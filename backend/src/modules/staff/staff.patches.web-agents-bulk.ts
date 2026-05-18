@@ -194,14 +194,11 @@ export async function bulkPatchAgents(
       const normalizedEnt = normalizeAgentEntitlementsInput(input.agent_entitlements);
       const usersForMerge = await prisma.user.findMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
-        select: { id: true, agent_entitlements: true }
+        select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
       });
       const patches = usersForMerge.map((u) => {
-        const prev =
-          u.agent_entitlements && typeof u.agent_entitlements === "object" && !Array.isArray(u.agent_entitlements)
-            ? (u.agent_entitlements as Record<string, unknown>)
-            : {};
-        return normalizeAgentEntitlementsInput({ ...parseEntitlements(prev), ...normalizedEnt });
+        const snap = entitlementsSnapshotFromAgentUser(u);
+        return snapToAgentEntitlements(mergeEntitlements(snap, normalizedEnt));
       });
       await prisma.$transaction(
         usersForMerge.map((u, i) =>

@@ -109,6 +109,7 @@ export async function importClientDataRows(
   for (let batchStart = firstDataRow; batchStart <= lastRowIdx; batchStart += BATCH_SIZE) {
     const batchEnd = Math.min(batchStart + BATCH_SIZE, lastRowIdx + 1);
     const batchRows = rows.slice(batchStart, batchEnd);
+    const batchDuplicateKeys: string[] = [];
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -260,11 +261,14 @@ export async function importClientDataRows(
           }
 
           created += 1;
-          if (dupKey) seenDuplicateKeys.add(dupKey);
+          if (dupKey) batchDuplicateKeys.push(dupKey);
           ctx.processedRows += 1;
         }
       });
 
+      for (const k of batchDuplicateKeys) {
+        seenDuplicateKeys.add(k);
+      }
       await reportImportRowProgress(ctx, "writing");
     } catch (e) {
       const raw = e instanceof Error ? e.message : "xato";

@@ -27,27 +27,36 @@ async function consolidateClientBalancesForMerge(
     if (mergeBalances.length === 0) return;
 
     const firstMerge = mergeBalances[0];
+    const remainingMerge = mergeBalances.slice(1);
+
+    // Update all movements to point to firstMerge BEFORE updating firstMerge's client_id
+    if (remainingMerge.length > 0) {
+      await tx.clientBalanceMovement.updateMany({
+        where: { client_balance_id: { in: remainingMerge.map(b => b.id) } },
+        data: { client_balance_id: firstMerge.id }
+      });
+    }
+
+    // Now update firstMerge's client_id to keepClientId
     await tx.clientBalance.update({
       where: { id: firstMerge.id },
       data: { client_id: keepClientId }
     });
 
-    // Update remaining merge balances to point to new master
-    const remainingMerge = mergeBalances.slice(1);
+    // Calculate total from remaining
+    const totalRemaining = remainingMerge.reduce(
+      (sum, b) => sum.plus(b.balance),
+      new Prisma.Decimal(0)
+    );
+
+    // Update firstMerge balance with total from remaining
+    await tx.clientBalance.update({
+      where: { id: firstMerge.id },
+      data: { balance: firstMerge.balance.plus(totalRemaining) }
+    });
+
+    // Delete remaining merge balances
     if (remainingMerge.length > 0) {
-      // Calculate total from remaining
-      const totalRemaining = remainingMerge.reduce(
-        (sum, b) => sum.plus(b.balance),
-        new Prisma.Decimal(0)
-      );
-      await tx.clientBalanceMovement.updateMany({
-        where: { client_balance_id: { in: remainingMerge.map(b => b.id) } },
-        data: { client_balance_id: firstMerge.id }
-      });
-      await tx.clientBalance.update({
-        where: { id: firstMerge.id },
-        data: { balance: firstMerge.balance.plus(totalRemaining) }
-      });
       await tx.clientBalance.deleteMany({
         where: { id: { in: remainingMerge.map(b => b.id) } }
       });
@@ -353,14 +362,22 @@ export async function mergeClientsIntoOne(
     const rules = await tx.bonusRule.findMany({
       where: { tenant_id: tenantId, selected_client_ids: { hasSome: uniqueMerge } }
     });
-    for (const br of rules) {
-      const next = Array.from(
-        new Set(br.selected_client_ids.map((id) => (uniqueMerge.includes(id) ? keepClientId : id)))
-      );
-      await tx.bonusRule.update({
-        where: { id: br.id },
-        data: { selected_client_ids: next }
+    if (rules.length > 0) {
+      const updates = rules.map((br) => {
+        const next = Array.from(
+          new Set(
+            br.selected_client_ids.map(
+              (id) => (br.selected_client_ids.includes(id) && uniqueMerge.includes(id) ? keepClientId : id)
+            )
+          )
+        );
+        return { id: br.id, selected_client_ids: next };
       });
+      await tx.$transaction(
+        updates.map((u) =>
+          tx.bonusRule.update({ where: { id: u.id }, data: { selected_client_ids: u.selected_client_ids } })
+        )
+      );
     }
 
     const orders_reassigned = (
