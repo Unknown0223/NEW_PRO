@@ -1,0 +1,950 @@
+# Minimal OpenAPI 3.0 artefakt — CI `openapi:lint` va keyingi to‘ldirish uchun.
+# To‘liq API hali bu yerda emas; strategiya: backend/docs/openapi-strategy.md
+
+openapi: 3.0.3
+info:
+  title: SALEC API (skeleton)
+  description: |
+    Infratuzilma va umumiy kontrakt tekshiruvi. Domain marshrutlari bosqichma-bosqich qo‘shiladi.
+  version: "0.0.0"
+  license:
+    name: Unlicense
+
+servers:
+  - url: http://127.0.0.1:4000
+    description: Local backend
+
+paths:
+  /health:
+    get:
+      summary: Liveness
+      operationId: health
+      tags: [Infra]
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /ready:
+    get:
+      summary: Readiness
+      operationId: ready
+      tags: [Infra]
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/auth/login:
+    post:
+      summary: Login (tenant slug in body)
+      operationId: authLogin
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/orders:
+    get:
+      summary: Orders list (tenant)
+      operationId: listOrders
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+    post:
+      summary: Create order
+      operationId: createOrder
+      tags: [Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/dashboard/stats:
+    get:
+      summary: Dashboard summary stats
+      operationId: dashboardStats
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/dashboard/supervisor:
+    get:
+      summary: Supervisor dashboard snapshot
+      operationId: dashboardSupervisor
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/dashboard/sales:
+    get:
+      summary: Sales dashboard snapshot
+      operationId: dashboardSales
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/dashboard/finance:
+    get:
+      summary: Finance dashboard snapshot
+      operationId: dashboardFinance
+      tags: [Dashboard]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/payments:
+    get:
+      summary: Payments list
+      operationId: listPayments
+      tags: [Payments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+    post:
+      summary: Create payment
+      operationId: createPayment
+      tags: [Payments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/products:
+    get:
+      summary: Products list
+      operationId: listProducts
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+
+    post:
+      summary: Create product
+      operationId: createProduct
+      tags: [Products]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/stock/balances:
+    get:
+      summary: Stock balances
+      operationId: stockBalances
+      tags: [Stock]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+        - name: view
+          in: query
+          schema: { type: string, enum: [summary, raw] }
+        - name: purpose
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/clients/references:
+    get:
+      summary: Client filter reference values (distinct fields)
+      operationId: clientReferences
+      tags: [Clients]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/clients:
+    get:
+      summary: Clients list (tenant)
+      operationId: listClients
+      tags: [Clients]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/reports/income-report:
+    get:
+      summary: Income report (payments by period)
+      operationId: reportsIncome
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/reports/report-builder/preview:
+    post:
+      summary: Report builder preview
+      operationId: reportBuilderPreview
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/reports/report-builder/dataset:
+    post:
+      summary: Report builder dataset rows
+      operationId: reportBuilderDataset
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/reports/order-debts:
+    get:
+      summary: Order debts report (outstanding receivables)
+      operationId: reportsOrderDebts
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: page
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/reports/sales:
+    get:
+      summary: Sales summary report
+      operationId: reportsSales
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/access/permissions/catalog:
+    get:
+      summary: Permission catalog (RBAC admin)
+      operationId: accessPermissionsCatalog
+      tags: [Access]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/access/me-permissions:
+    get:
+      summary: Current user permissions
+      operationId: accessMePermissions
+      tags: [Access]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/agent-config:
+    get:
+      summary: Mobile agent config
+      operationId: mobileAgentConfig
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/sync/full:
+    post:
+      summary: Mobile full sync
+      operationId: mobileSyncFull
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/sync/delta:
+    post:
+      summary: Mobile delta sync (single entity type)
+      operationId: mobileSyncDelta
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/orders/pending:
+    get:
+      summary: Pending offline orders count
+      operationId: mobileOrdersPending
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/fcm/register:
+    post:
+      summary: Register FCM device token
+      operationId: mobileFcmRegister
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/mobile/orders/enqueue:
+    post:
+      summary: Enqueue offline order
+      operationId: mobileEnqueueOrder
+      tags: [Mobile]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/access/users:
+    get:
+      summary: Access users list
+      operationId: accessUsersList
+      tags: [Access]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/access/users/{id}/detail:
+    get:
+      summary: Access user detail (RBAC matrix)
+      operationId: accessUserDetail
+      tags: [Access]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/linkage/options:
+    get:
+      summary: Linkage filter options
+      operationId: linkageOptions
+      tags: [Linkage]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/field/agent-visits:
+    post:
+      summary: Record agent visit
+      operationId: fieldAgentVisit
+      tags: [Field]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/settings/profile:
+    get:
+      summary: Tenant profile settings
+      operationId: getTenantProfile
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      summary: Patch tenant profile settings
+      operationId: patchTenantProfile
+      tags: [Settings]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/{slug}/clients/{id}:
+    patch:
+      summary: Update client fields
+      operationId: patchClient
+      tags: [Clients]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/TenantSlug"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantSlug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+        example: test1
+
+  schemas:
+    ApiError:
+      type: object
+      required: [error, requestId]
+      properties:
+        error:
+          type: string
+          example: NotReady
+        requestId:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true

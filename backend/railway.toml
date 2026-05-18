@@ -1,0 +1,12 @@
+# Railway: servis «Root Directory» = backend
+# https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+# startCommand berilmasin — Dockerfile CMD: migrate deploy + node dist/src/index.js

@@ -1,0 +1,85 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "sum(rate({app=\"salec-backend\"} |= \"slow_request\" [5m]))",
+          "legendFormat": "slow_request/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Slow requests (≥500ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "quantile_over_time(0.95, {app=\"salec-backend\"} |= \"request_complete\" | json | unwrap responseTimeMs [1h]) by (path)",
+          "legendFormat": "{{path}}",
+          "refId": "A"
+        }
+      ],
+      "title": "p95 responseTimeMs by path",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"salec-backend\"} |= \"request_complete\" | json | statusCode >= 500 [5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "5xx (5m window)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "topk(10, sum by (path) (count_over_time({app=\"salec-backend\"} |= \"slow_request\" [24h])))",
+          "refId": "A"
+        }
+      ],
+      "title": "Top slow paths (24h)",
+      "type": "barchart"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["salec", "foundation", "api"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "loki",
+        "current": {},
+        "hide": 0,
+        "label": "Loki"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "SALEC API Foundation",
+  "uid": "salec-api-foundation",
+  "version": 1
+}

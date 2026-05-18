@@ -1,0 +1,1353 @@
+"use client";
+
+import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
+import { BonusRuleCategoryHoverField } from "@/components/bonus-rules/bonus-rule-category-hover-field";
+import { BonusRulePrerequisitesField } from "@/components/bonus-rules/bonus-rule-prerequisites-field";
+import { BonusRuleSelectedClientsField } from "@/components/bonus-rules/bonus-rule-selected-clients-field";
+import { BonusRuleProductDualPanels } from "@/components/bonus-rules/bonus-rule-product-dual-panels";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
+import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
+import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import { STALE } from "@/lib/query-stale";
+import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type BonusType = "qty" | "sum" | "discount";
+
+type CondForm = {
+  min_qty: string;
+  max_qty: string;
+  step_qty: string;
+  bonus_qty: string;
+  max_bonus_qty: string;
+};
+
+type ClientRefEntry = { id: string; name: string; active?: boolean };
+
+function isoToLocalDatetime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localDatetimeToIso(local: string): string | null {
+  const t = local.trim();
+  if (!t) return null;
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+const emptyCond = (): CondForm => ({
+  min_qty: "",
+  max_qty: "",
+  step_qty: "6",
+  bonus_qty: "1",
+  max_bonus_qty: ""
+});
+
+type ErrorTarget = "basics" | "restrictions" | "products" | "conditions" | "discount" | null;
+
+function scrollToRef(el: HTMLElement | null) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+type SumThresholdScope = "order" | "calendar_month";
+
+/** Бонус: порог по сумме или по количеству (те же режимы заказ / месяц). */
+function SumThresholdScopeFields({
+  radioGroupName,
+  sumThresholdScope,
+  onScopeChange,
+  disabled,
+  variant = "sum"
+}: {
+  radioGroupName: string;
+  sumThresholdScope: SumThresholdScope;
+  onScopeChange: (scope: SumThresholdScope) => void;
+  disabled: boolean;
+  variant?: "sum" | "qty";
+}) {
+  const title = variant === "qty" ? "Порог по количеству" : "Порог по сумме";
+  const description =
+    variant === "qty"
+      ? "Сравнивается с количеством платных единиц в строках заказа (без бонусных). «Календарный месяц» — накопление по клиенту за месяц (Asia/Tashkent) плюс текущий заказ; отменённые и возвращённые заказы не учитываются. С ассортиментом или категорией считается по каждому SKU отдельно."
+      : "Сравнивается с суммой товаров до скидки. «Календарный месяц» — накопление по клиенту за месяц (Asia/Tashkent) плюс текущий заказ; отменённые и возвращённые заказы не учитываются.";
+  const monthLabel =
+    variant === "qty"
+      ? "Календарный месяц (количество по клиенту + текущий заказ)"
+      : "Календарный месяц (сумма заказов клиента + текущий)";
+  return (
+    <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+      <div className="flex flex-col gap-3">
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="radio"
+            name={radioGroupName}
+            className="mt-0.5 h-4 w-4 accent-primary"
+            checked={sumThresholdScope === "order"}
+            onChange={() => onScopeChange("order")}
+            disabled={disabled}
+          />
+          <span>Только этот заказ</span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="radio"
+            name={radioGroupName}
+            className="mt-0.5 h-4 w-4 accent-primary"
+            checked={sumThresholdScope === "calendar_month"}
+            onChange={() => onScopeChange("calendar_month")}
+            disabled={disabled}
+          />
+          <span>{monthLabel}</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+const inputCls =
+  "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring";
+/** `<select>` ga `flex` bermang — OS dropdown noto‘g‘ri chiziladi (Windows Chrome/Edge). */
+const selectCls =
+  "box-border h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 py-0 text-sm shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring";
+
+function parseCondRow(c: CondForm) {
+  const min_qty = c.min_qty.trim() === "" ? null : Number.parseFloat(c.min_qty);
+  const max_qty = c.max_qty.trim() === "" ? null : Number.parseFloat(c.max_qty);
+  const step_qty = Number.parseFloat(c.step_qty);
+  const bonus_qty = Number.parseFloat(c.bonus_qty);
+  const max_bonus_qty = c.max_bonus_qty.trim() === "" ? null : Number.parseFloat(c.max_bonus_qty);
+  if (Number.isNaN(step_qty) || step_qty <= 0 || Number.isNaN(bonus_qty) || bonus_qty < 0) {
+    throw new Error("В строках условий укажите шаг и количество бонуса");
+  }
+  if (min_qty != null && Number.isNaN(min_qty)) throw new Error("Мин. неверно");
+  if (max_qty != null && Number.isNaN(max_qty)) throw new Error("Макс. неверно");
+  if (min_qty != null && max_qty != null && min_qty > max_qty) throw new Error("мин ≤ макс");
+  if (max_bonus_qty != null && (Number.isNaN(max_bonus_qty) || max_bonus_qty < 0)) {
+    throw new Error("Макс. бонус неверен");
+  }
+  return {
+    min_qty,
+    max_qty,
+    step_qty,
+    bonus_qty,
+    max_bonus_qty: max_bonus_qty != null && !Number.isNaN(max_bonus_qty) ? max_bonus_qty : null
+  };
+}
+
+/** Ikkala cheklov ham o‘chiq bo‘lsa — Saqlashda chiqadigan xabar (matn bir xil bo‘lishi kerak). */
+const BONUS_SCOPE_REQUIRED_MSG = "Нужно выбрать одно из ограничений.";
+const NAME_REQUIRED_MSG = "Введите название правила.";
+
+export type BonusRuleFormVariant = "default" | "discountOnly";
+
+type Props = {
+  tenantSlug: string;
+  initialRule: BonusRuleRow | null;
+  /** Ro‘yxatdan nusxa: `initialRule.id === 0` bo‘lsa, shakl to‘ldirilgan, lekin saqlash — POST. */
+  prefillNonce?: string | null;
+  /** Chegirma bo‘limi: tur doim discount, saqlashdan keyin chegirmalar ro‘yxatiga qaytish */
+  variant?: BonusRuleFormVariant;
+};
+
+export function BonusRuleForm({
+  tenantSlug,
+  initialRule,
+  prefillNonce = null,
+  variant = "default"
+}: Props) {
+  const discountOnly = variant === "discountOnly";
+  const listHref = discountOnly ? "/settings/discount-rules/active" : "/settings/bonus-rules/active";
+  const router = useRouter();
+  const qc = useQueryClient();
+  const isEdit = Boolean(initialRule && initialRule.id > 0);
+  const seedKey =
+    initialRule && initialRule.id > 0
+      ? String(initialRule.id)
+      : initialRule && prefillNonce
+        ? prefillNonce
+        : initialRule
+          ? `prefill-${initialRule.name}-${initialRule.type}`
+          : "new";
+
+  const profileRefsQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "bonus-form-refs"],
+    staleTime: STALE.profile,
+    enabled: Boolean(tenantSlug),
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: {
+          /** Yangi spravochnik */
+          payment_method_entries?: { id?: string; name: string; active?: boolean }[];
+          /** Legacy: faqat nomlar (backend `resolvePaymentMethodEntries` bilan bir xil manba) */
+          payment_types?: string[];
+          client_category_entries?: ClientRefEntry[];
+        };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data?.references ?? {};
+    }
+  });
+
+  /** Faol yozuvlar; bo‘sh bo‘lsa `payment_types` dan (barchasi nofaol bo‘lib qolgan ham). */
+  const paymentOptions = useMemo(() => {
+    const refs = profileRefsQ.data;
+    if (!refs) return [] as { key: string; name: string }[];
+    const activeEntries = (refs.payment_method_entries ?? []).filter((p) => p.active !== false);
+    if (activeEntries.length > 0) {
+      return activeEntries.map((p, i) => ({
+        key: p.id?.trim() || `pm-${i}-${p.name}`,
+        name: p.name.trim()
+      }));
+    }
+    const legacy = refs.payment_types ?? [];
+    return legacy
+      .map((n) => String(n).trim())
+      .filter(Boolean)
+      .map((name, i) => ({ key: `pt-${i}-${name}`, name }));
+  }, [profileRefsQ.data]);
+  const clientCategoryOptions = (profileRefsQ.data?.client_category_entries ?? []).filter((c) => c.active !== false);
+
+  const priceTypesQ = useQuery({
+    queryKey: ["price-types", tenantSlug, "bonus-form"],
+    staleTime: STALE.reference,
+    enabled: Boolean(tenantSlug),
+    queryFn: async () => {
+      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types`);
+      return data.data;
+    }
+  });
+
+  const [name, setName] = useState("");
+  const [type, setType] = useState<BonusType>(discountOnly ? "discount" : "qty");
+  const [minSum, setMinSum] = useState("");
+  const [discountPct, setDiscountPct] = useState("");
+  const [priority, setPriority] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+  const [validFrom, setValidFrom] = useState("");
+  const [validTo, setValidTo] = useState("");
+  const [conditions, setConditions] = useState<CondForm[]>([emptyCond()]);
+  const [clientCategory, setClientCategory] = useState("");
+  const [paymentType, setPaymentType] = useState("");
+  const [clientType, setClientType] = useState("");
+  const [salesChannel, setSalesChannel] = useState("");
+  const [priceType, setPriceType] = useState("");
+  const [triggerProductIds, setTriggerProductIds] = useState<number[]>([]);
+  const [bonusProductIds, setBonusProductIds] = useState<number[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [targetAllClients, setTargetAllClients] = useState(true);
+  const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
+  const [selectedClientNames, setSelectedClientNames] = useState<Record<number, string>>({});
+  const [sumThresholdScope, setSumThresholdScope] = useState<SumThresholdScope>("order");
+  const [isManual, setIsManual] = useState(false);
+  const [inBlocks, setInBlocks] = useState(false);
+  const [oncePerClient, setOncePerClient] = useState(false);
+  const [prerequisiteRuleIds, setPrerequisiteRuleIds] = useState<number[]>([]);
+  const [scopeBranchCodes, setScopeBranchCodes] = useState<string[]>([]);
+  const [scopeAgentUserIds, setScopeAgentUserIds] = useState<number[]>([]);
+  const [scopeTradeDirectionIds, setScopeTradeDirectionIds] = useState<number[]>([]);
+  const [onlyByAssortment, setOnlyByAssortment] = useState(false);
+  const [onlyByCategory, setOnlyByCategory] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  /** Qaysi blokka scroll, ramka va ichki bildirishnoma bog‘langan */
+  const [errorTarget, setErrorTarget] = useState<ErrorTarget>(null);
+  const [errorShake, setErrorShake] = useState(false);
+  const basicsRef = useRef<HTMLDivElement>(null);
+  const restrictionsRef = useRef<HTMLDivElement>(null);
+  const conditionsRef = useRef<HTMLDivElement>(null);
+  const discountRef = useRef<HTMLDivElement>(null);
+  /** Скидки: один блок с % или суммой — как «Условия» у бонуса */
+  const discountDetailsRef = useRef<HTMLDivElement>(null);
+  const productsRef = useRef<HTMLDivElement>(null);
+
+  const pulseErrorOn = (target: ErrorTarget) => {
+    setErrorShake(true);
+    window.setTimeout(() => setErrorShake(false), 500);
+    if (target === "restrictions") scrollToRef(restrictionsRef.current);
+    else if (target === "products") scrollToRef(productsRef.current);
+    else if (target === "conditions") {
+      scrollToRef(discountOnly ? discountDetailsRef.current : conditionsRef.current);
+    } else if (target === "discount") {
+      scrollToRef(discountOnly ? discountDetailsRef.current : discountRef.current);
+    } else if (target === "basics") scrollToRef(basicsRef.current);
+  };
+
+  useEffect(() => {
+    setLocalError(null);
+    setErrorTarget(null);
+    const rule = initialRule;
+    let cancelled = false;
+
+    const loadClientLabels = async (ids: number[]) => {
+      if (!tenantSlug || ids.length === 0) return;
+      const patch: Record<number, string> = {};
+      for (const id of ids) {
+        try {
+          const { data } = await api.get<{ name?: string }>(`/api/${tenantSlug}/clients/${id}`);
+          if (cancelled) return;
+          if (data?.name) patch[id] = data.name;
+        } catch {
+          /* ignore */
+        }
+      }
+      if (!cancelled) setSelectedClientNames(patch);
+    };
+
+    if (rule) {
+      setName(rule.name);
+      setType(
+        discountOnly
+          ? rule.type === "sum" || rule.type === "discount"
+            ? (rule.type as BonusType)
+            : "discount"
+          : ((rule.type as BonusType) || "qty")
+      );
+      setMinSum(rule.min_sum != null ? String(rule.min_sum) : "");
+      setDiscountPct(rule.discount_pct != null ? String(rule.discount_pct) : "");
+      setPriority(String(rule.priority));
+      setIsActive(rule.is_active);
+      setValidFrom(isoToLocalDatetime(rule.valid_from));
+      setValidTo(isoToLocalDatetime(rule.valid_to));
+      if (rule.conditions?.length) {
+        setConditions(
+          rule.conditions.map((c) => ({
+            min_qty: c.min_qty != null ? String(c.min_qty) : "",
+            max_qty: c.max_qty != null ? String(c.max_qty) : "",
+            step_qty: String(c.step_qty),
+            bonus_qty: String(c.bonus_qty),
+            max_bonus_qty: c.max_bonus_qty != null ? String(c.max_bonus_qty) : ""
+          }))
+        );
+      } else {
+        setConditions([
+          {
+            min_qty: "",
+            max_qty: "",
+            step_qty: rule.buy_qty != null ? String(rule.buy_qty) : "6",
+            bonus_qty: rule.free_qty != null ? String(rule.free_qty) : "1",
+            max_bonus_qty: ""
+          }
+        ]);
+      }
+      setClientCategory(rule.client_category ?? "");
+      setPaymentType(rule.payment_type ?? "");
+      setClientType(rule.client_type ?? "");
+      setSalesChannel(rule.sales_channel ?? "");
+      setPriceType(rule.price_type ?? "");
+      setBonusProductIds([...(rule.bonus_product_ids ?? [])]);
+      setTargetAllClients(rule.target_all_clients ?? true);
+      {
+        const sc = [...(rule.selected_client_ids ?? [])];
+        setSelectedClientIds(sc);
+        setSelectedClientNames({});
+        void loadClientLabels(sc);
+      }
+      setSumThresholdScope(rule.sum_threshold_scope === "calendar_month" ? "calendar_month" : "order");
+      setIsManual(rule.is_manual ?? false);
+      setInBlocks(rule.in_blocks ?? false);
+      setOncePerClient(rule.once_per_client ?? false);
+      setPrerequisiteRuleIds([...(rule.prerequisite_rule_ids ?? [])]);
+      setScopeBranchCodes([...(rule.scope_branch_codes ?? [])]);
+      setScopeAgentUserIds([...(rule.scope_agent_user_ids ?? [])]);
+      setScopeTradeDirectionIds([...(rule.scope_trade_direction_ids ?? [])]);
+      const pids = [...(rule.product_ids ?? [])];
+      const cids = [...(rule.product_category_ids ?? [])];
+      if (cids.length > 0 && pids.length > 0) {
+        setOnlyByCategory(true);
+        setOnlyByAssortment(false);
+        setTriggerProductIds(pids);
+        setSelectedCategoryIds(cids);
+      } else if (pids.length > 0) {
+        setOnlyByAssortment(true);
+        setOnlyByCategory(false);
+        setTriggerProductIds(pids);
+        setSelectedCategoryIds([]);
+      } else if (cids.length > 0) {
+        setOnlyByAssortment(false);
+        setOnlyByCategory(true);
+        setTriggerProductIds([]);
+        setSelectedCategoryIds(cids);
+      } else {
+        setOnlyByAssortment(false);
+        setOnlyByCategory(false);
+        setTriggerProductIds([]);
+        setSelectedCategoryIds([]);
+      }
+    } else {
+      setName("");
+      setType(discountOnly ? "discount" : "qty");
+      setMinSum("");
+      setDiscountPct("");
+      setPriority("0");
+      setIsActive(true);
+      setValidFrom("");
+      setValidTo("");
+      setConditions([emptyCond()]);
+      setClientCategory("");
+      setPaymentType("");
+      setClientType("");
+      setSalesChannel("");
+      setPriceType("");
+      setTriggerProductIds([]);
+      setBonusProductIds([]);
+      setSelectedCategoryIds([]);
+      setTargetAllClients(true);
+      setSelectedClientIds([]);
+      setSelectedClientNames({});
+      setSumThresholdScope("order");
+      setIsManual(false);
+      setInBlocks(false);
+      setOncePerClient(false);
+      setPrerequisiteRuleIds([]);
+      setScopeBranchCodes([]);
+      setScopeAgentUserIds([]);
+      setScopeTradeDirectionIds([]);
+      setOnlyByAssortment(false);
+      setOnlyByCategory(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- faqat id o‘zgarganda seed
+  }, [seedKey, tenantSlug]);
+
+  useEffect(() => {
+    if (onlyByAssortment || onlyByCategory) {
+      setErrorTarget((t) => (t === "restrictions" ? null : t));
+      setLocalError((prev) => (prev === BONUS_SCOPE_REQUIRED_MSG ? null : prev));
+    }
+  }, [onlyByAssortment, onlyByCategory]);
+
+  useEffect(() => {
+    if (errorTarget !== "basics" || localError !== NAME_REQUIRED_MSG) return;
+    if (name.trim()) {
+      setLocalError(null);
+      setErrorTarget(null);
+    }
+  }, [name, errorTarget, localError]);
+
+  useEffect(() => {
+    if (errorTarget !== "products") return;
+    if (triggerProductIds.length > 0) {
+      setLocalError(null);
+      setErrorTarget(null);
+    }
+  }, [triggerProductIds.length, errorTarget]);
+
+  const errorTargetRef = useRef<ErrorTarget>(null);
+  errorTargetRef.current = errorTarget;
+
+  useEffect(() => {
+    if (errorTargetRef.current !== "conditions") return;
+    setLocalError(null);
+    setErrorTarget(null);
+  }, [conditions, minSum, type]);
+
+  useEffect(() => {
+    if (errorTargetRef.current !== "discount") return;
+    setLocalError(null);
+    setErrorTarget(null);
+  }, [discountPct]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const p = Number.parseInt(priority, 10);
+      const product_ids = onlyByAssortment || onlyByCategory ? triggerProductIds : [];
+      const product_category_ids = onlyByCategory ? selectedCategoryIds : [];
+      const assortmentOnlyNoBonusPicker = onlyByAssortment && !onlyByCategory;
+      const bonus_product_ids =
+        assortmentOnlyNoBonusPicker && (type === "qty" || type === "sum") ? [] : bonusProductIds;
+      const payload: Record<string, unknown> = {
+        name: name.trim(),
+        type,
+        priority: Number.isNaN(p) ? 0 : p,
+        is_active: isActive,
+        valid_from: localDatetimeToIso(validFrom),
+        valid_to: localDatetimeToIso(validTo),
+        client_category: clientCategory.trim() || null,
+        payment_type: paymentType.trim() || null,
+        client_type: clientType.trim() || null,
+        sales_channel: salesChannel.trim() || null,
+        price_type: priceType.trim() || null,
+        product_ids,
+        bonus_product_ids,
+        product_category_ids,
+        target_all_clients: targetAllClients,
+        selected_client_ids: targetAllClients ? [] : selectedClientIds,
+        is_manual: isManual,
+        in_blocks: inBlocks,
+        once_per_client: oncePerClient,
+        one_plus_one_gift: initialRule?.one_plus_one_gift ?? false,
+        prerequisite_rule_ids: prerequisiteRuleIds,
+        scope_branch_codes: scopeBranchCodes,
+        scope_agent_user_ids: scopeAgentUserIds,
+        scope_trade_direction_ids: scopeTradeDirectionIds
+      };
+
+      if (type === "qty") {
+        const rows = conditions.map(parseCondRow);
+        payload.conditions = rows.map((r, i) => ({ ...r, sort_order: i }));
+        payload.buy_qty = Math.floor(rows[0].step_qty);
+        payload.free_qty = Math.floor(rows[0].bonus_qty);
+        payload.sum_threshold_scope = sumThresholdScope;
+        payload.min_sum = null;
+        payload.discount_pct = null;
+      } else if (type === "sum") {
+        payload.min_sum = Number.parseFloat(minSum);
+        payload.sum_threshold_scope = sumThresholdScope;
+        payload.buy_qty = null;
+        payload.free_qty = null;
+        payload.discount_pct = null;
+        payload.conditions = [];
+      } else {
+        payload.discount_pct = Number.parseFloat(discountPct);
+        payload.buy_qty = null;
+        payload.free_qty = null;
+        payload.min_sum = null;
+        payload.conditions = [];
+      }
+
+      if (isEdit && initialRule && initialRule.id > 0) {
+        const { data } = await api.put(`/api/${tenantSlug}/bonus-rules/${initialRule.id}`, payload);
+        return data;
+      }
+      const { data } = await api.post(`/api/${tenantSlug}/bonus-rules`, payload);
+      return data;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["bonus-rules", tenantSlug] });
+      if (initialRule && initialRule.id > 0) {
+        await qc.invalidateQueries({ queryKey: ["bonus-rule", tenantSlug, initialRule.id] });
+      }
+      router.push(listHref);
+    },
+    onError: (e: unknown) => {
+      const ax = e as { response?: { data?: { error?: string }; status?: number } };
+      if (ax.response?.status === 403) {
+        setLocalError("Нет доступа (только администратор или оператор).");
+        setErrorTarget(null);
+        return;
+      }
+      if (ax.response?.data?.error === "ValidationError") {
+        const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
+        const hint = flat != null ? firstValidationUserHint(flat) : undefined;
+        setLocalError(
+          hint
+            ? withApiSupportLine(`Проверка сервера: ${hint}`, e)
+            : "Проверка сервера: проверьте поля (название, срок, товары, условия)."
+        );
+        setErrorTarget("basics");
+        pulseErrorOn("basics");
+        return;
+      }
+      if (ax.response?.data?.error === "ProductScopeRequired") {
+        setLocalError(BONUS_SCOPE_REQUIRED_MSG);
+        setErrorTarget("restrictions");
+        pulseErrorOn("restrictions");
+        return;
+      }
+      setLocalError(getUserFacingError(e, "Ошибка сохранения"));
+      setErrorTarget(null);
+    }
+  });
+
+  const submit = () => {
+    setLocalError(null);
+    setErrorTarget(null);
+
+    if (!name.trim()) {
+      setLocalError(NAME_REQUIRED_MSG);
+      setErrorTarget("basics");
+      pulseErrorOn("basics");
+      return;
+    }
+    if (!onlyByAssortment && !onlyByCategory) {
+      setLocalError(BONUS_SCOPE_REQUIRED_MSG);
+      setErrorTarget("restrictions");
+      pulseErrorOn("restrictions");
+      return;
+    }
+    if (!targetAllClients && selectedClientIds.length === 0) {
+      setLocalError("Выберите хотя бы одного клиента или включите «Все клиенты».");
+      setErrorTarget("restrictions");
+      pulseErrorOn("restrictions");
+      return;
+    }
+    if (onlyByAssortment) {
+      if ((type === "qty" || type === "sum") && triggerProductIds.length === 0) {
+        setLocalError("Включено «Только ассортимент»: слева отметьте хотя бы один триггер-товар.");
+        setErrorTarget("products");
+        pulseErrorOn("products");
+        return;
+      }
+      if (type === "discount" && triggerProductIds.length === 0) {
+        setLocalError(
+          "Для ограничения по ассортименту выберите слева хотя бы один товар или отключите «Только ассортимент»."
+        );
+        setErrorTarget("products");
+        pulseErrorOn("products");
+        return;
+      }
+    }
+    if (
+      onlyByCategory &&
+      (type === "qty" || type === "sum" || type === "discount") &&
+      triggerProductIds.length === 0
+    ) {
+      setLocalError(
+        "В режиме «Категория» слева отметьте хотя бы один триггер-товар (условие по категории и выбранным SKU)."
+      );
+      setErrorTarget("products");
+      pulseErrorOn("products");
+      return;
+    }
+    if (type === "sum") {
+      const m = Number.parseFloat(minSum);
+      if (minSum.trim() === "" || Number.isNaN(m) || m < 0) {
+        setLocalError("Введите минимальную сумму: число ≥ 0.");
+        setErrorTarget("conditions");
+        pulseErrorOn("conditions");
+        return;
+      }
+    }
+    if (type === "discount") {
+      const d = Number.parseFloat(discountPct);
+      if (discountPct.trim() === "" || Number.isNaN(d) || d < 0 || d > 100) {
+        setLocalError("Введите процент скидки от 0 до 100.");
+        setErrorTarget("discount");
+        pulseErrorOn("discount");
+        return;
+      }
+    }
+    if (type === "qty") {
+      for (let i = 0; i < conditions.length; i++) {
+        try {
+          parseCondRow(conditions[i]);
+        } catch (err) {
+          const base = err instanceof Error ? err.message : "Проверьте условия";
+          setLocalError(
+            conditions.length > 1
+              ? `${getUserFacingError(err, base)} (условие №${i + 1})`
+              : getUserFacingError(err, base)
+          );
+          setErrorTarget("conditions");
+          pulseErrorOn("conditions");
+          return;
+        }
+      }
+    }
+    mutation.mutate();
+  };
+
+  const showBonusColumn =
+    (type === "qty" || type === "sum") && !(onlyByAssortment && !onlyByCategory);
+  const showTriggerColumn =
+    type === "qty" || type === "sum" || (type === "discount" && (onlyByAssortment || onlyByCategory));
+
+  const sectionAlert = (target: ErrorTarget) =>
+    errorTarget === target && localError ? (
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="mb-4 rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2.5 text-sm font-medium text-destructive"
+      >
+        {localError}
+      </div>
+    ) : null;
+
+  return (
+    <div className="w-full space-y-6">
+      {localError && errorTarget === null ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {localError}
+        </div>
+      ) : null}
+      <div
+        ref={basicsRef}
+        className={cn(
+          "rounded-xl",
+          errorTarget === "basics" &&
+            "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+          errorTarget === "basics" && errorShake && "animate-bonus-rule-shake"
+        )}
+      >
+      <Card className="shadow-panel">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle>{discountOnly ? "Скидка — основные настройки" : "Основные настройки"}</CardTitle>
+          <CardDescription>
+            {discountOnly
+              ? "Как у бонусов: название, тип (процент или подарок по сумме), срок и фильтры. Один ряд — оплата, способ, состояние, для кого, ограничения; под ним товары. Параметры скидки — в следующем блоке."
+              : "Название и тип бонуса (количество или сумма заказа), срок и фильтры профиля. Ниже один ряд: оплата, способ, состояние, аудитория и ограничения; под ним — выбор товаров."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5 pt-6">
+          {sectionAlert("basics")}
+          {/* 1-bo‘lim: 2 qator — siqilishsiz, barcha ustunlarda bir xil label→maydon tartibi */}
+          <div className="flex flex-col gap-5">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,22rem)] md:items-start">
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="br-name">Название</Label>
+                <Input
+                  id="br-name"
+                  className={inputCls}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={mutation.isPending}
+                  aria-invalid={errorTarget === "basics" && !name.trim()}
+                />
+              </div>
+              {discountOnly ? (
+                <div className="grid min-w-0 gap-1.5">
+                  <Label htmlFor="br-skidka-type">Тип скидки</Label>
+                  <select
+                    id="br-skidka-type"
+                    className={selectCls}
+                    title="Процентная скидка или подарок по минимальной сумме"
+                    value={type === "sum" || type === "discount" ? type : "discount"}
+                    onChange={(e) => setType(e.target.value as BonusType)}
+                    disabled={mutation.isPending}
+                  >
+                    <option value="discount">Процентная скидка (%)</option>
+                    <option value="sum">Минимальная сумма заказа (подарок)</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="grid min-w-0 gap-1.5">
+                  <Label htmlFor="br-bonus-type">Тип бонуса</Label>
+                  <select
+                    id="br-bonus-type"
+                    className={selectCls}
+                    title="Бонус за количество или за сумму заказа"
+                    value={type === "sum" ? "sum" : "qty"}
+                    onChange={(e) => setType(e.target.value === "sum" ? "sum" : "qty")}
+                    disabled={mutation.isPending}
+                  >
+                    <option value="qty">Бонус за количество</option>
+                    <option value="sum">Бонус за сумму заказа</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(12.5rem,1.15fr)_minmax(12.5rem,1.15fr)_minmax(11rem,1fr)_minmax(11rem,1fr)_minmax(5.25rem,5.5rem)]">
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="br-valid-from">Действует с</Label>
+                <Input
+                  id="br-valid-from"
+                  className={inputCls}
+                  type="datetime-local"
+                  value={validFrom}
+                  onChange={(e) => setValidFrom(e.target.value)}
+                  disabled={mutation.isPending}
+                />
+              </div>
+              <div className="grid min-w-0 gap-1.5">
+                <Label htmlFor="br-valid-to">Действует до</Label>
+                <Input
+                  id="br-valid-to"
+                  className={inputCls}
+                  type="datetime-local"
+                  value={validTo}
+                  onChange={(e) => setValidTo(e.target.value)}
+                  disabled={mutation.isPending}
+                />
+              </div>
+              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                <Label htmlFor="br-client-cat">Категория клиента</Label>
+                <select
+                  id="br-client-cat"
+                  className={selectCls}
+                  value={
+                    clientCategory &&
+                    !clientCategoryOptions.some((c) => c.name === clientCategory)
+                      ? `__custom:${clientCategory}`
+                      : clientCategory
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setClientCategory(v.startsWith("__custom:") ? v.slice(11) : v);
+                  }}
+                  disabled={mutation.isPending}
+                >
+                  <option value="">Все</option>
+                  {clientCategory &&
+                  !clientCategoryOptions.some((c) => c.name === clientCategory) ? (
+                    <option value={`__custom:${clientCategory}`}>{clientCategory} (текущее)</option>
+                  ) : null}
+                  {clientCategoryOptions.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                <Label htmlFor="br-price-type">Тип цены</Label>
+                <select
+                  id="br-price-type"
+                  className={selectCls}
+                  value={priceType}
+                  onChange={(e) => setPriceType(e.target.value)}
+                  disabled={mutation.isPending}
+                >
+                  <option value="">Все</option>
+                  {(priceTypesQ.data ?? []).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                <Label htmlFor="br-priority" title="При нескольких правилах — какое применить раньше">
+                  Приоритет
+                </Label>
+                <Input
+                  id="br-priority"
+                  className={cn(inputCls, "max-w-full xl:max-w-[5.5rem]")}
+                  type="number"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  disabled={mutation.isPending}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            ref={restrictionsRef}
+            id="bonus-rule-restrictions"
+            className={cn(
+              "space-y-4",
+              (errorTarget === "restrictions" || errorTarget === "products") &&
+                "rounded-xl ring-2 ring-destructive ring-offset-2 ring-offset-background",
+              (errorTarget === "restrictions" || errorTarget === "products") && errorShake && "animate-bonus-rule-shake"
+            )}
+          >
+            {sectionAlert("restrictions")}
+            {sectionAlert("products")}
+
+            {/* Один ряд (xl): оплата | способ | состояние | для кого | ограничения */}
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Способ оплаты
+                </p>
+                <select
+                  id="br-payment"
+                  className={selectCls}
+                  value={paymentType}
+                  onChange={(e) => setPaymentType(e.target.value)}
+                  disabled={mutation.isPending || profileRefsQ.isLoading}
+                  aria-label="Способ оплаты"
+                >
+                  <option value="">Все</option>
+                  {paymentOptions.map((p) => (
+                    <option key={p.key} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {profileRefsQ.isSuccess && paymentOptions.length === 0 ? (
+                  <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+                    Активные способы оплаты не найдены. Добавьте в{" "}
+                    <a className="underline underline-offset-2 hover:text-foreground" href="/settings/payment-methods">
+                      способах оплаты
+                    </a>
+                    .
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Способ</p>
+                <div className="flex flex-col gap-2.5">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="br-method"
+                      className="h-4 w-4 accent-primary"
+                      checked={!isManual}
+                      onChange={() => setIsManual(false)}
+                      disabled={mutation.isPending}
+                    />
+                    Автоматически
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="br-method"
+                      className="h-4 w-4 accent-primary"
+                      checked={isManual}
+                      onChange={() => setIsManual(true)}
+                      disabled={mutation.isPending}
+                    />
+                    Вручную
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Состояние</p>
+                <div className="flex flex-col gap-2.5">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                      disabled={mutation.isPending}
+                    />
+                    Активен
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={inBlocks}
+                      onChange={(e) => setInBlocks(e.target.checked)}
+                      disabled={mutation.isPending}
+                    />
+                    По блокам
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3 sm:col-span-2 lg:col-span-1 xl:col-span-1">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Для кого</p>
+                <div className="flex flex-col gap-2.5">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="br-target-clients"
+                      className="h-4 w-4 accent-primary"
+                      checked={targetAllClients}
+                      onChange={() => setTargetAllClients(true)}
+                      disabled={mutation.isPending}
+                    />
+                    Все клиенты
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="radio"
+                      name="br-target-clients"
+                      className="h-4 w-4 accent-primary"
+                      checked={!targetAllClients}
+                      onChange={() => setTargetAllClients(false)}
+                      disabled={mutation.isPending}
+                    />
+                    {discountOnly ? "Выбранные клиенты" : "Избранные клиенты"}
+                  </label>
+                </div>
+                {!targetAllClients ? (
+                  <BonusRuleSelectedClientsField
+                    compact
+                    tenantSlug={tenantSlug}
+                    selectedIds={selectedClientIds}
+                    nameById={selectedClientNames}
+                    disabled={mutation.isPending}
+                    onChange={(ids, namePatch) => {
+                      setSelectedClientIds(ids);
+                      setSelectedClientNames((prev) => {
+                        const next = { ...prev };
+                        for (const [k, v] of Object.entries(namePatch)) {
+                          const id = Number(k);
+                          if (!v.trim()) delete next[id];
+                          else next[id] = v;
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                ) : null}
+              </div>
+
+              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3 sm:col-span-2 lg:col-span-2 xl:col-span-1">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Ограничения
+                </p>
+                <div className="flex flex-col gap-2.5">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={onlyByAssortment}
+                      onChange={(e) => {
+                        const v = e.target.checked;
+                        setOnlyByAssortment(v);
+                        if (v) {
+                          setOnlyByCategory(false);
+                          setSelectedCategoryIds([]);
+                          setBonusProductIds([]);
+                        }
+                        if (!v) setTriggerProductIds([]);
+                      }}
+                      disabled={mutation.isPending}
+                    />
+                    Только ассортимент
+                  </label>
+                  <BonusRuleCategoryHoverField
+                    checked={onlyByCategory}
+                    onCheckedChange={(v) => {
+                      setOnlyByCategory(v);
+                      if (v) {
+                        setOnlyByAssortment(false);
+                      }
+                      if (!v) setSelectedCategoryIds([]);
+                    }}
+                    disabled={mutation.isPending}
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={oncePerClient}
+                      onChange={(e) => setOncePerClient(e.target.checked)}
+                      disabled={mutation.isPending}
+                    />
+                    Один раз на клиента
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {showTriggerColumn || showBonusColumn ? (
+              <div ref={productsRef} className="space-y-3 border-t border-border/60 pt-4">
+                <p className="text-sm font-medium text-foreground">Товары и триггеры</p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Сохранение — только с «Только ассортимент» или «Категория». Дерево категорий: слева триггер, справа
+                  бонус (если столбец есть).
+                </p>
+                <BonusRuleProductDualPanels
+                  tenantSlug={tenantSlug}
+                  triggerProductIds={triggerProductIds}
+                  bonusProductIds={bonusProductIds}
+                  onTriggerChange={setTriggerProductIds}
+                  onBonusChange={setBonusProductIds}
+                  onlyByAssortment={onlyByAssortment}
+                  onlyByCategory={onlyByCategory}
+                  showTriggerColumn={showTriggerColumn}
+                  showBonusColumn={showBonusColumn}
+                  disabled={mutation.isPending}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {!isManual ? (
+            <div className="rounded-lg border border-border/80 bg-muted/15 p-4">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Предварительные условия (связанные правила)
+              </p>
+              <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+                Если в этом заказе выбранные правила не пройдут автоматическую проверку своего типа, текущее правило не
+                применится. В других заказах они работают независимо.
+              </p>
+              <BonusRulePrerequisitesField
+                tenantSlug={tenantSlug}
+                excludeRuleId={initialRule && initialRule.id > 0 ? initialRule.id : null}
+                value={prerequisiteRuleIds}
+                onChange={setPrerequisiteRuleIds}
+                disabled={mutation.isPending}
+              />
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+      </div>
+
+      {discountOnly ? (
+        <div
+          ref={discountDetailsRef}
+          className={cn(
+            "rounded-xl",
+            (errorTarget === "conditions" || errorTarget === "discount") &&
+              "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+            (errorTarget === "conditions" || errorTarget === "discount") &&
+              errorShake &&
+              "animate-bonus-rule-shake"
+          )}
+        >
+          <Card className="shadow-panel">
+            <CardHeader className="border-b border-border/60 pb-4">
+              <CardTitle>
+                {type === "discount" ? "Параметры скидки (%)" : "Условие по сумме заказа"}
+              </CardTitle>
+              <CardDescription>
+                {type === "discount"
+                  ? "Процент применяется к строкам заказа по выбранным вверху товарам. Остатки склада не меняются."
+                  : "Порог считается по сумме товаров до скидки. При достижении к заказу добавляется подарок (логика как у бонуса за сумму); ассортимент подарка — в блоке «Товары и триггеры» выше."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              {sectionAlert("conditions")}
+              {sectionAlert("discount")}
+              {type === "discount" ? (
+                <div className="grid max-w-md gap-1.5">
+                  <Label htmlFor="br-discount-pct">Процент скидки (%)</Label>
+                  <Input
+                    id="br-discount-pct"
+                    className={inputCls}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    value={discountPct}
+                    onChange={(e) => setDiscountPct(e.target.value)}
+                    disabled={mutation.isPending}
+                    aria-invalid={errorTarget === "discount"}
+                  />
+                </div>
+              ) : null}
+              {type === "sum" ? (
+                <div className="space-y-4">
+                  <div className="grid max-w-md gap-1.5">
+                    <Label>Минимальная сумма</Label>
+                    <Input
+                      className={inputCls}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={minSum}
+                      onChange={(e) => setMinSum(e.target.value)}
+                      disabled={mutation.isPending}
+                    />
+                  </div>
+                  <SumThresholdScopeFields
+                    radioGroupName="br-sum-scope-skid"
+                    sumThresholdScope={sumThresholdScope}
+                    onScopeChange={setSumThresholdScope}
+                    disabled={mutation.isPending}
+                  />
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      ) : type === "qty" || type === "sum" ? (
+      <div
+        ref={conditionsRef}
+        className={cn(
+          "rounded-xl",
+          errorTarget === "conditions" &&
+            "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+          errorTarget === "conditions" && errorShake && "animate-bonus-rule-shake"
+        )}
+      >
+      <Card className="shadow-panel">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <CardTitle>Условия</CardTitle>
+          <CardDescription>
+            {type === "qty"
+              ? "Каждая строка — отдельная «ступень»: диапазон мин/макс, шаг (напр. 6), бонус (напр. 1). Проданное в заказе количество попадает в один диапазон — применяется только эта строка. Ниже — учитывать только этот заказ или накопление за календарный месяц (как для бонуса по сумме)."
+              : "Минимальная сумма товаров до скидки; способ подсчёта порога — в блоке «Порог по сумме» ниже."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          {sectionAlert("conditions")}
+          {type === "qty" ? (
+            <>
+              {conditions.map((row, idx) => (
+                <div key={idx} className="rounded-xl border border-border/80 bg-muted/20 p-4">
+                  <p className="mb-3 text-xs font-medium text-muted-foreground">Условие №{idx + 1}</p>
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Мин. количество</Label>
+                      <Input
+                        className={inputCls}
+                        value={row.min_qty}
+                        onChange={(e) => {
+                          const next = [...conditions];
+                          next[idx] = { ...next[idx], min_qty: e.target.value };
+                          setConditions(next);
+                        }}
+                        disabled={mutation.isPending}
+                        placeholder="например 24"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Макс. количество (диапазон)</Label>
+                      <Input
+                        className={inputCls}
+                        value={row.max_qty}
+                        onChange={(e) => {
+                          const next = [...conditions];
+                          next[idx] = { ...next[idx], max_qty: e.target.value };
+                          setConditions(next);
+                        }}
+                        disabled={mutation.isPending}
+                        placeholder="например 100"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Шаг (каждые N)</Label>
+                      <Input
+                        className={inputCls}
+                        value={row.step_qty}
+                        onChange={(e) => {
+                          const next = [...conditions];
+                          next[idx] = { ...next[idx], step_qty: e.target.value };
+                          setConditions(next);
+                        }}
+                        disabled={mutation.isPending}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Бонус (кол-во)</Label>
+                      <Input
+                        className={inputCls}
+                        value={row.bonus_qty}
+                        onChange={(e) => {
+                          const next = [...conditions];
+                          next[idx] = { ...next[idx], bonus_qty: e.target.value };
+                          setConditions(next);
+                        }}
+                        disabled={mutation.isPending}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Макс. бонус (общий предел)</Label>
+                      <Input
+                        className={inputCls}
+                        value={row.max_bonus_qty}
+                        onChange={(e) => {
+                          const next = [...conditions];
+                          next[idx] = { ...next[idx], max_bonus_qty: e.target.value };
+                          setConditions(next);
+                        }}
+                        disabled={mutation.isPending}
+                      />
+                    </div>
+                  </div>
+                  {conditions.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => setConditions(conditions.filter((_, i) => i !== idx))}
+                    >
+                      Удалить это условие
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => setConditions([...conditions, emptyCond()])}
+                disabled={mutation.isPending}
+              >
+                Добавить условие
+              </Button>
+              <SumThresholdScopeFields
+                variant="qty"
+                radioGroupName="br-qty-scope"
+                sumThresholdScope={sumThresholdScope}
+                onScopeChange={setSumThresholdScope}
+                disabled={mutation.isPending}
+              />
+            </>
+          ) : null}
+
+          {type === "sum" ? (
+            <div className="space-y-4">
+              <div className="grid max-w-md gap-1.5">
+                <Label>Минимальная сумма</Label>
+                <Input
+                  className={inputCls}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={minSum}
+                  onChange={(e) => setMinSum(e.target.value)}
+                  disabled={mutation.isPending}
+                />
+              </div>
+              <SumThresholdScopeFields
+                radioGroupName="br-sum-scope"
+                sumThresholdScope={sumThresholdScope}
+                onScopeChange={setSumThresholdScope}
+                disabled={mutation.isPending}
+              />
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+      </div>
+      ) : null}
+
+      {!discountOnly && type === "discount" ? (
+        <div
+          ref={discountRef}
+          className={cn(
+            "rounded-xl",
+            errorTarget === "discount" &&
+              "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+            errorTarget === "discount" && errorShake && "animate-bonus-rule-shake"
+          )}
+        >
+          <Card className="shadow-panel">
+            <CardHeader className="border-b border-border/60 pb-4">
+              <CardTitle>Скидка</CardTitle>
+              <CardDescription>
+                Процентная скидка применяется к строкам заказа по выбранным товарам. Товары — в блоке выше («Товары и
+                триггеры»).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              {sectionAlert("discount")}
+              <div className="grid max-w-md gap-1.5">
+                <Label htmlFor="br-discount-pct-legacy">Процент скидки (%)</Label>
+                <Input
+                  id="br-discount-pct-legacy"
+                  className={inputCls}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(e.target.value)}
+                  disabled={mutation.isPending}
+                  aria-invalid={errorTarget === "discount"}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-6">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push(listHref)}
+          disabled={mutation.isPending}
+        >
+          Отмена
+        </Button>
+        <Button type="button" onClick={submit} disabled={mutation.isPending}>
+          {mutation.isPending ? "Сохранение…" : "Сохранить"}
+        </Button>
+      </div>
+    </div>
+  );
+}

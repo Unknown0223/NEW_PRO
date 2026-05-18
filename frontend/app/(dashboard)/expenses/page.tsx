@@ -1,0 +1,349 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { apiFetch, useTenant } from "@/lib/api-client";
+import { formatNumberGrouped } from "@/lib/format-numbers";
+import { STALE } from "@/lib/query-stale";
+import {
+  activeRefSelectOptions,
+  refEntryLabelByStored,
+} from "@/lib/profile-ref-entries";
+
+interface Expense {
+  id: number;
+  expense_type: string;
+  amount: string;
+  currency: string;
+  status: string;
+  expense_date: string;
+  agent_name: string | null;
+  warehouse_name: string | null;
+  created_by_name: string | null;
+  deleted_at?: string | null;
+  deleted_by_name?: string | null;
+}
+
+interface PnlReport {
+  revenue: string;
+  total_expenses_approved: string;
+  total_expenses_draft: string;
+  net_profit: string;
+}
+
+const typeMap: Record<string, string> = {
+  transport: "Transport", marketing: "Marketing", rent: "Ijara", salary: "Ish haqi",
+  office: "Ofis", other: "Boshqa", draft: "Qoralama", approved: "Tasdiqlangan", rejected: "Rad etilgan"
+};
+
+type SettingsProfile = {
+  references: {
+    finance_category_entries?: unknown;
+    currency_entries?: Array<{ code?: string; is_default?: boolean; active?: boolean }>;
+  };
+};
+
+function pickDefaultCurrency(refs: SettingsProfile["references"] | undefined): string {
+  const list = refs?.currency_entries;
+  if (!Array.isArray(list)) return "UZS";
+  const active = list.filter((c) => c && typeof c === "object" && (c as { active?: boolean }).active !== false);
+  const def = active.find((c) => (c as { is_default?: boolean }).is_default);
+  const row = (def ?? active[0]) as { code?: string } | undefined;
+  const s = typeof row?.code === "string" ? row.code.trim().toUpperCase() : "";
+  return s || "UZS";
+}
+
+export default function ExpensesPage() {
+  const tenant = useTenant();
+  const [loading, setLoading] = useState(true);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [pnl, setPnl] = useState<PnlReport | null>(null);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showArchive, setShowArchive] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [newAmount, setNewAmount] = useState("");
+  const [newType, setNewType] = useState("");
+  const [newNote, setNewNote] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+  const [categorySelectKey, setCategorySelectKey] = useState(0);
+
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenant, "expenses-page"],
+    enabled: Boolean(tenant),
+    staleTime: STALE.profile,
+    queryFn: async () => apiFetch<SettingsProfile>(`/api/${tenant}/settings/profile`)
+  });
+
+  const financeCategoryOptions = useMemo(
+    () => activeRefSelectOptions(profileQ.data?.references?.finance_category_entries),
+    [profileQ.data]
+  );
+
+  const defaultCurrency = useMemo(
+    () => pickDefaultCurrency(profileQ.data?.references),
+    [profileQ.data]
+  );
+
+  const fetchAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: String(page), limit: "20",
+        ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+        ...(showArchive ? { archive: "true" } : {})
+      });
+      const [data, pnlData] = await Promise.all([
+        apiFetch<{ data?: Expense[]; total?: number }>(`/api/${tenant}/expenses?${params}`),
+        apiFetch<PnlReport>(`/api/${tenant}/expenses/pnl`)
+      ]);
+      setExpenses(data.data ?? []);
+      setTotal(data.total ?? 0);
+      setPnl(pnlData);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [tenant, page, statusFilter, showArchive]);
+
+  useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  const handleAction = async (id: number, action: string) => {
+    await apiFetch(`/api/${tenant}/expenses/${id}/${action}`, { method: "POST", body: action === "reject" ? JSON.stringify({ note: "Rad etilgan" }) : undefined });
+    fetchAll();
+  };
+
+  const handleDeleteDraft = async (id: number) => {
+    if (!confirm(`Chiqim #${id} ni arxivga o‘tkazish?`)) return;
+    await apiFetch(`/api/${tenant}/expenses/${id}`, { method: "DELETE" });
+    fetchAll();
+  };
+
+  const handleRestoreExpense = async (id: number) => {
+    if (!confirm(`Chiqim #${id} ni tiklash?`)) return;
+    await apiFetch(`/api/${tenant}/expenses/${id}/restore`, { method: "POST" });
+    fetchAll();
+  };
+
+  const expenseTypeLabel = useCallback(
+    (stored: string) =>
+      refEntryLabelByStored(profileQ.data?.references?.finance_category_entries, stored) ??
+      typeMap[stored] ??
+      stored,
+    [profileQ.data]
+  );
+
+  const handleCreateExpense = async () => {
+    const raw = newAmount.replace(/\s/g, "").replace(",", ".");
+    const amount = Number(raw);
+    if (!tenant || !Number.isFinite(amount) || amount <= 0) return;
+    const t = newType.trim();
+    if (!t) return;
+    try {
+      setCreateBusy(true);
+      await apiFetch(`/api/${tenant}/expenses`, {
+        method: "POST",
+        body: JSON.stringify({
+          expense_type: t,
+          amount,
+          currency: defaultCurrency,
+          note: newNote.trim() || null
+        })
+      });
+      setNewAmount("");
+      setNewType("");
+      setNewNote("");
+      setCategorySelectKey((k) => k + 1);
+      await fetchAll();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Chiqimlar (Expenses)</h1>
+
+      {!showArchive ? (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Yangi chiqim</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Tur —{" "}
+            <Link href="/settings/reasons/finance-categories" className="text-primary underline-offset-4 hover:underline">
+              «Категория доходов/расходов»
+            </Link>{" "}
+            katalogidan; bo‘sh bo‘lsa, quyida qo‘lda yozish mumkin.
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label>Tur / kategoriya</Label>
+            {financeCategoryOptions.length > 0 ? (
+              <Select
+                key={categorySelectKey}
+                value={newType || undefined}
+                onValueChange={(v) => setNewType(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {financeCategoryOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                placeholder="masalan: transport, marketing"
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+              />
+            )}
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Summa ({defaultCurrency})</Label>
+            <Input
+              inputMode="decimal"
+              placeholder="0"
+              value={newAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
+            <Label>Izoh (ixtiyoriy)</Label>
+            <Input value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="—" />
+          </div>
+          <div className="flex items-end">
+            <Button type="button" disabled={createBusy || !tenant} onClick={() => void handleCreateExpense()}>
+              {createBusy ? "Jo‘natilmoqda…" : "Qoralama sifatida yaratish"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      ) : null}
+
+      {/* PnL Summary */}
+      {!showArchive && pnl ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Daromad</p><p className="text-2xl font-bold tabular-nums">{formatNumberGrouped(pnl.revenue, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tasdiqlangan chiqimlar</p><p className="text-2xl font-bold tabular-nums text-orange-600">{formatNumberGrouped(pnl.total_expenses_approved, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Qoralama chiqimlar</p><p className="text-2xl font-bold tabular-nums text-gray-500">{formatNumberGrouped(pnl.total_expenses_draft, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Sof foyda</p><p className="text-2xl font-bold tabular-nums text-green-600">{formatNumberGrouped(pnl.net_profit, { maxFractionDigits: 2 })}</p></CardContent></Card>
+        </div>
+      ) : null}
+
+      {/* Filters */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Chiqimlar ro‘yxati</CardTitle>
+            <div className="flex flex-wrap gap-2">
+            <Select
+              value={showArchive ? "archive" : "active"}
+              onValueChange={(v: string) => {
+                setShowArchive(v === "archive");
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Faol</SelectItem>
+                <SelectItem value="archive">Arxiv</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={statusFilter}
+              onValueChange={(v: string) => {
+                setStatusFilter(v);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Barchasi</SelectItem>
+                <SelectItem value="draft">Qoralama</SelectItem>
+                <SelectItem value="approved">Tasdiqlangan</SelectItem>
+                <SelectItem value="rejected">Rad etilgan</SelectItem>
+              </SelectContent>
+            </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? <div className="py-8 text-center">Загрузка…</div> : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tur</TableHead>
+                  <TableHead>Summa</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Holat</TableHead>
+                  <TableHead>Sana</TableHead>
+                  <TableHead>Ombor</TableHead>
+                  <TableHead className="text-right">Amallar</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Ma’lumot yo‘q</TableCell></TableRow>
+                ) : expenses.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell>{expenseTypeLabel(e.expense_type)}</TableCell>
+                    <TableCell className="font-medium tabular-nums">{formatNumberGrouped(e.amount, { maxFractionDigits: 2 })} {e.currency}</TableCell>
+                    <TableCell>{e.agent_name || "—"}</TableCell>
+                    <TableCell>
+                      <Badge className={
+                        e.status === "approved" ? "bg-green-100 text-green-800" :
+                        e.status === "rejected" ? "bg-red-100 text-red-800" :
+                        "bg-yellow-100 text-yellow-800"
+                      }>{typeMap[e.status] || e.status}</Badge>
+                    </TableCell>
+                    <TableCell>{new Date(e.expense_date).toLocaleDateString()}</TableCell>
+                    <TableCell>{e.warehouse_name || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {showArchive ? (
+                        <Button size="sm" variant="outline" onClick={() => void handleRestoreExpense(e.id)}>
+                          Tiklash
+                        </Button>
+                      ) : e.status === "draft" ? (
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <Button size="sm" variant="default" onClick={() => void handleAction(e.id, "approve")}>Tasdiqlash</Button>
+                          <Button size="sm" variant="destructive" onClick={() => void handleAction(e.id, "reject")}>Rad etish</Button>
+                          <Button size="sm" variant="outline" onClick={() => void handleDeleteDraft(e.id)}>Arxivga</Button>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {total > 20 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-muted-foreground">Jami: {formatNumberGrouped(total, { maxFractionDigits: 0 })}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Oldingi</Button>
+                <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)}>Keyingi</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

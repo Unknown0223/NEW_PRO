@@ -1,0 +1,115 @@
+{
+  "run_tag": "sd_full_1778132889280",
+  "tenant": "test1",
+  "date_utc": "2026-05-07",
+  "dry_run": false,
+  "payment_keys_from_tenant": [
+    "naqd",
+    "terminal",
+    "perechis"
+  ],
+  "keys_used": [
+    "naqd",
+    "terminal",
+    "perechis"
+  ],
+  "agents": 881,
+  "supervisors": 171,
+  "expeditors": 226,
+  "clients_fetched": 400,
+  "client_fetch_cap": 400,
+  "orders_planned": 400,
+  "visits_per_agent": 1,
+  "empty_payment_ratio": 0.08,
+  "created_orders": 400,
+  "created_visits": 881,
+  "created_photos": 881,
+  "created_assignments": 881,
+  "primary_supervisor": {
+    "id": 4,
+    "name": "Supervizor (seed)"
+  },
+  "kpi_no_supervisor_filter": {
+    "total_sales_sum": "17626000",
+    "cash_sales_sum": "3125000",
+    "sales_by_payment_method": [
+      {
+        "method": "",
+        "sum": "8551000"
+      },
+      {
+        "method": "naqd",
+        "sum": "3125000"
+      },
+      {
+        "method": "perechis",
+        "sum": "3100000"
+      },
+      {
+        "method": "terminal",
+        "sum": "2850000"
+      }
+    ],
+    "planned_visits": 328348,
+    "visited_planned": 401,
+    "visited_total": 881,
+    "successful_visits": 400,
+    "gps_visits": 881,
+    "photo_reports": 881,
+    "visit_pct": 0.1,
+    "success_pct": 45.4,
+    "gps_pct": 0.3,
+    "photo_pct": 0.3
+  },
+  "kpi_as_primary_supervisor": {
+    "total_sales_sum": "9676000",
+    "cash_sales_sum": "600000",
+    "sales_by_payment_method": [
+      {
+        "method": "",
+        "sum": "7726000"
+      },
+      {
+        "method": "perechis",
+        "sum": "675000"
+      },
+      {
+        "method": "terminal",
+        "sum": "675000"
+      },
+      {
+        "method": "naqd",
+        "sum": "600000"
+      }
+    ],
+    "planned_visits": 52138,
+    "visited_planned": 112,
+    "visited_total": 200,
+    "successful_visits": 82,
+    "gps_visits": 200,
+    "photo_reports": 200,
+    "visit_pct": 0.2,
+    "success_pct": 41,
+    "gps_pct": 0.4,
+    "photo_pct": 0.4
+  },
+  "sales_by_payment_method": [
+    {
+      "method": "",
+      "sum": "8551000"
+    },
+    {
+      "method": "naqd",
+      "sum": "3125000"
+    },
+    {
+      "method": "perechis",
+      "sum": "3100000"
+    },
+    {
+      "method": "terminal",
+      "sum": "2850000"
+    }
+  ],
+  "visit_rows": 881
+}

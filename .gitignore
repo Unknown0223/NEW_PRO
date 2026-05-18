@@ -1,0 +1,50 @@
+# Nested clone (accidental duplicate repo folder)
+SALEC/
+
+# Docker Postgres ma’lumoti (infrastructure/docker-compose bind mount)
+SALES/postgres-data/
+**/postgres-data/
+
+# Next.js (ildiz yoki boshqa joyda build bo‘lsa)
+**/.next/
+out/
+
+# Test / coverage
+coverage/
+**/coverage/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+blob-report/
+**/blob-report/
+
+# Postgres / lokal PID
+**/postmaster.pid
+*.pid
+
+# OS
+Thumbs.db
+Desktop.ini
+
+.git copy/
+
+.claude/
+
+backend/.env
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+**/dist/
+**/build/
+**/.DS_Store
+*.log
+backend/tests/.db-integration-ready
+
+# Excel import: qo‘lda qo‘yiladigan .xlsx (README va .gitkeep saqlanadi)
+backend/scripts/data/excel/*.xlsx
+backend/scripts/data/excel/warehouse-aliases.json
+
+# Archive (rollback uchun saqlangan eski kod)
+archive/

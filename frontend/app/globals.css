@@ -1,0 +1,1182 @@
+@import "tw-animate-css";
+@import "@webdatarocks/webdatarocks/webdatarocks.css";
+@import "shadcn/tailwind.css";
+@import "./theme-palettes.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  @keyframes bonus-rule-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    15% {
+      transform: translateX(-6px);
+    }
+    30% {
+      transform: translateX(6px);
+    }
+    45% {
+      transform: translateX(-4px);
+    }
+    60% {
+      transform: translateX(4px);
+    }
+    75% {
+      transform: translateX(-2px);
+    }
+  }
+  .animate-bonus-rule-shake {
+    animation: bonus-rule-shake 0.45s ease-in-out;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /** Scroll ishlaydi, lekin track/thumb ko‘rinmaydi (yon panel va ichki menyu) */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+    background: transparent;
+  }
+}
+
+@layer base {
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+  }
+  :root {
+    /* Yumshoq kulrang fon, chuqurlik uchun */
+    --background: oklch(0.978 0.006 250);
+    --foreground: oklch(0.22 0.02 255);
+    --card: oklch(0.995 0.003 250);
+    --card-foreground: oklch(0.22 0.02 255);
+    --popover: oklch(0.995 0.003 250);
+    --popover-foreground: oklch(0.22 0.02 255);
+    /* Asosiy rang: teal (savdo / ishonch) */
+    --primary: oklch(0.52 0.12 175);
+    --primary-foreground: oklch(0.99 0.005 175);
+    --secondary: oklch(0.94 0.02 250);
+    --secondary-foreground: oklch(0.28 0.03 255);
+    --muted: oklch(0.94 0.012 250);
+    --muted-foreground: oklch(0.48 0.02 255);
+    --accent: oklch(0.93 0.04 175);
+    --accent-foreground: oklch(0.28 0.06 175);
+    --destructive: oklch(0.55 0.22 25);
+    --border: oklch(0.9 0.012 250);
+    --input: oklch(0.9 0.012 250);
+    --ring: oklch(0.55 0.12 175);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    /* To‘q yashil sidebar (referens SALESDOC) */
+    --sidebar: oklch(0.32 0.08 155);
+    --sidebar-foreground: oklch(0.98 0.01 155);
+    --sidebar-primary: oklch(0.92 0.12 85);
+    --sidebar-primary-foreground: oklch(0.22 0.04 155);
+    --sidebar-accent: oklch(0.38 0.07 155);
+    --sidebar-accent-foreground: oklch(0.98 0.01 155);
+    --sidebar-border: oklch(0.4 0.06 155);
+    --sidebar-ring: oklch(0.55 0.08 155);
+  }
+  .dark {
+    --background: oklch(0.16 0.02 255);
+    --foreground: oklch(0.96 0.01 250);
+    --card: oklch(0.2 0.025 255);
+    --card-foreground: oklch(0.96 0.01 250);
+    --popover: oklch(0.2 0.025 255);
+    --popover-foreground: oklch(0.96 0.01 250);
+    --primary: oklch(0.62 0.12 175);
+    --primary-foreground: oklch(0.15 0.03 175);
+    --secondary: oklch(0.26 0.03 255);
+    --secondary-foreground: oklch(0.95 0.01 250);
+    --muted: oklch(0.26 0.03 255);
+    --muted-foreground: oklch(0.72 0.02 250);
+    --accent: oklch(0.28 0.05 175);
+    --accent-foreground: oklch(0.95 0.02 175);
+    --destructive: oklch(0.62 0.2 25);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 14%);
+    --ring: oklch(0.62 0.12 175);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.28 0.07 155);
+    --sidebar-foreground: oklch(0.96 0.01 155);
+    --sidebar-primary: oklch(0.88 0.1 85);
+    --sidebar-primary-foreground: oklch(0.2 0.04 155);
+    --sidebar-accent: oklch(0.35 0.06 155);
+    --sidebar-accent-foreground: oklch(0.98 0.01 155);
+    --sidebar-border: oklch(0.38 0.05 155);
+    --sidebar-ring: oklch(0.52 0.08 155);
+  }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Panel asosiy kontent — yengil kontrast */
+.app-main-canvas {
+  background: linear-gradient(
+    165deg,
+    oklch(0.97 0.008 250) 0%,
+    oklch(0.985 0.005 200) 45%,
+    oklch(0.975 0.01 250) 100%
+  );
+}
+
+.dark .app-main-canvas {
+  background: linear-gradient(165deg, oklch(0.16 0.02 255) 0%, oklch(0.18 0.025 250) 100%);
+}
+
+@layer components {
+  /* #wdr-toolbar-wrapper and #wdr-pivot-view are siblings inside the WDR container. Do not use flex/height:auto
+     on #wdr-pivot-view — it overrides the library’s px height and breaks the data sheet layout (empty grid). */
+  .wdr-host #wdr-toolbar-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+  /* Tab strip: remove from layout entirely. Modals append to wrapper, not inside #wdr-toolbar. */
+  .wdr-host #wdr-toolbar {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  /*
+   * WebDataRocks — doimiy «klassik» oq jadval (dark/light paneldan mustaqil).
+   * Oldin shadcn tokenlari ishlatilganda fon pushtish/krem bo‘lib qolardi.
+   */
+  .wdr-host {
+    color-scheme: light;
+    color: #111;
+    scrollbar-color: #b0b0b0 #f0f0f0;
+  }
+
+  .wdr-host #wdr-pivot-view {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-grid-view {
+    background-color: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-grid-layout #wdr-data-sheet,
+  .wdr-host #wdr-pivot-view .wdr-grid-layout #wdr-rows-sheet,
+  .wdr-host #wdr-pivot-view .wdr-grid-layout #wdr-cols-sheet,
+  .wdr-host #wdr-pivot-view .wdr-grid-layout #wdr-sheet-headers {
+    background-color: #fff !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-grid-layout #wdr-data-sheet {
+    border-top-color: #dbdbdb !important;
+    border-left-color: #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-grid-layout div.wdr-cell {
+    background-color: #fff !important;
+    color: #111 !important;
+    border-right-color: #dbdbdb !important;
+    border-bottom-color: #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-grid-layout div.wdr-header {
+    background-color: #f1f1f1 !important;
+    color: #111 !important;
+    border-right-color: #dbdbdb !important;
+    border-bottom-color: #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-grid-layout div.wdr-sheet-header {
+    background-color: #f1f1f1 !important;
+    color: #555 !important;
+    border-right-color: #dbdbdb !important;
+    border-bottom-color: #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view span.wdr-ui-label.wdr-pivot-title {
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-branding-bar {
+    background: #f5f5f5 !important;
+    border-top: 1px solid #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-branding-bar > span,
+  .wdr-host #wdr-pivot-view #wdr-branding-bar > span a,
+  .wdr-host #wdr-pivot-view #wdr-branding-bar #wdr-version-label {
+    color: #777 !important;
+  }
+
+  /* Tashqi «Поля» tugmasi bor — WDR ning o‘ng-ustki floating tugmasi va mobil toolbar yopiladi */
+  .wdr-host #wdr-pivot-view .wdr-fields-view-wrap #wdr-btn-open-fields {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .wdr-host #wdr-pivot-view .wdr-ui-toolbar-mobile {
+    display: none !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view,
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-panel-content {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-header {
+    background: #f1f1f1 !important;
+    border-bottom: 1px solid #d5d5d5 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-filter-view {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view div.wdr-ui-window .wdr-popup-header {
+    background: #f1f1f1 !important;
+    color: #111 !important;
+    border-bottom: 1px solid #d5d5d5 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap {
+    border-color: #d5d5d5 !important;
+    background: #fff !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-header {
+    background: #f1f1f1 !important;
+    border-bottom-color: #d5d5d5 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-header span.wdr-ui-label {
+    color: #999 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-header .wdr-search-wrap {
+    border-left-color: #d5d5d5 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-header .wdr-search-wrap .wdr-search-inp {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-content {
+    background: #fff !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-content li {
+    color: #111 !important;
+    border-bottom-color: #dbdbdb !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-fields-view .wdr-popup-content .wdr-list-wrap .wdr-list-content li:hover {
+    background: #f1f1f1 !important;
+  }
+
+  /* «Опции» / format — toolbar-wrapper popup */
+  .wdr-host #wdr-toolbar-wrapper div.wdr-popup,
+  .wdr-host #wdr-toolbar-wrapper div.wdr-panel.wdr-popup {
+    background: #fff !important;
+    color: #111 !important;
+    border-color: #d5d5d5 !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .wdr-host #wdr-toolbar-wrapper div.wdr-modal-overlay {
+    background: rgba(255, 255, 255, 0.75) !important;
+  }
+
+  .wdr-host #wdr-toolbar-wrapper .wdr-panel .wdr-panel-content {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-context-menu .wdr-ui-list,
+  .wdr-host #wdr-toolbar-wrapper .wdr-dropdown-content {
+    background: #fff !important;
+    border-color: #d5d5d5 !important;
+    color: #111 !important;
+  }
+
+  .wdr-host #wdr-pivot-view #wdr-context-menu .wdr-ui-list li:hover,
+  .wdr-host #wdr-toolbar-wrapper .wdr-dropdown-content li:hover {
+    background: #f1f1f1 !important;
+    color: #111 !important;
+  }
+
+  .wdr-host a.wdr-ui-btn-dark,
+  .wdr-host #wdr-btn-apply.wdr-ui-btn-dark {
+    background: #555 !important;
+    color: #fff !important;
+    border-color: #555 !important;
+  }
+
+  .wdr-host a.wdr-ui-btn-light,
+  .wdr-host a.wdr-ui-btn-superlight {
+    background: #fbfbfb !important;
+    color: #555 !important;
+    border-color: #d5d5d5 !important;
+  }
+
+  .access-surface {
+    border-radius: calc(var(--radius) + 4px);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, var(--primary) 30%);
+    background: linear-gradient(
+      170deg,
+      color-mix(in srgb, var(--card) 90%, var(--muted) 10%) 0%,
+      color-mix(in srgb, var(--card) 96%, var(--background) 4%) 100%
+    );
+    box-shadow: 0 10px 30px -14px color-mix(in srgb, var(--foreground) 26%, transparent);
+  }
+
+  .access-left-panel {
+    border: 1px solid color-mix(in srgb, var(--border) 78%, var(--primary) 22%);
+    background: color-mix(in srgb, var(--card) 88%, var(--muted) 12%);
+    border-radius: calc(var(--radius) + 2px);
+  }
+
+  .access-right-panel {
+    border: 1px solid color-mix(in srgb, var(--border) 72%, var(--primary) 28%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card) 93%, var(--background) 7%) 0%,
+      color-mix(in srgb, var(--card) 86%, var(--muted) 14%) 100%
+    );
+    border-radius: calc(var(--radius) + 2px);
+  }
+
+  .access-tab-chip {
+    @apply rounded-md px-3 py-1 text-xs transition-colors;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  }
+
+  .access-tab-chip[data-active="true"] {
+    background: color-mix(in srgb, var(--primary) 78%, var(--card) 22%);
+    color: var(--primary-foreground);
+    border-color: color-mix(in srgb, var(--primary) 55%, var(--border) 45%);
+  }
+
+  .access-item-card {
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    border-radius: var(--radius);
+  }
+
+  .access-item-card[data-active="true"] {
+    border-color: color-mix(in srgb, var(--primary) 62%, var(--border) 38%);
+    background: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+  }
+
+  .access-status-pill {
+    @apply rounded-md px-2.5 py-1 text-xs transition-colors;
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+
+  .access-status-pill[data-active="true"] {
+    background: color-mix(in srgb, var(--primary) 82%, var(--card) 18%);
+    color: var(--primary-foreground);
+    border-color: color-mix(in srgb, var(--primary) 50%, var(--border) 50%);
+  }
+
+  /** Единый вид select в карточках «Фильтр» (Доступ / шаблон) */
+  .access-filter-select {
+    @apply h-8 min-w-0 rounded-md border border-input bg-background px-2 text-xs shadow-sm;
+    @apply max-w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+  }
+
+  /** Короткие поля (Статус, источник) — не растягиваются на длину «Раздел» */
+  .access-filter-select--fixed {
+    width: 10.5rem;
+    max-width: 100%;
+  }
+
+  /** Подписи полей в карточке «Фильтр» (Доступ) */
+  .access-filter-field-label {
+    @apply mb-0.5 block text-[11px] font-medium text-muted-foreground;
+  }
+
+  /** Фильтры в одну линию (узкий gap) + кнопка справа, выравнивание по нижнему краю полей */
+  .access-filter-bar {
+    @apply flex flex-wrap items-end gap-x-2 gap-y-2 lg:flex-nowrap;
+  }
+
+  /** Первая колонка матрицы прав — только чекбоксы */
+  .access-matrix-col-select {
+    @apply w-8 min-w-[2rem] px-0.5 text-center align-middle;
+    border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    background: color-mix(in srgb, var(--muted) 6%, transparent);
+  }
+
+  /**
+   * «Доступ» — jadval shabloni: thead va tbody alohida; vertikal scroll faqat tbody;
+   * thead `overflow-y-scroll` + `scrollbar-gutter:stable` — ustun sarlavhasida scroll bo‘lmasin.
+   */
+  .access-split-scroll-panel {
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card shadow-sm;
+  }
+  .access-split-scroll-head {
+    @apply shrink-0 overflow-x-auto overflow-y-hidden border-b border-border bg-card;
+  }
+  .access-split-scroll-body {
+    @apply min-h-0 flex-1 overflow-y-auto overflow-x-auto overscroll-contain bg-card;
+  }
+  .access-split-scroll-table {
+    @apply w-full min-w-[656px] table-fixed border-collapse text-xs;
+  }
+  /** Foydalanuvchi kartochkasi — operatsiyalar matritsasi (kengroq ustunlar) */
+  .access-matrix-table {
+    @apply w-full min-w-[800px] table-fixed border-collapse text-xs;
+  }
+  /** «История доступов» va boshqa bitta jadval — gorizontal + vertikal avto */
+  .access-table-scroll {
+    @apply overflow-x-auto overflow-y-auto;
+  }
+
+  /** Верхняя полоса вкладок + ссылок — как панель фильтров «История доступов» */
+  .access-hub-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2;
+    background: color-mix(in srgb, var(--muted) 20%, var(--background));
+  }
+
+  /** Заголовок блока списка слева */
+  .access-list-cap {
+    @apply shrink-0 px-3 py-2 text-xs font-semibold tracking-tight text-foreground;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background: color-mix(in srgb, var(--muted) 25%, var(--card));
+  }
+
+  /* Заявки: три визуальных блока — фильтры / панель таблицы / таблица */
+  /* Заявки: фильтр плотнее к блоку таблицы */
+  .orders-hub-section--filters.orders-hub-section--stack-tight {
+    margin-bottom: 0.5rem;
+  }
+
+  .orders-hub-section--filters {
+    margin-bottom: 1rem;
+    border-radius: calc(var(--radius) + 2px);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 70%, var(--primary) 30%);
+    background: linear-gradient(
+      162deg,
+      color-mix(in srgb, var(--card) 80%, var(--primary) 20%) 0%,
+      var(--card) 48%,
+      color-mix(in srgb, var(--card) 94%, var(--muted) 6%) 100%
+    );
+    box-shadow: 0 6px 24px -10px color-mix(in srgb, var(--foreground) 16%, transparent);
+  }
+
+  .orders-hub-section--toolbar {
+    margin-bottom: 1rem;
+    border-radius: calc(var(--radius) + 2px);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, var(--foreground) 12%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--muted) 50%, var(--card) 50%) 0%,
+      color-mix(in srgb, var(--card) 96%, var(--muted) 4%) 100%
+    );
+    box-shadow: 0 3px 14px -6px color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+
+  .orders-hub-section--table {
+    margin-bottom: 1rem;
+    border-radius: calc(var(--radius) + 2px);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 55%, var(--primary) 45%);
+    background: var(--card);
+    box-shadow: 0 8px 30px -10px color-mix(in srgb, var(--foreground) 18%, transparent);
+  }
+
+  .orders-filter-field-label {
+    @apply flex flex-col gap-1 text-xs font-medium;
+    color: color-mix(in srgb, var(--foreground) 88%, transparent);
+  }
+
+  /* Ro‘yxat jadvallari: ustun nomlari qatori — fon va chiziq bilan ajratiladi */
+  .app-table-thead > tr {
+    border-bottom: 2px solid color-mix(in srgb, var(--border) 68%, var(--primary) 32%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--muted) 58%, var(--primary) 14%) 0%,
+      color-mix(in srgb, var(--muted) 36%, var(--card) 64%) 100%
+    );
+  }
+
+  .app-table-thead > tr > th {
+    @apply text-xs font-semibold tracking-tight;
+    color: color-mix(in srgb, var(--foreground) 92%, var(--muted-foreground) 8%);
+  }
+
+  /**
+   * Супервайзер — «Дневной отчет по визитам» (yorug‘ shablon: pastell «По плану» / «Вне плана», zebra).
+   * Ranglar tema tokenlari (primary, destructive, card, sidebar) bilan aralashgan.
+   */
+  .supervisor-visit-report {
+    @apply rounded-md border shadow-sm;
+    border-color: var(--border);
+    background: var(--card);
+  }
+  .svr-th {
+    @apply px-1.5 py-1.5 text-center text-[11px] font-medium leading-tight;
+    border: 1px solid var(--border);
+  }
+  /* «Агент» / «По плану» — biroz to‘qroq yashil tint */
+  .svr-th--agent {
+    background: color-mix(in oklch, var(--primary) 30%, var(--card) 70%);
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--primary) 34%, var(--border) 66%);
+  }
+  .supervisor-visit-report thead th.svr-th.svr-th--agent {
+    background-color: color-mix(in oklch, var(--primary) 30%, var(--card) 70%) !important;
+    color: var(--foreground) !important;
+    border-color: color-mix(in oklch, var(--primary) 34%, var(--border) 66%) !important;
+    vertical-align: middle !important;
+    text-align: center !important;
+    font-weight: 600;
+    min-width: 10.5rem;
+    max-width: min(22rem, 32vw);
+  }
+  /* Pastell yashil / qizil — shablon: #e0f2e1, #fce4ec ga yaqin */
+  .svr-th--band-plan {
+    background: color-mix(in oklch, var(--primary) 30%, var(--card) 70%);
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--primary) 34%, var(--border) 66%);
+  }
+
+  /** Supervisor KPI: «Общая сумма» strip — xuddi «По плану» */
+  .kpi-supervisor-strip-total {
+    background: color-mix(in oklch, var(--primary) 30%, var(--card) 70%);
+    color: var(--foreground);
+    border-bottom: 1px solid color-mix(in oklch, var(--primary) 34%, var(--border) 66%);
+  }
+  .svr-th--band-out {
+    background: color-mix(in oklch, var(--destructive) 18%, var(--card) 82%);
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--destructive) 24%, var(--border) 76%);
+  }
+  .svr-th--sub-plan {
+    background: color-mix(in oklch, var(--primary) 18%, var(--card) 82%);
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--primary) 24%, var(--border) 76%);
+  }
+  .svr-th--sub-out {
+    background: color-mix(in oklch, var(--destructive) 10%, var(--card) 90%);
+    color: var(--foreground);
+    border-color: color-mix(in oklch, var(--destructive) 16%, var(--border) 84%);
+  }
+  .svr-td {
+    @apply px-1.5 py-1.5 text-center text-xs tabular-nums;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground);
+  }
+  .svr-td--agent {
+    @apply max-w-[min(420px,40vw)] px-2 text-left;
+  }
+  .svr-tr-data:nth-child(even) .svr-td {
+    background: color-mix(in srgb, var(--muted) 42%, var(--card) 58%);
+  }
+  /* Shablon: yengil cyan ajratish (#e0f7fa ga yaqin) */
+  .svr-tr-data:hover .svr-td {
+    background: color-mix(in srgb, var(--primary) 9%, var(--card) 91%);
+  }
+  .svr-td.svr-td--foot {
+    @apply font-semibold;
+    background: color-mix(in srgb, var(--muted) 48%, var(--card) 52%);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+
+  .dark .supervisor-visit-report {
+    background: var(--card);
+  }
+  .dark .svr-th--agent {
+    background: color-mix(in oklch, var(--primary) 34%, var(--card) 66%);
+    color: var(--foreground);
+  }
+  .dark .supervisor-visit-report thead th.svr-th.svr-th--agent {
+    background-color: color-mix(in oklch, var(--primary) 34%, var(--card) 66%) !important;
+    color: var(--foreground) !important;
+  }
+  .dark .svr-th--band-plan {
+    background: color-mix(in oklch, var(--primary) 34%, var(--card) 66%);
+    color: var(--foreground);
+  }
+  .dark .kpi-supervisor-strip-total {
+    background: color-mix(in oklch, var(--primary) 34%, var(--card) 66%);
+    color: var(--foreground);
+    border-bottom-color: color-mix(in oklch, var(--primary) 34%, var(--border) 66%);
+  }
+  .dark .svr-th--band-out {
+    background: color-mix(in oklch, var(--destructive) 22%, var(--card) 78%);
+    color: var(--foreground);
+  }
+  .dark .svr-th--sub-plan {
+    background: color-mix(in oklch, var(--primary) 24%, var(--card) 76%);
+  }
+  .dark .svr-th--sub-out {
+    background: color-mix(in oklch, var(--destructive) 14%, var(--card) 86%);
+  }
+  .dark .svr-td {
+    background: var(--card);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+  .dark .svr-tr-data:nth-child(even) .svr-td {
+    background: color-mix(in srgb, var(--muted) 55%, var(--card) 45%);
+  }
+  .dark .svr-tr-data:hover .svr-td {
+    background: color-mix(in srgb, var(--primary) 14%, var(--card) 86%);
+  }
+  .dark .svr-td.svr-td--foot {
+    background: color-mix(in srgb, var(--muted) 40%, var(--card) 60%);
+  }
+
+  /**
+   * Double-bounce loader (Spinkit uslubi) — rang `primary` bilan tema bilan mos.
+   */
+  @keyframes spinner-double-bounce-sk-bounce {
+    0%,
+    100% {
+      transform: scale(0);
+    }
+    50% {
+      transform: scale(1);
+    }
+  }
+
+  .spinner-double-bounce {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .spinner-double-bounce__bounce1,
+  .spinner-double-bounce__bounce2 {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--loader-accent, var(--primary));
+    opacity: 0.72;
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: spinner-double-bounce-sk-bounce 2s infinite ease-in-out;
+  }
+
+  .spinner-double-bounce__bounce2 {
+    animation-delay: -1s;
+  }
+
+  /**
+   * Newton’s cradle — Uiverse.io (dovatgabriel), moslashtirilgan.
+   * Nuqta rangi: `currentColor` (komponentda `text-primary` yoki boshqa).
+   */
+  @keyframes newtons-cradle-swing {
+    0% {
+      transform: rotate(0deg);
+      animation-timing-function: ease-out;
+    }
+    25% {
+      transform: rotate(70deg);
+      animation-timing-function: ease-in;
+    }
+    50% {
+      transform: rotate(0deg);
+      animation-timing-function: linear;
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes newtons-cradle-swing2 {
+    0% {
+      transform: rotate(0deg);
+      animation-timing-function: linear;
+    }
+    50% {
+      transform: rotate(0deg);
+      animation-timing-function: ease-out;
+    }
+    75% {
+      transform: rotate(-70deg);
+      animation-timing-function: ease-in;
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+
+  .newtons-cradle {
+    --uib-size: 50px;
+    --uib-speed: 1.2s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--uib-size);
+    height: var(--uib-size);
+    flex-shrink: 0;
+    color: var(--loader-accent, var(--primary));
+    opacity: 0.88;
+  }
+
+  .newtons-cradle__dot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    width: 25%;
+    transform-origin: center top;
+  }
+
+  .newtons-cradle__dot::after {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 25%;
+    border-radius: 50%;
+    background-color: currentColor;
+  }
+
+  .newtons-cradle__dot:first-child {
+    animation: newtons-cradle-swing var(--uib-speed) linear infinite;
+  }
+
+  .newtons-cradle__dot:last-child {
+    animation: newtons-cradle-swing2 var(--uib-speed) linear infinite;
+  }
+
+  /* --- Salec: kvadratlar traektoriyasi (7 ta) --- */
+  @keyframes salec-square-path-move {
+    0% {
+      left: 0;
+      top: 0;
+    }
+    10.5% {
+      left: 0;
+      top: 0;
+    }
+    12.5% {
+      left: 32px;
+      top: 0;
+    }
+    23% {
+      left: 32px;
+      top: 0;
+    }
+    25% {
+      left: 64px;
+      top: 0;
+    }
+    35.5% {
+      left: 64px;
+      top: 0;
+    }
+    37.5% {
+      left: 64px;
+      top: 32px;
+    }
+    48% {
+      left: 64px;
+      top: 32px;
+    }
+    50% {
+      left: 32px;
+      top: 32px;
+    }
+    60.5% {
+      left: 32px;
+      top: 32px;
+    }
+    62.5% {
+      left: 32px;
+      top: 64px;
+    }
+    73% {
+      left: 32px;
+      top: 64px;
+    }
+    75% {
+      left: 0;
+      top: 64px;
+    }
+    85.5% {
+      left: 0;
+      top: 64px;
+    }
+    87.5% {
+      left: 0;
+      top: 32px;
+    }
+    98% {
+      left: 0;
+      top: 32px;
+    }
+    100% {
+      left: 0;
+      top: 0;
+    }
+  }
+
+  .salec-square-path {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .salec-square-path__inner {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+    transform-origin: center center;
+  }
+
+  .salec-square-path__cell {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
+    margin: 2px;
+    border-radius: 2px;
+    background: var(--loader-accent, var(--primary));
+    animation: salec-square-path-move 10s ease-in-out infinite both;
+  }
+
+  .salec-square-path__cell:nth-child(1) {
+    animation-delay: 0s;
+  }
+  .salec-square-path__cell:nth-child(2) {
+    animation-delay: calc(-10s / 7);
+  }
+  .salec-square-path__cell:nth-child(3) {
+    animation-delay: calc(-10s / 7 * 2);
+  }
+  .salec-square-path__cell:nth-child(4) {
+    animation-delay: calc(-10s / 7 * 3);
+  }
+  .salec-square-path__cell:nth-child(5) {
+    animation-delay: calc(-10s / 7 * 4);
+  }
+  .salec-square-path__cell:nth-child(6) {
+    animation-delay: calc(-10s / 7 * 5);
+  }
+  .salec-square-path__cell:nth-child(7) {
+    animation-delay: -10s;
+  }
+
+  /* --- Salec: radial «relsovye» + sharlar --- */
+  @keyframes salec-radial-ball-move {
+    0% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(12em);
+    }
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  .salec-radial-balls {
+    --salec-rfb-unit: 3px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: var(--salec-rfb-box, 80px);
+    height: var(--salec-rfb-box, 80px);
+    font-size: var(--salec-rfb-unit);
+  }
+
+  .salec-radial-balls__tracks,
+  .salec-radial-balls__arms {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .salec-radial-balls__arms {
+    z-index: 2;
+  }
+  .salec-radial-balls__tracks {
+    z-index: 1;
+  }
+
+  .salec-radial-balls__track {
+    position: absolute;
+    width: 1.15em;
+    height: 13em;
+    border-radius: 50px;
+    background: color-mix(in srgb, var(--muted) 82%, var(--border) 18%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  }
+
+  .salec-radial-balls__track::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1.15em;
+    height: 5em;
+    background: color-mix(in srgb, var(--muted) 78%, var(--card) 22%);
+    border-radius: 50px;
+    border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    box-shadow:
+      inset 3px 3px 10px color-mix(in srgb, var(--foreground) 8%, transparent),
+      inset -3px -3px 10px color-mix(in srgb, var(--card) 40%, transparent);
+    mask-image: linear-gradient(to bottom, black calc(100% - 2.8em), transparent 100%);
+  }
+
+  .salec-radial-balls__track::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 1.15em;
+    height: 4.5em;
+    background: color-mix(in srgb, var(--muted) 78%, var(--card) 22%);
+    border-radius: 50px;
+    border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    box-shadow:
+      inset 3px 3px 10px color-mix(in srgb, var(--foreground) 8%, transparent),
+      inset -3px -3px 10px color-mix(in srgb, var(--card) 40%, transparent);
+    mask-image: linear-gradient(to top, black calc(100% - 2.8em), transparent 100%);
+  }
+
+  .salec-radial-balls__arm {
+    position: absolute;
+    width: 1.15em;
+    height: 13em;
+    border-radius: 50px;
+    background: transparent;
+  }
+
+  .salec-radial-balls__ball {
+    width: 1.15em;
+    height: 1.15em;
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--loader-accent, var(--primary)) 92%, var(--card) 8%);
+    box-shadow:
+      color-mix(in srgb, var(--foreground) 14%, transparent) 0 -6px 8px 0 inset,
+      color-mix(in srgb, var(--foreground) 10%, transparent) 0 2px 4px 0;
+    animation: salec-radial-ball-move 3.63s ease-in-out infinite;
+  }
+
+  .salec-radial-balls__track:nth-child(2),
+  .salec-radial-balls__arm:nth-child(2) {
+    transform: rotate(20deg);
+  }
+  .salec-radial-balls__track:nth-child(3),
+  .salec-radial-balls__arm:nth-child(3) {
+    transform: rotate(40deg);
+  }
+  .salec-radial-balls__track:nth-child(4),
+  .salec-radial-balls__arm:nth-child(4) {
+    transform: rotate(60deg);
+  }
+  .salec-radial-balls__track:nth-child(5),
+  .salec-radial-balls__arm:nth-child(5) {
+    transform: rotate(80deg);
+  }
+  .salec-radial-balls__track:nth-child(6),
+  .salec-radial-balls__arm:nth-child(6) {
+    transform: rotate(100deg);
+  }
+  .salec-radial-balls__track:nth-child(7),
+  .salec-radial-balls__arm:nth-child(7) {
+    transform: rotate(120deg);
+  }
+  .salec-radial-balls__track:nth-child(8),
+  .salec-radial-balls__arm:nth-child(8) {
+    transform: rotate(140deg);
+  }
+  .salec-radial-balls__track:nth-child(9),
+  .salec-radial-balls__arm:nth-child(9) {
+    transform: rotate(160deg);
+  }
+
+  .salec-radial-balls__arm:nth-child(1) .salec-radial-balls__ball {
+    animation-delay: 0s;
+  }
+  .salec-radial-balls__arm:nth-child(2) .salec-radial-balls__ball {
+    animation-delay: 0.2s;
+  }
+  .salec-radial-balls__arm:nth-child(3) .salec-radial-balls__ball {
+    animation-delay: 0.4s;
+  }
+  .salec-radial-balls__arm:nth-child(4) .salec-radial-balls__ball {
+    animation-delay: 0.6s;
+  }
+  .salec-radial-balls__arm:nth-child(5) .salec-radial-balls__ball {
+    animation-delay: 0.8s;
+  }
+  .salec-radial-balls__arm:nth-child(6) .salec-radial-balls__ball {
+    animation-delay: 1s;
+  }
+  .salec-radial-balls__arm:nth-child(7) .salec-radial-balls__ball {
+    animation-delay: 1.2s;
+  }
+  .salec-radial-balls__arm:nth-child(8) .salec-radial-balls__ball {
+    animation-delay: 1.4s;
+  }
+  .salec-radial-balls__arm:nth-child(9) .salec-radial-balls__ball {
+    animation-delay: 1.6s;
+  }
+
+  /* --- Salec: 3D kub --- */
+  @keyframes salec-cube-spin {
+    0% {
+      transform: rotateX(-30deg) rotateY(0);
+    }
+    100% {
+      transform: rotateX(-30deg) rotateY(360deg);
+    }
+  }
+
+  .salec-cube-loader {
+    --salec-cube-s: 75px;
+    position: relative;
+    width: var(--salec-cube-s);
+    height: var(--salec-cube-s);
+    flex-shrink: 0;
+    transform-style: preserve-3d;
+    transform: rotateX(-30deg);
+    animation: salec-cube-spin 4s linear infinite;
+  }
+
+  .salec-cube-loader__wrap {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+  }
+
+  .salec-cube-loader__face {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotateY(calc(90deg * var(--salec-cube-i, 0)))
+      translateZ(calc(var(--salec-cube-s) / 2));
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--loader-accent, var(--primary)) 35%, #0f172a),
+      color-mix(in srgb, var(--loader-accent, var(--primary)) 88%, #020617)
+    );
+    backface-visibility: hidden;
+  }
+
+  .salec-cube-loader__top {
+    position: absolute;
+    width: var(--salec-cube-s);
+    height: var(--salec-cube-s);
+    background: color-mix(in srgb, var(--loader-accent, var(--primary)) 55%, #020617);
+    transform: rotateX(90deg) translateZ(calc(var(--salec-cube-s) / 2));
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+  }
+
+  .salec-cube-loader__top::before {
+    content: "";
+    position: absolute;
+    width: var(--salec-cube-s);
+    height: var(--salec-cube-s);
+    background: color-mix(in srgb, var(--loader-accent, var(--primary)) 45%, #0f172a);
+    transform: translateZ(calc(var(--salec-cube-s) * -1.1));
+    filter: blur(10px);
+    opacity: 0.55;
+    box-shadow:
+      0 0 12px color-mix(in srgb, var(--foreground) 25%, transparent),
+      0 0 28px color-mix(in srgb, var(--loader-accent, var(--primary)) 40%, transparent);
+  }
+
+  /* --- Salec: SVG chip dash --- */
+  @keyframes salec-trace-flow {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .salec-trace-chip__bg {
+    stroke: color-mix(in srgb, var(--foreground) 32%, transparent);
+    stroke-width: 1.6;
+    fill: none;
+  }
+
+  .salec-trace-chip__flow {
+    stroke-width: 1.85;
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 22 200;
+    stroke-dashoffset: 222;
+    filter: drop-shadow(0 0 5px currentColor);
+    animation: salec-trace-flow 2.8s cubic-bezier(0.5, 0, 0.9, 1) infinite;
+  }
+}
+
+/* Komplektatsiya sahifasida chop etish: sidebar va yordamchi tugmalar yashirin */
+@media print {
+  html[data-print-picking="1"] aside {
+    display: none !important;
+  }
+  html[data-print-picking="1"] header.md\:hidden {
+    display: none !important;
+  }
+  html[data-print-picking="1"] .no-print-picking {
+    display: none !important;
+  }
+  html[data-print-picking="1"] .flex.h-dvh {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  html[data-print-picking="1"] .app-main-canvas,
+  html[data-print-picking="1"] .app-main-canvas > div {
+    overflow: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}

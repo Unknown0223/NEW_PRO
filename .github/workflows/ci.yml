@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: savdo_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d savdo_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/savdo_db
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: access-secret-key-min-32-characters-123
+      JWT_REFRESH_SECRET: refresh-secret-key-min-32-characters-123
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+        working-directory: backend
+
+      - name: Typecheck scripts (import tooling)
+        run: npm run typecheck:scripts
+        working-directory: backend
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+        working-directory: backend
+
+      - name: Seed database
+        run: npx prisma db seed
+        working-directory: backend
+
+      - name: Run tests
+        run: npm run test:ci
+        working-directory: backend
+
+      - name: Contract schemas (unit)
+        run: npm run test:contracts
+        working-directory: backend
+
+      - name: Orders domain coverage (staged, bosqich 1)
+        run: npm run test:coverage:orders
+        working-directory: backend
+
+      - name: Contract smoke (integration)
+        run: npx vitest run tests/contract-smoke.integration.test.ts
+        working-directory: backend
+
+      - name: Foundation perf gate (quick P95)
+        run: npm run foundation:perf:gate
+        working-directory: backend
+
+      - name: Build
+        run: npm run build
+        working-directory: backend
+
+      - name: Generate and validate OpenAPI
+        run: npm run openapi:generate && npm run openapi:lint
+        working-directory: backend
+
+      - name: Audit route tenant context (core modules)
+        run: npm run audit:route-tenant
+        working-directory: backend
+
+      - name: Audit max file lines (refactor ≤400)
+        run: npm run audit:max-loc
+        working-directory: backend
+
+      - name: Foundation fast verify (Grafana JSON)
+        run: node scripts/perf/validate-grafana-dashboard.mjs
+        working-directory: backend
+
+      - name: Order-debts integration test
+        run: npx vitest run tests/order-debts.integration.test.ts
+        working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Audit max file lines (order-create, access-main)
+        run: npm run audit:max-loc
+        working-directory: frontend
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Frontend full gate (quality + e2e smoke)
+        run: npm run test:all
+        working-directory: frontend
+        env:
+          CI: true

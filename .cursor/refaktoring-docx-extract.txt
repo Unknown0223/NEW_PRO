@@ -1,0 +1,579 @@
+SALEC
+Kod Refaktoring Rejasi
+Katta Fayllarni Bo'lish — Qadam-ba-qadam Ko'rsatma
+Maqsad
+2775 qator orders.service.ts → 7 ta 150-400 qatorli fayl
+Asosiy prinsip
+Bir fayl = bir mas'uliyat. Domain-driven bo'linish.
+Vaqt
+3-5 kun orders, 2-3 kun dashboard, 2 kun payments
+1. HOZIRGI HOLAT — KATTA FAYLLAR TAHLILI
+Loyiha kodini to'liq tahlil qilish asosida eng katta va murakkab fayllar aniqlandi.
+1.1 Eng Katta Servis Fayllari (Kritik)
+Fayl
+Hozirgi Qator
+Asosiy Muammo
+Refaktoring Zaruriyati
+orders.service.ts
+~2,775
+Hammasi bir joyda: create, status, pricing, bonus, nakladnoy, export
+🔴 Kritik
+dashboard.service.ts
+~2,373
+Supervisor, sales, monitoring CTE — aralash
+🔴 Kritik
+payments.service.ts
+~1,223
+Payment, balance, akt-sverka, konsignatsiya
+🟡 O'rtacha
+staff.service.ts
+~1,100+
+Agent, expeditor, supervisor, skladchik — bitta faylda
+🟡 O'rtacha
+products.service.ts
+~800+
+CRUD + linkage + catalog
+🟢 Kichik
+clients.service.ts
+~700+
+CRUD + balance + merge
+🟢 Kichik
+1.2 orders.service.ts Ichki Tuzilma
+2,775 qator ichida quyidagi funksiyalar bor:
+Funksiya guruhi
+Taxm. Qator
+Nima qiladi
+createOrder + helpers
+~500
+Zakaz yaratish: validation, stock rezerv, bonus, DB tranzaksiya
+updateOrderStatus
+~200
+Status machine: pending → confirmed → delivered → completed
+bulkUpdateOrderStatus
+~150
+Ko'plab zakazlarni bir vaqtda status o'zgartirish
+getProductPrice + pricing
+~250
+Narx hisoblash: price_type, discount, round
+parseBonusGiftSelectionsJson
+~180
+Bonus logikasi: gift tanlash, hisoblash
+requestBulkOrderNakladnoy
+~200
+Nakladnoy PDF/Excel generatsiya (background job)
+listOrdersPaged
+~250
+Ro'yxat: filter, sort, pagination, join
+getOrderDetail
+~150
+Bitta zakaz to'liq ma'lumoti
+updateOrderLines
+~120
+Zakaz qatorlarini tahrirlash
+bulkUpdateExpeditor
+~100
+Ekspeditor ommaviy o'zgartirish
+Helpers (10+ funksiya)
+~675
+roundOrderMoney, applyDiscount, validateStock va boshqalar
+1.3 Nima Uchun Bu Muammo?
+MUAMMO #1: Parallel ishlab chiqish mumkin emas
+Ikki dasturchi bir vaqtda orders.service.ts da ishlayolmaydi — Git conflict kafolatlangan.
+Pricing tuzatish bonus logikasiga ta'sir qilishi mumkin — hammasi bir joyda.
+Code review — 2775 qatorni o'qish 2-3 soat vaqt oladi.
+MUAMMO #2: Test qiyinlashadi
+Bitta funksiya test qilish uchun butun 2775 qatorni import qilish kerak.
+Mock qilish murakkab — createOrder() 10+ dependency.
+Test fayli ham katta bo'lib ketadi — orders.service.test.ts 1000+ qator.
+MUAMMO #3: Kod navigatsiyasi qiyin
+IDE da funksiya qidirish — 2775 qator ichida scroll.
+Yangi dasturchi 'pricing qayerda?' deb soraydi — javob: 'orders.service.ts qatorlar 800-1050 orasida'.
+Bitta fayl — 30+ export funksiya — qaysi biri public, qaysi biri helper aniq emas.
+2. BO'LINISH STRATEGIYASI — DOMAIN-DRIVEN
+Har fayl bitta domen mas'uliyatiga ega bo'ladi. Maksimal 300-400 qator.
+2.1 orders.service.ts → 7 Fayl
+Yangi Fayl
+Mas'uliyat
+Qator
+Asosiy Funksiyalar
+order.create.ts
+Faqat zakaz yaratish
+~400
+createOrder, validateOrderInput, reserveStock
+order.status.ts
+Faqat status machine
+~200
+updateOrderStatus, bulkUpdateOrderStatus, forwardTransition
+order.pricing.ts
+Faqat narx hisoblash
+~200
+getProductPrice, applyDiscount, roundOrderMoney
+order.bonus.ts
+Faqat bonus logikasi
+~250
+parseBonusGiftSelectionsJson, applyBonuses, bonusGiftMapToJson
+order.query.ts
+Faqat list/get
+~300
+listOrdersPaged, getOrderDetail, getOrderById
+order.export.ts
+Faqat PDF/Excel
+~250
+requestBulkOrderNakladnoy, generateNakladnoyPDF, exportToExcel
+order.meta.ts
+Tahrirlash va meta
+~200
+updateOrderLines, updateOrderMeta, bulkUpdateExpeditor
+MUHIM: Eski fayl saqlanadi (backward compatibility)
+orders.service.ts yangi variant — faqat re-export:
+export * from './order.create';
+export * from './order.status';
+...
+Natija: Mavjud import qatorlari ishdan chiqmaydi:
+import { createOrder } from '../orders/orders.service'; ← ishlaydi!
+2.2 dashboard.service.ts → 4 Fayl
+Yangi Fayl
+Mas'uliyat
+Qator
+CTE / SQL
+dashboard.supervisor.ts
+Supervisor dashboard faqat
+~600
+WITH planned, visits, orders_pairs... (800+ qator CTE)
+dashboard.sales.ts
+Sales dashboard faqat
+~500
+Savdo metrikalar CTE
+dashboard.monitoring.ts
+Real-time monitoring
+~400
+Monitoring snapshot
+dashboard.cache.ts
+Kesh logikasi (bitta joy)
+~150
+setSnapshotCache, getSnapshotCache, invalidate
+Kesh strategiyasi — bitta fayl
+DASHBOARD_CACHE_TTL va env.DASHBOARD_SNAPSHOT_CACHE_TTL_SECONDS — ikki xil TTL mavjud.
+dashboard.cache.ts da bitta joyga yig'ish:
+- getSnapshotCache(key, ttl)
+- setSnapshotCache(key, data, ttl)
+- invalidateCache(pattern)
+Har dashboard (supervisor, sales, monitoring) shu yagona cache.ts dan foydalanadi.
+2.3 payments.service.ts → 4 Fayl
+Yangi Fayl
+Mas'uliyat
+Qator
+payment.create.ts
+To'lov qabul qilish tranzaksiya
+~300
+payment.balance.ts
+Client balans hisoblash
+~250
+payment.consignment.ts
+Konsignatsiya logikasi
+~200
+payment.query.ts
+List, detail, export
+~250
+2.4 Umumiy Bo'linish Qoidalari
+QOIDA 1: Bitta fayl = bitta mas'uliyat (Single Responsibility Principle).
+QOIDA 2: Maksimal 400 qator. 400 dan oshsa — keyingi bo'linish.
+QOIDA 3: Public funksiyalar export, helper funksiyalar fayl ichida qoladi.
+QOIDA 4: Eski fayl re-export sifatida saqlanadi — backward compatibility.
+QOIDA 5: Har fayl o'z test fayliga ega: order.create.test.ts, order.status.test.ts...
+QOIDA 6: Import tsikldan qochish: order.create.ts pricing'ga bog'langan, pricing create'ga emas.
+3. AMALIY BOSQICHLAR — ORDERS.SERVICE.TS MISOLIDA
+Bu eng katta fayl. Uni bosqichma-bosqich qanday bo'lish — to'liq ko'rsatma.
+3.1 Bosqich 0 — Tayyorgarlik (1 soat)
+Git branch yaratish: git checkout -b refactor/orders-service-split
+orders.service.ts dan nusxa olish: cp orders.service.ts orders.service.backup.ts
+Yangi papka yaratish: mkdir src/modules/orders/domain/
+Test ishga tushirishni tekshirish: npm test -- orders.service
+3.2 Bosqich 1 — order.pricing.ts (2-3 soat)
+Eng oddiy qism — narx hisoblash funksiyalari. Hech kimga bog'liq emas.
+// 1. Yangi fayl yaratish: src/modules/orders/domain/order.pricing.ts
+import { prisma } from '../../../config/database';
+import Decimal from 'decimal.js';
+export async function getProductPrice(tenantId, productId, priceType) {
+  const price = await prisma.productPrice.findFirst({
+    where: { tenant_id: tenantId, product_id: productId, price_type: priceType }
+  });
+  return price ? new Decimal(price.price) : new Decimal(0);
+}
+export function applyDiscount(price, discountPercent) {
+  const discount = new Decimal(discountPercent).div(100);
+  return price.mul(new Decimal(1).minus(discount));
+}
+export function roundOrderMoney(amount) {
+  return new Decimal(amount).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+// 2. orders.service.ts dan bu funksiyalarni o'chirish
+// 3. orders.service.ts ga import qo'shish:
+import { getProductPrice, applyDiscount, roundOrderMoney } from './domain/order.pricing';
+// 4. Test ishga tushirish: npm test -- orders.service
+// Agar test o'tsa — commit:
+git add .
+git commit -m 'refactor(orders): extract pricing logic to order.pricing.ts'
+3.3 Bosqich 2 — order.bonus.ts (3-4 soat)
+Bonus logikasi — pricing'ga bog'liq, lekin createOrder'ga emas.
+// src/modules/orders/domain/order.bonus.ts
+import { roundOrderMoney } from './order.pricing';
+export function parseBonusGiftSelectionsJson(raw) {
+  // ... 180 qator bonus logika
+}
+export async function applyBonuses(tenantId, orderId, bonusRules) {
+  // ... bonus hisoblash
+}
+Keyingi qadam: orders.service.ts dan o'chirish, import qo'shish, test, commit.
+3.4 Bosqich 3 — order.query.ts (3-4 soat)
+// src/modules/orders/domain/order.query.ts
+import { prisma } from '../../../config/database';
+import { paginationParams } from '../../../lib/pagination';
+export async function listOrdersPaged(tenantId, filters, page, limit) {
+  const where = { tenant_id: tenantId, ...buildWhereClause(filters) };
+  const [items, total] = await Promise.all([
+    prisma.order.findMany({ where, ...paginationParams(page, limit) }),
+    prisma.order.count({ where })
+  ]);
+  return { items, total, page, limit };
+}
+export async function getOrderDetail(tenantId, orderId) {
+  return prisma.order.findFirst({
+    where: { id: orderId, tenant_id: tenantId },
+    include: { order_items: true, client: true, agent: true }
+  });
+}
+3.5 Bosqich 4 — order.status.ts (2-3 soat)
+// src/modules/orders/domain/order.status.ts
+import { prisma } from '../../../config/database';
+import { appendTenantAuditEvent } from '../../../lib/tenant-audit';
+const ALLOWED_TRANSITIONS = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['in_delivery', 'cancelled'],
+  in_delivery: ['delivered', 'returned'],
+  delivered: ['completed'],
+};
+export async function updateOrderStatus(tenantId, orderId, newStatus, actorUserId) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenant_id: tenantId }
+  });
+  if (!order) throw new Error('NOT_FOUND');
+  if (!ALLOWED_TRANSITIONS[order.status]?.includes(newStatus)) {
+    throw new Error('INVALID_TRANSITION');
+  }
+  await prisma.order.update({
+    where: { id: orderId }, data: { status: newStatus }
+  });
+  await appendTenantAuditEvent({ ... });
+}
+3.6 Bosqich 5 — order.export.ts (2-3 soat)
+// src/modules/orders/domain/order.export.ts
+import { addJob } from '../../../lib/queue';
+import { generateNakladnoyPDF } from '../../../lib/pdf-generator';
+export async function requestBulkOrderNakladnoy(tenantId, orderIds, actorUserId) {
+  const jobId = await addJob('pdf-generation', {
+    tenant_id: tenantId, order_ids: orderIds, actor_id: actorUserId
+  });
+  return { job_id: jobId };
+}
+3.7 Bosqich 6 — order.meta.ts (2 soat)
+// src/modules/orders/domain/order.meta.ts
+export async function updateOrderLines(tenantId, orderId, lines) { ... }
+export async function updateOrderMeta(tenantId, orderId, meta) { ... }
+export async function bulkUpdateExpeditor(tenantId, orderIds, expeditorId) { ... }
+3.8 Bosqich 7 — order.create.ts (4-6 soat, eng murakkab)
+Bu fayl barchaga bog'liq: pricing, bonus, status, stock. Oxirgi qadamda qilinadi.
+// src/modules/orders/domain/order.create.ts
+import { getProductPrice, applyDiscount, roundOrderMoney } from './order.pricing';
+import { applyBonuses } from './order.bonus';
+import { reserveStock } from '../../stock/stock.service';
+import { prisma } from '../../../config/database';
+export async function createOrder(tenantId, input, actorUserId) {
+  return prisma.$transaction(async (tx) => {
+    // 1. Validate
+    validateOrderInput(input);
+    // 2. Calculate prices
+    const total = await calculateOrderTotal(tenantId, input.items);
+    // 3. Reserve stock
+    await reserveStock(tenantId, input.warehouse_id, input.items);
+    // 4. Apply bonuses
+    const bonuses = await applyBonuses(tenantId, input.bonus_rules);
+    // 5. Create order
+    const order = await tx.order.create({ data: { ... } });
+    // 6. Audit log
+    await appendTenantAuditEvent({ ... });
+    return order;
+  });
+}
+3.9 Bosqich 8 — orders.service.ts Re-export (30 daqiqa)
+// src/modules/orders/orders.service.ts — YANGI
+// Backward compatibility uchun — barcha yangi fayllarni re-export
+export * from './domain/order.create';
+export * from './domain/order.status';
+export * from './domain/order.pricing';
+export * from './domain/order.bonus';
+export * from './domain/order.query';
+export * from './domain/order.export';
+export * from './domain/order.meta';
+// Natija: Mavjud importlar ishdan chiqmaydi:
+// import { createOrder } from '../orders/orders.service'; ← ishlaydi!
+MUHIM: Eski orders.service.backup.ts o'chirmaslik!
+Agar biror narsa noto'g'ri ketsa — backup'dan qaytarish mumkin.
+Refaktoring to'liq tugagandan keyin (1-2 hafta test) — keyin o'chirish.
+4. TEST STRATEGIYASI — HAR BOSQICHDA
+4.1 Har Fayl Uchun Test Fayl
+Yangi Fayl
+Test Fayl
+Nima Test Qilinadi
+order.pricing.ts
+order.pricing.test.ts
+getProductPrice, applyDiscount, roundOrderMoney — unit test
+order.bonus.ts
+order.bonus.test.ts
+parseBonusGiftSelectionsJson, applyBonuses — mock Prisma
+order.query.ts
+order.query.test.ts
+listOrdersPaged, getOrderDetail — DB test
+order.status.ts
+order.status.test.ts
+Status transitions, ALLOWED_TRANSITIONS logic
+order.export.ts
+order.export.test.ts
+BullMQ job qo'shilishini tekshirish
+order.create.ts
+order.create.test.ts
+To'liq integration test — tranzaksiya
+4.2 Regression Test — Eski Testlar O'tishi Kerak
+Har bosqichdan keyin eski testlar ishga tushiriladi
+npm test -- orders.service.test.ts
+Agar eski test ishlamasa — refaktoring xato qilingan.
+Tuzatish: yangi fayl import qatorini tekshirish, funksiya nomini tekshirish.
+Faqat barcha eski testlar o'tgandan keyin — keyingi bosqichga o'tish.
+4.3 Coverage Maqsadi
+Har yangi fayl uchun: >70% test coverage.
+Umumiy backend: 50% → 65% ga ko'tarilishi kerak.
+Vitest coverage report: npm run test:coverage
+CI/CD da coverage tekshiruvi: agar <65% bo'lsa — PR merge bloklanydi.
+5. TO'LIQ REFAKTORING JADVALI
+5.1 orders.service.ts Bo'lish — Kun-ma-kun
+Kun
+Bosqich
+Vaqt
+Natija
+Kun 1 AM
+Tayyorgarlik + order.pricing.ts
+3 soat
+pricing alohida fayl, test o'tadi
+Kun 1 PM
+order.bonus.ts
+3 soat
+bonus alohida fayl
+Kun 2 AM
+order.query.ts
+3 soat
+list/get alohida fayl
+Kun 2 PM
+order.status.ts
+3 soat
+status machine alohida
+Kun 3 AM
+order.export.ts
+2 soat
+export alohida
+Kun 3 PM
+order.meta.ts
+2 soat
+meta update alohida
+Kun 4 AM
+order.create.ts (qiyin)
+4 soat
+create tranzaksiya alohida
+Kun 4 PM
+orders.service.ts re-export
+1 soat
+backward compat
+Kun 5
+Barcha testlar + regression
+6 soat
+Coverage >70%, CI yashil
+JAMI: 5 ish kuni (1 hafta) — orders.service.ts bo'linishi to'liq.
+5.2 dashboard.service.ts Bo'lish — 3 Kun
+Kun
+Fayl
+Vaqt
+Kun 1
+dashboard.cache.ts (kesh logika)
+2 soat
+Kun 1-2
+dashboard.supervisor.ts (eng katta CTE)
+6 soat
+Kun 2
+dashboard.sales.ts
+4 soat
+Kun 3
+dashboard.monitoring.ts + re-export
+4 soat
+Kun 3
+Test + regression
+2 soat
+5.3 payments.service.ts Bo'lish — 2 Kun
+Kun
+Fayl
+Vaqt
+Kun 1 AM
+payment.create.ts
+3 soat
+Kun 1 PM
+payment.balance.ts
+3 soat
+Kun 2 AM
+payment.consignment.ts
+2 soat
+Kun 2 PM
+payment.query.ts + re-export + test
+3 soat
+5.4 Umumiy Jadval
+Servis
+Hozir
+Bo'lingandan Keyin
+Vaqt
+orders.service.ts
+2,775 qator, 1 fayl
+7 fayl, 150-400q har biri
+5 kun
+dashboard.service.ts
+2,373 qator, 1 fayl
+4 fayl, 150-600q har biri
+3 kun
+payments.service.ts
+1,223 qator, 1 fayl
+4 fayl, 200-300q har biri
+2 kun
+staff.service.ts (ixtiyoriy)
+1,100+ qator, 1 fayl
+5 fayl, 200-300q har biri
+2 kun
+JAMI: 12-14 ish kuni (2.5 hafta) — barcha katta fayllar bo'linadi.
+6. GIT WORKFLOW — XAVFSIZ REFAKTORING
+6.1 Branch Strategiyasi
+# 1. Feature branch yaratish
+git checkout -b refactor/orders-service-split
+# 2. Har bosqich — alohida commit
+git add src/modules/orders/domain/order.pricing.ts
+git commit -m 'refactor(orders): extract pricing to order.pricing.ts'
+# 3. Test o'tmasa — commit qilmaslik
+npm test -- orders.service
+# Agar xato bo'lsa: git reset --soft HEAD~1 (oxirgi commitni qaytarish)
+# 4. Har kun oxirida — push
+git push origin refactor/orders-service-split
+6.2 Pull Request Strategiyasi
+Katta PR emas — kichik-kichik PR
+Yomon: Bitta PR — 7 ta fayl, 2775 qator o'zgartirish → code review qiyin.
+Yaxshi: Har fayl — alohida PR:
+  PR #1: order.pricing.ts (200 qator) → tez review, merge.
+  PR #2: order.bonus.ts (250 qator) → tez review, merge.
+  ...
+Har PR — 200-400 qator o'zgartirish. Review 10-15 daqiqa.
+6.3 Rollback Strategiyasi
+Har bosqichdan keyin backup saqlanadi: orders.service.backup.ts
+Agar biror xato bo'lsa — git revert yoki backup'dan qaytarish mumkin.
+Production'ga chiqishdan oldin: staging'da 1 hafta test.
+Production'da muammo bo'lsa — feature flag bilan yangi koddan eski kodga qaytish.
+7. KUTILAYOTGAN NATIJA VA FOYDA
+7.1 Kod Sifati Ko'rsatkichlari
+Ko'rsatkich
+Hozir (Before)
+Keyin (After)
+Yaxshilanish
+Eng katta fayl
+2,775 qator
+400 qator
+-85%
+Parallel ishlash
+Mumkin emas
+3-4 kishi bir modul
+✓
+Code review vaqti
+2-3 soat
+15-20 daqiqa
+-90%
+Test coverage
+<50%
+>70%
++40%
+Yangi dasturchi onboarding
+3-4 kun
+1 kun
+-70%
+Bug topish vaqti
+30-60 daqiqa
+5-10 daqiqa
+-80%
+7.2 Texnik Qarz Qisqarishi
+Refaktoring — texnik qarzni to'lash
+Hozir: Har yangi feature — orders.service.ts ga +50-100 qator → fayl yanada katta.
+Keyin: Yangi feature — yangi fayl yoki mavjud kichik fayl'ga qo'shimcha.
+Hozir: Bug fix — 2775 qator ichida qidirish.
+Keyin: Bug fix — aniq faylda: agar pricing muammosi bo'lsa → order.pricing.ts (200 qator).
+7.3 Kelajak Kengaytirish Osonlashadi
+Van-selling: order.create.ts ga 50 qator qo'shimcha — tushunish oson.
+AI narx bashorat: order.pricing.ts ichida yangi funksiya — boshqa fayllarga ta'sir yo'q.
+1C integratsiya: order.export.ts ga qo'shimcha format — alohida fayl.
+KPI: order.query.ts dan foydalanish — qayta yozish kerak emas.
+8. AMALIY CHECKLIST — BU HAFTADAN BOSHLASH
+8.1 Bu Hafta — orders.service.ts Bosqich 1-3
+✅ Darhol bajarilishi kerak
+□  Git branch yaratish: refactor/orders-service-split
+□  orders.service.ts backup qilish
+□  domain/ papka yaratish
+□  order.pricing.ts yozish (2-3 soat)
+□  Test ishga tushirish — barcha eski testlar o'tishi kerak
+□  PR #1 yaratish va merge qilish
+□  order.bonus.ts yozish (3-4 soat)
+□  PR #2 yaratish va merge qilish
+8.2 Kelasi Hafta — orders.service.ts Bosqich 4-8
+□  order.query.ts (3-4 soat)
+□  order.status.ts (2-3 soat)
+□  order.export.ts (2-3 soat)
+□  order.meta.ts (2 soat)
+□  order.create.ts (4-6 soat, eng murakkab)
+□  orders.service.ts re-export (30 daqiqa)
+□  Barcha testlar ishga tushirish + coverage >70%
+8.3 Uchinchi Hafta — dashboard va payments
+□  dashboard.cache.ts (2 soat)
+□  dashboard.supervisor.ts (6 soat)
+□  dashboard.sales.ts (4 soat)
+□  dashboard.monitoring.ts (4 soat)
+□  payment.create.ts (3 soat)
+□  payment.balance.ts (3 soat)
+□  payment.consignment.ts (2 soat)
+□  payment.query.ts (2 soat)
+8.4 Muvaffaqiyat Mezoni
+Mezon
+Qanday Tekshiriladi
+Maqsad
+Barcha testlar o'tadi
+npm test
+100% o'tishi kerak
+Coverage oshdi
+npm run test:coverage
+50% → 70%+
+Eng katta fayl kichraydi
+wc -l *.ts
+<400 qator
+CI/CD yashil
+GitHub Actions
+Barcha check ✓
+Code review tezlashdi
+PR review vaqti
+<30 daqiqa
+Production'da xato yo'q
+1 hafta monitoring
+0 yangi bug
+8.5 Oxirgi Tavsiya — Qat'iy Qoidalar
+Har doim esda tuting
+1. Har bosqichdan keyin test — test o'tmasa keyingi bosqichga o'tmaslik.
+2. Kichik PR — tez review — tez merge.
+3. Backup saqlaymiz — xato bo'lsa qaytaramiz.
+4. Re-export — backward compatibility — hech narsa buzilmaydi.
+5. Parallel ishlash — bir kishi pricing, boshqasi status — conflict yo'q.

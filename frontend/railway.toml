@@ -1,0 +1,12 @@
+# Railway: servis «Root Directory» = frontend
+# Variantlar:
+# - NEXT_PUBLIC_API_URL=https://<backend>... — build vaqtida (client to‘g‘ridan-to‘g‘ri API ga)
+# - API_INTERNAL_ORIGIN=https://<backend>... — runtime ham, build ham bo‘lishi mumkin; `app/auth` va `app/api`
+#   route handlerlari serverda backendga proxylaydi (404 yo‘q). Build talab qilmaydi.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"

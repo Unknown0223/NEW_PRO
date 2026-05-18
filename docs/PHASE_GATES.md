@@ -1,0 +1,115 @@
+﻿# Phase Gates
+
+This checklist is the release gate for each phase. A phase is complete only when all relevant boxes are checked.
+
+> **Jarayon foizi, qisman bajarilgan bandlar va keyingi qadam:** [`PHASE_PROGRESS.md`](./PHASE_PROGRESS.md)
+
+**Eslatma (2026-04):** FAZA **0вЂ“4** MVP yopilgan. **FAZA 5вЂ“10** kodda qisman bajarilgan; **2026-04-05** kod bazasi audit (Excel nakladnoy, transfer `api-client`, hisobotlar MVP, `field`/`visits`, mijozlar xaritasi) + **toвЂlov FIFO taqsimlash** REST va panel (В«ZakazlargaВ»). Qolgan `[ ]` bandlar `PHASE_PROGRESS.md` da navbat bilan.
+
+## Platforma (doimiy)
+
+- [x] KoвЂp foydalanuvchi: kritik yozuvlar **transaction** strategiyasi hujjatlangan (`docs/NON_FUNCTIONAL.md`) вЂ” zakaz/kredit/balans/merge; kilitleme rejasi Faza 5+ uchun qisqa reja
+- [x] API xatolarda `requestId` va strukturalangan `error` maydoni
+- [x] CI: migratsiya + testlar; oвЂzgarishlar mavjud jarayonlarni buzmasligi
+- [x] Yagona klientlar bazasi: `phone_normalized`, `merge`, Web UI (filtr + qidiruv), audit; DB **qisman UNIQUE** tavsiyasi `NON_FUNCTIONAL.md` da (seed dublikatlari sinov uchun)
+
+Batafsil: [`NON_FUNCTIONAL.md`](./NON_FUNCTIONAL.md)
+
+## FAZA 0 - Fundamental zamin
+
+- [x] `docker compose up -d` starts PostgreSQL and Redis
+- [x] `backend` dependencies install successfully
+- [x] `GET /health` returns `200` with `{ status: "ok", time }`
+- [x] Prisma migration `init` applies successfully
+- [x] `npm run test:ci` is green in `backend`
+- [x] `.env.example` exists and is complete
+
+## FAZA 1 - Server + DB + Auth + Tenant
+
+- [x] `tenant.plugin` resolves tenant from slug or `X-Tenant-Slug`
+- [x] `POST /auth/login` and `POST /api/auth/login` work for valid tenant user
+- [x] `GET /auth/me` and `GET /api/auth/me` work with Bearer access token
+- [x] `POST /auth/refresh` rotates refresh token
+- [x] Protected route without token returns `401`
+- [x] Wrong tenant slug/header returns `404` or `403`
+- [x] Prisma domain tables (clients, products, warehouses, stock, orders, bonus_rules) migrated
+- [x] `prisma db seed` creates `test1`, `demo`, admin/operator, mahsulotlar, kategoriyalar, omborlar, zakaz namunasi, bir nechta bonus qoidalari (batafsil: `PHASE_PROGRESS.md`)
+- [x] `GET /api/:slug/clients` returns tenant-scoped list when DB is available
+- [x] Integration tests are green (`auth.integration.test.ts`; `clients.integration.test.ts` runs when DB reachable)
+- [x] CI workflow runs `migrate deploy`, `db seed`, tests, and build on `main` / `master`
+
+## FAZA 2 - Next.js panel + spravochniklar (reja: hafta 3-4)
+
+- [x] `frontend` builds (`npm run build`) and `middleware.ts` protects `/dashboard`
+- [x] Login page calls backend `/auth/login`; session cookie + Zustand state aligned
+- [x] Mahsulotlar API + UI (CRUD, jadval, Excel import)
+- [x] Narxlar moduli (getProductPrice, `product_prices`, bulk import, panelda chakana ustuni) вЂ” zakazda qoвЂllash Faza 4
+- [x] Bonus qoidalari CRUD + toggle (`/api/:slug/bonus-rules`, `/bonus-rules`)
+- [x] Boshqa spravochniklar: omborlar + foydalanuvchilar API; mahsulot kategoriyalari **CRUD** (admin); `GET .../price-types`; toвЂlov / qaytarish / hududlar вЂ” `tenant.settings.references` + `/settings/company` + `/settings/spravochnik` UI
+- [x] Sozlamalar: kompaniya profili (`GET/PATCH .../settings/profile`: nom, telefon, manzil, logo, `feature_flags`, `references`); super-admin dilerlar вЂ” keyingi bosqich (multi-tenant boshqaruv)
+
+## FAZA 3 - Klientlar (reja: hafta 5)
+
+- [x] Telefon normalizatsiyasi + dublikat guruhlari API + merge (zakazlarni saqlab)
+- [x] Dublikatlar Web UI: qidiruv, **guruh hajmi filtri** (2+/3+/4+), merge tasdiq, ok/err xabarlar
+- [x] Klientlar API: roвЂyxat filtrlari, `PATCH`, `client_balances` + harakatlar, **`GET .../clients/:id/audit`**
+- [x] `client_balances` + zakazda kredit tekshiruvi: **headroom = credit_limit + account_balance** (ochiq zakazlar + yangi summa)
+- [x] Web UI: roвЂyxat, kartochka (**Asosiy / Balans / Zakazlar / Tarix**), kredit progress bar, manzil uchun **xarita** havolasi
+- [x] QatвЂ™iy yagona telefon: ilova darajasida dublikatlar va merge; DB qisman UNIQUE вЂ” `NON_FUNCTIONAL.md` (prod maвЂ™lumot tayyor boвЂlganda)
+
+## FAZA 4 - Zakaz + bonus + status (reja: hafta 6-9)
+
+- [x] `bonus.engine` (qty/sum/discount, stack, `once_per_client`) zakazda qoвЂllanadi; **unit testlar** вЂ” `order-bonus-apply.pure.test.ts` (filtr funksiyalari)
+- [x] Zakaz yaratish / qatorlarni yangilash вЂ” bitta **transaction** (narx, bonus, kredit+balans, loglar where implemented)
+- [x] 7 status, `PATCH` oвЂtishlar, rol cheklovlari, status/change loglar + UI
+- [x] Real-time: **SSE** `GET .../stream/orders` (WebSocket shart emas вЂ” gate В«yokiВ»)
+- [x] Zakaz Web UI: roвЂyxat (URL filtrlari), tafsilot, tahrir, bonus qatorlari, jurnal; operator cheklovlari
+
+## FAZA 5 - Ombor + nakladnoy (reja: hafta 10-12)
+
+- [x] Stock API: roвЂyxat, qoldiqlar, filtrlash, eksport (`GET .../stock`, balances)
+- [x] Kirim: `POST .../stock/receipts` + `goods-receipts` hujjatlari
+- [x] Inventarizatsiya: `stock-takes` (qatorlar, post в†’ qoldiq tuzatish)
+- [x] Omborlararo koвЂchirish: `transfers` (draft в†’ start в†’ receive / cancel)
+- [x] Zakaz bilan rezerv: `stock.reserved_qty` (zakaz yaratish/tahrir вЂ” `orders.service`)
+- [x] **Picking UI (MVP):** `/stock/picking` вЂ” `picking` zakazlar, ombor filtri, qidiruv, zakazga havola
+- [x] **SKU jamlanma:** `GET .../stock/picking-aggregate` вЂ” barcha picking zakazlaridan mahsulot boвЂyicha SUM(qty), zakazlar soni
+- [x] **Picking chuqurligi (MVP):** skaner maydoni (Enter в†’ SKU/shtrix filtri), chop etish (`window.print` + sidebar yashirish)
+- [x] **Korrektirovka:** panel `/stock/correction` вЂ” jurnal, kategoriya workspace, `POST .../stock/corrections/bulk`, audit (`warehouse-correction`). *(Eski В«inventarsiz tezkorВ» alohida endpoint вЂ” ixtiyoriy keyingi iteratsiya.)*
+- [x] **Nakladnoy (Excel, kodda bor):** `POST .../orders/bulk/nakladnoy` + `order-nakladnoy-xlsx.ts`; shablonlar 5.1.8 / 2.1.0; zakazlar paneli: yuklab olish tugmalari + sozlamalar (`frontend/lib/order-nakladnoy.ts`, `nakladnoy-export-settings-dialog`).
+- [x] **PDF** blankalar (MVP): orders nakladnoy (`5.1.8` / `2.1.0`) uchun `POST .../orders/bulk/nakladnoy` da `format=pdf` + UI tugmalar; transfer uchun `GET .../transfers/:id/pdf` + jurnal modalidan yuklab olish.
+- [x] Ombor Web UI: qoldiqlar jadvalida holat boвЂyicha qator foni (0 / manfiy dostup / toвЂliq rezerv)
+- [x] **Transfer UI:** `/stock/transfers` вЂ” `apiFetch` + `useTenant` (`frontend/lib/api-client.ts`); marshrut `middleware` orqali `/stock` himoyasida.
+
+## FAZA 6 - Moliya (reja: hafta 13)
+
+- [x] ToвЂlovlar API: yaratish, roвЂyxat, mijoz va zakaz boвЂyicha (`payments`)
+- [x] ToвЂlovni zakazlarga taqsimlash: `GET/POST .../payments/:id/allocations|allocate` + panel **ToвЂlovlar** в†’ В«ZakazlargaВ» (FIFO, `payment_allocations`); **toвЂlov kartochkasi** `GET .../payments/:id` + `/payments/[id]` (taqsimot jadvali, taqsimlash, admin: oвЂchirish)
+- [ ] Balans materialized view + refresh strategiyasi (agar kerak)
+- [x] Akt-sverka **PDF** (mijoz boвЂyicha): `GET /api/:slug/clients/:id/reconciliation-pdf` (`date_from` / `date_to`, ixtiyoriy; default вЂ” joriy oy boshidan bugungi kunga) + klient kartochkasida davr + yuklab olish.
+- [x] Qarzdorlik **roвЂyxati**: `GET /api/:slug/reports/receivables` (+ `/export` Excel `.xlsx`; alias `client-receivables`) вЂ” faqat **ochiq zakazlar yigвЂindisi 0 dan katta** boвЂlgan mijozlar; qoвЂshimcha filtrlar (`only_over_limit`, `active_only`), UI вЂ” **Hisobotlar** в†’ **Qarzdorlik**.
+
+## FAZA 7 - GPS (reja: hafta 14)
+
+- [x] **Qisman:** `field` moduli API: agent-visits, route days, tenant tasks (`field.route.ts`); Web **`/visits`** вЂ” roвЂyxat va CRUD (MVP).
+- [x] **Leaflet + OpenStreetMap** mijozlar xaritasi (`/clients/map`, `react-leaflet`); tashriflar **Excel** (`GET .../agent-visits/export` + **Р’РёР·РёС‚С‹**, max 10000 qator).
+- [x] **Agent GPS trek (veb + API):** `agent_location_pings`, `POST/GET .../agent-locations`, panel **`/routes/track`** (Leaflet polyline). **Mobil** fondda ping yuborish вЂ” FAZA 9 (shu POST).
+
+## FAZA 8 - Hisobotlar + dashboard (reja: hafta 15)
+
+- [x] Dashboard API: `GET .../dashboard/stats` (+ Redis cache invalidate)
+- [x] **Hisobotlar MVP (kod bilan):** backend `reports.route.ts` вЂ” sales, order-trends, products, clients, agent-kpi, status-distribution, **qoвЂshimcha** `channels`, `abc-analysis`, `xyz-analysis`, `client-churn`; frontend `/reports` вЂ” asosiy 6 ta oqim + **Excel eksport** (npm `xlsx` / SheetJS; `exceljs` emas).
+- [x] Hisobotlar UI: `channels` / ABC / XYZ / churn tablari + har biri uchun **Excel** (`/reports`, `?tab=` + `churn_months`).
+- [x] UI: dashboard va hisobotlarda **grafiklar** (**Recharts** вЂ” `components/charts/analytics-charts.tsx`).
+
+## FAZA 9 - Flutter (reja: hafta 16-18)
+
+- [ ] Agent va Dastavchi ilovalar (yoki flavor): URL sozlash, login, offline Hive, sync, GPS, FCM
+
+## FAZA 10 - Test + deploy (reja: hafta 19)
+
+- [x] Playwright (yoki E2E) to'liq zakaz zanjiri *(2026-04-08: `order-create-full-stack.spec.ts` + `order-create-*` testid; login + dashboard shell + CI; env - `E2E_*`, `PHASE_PROGRESS.md`)*
+- [x] k6 yoki load smoke *(yengil variant ishlayapti: `npm run load:smoke`; agregat: `npm run test:all`)*
+- [ ] Production: Nginx wildcard, SSL, PM2, backup cron *(checklistlar: `docs/PROD-CHECKLIST.md`, `docs/RAILWAY-STAGING-CHECKLIST.md`)*
+- [ ] Play Store / birinchi diler go-live checklist
+
