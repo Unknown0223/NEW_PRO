@@ -86,80 +86,94 @@ export async function buildSalesMonitoringBase(
   const prevCalBounds = monthBoundsUtc(prevCalYear, prevCalMonth);
   const prevCalSalesScope = monitoringSalesScope(tenantId, prevCalBounds.from, prevCalBounds.to, filters, territoryTerms);
 
-  const [
-    aggRows,
-    akbRows,
-    okbRows,
-    prevMonthSalesRows,
-    territoryKeyRows,
-    lossRows,
-    paymentRefRows
-  ] = await Promise.all([
-    prisma.$queryRaw<
-      Array<{ s: Prisma.Decimal; orders_count: bigint; delivered_orders: bigint }>
-    >`
-      SELECT
+  const [baseRows] = await prisma.$queryRaw<Array<{
+    s: Prisma.Decimal; orders_count: bigint; delivered_orders: bigint;
+    akb_count: bigint;
+    prev_s: Prisma.Decimal;
+    territory_count: bigint;
+    loss_s: Prisma.Decimal;
+    payment_refs: string[];
+  }>>`
+    WITH base_orders AS (
+      SELECT o.id, o.client_id, o.status, o.total_sum
+      FROM orders o
+      JOIN users u ON u.id = o.agent_id
+      JOIN clients c ON c.id = o.client_id
+      WHERE ${salesScope}
+    ),
+    prev_orders AS (
+      SELECT o.id, o.total_sum
+      FROM orders o
+      JOIN users u ON u.id = o.agent_id
+      JOIN clients c ON c.id = o.client_id
+      WHERE ${prevCalSalesScope}
+    ),
+    -- Main aggregation
+    agg AS (
+      SELECT 
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS s,
         COUNT(DISTINCT o.id)::bigint AS orders_count,
         COUNT(DISTINCT CASE WHEN o.status = 'delivered' THEN o.id END)::bigint AS delivered_orders
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
-      JOIN clients c ON c.id = o.client_id
+      FROM base_orders o
       JOIN order_items oi ON oi.order_id = o.id
-      WHERE ${salesScope}
-    `,
-    prisma.$queryRaw<Array<{ c: bigint }>>`
+    ),
+    -- AKB (active buying clients)
+    akb AS (
       SELECT COUNT(DISTINCT o.client_id)::bigint AS c
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
-      JOIN clients c ON c.id = o.client_id
-      WHERE ${salesScope}
-    `,
-    prisma.$queryRaw<Array<{ c: bigint }>>`
+      FROM base_orders o
+    ),
+    -- OKB (organized clients)
+    okb AS (
       SELECT COUNT(DISTINCT caa.client_id)::bigint AS c
       FROM client_agent_assignments caa
       JOIN clients c ON c.id = caa.client_id
       JOIN users u ON u.id = caa.agent_id
       WHERE ${allClientScope}
-    `,
-    prisma.$queryRaw<Array<{ s: Prisma.Decimal }>>`
+    ),
+    -- Previous month sales
+    prev_month AS (
       SELECT COALESCE(SUM(oi.total), 0)::numeric(15,2) AS s
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
-      JOIN clients c ON c.id = o.client_id
+      FROM prev_orders o
       JOIN order_items oi ON oi.order_id = o.id
-      WHERE ${prevCalSalesScope}
-    `,
-    prisma.$queryRaw<Array<{ n: bigint }>>`
+    ),
+    -- Territory count
+    territory_count AS (
       SELECT COUNT(DISTINCT (
         COALESCE(NULLIF(TRIM(c.zone), ''), '-') || '|' ||
         COALESCE(NULLIF(TRIM(c.region), ''), '-') || '|' ||
         COALESCE(NULLIF(TRIM(c.city), ''), '-')
       ))::bigint AS n
-      FROM orders o
-      JOIN users u ON u.id = o.agent_id
+      FROM base_orders o
       JOIN clients c ON c.id = o.client_id
-      JOIN order_items oi ON oi.order_id = o.id
-      WHERE ${salesScope}
-    `,
-    prisma.$queryRaw<Array<{ s: Prisma.Decimal }>>`
+    ),
+    -- Return/loss
+    loss AS (
       SELECT COALESCE(SUM(o.total_sum), 0)::numeric(15,2) AS s
       FROM orders o
       JOIN users u ON u.id = o.agent_id
       JOIN clients c ON c.id = o.client_id
       WHERE ${returnLossScope}
-    `,
-    prisma.$queryRaw<Array<{ ref: string }>>`
-      SELECT DISTINCT COALESCE(TRIM(o.payment_method_ref), '') AS ref
+    ),
+    -- Payment methods
+    payment_refs AS (
+      SELECT ARRAY_AGG(DISTINCT TRIM(o.payment_method_ref)) FILTER (WHERE o.payment_method_ref IS NOT NULL AND TRIM(o.payment_method_ref) <> '') AS refs
       FROM orders o
       WHERE o.tenant_id = ${tenantId}
         AND o.payment_method_ref IS NOT NULL
         AND TRIM(o.payment_method_ref) <> ''
-      ORDER BY 1
-      LIMIT 40
-    `
-  ]);
-  const agg0 = aggRows[0];
+    )
+    SELECT 
+      (SELECT s FROM agg) AS s,
+      (SELECT orders_count FROM agg) AS orders_count,
+      (SELECT delivered_orders FROM agg) AS delivered_orders,
+      (SELECT c FROM akb) AS akb_count,
+      (SELECT c FROM okb) AS okb_count,
+      (SELECT s FROM prev_month) AS prev_s,
+      (SELECT n FROM territory_count) AS territory_count,
+      (SELECT s FROM loss) AS loss_s,
+      COALESCE((SELECT refs FROM payment_refs), ARRAY[]::text[]) AS payment_refs
+  `;
+  const agg0 = baseRows[0];
   const factSales = decToString(agg0?.s ?? 0);
   const curOrd = Number(agg0?.orders_count ?? 0n);
   const deliveredOrd = Number(agg0?.delivered_orders ?? 0n);
@@ -169,11 +183,11 @@ export async function buildSalesMonitoringBase(
   const execution_pct =
     planNum > 0 && Number.isFinite(factNum) ? clampPct((factNum / planNum) * 100) : null;
 
-  const akb = Number(akbRows[0]?.c ?? 0n);
-  const okb = Number(okbRows[0]?.c ?? 0n);
+  const akb = Number(agg0?.akb_count ?? 0n);
+  const okb = Number(agg0?.okb_count ?? 0n);
   const coverage_pct = okb > 0 ? clampPct((akb / okb) * 100) : 0;
 
-  const prevMonthSalesNum = Number(decToString(prevMonthSalesRows[0]?.s ?? 0));
+  const prevMonthSalesNum = Number(decToString(agg0?.prev_s ?? 0));
   const growth_vs_prev_month_sales_pct =
     !Number.isFinite(factNum) || !Number.isFinite(prevMonthSalesNum)
       ? null
@@ -182,9 +196,9 @@ export async function buildSalesMonitoringBase(
           ? 100
           : 0
         : clampPct(((factNum - prevMonthSalesNum) / prevMonthSalesNum) * 100);
-  const activeTerritoryKeys = Number(territoryKeyRows[0]?.n ?? 0n);
-  const returnLossSum = decToString(lossRows[0]?.s ?? 0);
-  const payment_method_options = paymentRefRows.map((r) => r.ref).filter(Boolean);
+  const activeTerritoryKeys = Number(agg0?.territory_count ?? 0n);
+  const returnLossSum = decToString(agg0?.loss_s ?? 0);
+  const payment_method_options = (agg0?.payment_refs ?? []).filter(Boolean);
 
   const now = new Date();
   const isCurrentMonth =

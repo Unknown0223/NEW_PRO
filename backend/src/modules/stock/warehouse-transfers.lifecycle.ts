@@ -42,27 +42,25 @@ export async function startTransfer(
     productIds.map((pid) => Prisma.sql`${pid}`)
   )}) AND tenant_id = ${tenantId}`;
 
-  // Execute status change + stock deductions in a single transaction
-  await prisma.$transaction(async () => {
-    // Update transfer status
-    await prisma.$executeRaw`
+  const startedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
       UPDATE warehouse_transfers
-      SET status = 'in_transit', started_at = ${new Date()}
+      SET status = 'in_transit', started_at = ${startedAt}
       WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'draft'
     `;
 
-    // Deduct stock from source warehouse
     for (const line of lines) {
       const delta = new Prisma.Decimal(line.qty);
 
-      // Double-check stock still exists and has enough (re-verify inside transaction)
-      const stock = await prisma.$queryRaw<
+      const stock = await tx.$queryRaw<
         { id: number; qty: Prisma.Decimal; reserved_qty: Prisma.Decimal }[]
       >`
         SELECT id, qty, reserved_qty FROM stock
         WHERE tenant_id = ${tenantId}
           AND warehouse_id = ${sourceWarehouseId}
           AND product_id = ${line.product_id}
+        FOR UPDATE
       `;
 
       const entry = stock[0];
@@ -74,7 +72,7 @@ export async function startTransfer(
         throw new Error(`INSUFFICIENT_STOCK:${productInfo?.sku ?? line.product_id}`);
       }
 
-      await prisma.$executeRaw`
+      await tx.$executeRaw`
         UPDATE stock
         SET qty = ${afterQty}, updated_at = now()
         WHERE id = ${entry.id}
@@ -130,8 +128,8 @@ export async function receiveTransfer(
     }
   }
 
-  await prisma.$transaction(async () => {
-    // Add stock to destination warehouse
+  const receivedAt = new Date();
+  await prisma.$transaction(async (tx) => {
     for (const line of lines) {
       const receivedQty = adjMap.has(line.product_id)
         ? new Prisma.Decimal(adjMap.get(line.product_id) ?? 0)
@@ -139,43 +137,39 @@ export async function receiveTransfer(
 
       if (receivedQty.lte(0)) continue;
 
-      const stock = await prisma.$queryRaw<
-        { id: number; qty: Prisma.Decimal }[]
-      >`
+      const stock = await tx.$queryRaw<{ id: number; qty: Prisma.Decimal }[]>`
         SELECT id, qty FROM stock
         WHERE tenant_id = ${tenantId}
           AND warehouse_id = ${destWarehouseId}
           AND product_id = ${line.product_id}
+        FOR UPDATE
       `;
 
       if (stock.length > 0) {
         const newQty = stock[0].qty.plus(receivedQty);
-        await prisma.$executeRaw`
+        await tx.$executeRaw`
           UPDATE stock
           SET qty = ${newQty}, updated_at = now()
           WHERE id = ${stock[0].id}
         `;
       } else {
-        // Create new stock entry
-        await prisma.$executeRaw`
+        await tx.$executeRaw`
           INSERT INTO stock (tenant_id, warehouse_id, product_id, qty, created_at, updated_at)
           VALUES (${tenantId}, ${destWarehouseId}, ${line.product_id}, ${receivedQty}, now(), now())
         `;
       }
 
-      // Update received_qty on the line
-      await prisma.$executeRaw`
+      await tx.$executeRaw`
         UPDATE warehouse_transfer_lines
         SET received_qty = ${receivedQty}
         WHERE transfer_id = ${id} AND product_id = ${line.product_id}
       `;
     }
 
-    // Update transfer status
-    await prisma.$executeRaw`
+    await tx.$executeRaw`
       UPDATE warehouse_transfers
       SET status = 'received',
-          received_at = ${new Date()},
+          received_at = ${receivedAt},
           received_by_user_id = ${receivedByUserId ?? null}
       WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'in_transit'
     `;
@@ -222,34 +216,32 @@ export async function cancelTransfer(
     `;
 
     if (lines.length > 0) {
-      await prisma.$transaction(async () => {
+      await prisma.$transaction(async (tx) => {
         for (const line of lines) {
-          // Restore stock if entry exists, otherwise create it
-          const stock = await prisma.$queryRaw<
-            { id: number; qty: Prisma.Decimal }[]
-          >`
+          const stock = await tx.$queryRaw<{ id: number; qty: Prisma.Decimal }[]>`
             SELECT id, qty FROM stock
             WHERE tenant_id = ${tenantId}
               AND warehouse_id = ${sourceWarehouseId}
               AND product_id = ${line.product_id}
+            FOR UPDATE
           `;
 
           if (stock.length > 0) {
             const newQty = stock[0].qty.plus(line.qty);
-            await prisma.$executeRaw`
+            await tx.$executeRaw`
               UPDATE stock
               SET qty = ${newQty}, updated_at = now()
               WHERE id = ${stock[0].id}
             `;
           } else {
-            await prisma.$executeRaw`
+            await tx.$executeRaw`
               INSERT INTO stock (tenant_id, warehouse_id, product_id, qty, created_at, updated_at)
               VALUES (${tenantId}, ${sourceWarehouseId}, ${line.product_id}, ${line.qty}, now(), now())
             `;
           }
         }
 
-        await prisma.$executeRaw`
+        await tx.$executeRaw`
           UPDATE warehouse_transfers
           SET status = 'cancelled'
           WHERE id = ${id} AND tenant_id = ${tenantId} AND status = 'in_transit'

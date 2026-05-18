@@ -46,6 +46,23 @@ export async function pingAppRedis(): Promise<"ok" | "down"> {
 
 type CacheEntry = { value: string; expiresAt: number | null };
 const memoryStore = new Map<string, CacheEntry>();
+const MEMORY_STORE_MAX_ENTRIES = 5000;
+
+function pruneMemoryStore(): void {
+  const now = Date.now();
+  for (const [key, entry] of memoryStore) {
+    if (entry.expiresAt != null && now > entry.expiresAt) {
+      memoryStore.delete(key);
+    }
+  }
+  if (memoryStore.size <= MEMORY_STORE_MAX_ENTRIES) return;
+  const overflow = memoryStore.size - MEMORY_STORE_MAX_ENTRIES;
+  const keys = memoryStore.keys();
+  for (let i = 0; i < overflow; i++) {
+    const k = keys.next().value;
+    if (k != null) memoryStore.delete(k);
+  }
+}
 
 function createInMemoryRedis(): Redis {
   // Minimal mock — `get`, `set`, `del` ishlaydi
@@ -53,6 +70,7 @@ function createInMemoryRedis(): Redis {
   mockRedis.status = "ready";
   mockRedis.ping = async () => "PONG";
   mockRedis.get = async (key: string) => {
+    pruneMemoryStore();
     const entry = memoryStore.get(key);
     if (!entry) return null;
     if (entry.expiresAt && Date.now() > entry.expiresAt) {
@@ -62,6 +80,7 @@ function createInMemoryRedis(): Redis {
     return entry.value;
   };
   mockRedis.set = async (key: string, value: string, ...args: string[]) => {
+    pruneMemoryStore();
     let ttl: number | null = null;
     for (let i = 0; i < args.length; i++) {
       if (args[i].toUpperCase() === "EX" && args[i + 1]) {
@@ -73,6 +92,7 @@ function createInMemoryRedis(): Redis {
       value,
       expiresAt: ttl ? Date.now() + ttl : null
     });
+    pruneMemoryStore();
     return "OK";
   };
   mockRedis.del = async (key: string) => {

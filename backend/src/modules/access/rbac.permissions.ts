@@ -36,16 +36,19 @@ export async function ensurePermissionIdsForKeys(
   });
   for (const p of found) out.set(p.key, p.id);
   const missing = uniq.filter((k) => !out.has(k));
-  await Promise.all(
-    missing.map(async (key) => {
-      const p = await tx.permission.upsert({
-        where: { tenant_id_key: { tenant_id: tenantId, key } },
-        create: { tenant_id: tenantId, key, module: derivePermissionModule(key) },
-        update: {}
-      });
-      out.set(key, p.id);
-    })
-  );
+  if (missing.length > 0) {
+    const upsertResults = await Promise.all(
+      missing.map(async (key) => {
+        const p = await tx.permission.upsert({
+          where: { tenant_id_key: { tenant_id: tenantId, key } },
+          create: { tenant_id: tenantId, key, module: derivePermissionModule(key) },
+          update: {}
+        });
+        out.set(key, p.id);
+        return p.id;
+      })
+    );
+  }
   return out;
 }
 

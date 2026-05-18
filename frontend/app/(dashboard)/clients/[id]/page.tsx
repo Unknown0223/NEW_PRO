@@ -1,10 +1,22 @@
 "use client";
 
-import { ClientProfileHub } from "@/components/clients/client-profile-hub";
-import { PageShell } from "@/components/dashboard/page-shell";
+import dynamic from "next/dynamic";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
+const ClientProfileHub = dynamic(
+  () => import("@/components/clients/client-profile-hub").then((m) => m.ClientProfileHub),
+  {
+    loading: () => <p className="text-sm text-muted-foreground">Загрузка данных клиента…</p>,
+    ssr: false
+  }
+);
+
+const PageShell = dynamic(
+  () => import("@/components/dashboard/page-shell").then((m) => m.PageShell),
+  { ssr: false }
+);
 
 export default function ClientDetailPage() {
   const params = useParams();

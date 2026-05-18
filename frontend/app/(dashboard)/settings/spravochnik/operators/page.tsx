@@ -1,8 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { OperatorsWorkspace } from "@/components/staff/operators-workspace";
+
+const OperatorsWorkspace = dynamic(
+  () => import("@/components/staff/operators-workspace").then((m) => m.OperatorsWorkspace),
+  {
+    loading: () => <p className="text-sm text-muted-foreground">Загрузка списка операторов…</p>,
+    ssr: false
+  }
+);
 
 export default function OperatorsSpravochnikPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);

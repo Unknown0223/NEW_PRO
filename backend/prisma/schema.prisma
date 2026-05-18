@@ -228,6 +228,8 @@ model User {
   @@index([tenant_id, role])
   @@index([tenant_id, role, is_active])
   @@index([trade_direction_id])
+  @@index([supervisor_user_id])
+  @@index([tenant_id, is_active])
   @@map("users")
 }
 
@@ -343,9 +345,13 @@ model Product {
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, name])
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, is_active, name])
+  @@index([tenant_id, barcode])
   @@index([tenant_id, product_group_id])
   @@index([tenant_id, brand_id])
   @@index([tenant_id, segment_id])
+  @@index([category_id])
   @@map("products")
 }
 
@@ -803,6 +809,7 @@ model ClientBalance {
 
   @@unique([tenant_id, client_id])
   @@index([tenant_id])
+  @@index([tenant_id, balance])
   @@map("client_balances")
 }
 
@@ -865,6 +872,7 @@ model ClientAuditLog {
   user       User?    @relation(fields: [user_id], references: [id])
 
   @@index([tenant_id, client_id])
+  @@index([tenant_id, client_id, action])
   @@map("client_audit_logs")
 }
 
@@ -1216,6 +1224,8 @@ model Order {
   @@index([tenant_id, order_type, agent_id, created_at(sort: Desc)])
   /// Agent katalogi: order_items orqali DISTINCT product_id so‘rovlari
   @@index([tenant_id, agent_id, order_type])
+  @@index([tenant_id, agent_id, status])
+  @@index([tenant_id, client_id, status])
   @@index([warehouse_block_id])
   @@map("orders")
 }
@@ -1288,6 +1298,7 @@ model Payment {
   cash_desk          CashDesk? @relation(fields: [cash_desk_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, client_id])
+  @@index([tenant_id, client_id, entry_kind])
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, order_id])
   @@index([tenant_id, workflow_status])
@@ -1863,6 +1874,8 @@ model PaymentAllocation {
 
   @@index([tenant_id, payment_id])
   @@index([tenant_id, order_id])
+  @@index([order_id])
+  @@index([payment_id])
   @@map("payment_allocations")
 }
 

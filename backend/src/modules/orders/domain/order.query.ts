@@ -9,7 +9,8 @@ import { getErrorCode } from "../../../lib/app-error";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { cursorPagination, decodeCursor } from "../../../lib/pagination";
-import { invalidateDashboard, invalidateStock } from "../../../lib/redis-cache";
+import { getAppCache, invalidateDashboard, invalidateStock, setAppCache } from "../../../lib/redis-cache";
+import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -87,6 +88,8 @@ function parseListOrderLocalDayEnd(isoDate: string): Date | null {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
+const ORDERS_LIST_CACHE_TTL_SECONDS = 20;
+
 export async function listOrdersPaged(
   tenantId: number,
   q: ListOrdersQuery,
@@ -100,6 +103,25 @@ export async function listOrdersPaged(
   next_cursor?: string | null;
   has_next?: boolean;
 }> {
+  const cursorRawEarly = q.cursor?.trim();
+  const useCursorEarly = Boolean(cursorRawEarly);
+  if (!useCursorEarly) {
+    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
+      q,
+      viewerRole,
+      viewerUserId: viewerUserId ?? null
+    })}`;
+    const cached = await getAppCache<{
+      data: OrderListRow[];
+      total: number;
+      page: number;
+      limit: number;
+      next_cursor?: string | null;
+      has_next?: boolean;
+    }>(cacheKey);
+    if (cached) return cached;
+  }
+
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
 
   if (q.status?.trim()) {
@@ -262,7 +284,7 @@ export async function listOrdersPaged(
     }))
   );
 
-  return {
+  const result = {
     data: rows.map((o) => {
       const ex = o.expeditor_user;
       const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
@@ -319,6 +341,17 @@ export async function listOrdersPaged(
       ? { next_cursor: cursorPack.nextCursor, has_next: cursorPack.hasNext }
       : {})
   };
+
+  if (!useCursor) {
+    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
+      q,
+      viewerRole,
+      viewerUserId: viewerUserId ?? null
+    })}`;
+    void setAppCache(cacheKey, result, ORDERS_LIST_CACHE_TTL_SECONDS);
+  }
+
+  return result;
 }
 
 export async function getOrderDetail(
