@@ -9,38 +9,75 @@ async function consolidateClientBalancesForMerge(
   keepClientId: number,
   mergeIds: number[]
 ): Promise<void> {
-  let masterBal = await tx.clientBalance.findUnique({
-    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: keepClientId } }
-  });
-  for (const mid of mergeIds) {
-    const dupBal = await tx.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: mid } }
-    });
-    if (!dupBal) continue;
-    if (!masterBal) {
-      await tx.clientBalance.update({
-        where: { id: dupBal.id },
-        data: { client_id: keepClientId }
-      });
-      masterBal = await tx.clientBalance.findUnique({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: keepClientId } }
-      });
-      continue;
+  // OPTIMIZED: Fetch all balances in single query instead of N queries
+  const allBalances = await tx.clientBalance.findMany({
+    where: {
+      tenant_id: tenantId,
+      client_id: { in: [keepClientId, ...mergeIds] }
     }
-    await tx.clientBalanceMovement.updateMany({
-      where: { client_balance_id: dupBal.id },
-      data: { client_balance_id: masterBal.id }
-    });
-    const combined = new Prisma.Decimal(masterBal.balance.toString()).add(
-      new Prisma.Decimal(dupBal.balance.toString())
-    );
+  });
+
+  if (allBalances.length === 0) return;
+
+  const masterBalance = allBalances.find(b => b.client_id === keepClientId);
+  const mergeBalances = allBalances.filter(b => mergeIds.includes(b.client_id));
+
+  if (!masterBalance) {
+    // No master balance exists, promote first merge balance
+    if (mergeBalances.length === 0) return;
+
+    const firstMerge = mergeBalances[0];
     await tx.clientBalance.update({
-      where: { id: masterBal.id },
-      data: { balance: combined }
+      where: { id: firstMerge.id },
+      data: { client_id: keepClientId }
     });
-    await tx.clientBalance.delete({ where: { id: dupBal.id } });
-    masterBal = await tx.clientBalance.findUnique({
-      where: { tenant_id_client_id: { tenant_id: tenantId, client_id: keepClientId } }
+
+    // Update remaining merge balances to point to new master
+    const remainingMerge = mergeBalances.slice(1);
+    if (remainingMerge.length > 0) {
+      // Calculate total from remaining
+      const totalRemaining = remainingMerge.reduce(
+        (sum, b) => sum.plus(b.balance),
+        new Prisma.Decimal(0)
+      );
+      await tx.clientBalanceMovement.updateMany({
+        where: { client_balance_id: { in: remainingMerge.map(b => b.id) } },
+        data: { client_balance_id: firstMerge.id }
+      });
+      await tx.clientBalance.update({
+        where: { id: firstMerge.id },
+        data: { balance: firstMerge.balance.plus(totalRemaining) }
+      });
+      await tx.clientBalance.deleteMany({
+        where: { id: { in: remainingMerge.map(b => b.id) } }
+      });
+    }
+    return;
+  }
+
+  // Master balance exists, consolidate all merge balances
+  const totalMergeBalance = mergeBalances.reduce(
+    (sum, b) => sum.plus(b.balance),
+    new Prisma.Decimal(0)
+  );
+  const combinedBalance = masterBalance.balance.plus(totalMergeBalance);
+
+  // Update master balance
+  await tx.clientBalance.update({
+    where: { id: masterBalance.id },
+    data: { balance: combinedBalance }
+  });
+
+  // Update all movements to point to master balance
+  if (mergeBalances.length > 0) {
+    await tx.clientBalanceMovement.updateMany({
+      where: { client_balance_id: { in: mergeBalances.map(b => b.id) } },
+      data: { client_balance_id: masterBalance.id }
+    });
+
+    // Delete merge balances
+    await tx.clientBalance.deleteMany({
+      where: { id: { in: mergeBalances.map(b => b.id) } }
     });
   }
 }
@@ -51,21 +88,42 @@ async function reassignAgentAssignmentsForMerge(
   keepClientId: number,
   mergeIds: number[]
 ): Promise<void> {
+  // OPTIMIZED: Fetch all assignments and master slots in single queries
   const rows = await tx.clientAgentAssignment.findMany({
     where: { tenant_id: tenantId, client_id: { in: mergeIds } }
   });
+
+  if (rows.length === 0) return;
+
+  const masterAssignments = await tx.clientAgentAssignment.findMany({
+    where: { tenant_id: tenantId, client_id: keepClientId }
+  });
+  const masterSlots = new Set(masterAssignments.map(a => a.slot));
+
+  // Separate into delete (conflict) and reassign (no conflict)
+  const toDelete: number[] = [];
+  const toReassign: number[] = [];
+
   for (const a of rows) {
-    const clash = await tx.clientAgentAssignment.findUnique({
-      where: { client_id_slot: { client_id: keepClientId, slot: a.slot } }
-    });
-    if (clash) {
-      await tx.clientAgentAssignment.delete({ where: { id: a.id } });
+    if (masterSlots.has(a.slot)) {
+      toDelete.push(a.id);
     } else {
-      await tx.clientAgentAssignment.update({
-        where: { id: a.id },
-        data: { client_id: keepClientId }
-      });
+      toReassign.push(a.id);
     }
+  }
+
+  // Batch operations
+  if (toDelete.length > 0) {
+    await tx.clientAgentAssignment.deleteMany({
+      where: { id: { in: toDelete } }
+    });
+  }
+
+  if (toReassign.length > 0) {
+    await tx.clientAgentAssignment.updateMany({
+      where: { id: { in: toReassign } },
+      data: { client_id: keepClientId }
+    });
   }
 }
 
