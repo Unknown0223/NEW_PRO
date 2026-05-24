@@ -8,7 +8,11 @@ import { Prisma } from "@prisma/client";
 import { getErrorCode } from "../../../lib/app-error";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../../lib/redis-cache";
+import {
+  invalidateDashboard,
+  invalidateOrdersListCache,
+  invalidateStock
+} from "../../../lib/redis-cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -218,6 +222,7 @@ export async function createOrder(
   );
 
   emitOrderUpdated(tenantId, order.id);
+  void invalidateOrdersListCache(tenantId);
   void invalidateDashboard(tenantId);
   void invalidateStock(tenantId, input.warehouse_id);
   const detail = await enrichOrderDetailRow(tenantId, order as unknown as OrderDetailLoaded, viewerRole);

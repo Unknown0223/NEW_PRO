@@ -37,6 +37,7 @@ export type PolkiClientItem = {
   is_bonus: boolean;
   order_id?: number;
   order_number?: string;
+  category_id?: number | null;
 };
 
 export type PolkiOrderGroup = {
@@ -56,13 +57,21 @@ export type PolkiOrderPickRow = {
   total_sum?: string;
   bonus_qty?: string;
   bonus_sum?: string;
+  discount_sum?: string;
+  warehouse_id?: number | null;
   warehouse_name?: string | null;
+  agent_id?: number | null;
+  agent_trade_direction?: string | null;
+  /** Zakaz `payment_method_ref` — odatda narx turi kaliti bilan mos */
+  price_type?: string | null;
+  payment_method_ref?: string | null;
 };
 
 export type PolkiLinesTableProps = {
   canShowPolkiGrid: boolean;
   isPolkiByOrder: boolean;
   isPolkiFree: boolean;
+  groupLinesByOrder?: boolean;
   polkiLoading: boolean;
   polkiError: boolean;
   polkiSuccess: boolean;
@@ -79,6 +88,20 @@ export type PolkiLinesTableProps = {
   polkiVolumeM3: number;
   polkiEstimatedSum: number;
   polkiDebtHintSum: number;
+  polkiExpandedOrderId?: number | null;
+  setPolkiExpandedOrderId?: Dispatch<SetStateAction<number | null>>;
+  polkiPeresortByPairKey?: Record<string, number>;
+  setPolkiPeresortByPairKey?: Dispatch<SetStateAction<Record<string, number>>>;
+  polkiPeresortOptionsByProductId?: Map<number, Array<{ id: number; name: string }>>;
+  polkiAutoBonusExplicitByPairKey?: Record<string, { paid: number; bonus: number }>;
+  polkiAutoBonusDebtByPairKey?: Record<string, number>;
+  polkiAutoBonusPreviewLinesByProductId?: Map<
+    number,
+    import("./hooks/use-polki-auto-bonus").PolkiAutoBonusPreviewLine
+  >;
+  polkiAutoBonusPreviewPending?: boolean;
+  polkiAutoBonusPreviewError?: boolean;
+  polkiBonusCalcMode?: import("./view/polki-shelf-return/polki-bonus-calc").PolkiBonusCalcMode;
 };
 
 export type OrderCreateContextResponse = {

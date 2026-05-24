@@ -1,0 +1,61 @@
+/health:
+  get:
+    summary: Liveness
+    operationId: health
+    tags: [Infra]
+    security: []
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+
+
+/ready:
+  get:
+    summary: Readiness
+    operationId: ready
+    tags: [Infra]
+    security: []
+    responses:
+      "200":
+        description: Ready
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "503":
+        description: Not ready
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/auth/login:
+  post:
+    summary: Login (tenant slug in body)
+    operationId: authLogin
+    tags: [Auth]
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "200":
+        description: OK
+      "401":
+        description: Invalid credentials
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+

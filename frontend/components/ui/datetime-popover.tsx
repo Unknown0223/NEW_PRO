@@ -165,6 +165,12 @@ function SingleMonthCalendar({
   );
 }
 
+export type DateTimeQuickPreset = {
+  label: string;
+  /** ISO `YYYY-MM-DDTHH:mm` yoki to‘liq `Date` */
+  value: string | Date;
+};
+
 type DateTimePickerFieldProps = {
   id?: string;
   value: string;
@@ -178,6 +184,8 @@ type DateTimePickerFieldProps = {
   timePlacement?: "bottom" | "side";
   /** soat/daqiqani mouse wheel bilan o‘zgartirish */
   wheelTimeAdjust?: boolean;
+  /** Kalendar popover ichida (vaqt ustuni yonida) tezkor tanlov */
+  quickPresets?: DateTimeQuickPreset[];
 };
 
 /**
@@ -193,7 +201,8 @@ export function DateTimePickerField({
   "aria-invalid": ariaInvalid,
   dateOnly = false,
   timePlacement = "bottom",
-  wheelTimeAdjust = false
+  wheelTimeAdjust = false,
+  quickPresets
 }: DateTimePickerFieldProps) {
   const TIME_ROW_H = 28;
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -301,6 +310,17 @@ export function DateTimePickerField({
     };
   }, [open]);
 
+  const commitValue = useCallback(
+    (raw: string | Date) => {
+      const next = raw instanceof Date ? raw : parseLocalDateTime(raw);
+      if (!Number.isNaN(next.getTime())) {
+        onChange(localValueToDatetimeInput(next));
+      }
+      setOpen(false);
+    },
+    [onChange]
+  );
+
   const applyPanel = useCallback(() => {
     let next: Date;
     if (dateOnly) {
@@ -311,11 +331,8 @@ export function DateTimePickerField({
       const m = Number.isFinite(mm) ? Math.min(59, Math.max(0, mm)) : 0;
       next = new Date(`${panelYmd}T${pad2(h)}:${pad2(m)}:00`);
     }
-    if (!Number.isNaN(next.getTime())) {
-      onChange(localValueToDatetimeInput(next));
-    }
-    setOpen(false);
-  }, [panelTime, panelYmd, onChange, dateOnly]);
+    commitValue(next);
+  }, [panelTime, panelYmd, commitValue, dateOnly]);
 
   const display = dateOnly ? formatRuDateShort(value) : formatRuDateTimeShort(value);
   const hourValue = panelTime.slice(0, 2);
@@ -449,7 +466,7 @@ export function DateTimePickerField({
         ? createPortal(
             <div
               ref={panelRef}
-              className="fixed z-[100] w-max max-w-[min(calc(100vw-1rem),20rem)] rounded-lg border border-border/80 bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/5"
+              className="fixed z-[100] w-max max-w-[min(calc(100vw-1rem),28rem)] rounded-lg border border-border/80 bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-black/5"
               style={{ top: box.top, left: box.left }}
             >
               <div className={cn("flex gap-3", !dateOnly && timePlacement === "side" ? "items-start" : "items-stretch")}>
@@ -460,6 +477,23 @@ export function DateTimePickerField({
                   onPick={(ymd) => setPanelYmd(ymd)}
                   onShiftMonth={(delta) => setViewYm((v) => shiftMonthYm(v.y, v.m, delta))}
                 />
+                {!dateOnly && quickPresets && quickPresets.length > 0 ? (
+                  <div className="flex w-[5.5rem] shrink-0 flex-col gap-1 border-l border-border/60 pl-2">
+                    <span className="text-[10px] font-medium text-muted-foreground">Tez</span>
+                    {quickPresets.map((p) => (
+                      <Button
+                        key={p.label}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 justify-start px-2 text-[11px]"
+                        onClick={() => commitValue(p.value)}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
                 {!dateOnly && timePlacement === "side" ? (
                   <div className="w-[6.5rem]">
                     <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-1">

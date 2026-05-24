@@ -11,3 +11,9 @@ export * from "./returns-enhanced.create-period";
 export * from "./returns-enhanced.create-batch";
 export * from "./returns-enhanced.auto-mark";
 export * from "./returns-enhanced.full-return";
+export {
+  previewPolkiAutoBonusReverse,
+  computeReverseLineSplit,
+  type PolkiAutoBonusPreviewInput,
+  type PolkiAutoBonusPreviewResult
+} from "./returns-bonus-reverse.preview";

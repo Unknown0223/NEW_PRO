@@ -182,6 +182,25 @@ export function physicalQtyFromPeriodLine(l: CreatePeriodReturnLine | CreatePeri
   return (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
 }
 
+/** Erkin polki: paid/bonus explicit — hujjat bo‘yicha 24 dona limiti qo‘llanmaydi (faqat qator «макс»). */
+export function periodReturnUsesExplicitLines(
+  lines: Array<{
+    qty?: number;
+    return_qty?: number;
+    paid_qty?: number;
+    bonus_qty?: number;
+    bonus_cash?: number;
+  }>
+): boolean {
+  if (lines.length === 0) return false;
+  const noLegacyQty = lines.every((l) => !(l.qty != null && l.qty > 0));
+  if (!noLegacyQty) return false;
+  if (lines.some((l) => (l.return_qty ?? 0) > 0)) return true;
+  return lines.some(
+    (l) => (l.paid_qty ?? 0) > 0 || (l.bonus_qty ?? 0) > 0 || (l.bonus_cash ?? 0) > 0
+  );
+}
+
 export function assertPeriodLineModes(lines: CreatePeriodReturnLine[]): void {
   let legacy = 0;
   let explicit = 0;
@@ -237,6 +256,30 @@ export function buildPaidBonusAvailability(
     t.set(it.product_id, (t.get(it.product_id) ?? 0) + q);
   }
   return { paid, bonus };
+}
+
+/** Erkin/po-zakaz polki: `return_qty` zakaz qoldig‘idan oshmasin. */
+export function validateExplicitReturnQtyAgainstItems(
+  allItems: { product_id: number; qty: string; is_bonus: boolean }[],
+  lines: { product_id: number; return_qty?: number }[]
+): void {
+  const avail = new Map<number, number>();
+  for (const it of allItems) {
+    const q = Number(it.qty);
+    if (!(q > 0)) continue;
+    avail.set(it.product_id, (avail.get(it.product_id) ?? 0) + q);
+  }
+  const sumReturnQty = new Map<number, number>();
+  for (const ln of lines) {
+    const rq = ln.return_qty;
+    if (rq == null || !(rq > 0)) continue;
+    sumReturnQty.set(ln.product_id, (sumReturnQty.get(ln.product_id) ?? 0) + rq);
+  }
+  for (const [pid, rq] of sumReturnQty) {
+    if (rq > (avail.get(pid) ?? 0) + 1e-9) {
+      throw new Error("RETURN_QTY_EXCEEDS_ORDERED");
+    }
+  }
 }
 
 export function validateExplicitReturnAgainstItems(

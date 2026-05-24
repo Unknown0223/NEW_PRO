@@ -8,7 +8,11 @@ import { Prisma } from "@prisma/client";
 import { getErrorCode } from "../../../lib/app-error";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../../lib/redis-cache";
+import {
+  invalidateDashboard,
+  invalidateOrdersListCache,
+  invalidateStock
+} from "../../../lib/redis-cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -256,6 +260,8 @@ export async function updateOrderStatus(
   });
 
   emitOrderUpdated(tenantId, orderId);
+  void invalidateOrdersListCache(tenantId);
+  void invalidateDashboard(tenantId);
   void enqueueOrderStatusNotifyJob({
     tenant_id: tenantId,
     order_id: orderId,

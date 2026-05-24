@@ -5,6 +5,11 @@ import { prisma } from "./config/database";
 import { logger } from "./config/logger";
 import { closeOrderEventBusRedis, initOrderEventBusRedis } from "./lib/order-event-bus";
 import { disableAutoClose, enableAutoClose } from "./lib/order-auto-cron";
+import { disableDashboardCacheWarm, enableDashboardCacheWarm } from "./lib/dashboard-cache-warm";
+import {
+  disableProductPriceScheduleCron,
+  enableProductPriceScheduleCron
+} from "./lib/product-price-schedule-cron";
 
 async function main() {
   await prisma.$connect();
@@ -18,9 +23,14 @@ async function main() {
 
   enableAutoClose();
   app.log.info("Auto-status cron worker enabled.");
+  enableProductPriceScheduleCron();
+  app.log.info("Product price schedule cron enabled.");
+  enableDashboardCacheWarm();
 
   const shutdown = async () => {
     disableAutoClose();
+    disableProductPriceScheduleCron();
+    disableDashboardCacheWarm();
     await app.close();
     await closeOrderEventBusRedis();
     process.exit(0);

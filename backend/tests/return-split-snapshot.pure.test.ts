@@ -21,7 +21,8 @@ function row(
     total: String(qty * price),
     is_bonus,
     order_id: opts.order_id ?? 1,
-    order_number: "T-1"
+    order_number: "T-1",
+    category_id: null
   };
 }
 

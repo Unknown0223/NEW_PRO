@@ -1,0 +1,129 @@
+/api/{slug}/linkage/options:
+  get:
+    summary: Linkage filter options
+    operationId: linkageOptions
+    tags: [Linkage]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/field/agent-visits:
+  post:
+    summary: Record agent visit
+    operationId: fieldAgentVisit
+    tags: [Field]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "201":
+        description: Created
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/settings/profile:
+  get:
+    summary: Tenant profile settings
+    operationId: getTenantProfile
+    tags: [Settings]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "404":
+        description: Not found
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+  patch:
+    summary: Patch tenant profile settings
+    operationId: patchTenantProfile
+    tags: [Settings]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/clients/{id}:
+  patch:
+    summary: Update client fields
+    operationId: patchClient
+    tags: [Clients]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "404":
+        description: Not found
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+

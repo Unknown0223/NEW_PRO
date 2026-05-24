@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { SearchableMultiSelectPanel, type SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ export function AccessFilters({
   onClearFilters
 }: AccessFiltersProps) {
   const hasFilters = searchQuery || roleFilter || statusFilter;
+  const roleSelected = useMemo(() => new Set(roleFilter ? [roleFilter] : []), [roleFilter]);
+  const statusSelected = useMemo(() => new Set(statusFilter ? [statusFilter] : []), [statusFilter]);
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -55,20 +58,32 @@ export function AccessFilters({
         />
       </div>
 
-      <SearchableMultiSelectPanel
-        triggerLabel={ROLE_OPTIONS.find((r) => r.id === roleFilter)?.title ?? "Роль"}
+      <SearchableMultiSelectPanel<string>
+        label="Роль"
+        hideOuterLabel
+        triggerPlaceholder="Все роли"
         items={ROLE_OPTIONS}
-        selected={roleFilter ? [roleFilter] : []}
-        onChange={(ids) => onRoleChange(ids[0] ?? "")}
-        minSearchLength={8}
+        selected={roleSelected}
+        onSelectedChange={(next) => {
+          const set = typeof next === "function" ? next(roleSelected) : next;
+          onRoleChange([...set][0] ?? "");
+        }}
+        searchable={false}
+        resetAllLabel="Все роли"
       />
 
-      <SearchableMultiSelectPanel
-        triggerLabel={STATUS_OPTIONS.find((s) => s.id === statusFilter)?.title ?? "Статус"}
+      <SearchableMultiSelectPanel<string>
+        label="Статус"
+        hideOuterLabel
+        triggerPlaceholder="Все"
         items={STATUS_OPTIONS}
-        selected={statusFilter ? [statusFilter] : []}
-        onChange={(ids) => onStatusChange(ids[0] ?? "")}
-        minSearchLength={8}
+        selected={statusSelected}
+        onSelectedChange={(next) => {
+          const set = typeof next === "function" ? next(statusSelected) : next;
+          onStatusChange([...set][0] ?? "");
+        }}
+        searchable={false}
+        resetAllLabel="Все"
       />
 
       {hasFilters && (

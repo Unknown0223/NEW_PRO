@@ -163,6 +163,24 @@ export async function invalidatePriceTypesCache(tenantId: number): Promise<void>
   }
 }
 
+/** `listOrdersPaged` Redis/in-memory keshi — status o‘zgarganda majburiy tozalash. */
+export async function invalidateOrdersListCache(tenantId: number): Promise<void> {
+  const prefix = `tenant:${tenantId}:orders:list:`;
+  pruneMemoryStore();
+  for (const key of [...memoryStore.keys()]) {
+    if (key.startsWith(prefix)) memoryStore.delete(key);
+  }
+  try {
+    const redis = await getRedisForApp();
+    const keys = await redis.keys(`${prefix}*`);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Stock cache invalidatsiya */
 export async function invalidateStock(tenantId: number, warehouseId?: number): Promise<void> {
   try {

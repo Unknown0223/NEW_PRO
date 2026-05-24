@@ -7,6 +7,7 @@ export type FinanceDashboardFilters = {
   supervisor_ids: number[];
   trade_directions: string[];
   client_categories: string[];
+  category_ids: number[];
   territory_1_list: string[];
   territory_2_list: string[];
   territory_3_list: string[];

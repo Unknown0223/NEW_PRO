@@ -41,7 +41,7 @@ async function getClientReturnsDataMultipleOrders(
           price: true,
           total: true,
           is_bonus: true,
-          product: { select: { sku: true, name: true, unit: true } }
+          product: { select: { sku: true, name: true, unit: true, category_id: true } }
         }
       }
     }
@@ -88,7 +88,8 @@ async function getClientReturnsDataMultipleOrders(
         total: item.total.toString(),
         is_bonus: item.is_bonus,
         order_id: order.id,
-        order_number: order.number
+        order_number: order.number,
+        category_id: item.product.category_id
       });
       if (!item.is_bonus) totalPaidValue = totalPaidValue.add(item.total);
     }
@@ -181,7 +182,7 @@ export async function getClientReturnsData(
             price: true,
             total: true,
             is_bonus: true,
-            product: { select: { sku: true, name: true, unit: true } }
+            product: { select: { sku: true, name: true, unit: true, category_id: true } }
           }
         }
       }
@@ -224,7 +225,8 @@ export async function getClientReturnsData(
         total: item.total.toString(),
         is_bonus: item.is_bonus,
         order_id: order.id,
-        order_number: order.number
+        order_number: order.number,
+        category_id: item.product.category_id
       });
       if (!item.is_bonus) totalPaidValue = totalPaidValue.add(item.total);
     }
@@ -281,7 +283,7 @@ export async function getClientReturnsData(
       items: {
         select: {
           product_id: true, qty: true, price: true, total: true, is_bonus: true,
-          product: { select: { sku: true, name: true, unit: true } }
+          product: { select: { sku: true, name: true, unit: true, category_id: true } }
         }
       }
     }
@@ -314,10 +316,17 @@ export async function getClientReturnsData(
   for (const o of orders) {
     for (const item of o.items) {
       items.push({
-        product_id: item.product_id, sku: item.product.sku, name: item.product.name,
-        unit: item.product.unit, qty: item.qty.toString(), price: item.price.toString(),
-        total: item.total.toString(), is_bonus: item.is_bonus,
-        order_id: o.id, order_number: o.number
+        product_id: item.product_id,
+        sku: item.product.sku,
+        name: item.product.name,
+        unit: item.product.unit,
+        qty: item.qty.toString(),
+        price: item.price.toString(),
+        total: item.total.toString(),
+        is_bonus: item.is_bonus,
+        order_id: o.id,
+        order_number: o.number,
+        category_id: item.product.category_id
       });
       if (!item.is_bonus) totalPaidValue = totalPaidValue.add(item.total);
     }

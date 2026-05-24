@@ -1,0 +1,229 @@
+model Territory {
+  id          Int                 @id @default(autoincrement())
+  tenant_id   Int
+  name        String              @db.VarChar(256)
+  code        String?             @db.VarChar(64)
+  description String?
+  polygon     Json                @default("[]") // [{lat: number, lng: number}, ...]
+  is_active   Boolean             @default(true)
+  created_at  DateTime            @default(now())
+  updated_at  DateTime            @updatedAt
+  deleted_at  DateTime?
+  deleted_by_user_id Int?
+  tenant      Tenant              @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  deleted_by  User?               @relation("TerritoryVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
+  userLinks   TerritoryUserLink[]
+
+  @@unique([tenant_id, code])
+  @@index([tenant_id])
+  @@index([tenant_id, deleted_at])
+  @@map("territories")
+}
+
+
+model TerritoryUserLink {
+  id             Int       @id @default(autoincrement())
+  territory_id   Int
+  user_id        Int
+  assigned_at    DateTime  @default(now())
+  assigned_by    Int?
+  territory      Territory @relation(fields: [territory_id], references: [id], onDelete: Cascade)
+  assignedByUser User?     @relation("TerritoryAssigner", fields: [assigned_by], references: [id])
+
+  @@unique([territory_id, user_id])
+  @@index([territory_id])
+  @@index([user_id])
+  @@map("territory_user_links")
+}
+
+/// Xarajat (Expense) — draft → approved / rejected
+
+model Expense {
+  id                  Int      @id @default(autoincrement())
+  tenant_id           Int
+  expense_type        String   @db.VarChar(64)
+  agent_id            Int?
+  amount              Decimal  @db.Decimal(15, 2)
+  currency            String   @default("UZS") @db.VarChar(8)
+  warehouse_id        Int?
+  status              String   @default("draft") @db.VarChar(16)
+  note                String?
+  expense_date        DateTime
+  created_by_user_id  Int?
+  approved_by_user_id Int?
+  rejection_note      String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  deleted_at          DateTime?
+  deleted_by_user_id  Int?
+  delete_reason_ref   String?  @db.VarChar(128)
+  tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  created_by          User?    @relation("ExpenseCreator", fields: [created_by_user_id], references: [id])
+  approved_by         User?    @relation("ExpenseApprover", fields: [approved_by_user_id], references: [id])
+  deleted_by          User?    @relation("ExpenseVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, status])
+  @@index([tenant_id, expense_date(sort: Desc)])
+  @@index([tenant_id, expense_type])
+  @@index([tenant_id, agent_id])
+  @@index([tenant_id, warehouse_id])
+  @@index([tenant_id, deleted_at])
+  @@map("expenses")
+}
+
+/// Toʻlov taqsimoti — payment -> order allocation (FIFO)
+
+model PaymentAllocation {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  payment_id Int
+  order_id   Int
+  amount     Decimal  @db.Decimal(15, 2)
+  created_at DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, payment_id])
+  @@index([tenant_id, order_id])
+  @@index([order_id])
+  @@index([payment_id])
+  @@map("payment_allocations")
+}
+
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  tenant_id   Int
+  key         String           @db.VarChar(100)
+  name        String           @db.VarChar(200)
+  description String?
+  is_system   Boolean          @default(false)
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+  tenant      Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([tenant_id, key])
+  @@index([tenant_id, key])
+  @@map("roles")
+}
+
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  tenant_id   Int
+  key         String           @db.VarChar(180)
+  module      String           @db.VarChar(120)
+  section     String?          @db.VarChar(120)
+  action      String?          @db.VarChar(120)
+  description String?
+  risk_level  String           @default("low") @db.VarChar(16)
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @updatedAt
+  tenant      Tenant           @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  roles       RolePermission[]
+  users       UserPermission[]
+
+  @@unique([tenant_id, key])
+  @@index([tenant_id, module])
+  @@map("permissions")
+}
+
+
+model RolePermission {
+  role_id       Int
+  permission_id Int
+  created_at    DateTime   @default(now())
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@index([permission_id])
+  @@map("role_permissions")
+}
+
+
+model UserRole {
+  user_id     Int
+  role_id     Int
+  assigned_at DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role        Role     @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@index([role_id])
+  @@map("user_roles")
+}
+
+
+model UserPermission {
+  user_id       Int
+  permission_id Int
+  effect        String     @default("allow") @db.VarChar(16)
+  assigned_at   DateTime   @default(now())
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, permission_id])
+  @@index([permission_id])
+  @@index([effect])
+  @@map("user_permissions")
+}
+
+
+model UserBranchLink {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  branch_code String   @db.VarChar(120)
+  created_at  DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id, branch_code])
+  @@index([tenant_id, branch_code])
+  @@index([user_id])
+  @@map("user_branches")
+}
+
+
+model UserPaymentMethodLink {
+  id             Int      @id @default(autoincrement())
+  tenant_id      Int
+  user_id        Int
+  payment_method String   @db.VarChar(120)
+  created_at     DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id, payment_method])
+  @@index([tenant_id, payment_method])
+  @@index([user_id])
+  @@map("user_payment_methods")
+}
+
+
+model AccessLog {
+  id             Int      @id @default(autoincrement())
+  tenant_id      Int
+  actor_user_id  Int?
+  target_user_id Int?
+  action_type    String   @db.VarChar(80)
+  entity_type    String   @db.VarChar(80)
+  entity_id      String   @db.VarChar(80)
+  old_value      Json     @default("{}")
+  new_value      Json     @default("{}")
+  ip_address     String?  @db.VarChar(64)
+  device         String?  @db.VarChar(255)
+  created_at     DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  actor          User?    @relation("AccessLogActor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+  target         User?    @relation("AccessLogTarget", fields: [target_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, action_type])
+  @@index([tenant_id, actor_user_id])
+  @@index([tenant_id, target_user_id])
+  @@map("access_logs")
+}
+

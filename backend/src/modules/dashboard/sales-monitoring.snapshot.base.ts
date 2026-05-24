@@ -87,8 +87,11 @@ export async function buildSalesMonitoringBase(
   const prevCalSalesScope = monitoringSalesScope(tenantId, prevCalBounds.from, prevCalBounds.to, filters, territoryTerms);
 
   const [baseRows] = await prisma.$queryRaw<Array<{
-    s: Prisma.Decimal; orders_count: bigint; delivered_orders: bigint;
+    s: Prisma.Decimal;
+    orders_count: bigint;
+    delivered_orders: bigint;
     akb_count: bigint;
+    okb_count: bigint;
     prev_s: Prisma.Decimal;
     territory_count: bigint;
     loss_s: Prisma.Decimal;
@@ -173,7 +176,7 @@ export async function buildSalesMonitoringBase(
       (SELECT s FROM loss) AS loss_s,
       COALESCE((SELECT refs FROM payment_refs), ARRAY[]::text[]) AS payment_refs
   `;
-  const agg0 = baseRows[0];
+  const agg0 = baseRows;
   const factSales = decToString(agg0?.s ?? 0);
   const curOrd = Number(agg0?.orders_count ?? 0n);
   const deliveredOrd = Number(agg0?.delivered_orders ?? 0n);

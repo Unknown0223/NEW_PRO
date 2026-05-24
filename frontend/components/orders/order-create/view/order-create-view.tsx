@@ -42,8 +42,13 @@ import { CategoryIssueCountBadge } from "../category-issue-badge";
 import { PolkiReturnLinesTable } from "../polki-return-lines-table";
 import { PolkiClientSearchSelect } from "../polki-client-search-select";
 import type { OrderCreateVm } from "../hooks/use-order-create";
+import { PolkiShelfReturnView } from "./polki-shelf-return/polki-shelf-return-view";
 
 export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
+  if (vm.isPolkiSheet) {
+    return <PolkiShelfReturnView vm={vm} />;
+  }
+
   const {
     tenantSlug,
     onCreated,
@@ -228,8 +233,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     stockReadyForLines,
     tableProductGroups,
     tenantShowPaymentMethodSelector,
-    togglePolkiOrderPick,
-    togglePolkiOrdersSelectAll,
+    selectPolkiOrder,
     totalVolumeM3,
     uiPrefsQ,
     useSplitOrderCatalog,
@@ -1036,20 +1040,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
                         ; остальные не показываются.
                       </p>
                     </div>
-                    {polkiOrdersForPick.length > 0 ? (
-                      <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          className="rounded border-input"
-                          checked={
-                            polkiOrderIds.length > 0 &&
-                            polkiOrderIds.length === polkiOrdersForPick.length
-                          }
-                          onChange={(e) => togglePolkiOrdersSelectAll(e.target.checked)}
-                        />
-                        Все
-                      </label>
-                    ) : null}
                   </div>
                   <div className="mt-1.5 overflow-x-auto rounded border border-border/80 bg-background">
                     {!canPickWarehouse ? (
@@ -1121,11 +1111,11 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
                                             ? "cursor-pointer bg-teal-100/85 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.35)] hover:bg-teal-100 dark:bg-teal-950/50 dark:shadow-[inset_0_0_0_1px_rgba(45,212,191,0.28)] dark:hover:bg-teal-950/60"
                                             : "cursor-pointer hover:bg-muted/50"
                                         )}
-                                        onClick={() => togglePolkiOrderPick(o.id, !rowSelected)}
+                                        onClick={() => selectPolkiOrder(o.id)}
                                         onKeyDown={(e) => {
                                           if (e.key === "Enter" || e.key === " ") {
                                             e.preventDefault();
-                                            togglePolkiOrderPick(o.id, !rowSelected);
+                                            selectPolkiOrder(o.id);
                                           }
                                         }}
                                       >
@@ -1134,12 +1124,11 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <input
-                                            type="checkbox"
-                                            className="rounded border-input"
+                                            type="radio"
+                                            name="polki-order-pick-view"
+                                            className="border-input"
                                             checked={rowSelected}
-                                            onChange={(e) =>
-                                              togglePolkiOrderPick(o.id, e.target.checked)
-                                            }
+                                            onChange={() => selectPolkiOrder(o.id)}
                                             onClick={(e) => e.stopPropagation()}
                                             aria-label={`Заказ ${o.number}`}
                                           />
@@ -2008,6 +1997,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
               polkiVolumeM3={polkiVolumeM3}
               polkiEstimatedSum={polkiEstimatedSum}
               polkiDebtHintSum={polkiDebtHintSum}
+              groupLinesByOrder={isPolkiByOrder}
             />
           )}
 

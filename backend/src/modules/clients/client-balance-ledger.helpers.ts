@@ -123,11 +123,19 @@ export function territoryLabel(c: {
 }
 
 
+function isBonusDebtNote(note: string | null | undefined): boolean {
+  const n = (note ?? "").trim();
+  return n === "Долг бонус" || n.startsWith("Долг бонус ·");
+}
+
 export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   const rk = r.row_kind === "order" ? "order" : "payment";
+  const bonusDebtPayment = rk === "payment" && isBonusDebtNote(r.note);
   let type_label: string;
   if (rk === "order") {
     type_label = `Заказ (${r.order_number ?? r.order_id})`;
+  } else if (bonusDebtPayment) {
+    type_label = "Долг бонус";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
     type_label = `Расход (${r.payment_id})`;
   } else {
@@ -138,13 +146,21 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   let operation_type_code = "1";
   if (rk === "order") {
     operation_type_code = "7";
+  } else if (bonusDebtPayment) {
+    operation_type_code = "2";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
     operation_type_code = "2";
   }
 
   const order_kind_label = rk === "order" ? "Заказ" : null;
   const comment_primary =
-    rk === "order" ? "Удержание долга по заказу" : rk === "payment" && String(r.entry_kind) === "client_expense" ? "Расход клиента" : null;
+    rk === "order"
+      ? "Удержание долга по заказу"
+      : bonusDebtPayment
+        ? "Долг бонус (возврат с полки)"
+        : rk === "payment" && String(r.entry_kind) === "client_expense"
+          ? "Расход клиента"
+          : null;
   const comment_transaction = (r.note ?? "").trim() || null;
 
   const created_by_display =

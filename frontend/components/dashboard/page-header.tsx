@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 type Props = {
   title: ReactNode;
-  description?: string;
+  description?: ReactNode;
   /** O‘ng tomonda tugmalar / havolalar */
   actions?: ReactNode;
   className?: string;

@@ -198,7 +198,12 @@ export async function bulkPatchAgents(
       });
       const patches = usersForMerge.map((u) => {
         const snap = entitlementsSnapshotFromAgentUser(u);
-        return snapToAgentEntitlements(mergeEntitlements(snap, normalizedEnt));
+        return normalizeAgentEntitlementsInput({
+          price_types: normalizedEnt.price_types ?? snap.price_types,
+          product_rules: normalizedEnt.product_rules ?? snap.product_rules,
+          mobile_config:
+            normalizedEnt.mobile_config !== undefined ? normalizedEnt.mobile_config : snap.mobile_config
+        });
       });
       await prisma.$transaction(
         usersForMerge.map((u, i) =>

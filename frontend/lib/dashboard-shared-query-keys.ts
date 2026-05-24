@@ -13,3 +13,12 @@ export const qkDashboardClientReferences = (tenantSlug: string | null) =>
 
 export const qkDashboardProductCategories = (tenantSlug: string | null) =>
   ["dashboard-shared", "product-categories", tenantSlug ?? ""] as const;
+
+export const qkDashboardMeta = (tenantSlug: string | null) =>
+  ["dashboard-shared", "meta", tenantSlug ?? ""] as const;
+
+export const qkDashboardProfileRefs = (tenantSlug: string | null) =>
+  ["dashboard-shared", "profile-refs", tenantSlug ?? ""] as const;
+
+export const qkDashboardProductSalesFilters = (tenantSlug: string | null) =>
+  ["dashboard-shared", "product-sales-filter-options", tenantSlug ?? ""] as const;

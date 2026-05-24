@@ -1,140 +1,12 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { loadClientPreviewsMap } from "./client-dedupe.service";
 import { appendClientAuditLog } from "./clients.audit";
-
-async function consolidateClientBalancesForMerge(
-  tx: Prisma.TransactionClient,
-  tenantId: number,
-  keepClientId: number,
-  mergeIds: number[]
-): Promise<void> {
-  // OPTIMIZED: Fetch all balances in single query instead of N queries
-  const allBalances = await tx.clientBalance.findMany({
-    where: {
-      tenant_id: tenantId,
-      client_id: { in: [keepClientId, ...mergeIds] }
-    }
-  });
-
-  if (allBalances.length === 0) return;
-
-  const masterBalance = allBalances.find(b => b.client_id === keepClientId);
-  const mergeBalances = allBalances.filter(b => mergeIds.includes(b.client_id));
-
-  if (!masterBalance) {
-    // No master balance exists, promote first merge balance
-    if (mergeBalances.length === 0) return;
-
-    const firstMerge = mergeBalances[0];
-    const remainingMerge = mergeBalances.slice(1);
-
-    // Update all movements to point to firstMerge BEFORE updating firstMerge's client_id
-    if (remainingMerge.length > 0) {
-      await tx.clientBalanceMovement.updateMany({
-        where: { client_balance_id: { in: remainingMerge.map(b => b.id) } },
-        data: { client_balance_id: firstMerge.id }
-      });
-    }
-
-    // Now update firstMerge's client_id to keepClientId
-    await tx.clientBalance.update({
-      where: { id: firstMerge.id },
-      data: { client_id: keepClientId }
-    });
-
-    // Calculate total from remaining
-    const totalRemaining = remainingMerge.reduce(
-      (sum, b) => sum.plus(b.balance),
-      new Prisma.Decimal(0)
-    );
-
-    // Update firstMerge balance with total from remaining
-    await tx.clientBalance.update({
-      where: { id: firstMerge.id },
-      data: { balance: firstMerge.balance.plus(totalRemaining) }
-    });
-
-    // Delete remaining merge balances
-    if (remainingMerge.length > 0) {
-      await tx.clientBalance.deleteMany({
-        where: { id: { in: remainingMerge.map(b => b.id) } }
-      });
-    }
-    return;
-  }
-
-  // Master balance exists, consolidate all merge balances
-  const totalMergeBalance = mergeBalances.reduce(
-    (sum, b) => sum.plus(b.balance),
-    new Prisma.Decimal(0)
-  );
-  const combinedBalance = masterBalance.balance.plus(totalMergeBalance);
-
-  // Update master balance
-  await tx.clientBalance.update({
-    where: { id: masterBalance.id },
-    data: { balance: combinedBalance }
-  });
-
-  // Update all movements to point to master balance
-  if (mergeBalances.length > 0) {
-    await tx.clientBalanceMovement.updateMany({
-      where: { client_balance_id: { in: mergeBalances.map(b => b.id) } },
-      data: { client_balance_id: masterBalance.id }
-    });
-
-    // Delete merge balances
-    await tx.clientBalance.deleteMany({
-      where: { id: { in: mergeBalances.map(b => b.id) } }
-    });
-  }
-}
-
-async function reassignAgentAssignmentsForMerge(
-  tx: Prisma.TransactionClient,
-  tenantId: number,
-  keepClientId: number,
-  mergeIds: number[]
-): Promise<void> {
-  // OPTIMIZED: Fetch all assignments and master slots in single queries
-  const rows = await tx.clientAgentAssignment.findMany({
-    where: { tenant_id: tenantId, client_id: { in: mergeIds } }
-  });
-
-  if (rows.length === 0) return;
-
-  const masterAssignments = await tx.clientAgentAssignment.findMany({
-    where: { tenant_id: tenantId, client_id: keepClientId }
-  });
-  const masterSlots = new Set(masterAssignments.map(a => a.slot));
-
-  // Separate into delete (conflict) and reassign (no conflict)
-  const toDelete: number[] = [];
-  const toReassign: number[] = [];
-
-  for (const a of rows) {
-    if (masterSlots.has(a.slot)) {
-      toDelete.push(a.id);
-    } else {
-      toReassign.push(a.id);
-    }
-  }
-
-  // Batch operations
-  if (toDelete.length > 0) {
-    await tx.clientAgentAssignment.deleteMany({
-      where: { id: { in: toDelete } }
-    });
-  }
-
-  if (toReassign.length > 0) {
-    await tx.clientAgentAssignment.updateMany({
-      where: { id: { in: toReassign } },
-      data: { client_id: keepClientId }
-    });
-  }
-}
+import {
+  consolidateClientBalancesForMerge,
+  mergePreviewConflictLevel,
+  reassignAgentAssignmentsForMerge
+} from "./clients.merge.internals";
+import { Prisma } from "@prisma/client";
 
 export type MergeClientsResult = {
   kept: number;
@@ -169,20 +41,6 @@ export type MergeClientsPreviewResult = {
     critical: number;
   };
 };
-
-function normalizeMergePreviewCell(v: string | null | undefined): string {
-  return String(v ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function mergePreviewConflictLevel(values: Array<string | null | undefined>): "safe" | "warning" | "critical" {
-  const normalized = values.map(normalizeMergePreviewCell);
-  const meaningful = normalized.filter((v) => v !== "" && v !== "—");
-  if (meaningful.length <= 1) return "safe";
-  const uniq = new Set(meaningful);
-  if (uniq.size === 1) return "safe";
-  const anyEmpty = normalized.some((v) => v === "" || v === "—");
-  return anyEmpty ? "warning" : "critical";
-}
 
 export async function previewMergeClients(
   tenantId: number,
@@ -232,12 +90,15 @@ export async function previewMergeClients(
   const balMap = new Map<number, Prisma.Decimal>();
   for (const b of balances) balMap.set(b.client_id, b.balance);
   const sum = (ids: number[]) =>
-    ids.reduce((acc, id) => acc.add(new Prisma.Decimal((balMap.get(id) ?? new Prisma.Decimal(0)).toString())), new Prisma.Decimal(0));
+    ids.reduce(
+      (acc, id) => acc.add(new Prisma.Decimal((balMap.get(id) ?? new Prisma.Decimal(0)).toString())),
+      new Prisma.Decimal(0)
+    );
   const totalBefore = sum(allIds);
   const masterBefore = sum([keepClientId]);
 
   const previews = allIds.map((id) => previewsMap.get(id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
-  const conflictFields: Array<(p: NonNullable<typeof previews[number]>) => string | null | undefined> = [
+  const conflictFields: Array<(p: NonNullable<(typeof previews)[number]>) => string | null | undefined> = [
     (p) => p.name,
     (p) => p.legal_name,
     (p) => p.phone,
@@ -366,14 +227,14 @@ export async function mergeClientsIntoOne(
       const updates = rules.map((br) => {
         const next = Array.from(
           new Set(
-            br.selected_client_ids.map(
-              (id) => (br.selected_client_ids.includes(id) && uniqueMerge.includes(id) ? keepClientId : id)
+            br.selected_client_ids.map((id) =>
+              br.selected_client_ids.includes(id) && uniqueMerge.includes(id) ? keepClientId : id
             )
           )
         );
         return { id: br.id, selected_client_ids: next };
       });
-      await tx.$transaction(
+      await Promise.all(
         updates.map((u) =>
           tx.bonusRule.update({ where: { id: u.id }, data: { selected_client_ids: u.selected_client_ids } })
         )

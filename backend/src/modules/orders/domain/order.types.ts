@@ -80,8 +80,11 @@ export type OrderListRow = {
   client_legal_name: string | null;
   warehouse_id: number | null;
   warehouse_name: string | null;
+  agent_id: number | null;
   agent_name: string | null;
   agent_code: string | null;
+  /** Agent savdo yo‘nalishi (ro‘yxat / polki tanlash) */
+  agent_trade_direction: string | null;
   expeditors: string | null;
   expeditor_id: number | null;
   expeditor_display: string | null;

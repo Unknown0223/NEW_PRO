@@ -37,7 +37,10 @@
     "frontend:build": "npm run build --prefix frontend",
     "load:smoke": "node scripts/load-smoke.mjs",
     "test:all": "npm run test:all:ci && npm run load:smoke",
-    "test:supervisor-dashboard": "npm run test:supervisor-dashboard --prefix backend && npm run test:supervisor-dashboard --prefix frontend && npm run test:supervisor-dashboard:e2e --prefix frontend"
+    "test:supervisor-dashboard": "npm run test:supervisor-dashboard --prefix backend && npm run test:supervisor-dashboard --prefix frontend && npm run test:supervisor-dashboard:e2e --prefix frontend",
+    "audit:max-loc": "node scripts/audit-max-file-lines.mjs",
+    "audit:max-loc:backend": "npm run audit:max-loc --prefix backend",
+    "audit:max-loc:frontend": "npm run audit:max-loc --prefix frontend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

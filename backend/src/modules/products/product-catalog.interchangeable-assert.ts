@@ -1,6 +1,22 @@
-import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { InterchangeableExchangeLookupRow } from "./product-catalog.types";
+
+function normalizePriceTypeToken(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function priceTypeAllowedByLinks(requested: string, links: Array<{ price_type: string }>): boolean {
+  if (links.length === 0) return true;
+  const want = normalizePriceTypeToken(requested);
+  return links.some((x) => normalizePriceTypeToken(x.price_type) === want);
+}
+
+async function tenantHasActiveInterchangeableGroups(tenantId: number): Promise<boolean> {
+  const n = await prisma.interchangeableProductGroup.count({
+    where: { tenant_id: tenantId, is_active: true }
+  });
+  return n > 0;
+}
 
 async function interchangeableGroupIdsForProduct(tenantId: number, productId: number): Promise<number[]> {
   const rows = await prisma.interchangeableGroupProduct.findMany({
@@ -29,6 +45,7 @@ export async function assertExchangeInterchangeableProducts(
     throw new Error("EXCHANGE_INTERCHANGEABLE_INCOMPLETE");
   }
 
+  const pt = (priceType ?? "").trim() || "retail";
   const candidates = await interchangeableGroupIdsForProduct(tenantId, minusU[0]!);
   for (const gid of candidates) {
     const g = await prisma.interchangeableProductGroup.findFirst({
@@ -43,8 +60,7 @@ export async function assertExchangeInterchangeableProducts(
     if (!minusU.every((pid) => allowedSet.has(pid)) || !plusU.every((pid) => allowedSet.has(pid))) {
       continue;
     }
-    const pts = g.price_type_links.map((x) => x.price_type);
-    if (pts.length > 0 && !pts.includes(priceType)) {
+    if (!priceTypeAllowedByLinks(pt, g.price_type_links)) {
       continue;
     }
     return { groupId: g.id, allowedProductIds: [...allowedSet] };
@@ -56,6 +72,7 @@ export async function assertExchangeInterchangeableProducts(
 /**
  * Qaytarish (polki / oddiy return): har bir mahsulot kamida bitta faol interchangeable
  * guruhda; guruhda price_types bo‘lsa, `priceType` ro‘yxatda bo‘lishi kerak (exchange bilan bir xil).
+ * Tenantda faol guruh yo‘q bo‘lsa — tekshiruv o‘tkazilmaydi (eski loyiihalar / seed).
  */
 export async function assertReturnProductsInterchangeableStrict(
   tenantId: number,
@@ -64,6 +81,10 @@ export async function assertReturnProductsInterchangeableStrict(
 ): Promise<void> {
   const ids = [...new Set(productIds.filter((x) => Number.isInteger(x) && x > 0))];
   if (ids.length === 0) return;
+
+  if (!(await tenantHasActiveInterchangeableGroups(tenantId))) {
+    return;
+  }
 
   const pt = (priceType ?? "").trim() || "retail";
 
@@ -85,8 +106,7 @@ export async function assertReturnProductsInterchangeableStrict(
   for (const pid of ids) eligible.set(pid, false);
 
   for (const row of links) {
-    const pts = row.group.price_type_links.map((x) => x.price_type);
-    if (pts.length > 0 && !pts.includes(pt)) continue;
+    if (!priceTypeAllowedByLinks(pt, row.group.price_type_links)) continue;
     eligible.set(row.product_id, true);
   }
 
@@ -105,6 +125,7 @@ export async function getInterchangeableExchangeLookupForProduct(
   productId: number,
   priceType: string
 ): Promise<InterchangeableExchangeLookupRow | null> {
+  const pt = (priceType ?? "").trim() || "retail";
   const gids = await interchangeableGroupIdsForProduct(tenantId, productId);
   if (gids.length === 0) return null;
   const gid = gids[0]!;
@@ -120,14 +141,13 @@ export async function getInterchangeableExchangeLookupForProduct(
     }
   });
   if (!g) return null;
-  const pts = g.price_type_links.map((x) => x.price_type);
-  if (pts.length > 0 && !pts.includes(priceType)) {
+  if (!priceTypeAllowedByLinks(pt, g.price_type_links)) {
     return null;
   }
   return {
     group_id: g.id,
     group_name: g.name,
-    price_types: pts,
+    price_types: g.price_type_links.map((x) => x.price_type),
     products: g.products.map((l) => l.product)
   };
 }

@@ -56,6 +56,9 @@ export async function getFinanceDashboardSnapshot(
   const from = new Date(`${filters.from}T00:00:00.000Z`);
   const to = new Date(`${filters.to}T23:59:59.999Z`);
   const orderScope = financeOrderScopeSql(tenantId, from, to, filters);
+  const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, filters, {
+    aliases: { order: "o2", user: "u2", client: "c2" }
+  });
   const receivableOrderScope = financeOrderScopeSql(tenantId, from, to, filters, {
     onlyReceivableStatuses: true
   });
@@ -126,7 +129,7 @@ export async function getFinanceDashboardSnapshot(
         COALESCE(pc.name, '—') AS category,
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum,
         COUNT(DISTINCT o.id)::bigint AS order_count,
-        (SELECT COALESCE(SUM(oi2.total), 0)::numeric(15,2) FROM order_items oi2 JOIN orders o2 ON oi2.order_id = o2.id JOIN users u2 ON u2.id = o2.agent_id JOIN clients c2 ON c2.id = o2.client_id JOIN products p2 ON p2.id = oi2.product_id LEFT JOIN product_categories pc2 ON pc2.id = p2.category_id WHERE ${orderScope}) AS grand_total
+        (SELECT COALESCE(SUM(oi2.total), 0)::numeric(15,2) FROM order_items oi2 JOIN orders o2 ON oi2.order_id = o2.id JOIN users u2 ON u2.id = o2.agent_id JOIN clients c2 ON c2.id = o2.client_id JOIN products p2 ON p2.id = oi2.product_id LEFT JOIN product_categories pc2 ON pc2.id = p2.category_id WHERE ${orderScopeO2}) AS grand_total
       FROM orders o
       JOIN users u ON u.id = o.agent_id
       JOIN clients c ON c.id = o.client_id

@@ -11,13 +11,26 @@ import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { enqueueProductPricesImportJob } from "../jobs/jobs.service";
 import { getTenantDefaultCurrencyCode } from "../tenant-settings/tenant-settings.service";
 import {
-  bulkUpsertPricesForType,
   getProductPrice,
   importProductPricesFromXlsx,
   listCategoryPricesMatrix,
+  listPricesMatrixForCategories,
   listProductPrices,
+  saveMatrixPrices,
   syncProductPrices
 } from "./product-prices.service";
+
+function parseMatrixCategoryIds(q: Record<string, string | undefined>): number[] {
+  const rawIds = q.category_ids?.trim();
+  if (rawIds) {
+    const parts = rawIds.split(",").map((s) => Number.parseInt(s.trim(), 10));
+    const ids = parts.filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.length > 0) return [...new Set(ids)];
+  }
+  const single = Number.parseInt(q.category_id ?? "", 10);
+  if (Number.isFinite(single) && single > 0) return [single];
+  return [];
+}
 
 const putPricesSchema = z.object({
   items: z.array(
@@ -31,6 +44,9 @@ const putPricesSchema = z.object({
 const matrixPatchSchema = z.object({
   price_type: z.string().min(1).max(128),
   currency: z.string().min(2).max(20).optional(),
+  category_id: z.number().int().positive().optional(),
+  category_ids: z.array(z.number().int().positive()).max(50).optional(),
+  effective_at: z.string().datetime().optional(),
   items: z
     .array(
       z.object({
@@ -93,14 +109,28 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
-      const categoryId = Number.parseInt(q.category_id ?? "", 10);
+      const categoryIds = parseMatrixCategoryIds(q);
       const priceType = (q.price_type ?? "").trim();
-      if (Number.isNaN(categoryId) || !priceType) {
-        return sendApiError(reply, request, 400, "BadQuery", "category_id va price_type majburiy");
+      if (categoryIds.length === 0 || !priceType) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "BadQuery",
+          "category_id yoki category_ids va price_type majburiy"
+        );
       }
       try {
         const currency = await getTenantDefaultCurrencyCode(request.tenant!.id);
-        const data = await listCategoryPricesMatrix(request.tenant!.id, categoryId, priceType, currency);
+        const data =
+          categoryIds.length === 1
+            ? await listCategoryPricesMatrix(request.tenant!.id, categoryIds[0]!, priceType, currency)
+            : await listPricesMatrixForCategories(
+                request.tenant!.id,
+                categoryIds,
+                priceType,
+                currency
+              );
         return reply.send({ data, currency });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
@@ -123,15 +153,27 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
       const cur =
         parsed.data.currency?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) ||
         (await getTenantDefaultCurrencyCode(request.tenant!.id));
+      const categoryIds =
+        parsed.data.category_ids?.length
+          ? [...new Set(parsed.data.category_ids)]
+          : parsed.data.category_id != null
+            ? [parsed.data.category_id]
+            : null;
+      const effectiveAt = parsed.data.effective_at ? new Date(parsed.data.effective_at) : null;
+      if (effectiveAt != null && Number.isNaN(effectiveAt.getTime())) {
+        return sendApiError(reply, request, 400, "ValidationError", "effective_at noto‘g‘ri");
+      }
       try {
-        await bulkUpsertPricesForType(
+        const result = await saveMatrixPrices(
           request.tenant!.id,
           parsed.data.price_type,
           parsed.data.items,
           cur,
-          actorUserIdOrNull(request)
+          actorUserIdOrNull(request),
+          categoryIds,
+          effectiveAt
         );
-        return reply.send({ ok: true });
+        return reply.send({ ok: true, ...result });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");

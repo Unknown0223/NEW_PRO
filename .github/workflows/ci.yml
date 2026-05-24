@@ -134,9 +134,13 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Audit max file lines (order-create, access-main)
+      - name: Audit max file lines (components, app, lib ≤400)
         run: npm run audit:max-loc
         working-directory: frontend
+
+      - name: Audit max file lines (monorepo docs)
+        run: node scripts/audit-max-file-lines.mjs --docs
+        working-directory: .
 
       - name: Build
         run: npm run build
