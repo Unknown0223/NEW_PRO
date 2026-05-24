@@ -1,4 +1,5 @@
 import type { PolkiOrderGroup, PolkiOrderPickRow, PolkiPairRowModel } from "../../types";
+import type { OrderReturnBalanceView } from "./return-order-balance-block";
 import { polkiOrderBonusLimits } from "./polki-bonus-calc";
 import { orderStatusLabelRu, parsePriceAmount, parseStockQty, polkiOrderRowHasBonus } from "../../utils";
 import { formatPolkiMoneySum, formatPolkiQtyDisplay } from "./polki-format-display";
@@ -24,6 +25,7 @@ export type PolkiOrdersListEntry = {
   composition: PolkiOrderCompositionSummary | null;
   pickable: boolean;
   selected: boolean;
+  balance: OrderReturnBalanceView | null;
 };
 
 type ContextOrder = {
@@ -43,6 +45,7 @@ export function buildPolkiOrdersListEntries(input: {
   polkiOrderGroups: PolkiOrderGroup[];
   polkiRowsAll: PolkiPairRowModel[];
   pickById: Map<number, PolkiOrderPickRow>;
+  orderBalanceById?: Map<number, OrderReturnBalanceView>;
 }): PolkiOrdersListEntry[] {
   const groupById = new Map(input.polkiOrderGroups.map((g) => [g.orderId, g]));
   const seen = new Set<number>();
@@ -66,6 +69,7 @@ export function buildPolkiOrdersListEntries(input: {
           : { maxPaid: 0, maxBonus: 0 };
     const composition = compositionForOrder(o.id);
     const dateStr = o.created_at ? String(o.created_at).slice(0, 10) : "—";
+    const balance = input.orderBalanceById?.get(o.id) ?? null;
     out.push({
       orderId: o.id,
       orderNumber: o.number,
@@ -92,8 +96,9 @@ export function buildPolkiOrdersListEntries(input: {
       maxPaid: limits.maxPaid,
       maxBonus: limits.maxBonus,
       composition,
-      pickable: input.isPolkiByOrder,
-      selected: input.polkiOrderIdSet.has(o.id)
+      pickable: input.isPolkiByOrder && !(balance?.fully_returned ?? false),
+      selected: input.polkiOrderIdSet.has(o.id),
+      balance
     });
   };
 
@@ -125,8 +130,9 @@ export function buildPolkiOrdersListEntries(input: {
       maxPaid: limits.maxPaid,
       maxBonus: limits.maxBonus,
       composition,
-      pickable: input.isPolkiByOrder && Boolean(pick),
-      selected: input.polkiOrderIdSet.has(o.id)
+      pickable: input.isPolkiByOrder && Boolean(pick) && !(input.orderBalanceById?.get(o.id)?.fully_returned ?? false),
+      selected: input.polkiOrderIdSet.has(o.id),
+      balance: input.orderBalanceById?.get(o.id) ?? null
     });
   };
 
@@ -157,7 +163,8 @@ export function buildPolkiOrdersListEntries(input: {
           maxBonus: limits.maxBonus,
           composition: compositionForOrder(g.orderId),
           pickable: false,
-          selected: false
+          selected: false,
+          balance: input.orderBalanceById?.get(g.orderId) ?? null
         });
       }
     }

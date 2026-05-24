@@ -72,6 +72,16 @@ export function adjustOrderItemsQtyAfterPriorReturns(
     lines: ReturnLineQty[];
   }>
 ): OrderItemSummary[] {
+  const bonusCapacity = new Map<string, number>();
+  for (const it of items) {
+    if (!it.is_bonus) continue;
+    const k = `${it.order_id}:${it.product_id}`;
+    const q = Number(it.qty);
+    if (Number.isFinite(q) && q > 0) {
+      bonusCapacity.set(k, (bonusCapacity.get(k) ?? 0) + q);
+    }
+  }
+
   const alreadyPaid = new Map<string, number>();
   const alreadyBonus = new Map<string, number>();
   for (const ret of returns) {
@@ -82,6 +92,16 @@ export function adjustOrderItemsQtyAfterPriorReturns(
       const { paid, bonus } = splitReturnLinePaidBonus(ln);
       alreadyPaid.set(k, (alreadyPaid.get(k) ?? 0) + paid);
       alreadyBonus.set(k, (alreadyBonus.get(k) ?? 0) + bonus);
+    }
+  }
+
+  /** Bonus-only qaytarish pullik pozitsiyadan o‘tgan bo‘lsa — pullik qoldiqdan ayirish. */
+  for (const [k, bonusRet] of alreadyBonus) {
+    const cap = bonusCapacity.get(k) ?? 0;
+    if (bonusRet > cap + 1e-9) {
+      const spill = bonusRet - cap;
+      alreadyBonus.set(k, cap);
+      alreadyPaid.set(k, (alreadyPaid.get(k) ?? 0) + spill);
     }
   }
 

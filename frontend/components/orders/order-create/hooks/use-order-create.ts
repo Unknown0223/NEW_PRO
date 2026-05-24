@@ -300,6 +300,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       total_sum?: string;
       bonus_sum?: string;
     }>;
+    order_balance?: OrderReturnBalanceView | null;
+    order_balances?: OrderReturnBalanceView[];
     items: Array<{
       product_id: number;
       sku: string;
@@ -312,6 +314,17 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       order_number?: string;
     }>;
     max_returnable_value: string;
+  };
+
+  type OrderReturnBalanceView = {
+    order_id: number;
+    initial_paid_qty: number;
+    initial_bonus_qty: number;
+    returned_paid_qty: number;
+    returned_bonus_qty: number;
+    remaining_paid_qty: number;
+    remaining_bonus_qty: number;
+    fully_returned: boolean;
   };
 
   const polkiOrdersPickQ = useQuery({
@@ -331,10 +344,31 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     }
   });
 
-  const polkiOrdersForPick = useMemo(
-    () => (polkiOrdersPickQ.data ?? []).filter(isPolkiReturnByOrderPickable),
-    [polkiOrdersPickQ.data]
-  );
+  const polkiOrderBalancesQ = useQuery({
+    queryKey: ["order-create-polki-order-balances", tenantSlug, clientIdNum],
+    enabled: Boolean(
+      tenantSlug &&
+        isPolkiByOrder &&
+        Number.isFinite(clientIdNum) &&
+        clientIdNum > 0
+    ),
+    staleTime: STALE.list,
+    queryFn: async () => {
+      const { data: body } = await api.get<{ data: OrderReturnBalanceView[] }>(
+        `/api/${tenantSlug}/returns/order-balances?client_id=${clientIdNum}`
+      );
+      return body.data ?? [];
+    }
+  });
+
+  const polkiOrdersForPick = useMemo(() => {
+    const closedIds = new Set(
+      (polkiOrderBalancesQ.data ?? []).filter((b) => b.fully_returned).map((b) => b.order_id)
+    );
+    return (polkiOrdersPickQ.data ?? [])
+      .filter(isPolkiReturnByOrderPickable)
+      .filter((o) => !closedIds.has(o.id));
+  }, [polkiOrdersPickQ.data, polkiOrderBalancesQ.data]);
 
   const exchangeOrderIdsSortedKey = useMemo(
     () => [...exchangeSourceOrderIds].sort((a, b) => a - b).join(","),
@@ -487,6 +521,30 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       return data;
     }
   });
+
+  const polkiOrderBalanceById = useMemo(() => {
+    const m = new Map<number, OrderReturnBalanceView>();
+    for (const b of polkiOrderBalancesQ.data ?? []) {
+      m.set(b.order_id, b);
+    }
+    for (const b of polkiContextQ.data?.order_balances ?? []) {
+      m.set(b.order_id, b);
+    }
+    if (polkiContextQ.data?.order_balance) {
+      m.set(polkiContextQ.data.order_balance.order_id, polkiContextQ.data.order_balance);
+    }
+    return m;
+  }, [polkiOrderBalancesQ.data, polkiContextQ.data?.order_balance, polkiContextQ.data?.order_balances]);
+
+  const polkiSelectedOrderBalance = useMemo((): OrderReturnBalanceView | null => {
+    if (!isPolkiByOrder || polkiOrderIds.length !== 1) return null;
+    return polkiOrderBalanceById.get(polkiOrderIds[0]!) ?? polkiContextQ.data?.order_balance ?? null;
+  }, [
+    isPolkiByOrder,
+    polkiOrderIds,
+    polkiOrderBalanceById,
+    polkiContextQ.data?.order_balance
+  ]);
 
   const clientSummaryQ = useQuery({
     queryKey: ["client", tenantSlug, clientIdNum, "order-form"],
@@ -1919,6 +1977,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         void qc.invalidateQueries({ queryKey: ["returns-client-data", tenantSlug] });
         void qc.invalidateQueries({ queryKey: ["exchange-returns", tenantSlug] });
         void qc.invalidateQueries({ queryKey: ["polki-auto-bonus-preview"] });
+        void qc.invalidateQueries({ queryKey: ["order-create-polki-order-balances", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["order-create-polki-context", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["order-create-polki-orders", tenantSlug] });
       }
       if (isPolkiSheet && clientId.trim()) {
         const cid = Number.parseInt(clientId, 10);
@@ -2523,6 +2584,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiEstimatedSum,
     polkiHeaderDate,
     polkiLineKeySet,
+    polkiOrderBalanceById,
+    polkiOrderBalancesQ,
+    polkiSelectedOrderBalance,
     polkiOrderDateById,
     polkiOrderGroups,
     polkiOrderIdSet,

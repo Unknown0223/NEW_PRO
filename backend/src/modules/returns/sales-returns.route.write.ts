@@ -180,6 +180,22 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "QtyExceedsOrdered");
         if (code === "NOTHING_TO_RETURN")
           return sendApiError(reply, request, 400, "NothingToReturn");
+        if (code === "ORDER_FULLY_RETURNED")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "OrderFullyReturned",
+            "По этому заказу возврат уже полностью оформлен."
+          );
+        if (code === "REFUND_EXCEEDS_ORDER_REMAINING")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "RefundExceedsOrderRemaining",
+            "Сумма возврата превышает остаток по этому заказу."
+          );
         if (code === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
         if (code === "ORDER_NOT_DELIVERED")
           return sendApiError(
@@ -236,6 +252,22 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "QtyExceedsOrdered");
         if (code === "NOTHING_TO_RETURN")
           return sendApiError(reply, request, 400, "NothingToReturn");
+        if (code === "ORDER_FULLY_RETURNED")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "OrderFullyReturned",
+            "По этому заказу возврат уже полностью оформлен."
+          );
+        if (code === "REFUND_EXCEEDS_ORDER_REMAINING")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "RefundExceedsOrderRemaining",
+            "Сумма возврата превышает остаток по этому заказу."
+          );
         if (code === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
         if (code === "ORDER_NOT_DELIVERED")
           return sendApiError(

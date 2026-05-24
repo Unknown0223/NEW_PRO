@@ -177,6 +177,26 @@ export function scaleReturnLinesToMaxRefund(
   return { lines: adjusted, refund };
 }
 
+/** Po zakaz: pullikni bonusga aylantirmasdan; davr rejimida `scaleReturnLinesToMaxRefund`. */
+export function finalizePolkiReturnLines(
+  lines: Array<{ product_id: number; qty: number; paid_qty: number; bonus_qty: number; price: number }>,
+  maxRefund: Prisma.Decimal,
+  opts: { orderScoped: boolean }
+): {
+  lines: Array<{ product_id: number; qty: number; paid_qty: number; bonus_qty: number; price: number }>;
+  refund: Prisma.Decimal;
+} {
+  const refund = lines.reduce(
+    (a, l) => a.add(R(l.price).mul(l.paid_qty)),
+    new Prisma.Decimal(0)
+  );
+  if (opts.orderScoped) {
+    if (refund.gt(maxRefund)) throw new Error("REFUND_EXCEEDS_ORDER_REMAINING");
+    return { lines, refund };
+  }
+  return scaleReturnLinesToMaxRefund(lines, maxRefund);
+}
+
 export function physicalQtyFromPeriodLine(l: CreatePeriodReturnLine | CreatePeriodReturnBatchLine): number {
   if (l.qty != null && l.qty > 0) return l.qty;
   return (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
@@ -235,11 +255,16 @@ export function assertBatchLineModes(lines: CreatePeriodReturnBatchLine[]): void
   if (legacy > 0 && explicit > 0) throw new Error("MIXED_LINE_MODES");
 }
 
-export function priceByProductFromItems(allItems: { product_id: number; price: string }[]): Map<number, number> {
+export function priceByProductFromItems(allItems: { product_id: number; price: string; is_bonus?: boolean }[]): Map<number, number> {
   const m = new Map<number, number>();
   for (const it of allItems) {
     const p = Number(it.price);
-    if (Number.isFinite(p) && p >= 0) m.set(it.product_id, p);
+    if (!Number.isFinite(p) || p < 0) continue;
+    if (it.is_bonus) {
+      if (!m.has(it.product_id)) m.set(it.product_id, p);
+      continue;
+    }
+    m.set(it.product_id, p);
   }
   return m;
 }

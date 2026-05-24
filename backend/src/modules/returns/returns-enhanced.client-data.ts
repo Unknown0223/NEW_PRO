@@ -9,6 +9,7 @@ import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-st
 
 import type { ClientReturnsData, OrderItemSummary } from "./returns-enhanced.types";
 import { adjustOrderItemsQtyAfterPriorReturns, localDayEnd, localDayStart, R } from "./returns-enhanced.helpers";
+import { computeOrderReturnBalance, computeOrderRemainingPaidRefundCap } from "./returns-order-balance";
 
 export const POLKI_SOURCE_ORDER_STATUS = "delivered" as const;
 
@@ -96,6 +97,11 @@ async function getClientReturnsDataMultipleOrders(
   }
 
   const itemsAdjusted = adjustOrderItemsQtyAfterPriorReturns(items, returns);
+  const orderBalances = orders.map((o) => {
+    const orig = items.filter((i) => i.order_id === o.id);
+    const rem = itemsAdjusted.filter((i) => i.order_id === o.id);
+    return computeOrderReturnBalance(o.id, orig, rem, returns);
+  });
 
   const bal = await prisma.clientBalance.findUnique({
     where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
@@ -115,6 +121,8 @@ async function getClientReturnsDataMultipleOrders(
       created_at: o.created_at.toISOString()
     })),
     items: itemsAdjusted,
+    order_balance: orderBalances.length === 1 ? orderBalances[0]! : null,
+    order_balances: orderBalances,
     total_orders: orders.length,
     total_returned_qty: String(totalReturnedQty),
     total_paid_value: totalPaidValue.toString(),
@@ -234,13 +242,14 @@ export async function getClientReturnsData(
     const itemsOut = shrinkLineQtyAfterReturns
       ? adjustOrderItemsQtyAfterPriorReturns(items, returns)
       : items;
+    const orderBalance = computeOrderReturnBalance(singleOrderId, items, itemsOut, returns);
 
     const bal = await prisma.clientBalance.findUnique({
       where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
       select: { balance: true }
     });
     const balance = bal?.balance ?? new Prisma.Decimal(0);
-    const maxReturnable = totalPaidValue.sub(alreadyReturned);
+    const remainingRefundCap = computeOrderRemainingPaidRefundCap(itemsOut);
 
     return {
       polki_scope: "order",
@@ -255,11 +264,13 @@ export async function getClientReturnsData(
         }
       ],
       items: itemsOut,
+      order_balance: orderBalance,
+      order_balances: [orderBalance],
       total_orders: 1,
       total_returned_qty: String(totalReturnedQty),
       total_paid_value: totalPaidValue.toString(),
       already_returned_value: alreadyReturned.toString(),
-      max_returnable_value: maxReturnable.gt(0) ? maxReturnable.toString() : "0",
+      max_returnable_value: remainingRefundCap.gt(0) ? remainingRefundCap.toString() : "0",
       client_balance: balance.toString(),
       client_debt: balance.lt(0) ? balance.abs().toString() : "0"
     };
@@ -355,4 +366,72 @@ export async function getClientReturnsData(
     client_balance: balance.toString(),
     client_debt: balance.lt(0) ? balance.abs().toString() : "0"
   };
+}
+
+/** Mijozning yetkazilgan zakazlari uchun qoldiq — tanlash ro‘yxatini filtrlash. */
+export async function listClientOrderPickBalances(
+  tenantId: number,
+  clientId: number
+): Promise<import("./returns-enhanced.types").OrderReturnBalance[]> {
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, tenant_id: tenantId, merged_into_client_id: null }
+  });
+  if (!client) throw new Error("BAD_CLIENT");
+
+  const orders = await prisma.order.findMany({
+    where: {
+      tenant_id: tenantId,
+      client_id: clientId,
+      status: POLKI_SOURCE_ORDER_STATUS
+    },
+    orderBy: { created_at: "desc" },
+    select: {
+      id: true,
+      items: {
+        select: {
+          product_id: true,
+          qty: true,
+          price: true,
+          total: true,
+          is_bonus: true,
+          product: { select: { sku: true, name: true, unit: true, category_id: true } }
+        }
+      }
+    }
+  });
+  if (orders.length === 0) return [];
+
+  const orderIds = orders.map((o) => o.id);
+  const returns = await prisma.salesReturn.findMany({
+    where: {
+      tenant_id: tenantId,
+      client_id: clientId,
+      order_id: { in: orderIds },
+      status: "posted"
+    },
+    select: {
+      order_id: true,
+      lines: { select: { product_id: true, qty: true, paid_qty: true, bonus_qty: true } }
+    }
+  });
+
+  const out: import("./returns-enhanced.types").OrderReturnBalance[] = [];
+  for (const order of orders) {
+    const items: OrderItemSummary[] = order.items.map((item) => ({
+      product_id: item.product_id,
+      sku: item.product.sku,
+      name: item.product.name,
+      unit: item.product.unit,
+      qty: item.qty.toString(),
+      price: item.price.toString(),
+      total: item.total.toString(),
+      is_bonus: item.is_bonus,
+      order_id: order.id,
+      order_number: "",
+      category_id: item.product.category_id
+    }));
+    const adjusted = adjustOrderItemsQtyAfterPriorReturns(items, returns);
+    out.push(computeOrderReturnBalance(order.id, items, adjusted, returns));
+  }
+  return out;
 }

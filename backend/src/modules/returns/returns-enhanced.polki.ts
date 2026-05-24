@@ -82,6 +82,11 @@ export async function createPolkiMirrorZayavka(
     (a, l) => a.add(R(l.price).mul(l.bonus_qty)),
     new Prisma.Decimal(0)
   );
+  const paidLineTotal = params.retLines.reduce(
+    (a, l) => a.add(R(l.price).mul(l.paid_qty)),
+    new Prisma.Decimal(0)
+  );
+  const headerTotal = paidLineTotal.gt(0) ? paidLineTotal : params.refundAmount;
 
   let comment = params.note?.trim() || null;
   if (params.refusalReasonRef?.trim()) {
@@ -101,7 +106,7 @@ export async function createPolkiMirrorZayavka(
       warehouse_id: params.warehouseId,
       order_type: params.orderType,
       status: "returned",
-      total_sum: params.refundAmount,
+      total_sum: headerTotal,
       bonus_sum: bonusSum,
       discount_sum: new Prisma.Decimal(0),
       comment,

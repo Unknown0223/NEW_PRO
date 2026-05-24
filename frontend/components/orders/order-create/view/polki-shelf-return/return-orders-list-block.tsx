@@ -55,7 +55,8 @@ export function ReturnOrdersListBlock({
         contextOrders: polkiContextQ.data?.orders,
         polkiOrderGroups,
         polkiRowsAll,
-        pickById
+        pickById,
+        orderBalanceById: vm.polkiOrderBalanceById
       }),
     [
       isPolkiByOrder,
@@ -64,7 +65,8 @@ export function ReturnOrdersListBlock({
       polkiContextQ.data?.orders,
       polkiOrderGroups,
       polkiRowsAll,
-      pickById
+      pickById,
+      vm.polkiOrderBalanceById
     ]
   );
 
@@ -174,10 +176,23 @@ export function ReturnOrdersListBlock({
                       <dd className="font-medium">{e.warehouseName ?? "—"}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">К возврату</dt>
+                      <dt className="text-muted-foreground">Остаток</dt>
                       <dd className="font-medium tabular-nums">
-                        опл. {formatNumberGrouped(e.maxPaid, { maxFractionDigits: 0 })}
-                        {" · "}бон. {formatNumberGrouped(e.maxBonus, { maxFractionDigits: 0 })}
+                        {e.balance ? (
+                          <>
+                            опл. {formatNumberGrouped(e.balance.remaining_paid_qty, { maxFractionDigits: 0 })}
+                            {e.balance.remaining_bonus_qty > 0
+                              ? ` · бон. ${formatNumberGrouped(e.balance.remaining_bonus_qty, { maxFractionDigits: 0 })}`
+                              : ""}
+                          </>
+                        ) : (
+                          <>
+                            опл. {formatNumberGrouped(e.maxPaid, { maxFractionDigits: 0 })}
+                            {e.maxBonus > 0
+                              ? ` · бон. ${formatNumberGrouped(e.maxBonus, { maxFractionDigits: 0 })}`
+                              : ""}
+                          </>
+                        )}
                       </dd>
                     </div>
                   </dl>

@@ -12,7 +12,7 @@ import {
   listSalesReturnsForOrder,
   getSalesReturnById
 } from "./sales-returns.service";
-import { getClientReturnsData } from "./returns-enhanced.service";
+import { getClientReturnsData, listClientOrderPickBalances } from "./returns-enhanced.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -75,34 +75,6 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get(
-    "/api/:slug/returns/:id",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (Number.isNaN(id) || id < 1) {
-        return sendApiError(reply, request, 400, "InvalidId");
-      }
-      const row = await getSalesReturnById(request.tenant!.id, id);
-      if (!row) return sendApiError(reply, request, 404, "NotFound");
-      return reply.send(row);
-    }
-  );
-
-  // ─── Returns for a specific order ──────────────────────────────────────
-  app.get(
-    "/api/:slug/orders/:id/returns",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (Number.isNaN(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId");
-      const data = await listSalesReturnsForOrder(request.tenant!.id, id);
-      return reply.send({ data });
-    }
-  );
-
   // ─── Client returns data (with date filter) ────────────────────────────
   app.get(
     "/api/:slug/returns/client-data",
@@ -159,6 +131,60 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         throw e;
       }
+    }
+  );
+
+  app.get(
+    "/api/:slug/returns/order-balances",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const clientId = Number.parseInt(q.client_id ?? "0", 10);
+      if (!Number.isFinite(clientId) || clientId < 1) {
+        return sendApiError(reply, request, 400, "ClientIdRequired");
+      }
+      const selected = parseSelectedMastersFromQuery(q);
+      const scope = await resolveConstraintScope(request.tenant!.id, selected);
+      if (scope.constrained && !scope.client_ids.includes(clientId)) {
+        return sendApiError(reply, request, 400, "BadClientScope");
+      }
+      try {
+        const data = await listClientOrderPickBalances(request.tenant!.id, clientId);
+        return reply.send({ data });
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        throw e;
+      }
+    }
+  );
+
+  app.get(
+    "/api/:slug/returns/:id",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id) || id < 1) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      const row = await getSalesReturnById(request.tenant!.id, id);
+      if (!row) return sendApiError(reply, request, 404, "NotFound");
+      return reply.send(row);
+    }
+  );
+
+  // ─── Returns for a specific order ──────────────────────────────────────
+  app.get(
+    "/api/:slug/orders/:id/returns",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId");
+      const data = await listSalesReturnsForOrder(request.tenant!.id, id);
+      return reply.send({ data });
     }
   );
 }

@@ -22,15 +22,20 @@ import { getClientReturnsData, POLKI_SOURCE_ORDER_STATUS } from "./returns-enhan
 import {
   assertBatchLineModes,
   computeReturnSplitFromOrderSnapshot,
+  finalizePolkiReturnLines,
   periodReturnUsesExplicitLines,
   physicalQtyFromPeriodLine,
   priceByProductFromItems,
-  scaleReturnLinesToMaxRefund,
   validateExplicitReturnAgainstItems,
   validateExplicitReturnQtyAgainstItems,
   validateReturnQty
 } from "./returns-enhanced.compute";
+import {
+  assertOrderHasPhysicalRemaining,
+  computeOrderRemainingPaidRefundCap
+} from "./returns-order-balance";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
+import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
 
 export type PreparedPeriodReturnSlice = {
   orderId: number;
@@ -231,7 +236,8 @@ export async function preparePeriodReturnBatch(
       prevReturns.map((r) => ({ order_id: r.order_id, lines: r.lines }))
     );
 
-    const maxRet = new Prisma.Decimal(cdata.max_returnable_value);
+    assertOrderHasPhysicalRemaining(itemsAdjusted);
+    const maxRet = computeOrderRemainingPaidRefundCap(itemsAdjusted);
 
     let retLines: PreparedSlice["retLines"];
     let recalc: PreparedSlice["recalc"];
@@ -244,7 +250,9 @@ export async function preparePeriodReturnBatch(
         itemsAdjusted,
         slice.lines
       );
-      const { lines: r2, refund: cappedRefund } = scaleReturnLinesToMaxRefund(rawRetLines, maxRet);
+      const { lines: r2, refund: cappedRefund } = finalizePolkiReturnLines(rawRetLines, maxRet, {
+        orderScoped: true
+      });
       retLines = r2;
       recalc = {
         ...rawRecalc,
@@ -253,15 +261,37 @@ export async function preparePeriodReturnBatch(
         bonus_return_qty: retLines.reduce((a, l) => a + l.bonus_qty, 0)
       };
     } else {
-      const explicitRows = slice.lines.map((l) => ({
+      const reconciled = await reconcileOrderScopedExplicitLinesWithPreview(tenantId, {
+        client_id: input.client_id,
+        order_id: orderId,
+        price_type: input.price_type,
+        lines: slice.lines
+      });
+      const explicitRows = reconciled.map((l) => ({
         product_id: l.product_id,
         paid_qty: l.paid_qty ?? 0,
         bonus_qty: l.bonus_qty ?? 0,
         bonus_cash: l.bonus_cash ?? 0
       }));
+      validateReturnQty(
+        allItems,
+        alreadyRetMap,
+        explicitRows
+          .filter((er) => er.paid_qty + er.bonus_qty > 0)
+          .map((er) => ({ product_id: er.product_id, qty: er.paid_qty + er.bonus_qty }))
+      );
       const priceMap = priceByProductFromItems(cdata.items);
       validateExplicitReturnAgainstItems(itemsAdjusted, explicitRows, priceMap);
-      validateExplicitReturnQtyAgainstItems(itemsAdjusted, slice.lines);
+      validateExplicitReturnQtyAgainstItems(
+        itemsAdjusted,
+        reconciled.map((l) => ({
+          product_id: l.product_id,
+          return_qty:
+            l.return_qty != null && l.return_qty > 0
+              ? l.return_qty
+              : (l.paid_qty ?? 0) + (l.bonus_qty ?? 0)
+        }))
+      );
 
       const physical: PreparedSlice["retLines"] = [];
       let cashReqTotal = new Prisma.Decimal(0);
@@ -286,7 +316,7 @@ export async function preparePeriodReturnBatch(
 
       const scaled =
         physical.length > 0
-          ? scaleReturnLinesToMaxRefund(physical, maxRet)
+          ? finalizePolkiReturnLines(physical, maxRet, { orderScoped: true })
           : { lines: [] as PreparedSlice["retLines"], refund: new Prisma.Decimal(0) };
 
       const room = maxRet.sub(scaled.refund);

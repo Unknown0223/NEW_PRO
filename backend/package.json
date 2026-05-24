@@ -38,6 +38,7 @@
     "test:report-builder": "vitest run tests/report-builder-validate.test.ts tests/report-builder.integration.test.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "seed:polki-return-scenarios": "tsx scripts/seed-polki-return-scenarios-once.ts",
     "db:seed": "prisma db seed",
     "backfill:work-slots": "tsx scripts/backfill-work-slots.ts",
     "db:zero-reset": "tsx scripts/db-zero-reset.ts",

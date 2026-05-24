@@ -19,6 +19,17 @@ export type OrderItemSummary = {
   category_id: number | null;
 };
 
+export type OrderReturnBalance = {
+  order_id: number;
+  initial_paid_qty: number;
+  initial_bonus_qty: number;
+  returned_paid_qty: number;
+  returned_bonus_qty: number;
+  remaining_paid_qty: number;
+  remaining_bonus_qty: number;
+  fully_returned: boolean;
+};
+
 export type ClientReturnsData = {
   /** `period` — mijoz+davr (zakazsiz yig‘indi); `order` — bitta zakaz doirasi */
   polki_scope: "period" | "order";
@@ -31,6 +42,10 @@ export type ClientReturnsData = {
     created_at: string;
   }[];
   items: OrderItemSummary[];
+  /** Po zakaz: boshlang‘ich / qaytarilgan / qoldiq (pullik + bonus). */
+  order_balance?: OrderReturnBalance | null;
+  /** Mijozning barcha yetkazilgan zakazlari uchun qoldiq (tanlash ro‘yxati). */
+  order_balances?: OrderReturnBalance[];
   total_orders: number;
   total_returned_qty: string;
   total_paid_value: string;

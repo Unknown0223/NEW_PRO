@@ -9,6 +9,7 @@ import {
 } from "./polki-order-composition";
 import { PolkiOrderCompositionDetails } from "./polki-order-composition-details";
 import { polkiCard } from "./polki-return-ui";
+import { ReturnOrderBalanceBlock } from "./return-order-balance-block";
 
 /** Tanlangan zakaz: sotuv va bonus — scroll paytida tepada qoladi. */
 export function ReturnSelectedOrderSummary({
@@ -20,7 +21,7 @@ export function ReturnSelectedOrderSummary({
   className?: string;
   compact?: boolean;
 }) {
-  const { isPolkiByOrder, polkiOrderIds, polkiRowsAll, polkiOrdersForPick } = vm;
+  const { isPolkiByOrder, polkiOrderIds, polkiRowsAll, polkiOrdersForPick, polkiSelectedOrderBalance } = vm;
 
   if (!isPolkiByOrder || polkiOrderIds.length !== 1) return null;
 
@@ -72,6 +73,10 @@ export function ReturnSelectedOrderSummary({
           ) : null}
         </div>
       </div>
+
+      {polkiSelectedOrderBalance ? (
+        <ReturnOrderBalanceBlock balance={polkiSelectedOrderBalance} className="mb-3" dense={compact} />
+      ) : null}
 
       <PolkiOrderCompositionDetails
         composition={summary}

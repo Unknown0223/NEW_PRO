@@ -1,0 +1,185 @@
+{
+  "tag": "[POLKI-FULL]",
+  "client_id": 5,
+  "created_at": "2026-05-24T07:53:07.033Z",
+  "scenarios": [
+    {
+      "code": "S7-FREE-POLKI-PERIOD",
+      "order_id": 99,
+      "order_number": "99",
+      "polki_turi": "erkin",
+      "shart": "Vozvrat s polki (erkin) — order_id yo‘q, sana oralig‘i",
+      "returns": [
+        {
+          "number": "VR-1-0C660D90CB1F",
+          "refund": "100000",
+          "note": "S7 erkin polki qisman 4"
+        },
+        {
+          "number": "VR-1-A4BCC7BD7897",
+          "refund": "50000",
+          "note": "S7 erkin polki qolgan 2"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S1-PAID-PARTIAL-THEN-CLOSE",
+      "order_id": 102,
+      "order_number": "102",
+      "polki_turi": "po_zakaz",
+      "shart": "Faqat pullik; 5+7=12; to‘liq yopiladi",
+      "returns": [
+        {
+          "number": "VR-1-6275A75AB7DE",
+          "refund": "125000",
+          "note": "S1 qisman 5"
+        },
+        {
+          "number": "VR-1-20657369E622",
+          "refund": "175000",
+          "note": "S1 qolgan 7 — yopish"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S2-10+1-4-2-1-FLUSH",
+      "order_id": 105,
+      "order_number": "105",
+      "polki_turi": "po_zakaz",
+      "shart": "20 pullik + 10+1 bonus; 4→2→1→qolgan; 0/0",
+      "returns": [
+        {
+          "number": "VR-1-56F8C28A2B34",
+          "refund": "100000",
+          "note": "S2: 4 ta"
+        },
+        {
+          "number": "VR-1-D1752BF9283B",
+          "refund": "50000",
+          "note": "S2: 2 ta"
+        },
+        {
+          "number": "VR-1-463D4E1F8E99",
+          "refund": "25000",
+          "note": "S2: 1 ta"
+        },
+        {
+          "number": "VR-1-922A7B150B51",
+          "refund": "325000",
+          "note": "S2: qolganini yopish"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S3-FULL-LOCK",
+      "order_id": 110,
+      "order_number": "110",
+      "polki_turi": "po_zakaz",
+      "shart": "Bir VR to‘liq; ikkinchi ORDER_FULLY_RETURNED",
+      "returns": [
+        {
+          "number": "VR-1-A01B90F36341",
+          "refund": "680000",
+          "note": "S3 bir VR — to‘liq"
+        },
+        {
+          "number": "—",
+          "refund": "0",
+          "note": "blok: BAD_ORDER"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S4-RECONCILE-THEN-CLOSE",
+      "order_id": 112,
+      "order_number": "112",
+      "polki_turi": "po_zakaz",
+      "shart": "Noto‘g‘ri bonus-only; reconcile; keyin to‘liq yopish",
+      "returns": [
+        {
+          "number": "VR-1-D06374BABBF4",
+          "refund": "510000",
+          "note": "S4 bonus-only → server pullik"
+        },
+        {
+          "number": "VR-1-6785617B6ECC",
+          "refund": "340000",
+          "note": "S4 qolganini yopish"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S5-CROSS-BONUS-FLUSH",
+      "order_id": 115,
+      "order_number": "115",
+      "polki_turi": "po_zakaz",
+      "shart": "Savdo mahs.1, bonus boshqa mahsulotda; yopishgacha",
+      "returns": [
+        {
+          "number": "VR-1-48555E5249DF",
+          "refund": "250000",
+          "note": "S5 qisman 10"
+        },
+        {
+          "number": "VR-1-A412D073583D",
+          "refund": "250000",
+          "note": "S5 qolganini yopish"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    },
+    {
+      "code": "S6-MULTI-PRODUCT-VR",
+      "order_id": 118,
+      "order_number": "118",
+      "polki_turi": "po_zakaz",
+      "shart": "Bitta vozvratda bir nechta mahsulot; keyin yopish",
+      "returns": [
+        {
+          "number": "VR-1-17CA75342F93",
+          "refund": "195000",
+          "note": "S6 bir VR — 2 mahsulot qisman"
+        },
+        {
+          "number": "VR-1-A41EF39A4D87",
+          "refund": "195000",
+          "note": "S6 qolganini yopish"
+        }
+      ],
+      "qoldiq": {
+        "paid": 0,
+        "bonus": 0,
+        "fully_returned": true
+      }
+    }
+  ]
+}

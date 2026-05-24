@@ -9,6 +9,11 @@ import {
   loadActiveQtyBonusRules,
   ruleQtyLabel
 } from "./returns-bonus-reverse.match";
+import {
+  computeOrderLevelBonusToReturn,
+  distributeOrderBonusReturn,
+  paidReturnFromLineQty
+} from "./returns-bonus-reverse.order-level";
 import type { ProductLite } from "../orders/order-bonus-context.fetch";
 import {
   loadInterchangeableSiblingsByProductId,
@@ -168,12 +173,32 @@ export async function previewPolkiAutoBonusReverse(
 
   const qtyRules = await loadActiveQtyBonusRules(tenantId, refAt);
   const siblingsByProduct = await loadInterchangeableSiblingsByProductId(tenantId);
-  const outLines: PolkiAutoBonusPreviewLine[] = [];
-  let sumPaid = 0;
-  let sumBonus = 0;
-  let sumDebtQty = 0;
-  let refund = new Prisma.Decimal(0);
-  let sumDebtAmount = new Prisma.Decimal(0);
+
+  const bonusProductIds = new Set<number>();
+  for (const it of cdata.items) {
+    if (it.is_bonus) bonusProductIds.add(it.product_id);
+  }
+
+  const orderScoped = orderId != null;
+  let orderRemainingPaid = 0;
+  let orderRemainingBonus = 0;
+  if (orderScoped) {
+    for (const pool of poolByProduct.values()) {
+      orderRemainingPaid += pool.max_paid;
+      orderRemainingBonus += pool.max_bonus;
+    }
+  }
+
+  type LineDraft = {
+    ln: PolkiAutoBonusPreviewLineInput;
+    p: NonNullable<ReturnType<typeof pmap.get>>;
+    pool: NonNullable<ReturnType<typeof poolByProduct.get>>;
+    returnQty: number;
+    paidReturn: number;
+    rule: ReturnType<typeof findQtyRuleForProduct>;
+    ruleMeta: { id: number; name: string; label: string } | null;
+  };
+  const drafts: LineDraft[] = [];
 
   for (const ln of input.lines) {
     if (!(ln.return_qty > 0)) continue;
@@ -208,21 +233,60 @@ export async function previewPolkiAutoBonusReverse(
       category_id: p.category_id
     };
     const rule = findQtyRuleForProduct(qtyRules, lite);
-    let bonusTheoretical = 0;
-    let ruleMeta: { id: number; name: string; label: string } | null = null;
-    const ruleBonus =
-      rule != null ? computeQtyBonusForRuleRow(rule, returnQty) : null;
-    if (rule) {
-      ruleMeta = { id: rule.id, name: rule.name, label: ruleQtyLabel(rule) };
+    const ruleMeta = rule ? { id: rule.id, name: rule.name, label: ruleQtyLabel(rule) } : null;
+
+    const paidReturn = orderScoped
+      ? paidReturnFromLineQty(returnQty, pool)
+      : Math.min(returnQty, pool.max_paid);
+
+    drafts.push({ ln, p, pool, returnQty, paidReturn, rule, ruleMeta });
+  }
+
+  let orderBonusByProduct = new Map<number, number>();
+  if (orderScoped && drafts.length > 0) {
+    const paidReturnTotal = drafts.reduce((a, d) => a + d.paidReturn, 0);
+    if (paidReturnTotal > orderRemainingPaid + 1e-9) {
+      warnings.push(
+        `По заказу осталось только ${orderRemainingPaid} шт оплаты — нельзя вернуть ${paidReturnTotal} шт.`
+      );
     }
-    bonusTheoretical = resolveReturnBonusTheoretical({
-      scopedToOrder: orderId != null,
-      returnQty,
-      pool,
-      ruleBonusFromQty: ruleBonus
+    let orderRule = drafts.find((d) => d.rule && d.pool.max_bonus > 0)?.rule ?? null;
+    if (!orderRule) {
+      orderRule = drafts.find((d) => d.rule)?.rule ?? null;
+    }
+    const { bonusToReturn } = computeOrderLevelBonusToReturn({
+      remainingPaidBefore: orderRemainingPaid,
+      remainingBonusBefore: orderRemainingBonus,
+      paidReturnThisTime: paidReturnTotal,
+      rule: orderRule
     });
-    if (returnQty > 0 && !rule && orderId == null) {
-      warnings.push(`${p.name}: mos qty-bonus qoidasi yo‘q — snapshot bo‘yicha taqsimlash`);
+    orderBonusByProduct = distributeOrderBonusReturn(bonusToReturn, poolByProduct, bonusProductIds);
+  }
+
+  const outLines: PolkiAutoBonusPreviewLine[] = [];
+  let sumPaid = 0;
+  let sumBonus = 0;
+  let sumDebtQty = 0;
+  let refund = new Prisma.Decimal(0);
+  let sumDebtAmount = new Prisma.Decimal(0);
+
+  for (const d of drafts) {
+    const { p, pool, returnQty, paidReturn, ruleMeta } = d;
+    let bonusTheoretical = 0;
+    if (orderScoped) {
+      bonusTheoretical = orderBonusByProduct.get(d.ln.product_id) ?? 0;
+      bonusTheoretical = Math.min(bonusTheoretical, pool.max_bonus, returnQty);
+    } else {
+      const ruleBonus = d.rule != null ? computeQtyBonusForRuleRow(d.rule, returnQty) : null;
+      bonusTheoretical = resolveReturnBonusTheoretical({
+        scopedToOrder: false,
+        returnQty,
+        pool,
+        ruleBonusFromQty: ruleBonus
+      });
+      if (returnQty > 0 && !d.rule) {
+        warnings.push(`${p.name}: mos qty-bonus qoidasi yo‘q — snapshot bo‘yicha taqsimlash`);
+      }
     }
 
     const split = computeReverseLineSplit({
@@ -235,17 +299,30 @@ export async function previewPolkiAutoBonusReverse(
       bonus_reverseTheoretical: bonusTheoretical
     });
 
+    if (orderScoped && paidReturn !== split.paid_qty) {
+      split.paid_qty = paidReturn;
+      split.bonus_qty = Math.min(
+        bonusTheoretical,
+        pool.max_bonus,
+        Math.max(0, returnQty - paidReturn)
+      );
+      const unallocated = Math.max(0, returnQty - split.paid_qty - split.bonus_qty);
+      const bonusShortfall = Math.max(0, bonusTheoretical - split.bonus_qty);
+      split.bonus_debt_qty = bonusShortfall + unallocated;
+      const unitBonus = pool.unit_price_bonus > 0 ? pool.unit_price_bonus : pool.unit_price_paid;
+      split.bonus_debt_amount = split.bonus_debt_qty * unitBonus;
+    }
+
     const peresort = resolveAutoPeresortWarehouse({
-      sourceProductId: ln.product_id,
+      sourceProductId: d.ln.product_id,
       sourceName: p.name,
       bonusQty: split.bonus_qty,
       paidQty: split.paid_qty,
       poolByProduct,
-      siblings: siblingsByProduct.get(ln.product_id),
+      siblings: siblingsByProduct.get(d.ln.product_id),
       unitPriceBonus: pool.unit_price_bonus
     });
-    const lineDebtAmount =
-      split.bonus_debt_amount + peresort.peresort_debt_amount;
+    const lineDebtAmount = split.bonus_debt_amount + peresort.peresort_debt_amount;
 
     sumPaid += split.paid_qty;
     sumBonus += split.bonus_qty;
@@ -254,7 +331,7 @@ export async function previewPolkiAutoBonusReverse(
     sumDebtAmount = sumDebtAmount.add(new Prisma.Decimal(lineDebtAmount));
 
     outLines.push({
-      product_id: ln.product_id,
+      product_id: d.ln.product_id,
       sku: p.sku,
       name: p.name,
       max_paid: pool.max_paid,

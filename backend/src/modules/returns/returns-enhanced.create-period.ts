@@ -16,18 +16,23 @@ import { createPolkiMirrorZayavka } from "./returns-enhanced.polki";
 import { getClientReturnsData, POLKI_SOURCE_ORDER_STATUS } from "./returns-enhanced.client-data";
 import { localDayEnd, localDayStart } from "./returns-enhanced.helpers";
 import {
+  assertOrderHasPhysicalRemaining,
+  computeOrderRemainingPaidRefundCap
+} from "./returns-order-balance";
+import {
   assertPeriodLineModes,
   computeReturnSplitFromOrderSnapshot,
+  finalizePolkiReturnLines,
   periodReturnUsesExplicitLines,
   physicalQtyFromPeriodLine,
   priceByProductFromItems,
-  scaleReturnLinesToMaxRefund,
   validateExplicitReturnAgainstItems,
   validateExplicitReturnQtyAgainstItems,
   validateReturnQty
 } from "./returns-enhanced.compute";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
+import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
 
 
 export async function createPeriodReturn(
@@ -125,13 +130,19 @@ export async function createPeriodReturn(
     prevReturns.map((r) => ({ order_id: r.order_id, lines: r.lines }))
   );
 
+  if (orderScoped) {
+    assertOrderHasPhysicalRemaining(itemsAdjusted);
+  }
+
+  const maxRet = orderScoped
+    ? computeOrderRemainingPaidRefundCap(itemsAdjusted)
+    : new Prisma.Decimal(cdata.max_returnable_value);
+
   const useExplicit = input.lines.every((l) => !(l.qty != null && l.qty > 0));
 
   if (!useExplicit) {
     validateReturnQty(allItems, alreadyRetMap, input.lines as { product_id: number; qty: number }[]);
   }
-
-  const maxRet = new Prisma.Decimal(cdata.max_returnable_value);
 
   let retLines: Array<{ product_id: number; qty: number; paid_qty: number; bonus_qty: number; price: number }>;
   let recalc: {
@@ -146,15 +157,42 @@ export async function createPeriodReturn(
   };
 
   if (useExplicit) {
-    const explicitRows = input.lines.map((l) => ({
+    const reconciled =
+      orderScoped
+        ? await reconcileOrderScopedExplicitLinesWithPreview(tenantId, {
+            client_id: input.client_id,
+            order_id: input.order_id!,
+            price_type: input.price_type,
+            lines: input.lines
+          })
+        : null;
+
+    const explicitRows = (reconciled ?? input.lines).map((l) => ({
       product_id: l.product_id,
       paid_qty: l.paid_qty ?? 0,
       bonus_qty: l.bonus_qty ?? 0,
       bonus_cash: l.bonus_cash ?? 0
     }));
+
+    validateReturnQty(
+      allItems,
+      alreadyRetMap,
+      explicitRows
+        .filter((er) => er.paid_qty + er.bonus_qty > 0)
+        .map((er) => ({ product_id: er.product_id, qty: er.paid_qty + er.bonus_qty }))
+    );
     const priceMap = priceByProductFromItems(cdata.items);
     validateExplicitReturnAgainstItems(itemsAdjusted, explicitRows, priceMap);
-    validateExplicitReturnQtyAgainstItems(itemsAdjusted, input.lines);
+    validateExplicitReturnQtyAgainstItems(
+      itemsAdjusted,
+      (reconciled ?? input.lines).map((l) => ({
+        product_id: l.product_id,
+        return_qty:
+          l.return_qty != null && l.return_qty > 0
+            ? l.return_qty
+            : (l.paid_qty ?? 0) + (l.bonus_qty ?? 0)
+      }))
+    );
 
     const physical: Array<{
       product_id: number;
@@ -185,7 +223,7 @@ export async function createPeriodReturn(
 
     const scaled =
       physical.length > 0
-        ? scaleReturnLinesToMaxRefund(physical, maxRet)
+        ? finalizePolkiReturnLines(physical, maxRet, { orderScoped })
         : { lines: [] as typeof physical, refund: new Prisma.Decimal(0) };
 
     const room = maxRet.sub(scaled.refund);
@@ -216,7 +254,9 @@ export async function createPeriodReturn(
       itemsAdjusted,
       input.lines as { product_id: number; qty: number }[]
     );
-    const { lines: r2, refund: cappedRefund } = scaleReturnLinesToMaxRefund(rawRetLines, maxRet);
+    const { lines: r2, refund: cappedRefund } = finalizePolkiReturnLines(rawRetLines, maxRet, {
+      orderScoped
+    });
     retLines = r2;
     recalc = {
       ...rawRecalc,
