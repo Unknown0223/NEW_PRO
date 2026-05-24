@@ -22,7 +22,15 @@ export const POLKI_SKIDKA_OPTS = [
 
 export const POLKI_PRICE_TYPE_LABEL_RU: Record<string, string> = {
   retail: "Розница",
-  wholesale: "Опт"
+  wholesale: "Опт",
+  naqd: "Наличные",
+  terminal: "Терминал",
+  perechisleniye: "Перечисление",
+  NAQD_PUL: "Наличные",
+  TERMINAL: "Терминал",
+  PERECHISLENIYE: "Перечисление",
+  old_prices: "Старые цены",
+  OLD_PRICES: "Старые цены"
 };
 
 export const ORDER_STATUS_LABEL_RU: Record<string, string> = {

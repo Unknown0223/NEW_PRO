@@ -194,19 +194,22 @@ export async function bulkPatchAgents(
       const normalizedEnt = normalizeAgentEntitlementsInput(input.agent_entitlements);
       const usersForMerge = await prisma.user.findMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
-        select: { id: true, agent_entitlements: true }
+        select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
       });
-      for (const u of usersForMerge) {
-        const prev =
-          u.agent_entitlements && typeof u.agent_entitlements === "object" && !Array.isArray(u.agent_entitlements)
-            ? (u.agent_entitlements as Record<string, unknown>)
-            : {};
-        const merged = normalizeAgentEntitlementsInput({
-          ...parseEntitlements(prev),
-          ...normalizedEnt
+      const patches = usersForMerge.map((u) => {
+        const snap = entitlementsSnapshotFromAgentUser(u);
+        return normalizeAgentEntitlementsInput({
+          price_types: normalizedEnt.price_types ?? snap.price_types,
+          product_rules: normalizedEnt.product_rules ?? snap.product_rules,
+          mobile_config:
+            normalizedEnt.mobile_config !== undefined ? normalizedEnt.mobile_config : snap.mobile_config
         });
-        await applyAgentPatchInDb(tenantId, u.id, { agent_entitlements: merged }, actorUserId);
-      }
+      });
+      await prisma.$transaction(
+        usersForMerge.map((u, i) =>
+          prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patches[i] } })
+        )
+      );
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
@@ -220,24 +223,29 @@ export async function bulkPatchAgents(
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
       });
-      for (const u of users) {
+      const patches = users.map((u) => {
         const ent = mergeAgentEntitlementsAfterProductListPatch(u, {
           mode: input.mode,
           category_id: input.category_id,
           product_ids: pids,
           price_types: pts
         });
-        await validateAgentEntitlements(tenantId, ent);
-        await applyAgentPatchInDb(tenantId, u.id, { agent_entitlements: ent }, actorUserId);
-      }
+        return ent;
+      });
+      await prisma.$transaction(
+        users.map((u, i) =>
+          prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patches[i] } })
+        )
+      );
       await auditBulk(users.length);
       return { updated: users.length };
     }
     case "set_trade_direction": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
-      for (const id of ids) {
-        await applyAgentPatchInDb(tenantId, id, { trade_direction_id: input.trade_direction_id }, actorUserId);
-      }
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { trade_direction_id: input.trade_direction_id }
+      });
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
@@ -246,9 +254,11 @@ export async function bulkPatchAgents(
       if (input.updates.length > AGENT_BULK_MAX_IDS) throw new Error("TOO_MANY_AGENTS");
       const uids = input.updates.map((u) => u.agent_id);
       await assertTenantAgentIdList(tenantId, uids);
-      for (const u of input.updates) {
-        await applyAgentPatchInDb(tenantId, u.agent_id, { trade_direction_id: u.trade_direction_id }, actorUserId);
-      }
+      await prisma.$transaction(
+        input.updates.map((u) =>
+          prisma.user.update({ where: { id: u.agent_id }, data: { trade_direction_id: u.trade_direction_id } })
+        )
+      );
       await auditBulk(input.updates.length);
       return { updated: input.updates.length };
     }

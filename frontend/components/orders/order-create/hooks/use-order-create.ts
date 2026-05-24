@@ -30,21 +30,37 @@ import type {
   PolkiClientItem,
   PolkiOrderGroup
 } from "../types";
-import { MAX_POLKI_RETURN_QTY, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS } from "../constants";
+import { MAX_POLKI_RETURN_QTY, POLKI_SKIDKA_OPTS } from "../constants";
+import { polkiDefaultsFromOrderRow } from "../view/polki-shelf-return/polki-apply-order-defaults";
+import {
+  tradeDirectionLabel,
+  tradeDirectionOptionsFromProfile
+} from "../view/polki-shelf-return/polki-trade-direction-options";
+import type { PolkiPriceTypeEntryRef } from "../view/polki-shelf-return/polki-price-type-options";
 import {
   parsePriceAmount,
   parseStockQty,
   availableOrderQty,
   formatQtyState,
+  formatPolkiPieceQty,
   orderStatusLabelRu,
   currentMonthEndIsoDate,
   unitPriceForType,
   buildPolkiPairRows,
   polkiSplitTotal,
+  capPolkiQtyToRow,
+  polkiRowMaxReturnQty,
+  polkiProductMaxReturnPool,
   isPolkiShelfSourceOrder,
   isPolkiReturnByOrderPickable,
   polkiOrderRowHasBonus
 } from "../utils";
+import { applyPolkiOrderPieceRebalance } from "../view/polki-shelf-return/polki-order-composition";
+import { usePolkiAutoBonus } from "./use-polki-auto-bonus";
+import { usePolkiPeresort } from "./use-polki-peresort";
+import { computePolkiDebtHintSum, parsePolkiQty } from "../polki-bonus-balance.logic";
+
+const EMPTY_CREATE_PRODUCTS: ProductRow[] = [];
 
 export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: OrderCreateProps) {
   const qc = useQueryClient();
@@ -82,6 +98,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const polkiRangeAnchorRef = useRef<HTMLElement | null>(null);
   const [polkiRangeOpen, setPolkiRangeOpen] = useState(false);
   const [polkiOrderIds, setPolkiOrderIds] = useState<number[]>([]);
+  const polkiAutoCategoriesOrderRef = useRef<number | null>(null);
   const [polkiTotalQty, setPolkiTotalQty] = useState<Record<string, string>>({});
   const [polkiBonusToBalance, setPolkiBonusToBalance] = useState<Record<string, boolean>>({});
   const [polkiBonusCash, setPolkiBonusCash] = useState<Record<string, string>>({});
@@ -89,6 +106,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const [polkiHeaderDate, setPolkiHeaderDate] = useState("");
   const [polkiTradeDirection, setPolkiTradeDirection] = useState("");
   const [polkiSkidkaType, setPolkiSkidkaType] = useState("none");
+  const [polkiExpandedOrderId, setPolkiExpandedOrderId] = useState<number | null>(null);
+  const [polkiBonusCalcMode, setPolkiBonusCalcMode] = useState<"manual" | "auto">("auto");
+  const [polkiPeresortByPairKey, setPolkiPeresortByPairKey] = useState<Record<string, number>>({});
   const [orderIsConsignment, setOrderIsConsignment] = useState(false);
   const [consignmentDueDate, setConsignmentDueDate] = useState("");
   const [consignmentDueOpen, setConsignmentDueOpen] = useState(false);
@@ -175,6 +195,15 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         /** Legacy ro‘yxat (kodlar) — payment_method_entries bo‘lmasa fallback. */
         payment_types?: string[];
         payment_method_entries?: { id: string; name: string; active?: boolean }[];
+        price_type_entries?: Array<{
+          id: string;
+          name: string;
+          code: string | null;
+          kind?: string;
+          active?: boolean;
+          sort_order?: number | null;
+        }>;
+        trade_directions?: string[];
       };
     };
     product_categories: { id: number; name: string }[];
@@ -236,7 +265,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const useSplitOrderCatalog = requiresAgentForProductCatalog && hasAgentSelected;
 
   const stockProductIdsKey = useMemo(() => {
-    const src = agentCatalogReady ? (createCtxQ.data?.products ?? []) : [];
+    const src = agentCatalogReady
+      ? (createCtxQ.data?.products ?? EMPTY_CREATE_PRODUCTS)
+      : EMPTY_CREATE_PRODUCTS;
     const ids = src.map((p) => p.id).filter((n) => Number.isFinite(n) && n > 0);
     ids.sort((a, b) => a - b);
     return ids.join(",");
@@ -264,7 +295,10 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     orders?: Array<{
       id: number;
       number: string;
+      status: string;
       created_at: string;
+      total_sum?: string;
+      bonus_sum?: string;
     }>;
     items: Array<{
       product_id: number;
@@ -353,17 +387,38 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     });
   }, [isPolkiByOrder, polkiOrdersForPick]);
 
-  const togglePolkiOrderPick = (id: number, checked: boolean) => {
-    setPolkiOrderIds((prev) => {
-      if (checked) return prev.includes(id) ? prev : [...prev, id];
-      return prev.filter((x) => x !== id);
-    });
-  };
+  const polkiOrderFieldsFromOrder = isPolkiByOrder && polkiOrderIds.length > 0;
 
-  const togglePolkiOrdersSelectAll = (checked: boolean) => {
-    if (checked) setPolkiOrderIds(polkiOrdersForPick.map((o) => o.id));
-    else setPolkiOrderIds([]);
-  };
+  const selectPolkiOrder = useCallback(
+    (id: number) => {
+      setPolkiOrderIds([id]);
+      setPolkiExpandedOrderId(id);
+      polkiAutoCategoriesOrderRef.current = null;
+      setPolkiTotalQty({});
+      setPolkiPeresortByPairKey({});
+      setPolkiBonusToBalance({});
+      setPolkiBonusCash({});
+      setSelectionNotice(null);
+
+      const order = polkiOrdersForPick.find((o) => o.id === id);
+      if (!order) return;
+
+      const profile = createCtxQ.data?.settings_profile;
+      const patch = polkiDefaultsFromOrderRow(order, {
+        priceTypeEntries: profile?.references?.price_type_entries as PolkiPriceTypeEntryRef[] | undefined,
+        fallbackPriceTypes: createCtxQ.data?.price_types ?? [],
+        tradeDirectionOptions: tradeDirectionOptionsFromProfile(profile?.references?.trade_directions)
+      });
+
+      if (patch.warehouseId) setWarehouseId(patch.warehouseId);
+      if (patch.agentId) setAgentId(patch.agentId);
+      setPriceType(patch.priceType);
+      setPolkiTradeDirection(patch.tradeDirection);
+      setPolkiSkidkaType(patch.skidkaType);
+      setPolkiBonusCalcMode(patch.bonusCalcMode);
+    },
+    [polkiOrdersForPick, createCtxQ.data]
+  );
 
   useEffect(() => {
     if (!isPolkiSheet) return;
@@ -397,6 +452,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiOrdersForPick
   ]);
 
+  const { polkiPeresortOptionsByProductId } = usePolkiPeresort(tenantSlug, isPolkiSheet);
+
   const polkiContextQ = useQuery({
     queryKey: [
       "order-create-polki-context",
@@ -421,9 +478,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       if (isPolkiFree) {
         if (polkiDateFrom) params.set("date_from", polkiDateFrom);
         if (polkiDateTo) params.set("date_to", polkiDateTo);
-      } else if (polkiOrderIds.length > 1) {
-        params.set("order_ids", [...polkiOrderIds].sort((a, b) => a - b).join(","));
-      } else if (polkiOrderIds.length === 1) {
+      } else if (polkiOrderIds.length >= 1) {
         params.set("order_id", String(polkiOrderIds[0]));
       }
       const { data } = await api.get<ClientReturnDataPolki>(
@@ -573,7 +628,10 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     }
     return `Клиент #${id}`;
   }, [clientId, eligibleClientById, clientSummaryQ.data, clientSummaryQ.isFetching]);
-  const products = agentCatalogReady ? (createCtxQ.data?.products ?? []) : [];
+  const products = useMemo(
+    () => (agentCatalogReady ? (createCtxQ.data?.products ?? EMPTY_CREATE_PRODUCTS) : EMPTY_CREATE_PRODUCTS),
+    [agentCatalogReady, createCtxQ.data?.products]
+  );
   const warehouses = createCtxQ.data?.warehouses ?? [];
   const users = createCtxQ.data?.users ?? [];
   const categories = agentCatalogReady ? (createCtxQ.data?.product_categories ?? []) : [];
@@ -628,6 +686,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setQtyByProductId({});
       setBlockByProductId({});
       setPolkiOrderIds([]);
+      polkiAutoCategoriesOrderRef.current = null;
       setSelectionNotice(
         "Tanlangan klient kombinatsiyasi cheklovga tushdi: agent/ombor/qabulchi qayta tanlanadi."
       );
@@ -813,8 +872,13 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const polkiRowsAll = useMemo((): PolkiPairRowModel[] => {
     if (!isPolkiSheet || !polkiContextQ.data?.items?.length) return [];
-    return buildPolkiPairRows(polkiContextQ.data.items as PolkiClientItem[], products);
-  }, [isPolkiSheet, polkiContextQ.data?.items, products]);
+    const items = polkiContextQ.data.items as PolkiClientItem[];
+    const built = buildPolkiPairRows(items, products, {
+      aggregateByProduct: isPolkiFree
+    });
+    if (isPolkiFree) return built;
+    return applyPolkiOrderPieceRebalance(built, items);
+  }, [isPolkiSheet, isPolkiFree, polkiContextQ.data?.items, products]);
 
   const polkiLineKeySet = useMemo(
     () => new Set(polkiRowsAll.map((r) => r.pair_key)),
@@ -848,16 +912,60 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     return m;
   }, [polkiContextQ.data?.orders, polkiOrdersForPick]);
 
+  /** Vozvrat qatorlari bo‘yicha kategoriyalar (ombor qoldig‘i emas). */
+  const polkiReturnCategories = useMemo(() => {
+    if (!isPolkiSheet) return null;
+    if (polkiContextQ.isLoading) return null;
+    if (!polkiContextQ.isSuccess) return [];
+    if (polkiRowsAll.length === 0) return [];
+    const ids = new Set<number>();
+    for (const r of polkiRowsAll) {
+      if (r.category_id != null && Number.isFinite(r.category_id)) ids.add(r.category_id);
+    }
+    return categories
+      .filter((c) => ids.has(c.id))
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  }, [isPolkiSheet, polkiContextQ.isLoading, polkiContextQ.isSuccess, polkiRowsAll, categories]);
+
+  useEffect(() => {
+    if (!isPolkiSheet || polkiReturnCategories == null) return;
+    const allowed = new Set(polkiReturnCategories.map((c) => c.id));
+    setSelectedCategoryIds((prev) => {
+      const next = prev.filter((id) => allowed.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [isPolkiSheet, polkiReturnCategories]);
+
+  /** Po zakaz: zakaz tanlanganda barcha kategoriyalar (qatorlarda bor) avtomatik tanlanadi; foydalanuvchi cheklashi mumkin. */
+  useEffect(() => {
+    if (!isPolkiByOrder || polkiOrderIds.length !== 1) return;
+    if (!polkiReturnCategories?.length) return;
+    const oid = polkiOrderIds[0]!;
+    if (polkiAutoCategoriesOrderRef.current === oid) return;
+    polkiAutoCategoriesOrderRef.current = oid;
+    const ids = polkiReturnCategories.map((c) => c.id);
+    setSelectedCategoryIds(ids);
+    setActiveCatalogCategoryId(ids[0] ?? null);
+  }, [isPolkiByOrder, polkiOrderIds, polkiReturnCategories]);
+
   const polkiRowsFiltered = useMemo((): PolkiPairRowModel[] => {
     if (!isPolkiSheet) return [];
+    if (!categoryFilterActive) return [];
+    const activeId = activeCatalogCategoryId ?? selectedCategoryIds[0];
+    if (activeId == null) return [];
     return polkiRowsAll.filter((r) => {
-      if (!categoryFilterActive) return true;
       const cid = r.category_id;
       if (cid == null || !Number.isFinite(cid)) return false;
-      const activeId = activeCatalogCategoryId ?? selectedCategoryIds[0];
+      if (!selectedCategoryIds.includes(cid)) return false;
       return cid === activeId;
     });
-  }, [isPolkiSheet, polkiRowsAll, categoryFilterActive, activeCatalogCategoryId, selectedCategoryIds]);
+  }, [
+    isPolkiSheet,
+    polkiRowsAll,
+    categoryFilterActive,
+    activeCatalogCategoryId,
+    selectedCategoryIds
+  ]);
 
   const polkiDisplayRows = useMemo((): PolkiPairRowModel[] => {
     if (!isPolkiSheet) return [];
@@ -868,8 +976,60 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     );
   }, [isPolkiSheet, polkiRowsFiltered, productSearch]);
 
+  const canShowPolkiGridForHook =
+    isPolkiSheet &&
+    Boolean(clientId.trim()) &&
+    Boolean(warehouseId.trim()) &&
+    (isPolkiFree || (isPolkiByOrder && polkiOrderIds.length > 0));
+
+  const {
+    polkiAutoBonusPreviewQ,
+    polkiAutoBonusExplicitByPairKey,
+    polkiAutoBonusPeresortByPairKey,
+    polkiAutoBonusDebtAmount,
+    polkiAutoBonusDebtByPairKey,
+    polkiAutoBonusPreviewReady,
+    polkiAutoBonusPreviewPending
+  } = usePolkiAutoBonus({
+    tenantSlug,
+    isPolkiFree,
+    isPolkiByOrder,
+    polkiOrderId: isPolkiByOrder ? (polkiOrderIds[0] ?? null) : null,
+    polkiBonusCalcMode,
+    canShowPolkiGrid: canShowPolkiGridForHook,
+    clientId,
+    priceType,
+    selectedCategoryIds,
+    polkiDisplayRows,
+    polkiTotalQty
+  });
+
+  const polkiUsesAutoBonus = isPolkiFree || isPolkiByOrder;
+
+  const polkiAutoBonusPreviewLinesByProductId = useMemo(() => {
+    const m = new Map<
+      number,
+      import("./use-polki-auto-bonus").PolkiAutoBonusPreviewLine
+    >();
+    for (const l of polkiAutoBonusPreviewQ.data?.lines ?? []) {
+      m.set(l.product_id, l);
+    }
+    return m;
+  }, [polkiAutoBonusPreviewQ.data]);
+
   const polkiOrderGroups = useMemo((): PolkiOrderGroup[] => {
     if (!isPolkiSheet) return [];
+    if (isPolkiFree) {
+      if (polkiDisplayRows.length === 0) return [];
+      return [
+        {
+          orderId: 0,
+          orderNumber: "",
+          orderDate: "",
+          rows: polkiDisplayRows
+        }
+      ];
+    }
     const byOrder = new Map<number, PolkiPairRowModel[]>();
     for (const r of polkiDisplayRows) {
       const arr = byOrder.get(r.order_id) ?? [];
@@ -884,7 +1044,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         orderDate: polkiOrderDateById.get(orderId) ?? "",
         rows
       }));
-  }, [isPolkiSheet, polkiDisplayRows, polkiOrderDateById]);
+  }, [isPolkiSheet, isPolkiFree, polkiDisplayRows, polkiOrderDateById]);
+
+  useEffect(() => {
+    if (!isPolkiSheet || isPolkiFree) return;
+    const ids = polkiOrderGroups.map((g) => g.orderId);
+    if (ids.length === 0) {
+      setPolkiExpandedOrderId(null);
+      return;
+    }
+    setPolkiExpandedOrderId((prev) =>
+      prev !== null && ids.includes(prev) ? prev : (ids[0] ?? null)
+    );
+  }, [isPolkiSheet, isPolkiFree, polkiOrderGroups]);
 
   const hasPolkiQtyOverMax = useMemo(() => {
     if (!isPolkiSheet) return false;
@@ -893,18 +1065,18 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       const tr = polkiTotalQty[pk] ?? "";
       if (!tr.trim()) continue;
       const tq = Number.parseFloat(tr.replace(",", "."));
-      if (Number.isFinite(tq) && tq > 0 && tq > r.max_paid + r.max_bonus) return true;
+      if (Number.isFinite(tq) && tq > 0 && tq > polkiRowMaxReturnQty(r) + 1e-9) return true;
     }
     return false;
   }, [isPolkiSheet, polkiRowsAll, polkiTotalQty]);
 
   const hasPolkiBonusCashOverMax = useMemo(() => {
-    if (!isPolkiSheet) return false;
+    if (!isPolkiSheet || polkiUsesAutoBonus) return false;
     for (const r of polkiRowsAll) {
       if (r.max_bonus <= 0) continue;
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const { effBonus } = polkiSplitTotal(r, total);
       const defer = Boolean(polkiBonusToBalance[pk]);
       const bq = defer ? 0 : effBonus;
       const maxCash = defer
@@ -914,30 +1086,57 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       if (cash > maxCash + 1e-6) return true;
     }
     return false;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
+  }, [isPolkiSheet, polkiUsesAutoBonus, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
 
   const polkiTotalReturnQtySum = useMemo(() => {
     if (!isPolkiSheet) return 0;
+    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals) {
+      const t = polkiAutoBonusPreviewQ.data.totals;
+      return t.paid_qty + t.bonus_qty;
+    }
     let s = 0;
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effPaid, effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const ex = polkiUsesAutoBonus ? polkiAutoBonusExplicitByPairKey[pk] : undefined;
+      const { effPaid, effBonus } = ex
+        ? { effPaid: ex.paid, effBonus: ex.bonus }
+        : polkiSplitTotal(r, total);
       const defer = Boolean(polkiBonusToBalance[pk]);
       const physBonus = defer ? 0 : effBonus;
       s += effPaid + physBonus;
     }
     return s;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance]);
+  }, [
+    isPolkiSheet,
+    polkiUsesAutoBonus,
+    polkiAutoBonusPreviewQ.data,
+    polkiAutoBonusExplicitByPairKey,
+    polkiRowsAll,
+    polkiTotalQty,
+    polkiBonusToBalance
+  ]);
+
+  /** Erkin polki: foydalanuvchi «всего к возврату» ustunida kiritgan yig‘indi (qoida oldidan). */
+  const polkiEnteredTotalQtySum = useMemo(() => {
+    if (!isPolkiSheet) return 0;
+    let s = 0;
+    for (const r of polkiRowsAll) {
+      const pk = r.pair_key;
+      const t = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      if (t > 0) s += t;
+    }
+    return s;
+  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty]);
 
   const polkiTotalBonusCashSum = useMemo(() => {
-    if (!isPolkiSheet) return 0;
+    if (!isPolkiSheet || polkiUsesAutoBonus) return 0;
     let t = 0;
     for (const r of polkiRowsAll) {
       if (r.max_bonus <= 0) continue;
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const { effBonus } = polkiSplitTotal(r, total);
       const defer = Boolean(polkiBonusToBalance[pk]);
       const bq = defer ? 0 : effBonus;
       const maxCash = defer
@@ -949,29 +1148,20 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     return t;
   }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
 
-  const polkiDebtHintSum = useMemo(() => {
-    if (!isPolkiSheet) return 0;
-    let d = 0;
-    for (const r of polkiRowsAll) {
-      if (!polkiBonusToBalance[r.pair_key]) continue;
-      const total = Number.parseFloat((polkiTotalQty[r.pair_key] ?? "").replace(",", "."));
-      const { effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
-      if (effBonus <= 0) continue;
-      const suggested = effBonus * r.unit_price_bonus;
-      const maxC = r.max_bonus * r.unit_price_bonus;
-      const cash = Math.min(parsePriceAmount(polkiBonusCash[r.pair_key] ?? ""), maxC);
-      d += Math.max(0, suggested - cash);
-    }
-    return d;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
-
   const polkiSelectedLinesCount = useMemo(() => {
     if (!isPolkiSheet) return 0;
     let n = 0;
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effPaid, effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const ex = polkiUsesAutoBonus ? polkiAutoBonusExplicitByPairKey[pk] : undefined;
+      const { effPaid, effBonus } = ex
+        ? { effPaid: ex.paid, effBonus: ex.bonus }
+        : polkiSplitTotal(r, total);
+      if (polkiUsesAutoBonus) {
+        if (effPaid + effBonus > 0) n++;
+        continue;
+      }
       const defer = Boolean(polkiBonusToBalance[pk]);
       const bq = defer ? 0 : effBonus;
       const maxCash =
@@ -984,15 +1174,29 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       if (effPaid + bq + effCash > 0) n++;
     }
     return n;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
+  }, [
+    isPolkiSheet,
+    polkiUsesAutoBonus,
+    polkiAutoBonusExplicitByPairKey,
+    polkiRowsAll,
+    polkiTotalQty,
+    polkiBonusToBalance,
+    polkiBonusCash
+  ]);
 
   const polkiEstimatedSum = useMemo(() => {
     if (!isPolkiSheet) return 0;
+    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals.refund_amount) {
+      return Number.parseFloat(polkiAutoBonusPreviewQ.data.totals.refund_amount) || 0;
+    }
     let t = 0;
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effPaid, effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const ex = polkiUsesAutoBonus ? polkiAutoBonusExplicitByPairKey[pk] : undefined;
+      const { effPaid, effBonus } = ex
+        ? { effPaid: ex.paid, effBonus: ex.bonus }
+        : polkiSplitTotal(r, total);
       const defer = Boolean(polkiBonusToBalance[pk]);
       const bq = defer ? 0 : effBonus;
       const maxCash =
@@ -1006,22 +1210,41 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       t += cash;
     }
     return t;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
+  }, [
+    isPolkiSheet,
+    polkiUsesAutoBonus,
+    polkiAutoBonusPreviewQ.data,
+    polkiAutoBonusExplicitByPairKey,
+    polkiRowsAll,
+    polkiTotalQty,
+    polkiBonusToBalance,
+    polkiBonusCash
+  ]);
 
   const polkiVolumeM3 = useMemo(() => {
     if (!isPolkiSheet) return 0;
     let v = 0;
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
-      const total = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-      const { effPaid, effBonus } = polkiSplitTotal(r, Number.isFinite(total) ? total : 0);
-      const defer = Boolean(polkiBonusToBalance[pk]);
+      const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
+      const ex = polkiUsesAutoBonus ? polkiAutoBonusExplicitByPairKey[pk] : undefined;
+      const { effPaid, effBonus } = ex
+        ? { effPaid: ex.paid, effBonus: ex.bonus }
+        : polkiSplitTotal(r, total);
+      const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
       const physBonus = defer ? 0 : effBonus;
       const vol = r.volume_m3 != null ? Number.parseFloat(String(r.volume_m3)) : NaN;
       if (Number.isFinite(vol) && effPaid + physBonus > 0) v += (effPaid + physBonus) * vol;
     }
     return v;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance]);
+  }, [
+    isPolkiSheet,
+    polkiUsesAutoBonus,
+    polkiAutoBonusExplicitByPairKey,
+    polkiRowsAll,
+    polkiTotalQty,
+    polkiBonusToBalance
+  ]);
 
   const catalogProducts = useMemo(() => {
     const stockMap = new Map((stockQ.data ?? []).map((s) => [s.product_id, s]));
@@ -1287,6 +1510,37 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const loadingLists = createCtxQ.isPending && !createCtxQ.data;
 
+  const polkiDebtHintSum = useMemo(() => {
+    if (!isPolkiSheet) return 0;
+    if (polkiUsesAutoBonus) {
+      return polkiAutoBonusDebtAmount;
+    }
+    return computePolkiDebtHintSum({
+      rows: polkiRowsAll,
+      polkiTotalQty,
+      polkiBonusToBalance,
+      polkiBonusCash,
+      explicitByPairKey: polkiAutoBonusExplicitByPairKey
+    });
+  }, [
+    isPolkiSheet,
+    polkiUsesAutoBonus,
+    polkiAutoBonusDebtAmount,
+    polkiRowsAll,
+    polkiTotalQty,
+    polkiBonusToBalance,
+    polkiBonusCash,
+    polkiAutoBonusExplicitByPairKey
+  ]);
+
+  const polkiSubmitBonusDebt = useMemo(() => {
+    if (!isPolkiSheet) return 0;
+    if (polkiUsesAutoBonus) {
+      return polkiAutoBonusDebtAmount;
+    }
+    return Math.round(polkiDebtHintSum);
+  }, [isPolkiSheet, polkiUsesAutoBonus, polkiAutoBonusDebtAmount, polkiDebtHintSum]);
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (isPolkiSheet) {
@@ -1297,10 +1551,29 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         if (isPolkiByOrder && polkiOrderIds.length < 1) {
           throw new Error("polki_order");
         }
+        if (polkiUsesAutoBonus) {
+          if (polkiAutoBonusPreviewPending) throw new Error("polki_bonus_preview_pending");
+          if (polkiAutoBonusPreviewQ.isError) throw new Error("polki_bonus_preview_error");
+          if (!polkiAutoBonusPreviewReady) throw new Error("polki_bonus_preview");
+          for (const r of polkiRowsAll) {
+            const pk = r.pair_key;
+            const t = parsePolkiQty(polkiTotalQty[pk] ?? "");
+            if (t > polkiRowMaxReturnQty(r)) {
+              throw new Error("polki_over_max");
+            }
+            const ex = polkiAutoBonusExplicitByPairKey[pk];
+            if (ex) {
+              if (ex.paid > r.max_paid + 1e-9 || ex.bonus > r.max_bonus + 1e-9) {
+                throw new Error("polki_over_max");
+              }
+              if (ex.paid + ex.bonus > polkiRowMaxReturnQty(r) + 1e-9) {
+                throw new Error("polki_over_max");
+              }
+            }
+          }
+        }
         const distinctOrderCount = new Set(polkiRowsAll.map((row) => row.order_id)).size;
-        const usePeriodBatch =
-          (isPolkiByOrder && polkiOrderIds.length > 1) ||
-          (isPolkiFree && distinctOrderCount > 1);
+        const usePeriodBatch = isPolkiFree && distinctOrderCount > 1;
 
         let sumPhysical = 0;
         const batchLines: {
@@ -1309,56 +1582,140 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           paid_qty: number;
           bonus_qty: number;
           bonus_cash: number;
+          return_qty?: number;
         }[] = [];
         const periodMerge = new Map<number, { paid: number; bonus: number; cash: number }>();
 
+        let submitBonusDebt = 0;
+
+        const polkiReturnQtyByProduct = new Map<number, number>();
+        if (polkiUsesAutoBonus) {
+          for (const r of polkiRowsAll) {
+            const pk = r.pair_key;
+            const t = parsePolkiQty(polkiTotalQty[pk] ?? "");
+            const capped = capPolkiQtyToRow(r, t);
+            if (capped > 0) {
+              const poolMax = polkiProductMaxReturnPool(polkiRowsAll, r.product_id);
+              const prev = polkiReturnQtyByProduct.get(r.product_id) ?? 0;
+              polkiReturnQtyByProduct.set(
+                r.product_id,
+                Math.min(prev + capped, poolMax > 0 ? poolMax : prev + capped)
+              );
+            }
+          }
+        }
+
         for (const r of polkiRowsAll) {
           const pk = r.pair_key;
-          const totalParsed = Number.parseFloat((polkiTotalQty[pk] ?? "").replace(",", "."));
-          const { effPaid, effBonus } = polkiSplitTotal(
-            r,
-            Number.isFinite(totalParsed) ? totalParsed : 0
-          );
-          const defer = Boolean(polkiBonusToBalance[pk]);
+          const totalParsed = parsePolkiQty(polkiTotalQty[pk] ?? "");
+          const explicit = polkiUsesAutoBonus ? polkiAutoBonusExplicitByPairKey[pk] : undefined;
+          const { effPaid, effBonus } = explicit
+            ? { effPaid: explicit.paid, effBonus: explicit.bonus }
+            : polkiSplitTotal(r, totalParsed);
+          const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
           const pq = effPaid;
           const bq = defer ? 0 : effBonus;
-          let cash = parsePriceAmount(polkiBonusCash[pk] ?? "");
-          const maxCash =
-            r.max_bonus > 0
-              ? defer
-                ? r.max_bonus * r.unit_price_bonus
-                : Math.max(0, (r.max_bonus - bq) * r.unit_price_bonus)
-              : 0;
-          if (r.max_bonus <= 0) cash = 0;
-          else cash = Math.min(cash, maxCash);
+          let cash = polkiUsesAutoBonus ? 0 : parsePriceAmount(polkiBonusCash[pk] ?? "");
+          if (!polkiUsesAutoBonus) {
+            const maxCash =
+              r.max_bonus > 0
+                ? defer
+                  ? r.max_bonus * r.unit_price_bonus
+                  : Math.max(0, (r.max_bonus - bq) * r.unit_price_bonus)
+                : 0;
+            if (r.max_bonus <= 0) cash = 0;
+            else cash = Math.min(cash, maxCash);
+          }
 
           if (pq + bq + cash <= 0) continue;
           sumPhysical += pq + bq;
+          const peresortRaw =
+            isPolkiByOrder && polkiBonusCalcMode === "manual"
+              ? polkiPeresortByPairKey[pk]
+              : polkiUsesAutoBonus
+                ? polkiAutoBonusPeresortByPairKey[pk]
+                : polkiPeresortByPairKey[pk];
+          const bonusProductId =
+            peresortRaw && peresortRaw !== r.product_id && bq > 0 ? peresortRaw : r.product_id;
+          const splitBonusSku = bq > 0 && bonusProductId !== r.product_id;
+
           if (usePeriodBatch) {
             const oid = r.order_id;
             if (!oid || oid < 1) throw new Error("polki_missing_order");
-            batchLines.push({
-              order_id: oid,
-              product_id: r.product_id,
-              paid_qty: pq,
-              bonus_qty: bq,
-              bonus_cash: cash
-            });
+            const rowReturnQty = Number.isFinite(totalParsed) && totalParsed > 0 ? totalParsed : undefined;
+            if (!splitBonusSku) {
+              batchLines.push({
+                order_id: oid,
+                product_id: r.product_id,
+                paid_qty: pq,
+                bonus_qty: bq,
+                bonus_cash: cash,
+                ...(polkiUsesAutoBonus && rowReturnQty != null ? { return_qty: rowReturnQty } : {})
+              });
+            } else {
+              if (pq > 0) {
+                batchLines.push({
+                  order_id: oid,
+                  product_id: r.product_id,
+                  paid_qty: pq,
+                  bonus_qty: 0,
+                  bonus_cash: 0,
+                  ...(polkiUsesAutoBonus && rowReturnQty != null ? { return_qty: rowReturnQty } : {})
+                });
+              } else if (polkiUsesAutoBonus && rowReturnQty != null) {
+                batchLines.push({
+                  order_id: oid,
+                  product_id: bonusProductId,
+                  paid_qty: 0,
+                  bonus_qty: bq,
+                  bonus_cash: 0,
+                  return_qty: rowReturnQty
+                });
+                continue;
+              }
+              batchLines.push({
+                order_id: oid,
+                product_id: bonusProductId,
+                paid_qty: 0,
+                bonus_qty: bq,
+                bonus_cash: 0
+              });
+              if (cash > 0) {
+                batchLines.push({
+                  order_id: oid,
+                  product_id: r.product_id,
+                  paid_qty: 0,
+                  bonus_qty: 0,
+                  bonus_cash: cash
+                });
+              }
+            }
           } else {
-            const cur = periodMerge.get(r.product_id) ?? { paid: 0, bonus: 0, cash: 0 };
-            cur.paid += pq;
-            cur.bonus += bq;
-            cur.cash += cash;
-            periodMerge.set(r.product_id, cur);
+            if (pq > 0) {
+              const cur = periodMerge.get(r.product_id) ?? { paid: 0, bonus: 0, cash: 0 };
+              cur.paid += pq;
+              periodMerge.set(r.product_id, cur);
+            }
+            if (bq > 0) {
+              const cur = periodMerge.get(bonusProductId) ?? { paid: 0, bonus: 0, cash: 0 };
+              cur.bonus += bq;
+              periodMerge.set(bonusProductId, cur);
+            }
+            if (cash > 0) {
+              const cur = periodMerge.get(r.product_id) ?? { paid: 0, bonus: 0, cash: 0 };
+              cur.cash += cash;
+              periodMerge.set(r.product_id, cur);
+            }
           }
         }
-        if (sumPhysical > MAX_POLKI_RETURN_QTY) throw new Error("polki_too_many");
+        if (!polkiUsesAutoBonus && sumPhysical > MAX_POLKI_RETURN_QTY) throw new Error("polki_too_many");
         const noteParts: string[] = [];
         if (polkiHeaderDate.trim()) noteParts.push(`Дата заявки: ${polkiHeaderDate.trim()}`);
         if (polkiTradeDirection.trim()) {
-          const td =
-            POLKI_TRADE_DIRECTION_OPTS.find((o) => o.value === polkiTradeDirection)?.label ??
-            polkiTradeDirection;
+          const td = tradeDirectionLabel(
+            polkiTradeDirection,
+            ctxProfile?.references?.trade_directions
+          );
           noteParts.push(`Направление: ${td}`);
         }
         if (polkiSkidkaType !== "none") {
@@ -1385,16 +1742,22 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           };
           if (noteJoined) body.note = noteJoined;
           if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
+          if (polkiSubmitBonusDebt > 0) body.bonus_debt_amount = polkiSubmitBonusDebt;
           await api.post(`/api/${tenantSlug}/returns/period-batch`, body);
-          return;
+          return { bonusDebtApplied: polkiSubmitBonusDebt };
         }
+
+        submitBonusDebt = polkiSubmitBonusDebt;
 
         const lines = Array.from(periodMerge.entries())
           .map(([product_id, v]) => ({
             product_id,
             paid_qty: v.paid,
             bonus_qty: v.bonus,
-            bonus_cash: v.cash
+            bonus_cash: v.cash,
+            ...(polkiUsesAutoBonus
+              ? { return_qty: polkiReturnQtyByProduct.get(product_id) }
+              : {})
           }))
           .filter((l) => l.paid_qty + l.bonus_qty + l.bonus_cash > 0);
         if (lines.length === 0) throw new Error("nolines");
@@ -1413,8 +1776,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         }
         if (noteJoined) body.note = noteJoined;
         if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
+        if (submitBonusDebt > 0) body.bonus_debt_amount = submitBonusDebt;
         await api.post(`/api/${tenantSlug}/returns/period`, body);
-        return;
+        return { bonusDebtApplied: submitBonusDebt };
       }
 
       if (isExchangeFlow) {
@@ -1547,13 +1911,33 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
       await api.post(`/api/${tenantSlug}/orders`, body);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["orders", "create-context", tenantSlug] });
       if (isPolkiSheet || isExchangeFlow) {
         void qc.invalidateQueries({ queryKey: ["returns", tenantSlug] });
         void qc.invalidateQueries({ queryKey: ["returns-client-data", tenantSlug] });
         void qc.invalidateQueries({ queryKey: ["exchange-returns", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["polki-auto-bonus-preview"] });
+      }
+      if (isPolkiSheet && clientId.trim()) {
+        const cid = Number.parseInt(clientId, 10);
+        if (Number.isFinite(cid) && cid > 0) {
+          void qc.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug, cid] });
+          void qc.invalidateQueries({ queryKey: ["client-balance-movements", tenantSlug, cid] });
+        }
+      }
+      const debtApplied =
+        result &&
+        typeof result === "object" &&
+        "bonusDebtApplied" in result &&
+        Number((result as { bonusDebtApplied?: number }).bonusDebtApplied) > 0
+          ? Number((result as { bonusDebtApplied: number }).bonusDebtApplied)
+          : 0;
+      if (debtApplied > 0) {
+        setSelectionNotice(
+          `Долг бонус ${Math.round(debtApplied).toLocaleString("ru-RU")} сум записан в баланс клиента (карточка → Балансы).`
+        );
       }
       setRequestTypeRef("");
       setOrderNotePreset("");
@@ -1594,8 +1978,28 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           );
           return;
         }
+        if (e.message === "polki_over_max") {
+          setLocalError(
+            "Количество к возврату не может превышать остаток по заказу (см. «макс. всего» в строке)."
+          );
+          return;
+        }
         if (e.message === "nolines") {
           setLocalError("Укажите хотя бы одну позицию с количеством или компенсацией бонуса.");
+          return;
+        }
+        if (e.message === "polki_bonus_preview_pending") {
+          setLocalError("Дождитесь окончания расчёта бонуса (колонка «Бонус / баланс»).");
+          return;
+        }
+        if (e.message === "polki_bonus_preview_error") {
+          setLocalError("Не удалось рассчитать бонус. Проверьте сеть и количества в таблице.");
+          return;
+        }
+        if (e.message === "polki_bonus_preview") {
+          setLocalError(
+            "Сначала дождитесь авто-расчёта бонуса по всем строкам с количеством."
+          );
           return;
         }
         if (e.message === "qty") {
@@ -1641,6 +2045,10 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       }
       if (e.message === "polki_too_many") {
         setLocalError(`Bir hujjatda jami qaytarish ${MAX_POLKI_RETURN_QTY} donadan oshmasin.`);
+        return;
+      }
+      if (e.message === "polki_over_max") {
+        setLocalError("Qaytarish miqdori zakaz qoldig‘idan oshmasin.");
         return;
       }
       if (e.message === "nolines") {
@@ -1829,6 +2237,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const canShowPolkiGrid =
     isPolkiSheet &&
     hasClient &&
+    hasWarehouse &&
     (isPolkiFree || (isPolkiByOrder && polkiOrderIds.length > 0));
 
   const canUseCategoryChips = isPolkiSheet ? canPickProducts || canShowPolkiGrid : canShowOrderCatalog;
@@ -1844,12 +2253,16 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           polkiContextQ.isSuccess &&
           polkiSelectedLinesCount > 0 &&
           (polkiTotalReturnQtySum > 0 || polkiTotalBonusCashSum > 0) &&
-          polkiTotalReturnQtySum <= MAX_POLKI_RETURN_QTY &&
+          (polkiUsesAutoBonus || polkiTotalReturnQtySum <= MAX_POLKI_RETURN_QTY) &&
           !hasPolkiQtyOverMax &&
           !hasPolkiBonusCashOverMax &&
           !mutation.isPending &&
           stockReadyForLines &&
-          (isPolkiFree || (isPolkiByOrder && polkiOrderIds.length > 0))
+          (isPolkiFree || (isPolkiByOrder && polkiOrderIds.length > 0)) &&
+          (!polkiUsesAutoBonus ||
+            (polkiAutoBonusPreviewReady &&
+              !polkiAutoBonusPreviewPending &&
+              !polkiAutoBonusPreviewQ.isError))
       )
     : isExchangeFlow
       ? Boolean(
@@ -1875,11 +2288,33 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         );
 
   /** Nega «Возврат» o‘chiq — foydalanuvchiga aniq sabab (rus.). */
+  const polkiOverDocumentLimit =
+    isPolkiSheet && !polkiUsesAutoBonus && polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY;
+
+  const applyPolkiQtyUnderDocumentLimit = useCallback(() => {
+    const active = polkiRowsAll.filter((r) => parsePolkiQty(polkiTotalQty[r.pair_key] ?? "") > 0);
+    if (active.length === 0) return;
+    const share = Math.floor(MAX_POLKI_RETURN_QTY / active.length);
+    setPolkiTotalQty((prev) => {
+      const next = { ...prev };
+      for (const r of active) {
+        const cap = polkiRowMaxReturnQty(r);
+        const q = cap > 0 ? Math.min(share, cap) : share;
+        next[r.pair_key] = formatPolkiPieceQty(q);
+      }
+      return next;
+    });
+    setLocalError(null);
+    setSelectionNotice(
+      `Подогнано под лимит: ~${share} шт в каждой из ${active.length} поз. (макс. ${MAX_POLKI_RETURN_QTY} шт на склад). Дождитесь «Пересчёт…» и нажмите «Оформить возврат».`
+    );
+  }, [polkiRowsAll, polkiTotalQty]);
+
   const polkiSubmitBlockedReason = useMemo((): string | null => {
     if (!isPolkiSheet || mutation.isPending) return null;
     if (!hasClient) return "Выберите клиента.";
     if (isPolkiByOrder && polkiOrderIds.length === 0) {
-      return "В блоке «Заказы» отметьте хотя бы один доставленный заказ.";
+      return "В блоке «Выбор заказа» справа выберите один доставленный заказ.";
     }
     if (!hasWarehouse) return "Выберите склад возврата (блок «Параметры возврата»).";
     if (polkiContextQ.isLoading) return "Загрузка состава возврата…";
@@ -1890,14 +2325,25 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     if (polkiSelectedLinesCount === 0) {
       return "В «Состав заявки» введите количество к возврату или сумму компенсации бонуса хотя бы в одной строке.";
     }
-    if (polkiTotalReturnQtySum <= 0 && polkiTotalBonusCashSum <= 0) {
-      return "Суммарно к возврату 0: укажите шт в колонке «всего к возврату» и/или сумму в блоке бонуса.";
+    if (polkiUsesAutoBonus && polkiSelectedLinesCount > 0) {
+      if (polkiAutoBonusPreviewPending) {
+        return "Дождитесь расчёта бонуса…";
+      }
+      if (polkiAutoBonusPreviewQ.isError) {
+        return "Не удалось рассчитать бонус. Проверьте сеть и количества.";
+      }
+      if (!polkiAutoBonusPreviewReady) {
+        return "Дождитесь расчёта бонуса по строкам.";
+      }
     }
-    if (polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY) {
-      return `Превышен лимит документа: не более ${MAX_POLKI_RETURN_QTY} шт на склад за раз (сейчас ${polkiTotalReturnQtySum}). Уменьшите количество или оформите несколько возвратов.`;
+    if (polkiTotalReturnQtySum <= 0 && polkiTotalBonusCashSum <= 0) {
+      return "Суммарно к возврату 0: укажите шт в колонке «всего к возврату».";
+    }
+    if (!polkiUsesAutoBonus && polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY) {
+      return `Превышен лимит документа: на склад (оплата + бонус) пойдёт ${polkiTotalReturnQtySum} шт, максимум ${MAX_POLKI_RETURN_QTY} шт в одном возврате. Уменьшите количество или оформите несколько возвратов.`;
     }
     if (hasPolkiQtyOverMax) {
-      return "В строке введено больше, чем разрешено («макс. всего» к возврату).";
+      return "В строке больше, чем по заказу (см. «макс. всего») — уменьшите количество.";
     }
     if (hasPolkiBonusCashOverMax) {
       return "Сумма компенсации бонуса превышает допустимое значение для строки.";
@@ -1915,7 +2361,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiContextQ.isError,
     polkiContextQ.isSuccess,
     polkiSelectedLinesCount,
+    polkiUsesAutoBonus,
+    polkiAutoBonusPreviewPending,
+    polkiAutoBonusPreviewReady,
+    polkiAutoBonusPreviewQ.isError,
     polkiTotalReturnQtySum,
+    polkiEnteredTotalQtySum,
     polkiTotalBonusCashSum,
     hasPolkiQtyOverMax,
     hasPolkiBonusCashOverMax,
@@ -1986,6 +2437,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     catalogTabMode,
     categories,
     categoriesWithWarehouseSellableStock,
+    polkiReturnCategories,
     categoryFilterActive,
     categoryFilterSet,
     categoryIdsWithPositiveStock,
@@ -2029,6 +2481,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     isPolkiByOrder,
     isPolkiFree,
     isPolkiSheet,
+    polkiOrderFieldsFromOrder,
     lineProblemCountByCategoryId,
     loadingLists,
     localError,
@@ -2045,6 +2498,23 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     paymentMethodSelectOptions,
     polkiBonusCash,
     polkiBonusToBalance,
+    polkiExpandedOrderId,
+    setPolkiExpandedOrderId,
+    polkiBonusCalcMode,
+    setPolkiBonusCalcMode,
+    polkiUsesAutoBonus,
+    polkiAutoBonusPreviewQ,
+    polkiAutoBonusDebtByPairKey,
+    polkiAutoBonusExplicitByPairKey,
+    polkiAutoBonusPeresortByPairKey,
+    polkiAutoBonusPreviewLinesByProductId,
+    polkiAutoBonusPreviewPending,
+    polkiAutoBonusPreviewError: polkiAutoBonusPreviewQ.isError,
+    polkiAutoBonusPreviewReady,
+    polkiAutoBonusDebtAmount,
+    polkiPeresortByPairKey,
+    setPolkiPeresortByPairKey,
+    polkiPeresortOptionsByProductId,
     polkiContextQ,
     polkiDateFrom,
     polkiDateTo,
@@ -2070,8 +2540,11 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiSelectedLinesCount,
     polkiSkidkaType,
     polkiSubmitBlockedReason,
+    polkiOverDocumentLimit,
+    applyPolkiQtyUnderDocumentLimit,
     polkiTotalBonusCashSum,
     polkiTotalQty,
+    polkiEnteredTotalQtySum,
     polkiTotalReturnQtySum,
     polkiTradeDirection,
     polkiVolumeM3,
@@ -2145,8 +2618,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     stockReadyForLines,
     tableProductGroups,
     tenantShowPaymentMethodSelector,
-    togglePolkiOrderPick,
-    togglePolkiOrdersSelectAll,
+    selectPolkiOrder,
     totalVolumeM3,
     uiPrefsQ,
     useSplitOrderCatalog,

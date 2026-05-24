@@ -132,8 +132,11 @@ export function SalesShareDonut({
           paddingAngle={1}
           label={false}
         >
-          {slices.map((_, i) => (
-            <Cell key={slices[i].status} fill={PIE_FILL[i % PIE_FILL.length]} />
+          {slices.map((row, i) => (
+            <Cell
+              key={row.status}
+              fill={row.status === "empty" ? "#e2e8f0" : PIE_FILL[i % PIE_FILL.length]}
+            />
           ))}
         </Pie>
         <Tooltip
@@ -180,16 +183,10 @@ type DailyRev = { day: string; revenue: number };
 
 /** Одна линия: сумма продаж по дням месяца; cumulative — накопительный итог */
 export function MonitoringDailyRevenueLine({ rows, cumulative = false }: { rows: DailyRev[]; cumulative?: boolean }) {
-  if (rows.length === 0) {
-    return (
-      <div className="flex h-[320px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
-        Нет данных
-      </div>
-    );
-  }
+  const safeRows = rows.length > 0 ? rows : [{ day: "—", revenue: 0 }];
   const data = useMemo(() => {
     let run = 0;
-    return rows.map((r) => {
+    return safeRows.map((r) => {
       run += r.revenue;
       return {
         ...r,
@@ -197,7 +194,7 @@ export function MonitoringDailyRevenueLine({ rows, cumulative = false }: { rows:
         revenue: cumulative ? run : r.revenue
       };
     });
-  }, [rows, cumulative]);
+  }, [safeRows, cumulative]);
   return (
     <ResponsiveContainer width="100%" height={320}>
       <LineChart data={data} margin={{ top: 12, right: 16, left: 4, bottom: 8 }}>

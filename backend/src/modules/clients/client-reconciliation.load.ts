@@ -70,13 +70,23 @@ export async function loadClientReconciliation(
     movementsInPeriod = movRows;
   }
 
-  let periodMovementsSum = new Prisma.Decimal(0);
-  for (const m of movementsInPeriod) {
-    periodMovementsSum = periodMovementsSum.add(m.delta);
-  }
-  const closingAtPeriodEnd = openingSum.add(periodMovementsSum);
-
-  const [ordersInPeriod, paymentsInPeriod, outstandingAgg] = await Promise.all([
+  const [
+    movementsSumAgg,
+    orderRows,
+    paymentRows,
+    ordersSumAgg,
+    paymentsSumAgg,
+    outstandingAgg
+  ] = await Promise.all([
+    bal
+      ? prisma.clientBalanceMovement.aggregate({
+          where: {
+            client_balance_id: bal.id,
+            created_at: { gte: dateFromStart, lte: dateToEnd }
+          },
+          _sum: { delta: true }
+        })
+      : Promise.resolve({ _sum: { delta: null as Prisma.Decimal | null } }),
     prisma.order.findMany({
       where: {
         tenant_id: tenantId,
@@ -106,20 +116,35 @@ export async function loadClientReconciliation(
       where: {
         tenant_id: tenantId,
         client_id: clientId,
+        created_at: { gte: dateFromStart, lte: dateToEnd }
+      },
+      _sum: { total_sum: true }
+    }),
+    prisma.payment.aggregate({
+      where: {
+        tenant_id: tenantId,
+        client_id: clientId,
+        deleted_at: null,
+        created_at: { gte: dateFromStart, lte: dateToEnd }
+      },
+      _sum: { amount: true }
+    }),
+    prisma.order.aggregate({
+      where: {
+        tenant_id: tenantId,
+        client_id: clientId,
         status: { notIn: [...ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE] }
       },
       _sum: { total_sum: true }
     })
   ]);
 
-  let sumOrders = new Prisma.Decimal(0);
-  for (const o of ordersInPeriod) {
-    sumOrders = sumOrders.add(o.total_sum);
-  }
-  let sumPayments = new Prisma.Decimal(0);
-  for (const p of paymentsInPeriod) {
-    sumPayments = sumPayments.add(p.amount);
-  }
+  const periodMovementsSum = movementsSumAgg._sum.delta ?? new Prisma.Decimal(0);
+  const closingAtPeriodEnd = openingSum.add(periodMovementsSum);
+  const sumOrders = ordersSumAgg._sum.total_sum ?? new Prisma.Decimal(0);
+  const sumPayments = paymentsSumAgg._sum.amount ?? new Prisma.Decimal(0);
+  const ordersInPeriod = orderRows;
+  const paymentsInPeriod = paymentRows;
 
   const accountBalance = bal?.balance ?? new Prisma.Decimal(0);
   const outstandingOrdersTotal = outstandingAgg._sum.total_sum ?? new Prisma.Decimal(0);

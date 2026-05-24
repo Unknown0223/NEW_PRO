@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { findMany } = vi.hoisted(() => ({
-  findMany: vi.fn()
+const { findMany, groupCount } = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  groupCount: vi.fn()
 }));
 
 vi.mock("../src/config/database", () => ({
   prisma: {
     interchangeableGroupProduct: {
       findMany
+    },
+    interchangeableProductGroup: {
+      count: groupCount
     }
   }
 }));
@@ -17,6 +21,15 @@ import { assertReturnProductsInterchangeableStrict } from "../src/modules/produc
 describe("assertReturnProductsInterchangeableStrict", () => {
   beforeEach(() => {
     findMany.mockReset();
+    groupCount.mockReset();
+    groupCount.mockResolvedValue(1);
+  });
+
+  it("skips check when tenant has no interchangeable groups", async () => {
+    groupCount.mockResolvedValue(0);
+    findMany.mockResolvedValue([]);
+    await expect(assertReturnProductsInterchangeableStrict(1, [99], "retail")).resolves.toBeUndefined();
+    expect(findMany).not.toHaveBeenCalled();
   });
 
   it("resolves when product is in a group with no price_type constraints", async () => {
@@ -38,6 +51,13 @@ describe("assertReturnProductsInterchangeableStrict", () => {
     await expect(assertReturnProductsInterchangeableStrict(1, [10], "retail")).rejects.toThrow(
       "RETURN_NOT_INTERCHANGEABLE"
     );
+  });
+
+  it("matches price_type case-insensitively and ignores separators", async () => {
+    findMany.mockResolvedValue([
+      { product_id: 10, group: { price_type_links: [{ price_type: "NAQD_PUL" }] } }
+    ]);
+    await expect(assertReturnProductsInterchangeableStrict(1, [10], "naqd pul")).resolves.toBeUndefined();
   });
 
   it("rejects when product has no active group rows", async () => {

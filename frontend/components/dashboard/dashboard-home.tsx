@@ -3,11 +3,21 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { SupervisorDashboardMultiFilter } from "@/components/dashboard/supervisor-dashboard-multi-filter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SupervisorEnterpriseKpiPanel } from "@/components/dashboard/supervisor/supervisor-enterprise-kpi-panel";
+import { SupervisorEnterpriseSection } from "@/components/dashboard/supervisor/supervisor-enterprise-section";
+import {
+  SupervisorProductAnalyticsTable,
+  analyticsDimensionLabel
+} from "@/components/dashboard/supervisor/supervisor-product-analytics-table";
+import {
+  SupervisorEnterprisePager,
+  SupervisorEnterpriseSegmentTabs,
+  SupervisorEnterpriseTableWrap,
+  SupervisorEnterpriseToolbar
+} from "@/components/dashboard/supervisor/supervisor-enterprise-ui";
+import type { SupervisorPaymentSlot } from "@/components/dashboard/supervisor/supervisor-enterprise-payment-card";
 import { DatePickerPopover, formatRuDateButton } from "@/components/ui/date-picker-popover";
 import { filterSelectClassName } from "@/components/ui/filter-select";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import {
   buildSupervisorDashboardQueryString,
@@ -18,25 +28,20 @@ import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { useQuery } from "@tanstack/react-query";
 import {
+  BarChart3,
   CalendarDays,
-  ChevronDown,
-  ChevronRight,
-  FileSpreadsheet,
-  Loader2,
+  Package,
   RotateCcw,
-  Search
+  TrendingUp,
+  Users
 } from "lucide-react";
 import { localYmd } from "@/components/ui/date-picker-popover";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
-import {
-  qkDashboardAgentsActive,
-  qkDashboardClientReferences,
-  qkDashboardSupervisorsActive
-} from "@/lib/dashboard-shared-query-keys";
+import { useDashboardMeta } from "@/lib/use-dashboard-meta";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as XLSX from "xlsx";
 
 type StaffPick = { id: number; fio: string; code?: string | null };
@@ -143,14 +148,6 @@ function visitAgentLabel(r: Pick<VisitRow, "agent_id" | "agent_code" | "agent_na
   return `${idPart} - ${code} - ${r.agent_name}`;
 }
 
-const KPI_PAY_STRIP_BG = [
-  "bg-teal-600",
-  "bg-emerald-600",
-  "bg-amber-500",
-  "bg-violet-600",
-  "bg-sky-600"
-] as const;
-
 /** «Продажи по товарам» / универсальный отчёт bilan bir xil trigger */
 const FILTER_TRIGGER =
   "h-8 min-h-8 w-full min-w-0 max-w-none px-2 text-xs font-normal shadow-sm";
@@ -240,42 +237,6 @@ function addMoneyStr(a: string, b: string): string {
   return (parse(a) + parse(b)).toFixed(2);
 }
 
-function KpiPaymentStripCard(props: {
-  title: string;
-  amount: string;
-  headerBgClass: string;
-  empty?: boolean;
-  /** «По плану» bilan bir xil fon (Общая сумма) */
-  headerMatchPlan?: boolean;
-  compact?: boolean;
-}) {
-  const muted = Boolean(props.empty);
-  const c = props.compact;
-  return (
-    <div
-      className={cn("flex flex-col overflow-hidden rounded-md border border-border/60 shadow-sm", muted && "opacity-70")}
-    >
-      <div
-        className={cn(
-          "text-center font-semibold uppercase leading-tight tracking-wide",
-          c ? "px-1.5 py-1 text-[10px]" : "px-2 py-2 text-[11px]",
-          props.headerMatchPlan ? "kpi-supervisor-strip-total" : cn("text-white", props.headerBgClass)
-        )}
-      >
-        {props.title}
-      </div>
-      <div
-        className={cn(
-          "bg-card text-center font-semibold tabular-nums text-foreground",
-          c ? "px-1.5 py-1.5 text-sm sm:text-[0.95rem]" : "px-2 py-3 text-base sm:text-lg"
-        )}
-      >
-        {muted ? "—" : formatNumberGrouped(props.amount, { maxFractionDigits: 2 })}
-      </div>
-    </div>
-  );
-}
-
 type VisitReportXlsxMerge = { s: { r: number; c: number }; e: { r: number; c: number } };
 
 function visitReportParseNum(v: string | number): number {
@@ -283,25 +244,6 @@ function visitReportParseNum(v: string | number): number {
   const t = String(v ?? "0").replace(/\s/g, "").replace(",", ".");
   const n = Number.parseFloat(t);
   return Number.isFinite(n) ? n : 0;
-}
-
-/** 0% — qizil; keyin tezroq sariq → boy yashil (hue ~162). */
-function kpiPercentCardStyle(pct: number): CSSProperties {
-  const tLin = Math.min(100, Math.max(0, Number.isFinite(pct) ? pct : 0)) / 100;
-  const t = Math.pow(tLin, 0.68);
-  let hue: number;
-  if (t <= 0.42) {
-    hue = (t / 0.42) * 48;
-  } else {
-    hue = 48 + ((t - 0.42) / 0.58) * (162 - 48);
-  }
-  const sat = 58 + tLin * 22;
-  const light = 90 - tLin * 5;
-  const borderL = Math.max(56, light - 13);
-  return {
-    backgroundColor: `hsl(${hue} ${sat}% ${light}%)`,
-    borderColor: `hsl(${hue} ${Math.min(90, sat + 5)}% ${borderL}%)`
-  };
 }
 
 function visitRowToSheetRow(r: VisitRow): (string | number)[] {
@@ -430,8 +372,8 @@ function renderDailyVisitReportTable(rows: VisitRow[], totals: VisitTotals) {
   const td = "svr-td";
   const tdFoot = "svr-td svr-td--foot";
   return (
-    <div className="supervisor-visit-report">
-      <table className="w-full min-w-[1100px] border-collapse text-sm">
+    <SupervisorEnterpriseTableWrap className="supervisor-visit-report">
+      <table className="w-full min-w-[1100px] border-collapse text-xs">
         <thead>
           <tr>
             <th rowSpan={4} className="svr-th svr-th--agent align-middle whitespace-normal">
@@ -549,7 +491,7 @@ function renderDailyVisitReportTable(rows: VisitRow[], totals: VisitTotals) {
           </tr>
         </tbody>
       </table>
-    </div>
+    </SupervisorEnterpriseTableWrap>
   );
 }
 
@@ -567,7 +509,7 @@ type EfficiencyRow = {
   total_sales_sum: string;
 };
 
-type CollapsibleSection = "products" | "visits" | "efficiency" | null;
+type CollapsibleSection = "analytics" | "products" | "visits" | "efficiency" | null;
 
 function normTrim(v: string | null | undefined): string {
   return String(v ?? "").trim();
@@ -632,10 +574,11 @@ export function DashboardHome({
   const [draft, setDraft] = useState<SupervisorFilterDraft>(() => emptyFilters());
   const [applied, setApplied] = useState<SupervisorFilterDraft>(() => emptyFilters());
   const [productTab, setProductTab] = useState<string | null>("category");
+  const [analyticsTab, setAnalyticsTab] = useState<string | null>("category");
   const [productAxis, setProductAxis] = useState<string | null>("agents");
   const [productMetric, setProductMetric] = useState<string | null>("revenue");
   const [effTab, setEffTab] = useState<string | null>("agents");
-  const [activeSection, setActiveSection] = useState<CollapsibleSection>("products");
+  const [activeSection, setActiveSection] = useState<CollapsibleSection>(null);
   const [productPage, setProductPage] = useState(1);
   const [productLimit, setProductLimit] = useState(20);
   const [productSearch, setProductSearch] = useState("");
@@ -653,100 +596,121 @@ export function DashboardHome({
   );
   const selfSupervisorIdStr = selfSupervisorId != null ? String(selfSupervisorId) : "";
 
-  const agentsQ = useQuery({
-    queryKey: qkDashboardAgentsActive(tenantSlug),
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
-      return data.data ?? [];
-    }
-  });
-
-  const supervisorsQ = useQuery({
-    queryKey: qkDashboardSupervisorsActive(tenantSlug),
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?is_active=true`);
-      return data.data ?? [];
-    }
-  });
-
-  const profileQ = useQuery({
-    queryKey: ["dashboard-supervisor", "profile", tenantSlug],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.profile,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        references?: {
-          payment_method_entries?: Array<{ id: string; name: string; active?: boolean; code?: string | null }>;
-          payment_types?: string[];
-          trade_directions?: string[];
-          territory_nodes?: TerritoryNode[];
-        };
-      }>(`/api/${tenantSlug}/settings/profile`);
-      return data.references ?? {};
-    }
-  });
-
-  const clientRefsQ = useQuery({
-    queryKey: qkDashboardClientReferences(tenantSlug),
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        categories?: string[];
-        category_options?: Array<string | { value?: string; label?: string }>;
-        zones?: string[];
-        regions?: string[];
-        cities?: string[];
-        region_options?: Array<{ value?: string; label?: string }>;
-        city_options?: Array<{ value?: string; label?: string }>;
-      }>(`/api/${tenantSlug}/clients/references`);
-      return data;
-    }
-  });
-
-  const productSalesFiltersQ = useQuery({
-    queryKey: ["dashboard-supervisor", "product-sales-filter-options", tenantSlug],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ProductSalesFilterOpts }>(
-        `/api/${tenantSlug}/reports/product-sales/filter-options`
-      );
-      return data.data;
-    }
-  });
-
-  const reportFilters = productSalesFiltersQ.data;
+  const {
+    agents,
+    supervisors,
+    clientRefs,
+    profileRefs,
+    reportFilters: reportFiltersRaw
+  } = useDashboardMeta(tenantSlug, hydrated);
+  const reportFilters = reportFiltersRaw as ProductSalesFilterOpts | undefined;
 
   const effectiveQs = useMemo(() => buildSupervisorDashboardQueryString(applied), [applied]);
 
-  const dataQ = useQuery({
-    queryKey: ["dashboard-supervisor", tenantSlug, effectiveQs],
+  const summaryQ = useQuery({
+    queryKey: ["dashboard-supervisor", "summary", tenantSlug, effectiveQs],
     enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.live,
+    staleTime: STALE.report,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: 1,
     queryFn: async () => {
-      const { data } = await api.get<SupervisorDashboardData>(`/api/${tenantSlug}/dashboard/supervisor?${effectiveQs}`);
-      return data;
+      const { data } = await api.get(`/api/${tenantSlug}/dashboard/supervisor/summary?${effectiveQs}`);
+      return data as Pick<SupervisorDashboardData, "kpi" | "efficiency_report"> & {
+        visit_totals: SupervisorDashboardData["visit_report"]["totals"];
+      };
     }
   });
 
+  const visitsQ = useQuery({
+    queryKey: ["dashboard-supervisor", "visits", tenantSlug, effectiveQs, visitPage, visitLimit],
+    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && activeSection === "visits",
+    staleTime: STALE.report,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 1,
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/api/${tenantSlug}/dashboard/supervisor/visits?${effectiveQs}&page=${visitPage}&limit=${visitLimit}`
+      );
+      return data as {
+        visit_report: SupervisorDashboardData["visit_report"];
+        total: number;
+      };
+    }
+  });
+
+  const productsQ = useQuery({
+    queryKey: ["dashboard-supervisor", "products", tenantSlug, effectiveQs],
+    enabled:
+      Boolean(tenantSlug) &&
+      hydrated &&
+      summaryQ.isSuccess &&
+      (activeSection === "products" || activeSection === "analytics"),
+    staleTime: STALE.report,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: 1,
+    queryFn: async () => {
+      const { data } = await api.get(`/api/${tenantSlug}/dashboard/supervisor/products?${effectiveQs}`);
+      return data as Pick<SupervisorDashboardData, "product_analytics" | "product_matrix">;
+    }
+  });
+
+  const dataQ = useMemo(() => {
+    const summary = summaryQ.data;
+    const visits = visitsQ.data;
+    const products = productsQ.data;
+    if (!summary) {
+      return {
+        data: undefined as SupervisorDashboardData | undefined,
+        isLoading: summaryQ.isLoading,
+        isFetching: summaryQ.isFetching || visitsQ.isFetching || productsQ.isFetching,
+        isError: summaryQ.isError || visitsQ.isError || productsQ.isError,
+        refetch: () => {
+          void summaryQ.refetch();
+          void visitsQ.refetch();
+          void productsQ.refetch();
+        }
+      };
+    }
+    const merged: SupervisorDashboardData = {
+      kpi: summary.kpi,
+      efficiency_report: summary.efficiency_report,
+      product_analytics: products?.product_analytics ?? { by_category: [], by_group: [], by_brand: [] },
+      product_matrix: products?.product_matrix ?? {
+        by_category: { dimensions: [], by_agents: [], by_supervisors: [] },
+        by_group: { dimensions: [], by_agents: [], by_supervisors: [] },
+        by_brand: { dimensions: [], by_agents: [], by_supervisors: [] }
+      },
+      visit_report: visits?.visit_report ?? {
+        rows: [],
+        totals: summary.visit_totals
+      }
+    };
+    return {
+      data: merged,
+      isLoading: summaryQ.isLoading,
+      isFetching: summaryQ.isFetching || visitsQ.isFetching || productsQ.isFetching,
+      isError: summaryQ.isError || visitsQ.isError || productsQ.isError,
+      refetch: () => {
+        void summaryQ.refetch();
+        void visitsQ.refetch();
+        void productsQ.refetch();
+      }
+    };
+  }, [summaryQ, visitsQ, productsQ]);
+
   const categoryOptions = useMemo(() => {
-    const fromOptions = (clientRefsQ.data?.category_options ?? [])
+    const fromOptions = (clientRefs?.category_options ?? [])
       .map((o) => (typeof o === "string" ? o : (o?.label ?? o?.value ?? "")))
       .map((x) => String(x).trim())
       .filter(Boolean);
-    const fromList = (clientRefsQ.data?.categories ?? []).map((x) => String(x).trim()).filter(Boolean);
+    const fromList = (clientRefs?.categories ?? []).map((x) => String(x).trim()).filter(Boolean);
     return Array.from(new Set([...fromOptions, ...fromList])).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [clientRefsQ.data]);
+  }, [clientRefs]);
   const paymentOptions = useMemo(() => {
-    const fromEntries = (profileQ.data?.payment_method_entries ?? [])
+    const fromEntries = (profileRefs?.payment_method_entries ?? [])
       .filter((p) => p?.active !== false)
       .map((p) => {
         const id = String(p.id ?? "").trim();
@@ -756,12 +720,12 @@ export function DashboardHome({
       })
       .filter((p) => p.value && p.label);
     if (fromEntries.length > 0) return fromEntries;
-    const legacy = (profileQ.data?.payment_types ?? [])
+    const legacy = (profileRefs?.payment_types ?? [])
       .map((x) => String(x).trim())
       .filter(Boolean)
       .map((x) => ({ value: x, label: x, code: "" as const }));
     return legacy;
-  }, [profileQ.data]);
+  }, [profileRefs]);
 
   const paymentFilterOptions = useMemo(() => {
     const fromReport = reportFilters?.payment_methods ?? [];
@@ -779,7 +743,7 @@ export function DashboardHome({
     if (!dataQ.data) return null;
     const kpi = dataQ.data.kpi;
     const breakdown = kpi.sales_by_payment_method ?? [];
-    const entries = profileQ.data?.payment_method_entries;
+    const entries = profileRefs?.payment_method_entries;
     const defs = paymentFilterOptions;
 
     if (defs.length === 0) {
@@ -830,44 +794,63 @@ export function DashboardHome({
       out.push({ title: "Не указано", amount: orphanSum, empty: false });
     }
     return out;
-  }, [dataQ.data, paymentFilterOptions, profileQ.data?.payment_method_entries]);
+  }, [dataQ.data, paymentFilterOptions, profileRefs?.payment_method_entries]);
+
+  const enterprisePaymentSlots = useMemo((): SupervisorPaymentSlot[] => {
+    if (!kpiPaymentColumnSlots) return [];
+    return kpiPaymentColumnSlots.map((slot, i) => ({
+      key: i === 0 ? "__total__" : `pay-${normTrim(slot.title).replace(/\s+/g, "_")}`,
+      title: slot.title,
+      amount: slot.amount,
+      empty: slot.empty,
+      isTotal: i === 0
+    }));
+  }, [kpiPaymentColumnSlots]);
+
+  const analyticsRows = useMemo(() => {
+    if (!dataQ.data) return [];
+    const tab = analyticsTab ?? "category";
+    if (tab === "group") return dataQ.data.product_analytics.by_group;
+    if (tab === "brand") return dataQ.data.product_analytics.by_brand;
+    return dataQ.data.product_analytics.by_category;
+  }, [dataQ.data, analyticsTab]);
 
   const resolveTerritoryDisplay = useMemo(
     () =>
       createTerritoryLabelResolver({
-        zones: clientRefsQ.data?.zones,
-        region_options: (clientRefsQ.data?.region_options ?? [])
+        zones: clientRefs?.zones,
+        region_options: (clientRefs?.region_options ?? [])
           .filter((o): o is { value: string; label?: string | undefined } => Boolean(o?.value))
           .map((o) => ({ value: o.value, label: o.label ?? undefined })),
-        city_options: (clientRefsQ.data?.city_options ?? [])
+        city_options: (clientRefs?.city_options ?? [])
           .filter((o): o is { value: string; label?: string | undefined } => Boolean(o?.value))
           .map((o) => ({ value: o.value, label: o.label ?? undefined })),
-        territory_nodes: profileQ.data?.territory_nodes as TerritoryNode[] | undefined
+        territory_nodes: profileRefs?.territory_nodes as TerritoryNode[] | undefined
       }),
     [
-      clientRefsQ.data?.zones,
-      clientRefsQ.data?.region_options,
-      clientRefsQ.data?.city_options,
-      profileQ.data?.territory_nodes
+      clientRefs?.zones,
+      clientRefs?.region_options,
+      clientRefs?.city_options,
+      profileRefs?.territory_nodes
     ]
   );
 
   /** Kaskad: «Продажи по товарам» filter-options + mijozlar references (kod → ном) */
   const supervisorTerritoryZoneOptions = useMemo(() => {
     const hasReport = (reportFilters?.territory_1?.length ?? 0) > 0;
-    const list = hasReport ? (reportFilters?.territory_1 ?? []) : (clientRefsQ.data?.zones ?? []);
+    const list = hasReport ? (reportFilters?.territory_1 ?? []) : (clientRefs?.zones ?? []);
     return uniqSortedTerritoryValues(list).map((z) => ({
       value: z,
       label: resolveTerritoryDisplay(z)
     }));
-  }, [reportFilters?.territory_1, clientRefsQ.data?.zones, resolveTerritoryDisplay]);
+  }, [reportFilters?.territory_1, clientRefs?.zones, resolveTerritoryDisplay]);
 
   const supervisorTerritoryRegionOptions = useMemo(() => {
     const zones = draft.territory_1_list.map(normTrim).filter(Boolean);
     let rows: string[];
     if (zones.length === 0) {
       const hasReport = (reportFilters?.territory_2?.length ?? 0) > 0;
-      rows = hasReport ? (reportFilters?.territory_2 ?? []) : (clientRefsQ.data?.regions ?? []);
+      rows = hasReport ? (reportFilters?.territory_2 ?? []) : (clientRefs?.regions ?? []);
     } else {
       const acc = new Set<string>();
       for (const z of zones) {
@@ -878,13 +861,13 @@ export function DashboardHome({
         for (const r of chunk) acc.add(r);
       }
       rows = [...acc];
-      if (rows.length === 0) rows = reportFilters?.territory_2 ?? clientRefsQ.data?.regions ?? [];
+      if (rows.length === 0) rows = reportFilters?.territory_2 ?? clientRefs?.regions ?? [];
     }
     return uniqSortedTerritoryValues(rows).map((r) => ({
       value: r,
       label: resolveTerritoryDisplay(r)
     }));
-  }, [draft.territory_1_list, reportFilters, clientRefsQ.data?.regions, resolveTerritoryDisplay]);
+  }, [draft.territory_1_list, reportFilters, clientRefs?.regions, resolveTerritoryDisplay]);
 
   const supervisorTerritoryCityOptions = useMemo(() => {
     const zones = draft.territory_1_list.map(normTrim).filter(Boolean);
@@ -894,7 +877,7 @@ export function DashboardHome({
     if (regions.length === 0) {
       if (zones.length === 0) {
         const hasReport = (reportFilters?.territory_3?.length ?? 0) > 0;
-        rows = hasReport ? (reportFilters?.territory_3 ?? []) : (clientRefsQ.data?.cities ?? []);
+        rows = hasReport ? (reportFilters?.territory_3 ?? []) : (clientRefs?.cities ?? []);
       } else {
         const set = new Set<string>();
         for (const row of reportFilters?.territory_tree ?? []) {
@@ -904,7 +887,7 @@ export function DashboardHome({
           if (zones.some((z) => z.toLowerCase() === rz.toLowerCase())) set.add(city);
         }
         rows = [...set];
-        if (rows.length === 0) rows = reportFilters?.territory_3 ?? clientRefsQ.data?.cities ?? [];
+        if (rows.length === 0) rows = reportFilters?.territory_3 ?? clientRefs?.cities ?? [];
       }
     } else {
       const set = new Set<string>();
@@ -957,7 +940,7 @@ export function DashboardHome({
         }
       }
       rows = [...set];
-      if (rows.length === 0) rows = [...(reportFilters?.territory_3 ?? clientRefsQ.data?.cities ?? [])];
+      if (rows.length === 0) rows = [...(reportFilters?.territory_3 ?? clientRefs?.cities ?? [])];
     }
 
     return uniqSortedTerritoryValues(rows).map((c) => ({
@@ -968,7 +951,7 @@ export function DashboardHome({
     draft.territory_1_list,
     draft.territory_2_list,
     reportFilters,
-    clientRefsQ.data?.cities,
+    clientRefs?.cities,
     resolveTerritoryDisplay
   ]);
 
@@ -989,24 +972,24 @@ export function DashboardHome({
         searchText: [t.name, t.code].filter((x) => x != null && String(x).trim()).join(" ")
       }));
     }
-    return (profileQ.data?.trade_directions ?? []).map((t) => ({
+    return (profileRefs?.trade_directions ?? []).map((t) => ({
       value: t,
       label: t,
       searchText: t
     }));
-  }, [reportFilters?.trade_directions, profileQ.data?.trade_directions]);
+  }, [reportFilters?.trade_directions, profileRefs?.trade_directions]);
 
   const agentPickOptions = useMemo((): StaffPick[] => {
     const a = reportFilters?.agents;
     if (a?.length) return a.map((x) => ({ id: x.id, fio: x.name, code: x.code }));
-    return agentsQ.data ?? [];
-  }, [reportFilters?.agents, agentsQ.data]);
+    return agents ?? [];
+  }, [reportFilters?.agents, agents]);
 
   const supervisorPickOptions = useMemo((): StaffPick[] => {
     const s = reportFilters?.supervisors;
     if (s?.length) return s.map((x) => ({ id: x.id, fio: x.name, code: x.code }));
-    return supervisorsQ.data ?? [];
-  }, [reportFilters?.supervisors, supervisorsQ.data]);
+    return supervisors ?? [];
+  }, [reportFilters?.supervisors, supervisors]);
 
   const filterRowSelect = cn(filterSelectClassName, FILTER_TRIGGER);
 
@@ -1051,6 +1034,7 @@ export function DashboardHome({
   const productFiltered = productMatrixRows.filter((r) =>
     !productSearch.trim() || r.name.toLowerCase().includes(productSearch.trim().toLowerCase())
   );
+  const visitTotalPages = Math.max(1, Math.ceil((visitsQ.data?.total ?? 0) / visitLimit));
   const visitFiltered = (dataQ.data?.visit_report.rows ?? []).filter((r) => {
     const q = visitSearch.trim().toLowerCase();
     if (!q) return true;
@@ -1062,7 +1046,7 @@ export function DashboardHome({
     !effSearch.trim() || r.name.toLowerCase().includes(effSearch.trim().toLowerCase())
   );
   const productPaged = paginateRows(productFiltered, productPage, productLimit);
-  const visitPaged = paginateRows(visitFiltered, visitPage, visitLimit);
+  const visitPaged = { rows: visitFiltered, page: visitPage, totalPages: visitTotalPages };
   const effPaged = paginateRows(effFiltered, effPage, effLimit);
 
   const toggleSection = (key: Exclude<CollapsibleSection, null>) => {
@@ -1093,11 +1077,18 @@ export function DashboardHome({
     setEffPage(1);
   }, [effTab]);
 
+  useEffect(() => {
+    if (dataQ.data && activeSection === null) {
+      setActiveSection("analytics");
+    }
+  }, [dataQ.data, activeSection]);
+
   return (
-    <PageShell>
+    <PageShell className="max-w-none space-y-5">
       <PageHeader
-        title={headerTitle}
-        description={headerDescription}
+        className="border-b border-gray-200/60 pb-5 dark:border-border/80"
+        title={<span className="text-2xl font-bold tracking-tight">{headerTitle}</span>}
+        description={<span className="text-sm text-muted-foreground">{headerDescription}</span>}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -1139,8 +1130,8 @@ export function DashboardHome({
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена. Войдите заново.</p>
       ) : (
-        <div className="space-y-4">
-          <div className="space-y-2 rounded border bg-card p-2">
+        <div className="space-y-5">
+          <div className="border-b border-border pb-4">
             <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
               <div className="min-w-0">
                 <SupervisorDashboardMultiFilter
@@ -1239,353 +1230,194 @@ export function DashboardHome({
             onChange={(iso) => setDraft((p) => ({ ...p, date: iso || localYmd(new Date()) }))}
           />
 
-          {dataQ.isLoading ? <p className="text-sm text-muted-foreground">Загрузка данных…</p> : null}
-          {dataQ.isError ? <p className="text-sm text-destructive">Не удалось загрузить дашборд.</p> : null}
+          {dataQ.isLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка KPI…</p>
+          ) : null}
+          {dataQ.isError ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              Не удалось загрузить дашборд.
+            </div>
+          ) : null}
 
           {dataQ.data ? (
             <>
-              <section className="space-y-4">
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold tracking-tight">Ключевые показатели</h2>
-                  <p className="text-sm text-muted-foreground">Сводка за выбранную дату и фильтры</p>
-                </div>
-                {kpiPaymentColumnSlots ? (
-                  <div className="flex flex-col gap-2">
-                    {/* Yuqori: «Общая сумма» + barcha способы оплаты — qator uzunligi tenant sozlamasiga mos */}
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                      {kpiPaymentColumnSlots.map((slot, col) => {
-                        const payColorIdx =
-                          col === 0 ? 0 : (col - 1) % KPI_PAY_STRIP_BG.length;
-                        return (
-                        <KpiPaymentStripCard
-                          key={`kpi-strip-${col}`}
-                          title={slot.title}
-                          amount={slot.amount}
-                          empty={slot.empty}
-                          compact
-                          headerMatchPlan={col === 0}
-                          headerBgClass={
-                            col === 0
-                              ? ""
-                              : slot.empty
-                                ? "bg-muted-foreground/45"
-                                : KPI_PAY_STRIP_BG[payColorIdx]!
-                          }
-                        />
-                        );
-                      })}
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      <Card
-                        className="flex min-h-[132px] flex-col border-2 shadow-none transition-[background-color,border-color] duration-300 ease-out"
-                        style={kpiPercentCardStyle(dataQ.data.kpi.visit_pct)}
-                      >
-                        <CardHeader className="flex flex-1 flex-col justify-center space-y-1 pb-2 pt-3">
-                          <CardDescription className="text-xs font-medium text-foreground/85">
-                            Посещения (по визитам)
-                          </CardDescription>
-                          <CardTitle className="text-lg font-semibold tabular-nums leading-tight text-foreground sm:text-xl">
-                            {dataQ.data.kpi.visit_pct}%
-                          </CardTitle>
-                          <CardDescription className="text-xs text-foreground/75">
-                            План {dataQ.data.kpi.planned_visits} · Факт {dataQ.data.kpi.visited_planned}
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card
-                        className="flex min-h-[132px] flex-col border-2 shadow-none transition-[background-color,border-color] duration-300 ease-out"
-                        style={kpiPercentCardStyle(dataQ.data.kpi.success_pct)}
-                      >
-                        <CardHeader className="flex flex-1 flex-col justify-center space-y-1 pb-2 pt-3">
-                          <CardDescription className="text-xs font-medium text-foreground/85">Успешные визиты</CardDescription>
-                          <CardTitle className="text-lg font-semibold tabular-nums leading-tight text-foreground sm:text-xl">
-                            {dataQ.data.kpi.success_pct}%
-                          </CardTitle>
-                          <CardDescription className="text-xs text-foreground/75">
-                            {dataQ.data.kpi.successful_visits} / {dataQ.data.kpi.visited_total}
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card
-                        className="flex min-h-[132px] flex-col border-2 shadow-none transition-[background-color,border-color] duration-300 ease-out"
-                        style={kpiPercentCardStyle(dataQ.data.kpi.gps_pct)}
-                      >
-                        <CardHeader className="flex flex-1 flex-col justify-center space-y-1 pb-2 pt-3">
-                          <CardDescription className="text-xs font-medium text-foreground/85">Посещения (по GPS)</CardDescription>
-                          <CardTitle className="text-lg font-semibold tabular-nums leading-tight text-foreground sm:text-xl">
-                            {dataQ.data.kpi.gps_pct}%
-                          </CardTitle>
-                          <CardDescription className="text-xs text-foreground/75">
-                            {dataQ.data.kpi.gps_visits} из {dataQ.data.kpi.planned_visits}
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card
-                        className="flex min-h-[132px] flex-col border-2 shadow-none transition-[background-color,border-color] duration-300 ease-out"
-                        style={kpiPercentCardStyle(dataQ.data.kpi.photo_pct)}
-                      >
-                        <CardHeader className="flex flex-1 flex-col justify-center space-y-1 pb-2 pt-3">
-                          <CardDescription className="text-xs font-medium text-foreground/85">Фото отчёты</CardDescription>
-                          <CardTitle className="text-lg font-semibold tabular-nums leading-tight text-foreground sm:text-xl">
-                            {dataQ.data.kpi.photo_pct}%
-                          </CardTitle>
-                          <CardDescription className="text-xs text-foreground/75">
-                            {dataQ.data.kpi.photo_reports} из {dataQ.data.kpi.planned_visits}
-                          </CardDescription>
-                        </CardHeader>
-                      </Card>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
+              {enterprisePaymentSlots.length > 0 ? (
+                <SupervisorEnterpriseKpiPanel paymentSlots={enterprisePaymentSlots} visitKpi={dataQ.data.kpi} />
+              ) : null}
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection("products")}
-                      className="flex items-center gap-2 text-left"
-                    >
-                      {activeSection === "products" ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <div>
-                        <CardTitle>Аналитика по продуктам</CardTitle>
-                        <CardDescription className="mt-0.5 font-normal">Матрица по категориям, группам и брендам</CardDescription>
-                      </div>
-                    </button>
-                  </div>
-                </CardHeader>
-                {activeSection === "products" && <CardContent>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">
-                        Строк на странице{" "}
-                        <select
-                          className="ml-1 h-8 rounded border border-input bg-background px-1 text-xs"
-                          value={String(productLimit)}
-                          onChange={(e) => {
-                            const next = Number.parseInt(e.target.value, 10) || 20;
-                            setProductLimit(next);
-                            setProductPage(1);
-                          }}
-                        >
-                          {[10, 20, 30, 50, 100].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <Input
-                        value={productSearch}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        placeholder="Поиск"
-                        className="h-8 w-[180px] text-xs"
-                      />
-                      <button
-                        type="button"
-                        className="h-8 rounded border border-input bg-background px-2 text-xs hover:bg-muted"
-                        onClick={() =>
-                          exportRowsToXlsx(
-                            toProductExportRows(productFiltered, productMatrixBlock?.dimensions ?? [], productMetric ?? "revenue"),
-                            "po-kategorii-produktov.xlsx"
-                          )
-                        }
-                      >
-                        Excel
-                      </button>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      Всего: {productFiltered.length}
-                    </span>
-                  </div>
-                  <Tabs value={productTab} onValueChange={setProductTab}>
-                    <TabsList>
-                      <TabsTrigger value="category">По категории продуктов</TabsTrigger>
-                      <TabsTrigger value="group">По группам товаров</TabsTrigger>
-                      <TabsTrigger value="brand">По брендам</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="category">
-                      {renderProductMatrixBlock(
-                        productPaged.rows,
-                        productMatrixBlock?.dimensions ?? [],
-                        productAxis ?? "agents",
-                        productMetric ?? "revenue",
-                        setProductAxis,
-                        setProductMetric
-                      )}
-                    </TabsContent>
-                    <TabsContent value="group">
-                      {renderProductMatrixBlock(
-                        productPaged.rows,
-                        productMatrixBlock?.dimensions ?? [],
-                        productAxis ?? "agents",
-                        productMetric ?? "revenue",
-                        setProductAxis,
-                        setProductMetric
-                      )}
-                    </TabsContent>
-                    <TabsContent value="brand">
-                      {renderProductMatrixBlock(
-                        productPaged.rows,
-                        productMatrixBlock?.dimensions ?? [],
-                        productAxis ?? "agents",
-                        productMetric ?? "revenue",
-                        setProductAxis,
-                        setProductMetric
-                      )}
-                    </TabsContent>
-                  </Tabs>
-                  {renderPager(productPaged.page, productPaged.totalPages, setProductPage)}
-                </CardContent>}
-              </Card>
+              <SupervisorEnterpriseSection
+                title="Ключевые показатели"
+                subtitle="Доля, сумма и АКБ по ассортименту"
+                icon={<TrendingUp className="h-4 w-4 text-teal-600" aria-hidden />}
+                iconClassName="bg-teal-50 text-teal-600 dark:bg-teal-950/40"
+                expanded={activeSection === "analytics"}
+                onToggle={() => toggleSection("analytics")}
+                headerExtra={
+                  <SupervisorEnterpriseSegmentTabs
+                    tabs={[
+                      { key: "category", label: "По категории продуктов" },
+                      { key: "group", label: "По группам товаров" },
+                      { key: "brand", label: "По брендам" }
+                    ]}
+                    value={analyticsTab ?? "category"}
+                    onChange={setAnalyticsTab}
+                  />
+                }
+              >
+                {productsQ.isLoading && activeSection === "analytics" ? (
+                  <p className="text-sm text-muted-foreground">Загрузка аналитики…</p>
+                ) : (
+                  <SupervisorProductAnalyticsTable
+                    rows={analyticsRows}
+                    dimensionLabel={analyticsDimensionLabel(analyticsTab ?? "category")}
+                  />
+                )}
+              </SupervisorEnterpriseSection>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection("visits")}
-                      className="flex items-center gap-2 text-left"
-                    >
-                      {activeSection === "visits" ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <CardTitle>Дневной отчет по визитам</CardTitle>
-                    </button>
-                  </div>
-                </CardHeader>
-                {activeSection === "visits" && <CardContent className="overflow-x-auto">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="text-xs text-muted-foreground">
-                        Строк на странице{" "}
-                        <select
-                          className="ml-1 h-8 rounded border border-input bg-background px-1 text-xs"
-                          value={String(visitLimit)}
-                          onChange={(e) => {
-                            const next = Number.parseInt(e.target.value, 10) || 20;
-                            setVisitLimit(next);
-                            setVisitPage(1);
-                          }}
-                        >
-                          {[10, 20, 30, 50, 100].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="relative">
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          value={visitSearch}
-                          onChange={(e) => setVisitSearch(e.target.value)}
-                          placeholder="Поиск"
-                          className="h-8 w-[200px] pl-8 text-xs"
-                          aria-label="Поиск по агенту"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="inline-flex h-8 items-center gap-1 rounded border border-primary/35 bg-primary/10 px-2 text-xs font-medium text-primary hover:bg-primary/15"
-                        onClick={() =>
-                          exportVisitReportToXlsx(
-                            visitFiltered,
-                            dataQ.data.visit_report.totals,
-                            "dnevnoy-otchet-po-vizitam.xlsx"
-                          )
-                        }
-                      >
-                        <FileSpreadsheet className="h-3.5 w-3.5 text-primary" aria-hidden />
-                        Excel
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-8 items-center justify-center rounded border border-input bg-background px-2 text-xs hover:bg-muted disabled:opacity-50"
-                        disabled={dataQ.isFetching}
-                        onClick={() => void dataQ.refetch()}
-                        aria-label="Обновить отчёт"
-                      >
-                        <Loader2 className={`h-3.5 w-3.5 ${dataQ.isFetching ? "animate-spin" : ""}`} />
-                      </button>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      Всего: {visitFiltered.length}
-                    </span>
-                  </div>
-                  {renderDailyVisitReportTable(visitPaged.rows, dataQ.data.visit_report.totals)}
-                  {renderVisitReportPager(
-                    visitPaged.page,
-                    visitPaged.totalPages,
-                    visitFiltered.length,
-                    visitLimit,
-                    setVisitPage
+              <SupervisorEnterpriseSection
+                title="Продажа по категории продуктов"
+                subtitle="Матрица по агентам и супервайзерам"
+                icon={<Package className="h-4 w-4 text-indigo-600" aria-hidden />}
+                iconClassName="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40"
+                expanded={activeSection === "products"}
+                onToggle={() => toggleSection("products")}
+              >
+                {activeSection === "products" ? (
+                <div className="space-y-4">
+                  <SupervisorEnterpriseSegmentTabs
+                    tabs={[
+                      { key: "category", label: "По категории продуктов" },
+                      { key: "group", label: "По группам товаров" },
+                      { key: "brand", label: "По брендам" }
+                    ]}
+                    value={productTab ?? "category"}
+                    onChange={setProductTab}
+                  />
+                  <SupervisorEnterpriseToolbar
+                    pageSize={productLimit}
+                    onPageSizeChange={(n) => {
+                      setProductLimit(n);
+                      setProductPage(1);
+                    }}
+                    search={productSearch}
+                    onSearchChange={setProductSearch}
+                    onExcel={() =>
+                      exportRowsToXlsx(
+                        toProductExportRows(
+                          productFiltered,
+                          productMatrixBlock?.dimensions ?? [],
+                          productMetric ?? "revenue"
+                        ),
+                        "po-kategorii-produktov.xlsx"
+                      )
+                    }
+                    totalCount={productFiltered.length}
+                  />
+                  {renderProductMatrixBlock(
+                    productPaged.rows,
+                    productMatrixBlock?.dimensions ?? [],
+                    productAxis ?? "agents",
+                    productMetric ?? "revenue",
+                    setProductAxis,
+                    setProductMetric
                   )}
-                </CardContent>}
-              </Card>
+                  <SupervisorEnterprisePager
+                    page={productPaged.page}
+                    totalPages={productPaged.totalPages}
+                    totalRows={productFiltered.length}
+                    pageSize={productLimit}
+                    onPage={setProductPage}
+                  />
+                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Нажмите заголовок, чтобы загрузить матрицу.</p>
+                )}
+              </SupervisorEnterpriseSection>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection("efficiency")}
-                      className="flex items-center gap-2 text-left"
-                    >
-                      {activeSection === "efficiency" ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      <CardTitle>Отчет по эффективности</CardTitle>
-                    </button>
-                  </div>
-                </CardHeader>
-                {activeSection === "efficiency" && <CardContent>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">
-                        Строк на странице{" "}
-                        <select
-                          className="ml-1 h-8 rounded border border-input bg-background px-1 text-xs"
-                          value={String(effLimit)}
-                          onChange={(e) => {
-                            const next = Number.parseInt(e.target.value, 10) || 20;
-                            setEffLimit(next);
-                            setEffPage(1);
-                          }}
-                        >
-                          {[10, 20, 30, 50, 100].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <Input
-                        value={effSearch}
-                        onChange={(e) => setEffSearch(e.target.value)}
-                        placeholder="Поиск"
-                        className="h-8 w-[180px] text-xs"
-                      />
-                      <button
-                        type="button"
-                        className="h-8 rounded border border-input bg-background px-2 text-xs hover:bg-muted"
-                        onClick={() => exportRowsToXlsx(effFiltered, "torgovye-agenty.xlsx")}
-                      >
-                        Excel
-                      </button>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      Всего: {effFiltered.length}
-                    </span>
-                  </div>
-                  <Tabs value={effTab} onValueChange={setEffTab}>
-                    <TabsList>
-                      <TabsTrigger value="agents">Торговые агенты</TabsTrigger>
-                      <TabsTrigger value="supervisors">Супервайзеры</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="agents">{renderEfficiencyTable(effPaged.rows)}</TabsContent>
-                    <TabsContent value="supervisors">{renderEfficiencyTable(effPaged.rows)}</TabsContent>
-                  </Tabs>
-                  {renderPager(effPaged.page, effPaged.totalPages, setEffPage)}
-                </CardContent>}
-              </Card>
+              <SupervisorEnterpriseSection
+                title="Дневной отчет по визитам"
+                subtitle="План и вне плана по агентам"
+                icon={<Users className="h-4 w-4 text-blue-600" aria-hidden />}
+                iconClassName="bg-blue-50 text-blue-600 dark:bg-blue-950/40"
+                expanded={activeSection === "visits"}
+                onToggle={() => toggleSection("visits")}
+              >
+                {activeSection === "visits" ? (
+                <div>
+                  <SupervisorEnterpriseToolbar
+                    pageSize={visitLimit}
+                    onPageSizeChange={(n) => {
+                      setVisitLimit(n);
+                      setVisitPage(1);
+                    }}
+                    search={visitSearch}
+                    onSearchChange={setVisitSearch}
+                    searchPlaceholder="Поиск по агенту"
+                    onExcel={() => {
+                      const totals = dataQ.data?.visit_report.totals;
+                      if (!totals) return;
+                      void exportVisitReportToXlsx(visitFiltered, totals, "dnevnoy-otchet-po-vizitam.xlsx");
+                    }}
+                    onRefresh={() => void dataQ.refetch()}
+                    refreshing={dataQ.isFetching}
+                    totalCount={visitFiltered.length}
+                  />
+                  {renderDailyVisitReportTable(visitPaged.rows, dataQ.data.visit_report.totals)}
+                  <SupervisorEnterprisePager
+                    page={visitPaged.page}
+                    totalPages={visitPaged.totalPages}
+                    totalRows={visitFiltered.length}
+                    pageSize={visitLimit}
+                    onPage={setVisitPage}
+                  />
+                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Нажмите заголовок, чтобы открыть отчёт.</p>
+                )}
+              </SupervisorEnterpriseSection>
+
+              <SupervisorEnterpriseSection
+                title="Отчет по эффективности"
+                subtitle="Торговые агенты и супервайзеры"
+                icon={<BarChart3 className="h-4 w-4 text-violet-600" aria-hidden />}
+                iconClassName="bg-violet-50 text-violet-600 dark:bg-violet-950/40"
+                expanded={activeSection === "efficiency"}
+                onToggle={() => toggleSection("efficiency")}
+              >
+                {activeSection === "efficiency" ? (
+                <div className="space-y-4">
+                  <SupervisorEnterpriseSegmentTabs
+                    tabs={[
+                      { key: "agents", label: "Торговые агенты" },
+                      { key: "supervisors", label: "Супервайзеры" }
+                    ]}
+                    value={effTab ?? "agents"}
+                    onChange={setEffTab}
+                  />
+                  <SupervisorEnterpriseToolbar
+                    pageSize={effLimit}
+                    onPageSizeChange={(n) => {
+                      setEffLimit(n);
+                      setEffPage(1);
+                    }}
+                    search={effSearch}
+                    onSearchChange={setEffSearch}
+                    onExcel={() => exportRowsToXlsx(effFiltered, "torgovye-agenty.xlsx")}
+                    totalCount={effFiltered.length}
+                  />
+                  {renderEfficiencyTable(effPaged.rows)}
+                  <SupervisorEnterprisePager
+                    page={effPaged.page}
+                    totalPages={effPaged.totalPages}
+                    totalRows={effFiltered.length}
+                    pageSize={effLimit}
+                    onPage={setEffPage}
+                  />
+                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Нажмите заголовок, чтобы открыть отчёт.</p>
+                )}
+              </SupervisorEnterpriseSection>
             </>
           ) : null}
         </div>
@@ -1604,82 +1436,6 @@ function paginateRows<T>(rows: T[], page: number, limit: number): { rows: T[]; p
     page: safePage,
     totalPages
   };
-}
-
-function renderPager(page: number, totalPages: number, onPage: (next: number) => void) {
-  if (totalPages <= 1) return null;
-  return (
-    <div className="mt-3 flex items-center justify-end gap-2 text-xs">
-      <button
-        type="button"
-        className="h-8 rounded border border-input bg-background px-2 disabled:opacity-50"
-        disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
-      >
-        Назад
-      </button>
-      <span className="text-muted-foreground">
-        Стр. {page} / {totalPages}
-      </span>
-      <button
-        type="button"
-        className="h-8 rounded border border-input bg-background px-2 disabled:opacity-50"
-        disabled={page >= totalPages}
-        onClick={() => onPage(page + 1)}
-      >
-        Вперёд
-      </button>
-    </div>
-  );
-}
-
-/** Shablon: «Показано 1 – 10 / 440», faol sahifa — primary (teal) */
-function renderVisitReportPager(
-  page: number,
-  totalPages: number,
-  totalRows: number,
-  pageSize: number,
-  onPage: (next: number) => void
-) {
-  const safeSize = Math.max(1, pageSize);
-  const from = totalRows === 0 ? 0 : (page - 1) * safeSize + 1;
-  const to = totalRows === 0 ? 0 : Math.min(page * safeSize, totalRows);
-  return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-      <span className="text-muted-foreground">
-        Показано {from} – {to} / {totalRows}
-      </span>
-      {totalPages > 1 ? (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="h-8 rounded border border-input bg-background px-2 disabled:opacity-50"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-            aria-label="Предыдущая страница"
-          >
-            Назад
-          </button>
-          <span
-            className="inline-flex h-8 min-w-[2.25rem] items-center justify-center rounded-md border border-sidebar-border bg-sidebar px-2 font-semibold text-sidebar-foreground shadow-sm"
-            title={`Страница ${page} из ${totalPages}`}
-          >
-            {page}
-          </span>
-          <span className="text-muted-foreground">/ {totalPages}</span>
-          <button
-            type="button"
-            className="h-8 rounded border border-input bg-background px-2 disabled:opacity-50"
-            disabled={page >= totalPages}
-            onClick={() => onPage(page + 1)}
-            aria-label="Следующая страница"
-          >
-            Вперёд
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 function exportRowsToXlsx(rows: Array<Record<string, unknown>>, filename: string) {
@@ -1720,39 +1476,48 @@ function renderProductMatrixBlock(
     metric === "akb" ? "АКБ" : metric === "quantity" ? "Объем" : metric === "orders" ? "Количество" : "Сумма";
   const actorLabel = axis === "supervisors" ? "Супервайзеры" : "Агенты";
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs value={axis} onValueChange={setAxis}>
-          <TabsList className="h-8">
-            <TabsTrigger value="agents" className="h-6 px-2 text-xs">По агентам</TabsTrigger>
-            <TabsTrigger value="supervisors" className="h-6 px-2 text-xs">По супервайзерам</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <Tabs value={metric} onValueChange={setMetric}>
-          <TabsList className="h-8">
-            <TabsTrigger value="akb" className="h-6 px-2 text-xs">АКБ</TabsTrigger>
-            <TabsTrigger value="quantity" className="h-6 px-2 text-xs">Объем</TabsTrigger>
-            <TabsTrigger value="revenue" className="h-6 px-2 text-xs">Сумма</TabsTrigger>
-            <TabsTrigger value="orders" className="h-6 px-2 text-xs">Количество</TabsTrigger>
-          </TabsList>
-        </Tabs>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SupervisorEnterpriseSegmentTabs
+          tabs={[
+            { key: "agents", label: "По агентам" },
+            { key: "supervisors", label: "По супервайзерам" }
+          ]}
+          value={axis}
+          onChange={setAxis}
+        />
+        <SupervisorEnterpriseSegmentTabs
+          tabs={[
+            { key: "akb", label: "АКБ" },
+            { key: "quantity", label: "Объем" },
+            { key: "revenue", label: "Сумма" },
+            { key: "orders", label: "Количество" }
+          ]}
+          value={metric}
+          onChange={setMetric}
+        />
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse text-sm">
-          <thead className="app-table-thead">
-            <tr>
-              <th className="px-2 py-2 text-left text-xs">{actorLabel}</th>
+      <SupervisorEnterpriseTableWrap>
+        <table className="w-full min-w-[900px] text-sm">
+          <thead>
+            <tr className="bg-gray-50/80 dark:bg-muted/50">
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {actorLabel}
+              </th>
               {dimensions.map((d) => (
-                <th key={d} className="px-2 py-2 text-right text-xs">
+                <th
+                  key={d}
+                  className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                >
                   {d}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100 dark:divide-border">
             {rows.map((r) => (
-              <tr key={r.id} className="border-b border-border/60">
-                <td className="px-2 py-1.5">{r.name}</td>
+              <tr key={r.id} className="transition-colors hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
+                <td className="px-5 py-3.5 font-medium text-foreground">{r.name}</td>
                 {dimensions.map((d) => {
                   const cell = r.values[d];
                   let value = "0";
@@ -1763,7 +1528,7 @@ function renderProductMatrixBlock(
                     else value = formatNumberGrouped(cell.revenue, { maxFractionDigits: 2 });
                   }
                   return (
-                    <td key={`${r.id}-${d}`} className="px-2 py-1.5 text-right tabular-nums">
+                    <td key={`${r.id}-${d}`} className="px-5 py-3.5 text-right tabular-nums">
                       {value}
                     </td>
                   );
@@ -1772,58 +1537,81 @@ function renderProductMatrixBlock(
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td className="px-2 py-4 text-center text-muted-foreground" colSpan={Math.max(2, dimensions.length + 1)}>
+                <td
+                  className="px-5 py-8 text-center text-muted-foreground"
+                  colSpan={Math.max(2, dimensions.length + 1)}
+                >
                   Пусто ({metricTitle})
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
-      </div>
+      </SupervisorEnterpriseTableWrap>
     </div>
   );
 }
 
 function renderEfficiencyTable(rows: EfficiencyRow[]) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] border-collapse text-sm">
-        <thead className="app-table-thead">
-          <tr>
-            <th className="px-2 py-2 text-left text-xs">Сотрудник</th>
-            <th className="px-2 py-2 text-right text-xs">Заказы</th>
-            <th className="px-2 py-2 text-right text-xs">План</th>
-            <th className="px-2 py-2 text-right text-xs">Визиты</th>
-            <th className="px-2 py-2 text-right text-xs">Отказы</th>
-            <th className="px-2 py-2 text-right text-xs">Непосещено</th>
-            <th className="px-2 py-2 text-right text-xs">Посещения %</th>
-            <th className="px-2 py-2 text-right text-xs">Фото</th>
-            <th className="px-2 py-2 text-right text-xs">Сумма</th>
+    <SupervisorEnterpriseTableWrap>
+      <table className="w-full min-w-[760px] text-sm">
+        <thead>
+          <tr className="bg-gray-50/80 dark:bg-muted/50">
+            <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Сотрудник
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Заказы
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              План
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Визиты
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Отказы
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Непосещено
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Посещения %
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Фото
+            </th>
+            <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Сумма
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-gray-100 dark:divide-border">
           {rows.map((r) => (
-            <tr key={r.id} className="border-b border-border/60">
-              <td className="px-2 py-1.5">{r.name}</td>
-              <td className="px-2 py-1.5 text-right">{r.order_count}</td>
-              <td className="px-2 py-1.5 text-right">{r.planned_visits}</td>
-              <td className="px-2 py-1.5 text-right">{r.visited_total}</td>
-              <td className="px-2 py-1.5 text-right">{r.rejected_visits}</td>
-              <td className="px-2 py-1.5 text-right">{r.unvisited}</td>
-              <td className="px-2 py-1.5 text-right">{r.visit_pct}%</td>
-              <td className="px-2 py-1.5 text-right">{r.photo_reports}</td>
-              <td className="px-2 py-1.5 text-right">{formatNumberGrouped(r.total_sales_sum, { maxFractionDigits: 2 })}</td>
+            <tr key={r.id} className="transition-colors hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
+              <td className="px-5 py-3.5 font-medium text-foreground">{r.name}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.order_count}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.planned_visits}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.visited_total}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.rejected_visits}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.unvisited}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.visit_pct}%</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">{r.photo_reports}</td>
+              <td className="px-5 py-3.5 text-right font-semibold tabular-nums">
+                {formatNumberGrouped(r.total_sales_sum, { maxFractionDigits: 2 })}
+              </td>
             </tr>
           ))}
           {rows.length === 0 ? (
             <tr>
-              <td className="px-2 py-4 text-center text-muted-foreground" colSpan={9}>
+              <td className="px-5 py-8 text-center text-muted-foreground" colSpan={9}>
                 Пусто
               </td>
             </tr>
           ) : null}
         </tbody>
       </table>
-    </div>
+    </SupervisorEnterpriseTableWrap>
   );
 }

@@ -10,6 +10,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { invalidateDashboard } from "../../lib/redis-cache";
 import {
   allocatePayment,
+  allocatePaymentInTransaction,
   getPaymentAllocations,
   type AllocationMode,
   type PaymentAllocationRow
@@ -240,12 +241,12 @@ export async function confirmPendingPayment(
         confirmed_at: eventAt
       }
     });
-  });
 
-  await allocatePayment(tenantId, paymentId, actorUserId, {
-    mode: "none",
-    agent_id: null,
-    order_ids: []
+    await allocatePaymentInTransaction(tx, tenantId, paymentId, uid, {
+      mode: "none",
+      agent_id: null,
+      order_ids: []
+    });
   });
 
   void invalidateDashboard(tenantId);
@@ -319,20 +320,33 @@ export async function rejectPendingPayment(
   }
 }
 
+const BATCH_CONFIRM_CONCURRENCY = 5;
+
 export async function confirmPendingPaymentsBatch(
   tenantId: number,
   ids: number[],
   actorUserId: number | null
 ): Promise<{ ok: number[]; failed: { id: number; error: string }[] }> {
+  const validIds = [...new Set(ids.filter((id) => Number.isFinite(id) && id >= 1))];
   const ok: number[] = [];
   const failed: { id: number; error: string }[] = [];
-  for (const id of ids) {
-    if (!Number.isFinite(id) || id < 1) continue;
-    try {
-      await confirmPendingPayment(tenantId, id, actorUserId);
-      ok.push(id);
-    } catch (e) {
-      failed.push({ id, error: e instanceof Error ? e.message : "ERR" });
+
+  for (let i = 0; i < validIds.length; i += BATCH_CONFIRM_CONCURRENCY) {
+    const chunk = validIds.slice(i, i + BATCH_CONFIRM_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map((id) => confirmPendingPayment(tenantId, id, actorUserId))
+    );
+    for (let j = 0; j < chunk.length; j++) {
+      const id = chunk[j]!;
+      const result = results[j]!;
+      if (result.status === "fulfilled") {
+        ok.push(id);
+      } else {
+        failed.push({
+          id,
+          error: result.reason instanceof Error ? result.reason.message : "ERR"
+        });
+      }
     }
   }
   return { ok, failed };

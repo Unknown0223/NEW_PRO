@@ -16,7 +16,11 @@ import {
   buildClientReconciliationPdfBufferFromLoaded,
   loadClientReconciliation
 } from "./client-reconciliation-data";
+import { getAppCache, setAppCache } from "../../lib/redis-cache";
+import { stableJsonStringify } from "../dashboard/dashboard.cache";
 import { appendClientAuditLog } from "./clients.audit";
+
+const CLIENT_DETAIL_CACHE_TTL_SECONDS = 30;
 
 export type ClientDetailRow = ClientListRow & {
   phone_normalized: string | null;
@@ -40,6 +44,10 @@ function auditActorLabel(user: { name: string; login: string } | null | undefine
 }
 
 export async function getClientDetail(tenantId: number, id: number): Promise<ClientDetailRow> {
+  const cacheKey = `tenant:${tenantId}:client:detail:${id}`;
+  const cached = await getAppCache<ClientDetailRow>(cacheKey);
+  if (cached) return cached;
+
   const [c, agg, balRow, auditPair, deliveryMap] = await Promise.all([
     prisma.client.findFirst({
       where: { id, tenant_id: tenantId, merged_into_client_id: null },
@@ -139,7 +147,7 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     visitLegacy,
     agent_assignments
   );
-  return {
+  const detail: ClientDetailRow = {
     id: c.id,
     name: c.name,
     legal_name: c.legal_name,
@@ -193,6 +201,8 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     created_by_user_label: auditActorLabel(createLog?.user ?? undefined),
     last_modified_by_user_label: auditActorLabel(lastPatchLog?.user ?? undefined)
   };
+  void setAppCache(cacheKey, detail, CLIENT_DETAIL_CACHE_TTL_SECONDS);
+  return detail;
 }
 
 export type ClientBalanceMovementRow = {

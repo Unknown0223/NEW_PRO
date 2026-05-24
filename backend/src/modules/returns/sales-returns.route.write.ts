@@ -17,9 +17,9 @@ import {
   createPeriodReturn,
   createPeriodReturnBatch,
   createFullReturnFromOrder,
+  previewPolkiAutoBonusReverse,
   MAX_RETURN_ITEMS
 } from "./returns-enhanced.service";
-
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 const priceTypeOptional = z.string().trim().min(1).max(128).optional().nullable();
@@ -47,7 +47,8 @@ const periodReturnLine = z.object({
   qty: z.number().positive().optional(),
   paid_qty: z.number().min(0).optional(),
   bonus_qty: z.number().min(0).optional(),
-  bonus_cash: z.number().min(0).optional()
+  bonus_cash: z.number().min(0).optional(),
+  return_qty: z.number().min(0).optional()
 });
 
 const periodReturnBody = z.object({
@@ -59,18 +60,25 @@ const periodReturnBody = z.object({
   date_to: z.string().optional(),
   note: z.string().max(2000).optional().nullable(),
   refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
+  bonus_debt_amount: z.number().min(0).optional(),
+  /** Erkin polki (explicit paid/bonus): hujjat bo‘yicha 24 limit Zod da yo‘q — `createPeriodReturn`. */
+  lines: z.array(periodReturnLine).min(1)
+});
+
+const polkiAutoBonusPreviewBody = z.object({
+  client_id: z.number().int().positive(),
+  order_id: z.number().int().positive().optional(),
+  price_type: priceTypeOptional,
+  category_ids: z.array(z.number().int().positive()).optional(),
   lines: z
-    .array(periodReturnLine)
-    .min(1)
-    .refine(
-      (lines) =>
-        lines.reduce((a, l) => {
-          const q = l.qty ?? 0;
-          if (q > 0) return a + q;
-          return a + (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
-        }, 0) <= MAX_RETURN_ITEMS,
-      { message: `Max ${MAX_RETURN_ITEMS} ta mahsulot qaytarish mumkin` }
+    .array(
+      z.object({
+        product_id: z.number().int().positive(),
+        return_qty: z.number().positive()
+      })
     )
+    .min(1)
+    .max(400)
 });
 
 const periodReturnBatchLine = z.object({
@@ -79,7 +87,8 @@ const periodReturnBatchLine = z.object({
   qty: z.number().positive().optional(),
   paid_qty: z.number().min(0).optional(),
   bonus_qty: z.number().min(0).optional(),
-  bonus_cash: z.number().min(0).optional()
+  bonus_cash: z.number().min(0).optional(),
+  return_qty: z.number().min(0).optional()
 });
 
 const periodReturnBatchBody = z.object({
@@ -88,18 +97,8 @@ const periodReturnBatchBody = z.object({
   price_type: priceTypeOptional,
   note: z.string().max(2000).optional().nullable(),
   refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
-  lines: z
-    .array(periodReturnBatchLine)
-    .min(1)
-    .refine(
-      (lines) =>
-        lines.reduce((a, l) => {
-          const q = l.qty ?? 0;
-          if (q > 0) return a + q;
-          return a + (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
-        }, 0) <= MAX_RETURN_ITEMS,
-      { message: `Max ${MAX_RETURN_ITEMS} ta mahsulot qaytarish mumkin` }
-    )
+  bonus_debt_amount: z.number().min(0).optional(),
+  lines: z.array(periodReturnBatchLine).min(1)
 });
 
 const fullReturnBody = z.object({
@@ -124,6 +123,33 @@ function sendReturnNotInterchangeable(reply: FastifyReply, request: FastifyReque
 }
 
 export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
+  app.post(
+    "/api/:slug/returns/polki-auto-bonus/preview",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = polkiAutoBonusPreviewBody.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          undefined,
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        const data = await previewPolkiAutoBonusReverse(request.tenant!.id, parsed.data);
+        return reply.send(data);
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        throw e;
+      }
+    }
+  );
+
   app.post(
     "/api/:slug/returns/period",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },

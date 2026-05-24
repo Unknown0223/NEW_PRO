@@ -14,7 +14,9 @@ import {
   getCandidateOrdersForAllocation,
   type AllocationCandidateOrder
 } from "./payment-allocations.open";
-export async function allocatePayment(
+/** FIFO allocation — must run inside caller's transaction when confirming payments. */
+export async function allocatePaymentInTransaction(
+  tx: Prisma.TransactionClient,
   tenantId: number,
   paymentId: number,
   actorUserId: number | null,
@@ -24,9 +26,6 @@ export async function allocatePayment(
     order_ids?: number[];
   }
 ): Promise<PaymentAllocationRow[]> {
-  await assertTenantAccess(tenantId);
-
-  const created: PaymentAllocationRow[] = await prisma.$transaction(async (tx) => {
     // Fetch payment details
     const payment = await tx.payment.findFirst({
       where: { id: paymentId, tenant_id: tenantId }
@@ -95,11 +94,23 @@ export async function allocatePayment(
 
     const allocations: PaymentAllocationRow[] = [];
 
+    const orderIds = uniqOrders.map((o) => o.id);
+    const allocatedByOrder = new Map<number, Prisma.Decimal>();
+    if (orderIds.length > 0) {
+      const grouped = await tx.paymentAllocation.groupBy({
+        by: ["order_id"],
+        where: { tenant_id: tenantId, order_id: { in: orderIds } },
+        _sum: { amount: true }
+      });
+      for (const row of grouped) {
+        allocatedByOrder.set(row.order_id, row._sum.amount ?? new Prisma.Decimal(0));
+      }
+    }
+
     for (const order of uniqOrders) {
       if (remaining.lte(0)) break;
 
-      // Compute remaining unpaid amount
-      const alreadyAllocatedToOrder = await getAllocatedForOrder(tx, tenantId, order.id);
+      const alreadyAllocatedToOrder = allocatedByOrder.get(order.id) ?? new Prisma.Decimal(0);
       const orderRemaining = order.total_sum.sub(alreadyAllocatedToOrder);
 
       if (orderRemaining.lte(0)) continue; // Fully paid
@@ -149,7 +160,20 @@ export async function allocatePayment(
     }
 
     return allocations;
-  });
+}
 
-  return created;
+export async function allocatePayment(
+  tenantId: number,
+  paymentId: number,
+  actorUserId: number | null,
+  options?: {
+    mode?: AllocationMode;
+    agent_id?: number | null;
+    order_ids?: number[];
+  }
+): Promise<PaymentAllocationRow[]> {
+  await assertTenantAccess(tenantId);
+  return prisma.$transaction((tx) =>
+    allocatePaymentInTransaction(tx, tenantId, paymentId, actorUserId, options)
+  );
 }

@@ -1,0 +1,374 @@
+model Tenant {
+  id                             Int                           @id @default(autoincrement())
+  slug                           String                        @unique
+  name                           String
+  phone                          String?
+  address                        String?
+  logo_url                       String?
+  plan                           String                        @default("basic")
+  is_active                      Boolean                       @default(true)
+  settings                       Json                          @default("{}")
+  created_at                     DateTime                      @default(now())
+  updated_at                     DateTime                      @updatedAt
+  agent_route_days               AgentRouteDay[]
+  agent_visits                   AgentVisit[]
+  agent_location_pings           AgentLocationPing[]
+  bonus_rules                    BonusRule[]
+  cash_desk_shifts               CashDeskShift[]
+  cash_desks                     CashDesk[]
+  currency_exchange_rates        CurrencyExchangeRate[]
+  client_agent_assignments       ClientAgentAssignment[]
+  client_audit_logs              ClientAuditLog[]
+  client_balances                ClientBalance[]
+  client_opening_balance_entries ClientOpeningBalanceEntry[]
+  payments                       Payment[]
+  clients                        Client[]
+  goods_receipts                 GoodsReceipt[]
+  in_app_notifications           InAppNotification[]
+  interchangeable_product_groups InterchangeableProductGroup[]
+  kpi_groups                     KpiGroup[]
+  kpi_results                    KpiResult[]
+  orders                         Order[]
+  product_brands                 ProductBrand[]
+  product_catalog_groups         ProductCatalogGroup[]
+  product_categories             ProductCategory[]
+  product_manufacturers          ProductManufacturer[]
+  product_prices                 ProductPrice[]
+  product_price_schedules        ProductPriceSchedule[]
+  price_matrices                 PriceMatrix[]
+  product_segments               ProductSegment[]
+  products                       Product[]
+  refresh_tokens                 RefreshToken[]
+  sales_channel_refs             SalesChannelRef[]
+  sales_returns                  SalesReturn[]
+  stock                          Stock[]
+  stock_takes                    StockTake[]
+  suppliers                      Supplier[]
+  supplier_payments              SupplierPayment[]
+  tenant_audit_events            TenantAuditEvent[]
+  access_logs                    AccessLog[]
+  tenant_tasks                   TenantTask[]
+  trade_directions               TradeDirection[]
+  users                          User[]
+  warehouses                     Warehouse[]
+  warehouse_blocks               WarehouseBlock[]
+  expenses                       Expense[]
+  payment_allocations            PaymentAllocation[]
+  territories                    Territory[]
+  warehouse_corrections          WarehouseCorrection[]
+  client_equipment               ClientEquipment[]
+  client_photo_reports           ClientPhotoReport[]
+  retail_outlet_stocks           RetailOutletStock[]
+  stock_uploads                  StockUpload[]
+  client_qr_codes               ClientQrCode[]
+  client_merge_logs             ClientMergeLog[]
+  client_saved_duplicate_groups ClientSavedDuplicateGroup[]
+  report_builder_saved_configs  ReportBuilderSavedConfig[]
+  roles                         Role[]
+  permissions                   Permission[]
+  user_branch_links             UserBranchLink[]
+  user_payment_method_links     UserPaymentMethodLink[]
+  work_slots                    WorkSlot[]
+  slot_user_links               SlotUserLink[]
+  slot_audit_entries            SlotAuditEntry[]
+
+  @@map("tenants")
+}
+
+
+model ClientQrCode {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  qr_code            String   @db.VarChar(128)
+  client_id          Int?
+  status             String   @default("new") @db.VarChar(24)
+  created_by_user_id Int?
+  printed_by_user_id Int?
+  bound_by_user_id   Int?
+  detached_by_user_id Int?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  printed_at         DateTime?
+  bound_at           DateTime?
+  detached_at        DateTime?
+  is_active          Boolean  @default(true)
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  client             Client?  @relation(fields: [client_id], references: [id], onDelete: SetNull)
+
+  @@unique([tenant_id, qr_code])
+  @@index([tenant_id, status])
+  @@index([tenant_id, client_id])
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, bound_at(sort: Desc)])
+  @@map("client_qr_codes")
+}
+
+
+model User {
+  id                         Int                     @id @default(autoincrement())
+  tenant_id                  Int
+  name                       String
+  login                      String
+  password_hash              String
+  role                       String
+  is_active                  Boolean                 @default(true)
+  created_at                 DateTime                @default(now())
+  updated_at                 DateTime                @updatedAt
+  first_name                 String?
+  last_name                  String?
+  middle_name                String?
+  product                    String?
+  agent_type                 String?
+  code                       String?
+  pinfl                      String?
+  consignment                Boolean                 @default(false)
+  /// Konsignatsiya limiti (so‘m); `null` — cheklov tekshiruvi qo‘llanmaydi (faqat `consignment` yoqilganligi)
+  consignment_limit_amount   Decimal?                @db.Decimal(15, 2)
+  /// `true` bo‘lsa limit iste’moli faqat hisobot oyi ichidagi konsignatsiya zakazlari qarzi
+  consignment_ignore_previous_months_debt Boolean    @default(false)
+  consignment_updated_at     DateTime?
+  apk_version                String?
+  device_name                String?
+  last_sync_at               DateTime?
+  phone                      String?
+  can_authorize              Boolean                 @default(true)
+  price_type                 String?
+  warehouse_id               Int?
+  trade_direction            String?
+  branch                     String?
+  position                   String?
+  app_access                 Boolean                 @default(true)
+  territory                  String?
+  return_warehouse_id        Int?
+  /// Agent / foydalanuvchi ustavi (supervisor) — klientlar ro‘yxatida filtr
+  supervisor_user_id         Int?
+  email                      String?
+  /// Bir nechta narx turi (mobil / cheklovlar); bo‘sh bo‘lsa `price_type` ishlatiladi
+  agent_price_types          Json                    @default("[]")
+  /// { price_types?: string[], product_rules?: { category_id: number, all: boolean, product_ids?: number[] }[] }
+  agent_entitlements         Json                    @default("{}")
+  max_sessions               Int                     @default(2)
+  kpi_color                  String?                 @db.VarChar(16)
+  /// Dastavchik: zakaz yaratilganda avtobog‘lash shartlari (bo‘sh = cheklov yo‘q)
+  expeditor_assignment_rules Json                    @default("{}")
+  /// Skladchik: panel «Конфигурации» cheklovlari (kalit -> true)
+  warehouse_staff_entitlements Json                 @default("{}")
+  /// Jadval ustunlari, sahifa o‘lchami va boshqa UI — foydalanuvchiga xos (JSON)
+  ui_preferences             Json                    @default("{}")
+  /// Savdo yo‘nalishi (spravochnik) — `trade_direction` matni avtomatik sinxronlanadi
+  trade_direction_id         Int?
+  agent_route_days           AgentRouteDay[]
+  agent_visits               AgentVisit[]
+  agent_location_pings       AgentLocationPing[]
+  cash_desk_shifts_closed    CashDeskShift[]         @relation("CashDeskShiftClosedBy")
+  cash_desk_shifts_opened    CashDeskShift[]         @relation("CashDeskShiftOpenedBy")
+  cash_desk_links            CashDeskUserLink[]
+  client_agent_slots         ClientAgentAssignment[] @relation("ClientAgentSlotAgents")
+  expeditor_assignments      ClientAgentAssignment[] @relation("ExpeditorOnAssignment")
+  client_audit_logs          ClientAuditLog[]
+  balance_movements          ClientBalanceMovement[]
+  payments_created           Payment[]               @relation("PaymentCreator")
+  payments_voided            Payment[]               @relation("PaymentVoidedBy")
+  payments_as_expeditor      Payment[]               @relation("PaymentExpeditor")
+  payments_ledger_agent      Payment[]               @relation("PaymentLedgerAgent")
+  opening_balances_created   ClientOpeningBalanceEntry[] @relation("OpeningBalanceCreator")
+  clients_as_agent           Client[]                @relation("UserAgents")
+  goods_receipts_created     GoodsReceipt[]          @relation("GoodsReceiptCreator")
+  in_app_notifications       InAppNotification[]
+  kpi_group_links            KpiGroupAgent[]
+  order_change_logs          OrderChangeLog[]
+  order_status_changes       OrderStatusLog[]
+  orders_as_agent            Order[]                 @relation("OrderAgents")
+  orders_as_expeditor        Order[]                 @relation("OrderExpeditor")
+  refresh_tokens             RefreshToken[]
+  sales_returns_created      SalesReturn[]           @relation("SalesReturnCreator")
+  stock_takes_created        StockTake[]             @relation("StockTakeCreator")
+  tenant_audit_events        TenantAuditEvent[]      @relation("TenantAuditEventActor")
+  tenant_tasks_assigned      TenantTask[]            @relation("TenantTaskAssignee")
+  tenant_tasks_created       TenantTask[]            @relation("TenantTaskCreator")
+  return_warehouse           Warehouse?              @relation("UserReturnWarehouse", fields: [return_warehouse_id], references: [id])
+  supervisor                 User?                   @relation("UserSupervisor", fields: [supervisor_user_id], references: [id])
+  supervisees                User[]                  @relation("UserSupervisor")
+  tenant                     Tenant                  @relation(fields: [tenant_id], references: [id])
+  trade_direction_row        TradeDirection?         @relation("UserTradeDirection", fields: [trade_direction_id], references: [id])
+  warehouse                  Warehouse?              @relation("UserWarehouse", fields: [warehouse_id], references: [id])
+  warehouse_links            WarehouseUserLink[]
+  expenses_created           Expense[]               @relation("ExpenseCreator")
+  expenses_approved          Expense[]               @relation("ExpenseApprover")
+  expenses_voided            Expense[]               @relation("ExpenseVoidedBy")
+  opening_balances_voided    ClientOpeningBalanceEntry[] @relation("OpeningBalanceVoidedBy")
+  goods_receipts_voided      GoodsReceipt[]          @relation("GoodsReceiptVoidedBy")
+  supplier_payments_created  SupplierPayment[]       @relation("SupplierPaymentCreator")
+  supplier_payments_reversed SupplierPayment[]       @relation("SupplierPaymentReverser")
+  territories_voided         Territory[]             @relation("TerritoryVoidedBy")
+  territory_assignments      TerritoryUserLink[]     @relation("TerritoryAssigner")
+  warehouse_corrections_created WarehouseCorrection[] @relation("WarehouseCorrectionCreator")
+  client_photo_reports_created  ClientPhotoReport[]   @relation("ClientPhotoReportCreator")
+  saved_duplicate_groups_created ClientSavedDuplicateGroup[] @relation("SavedDupGroupCreator")
+  warehouse_block_expeditors     WarehouseBlockExpeditor[]   @relation("WarehouseBlockExpeditorUser")
+  warehouse_blocks_as_gruzchik   WarehouseBlock[]            @relation("WarehouseBlockGruzchik")
+  report_builder_saved_configs   ReportBuilderSavedConfig[]
+  access_logs_actor             AccessLog[]               @relation("AccessLogActor")
+  access_logs_target            AccessLog[]               @relation("AccessLogTarget")
+  user_roles                    UserRole[]
+  user_permissions              UserPermission[]
+  branch_links                  UserBranchLink[]
+  payment_method_links          UserPaymentMethodLink[]
+  slot_user_links               SlotUserLink[]          @relation("SlotUserLinks")
+  assignment_locks_set          ClientAgentAssignment[] @relation("AssignmentLockSetter")
+  slot_audit_entries_as_actor   SlotAuditEntry[]        @relation("SlotAuditActor")
+
+  @@unique([tenant_id, login])
+  @@index([tenant_id, role])
+  @@index([tenant_id, role, is_active])
+  @@index([trade_direction_id])
+  @@index([supervisor_user_id])
+  @@index([tenant_id, is_active])
+  @@map("users")
+}
+
+/// «Конструктор отчетов» — foydalanuvchi saqlagan pivot/konfig (JSON).
+
+model ReportBuilderSavedConfig {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  name        String   @db.VarChar(200)
+  dataset_id  String   @db.VarChar(64)
+  config      Json     @default("{}")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id])
+  @@index([tenant_id, user_id, updated_at(sort: Desc)])
+  @@map("report_builder_saved_configs")
+}
+
+
+model RefreshToken {
+  id          Int       @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  token_hash  String    @unique
+  expires_at  DateTime
+  revoked_at  DateTime?
+  created_at  DateTime  @default(now())
+  device_name String?
+  ip_address  String?   @db.VarChar(64)
+  user_agent  String?   @db.VarChar(512)
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id])
+  @@map("refresh_tokens")
+}
+
+
+model ProductCategory {
+  id           Int               @id @default(autoincrement())
+  tenant_id    Int
+  name         String
+  parent_id    Int?
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+  /// Qisqa kod (masalan SKU prefiks / filtr)
+  code         String?           @db.VarChar(24)
+  sort_order   Int?
+  /// Kategoriya uchun tavsiya etilgan birlik (mahsulot `unit` bilan mos kelishi mumkin)
+  default_unit String?           @db.VarChar(64)
+  is_active    Boolean           @default(true)
+  comment      String?
+  parent       ProductCategory?  @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children     ProductCategory[] @relation("CategoryHierarchy")
+  tenant       Tenant            @relation(fields: [tenant_id], references: [id])
+  products     Product[]
+
+  @@index([tenant_id])
+  @@index([tenant_id, parent_id])
+  @@map("product_categories")
+}
+
+
+model Product {
+  id                    Int                           @id @default(autoincrement())
+  tenant_id             Int
+  sku                   String
+  name                  String
+  category_id           Int?
+  unit                  String                        @default("dona")
+  barcode               String?
+  is_active             Boolean                       @default(true)
+  created_at            DateTime                      @default(now())
+  updated_at            DateTime                      @updatedAt
+  /// «Группа товаров» (katalog guruh — kategoriya ierarxiyasidan alohida)
+  product_group_id      Int?
+  brand_id              Int?
+  manufacturer_id       Int?
+  segment_id            Int?
+  weight_kg             Decimal?                      @db.Decimal(12, 4)
+  volume_m3             Decimal?                      @db.Decimal(14, 6)
+  qty_per_block         Int?
+  /// o‘lchov: `cm` yoki `m` (UI: santimetr / metr)
+  dimension_unit        String?                       @db.VarChar(8)
+  width_cm              Decimal?                      @db.Decimal(12, 2)
+  height_cm             Decimal?                      @db.Decimal(12, 2)
+  length_cm             Decimal?                      @db.Decimal(12, 2)
+  ikpu_code             String?                       @db.VarChar(64)
+  hs_code               String?                       @db.VarChar(32)
+  sell_code             String?                       @db.VarChar(64)
+  comment               String?
+  sort_order            Int?
+  is_blocked            Boolean                       @default(false)
+  /// `true` — mahsulot «Оборудование» modulida tanlash uchun belgilangan
+  is_equipment          Boolean                       @default(false)
+  goods_receipt_lines   GoodsReceiptLine[]
+  interchangeable_links InterchangeableGroupProduct[]
+  kpi_group_products    KpiGroupProduct[]
+  order_items           OrderItem[]
+  prices                ProductPrice[]
+  price_schedules       ProductPriceSchedule[]
+  brand                 ProductBrand?                 @relation(fields: [brand_id], references: [id])
+  category              ProductCategory?              @relation(fields: [category_id], references: [id])
+  manufacturer          ProductManufacturer?          @relation(fields: [manufacturer_id], references: [id])
+  product_group         ProductCatalogGroup?          @relation(fields: [product_group_id], references: [id])
+  segment               ProductSegment?               @relation(fields: [segment_id], references: [id])
+  tenant                Tenant                        @relation(fields: [tenant_id], references: [id])
+  sales_return_lines    SalesReturnLine[]
+  stock                 Stock[]
+  stock_take_lines      StockTakeLine[]
+  price_matrix          PriceMatrix[]
+  warehouse_correction_lines WarehouseCorrectionLine[]
+  retail_outlet_stocks      RetailOutletStock[]
+
+  @@unique([tenant_id, sku])
+  @@index([tenant_id, name])
+  @@index([tenant_id, is_active])
+  @@index([tenant_id, is_active, name])
+  @@index([tenant_id, barcode])
+  @@index([tenant_id, product_group_id])
+  @@index([tenant_id, brand_id])
+  @@index([tenant_id, segment_id])
+  @@index([category_id])
+  @@map("products")
+}
+
+/// Katalog: «группа товаров»
+
+model ProductCatalogGroup {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  name       String
+  code       String?   @db.VarChar(24)
+  sort_order Int?
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([tenant_id])
+  @@map("product_catalog_groups")
+}
+

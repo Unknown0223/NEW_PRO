@@ -4,6 +4,13 @@
     "rootDir": "..",
     "noEmit": true
   },
-  "include": ["scripts/**/*.ts", "../shared/**/*.ts"],
-  "exclude": ["tests", "dist", "node_modules", "scripts/**/*.spec.ts"]
+  "include": ["scripts/**/*.ts", "src/types/**/*.d.ts", "../shared/**/*.ts"],
+  "exclude": [
+    "tests",
+    "dist",
+    "node_modules",
+    "scripts/**/*.spec.ts",
+    "scripts/perf/**",
+    "scripts/openapi/generate-schemas.ts"
+  ]
 }

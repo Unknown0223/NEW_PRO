@@ -54,7 +54,9 @@ const envSchema = z.object({
    */
   DASHBOARD_PERF_LOG: z.enum(["0", "1"]).default("0"),
   /** Redis snapshot kesh: supervisor/sales/sales-monitoring (5–600 s). */
-  DASHBOARD_SNAPSHOT_CACHE_TTL_SECONDS: z.coerce.number().int().min(5).max(600).default(15),
+  DASHBOARD_SNAPSHOT_CACHE_TTL_SECONDS: z.coerce.number().int().min(5).max(600).default(60),
+  /** `1` bo‘lsa: har 2 daqiqada joriy oy uchun sales-monitoring summary keshini oldindan hisoblaydi. */
+  DASHBOARD_CACHE_WARMING: z.enum(["0", "1"]).default("0"),
   /** `listProductsForOrderCreateForm`: `IN (...)` bo‘laklari o‘lchami. */
   ORDER_CREATE_PRODUCT_CHUNK: z.coerce.number().int().min(50).max(2000).default(750),
   /** Shu vaqtda parallel `findMany` chaqiruvlari soni. */

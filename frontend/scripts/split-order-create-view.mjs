@@ -1,41 +1,46 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import fs, { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const viewDir = path.join(root, "components/orders/order-create/view");
-const lines = readFileSync(path.join(viewDir, "order-create-view.tsx"), "utf8").split(/\r?\n/);
+const monolithPath = path.join(viewDir, "order-create-view.monolith.tsx");
+const lines = readFileSync(monolithPath, "utf8").split(/\r?\n/);
 
-const hookSrc = readFileSync(
-  path.join(root, "components/orders/order-create/hooks/use-order-create.ts"),
-  "utf8"
-);
-const vmKeys = [...hookSrc.matchAll(/^\s{4}(\w+),$/gm)].map((m) => m[1]);
+const hooksDir = path.join(root, "components/orders/order-create/hooks");
+const vmKeys = [];
+for (const name of fs.readdirSync(hooksDir)) {
+  if (!name.startsWith("use-order-create") || !name.endsWith(".ts")) continue;
+  const src = readFileSync(path.join(hooksDir, name), "utf8");
+  for (const m of src.matchAll(/^\s{4}(\w+),$/gm)) vmKeys.push(m[1]);
+}
+const vmKeysUnique = [...new Set(vmKeys)];
 const importBlock = lines.slice(0, 44).join("\n");
 
 const slices = [
   { file: "order-create-view-header.tsx", name: "OrderCreateViewHeader", start: 245, end: 337 },
-  { file: "order-create-view-alerts.tsx", name: "OrderCreateViewAlerts", start: 345, end: 432 },
-  { file: "order-create-standard-params.tsx", name: "OrderCreateStandardParams", start: 441, end: 831, wrap: true },
-  { file: "order-create-polki-params.tsx", name: "OrderCreatePolkiParams", start: 834, end: 1203, wrap: true },
-  { file: "order-create-order-refs.tsx", name: "OrderCreateOrderRefs", start: 1206, end: 1342 },
-  { file: "order-create-client-summary.tsx", name: "OrderCreateClientSummary", start: 1344, end: 1391 },
-  { file: "order-create-lines-intro.tsx", name: "OrderCreateLinesIntro", start: 1394, end: 1561 },
-  { file: "order-create-exchange-block.tsx", name: "OrderCreateExchangeBlock", start: 1563, end: 1585 },
-  { file: "order-create-catalog-chrome.tsx", name: "OrderCreateCatalogChrome", start: 1587, end: 1645 },
-  { file: "order-create-catalog-table.tsx", name: "OrderCreateCatalogTable", start: 1647, end: 2012 },
-  { file: "order-create-lines-footer-note.tsx", name: "OrderCreateLinesFooterNote", start: 2014, end: 2047 },
-  { file: "order-create-view-footer.tsx", name: "OrderCreateViewFooter", start: 2051, end: 2083 }
+  { file: "order-create-view-alerts.tsx", name: "OrderCreateViewAlerts", start: 345, end: 432, wrap: true },
+  { file: "order-create-standard-params.a.tsx", name: "OrderCreateStandardParamsA", start: 441, end: 631, wrap: true },
+  { file: "order-create-standard-params.b.tsx", name: "OrderCreateStandardParamsB", start: 632, end: 831, wrap: true },
+  { file: "order-create-polki-params.a.tsx", name: "OrderCreatePolkiParamsA", start: 834, end: 1025, wrap: true },
+  { file: "order-create-polki-params.b.tsx", name: "OrderCreatePolkiParamsB", start: 1026, end: 1203, wrap: true },
+  { file: "order-create-order-refs.tsx", name: "OrderCreateOrderRefs", start: 1206, end: 1342, wrap: true },
+  { file: "order-create-client-summary.tsx", name: "OrderCreateClientSummary", start: 1344, end: 1391, wrap: true },
+  { file: "order-create-lines-intro.tsx", name: "OrderCreateLinesIntro", start: 1394, end: 1561, wrap: true },
+  { file: "order-create-exchange-block.tsx", name: "OrderCreateExchangeBlock", start: 1563, end: 1585, wrap: true },
+  { file: "order-create-catalog-chrome.tsx", name: "OrderCreateCatalogChrome", start: 1587, end: 1645, wrap: true },
+  { file: "order-create-catalog-table.a.tsx", name: "OrderCreateCatalogTableA", start: 1647, end: 1835, wrap: true },
+  { file: "order-create-catalog-table.b.tsx", name: "OrderCreateCatalogTableB", start: 1836, end: 2012, wrap: true },
+  { file: "order-create-lines-footer-note.tsx", name: "OrderCreateLinesFooterNote", start: 2014, end: 2047, wrap: true },
+  { file: "order-create-view-footer.tsx", name: "OrderCreateViewFooter", start: 2051, end: 2083, wrap: true }
 ];
 
 function usedKeys(text) {
-  return vmKeys.filter((k) => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text));
+  return vmKeysUnique.filter((k) => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text));
 }
 
-mkdirSync(viewDir, { recursive: true });
-
-for (const s of slices) {
+function emitSection(s) {
   const body = lines.slice(s.start - 1, s.end).join("\n");
   const keys = usedKeys(body);
   const destructure = `  const {\n${keys.map((k) => `    ${k},`).join("\n")}\n  } = vm;\n\n`;
@@ -54,6 +59,44 @@ ${destructure}${inner}
   console.log(`${s.file}\t${n}\tkeys:${keys.length}`);
 }
 
+mkdirSync(viewDir, { recursive: true });
+for (const s of slices) emitSection(s);
+
+const barrel = (file, name, parts) => `${importBlock}
+import type { OrderCreateVm } from "../hooks/use-order-create";
+${parts.map((p) => `import { ${p.name} } from "./${p.file.replace(".tsx", "")}";`).join("\n")}
+
+export function ${name}({ vm }: { vm: OrderCreateVm }) {
+  return (
+    <>
+${parts.map((p) => `      <${p.name} vm={vm} />`).join("\n")}
+    </>
+  );
+}
+`;
+
+writeFileSync(
+  path.join(viewDir, "order-create-standard-params.tsx"),
+  barrel("order-create-standard-params.tsx", "OrderCreateStandardParams", [
+    { file: "order-create-standard-params.a.tsx", name: "OrderCreateStandardParamsA" },
+    { file: "order-create-standard-params.b.tsx", name: "OrderCreateStandardParamsB" }
+  ])
+);
+writeFileSync(
+  path.join(viewDir, "order-create-polki-params.tsx"),
+  barrel("order-create-polki-params.tsx", "OrderCreatePolkiParams", [
+    { file: "order-create-polki-params.a.tsx", name: "OrderCreatePolkiParamsA" },
+    { file: "order-create-polki-params.b.tsx", name: "OrderCreatePolkiParamsB" }
+  ])
+);
+writeFileSync(
+  path.join(viewDir, "order-create-catalog-table.tsx"),
+  barrel("order-create-catalog-table.tsx", "OrderCreateCatalogTable", [
+    { file: "order-create-catalog-table.a.tsx", name: "OrderCreateCatalogTableA" },
+    { file: "order-create-catalog-table.b.tsx", name: "OrderCreateCatalogTableB" }
+  ])
+);
+
 writeFileSync(
   path.join(viewDir, "order-create-lines-section.tsx"),
   `${importBlock}
@@ -66,20 +109,16 @@ import { OrderCreateLinesFooterNote } from "./order-create-lines-footer-note";
 
 export function OrderCreateLinesSection({ vm }: { vm: OrderCreateVm }) {
   return (
-  <OrderCreateLinesIntro vm={vm} />
-  <OrderCreateExchangeBlock vm={vm} />
-  <OrderCreateCatalogChrome vm={vm} />
-  <OrderCreateCatalogTable vm={vm} />
-  <OrderCreateLinesFooterNote vm={vm} />
+    <>
+      <OrderCreateLinesIntro vm={vm} />
+      <OrderCreateExchangeBlock vm={vm} />
+      <OrderCreateCatalogChrome vm={vm} />
+      <OrderCreateCatalogTable vm={vm} />
+      <OrderCreateLinesFooterNote vm={vm} />
+    </>
   );
 }
-`.replace(
-  "return (\n  <OrderCreate",
-  "return (\n    <>\n      <OrderCreate"
-).replace(
-  "<OrderCreateLinesFooterNote vm={vm} />\n  );",
-  "<OrderCreateLinesFooterNote vm={vm} />\n    </>\n  );"
-)
+`
 );
 
 writeFileSync(
@@ -112,7 +151,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     <PageShell>
       <OrderCreateViewHeader vm={vm} />
 
-      <motioned
+      <div
         className={cn(
           "flex w-full min-w-0 flex-col",
           isPolkiSheet ? "gap-4 pb-24" : "gap-6 pb-32"
@@ -132,7 +171,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
         </section>
 
         <OrderCreateLinesSection vm={vm} />
-      </motioned>
+      </div>
 
       <OrderCreateViewFooter vm={vm} />
 
@@ -152,7 +191,8 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     </PageShell>
   );
 }
-`.replaceAll("motioned", "div")
+`
 );
 
 console.log("done");
+

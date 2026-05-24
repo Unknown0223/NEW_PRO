@@ -1,0 +1,398 @@
+model ProductBrand {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  name       String
+  code       String?   @db.VarChar(24)
+  sort_order Int?
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([tenant_id])
+  @@map("product_brands")
+}
+
+
+model ProductManufacturer {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  name       String
+  code       String?   @db.VarChar(24)
+  sort_order Int?
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([tenant_id])
+  @@map("product_manufacturers")
+}
+
+
+model ProductSegment {
+  id         Int       @id @default(autoincrement())
+  tenant_id  Int
+  name       String
+  code       String?   @db.VarChar(24)
+  sort_order Int?
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@index([tenant_id])
+  @@map("product_segments")
+}
+
+
+model InterchangeableProductGroup {
+  id               Int                             @id @default(autoincrement())
+  tenant_id        Int
+  name             String
+  code             String?                         @db.VarChar(24)
+  sort_order       Int?
+  comment          String?
+  is_active        Boolean                         @default(true)
+  created_at       DateTime                        @default(now())
+  updated_at       DateTime                        @updatedAt
+  price_type_links InterchangeableGroupPriceType[]
+  products         InterchangeableGroupProduct[]
+  tenant           Tenant                          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("interchangeable_product_groups")
+}
+
+
+model InterchangeableGroupProduct {
+  group_id   Int
+  product_id Int
+  group      InterchangeableProductGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  product    Product                     @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@id([group_id, product_id])
+  @@index([product_id])
+  @@map("interchangeable_group_products")
+}
+
+
+model InterchangeableGroupPriceType {
+  group_id   Int
+  price_type String                      @db.VarChar(128)
+  group      InterchangeableProductGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@id([group_id, price_type])
+  @@map("interchangeable_group_price_types")
+}
+
+/// Mahsulot narxlari (narx turi: masalan retail, wholesale — bonus `price_type` bilan bog‘lanishi mumkin)
+
+model ProductPrice {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  product_id Int
+  price_type String
+  price      Decimal  @db.Decimal(15, 2)
+  currency   String   @default("UZS")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, product_id, price_type])
+  @@index([tenant_id, product_id])
+  @@map("product_prices")
+}
+
+/// Rejalashtirilgan mahsulot narxi — `effective_at` da `product_prices` ga qo‘llanadi (cron).
+
+model ProductPriceSchedule {
+  id           Int       @id @default(autoincrement())
+  tenant_id    Int
+  product_id   Int
+  price_type   String
+  price        Decimal   @db.Decimal(15, 2)
+  currency     String    @default("UZS")
+  effective_at DateTime
+  status       String    @default("pending") @db.VarChar(16)
+  created_by   Int?
+  applied_at   DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  product      Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, status, effective_at])
+  @@index([tenant_id, product_id, price_type, status])
+  @@map("product_price_schedules")
+}
+
+
+model Client {
+  id                    Int                     @id @default(autoincrement())
+  tenant_id             Int
+  name                  String
+  address               String?
+  phone                 String?
+  agent_id              Int?
+  category              String?
+  credit_limit          Decimal                 @default(0) @db.Decimal(15, 2)
+  is_active             Boolean                 @default(true)
+  created_at            DateTime                @default(now())
+  updated_at            DateTime                @updatedAt
+  /// Faqat raqamlar (dublikat va yagona bazada qidiruv uchun)
+  phone_normalized      String?
+  /// Birlashtirishdan keyin asosiy yozuv
+  merged_into_client_id Int?
+  /// Mas'ul shaxs, mo'ljal, STIR, P-D-L, logistika, litsenziya, ish vaqti
+  responsible_person    String?
+  landmark              String?
+  inn                   String?
+  pdl                   String?
+  logistics_service     String?
+  license_until         DateTime?
+  working_hours         String?
+  /// Manzil bo‘laklari + GPS matni + tashrif sanasi + izoh
+  /// `region` — viloyat / область / «территория» (hudud daraxti qatlami); `city` — shahar kodi yoki nomi; `district` — tuman / район; `zone` — kompaniya zonasi.
+  region                String?
+  district              String?
+  /// Shahar / город (spravochnik yoki territory_nodes shahar qatlami, odatda kod)
+  city                  String?
+  neighborhood          String?
+  street                String?
+  house_number          String?
+  apartment             String?
+  gps_text              String?
+  visit_date            DateTime?
+  notes                 String?
+  /// Mijoz formati (masalan savdo kanali / turi) — keyinroq qoidalarga bog‘lash mumkin
+  client_format         String?
+  /// 10 ta kontakt: [{ "firstName", "lastName", "phone" }, ...]
+  contact_persons       Json                    @default("[]")
+  /// Yuridik / rasmiy nom (ko‘rsatish uchun)
+  legal_name            String?
+  /// Mijoz turi kodi (spravochnik bilan bog‘lanishi mumkin)
+  client_type_code      String?
+  /// Qisqa ichki kod (masalan 20 belgi)
+  client_code           String?                 @db.VarChar(32)
+  /// Savdo kanali (Lalaku: «Канал продаж»)
+  sales_channel         String?
+  /// Mahsulot toifasi (spravochnikdan tanlangan qiymat matni)
+  product_category_ref  String?
+  /// Bank rekvizitlari
+  bank_name             String?
+  bank_account          String?
+  bank_mfo              String?
+  /// Mijoz JSHSHIR / ПИНФЛ
+  client_pinfl          String?                 @db.VarChar(20)
+  oked                  String?
+  contract_number       String?
+  vat_reg_code          String?
+  /// Xarita (Yandex / GPS)
+  latitude              Decimal?                @db.Decimal(11, 8)
+  longitude             Decimal?                @db.Decimal(11, 8)
+  /// Zona (kompaniya bo‘linmasi / «Зона»)
+  zone                  String?
+  /// Oxirgi agent tashrif vaqti (`agent_visits` check-in bilan yangilanadi, hisobot keshi).
+  last_visit_at         DateTime?
+  agent_visits          AgentVisit[]
+  agent_assignments     ClientAgentAssignment[]
+  audit_logs            ClientAuditLog[]
+  client_balances                ClientBalance[]
+  client_opening_balance_entries ClientOpeningBalanceEntry[]
+  payments                       Payment[]
+  agent                          User?                   @relation("UserAgents", fields: [agent_id], references: [id])
+  merged_into           Client?                 @relation("ClientMerge", fields: [merged_into_client_id], references: [id])
+  merged_from           Client[]                @relation("ClientMerge")
+  tenant                Tenant                  @relation(fields: [tenant_id], references: [id])
+  orders                Order[]
+  sales_returns         SalesReturn[]
+  client_equipment      ClientEquipment[]
+  client_photo_reports  ClientPhotoReport[]
+  retail_outlet_stocks  RetailOutletStock[]
+  qr_codes              ClientQrCode[]
+  merge_logs_as_master  ClientMergeLog[] @relation("MergeLogMaster")
+  merge_logs_as_merged  ClientMergeLog[] @relation("MergeLogMerged")
+  saved_duplicate_groups  ClientSavedDuplicateGroup[] @relation("SavedDupGroupMaster")
+
+  @@index([tenant_id])
+  @@index([tenant_id, name])
+  @@index([tenant_id, is_active, name])
+  @@index([tenant_id, phone_normalized])
+  @@index([tenant_id, last_visit_at(sort: Desc)])
+  @@map("clients")
+}
+
+/// Mijozlarni birlashtirish jurnali (CRM dedupe / audit).
+
+model ClientMergeLog {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  master_client_id   Int
+  merged_client_id   Int
+  merged_by_user_id  Int?
+  merged_at          DateTime @default(now())
+  payload            Json     @default("{}")
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  master_client      Client   @relation("MergeLogMaster", fields: [master_client_id], references: [id], onDelete: Cascade)
+  merged_client      Client   @relation("MergeLogMerged", fields: [merged_client_id], references: [id], onDelete: Restrict)
+
+  @@index([tenant_id, merged_at(sort: Desc)])
+  @@index([tenant_id, master_client_id])
+  @@map("client_merge_logs")
+}
+
+/// Operator saqlagan dublikat guruhi («Сохранённые»).
+
+model ClientSavedDuplicateGroup {
+  id                  Int      @id @default(autoincrement())
+  tenant_id           Int
+  master_client_id    Int
+  client_ids          Int[]
+  note                String?  @db.VarChar(2000)
+  created_by_user_id  Int?
+  created_at          DateTime @default(now())
+  tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  master_client       Client   @relation("SavedDupGroupMaster", fields: [master_client_id], references: [id], onDelete: Cascade)
+  created_by          User?    @relation("SavedDupGroupCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@map("client_saved_duplicate_groups")
+}
+
+/// Klientga berilgan jihoz / inventar (qaytarilganda removed_at)
+
+model ClientEquipment {
+  id               Int       @id @default(autoincrement())
+  tenant_id        Int
+  client_id        Int
+  inventory_type   String    @db.VarChar(256)
+  equipment_kind   String?   @db.VarChar(256)
+  serial_number    String?   @db.VarChar(128)
+  inventory_number String?   @db.VarChar(128)
+  assigned_at      DateTime  @default(now())
+  removed_at       DateTime?
+  note             String?   @db.VarChar(2000)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  client           Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, client_id])
+  @@index([tenant_id, client_id, removed_at])
+  @@map("client_equipment")
+}
+
+/// Savdo nuqtalaridagi qoldiq/sotuv snapshot (kunlik import yoki qo‘lda yozuv)
+
+model RetailOutletStock {
+  id            Int      @id @default(autoincrement())
+  tenant_id     Int
+  stock_date    DateTime @db.Date
+  client_id     Int
+  product_id    Int
+  agent_id      Int?
+  territory_1   String?  @db.VarChar(128)
+  territory_2   String?  @db.VarChar(128)
+  territory_3   String?  @db.VarChar(128)
+  quantity      Decimal  @db.Decimal(15, 3)
+  sold_quantity Decimal  @default(0) @db.Decimal(15, 3)
+  amount        Decimal? @db.Decimal(15, 2)
+  price_type    String?  @db.VarChar(64)
+  volume        String?  @db.VarChar(64)
+  comment       String?  @db.VarChar(2000)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  client        Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, stock_date, client_id, product_id])
+  @@index([tenant_id, stock_date])
+  @@index([tenant_id, agent_id])
+  @@index([tenant_id, territory_1, territory_2, territory_3])
+  @@index([tenant_id, product_id])
+  @@map("retail_outlet_stocks")
+}
+
+/// Retail-stock import log (audit / diagnostika)
+
+model StockUpload {
+  id                  Int      @id @default(autoincrement())
+  tenant_id           Int
+  uploaded_by_user_id Int?
+  file_name           String   @db.VarChar(512)
+  rows_total          Int      @default(0)
+  rows_applied        Int      @default(0)
+  errors_count        Int      @default(0)
+  created_at          DateTime @default(now())
+  tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@map("stock_uploads")
+}
+
+/// Klient foto hisoboti (URL yoki tashqi storage)
+
+model ClientPhotoReport {
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  client_id          Int
+  image_url          String    @db.VarChar(4000)
+  caption            String?   @db.VarChar(1000)
+  order_id           Int?
+  created_by_user_id Int?
+  created_at         DateTime  @default(now())
+  client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  order              Order?    @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  created_by         User?     @relation("ClientPhotoReportCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, client_id])
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, created_by_user_id, created_at(sort: Desc)])
+  @@map("client_photo_reports")
+}
+
+/// Mijozga 1..10 gacha agent slotlari (tashrif sanasi + ekspeditor telefoni).
+
+model ClientAgentAssignment {
+  id                Int       @id @default(autoincrement())
+  tenant_id         Int
+  client_id         Int
+  slot              Int
+  agent_id          Int?
+  visit_date        DateTime?
+  expeditor_phone   String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  /// Tashrif kunlari: [1..7] — 1=Du, 7=Ya (ISO hafta kuni emas, savdo UI)
+  visit_weekdays    Json      @default("[]")
+  /// Tanlangan foydalanuvchi (ekspeditor ro‘yxatidan)
+  expeditor_user_id Int?
+  /// none | manual | contract — avtomatik agent o‘zgartirish siyosati
+  lock_type           String    @default("none") @db.VarChar(24)
+  lock_reason         String?
+  lock_set_by         Int?
+  /// assigned | pending_review | locked
+  auto_assign_status  String    @default("assigned") @db.VarChar(32)
+  work_slot_id        Int?
+  agent               User?     @relation("ClientAgentSlotAgents", fields: [agent_id], references: [id])
+  client              Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  expeditor_user      User?     @relation("ExpeditorOnAssignment", fields: [expeditor_user_id], references: [id])
+  tenant              Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  work_slot           WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
+  lock_set_by_user    User?     @relation("AssignmentLockSetter", fields: [lock_set_by], references: [id], onDelete: SetNull)
+
+  @@unique([client_id, slot])
+  @@index([tenant_id, client_id])
+  @@index([tenant_id, auto_assign_status])
+  @@index([work_slot_id])
+  @@map("client_agent_assignments")
+}
+
+/// Ishchi o‘rni (doimiy joy): smart kod, filial, yo‘nalish.

@@ -18,13 +18,16 @@ import { localDayEnd, localDayStart } from "./returns-enhanced.helpers";
 import {
   assertPeriodLineModes,
   computeReturnSplitFromOrderSnapshot,
+  periodReturnUsesExplicitLines,
   physicalQtyFromPeriodLine,
   priceByProductFromItems,
   scaleReturnLinesToMaxRefund,
   validateExplicitReturnAgainstItems,
+  validateExplicitReturnQtyAgainstItems,
   validateReturnQty
 } from "./returns-enhanced.compute";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
+import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
 
 
 export async function createPeriodReturn(
@@ -36,7 +39,10 @@ export async function createPeriodReturn(
 
   assertPeriodLineModes(input.lines);
   const totalPhys = input.lines.reduce((a, l) => a + physicalQtyFromPeriodLine(l), 0);
-  if (totalPhys > MAX_RETURN_ITEMS) throw new Error("TOO_MANY_ITEMS");
+  const explicitPolki =
+    periodReturnUsesExplicitLines(input.lines) ||
+    (input.bonus_debt_amount != null && Number(input.bonus_debt_amount) > 0);
+  if (totalPhys > MAX_RETURN_ITEMS && !explicitPolki) throw new Error("TOO_MANY_ITEMS");
 
   const client = await prisma.client.findFirst({
     where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null }
@@ -148,6 +154,7 @@ export async function createPeriodReturn(
     }));
     const priceMap = priceByProductFromItems(cdata.items);
     validateExplicitReturnAgainstItems(itemsAdjusted, explicitRows, priceMap);
+    validateExplicitReturnQtyAgainstItems(itemsAdjusted, input.lines);
 
     const physical: Array<{
       product_id: number;
@@ -218,6 +225,8 @@ export async function createPeriodReturn(
       bonus_return_qty: retLines.reduce((a, l) => a + l.bonus_qty, 0)
     };
   }
+
+  const bonusDebtAmount = await resolvePolkiBonusDebtAmount(tenantId, input);
 
   const number = `VR-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
   const uid = actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
@@ -304,6 +313,12 @@ export async function createPeriodReturn(
       });
     }
 
+    if (bonusDebtAmount.gt(0)) {
+      await applyClientBonusDebt(tx, tenantId, input.client_id, bonusDebtAmount, uid, {
+        returnNumber: number
+      });
+    }
+
     return { ret, mirrorOrderId };
   });
 
@@ -336,7 +351,13 @@ export async function createPeriodReturn(
         paid_return_qty: recalc.paid_return_qty,
         bonus_return_qty: recalc.bonus_return_qty,
         refund_amount: recalc.refund_amount.toString(),
-        ...(recalc.bonus_cash_applied != null ? { bonus_cash_applied: recalc.bonus_cash_applied } : {})
+        ...(recalc.bonus_cash_applied != null ? { bonus_cash_applied: recalc.bonus_cash_applied } : {}),
+        ...(bonusDebtAmount.gt(0)
+          ? {
+              bonus_debt_amount: bonusDebtAmount.toString(),
+              bonus_debt_qty: null
+            }
+          : {})
       },
       mirror_order_id: mirrorOrderId
     }
@@ -354,6 +375,10 @@ export async function createPeriodReturn(
       bonus_qty: String(rl.bonus_qty),
       paid_amount: R(rl.price).mul(rl.paid_qty).toString()
     })),
-    bonus_recalc: { ...recalc, refund_amount: recalc.refund_amount.toString() }
+    bonus_recalc: {
+      ...recalc,
+      refund_amount: recalc.refund_amount.toString(),
+      ...(bonusDebtAmount.gt(0) ? { bonus_debt_amount: bonusDebtAmount.toString() } : {})
+    }
   };
 }

@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useId,
   useLayoutEffect,
@@ -164,9 +165,10 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
     setOpenTracked(false);
   }, [closeToken, setOpenTracked]);
 
+  const deferredSearch = useDeferredValue(search);
   const displayItems = useMemo(() => {
     if (!filterItemsBySearch) return items;
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     if (!q) return items;
     return items.filter((i) => {
       const hay = `${String(i.title)} ${String(i.subtitle ?? "")} ${String(i.searchText ?? "")} ${String(i.id)}`
@@ -174,7 +176,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
         .replace(/\s+/g, " ");
       return hay.includes(q);
     });
-  }, [items, search, filterItemsBySearch]);
+  }, [items, deferredSearch, filterItemsBySearch]);
 
   const visibleIds = displayItems.map((i) => i.id);
   const hasVisible = visibleIds.length > 0;

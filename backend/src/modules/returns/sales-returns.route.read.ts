@@ -12,13 +12,7 @@ import {
   listSalesReturnsForOrder,
   getSalesReturnById
 } from "./sales-returns.service";
-import {
-  getClientReturnsData,
-  createPeriodReturn,
-  createPeriodReturnBatch,
-  createFullReturnFromOrder,
-  MAX_RETURN_ITEMS
-} from "./returns-enhanced.service";
+import { getClientReturnsData } from "./returns-enhanced.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -40,75 +34,6 @@ const createBody = z.object({
       })
     )
     .min(1)
-});
-
-const periodReturnLine = z.object({
-  product_id: z.number().int().positive(),
-  qty: z.number().positive().optional(),
-  paid_qty: z.number().min(0).optional(),
-  bonus_qty: z.number().min(0).optional(),
-  bonus_cash: z.number().min(0).optional()
-});
-
-const periodReturnBody = z.object({
-  client_id: z.number().int().positive(),
-  order_id: z.number().int().positive().optional(),
-  warehouse_id: z.number().int().positive().optional(),
-  price_type: priceTypeOptional,
-  date_from: z.string().optional(),
-  date_to: z.string().optional(),
-  note: z.string().max(2000).optional().nullable(),
-  refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
-  lines: z
-    .array(periodReturnLine)
-    .min(1)
-    .refine(
-      (lines) =>
-        lines.reduce((a, l) => {
-          const q = l.qty ?? 0;
-          if (q > 0) return a + q;
-          return a + (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
-        }, 0) <= MAX_RETURN_ITEMS,
-      { message: `Max ${MAX_RETURN_ITEMS} ta mahsulot qaytarish mumkin` }
-    )
-});
-
-const periodReturnBatchLine = z.object({
-  order_id: z.number().int().positive(),
-  product_id: z.number().int().positive(),
-  qty: z.number().positive().optional(),
-  paid_qty: z.number().min(0).optional(),
-  bonus_qty: z.number().min(0).optional(),
-  bonus_cash: z.number().min(0).optional()
-});
-
-const periodReturnBatchBody = z.object({
-  client_id: z.number().int().positive(),
-  warehouse_id: z.number().int().positive().optional(),
-  price_type: priceTypeOptional,
-  note: z.string().max(2000).optional().nullable(),
-  refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
-  lines: z
-    .array(periodReturnBatchLine)
-    .min(1)
-    .refine(
-      (lines) =>
-        lines.reduce((a, l) => {
-          const q = l.qty ?? 0;
-          if (q > 0) return a + q;
-          return a + (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
-        }, 0) <= MAX_RETURN_ITEMS,
-      { message: `Max ${MAX_RETURN_ITEMS} ta mahsulot qaytarish mumkin` }
-    )
-});
-
-const fullReturnBody = z.object({
-  order_id: z.number().int().positive(),
-  warehouse_id: z.number().int().positive().optional(),
-  price_type: priceTypeOptional,
-  refund_amount: z.number().positive().optional(),
-  note: z.string().max(2000).optional().nullable(),
-  refusal_reason_ref: z.string().trim().max(128).optional().nullable()
 });
 
 function sendReturnNotInterchangeable(reply: FastifyReply, request: FastifyRequest, e: unknown) {
@@ -236,6 +161,4 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
       }
     }
   );
-
-  // ─── Create period return (Vazvrat Polki) ──────────────────────────────
 }

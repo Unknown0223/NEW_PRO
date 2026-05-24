@@ -179,6 +179,11 @@ export async function importClientUpdateRows(
     }
   }
 
+  const BATCH_SIZE = 50;
+  const bothUpdates: Array<{ idVal: number; nextData: Record<string, unknown>; agentPatches: unknown[] }> = [];
+  const scalarOnly: Array<{ idVal: number; nextData: Record<string, unknown> }> = [];
+  const assignmentOnly: Array<{ idVal: number; agentPatches: unknown[] }> = [];
+
   for (let r = firstDataRow; r <= lastRowIdx; r++) {
     const row = rows[r];
     if (!Array.isArray(row)) {
@@ -228,33 +233,24 @@ export async function importClientUpdateRows(
         await reportImportRowProgress(ctx, "resolving");
         continue;
       }
-      const writeStarted = Date.now();
+
       if (hasScalars && hasAssignmentChange) {
-        await prisma.$transaction(async (tx) => {
-          await tx.client.update({ where: { id: idVal }, data: nextData });
-          await replaceClientAgentAssignments(tx, tenantId, idVal, agentPatches, {
-            skipStaffDbValidation: true
-          });
-        });
+        bothUpdates.push({ idVal, nextData, agentPatches });
       } else if (hasScalars) {
-        await prisma.client.update({ where: { id: idVal }, data: nextData });
+        scalarOnly.push({ idVal, nextData });
       } else if (hasAssignmentChange) {
-        await prisma.$transaction(async (tx) => {
-          await replaceClientAgentAssignments(tx, tenantId, idVal, agentPatches, {
-            skipStaffDbValidation: true
-          });
-        });
+        assignmentOnly.push({ idVal, agentPatches });
       }
+
       if (hasAssignmentChange) {
         currentAssignmentsByClientId.set(idVal, nextAssignments);
       }
-      ctx.writeMs += Date.now() - writeStarted;
       const rowChanged = hasScalars || hasAssignmentChange;
       if (rowChanged) {
         updated += 1;
       }
       ctx.processedRows += 1;
-      await reportImportRowProgress(ctx, "writing");
+      await reportImportRowProgress(ctx, "resolving");
     } catch (e) {
       const raw = e instanceof Error ? e.message : "xato";
       if (raw === "NOT_FOUND") {
@@ -269,9 +265,50 @@ export async function importClientUpdateRows(
         pushErr(`Qator ${r + 1} (Excel): ${short}`);
       }
       ctx.processedRows += 1;
+      ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "writing");
     }
   }
+
+  const writeStarted = Date.now();
+  const processBatch = async (batch: unknown[], fn: (tx: Prisma.TransactionClient, item: unknown) => Promise<void>) => {
+    for (let i = 0; i < batch.length; i += BATCH_SIZE) {
+      const chunk = batch.slice(i, i + BATCH_SIZE);
+      await prisma.$transaction(async (tx) => {
+        for (const item of chunk) {
+          await fn(tx, item);
+        }
+      });
+    }
+  };
+
+  if (bothUpdates.length > 0) {
+    await processBatch(bothUpdates, async (tx, item) => {
+      const { idVal, nextData, agentPatches } = item as { idVal: number; nextData: Record<string, unknown>; agentPatches: unknown[] };
+      await tx.client.update({ where: { id: idVal }, data: nextData });
+      await replaceClientAgentAssignments(tx, tenantId, idVal, agentPatches as Parameters<typeof replaceClientAgentAssignments>[3], {
+        skipStaffDbValidation: true
+      });
+    });
+  }
+
+  if (scalarOnly.length > 0) {
+    await processBatch(scalarOnly, async (tx, item) => {
+      const { idVal, nextData } = item as { idVal: number; nextData: Record<string, unknown> };
+      await tx.client.update({ where: { id: idVal }, data: nextData });
+    });
+  }
+
+  if (assignmentOnly.length > 0) {
+    await processBatch(assignmentOnly, async (tx, item) => {
+      const { idVal, agentPatches } = item as { idVal: number; agentPatches: unknown[] };
+      await replaceClientAgentAssignments(tx, tenantId, idVal, agentPatches as Parameters<typeof replaceClientAgentAssignments>[3], {
+        skipStaffDbValidation: true
+      });
+    });
+  }
+
+  ctx.writeMs += Date.now() - writeStarted;
 
   const out = [...errors];
   if (updated === 0 && errors.length === 0 && skippedEmpty > 0) {

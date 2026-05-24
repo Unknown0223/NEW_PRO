@@ -3,6 +3,41 @@ import { prisma } from "../../config/database";
 import type { ClientSales4Filters, ReportActor } from "./client-sales-4.types";
 import { cteBody } from "./client-sales-4.core";
 
+const ITEM_FILTER_LATERAL = (itemSql: Prisma.Sql, hasItemFilter: boolean) => Prisma.sql`
+  LEFT JOIN LATERAL (
+    SELECT
+      COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
+      COUNT(*)::int AS item_count
+    FROM order_items oi
+    JOIN products p ON p.id = oi.product_id
+    WHERE oi.order_id = o.id
+    ${itemSql}
+  ) it ON true
+`;
+
+const FILTERED_ORDERS_CTE = (
+  whereSql: Prisma.Sql,
+  itemSql: Prisma.Sql,
+  hasItemFilter: boolean
+) => Prisma.sql`
+  filtered_orders AS (
+    SELECT
+      o.id AS order_id,
+      o.client_id,
+      COALESCE(o.agent_id, c.agent_id) AS agent_id,
+      c.name AS client_name,
+      c.zone,
+      c.region,
+      c.city,
+      COALESCE(it.item_amount, 0)::numeric(15,2) AS amount
+    FROM orders o
+    JOIN clients c ON c.id = o.client_id
+    ${ITEM_FILTER_LATERAL(itemSql, hasItemFilter)}
+    WHERE ${whereSql}
+      ${hasItemFilter ? Prisma.sql`AND COALESCE(it.item_count, 0) > 0` : Prisma.empty}
+  )
+`;
+
 export async function getClientSales4Report(tenantId: number, f: ClientSales4Filters, actor?: ReportActor) {
   const { whereSql, itemSql, hasItemFilter, clientHaving } = cteBody(f, tenantId, actor);
   const offset = (f.page - 1) * f.limit;
@@ -17,30 +52,7 @@ export async function getClientSales4Report(tenantId: number, f: ClientSales4Fil
       amount: Prisma.Decimal;
     }>
   >`
-    WITH filtered_orders AS (
-      SELECT
-        o.id AS order_id,
-        o.client_id,
-        COALESCE(o.agent_id, c.agent_id) AS agent_id,
-        c.name AS client_name,
-        c.zone,
-        c.region,
-        c.city,
-        COALESCE(it.item_amount, 0)::numeric(15,2) AS amount
-      FROM orders o
-      JOIN clients c ON c.id = o.client_id
-      LEFT JOIN LATERAL (
-        SELECT
-          COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
-          COUNT(*)::int AS item_count
-        FROM order_items oi
-        JOIN products p ON p.id = oi.product_id
-        WHERE oi.order_id = o.id
-        ${itemSql}
-      ) it ON true
-      WHERE ${whereSql}
-        ${hasItemFilter ? Prisma.sql`AND COALESCE(it.item_count, 0) > 0` : Prisma.empty}
-    ),
+    WITH ${FILTERED_ORDERS_CTE(whereSql, itemSql, hasItemFilter)},
     client_agg AS (
       SELECT
         fo.client_id,
@@ -63,30 +75,7 @@ export async function getClientSales4Report(tenantId: number, f: ClientSales4Fil
   const statsRows = await prisma.$queryRaw<
     Array<{ total: bigint; akb: bigint; total_amount: Prisma.Decimal }>
   >`
-    WITH filtered_orders AS (
-      SELECT
-        o.id AS order_id,
-        o.client_id,
-        COALESCE(o.agent_id, c.agent_id) AS agent_id,
-        c.name AS client_name,
-        c.zone,
-        c.region,
-        c.city,
-        COALESCE(it.item_amount, 0)::numeric(15,2) AS amount
-      FROM orders o
-      JOIN clients c ON c.id = o.client_id
-      LEFT JOIN LATERAL (
-        SELECT
-          COALESCE(SUM(oi.total), 0)::numeric(15,2) AS item_amount,
-          COUNT(*)::int AS item_count
-        FROM order_items oi
-        JOIN products p ON p.id = oi.product_id
-        WHERE oi.order_id = o.id
-        ${itemSql}
-      ) it ON true
-      WHERE ${whereSql}
-        ${hasItemFilter ? Prisma.sql`AND COALESCE(it.item_count, 0) > 0` : Prisma.empty}
-    ),
+    WITH ${FILTERED_ORDERS_CTE(whereSql, itemSql, hasItemFilter)},
     client_agg AS (
       SELECT
         fo.client_id,

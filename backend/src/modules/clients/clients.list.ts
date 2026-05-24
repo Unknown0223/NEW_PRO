@@ -13,7 +13,7 @@ import {
   mapAgentAssignmentsToApi,
   mergeAgentDisplayFromAssignments
 } from "./clients.agent-assignments";
-import { appendClientAuditLog } from "./clients.audit";
+import { appendClientAuditLogsBatch } from "./clients.audit";
 import { buildClientListWhereInput } from "./clients.list.where";
 
 const CLIENTS_EXPORT_MAX = 10_000;
@@ -139,9 +139,7 @@ export async function bulkSetClientsActive(
     data: { is_active }
   });
 
-  for (const id of ok) {
-    await appendClientAuditLog(tenantId, id, actorUserId, "client.bulk_set_active", { is_active });
-  }
+  await appendClientAuditLogsBatch(tenantId, ok, actorUserId, "client.bulk_set_active", { is_active });
 
   return { updated: ok.length };
 }

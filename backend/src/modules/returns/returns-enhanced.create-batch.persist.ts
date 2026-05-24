@@ -6,6 +6,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { R } from "./returns-enhanced.helpers";
 import { createPolkiMirrorZayavka } from "./returns-enhanced.polki";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
+import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
 import type { PeriodReturnBatchResult, PeriodReturnResult } from "./returns-enhanced.types";
 import type { PreparePeriodReturnBatchResult } from "./returns-enhanced.create-batch.prepare";
 
@@ -113,6 +114,20 @@ export async function persistPeriodReturnBatch(
 
       rows.push(ret);
     }
+
+    const batchDebt = await resolvePolkiBonusDebtAmount(tenantId, {
+      client_id: input.client_id,
+      price_type: input.price_type,
+      lines: input.lines,
+      bonus_debt_amount: input.bonus_debt_amount
+    });
+    if (batchDebt.gt(0)) {
+      const refNum = rows[0]?.number ?? null;
+      await applyClientBonusDebt(tx, tenantId, input.client_id, batchDebt, uid, {
+        returnNumber: refNum
+      });
+    }
+
     return { rows, mirrorOrderIds };
   });
 

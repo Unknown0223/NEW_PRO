@@ -1040,6 +1040,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onClose={() => setRestrictAgent(null)}
         tenantSlug={tenantSlug}
         categories={categoriesQ.data ?? []}
+        categoriesLoading={categoriesQ.isLoading}
         priceTypes={priceTypesQ.data ?? []}
         onSave={async (ent) => {
           if (!restrictAgent) return;
@@ -1065,6 +1066,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onClose={() => setGroupDialog(null)}
         tenantSlug={tenantSlug}
         categories={categoriesQ.data ?? []}
+        categoriesLoading={categoriesQ.isLoading}
         priceTypes={priceTypesQ.data ?? []}
         onSave={async (ent) => {
           await bulkMut.mutateAsync({
@@ -1826,6 +1828,7 @@ function RestrictionsDialog({
   onClose,
   tenantSlug,
   categories,
+  categoriesLoading = false,
   priceTypes,
   onSave
 }: {
@@ -1836,6 +1839,7 @@ function RestrictionsDialog({
   onClose: () => void;
   tenantSlug: string;
   categories: ProductCategoryRow[];
+  categoriesLoading?: boolean;
   priceTypes: string[];
   onSave: (ent: EntitlementSavePayload) => Promise<unknown>;
 }) {
@@ -1970,7 +1974,7 @@ function RestrictionsDialog({
             <p className="text-sm text-muted-foreground">{bulkSummary}</p>
           ) : null}
         </DialogHeader>
-        <div className="grid max-h-[65vh] grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid max-h-[65vh] min-h-[min(50vh,360px)] grid-cols-1 gap-4 md:grid-cols-2">
           <SearchableMultiSelectPanel<string>
             label="Тип цены"
             searchPlaceholder="Поиск"
@@ -1981,7 +1985,7 @@ function RestrictionsDialog({
             onSelectedChange={setPtSel}
             emptyMessage="Нет вариантов"
           />
-          <div className="flex min-h-0 flex-col rounded-md border">
+          <div className="flex min-h-0 flex-col rounded-md border md:min-h-[min(50vh,360px)]">
             <div className="border-b p-2 text-sm font-medium">Продукт</div>
             <label className="mx-2 mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               <input
@@ -2010,26 +2014,36 @@ function RestrictionsDialog({
               value={prSearch}
               onChange={(e) => setPrSearch(e.target.value)}
             />
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {visibleCat.map((c) => (
-                <CategoryRestrictRow
-                  key={c.id}
-                  tenantSlug={tenantSlug}
-                  cat={c}
-                  showOnlySelected={showOnlySelected}
-                  expanded={expanded.has(c.id)}
-                  onToggleExpand={() => {
-                    const n = new Set(expanded);
-                    if (n.has(c.id)) n.delete(c.id);
-                    else n.add(c.id);
-                    setExpanded(n);
-                  }}
-                  checked={Boolean(catChecked[c.id])}
-                  onToggleCat={(v) => setCatChecked((p) => ({ ...p, [c.id]: v }))}
-                  prodChecked={prodChecked}
-                  setProdChecked={setProdChecked}
-                />
-              ))}
+            <div className="min-h-[200px] flex-1 overflow-y-auto overscroll-contain p-2">
+              {categoriesLoading ? (
+                <p className="text-xs text-muted-foreground">Загрузка категорий…</p>
+              ) : visibleCat.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {showOnlySelected
+                    ? "Нет выбранных категорий."
+                    : "Нет категорий. Создайте в Настройки → Категория продукта."}
+                </p>
+              ) : (
+                visibleCat.map((c) => (
+                  <CategoryRestrictRow
+                    key={c.id}
+                    tenantSlug={tenantSlug}
+                    cat={c}
+                    showOnlySelected={showOnlySelected}
+                    expanded={expanded.has(c.id)}
+                    onToggleExpand={() => {
+                      const n = new Set(expanded);
+                      if (n.has(c.id)) n.delete(c.id);
+                      else n.add(c.id);
+                      setExpanded(n);
+                    }}
+                    checked={Boolean(catChecked[c.id])}
+                    onToggleCat={(v) => setCatChecked((p) => ({ ...p, [c.id]: v }))}
+                    prodChecked={prodChecked}
+                    setProdChecked={setProdChecked}
+                  />
+                ))
+              )}
             </div>
           </div>
         </div>

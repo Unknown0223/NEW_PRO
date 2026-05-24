@@ -9,7 +9,8 @@ import { getErrorCode } from "../../../lib/app-error";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { cursorPagination, decodeCursor } from "../../../lib/pagination";
-import { invalidateDashboard, invalidateStock } from "../../../lib/redis-cache";
+import { getAppCache, invalidateDashboard, invalidateStock, setAppCache } from "../../../lib/redis-cache";
+import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -87,6 +88,8 @@ function parseListOrderLocalDayEnd(isoDate: string): Date | null {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
+const ORDERS_LIST_CACHE_TTL_SECONDS = 20;
+
 export async function listOrdersPaged(
   tenantId: number,
   q: ListOrdersQuery,
@@ -100,6 +103,25 @@ export async function listOrdersPaged(
   next_cursor?: string | null;
   has_next?: boolean;
 }> {
+  const cursorRawEarly = q.cursor?.trim();
+  const useCursorEarly = Boolean(cursorRawEarly);
+  if (!useCursorEarly) {
+    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
+      q,
+      viewerRole,
+      viewerUserId: viewerUserId ?? null
+    })}`;
+    const cached = await getAppCache<{
+      data: OrderListRow[];
+      total: number;
+      page: number;
+      limit: number;
+      next_cursor?: string | null;
+      has_next?: boolean;
+    }>(cacheKey);
+    if (cached) return cached;
+  }
+
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
 
   if (q.status?.trim()) {
@@ -241,7 +263,15 @@ export async function listOrdersPaged(
         },
         warehouse: { select: { name: true } },
         warehouse_block: { select: { id: true, name: true } },
-        agent: { select: { name: true, code: true, consignment: true } },
+        agent: {
+          select: {
+            name: true,
+            code: true,
+            consignment: true,
+            trade_direction: true,
+            trade_direction_row: { select: { code: true, name: true } }
+          }
+        },
         expeditor_user: { select: { id: true, login: true, name: true } },
         items: { select: { qty: true, is_bonus: true } }
       }
@@ -262,7 +292,7 @@ export async function listOrdersPaged(
     }))
   );
 
-  return {
+  const result = {
     data: rows.map((o) => {
       const ex = o.expeditor_user;
       const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
@@ -278,8 +308,14 @@ export async function listOrdersPaged(
       warehouse_name: o.warehouse?.name ?? null,
       warehouse_block_id: (o as { warehouse_block_id?: number | null }).warehouse_block_id ?? null,
       warehouse_block_name: (o as { warehouse_block?: { name: string } | null }).warehouse_block?.name ?? null,
+      agent_id: o.agent_id,
       agent_name: o.agent?.name ?? null,
       agent_code: o.agent?.code ?? null,
+      agent_trade_direction:
+        o.agent?.trade_direction_row?.code?.trim() ||
+        o.agent?.trade_direction_row?.name?.trim() ||
+        o.agent?.trade_direction?.trim() ||
+        null,
       expeditors: expeditorDisplay,
       expeditor_id: ex?.id ?? null,
       expeditor_display: expeditorDisplay,
@@ -305,9 +341,10 @@ export async function listOrdersPaged(
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
-      price_type: null,
+      price_type: o.payment_method_ref?.trim() || null,
       comment: (o as { comment?: string | null }).comment ?? null,
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
+      payment_method_ref: o.payment_method_ref?.trim() || null,
       created_at: o.created_at.toISOString(),
       allowed_next_statuses: allowedNextForRole(o.status, viewerRole)
     };
@@ -319,6 +356,17 @@ export async function listOrdersPaged(
       ? { next_cursor: cursorPack.nextCursor, has_next: cursorPack.hasNext }
       : {})
   };
+
+  if (!useCursor) {
+    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
+      q,
+      viewerRole,
+      viewerUserId: viewerUserId ?? null
+    })}`;
+    void setAppCache(cacheKey, result, ORDERS_LIST_CACHE_TTL_SECONDS);
+  }
+
+  return result;
 }
 
 export async function getOrderDetail(

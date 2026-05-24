@@ -1,0 +1,160 @@
+/api/{slug}/reports/income-report:
+  get:
+    summary: Income report (payments by period)
+    operationId: reportsIncome
+    tags: [Reports]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: from
+        in: query
+        schema: { type: string }
+      - name: to
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/reports/report-builder/preview:
+  post:
+    summary: Report builder preview
+    operationId: reportBuilderPreview
+    tags: [Reports]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/reports/report-builder/dataset:
+  post:
+    summary: Report builder dataset rows
+    operationId: reportBuilderDataset
+    tags: [Reports]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/reports/order-debts:
+  get:
+    summary: Order debts report (outstanding receivables)
+    operationId: reportsOrderDebts
+    tags: [Reports]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/reports/sales:
+  get:
+    summary: Sales summary report
+    operationId: reportsSales
+    tags: [Reports]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: from
+        in: query
+        schema: { type: string }
+      - name: to
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+

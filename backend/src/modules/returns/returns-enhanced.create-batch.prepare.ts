@@ -22,10 +22,12 @@ import { getClientReturnsData, POLKI_SOURCE_ORDER_STATUS } from "./returns-enhan
 import {
   assertBatchLineModes,
   computeReturnSplitFromOrderSnapshot,
+  periodReturnUsesExplicitLines,
   physicalQtyFromPeriodLine,
   priceByProductFromItems,
   scaleReturnLinesToMaxRefund,
   validateExplicitReturnAgainstItems,
+  validateExplicitReturnQtyAgainstItems,
   validateReturnQty
 } from "./returns-enhanced.compute";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
@@ -71,7 +73,10 @@ export async function preparePeriodReturnBatch(
 
   assertBatchLineModes(input.lines);
   const totalPhys = input.lines.reduce((a, l) => a + physicalQtyFromPeriodLine(l), 0);
-  if (totalPhys > MAX_RETURN_ITEMS) throw new Error("TOO_MANY_ITEMS");
+  const explicitPolki =
+    periodReturnUsesExplicitLines(input.lines) ||
+    (input.bonus_debt_amount != null && Number(input.bonus_debt_amount) > 0);
+  if (totalPhys > MAX_RETURN_ITEMS && !explicitPolki) throw new Error("TOO_MANY_ITEMS");
 
   const client = await prisma.client.findFirst({
     where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null }
@@ -256,6 +261,7 @@ export async function preparePeriodReturnBatch(
       }));
       const priceMap = priceByProductFromItems(cdata.items);
       validateExplicitReturnAgainstItems(itemsAdjusted, explicitRows, priceMap);
+      validateExplicitReturnQtyAgainstItems(itemsAdjusted, slice.lines);
 
       const physical: PreparedSlice["retLines"] = [];
       let cashReqTotal = new Prisma.Decimal(0);

@@ -1,0 +1,392 @@
+/api/{slug}/orders:
+  get:
+    summary: Orders list (tenant)
+    operationId: listOrders
+    tags: [Orders]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+  post:
+    summary: Create order
+    operationId: createOrder
+    tags: [Orders]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "201":
+        description: Created
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/dashboard/stats:
+  get:
+    summary: Dashboard summary stats
+    operationId: dashboardStats
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/dashboard/supervisor:
+  get:
+    summary: Supervisor dashboard snapshot
+    operationId: dashboardSupervisor
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/dashboard/sales/summary:
+  get:
+    summary: Sales dashboard summary (KPI, payments, AKB/OKB)
+    operationId: dashboardSalesSummary
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+/api/{slug}/dashboard/sales/analytics:
+  get:
+    summary: Sales dashboard analytics (charts, dynamics, refusals)
+    operationId: dashboardSalesAnalytics
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+/api/{slug}/dashboard/sales/breakdown:
+  get:
+    summary: Sales dashboard breakdown (territory, agents)
+    operationId: dashboardSalesBreakdown
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+/api/{slug}/dashboard/sales:
+  get:
+    summary: Sales dashboard snapshot (deprecated — use /summary, /analytics, /breakdown)
+    operationId: dashboardSales
+    deprecated: true
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/dashboard/finance:
+  get:
+    summary: Finance dashboard snapshot
+    operationId: dashboardFinance
+    tags: [Dashboard]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/payments:
+  get:
+    summary: Payments list
+    operationId: listPayments
+    tags: [Payments]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+  post:
+    summary: Create payment
+    operationId: createPayment
+    tags: [Payments]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "201":
+        description: Created
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/products:
+  get:
+    summary: Products list
+    operationId: listProducts
+    tags: [Products]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+
+  post:
+    summary: Create product
+    operationId: createProduct
+    tags: [Products]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "201":
+        description: Created
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/stock/balances:
+  get:
+    summary: Stock balances
+    operationId: stockBalances
+    tags: [Stock]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+      - name: view
+        in: query
+        schema: { type: string, enum: [summary, raw] }
+      - name: purpose
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+      "400":
+        description: Validation error
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/clients/references:
+  get:
+    summary: Client filter reference values (distinct fields)
+    operationId: clientReferences
+    tags: [Clients]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+      "401":
+        description: Unauthorized
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+
+
+/api/{slug}/clients:
+  get:
+    summary: Clients list (tenant)
+    operationId: listClients
+    tags: [Clients]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+      - name: page
+        in: query
+        schema: { type: string }
+      - name: limit
+        in: query
+        schema: { type: string }
+      - name: search
+        in: query
+        schema: { type: string }
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "403":
+        description: Forbidden
+        content:
+          application/json:
+            schema:
+              $ref: "../skeleton.yaml#/components/schemas/ApiError"
+

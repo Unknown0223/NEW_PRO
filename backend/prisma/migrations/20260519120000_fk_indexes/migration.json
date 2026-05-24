@@ -1,0 +1,12 @@
+{
+  "version": "20260519120000",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 1,
+      "breakpoints": "true",
+      "state": "forward",
+      "appliedAt": "2026-05-19T12:00:00.000Z"
+    }
+  ]
+}

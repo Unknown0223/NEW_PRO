@@ -49,7 +49,12 @@ export async function listClientBalancesReportMain(
   const { tenantId, q, perf, page, limit, asOfEnd, odFrom, odTo, where } = ctx;
   const allClientsLedger = await prisma.client.findMany({
     where,
-    select: { id: true, client_balances: { take: 1, select: { balance: true } } }
+    select: {
+      id: true,
+      agent_id: true,
+      agent: { select: { id: true, name: true, code: true } },
+      client_balances: { take: 1, select: { balance: true } }
+    }
   });
   const ids = allClientsLedger.map((c) => c.id);
   perf("clients-all.ids-loaded", { ids: ids.length });
@@ -103,16 +108,7 @@ export async function listClientBalancesReportMain(
         code: string | null;
       }
     >();
-    const clientsForAgg = await prisma.client.findMany({
-      where,
-      select: {
-        id: true,
-        agent_id: true,
-        client_balances: { select: { balance: true } },
-        agent: { select: { id: true, name: true, code: true } }
-      }
-    });
-    for (const c of clientsForAgg) {
+    for (const c of allClientsLedger) {
       const aid = c.agent_id ?? null;
       const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
       const base = balAsOfMapAll?.get(c.id) ?? ledger;

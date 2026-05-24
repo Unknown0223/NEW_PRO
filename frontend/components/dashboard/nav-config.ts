@@ -50,7 +50,7 @@ export const dashboardOrdersNav: {
       items: [
         { href: "/orders/new?type=order", label: "Создать заказ" },
         { href: "/orders/new?type=return", label: "Создать возврат с полки" },
-        { href: "/orders/new?type=return_by_order", label: "Создать возврат по заказу" },
+        { href: "/orders/new?type=return_by_order", label: "Возврат с полки по заказу" },
         { href: "/orders/new?type=exchange", label: "Создать обмен" }
       ]
     },

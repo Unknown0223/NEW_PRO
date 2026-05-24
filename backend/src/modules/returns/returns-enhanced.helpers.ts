@@ -26,13 +26,11 @@ export function R(v: string | number | Prisma.Decimal): Prisma.Decimal {
   return d.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-/** 3 o‘rinli qty uchun qisqa satr (0 → "0"). */
+/** Qaytarish qoldig‘i: fizik шт — butun son (0 → "0"). */
 export function formatAdjustedQtyString(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";
-  const rounded = Math.round(n * 1000) / 1000;
-  if (rounded <= 0) return "0";
-  const s = rounded.toFixed(3).replace(/\.?0+$/, "");
-  return s === "" ? "0" : s;
+  const whole = Math.floor(n + 1e-9);
+  return whole > 0 ? String(whole) : "0";
 }
 
 type ReturnLineQty = {
@@ -129,7 +127,7 @@ export function adjustOrderItemsQtyAfterPriorReturns(
         next[i] = { ...next[i]!, qty: formatAdjustedQtyString(last) };
       } else {
         const part = (remaining * q) / sumOrdered;
-        const rounded = Math.floor(part * 1000) / 1000;
+        const rounded = Math.floor(part + 1e-9);
         allocated += rounded;
         next[i] = { ...next[i]!, qty: formatAdjustedQtyString(rounded) };
       }

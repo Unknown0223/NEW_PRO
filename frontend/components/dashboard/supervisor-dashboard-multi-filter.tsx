@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { SearchableMultiSelectPanel, type SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 
 export type SupervisorDashboardMultiFilterItem = {
@@ -12,7 +12,7 @@ export type SupervisorDashboardMultiFilterItem = {
 /**
  * Supervisor dashboard: «Продажи по товарам» bilan bir xil qidiruv + checkbox + «Выбрать все на экране».
  */
-export function SupervisorDashboardMultiFilter(props: {
+export const SupervisorDashboardMultiFilter = memo(function SupervisorDashboardMultiFilter(props: {
   placeholder: string;
   searchPlaceholder: string;
   items: SupervisorDashboardMultiFilterItem[];
@@ -80,4 +80,4 @@ export function SupervisorDashboardMultiFilter(props: {
       disabled={disabled}
     />
   );
-}
+});

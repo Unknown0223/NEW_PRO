@@ -15,6 +15,8 @@ export type OrderItemSummary = {
   is_bonus: boolean;
   order_id: number;
   order_number: string;
+  /** Kategoriya filtri (frontend) — mahsulot jadvalidan. */
+  category_id: number | null;
 };
 
 export type ClientReturnsData = {
@@ -38,7 +40,7 @@ export type ClientReturnsData = {
   client_debt: string;
 };
 
-/** Jami fizik dona (paid_qty + bonus_qty na sklad) bitta dokumentda; frontend: `return-limits.ts`. */
+/** Legacy qty-rejim / zakaz bo‘yicha polki: jami fizik dona hujjatda. Explicit erkin polki — cheklanmaydi. */
 export const MAX_RETURN_ITEMS = 24;
 
 export type CreatePeriodReturnLine = {
@@ -51,6 +53,8 @@ export type CreatePeriodReturnLine = {
   bonus_qty?: number;
   /** Bonus o‘rniga naqd kompensatsiya (balans/kassa, omborga bonus dona qo‘shilmaydi) */
   bonus_cash?: number;
+  /** Erkin polki: foydalanuvchi «всего к возврату» — server bonus-debt hisobi uchun */
+  return_qty?: number;
 };
 
 export type CreatePeriodReturnInput = {
@@ -64,6 +68,8 @@ export type CreatePeriodReturnInput = {
   lines: CreatePeriodReturnLine[];
   note?: string | null;
   refusal_reason_ref?: string | null;
+  /** Kamchilik bo‘yicha «Долг бонус» — mijoz balansiga manfiy delta (ixtiyoriy). */
+  bonus_debt_amount?: number;
 };
 
 /** Bir nechta zakazdan bir vaqtda polki qaytarish (har zakaz uchun alohida sales_return). */
@@ -74,12 +80,14 @@ export type CreatePeriodReturnBatchLine = {
   paid_qty?: number;
   bonus_qty?: number;
   bonus_cash?: number;
+  return_qty?: number;
 };
 
 export type CreatePeriodReturnBatchInput = {
   warehouse_id?: number;
   client_id: number;
   price_type?: string | null;
+  bonus_debt_amount?: number;
   lines: CreatePeriodReturnBatchLine[];
   note?: string | null;
   refusal_reason_ref?: string | null;
