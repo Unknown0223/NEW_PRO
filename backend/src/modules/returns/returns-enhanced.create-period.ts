@@ -9,12 +9,10 @@ import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-st
 
 import type { CreatePeriodReturnInput, PeriodReturnResult } from "./returns-enhanced.types";
 import { effectiveReturnPriceType } from "./returns-enhanced.types";
-import { MAX_RETURN_ITEMS } from "./returns-enhanced.types";
 import { adjustOrderItemsQtyAfterPriorReturns, R } from "./returns-enhanced.helpers";
 import { findReturnWarehouse } from "./returns-enhanced.warehouse";
 import { createPolkiMirrorZayavka } from "./returns-enhanced.polki";
 import { getClientReturnsData, POLKI_SOURCE_ORDER_STATUS } from "./returns-enhanced.client-data";
-import { localDayEnd, localDayStart } from "./returns-enhanced.helpers";
 import {
   assertOrderHasPhysicalRemaining,
   computeOrderRemainingPaidRefundCap
@@ -23,8 +21,6 @@ import {
   assertPeriodLineModes,
   computeReturnSplitFromOrderSnapshot,
   finalizePolkiReturnLines,
-  periodReturnUsesExplicitLines,
-  physicalQtyFromPeriodLine,
   priceByProductFromItems,
   validateExplicitReturnAgainstItems,
   validateExplicitReturnQtyAgainstItems,
@@ -33,6 +29,7 @@ import {
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
 import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
+import { assertOrdersInReturnFilter } from "./returns-filter.service";
 
 
 export async function createPeriodReturn(
@@ -43,11 +40,6 @@ export async function createPeriodReturn(
   if (!input.lines.length) throw new Error("EMPTY_LINES");
 
   assertPeriodLineModes(input.lines);
-  const totalPhys = input.lines.reduce((a, l) => a + physicalQtyFromPeriodLine(l), 0);
-  const explicitPolki =
-    periodReturnUsesExplicitLines(input.lines) ||
-    (input.bonus_debt_amount != null && Number(input.bonus_debt_amount) > 0);
-  if (totalPhys > MAX_RETURN_ITEMS && !explicitPolki) throw new Error("TOO_MANY_ITEMS");
 
   const client = await prisma.client.findFirst({
     where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null }
@@ -82,6 +74,7 @@ export async function createPeriodReturn(
       select: { id: true }
     });
     if (!ordOk) throw new Error("BAD_ORDER");
+    await assertOrdersInReturnFilter(tenantId, input.client_id, [input.order_id!]);
   }
 
   const cdata = orderScoped
@@ -92,24 +85,24 @@ export async function createPeriodReturn(
         shrinkLineQtyAfterReturns: false
       });
 
+  if (!orderScoped && cdata.filter_meta?.empty_reason) {
+    throw new Error("RETURN_FILTER_EMPTY");
+  }
+
   const allItems = cdata.items.map(i => ({
     product_id: i.product_id, qty: Number(i.qty), price: Number(i.price), is_bonus: i.is_bonus
   }));
 
+  const eligibleOrderIds = orderScoped
+    ? [input.order_id!]
+    : cdata.orders.map((o) => o.id);
+
   const returnWhere: Prisma.SalesReturnWhereInput = {
-    tenant_id: tenantId, client_id: input.client_id, status: "posted"
+    tenant_id: tenantId,
+    client_id: input.client_id,
+    status: "posted",
+    order_id: { in: eligibleOrderIds.length > 0 ? eligibleOrderIds : [-1] }
   };
-  if (orderScoped) {
-    returnWhere.order_id = input.order_id;
-  } else {
-    if (input.date_from) returnWhere.created_at = { gte: localDayStart(input.date_from) };
-    if (input.date_to) {
-      returnWhere.created_at = {
-        ...(returnWhere.created_at as object) ?? {},
-        lte: localDayEnd(input.date_to)
-      };
-    }
-  }
 
   const alreadyRetMap = new Map<number, number>();
   const prevReturns = await prisma.salesReturn.findMany({

@@ -14,7 +14,11 @@ import {
   patchOrderInOrdersListCaches,
   type OrdersListCacheBody
 } from "@/lib/orders-list-cache";
-import { ORDER_LIST_COLUMN_IDS, ORDERS_LIST_TABLE_ID } from "@/lib/orders-list-columns";
+import {
+  ORDER_LIST_COLUMN_IDS,
+  ORDER_LIST_DEFAULT_HIDDEN_COLUMN_IDS,
+  ORDERS_LIST_TABLE_ID
+} from "@/lib/orders-list-columns";
 import { STALE } from "@/lib/query-stale";
 import { useOrdersListReferenceData } from "./use-orders-list-reference-data";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -54,14 +58,14 @@ export function useOrdersListPagePart1() {
   const [nakladnoySettingsOpen, setNakladnoySettingsOpen] = useState(false);
   const [nakladnoyFeedback, setNakladnoyFeedback] = useState<string | null>(null);
   const [statusRowError, setStatusRowError] = useState<Record<number, string>>({});
-  const [totalsDialogOpen, setTotalsDialogOpen] = useState(false);
+  const [totalsPanelOpen, setTotalsPanelOpen] = useState(false);
   const [bulkExpeditorChoice, setBulkExpeditorChoice] = useState<string>("");
   const [bulkExpFeedback, setBulkExpFeedback] = useState<string | null>(null);
+  const [bulkConsignmentFeedback, setBulkConsignmentFeedback] = useState<string | null>(null);
   const [filterVisibilityOpen, setFilterVisibilityOpen] = useState(false);
   const [filterVisibility, setFilterVisibility] = useState<OrdersFilterVisibility>(
     DEFAULT_ORDERS_FILTER_VISIBILITY
   );
-  const filterPanelRef = useRef<HTMLDivElement | null>(null);
   const ordersDateRangeAnchorRef = useRef<HTMLButtonElement>(null);
   const [ordersDateRangeOpen, setOrdersDateRangeOpen] = useState(false);
   const [ordersViewMode, setOrdersViewMode] = useState<"list" | "expeditor-summary">("list");
@@ -80,9 +84,12 @@ export function useOrdersListPagePart1() {
       const raw = window.localStorage.getItem(ORDERS_FILTER_VISIBILITY_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<OrdersFilterVisibility>;
+      const { clientId: _omitClientId, ...parsedRest } = parsed as OrdersFilterVisibility & {
+        clientId?: boolean;
+      };
       setFilterVisibility({
         ...DEFAULT_ORDERS_FILTER_VISIBILITY,
-        ...parsed,
+        ...parsedRest,
         paymentLinkedType:
           parsed.paymentLinkedType ?? DEFAULT_ORDERS_FILTER_VISIBILITY.paymentLinkedType
       });
@@ -102,17 +109,6 @@ export function useOrdersListPagePart1() {
     }
   }, [filterVisibility]);
 
-  useEffect(() => {
-    function onDocMouseDown(e: MouseEvent) {
-      if (!filterVisibilityOpen) return;
-      const target = e.target as Node | null;
-      if (target && filterPanelRef.current?.contains(target)) return;
-      setFilterVisibilityOpen(false);
-    }
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-  }, [filterVisibilityOpen]);
-
   const {
     canBulkCatalog,
     warehousesQ,
@@ -121,16 +117,22 @@ export function useOrdersListPagePart1() {
     productsFilterQ,
     productCategoriesQ,
     ordersProfileRefsQ,
+    clientCategoryFilterOpts,
+    tradeDirectionFilterOpts,
+    priceTypeFilterOpts,
+    buildTerritoryCascade,
     paymentMethodFilterOpts,
-    paymentTypeFilterOpts
-  } = useOrdersListReferenceData(tenantSlug, effectiveRole);
+    paymentTypeFilterOpts,
+    nakladnoyTypeFilterOpts
+  } = useOrdersListReferenceData(tenantSlug, effectiveRole, filterDraft);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: ORDERS_LIST_TABLE_ID,
     defaultColumnOrder: [...ORDER_LIST_COLUMN_IDS],
-    defaultPageSize: 30,
-    allowedPageSizes: [15, 20, 30, 50, 100]
+    defaultHiddenColumnIds: ORDER_LIST_DEFAULT_HIDDEN_COLUMN_IDS,
+    defaultPageSize: 15,
+    allowedPageSizes: [10, 15, 20, 30, 50, 100]
   });
 
   const replaceOrdersQuery = useCallback(
@@ -140,6 +142,7 @@ export function useOrdersListPagePart1() {
         status: patch.status !== undefined ? patch.status : cur.status,
         order_type: patch.order_type !== undefined ? patch.order_type : cur.order_type,
         page: patch.page !== undefined ? patch.page : cur.page,
+        search: patch.search !== undefined ? patch.search : cur.search,
         warehouse_id: patch.warehouse_id !== undefined ? patch.warehouse_id : cur.warehouse_id,
         agent_id: patch.agent_id !== undefined ? patch.agent_id : cur.agent_id,
         expeditor_id: patch.expeditor_id !== undefined ? patch.expeditor_id : cur.expeditor_id,
@@ -149,13 +152,22 @@ export function useOrdersListPagePart1() {
         product_id: patch.product_id !== undefined ? patch.product_id : cur.product_id,
         client_category:
           patch.client_category !== undefined ? patch.client_category : cur.client_category,
+        client_region: patch.client_region !== undefined ? patch.client_region : cur.client_region,
+        client_city: patch.client_city !== undefined ? patch.client_city : cur.client_city,
+        client_zone: patch.client_zone !== undefined ? patch.client_zone : cur.client_zone,
+        trade_direction:
+          patch.trade_direction !== undefined ? patch.trade_direction : cur.trade_direction,
         date_mode: patch.date_mode !== undefined ? patch.date_mode : cur.date_mode,
         is_consignment: patch.is_consignment !== undefined ? patch.is_consignment : cur.is_consignment,
         product_category_id:
           patch.product_category_id !== undefined ? patch.product_category_id : cur.product_category_id,
         payment_type: patch.payment_type !== undefined ? patch.payment_type : cur.payment_type,
         payment_method_ref:
-          patch.payment_method_ref !== undefined ? patch.payment_method_ref : cur.payment_method_ref
+          patch.payment_method_ref !== undefined ? patch.payment_method_ref : cur.payment_method_ref,
+        request_type_ref:
+          patch.request_type_ref !== undefined ? patch.request_type_ref : cur.request_type_ref,
+        visit_weekday: patch.visit_weekday !== undefined ? patch.visit_weekday : cur.visit_weekday,
+        price_type: patch.price_type !== undefined ? patch.price_type : cur.price_type
       };
       const qs = buildOrdersSearchParams(next).toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -173,6 +185,7 @@ export function useOrdersListPagePart1() {
       status: "",
       order_type: "",
       page: 1,
+      search: "",
       warehouse_id: "",
       agent_id: "",
       expeditor_id: "",
@@ -181,11 +194,18 @@ export function useOrdersListPagePart1() {
       client_id: "",
       product_id: "",
       client_category: "",
-      date_mode: "ship",
+      client_region: "",
+      client_city: "",
+      client_zone: "",
+      trade_direction: "",
+      date_mode: "order",
       is_consignment: "",
       product_category_id: "",
       payment_type: "",
-      payment_method_ref: ""
+      payment_method_ref: "",
+      request_type_ref: "",
+      visit_weekday: "",
+      price_type: ""
     };
     setFilterDraft(empty);
     replaceOrdersQuery(empty);
@@ -196,6 +216,7 @@ export function useOrdersListPagePart1() {
       "orders",
       tenantSlug,
       filters.page,
+      filters.search,
       filters.status,
       filters.order_type,
       filters.client_id,
@@ -209,8 +230,15 @@ export function useOrdersListPagePart1() {
       filters.product_category_id,
       filters.payment_type,
       filters.payment_method_ref,
+      filters.request_type_ref,
       filters.product_id,
       filters.client_category,
+      filters.client_region,
+      filters.client_city,
+      filters.client_zone,
+      filters.trade_direction,
+      filters.visit_weekday,
+      filters.price_type,
       tablePrefs.pageSize
     ],
     enabled: Boolean(tenantSlug),
@@ -221,6 +249,7 @@ export function useOrdersListPagePart1() {
         page: String(filters.page),
         limit: String(tablePrefs.pageSize)
       });
+      if (filters.search.trim()) params.set("q", filters.search.trim());
       if (filters.status.trim()) params.set("status", filters.status.trim());
       if (filters.order_type) params.set("order_type", filters.order_type);
       if (filters.client_id) params.set("client_id", filters.client_id);
@@ -231,13 +260,22 @@ export function useOrdersListPagePart1() {
       if (filters.date_to) params.set("date_to", filters.date_to);
       if (filters.product_id) params.set("product_id", filters.product_id);
       if (filters.client_category) params.set("client_category", filters.client_category);
-      params.set("date_mode", filters.date_mode);
+      if (filters.client_region) params.set("client_region", filters.client_region);
+      if (filters.client_city) params.set("client_city", filters.client_city);
+      if (filters.client_zone) params.set("client_zone", filters.client_zone);
+      if (filters.trade_direction) params.set("trade_direction", filters.trade_direction);
+      if (filters.visit_weekday) params.set("visit_weekday", filters.visit_weekday);
+      if (filters.price_type) params.set("price_type", filters.price_type);
+      if (filters.date_mode) params.set("date_mode", filters.date_mode);
       if (filters.is_consignment === "true") params.set("is_consignment", "true");
       if (filters.is_consignment === "false") params.set("is_consignment", "false");
       if (filters.product_category_id) params.set("product_category_id", filters.product_category_id);
       if (filters.payment_type.trim()) params.set("payment_type", filters.payment_type.trim());
       if (filters.payment_method_ref.trim()) {
         params.set("payment_method_ref", filters.payment_method_ref.trim());
+      }
+      if (filters.request_type_ref.trim()) {
+        params.set("request_type_ref", filters.request_type_ref.trim());
       }
       const { data: body } = await api.get<OrdersResponse>(
         `/api/${tenantSlug}/orders?${params.toString()}`
@@ -328,17 +366,18 @@ export function useOrdersListPagePart1() {
     setNakladnoyFeedback,
     statusRowError,
     setStatusRowError,
-    totalsDialogOpen,
-    setTotalsDialogOpen,
+    totalsPanelOpen,
+    setTotalsPanelOpen,
     bulkExpeditorChoice,
     setBulkExpeditorChoice,
     bulkExpFeedback,
     setBulkExpFeedback,
+    bulkConsignmentFeedback,
+    setBulkConsignmentFeedback,
     filterVisibilityOpen,
     setFilterVisibilityOpen,
     filterVisibility,
     setFilterVisibility,
-    filterPanelRef,
     ordersDateRangeAnchorRef,
     ordersDateRangeOpen,
     setOrdersDateRangeOpen,
@@ -363,8 +402,13 @@ export function useOrdersListPagePart1() {
     productsFilterQ,
     productCategoriesQ,
     ordersProfileRefsQ,
+    clientCategoryFilterOpts,
+    tradeDirectionFilterOpts,
+    priceTypeFilterOpts,
+    buildTerritoryCascade,
     paymentMethodFilterOpts,
     paymentTypeFilterOpts,
+    nakladnoyTypeFilterOpts,
     prefetchOrderDetail,
     patchOrderInOrdersListCaches,
     applyOrderDetailToListCaches

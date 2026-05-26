@@ -22,20 +22,22 @@ test.describe("Payment FIFO allocate full stack (ixtiyoriy)", () => {
     await page.getByRole("button", { name: /войти/i }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
 
-    await page.goto("/payments/new");
-    await expect(page.getByRole("heading", { name: /Yangi to‘lov/i })).toBeVisible({
+    await page.goto("/orders");
+    await page.getByText("Загрузка…").first().waitFor({ state: "hidden", timeout: 45_000 }).catch(() => {});
+    const seedRow = page.getByRole("row").filter({ hasText: "Asosiy mijoz (seed)" }).first();
+    await expect(seedRow).toBeVisible({ timeout: 30_000 });
+    await seedRow.getByRole("checkbox").check();
+    await page.getByRole("button", { name: /Дополнительно/i }).click();
+    await page.getByRole("link", { name: /Касса \(выбранные\)/i }).click();
+
+    await expect(page).toHaveURL(/\/payments\/new\?/, { timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: /Приход в кассу/i })).toBeVisible({
       timeout: 20_000
     });
 
-    const clientSel = page.getByTestId("new-payment-client");
-    await expect(clientSel).toBeVisible({ timeout: 30_000 });
-    const clientOpt = clientSel.locator("option", { hasText: "Asosiy mijoz (seed)" }).first();
-    await expect(clientOpt).toBeAttached({ timeout: 30_000 });
-    const clientValue = await clientOpt.getAttribute("value");
-    expect(clientValue).toBeTruthy();
-    await clientSel.selectOption(clientValue!);
-
-    await page.getByTestId("new-payment-amount").fill("100000");
+    const amountInput = page.getByTestId("new-payment-amount").first();
+    await expect(amountInput).toBeVisible({ timeout: 30_000 });
+    await amountInput.fill("100000");
     await page.getByTestId("new-payment-submit").click();
 
     await expect(page).toHaveURL(/\/payments/, { timeout: 30_000 });

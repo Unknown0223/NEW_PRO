@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { OrderCreateVm } from "../../hooks/use-order-create";
 import { buildPolkiOrdersListEntries } from "./polki-orders-list";
+import { polkiReturnEmptyListMessage } from "@/lib/return-filter-messages";
+import { ReturnFilterDebugPanel } from "./return-filter-debug-panel";
 import { PolkiOrderCompositionDetails } from "./polki-order-composition-details";
 import { formatCompositionQty, formatCompositionSum } from "./polki-order-composition";
 import { polkiCard } from "./polki-return-ui";
@@ -32,6 +34,7 @@ export function ReturnOrdersListBlock({
     polkiOrdersPickQ,
     polkiOrdersForPick,
     polkiOrdersPickRawCount,
+    polkiOrderFilterMeta,
     polkiOrderGroups,
     polkiRowsAll,
     polkiOrderIdSet,
@@ -87,11 +90,22 @@ export function ReturnOrdersListBlock({
     ) : loading ? (
       <p className="text-xs text-muted-foreground">Загрузка заказов…</p>
     ) : entries.length === 0 ? (
-      <p className="text-xs text-muted-foreground">
-        {isPolkiByOrder && polkiOrdersPickRawCount > 0
-          ? "Нет доставленных заказов для возврата."
-          : "Нет доставленных заказов с позициями для возврата."}
-      </p>
+      <div className="space-y-2">
+        <p className="text-xs text-amber-900 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5">
+          {polkiReturnEmptyListMessage({
+            filterMeta: polkiOrderFilterMeta,
+            deliveredOrdersCount: polkiOrdersPickRawCount,
+            returnableCount: polkiOrdersForPick.length,
+            isByOrder: isPolkiByOrder
+          })}
+        </p>
+        {polkiOrderFilterMeta &&
+        (polkiOrderFilterMeta.period_enabled ||
+          polkiOrderFilterMeta.balance_zero_enabled ||
+          polkiOrderFilterMeta.empty_reason) ? (
+          <ReturnFilterDebugPanel meta={polkiOrderFilterMeta} />
+        ) : null}
+      </div>
     ) : (
       <div
         className={cn(

@@ -1,6 +1,7 @@
 "use client";
 
 import { FinanceSectionHeader } from "@/components/dashboard/finance/finance-section-header";
+import { fmtFinanceCount } from "@/components/dashboard/finance/format";
 import {
   CLIENT_LEDGER_COL_DEFS,
   clientLedgerCell,
@@ -10,7 +11,7 @@ import {
 import type { FinanceClientDebtRow } from "@/components/dashboard/finance/types";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 import { useDashboardVirtualRows } from "@/components/dashboard/dashboard-virtual-tbody";
-import { LayoutGrid } from "lucide-react";
+import { Download, LayoutGrid, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type SortDir = "asc" | "desc";
@@ -85,7 +86,7 @@ export function FinanceClientLedger(props: {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const virtual = useDashboardVirtualRows(sorted.length, 48);
+  const virtual = useDashboardVirtualRows(sorted.length, 64);
 
   const exportCsv = () => {
     const header = visibleCols.map((c) => `"${c.label}"`).join(",");
@@ -98,7 +99,7 @@ export function FinanceClientLedger(props: {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "finance-clients-debt.csv";
+    a.download = "customer-ledger.csv";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -110,24 +111,25 @@ export function FinanceClientLedger(props: {
     >
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <FinanceSectionHeader
-          title="Долги клиентов"
-          subtitle="Серверная пагинация; виртуальный скролл при большом списке на странице"
+          title="Список клиенты"
+          subtitle="Реестр задолженности с серверной пагинацией и поиском"
         />
         {isFetching ? <span className="text-xs font-medium text-teal-700">Обновление…</span> : null}
       </div>
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
             onClick={exportCsv}
           >
+            <Download className="h-4 w-4 text-emerald-600" />
             Excel
           </button>
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-teal-500"
           >
             {[10, 20, 30, 50, 100, 200].map((n) => (
               <option key={n} value={n}>
@@ -137,36 +139,40 @@ export function FinanceClientLedger(props: {
           </select>
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-1 rounded-lg border px-3 text-sm"
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-teal-300"
             onClick={() => setColumnsOpen(true)}
           >
             <LayoutGrid className="h-4 w-4" />
             Колонки
           </button>
         </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск клиента"
-          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm lg:w-[320px]"
-        />
+        <label className="relative w-full lg:w-[360px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск клиента"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+          />
+        </label>
       </div>
       <div className="overflow-hidden rounded-xl border border-slate-200">
         <div
           ref={virtual.enabled ? virtual.scrollRef : undefined}
-          className="max-h-[560px] overflow-auto"
-          style={virtual.enabled ? { maxHeight: 520 } : undefined}
+          className="overflow-auto"
+          style={virtual.enabled ? { maxHeight: 520 } : { maxHeight: 560 }}
         >
-          <table className="w-full min-w-[900px] border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500">
+          <table className="w-full min-w-[1190px] border-collapse text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
               <tr>
                 {visibleCols.map((col) => (
                   <th
                     key={col.id}
-                    className={`border-b px-3 py-3 text-right font-bold ${col.id === "client" ? "text-left" : ""}`}
+                    className={`border-b border-slate-200 px-3 py-3 text-right ${col.id === "client" ? "text-left" : ""}`}
                   >
                     <button
                       type="button"
+                      className="inline-flex items-center gap-1"
                       onClick={() =>
                         setSort((s) => ({
                           key: col.id,
@@ -175,6 +181,9 @@ export function FinanceClientLedger(props: {
                       }
                     >
                       {col.label}
+                      <span className={`text-[10px] ${sort.key === col.id ? "text-teal-600" : "text-slate-300"}`}>
+                        {sort.key === col.id ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
+                      </span>
                     </button>
                   </th>
                 ))}
@@ -192,11 +201,14 @@ export function FinanceClientLedger(props: {
               ).map((idx) => {
                 const row = sorted[idx]!;
                 return (
-                  <tr key={`${row.client_id}-${idx}`} className="border-b hover:bg-teal-50/40">
+                  <tr
+                    key={`${row.client_id}-${idx}`}
+                    className="border-b border-slate-200/80 text-slate-700 transition hover:bg-teal-50/45"
+                  >
                     {visibleCols.map((col) => (
                       <td
                         key={col.id}
-                        className={`px-3 py-3 tabular-nums ${col.id === "client" ? "text-left" : "text-right"}`}
+                        className={`px-3 py-3 tabular-nums ${col.id === "client" ? "text-left font-semibold" : "text-right"}`}
                       >
                         {clientLedgerCell(row, col.id)}
                       </td>
@@ -213,28 +225,29 @@ export function FinanceClientLedger(props: {
           </table>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-        <span className="tabular-nums">
-          Страница {safePage} / {totalPages} · всего {total} клиентов
+      <div className="mt-3 flex flex-col gap-2 text-sm font-medium text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Показано {fmtFinanceCount(sorted.length)} на странице · страница {safePage} / {totalPages}
         </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            className="h-8 rounded-md border px-2 disabled:opacity-50"
-            disabled={safePage <= 1}
-            onClick={() => onPageChange(Math.max(1, safePage - 1))}
-          >
-            Назад
-          </button>
-          <button
-            type="button"
-            className="h-8 rounded-md border px-2 disabled:opacity-50"
-            disabled={safePage >= totalPages}
-            onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
-          >
-            Вперёд
-          </button>
-        </div>
+        <span>Всего: {fmtFinanceCount(total)} клиентов</span>
+      </div>
+      <div className="mt-2 flex gap-1">
+        <button
+          type="button"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(Math.max(1, safePage - 1))}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
+        >
+          ›
+        </button>
       </div>
       <TableColumnSettingsDialog
         open={columnsOpen}

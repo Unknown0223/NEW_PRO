@@ -51,6 +51,37 @@ export type QtyPreviewResult = {
  * Zakaz / preview uchun: qoidaga ko‘ra sotib olingan miqdordan bonus dona soni.
  * `previewQtyBonus` bilan bir xil shart tanlash mantiq.
  */
+/** Qaytarish (oddiy polki): teskari blok — 5+1 da 1–5 → 1 bonus, 6–10 → 2 bonus. */
+export function computeReturnQtyBonusForRuleRow(rule: BonusRuleRow, returnQty: number): number {
+  if (rule.type !== "qty") return 0;
+  let conditions = rule.conditions;
+  if (conditions.length === 0 && rule.buy_qty != null && rule.free_qty != null) {
+    conditions = [
+      {
+        id: 0,
+        min_qty: null,
+        max_qty: null,
+        step_qty: rule.buy_qty,
+        bonus_qty: rule.free_qty,
+        max_bonus_qty: null,
+        sort_order: 0
+      }
+    ];
+  }
+  if (conditions.length === 0) return 0;
+  const matched = pickMatchingCondition(conditions, returnQty);
+  if (!matched) return 0;
+  if (rule.in_blocks) {
+    let raw = Math.ceil(returnQty / matched.step_qty) * matched.bonus_qty;
+    if (matched.max_bonus_qty != null) raw = Math.min(raw, matched.max_bonus_qty);
+    return raw;
+  }
+  if (returnQty < matched.step_qty) return 0;
+  let b = matched.bonus_qty;
+  if (matched.max_bonus_qty != null) b = Math.min(b, matched.max_bonus_qty);
+  return b;
+}
+
 export function computeQtyBonusForRuleRow(rule: BonusRuleRow, purchasedQty: number): number {
   if (rule.type !== "qty") return 0;
   let conditions = rule.conditions;

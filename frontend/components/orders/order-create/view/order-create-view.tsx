@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarDays, Check, ChevronDown, Gift, Search } from "lucide-react";
 import { ExchangeOrderCreatePanel } from "@/components/orders/exchange-order-create-panel";
 import { OrderCreateAgentLockHint } from "@/components/orders/order-create-agent-lock-hint";
-import { fieldClass, MAX_POLKI_RETURN_QTY, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS, POLKI_PRICE_TYPE_LABEL_RU } from "../constants";
+import { fieldClass, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS, POLKI_PRICE_TYPE_LABEL_RU } from "../constants";
 import {
   parseStockQty,
   parsePriceAmount,
@@ -290,9 +290,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
                         ? "Выберите склад возврата"
                         : polkiTotalReturnQtySum <= 0 && polkiTotalBonusCashSum <= 0
                           ? "Укажите количество к возврату или компенсацию бонуса"
-                          : polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY
-                            ? `Не более ${MAX_POLKI_RETURN_QTY} шт на склад в одном документе`
-                            : hasPolkiBonusCashOverMax
+                          : hasPolkiBonusCashOverMax
                               ? "Сумма компенсации вместо бонуса превышает допустимое"
                               : hasPolkiQtyOverMax
                               ? "Количество не больше проданного"
@@ -1373,9 +1371,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
               <span className="tabular-nums font-medium text-amber-800 dark:text-amber-200">
                 {formatNumberGrouped(polkiContextQ.data.max_returnable_value, { maxFractionDigits: 2 })}
               </span>
-              {" · "}
-              <span className="font-medium text-foreground">Лимит позиций в документе: </span>
-              {MAX_POLKI_RETURN_QTY} шт
             </div>
           ) : null}
         </section>
@@ -2015,10 +2010,8 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
               <>
                 <span className="font-medium text-foreground">Возврат: </span>
                 после проведения — приход на выбранный склад возврата; детали списания с продажного склада
-                задаёт сервер. Суммы в таблице и карточках — оценка по ценам продажи. В одном документе — не
-                более {MAX_POLKI_RETURN_QTY} шт на склад за раз: в счёт входят и оплата, и бонус, если обе
-                части физически возвращаются на склад (как в строке «Авторасп: … опл … бон»). При большем
-                объёме оформите несколько возвратов.
+                задаёт сервер. Суммы в таблице и карточках — оценка по ценам продажи. Количество в строке
+                не больше остатка по заказу; список заказов ограничен настройками возврата (период и баланс 0).
               </>
             ) : isExchangeFlow ? (
               <>

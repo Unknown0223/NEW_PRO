@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { formatNumberGrouped } from "@/lib/format-numbers";
-import { MAX_POLKI_RETURN_QTY } from "../../constants";
 import type { OrderCreateVm } from "../../hooks/use-order-create";
 
 export function CompositionSubmitRow({
@@ -26,10 +25,7 @@ export function CompositionSubmitRow({
     polkiEstimatedSum,
     orderComment,
     localError,
-    polkiSubmitBlockedReason,
-    polkiOverDocumentLimit,
-    polkiTotalReturnQtySum,
-    applyPolkiQtyUnderDocumentLimit
+    polkiSubmitBlockedReason
   } = vm;
 
   const warehouseName = useMemo(() => {
@@ -46,21 +42,9 @@ export function CompositionSubmitRow({
         </p>
       ) : null}
       {!canSubmit && polkiSubmitBlockedReason && !localError ? (
-        <div className="mb-3 space-y-2" role="status">
-          <p className="text-sm text-amber-800 dark:text-amber-200">{polkiSubmitBlockedReason}</p>
-          {polkiOverDocumentLimit ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="border-amber-600/40 text-amber-900 hover:bg-amber-50"
-              disabled={mutation.isPending}
-              onClick={applyPolkiQtyUnderDocumentLimit}
-            >
-              Подогнать под лимит {MAX_POLKI_RETURN_QTY} шт (сейчас {polkiTotalReturnQtySum})
-            </Button>
-          ) : null}
-        </div>
+        <p className="mb-3 text-sm text-amber-800 dark:text-amber-200" role="status">
+          {polkiSubmitBlockedReason}
+        </p>
       ) : null}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
@@ -106,11 +90,7 @@ export function CompositionSubmitRow({
             onClick={() => mutation.mutate()}
             className="inline-flex items-center justify-center rounded-lg bg-[#0a8f7e] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(10,143,126,0.3)] transition hover:bg-[#066b5f] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {mutation.isPending
-              ? "Оформление…"
-              : !canSubmit && polkiOverDocumentLimit
-                ? `Лимит ${MAX_POLKI_RETURN_QTY} шт (на склад ${polkiTotalReturnQtySum})`
-                : "Оформить возврат"}
+            {mutation.isPending ? "Оформление…" : "Оформить возврат"}
           </button>
         </div>
       </div>

@@ -1,10 +1,13 @@
 "use client";
 
+import { OrderHistoryBreadcrumbs } from "@/components/orders/order-history/order-history-breadcrumbs";
 import { OrderHistoryView } from "@/components/orders/order-history-view";
-import { OrdersHubTopBar } from "@/components/orders/orders-hub-top-bar";
+import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
-import Link from "next/link";
+import { STALE } from "@/lib/query-stale";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 
 export default function OrderHistoryPage() {
@@ -17,22 +20,32 @@ export default function OrderHistoryPage() {
 
   const invalid = !Number.isFinite(orderId) || orderId < 1;
 
+  const orderTitleQ = useQuery({
+    queryKey: ["order", tenantSlug, orderId],
+    enabled: Boolean(tenantSlug) && !invalid,
+    staleTime: STALE.detail,
+    queryFn: async () => {
+      const { data } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${orderId}`);
+      return data;
+    }
+  });
+
+  const titleNumber =
+    orderTitleQ.data?.number ??
+    (orderTitleQ.isLoading ? "…" : invalid ? "—" : String(orderId));
+
   return (
     <PageShell className="pb-12">
-      <OrdersHubTopBar />
-      <Link
-        href={invalid ? "/orders" : `/orders/${orderId}`}
-        className="mb-3 inline-block text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-      >
-        ← Orqaga
-      </Link>
+      {!invalid ? (
+        <OrderHistoryBreadcrumbs orderNumber={titleNumber} orderId={orderId} />
+      ) : null}
 
       {!hydrated ? (
         <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       ) : !tenantSlug ? (
-        <p className="text-sm text-destructive">Sessiya topilmadi.</p>
+        <p className="text-sm text-destructive">Сессия истекла — войдите снова.</p>
       ) : invalid ? (
-        <p className="text-sm text-destructive">Zakaz identifikatori noto‘g‘ri.</p>
+        <p className="text-sm text-destructive">Неверный идентификатор заявки.</p>
       ) : (
         <OrderHistoryView tenantSlug={tenantSlug} orderId={orderId} />
       )}

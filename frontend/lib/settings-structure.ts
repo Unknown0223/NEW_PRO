@@ -53,6 +53,13 @@ export const settingsSections: SettingsSection[] = [
         slug: "tema-tsveta",
         href: "/settings/appearance",
         status: "available"
+      },
+      {
+        title: "Qaytarish filtri",
+        slug: "qaytarish-filtri",
+        href: "/settings/returns/filter",
+        status: "available",
+        requiredRoles: ["admin"] as const
       }
     ]
   },
@@ -258,6 +265,8 @@ const existingHrefByItemTitle: Record<string, string> = {
   "веб сотрудники": "/settings/spravochnik/operators",
   "сотрудники": "/settings/spravochnik/operators",
   "компания": "/settings/company",
+  "qaytarish filtri": "/settings/returns/filter",
+  "фильтр возврата": "/settings/returns/filter",
   "аудит": "/settings/audit",
   "должности веб-сотрудников": "/settings/web-staff-position-presets",
   "должности веб сотрудников": "/settings/web-staff-position-presets",

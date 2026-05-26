@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { computeQtyBonusForRuleRow } from "../bonus-rules/bonus-rules.service";
+import {
+  computeQtyBonusForRuleRow,
+  computeReturnQtyBonusForRuleRow
+} from "../bonus-rules/bonus-rules.service";
 import { getClientReturnsData } from "./returns-enhanced.client-data";
 import { buildProductReturnPools } from "./returns-bonus-reverse.pools";
 import { effectiveReturnPriceType } from "./returns-enhanced.types";
@@ -63,6 +66,8 @@ export type PolkiAutoBonusPreviewInput = {
   client_id: number;
   /** Polki po zakaz: faqat shu zakaz pozitsiyalari va narxlari. */
   order_id?: number | null;
+  date_from?: string;
+  date_to?: string;
   price_type?: string | null;
   category_ids?: number[];
   lines: PolkiAutoBonusPreviewLineInput[];
@@ -151,8 +156,8 @@ export async function previewPolkiAutoBonusReverse(
   const cdata = await getClientReturnsData(
     tenantId,
     input.client_id,
-    undefined,
-    undefined,
+    orderId == null ? input.date_from : undefined,
+    orderId == null ? input.date_to : undefined,
     orderId,
     undefined,
     { shrinkLineQtyAfterReturns: true }
@@ -277,7 +282,8 @@ export async function previewPolkiAutoBonusReverse(
       bonusTheoretical = orderBonusByProduct.get(d.ln.product_id) ?? 0;
       bonusTheoretical = Math.min(bonusTheoretical, pool.max_bonus, returnQty);
     } else {
-      const ruleBonus = d.rule != null ? computeQtyBonusForRuleRow(d.rule, returnQty) : null;
+      const ruleBonus =
+        d.rule != null ? computeReturnQtyBonusForRuleRow(d.rule, returnQty) : null;
       bonusTheoretical = resolveReturnBonusTheoretical({
         scopedToOrder: false,
         returnQty,

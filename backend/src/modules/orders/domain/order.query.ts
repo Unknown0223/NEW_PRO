@@ -12,6 +12,7 @@ import { cursorPagination, decodeCursor } from "../../../lib/pagination";
 import { getAppCache, invalidateDashboard, invalidateStock, setAppCache } from "../../../lib/redis-cache";
 import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
+import { clientIdsWithVisitWeekday } from "../../clients/clients.list.where";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import {
@@ -58,6 +59,7 @@ import {
   loadOrdersFinanceEnrichment,
   sumBonusQty
 } from "./order.detail-mappers";
+import { loadOrdersListMetaEnrichment } from "./order.list-enrichment";
 import {
   orderDetailInclude,
   type ListOrdersQuery,
@@ -89,6 +91,25 @@ function parseListOrderLocalDayEnd(isoDate: string): Date | null {
 }
 
 const ORDERS_LIST_CACHE_TTL_SECONDS = 20;
+
+function sumOrderListVolumeM3(
+  items: Array<{
+    qty: Prisma.Decimal;
+    is_bonus: boolean;
+    product: { volume_m3: Prisma.Decimal | null } | null;
+  }>
+): string | null {
+  let sum = new Prisma.Decimal(0);
+  let any = false;
+  for (const i of items) {
+    if (i.is_bonus) continue;
+    const v = i.product?.volume_m3;
+    if (v == null || v.lte(0)) continue;
+    sum = sum.add(i.qty.mul(v));
+    any = true;
+  }
+  return any ? sum.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP).toString() : null;
+}
 
 export async function listOrdersPaged(
   tenantId: number,
@@ -160,9 +181,43 @@ export async function listOrdersPaged(
   if (viewerRole === "gruzchik" && viewerUserId != null && viewerUserId > 0) {
     andClauses.push({ warehouse_block: { is: { gruzchik_user_id: viewerUserId } } });
   }
+  if (q.visit_weekday != null && Number.isFinite(q.visit_weekday)) {
+    const visitClientIds = await clientIdsWithVisitWeekday(tenantId, q.visit_weekday);
+    if (visitClientIds.length === 0) {
+      return { data: [], total: 0, page: q.page, limit: q.limit };
+    }
+    andClauses.push({ client_id: { in: visitClientIds } });
+  }
   const cat = q.client_category?.trim();
   if (cat) {
     andClauses.push({ client: { category: cat } });
+  }
+  const reg = q.client_region?.trim();
+  if (reg) {
+    andClauses.push({ client: { region: reg } });
+  }
+  const cityF = q.client_city?.trim();
+  if (cityF) {
+    andClauses.push({
+      client: {
+        OR: [{ city: cityF }, { district: cityF }]
+      }
+    });
+  }
+  const zoneF = q.client_zone?.trim();
+  if (zoneF) {
+    andClauses.push({ client: { neighborhood: zoneF } });
+  }
+  const tradeDir = q.agent_trade_direction?.trim();
+  if (tradeDir) {
+    andClauses.push({
+      agent: {
+        OR: [
+          { trade_direction: tradeDir },
+          { trade_direction_row: { is: { OR: [{ code: tradeDir }, { name: tradeDir }] } } }
+        ]
+      }
+    });
   }
   if (q.product_id != null && Number.isFinite(q.product_id) && q.product_id > 0) {
     andClauses.push({ items: { some: { product_id: q.product_id } } });
@@ -192,9 +247,17 @@ export async function listOrdersPaged(
     });
   }
 
+  const reqTypeRef = q.request_type_ref?.trim();
+  if (reqTypeRef) {
+    andClauses.push({ request_type_ref: reqTypeRef });
+  }
+
   const pmRef = q.payment_method_ref?.trim();
+  const listPriceType = q.list_price_type?.trim();
   if (pmRef) {
     andClauses.push({ payment_method_ref: pmRef });
+  } else if (listPriceType) {
+    andClauses.push({ payment_method_ref: listPriceType });
   }
 
   const fromD = q.date_from?.trim() ? parseListOrderLocalDayStart(q.date_from.trim()) : null;
@@ -255,6 +318,12 @@ export async function listOrdersPaged(
         client: {
           select: {
             name: true,
+            legal_name: true,
+            phone: true,
+            inn: true,
+            address: true,
+            landmark: true,
+            sales_channel: true,
             region: true,
             city: true,
             district: true,
@@ -273,13 +342,46 @@ export async function listOrdersPaged(
           }
         },
         expeditor_user: { select: { id: true, login: true, name: true } },
-        items: { select: { qty: true, is_bonus: true } }
+        items: {
+          select: {
+            qty: true,
+            is_bonus: true,
+            product: { select: { volume_m3: true } }
+          }
+        }
       }
     })
   ]);
 
   const cursorPack = useCursor ? cursorPagination(rowsRaw, (r) => r.id, q.limit) : null;
   const rows = cursorPack?.data ?? rowsRaw;
+
+  const exchangeIds = rows
+    .filter((o) => (o.order_type ?? "order") === "exchange")
+    .map((o) => o.id);
+  const exchangeMetaById = new Map<number, unknown>();
+  if (exchangeIds.length > 0) {
+    const exRows = await prisma.order.findMany({
+      where: { tenant_id: tenantId, id: { in: exchangeIds } },
+      select: { id: true, exchange_meta: true }
+    });
+    for (const er of exRows) {
+      exchangeMetaById.set(er.id, er.exchange_meta);
+    }
+  }
+
+  const meta = await loadOrdersListMetaEnrichment(
+    tenantId,
+    rows.map((o) => ({
+      id: o.id,
+      order_type: o.order_type ?? "order",
+      comment: o.comment ?? null,
+      exchange_meta: exchangeMetaById.get(o.id) ?? null,
+      agent_id: o.agent_id,
+      created_at: o.created_at,
+      status: o.status
+    }))
+  );
 
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
@@ -297,13 +399,24 @@ export async function listOrdersPaged(
       const ex = o.expeditor_user;
       const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
       const finRow = finance.get(o.id);
+      const metaRow = meta.get(o.id);
       return {
       id: o.id,
       number: o.number,
       order_type: o.order_type ?? "order",
       client_id: o.client_id,
       client_name: o.client.name,
-      client_legal_name: null,
+      client_legal_name: o.client.legal_name?.trim() || null,
+      client_phone: o.client.phone?.trim() || null,
+      client_inn: o.client.inn?.trim() || null,
+      client_address: o.client.address?.trim() || null,
+      order_location: o.client.landmark?.trim() || null,
+      sales_channel: o.client.sales_channel?.trim() || null,
+      volume_m3: sumOrderListVolumeM3(o.items),
+      cumulative_bonus: null,
+      consignment_due_date: o.consignment_due_date
+        ? o.consignment_due_date.toISOString()
+        : null,
       warehouse_id: o.warehouse_id,
       warehouse_name: o.warehouse?.name ?? null,
       warehouse_block_id: (o as { warehouse_block_id?: number | null }).warehouse_block_id ?? null,
@@ -325,11 +438,16 @@ export async function listOrdersPaged(
       consignment: o.agent?.consignment ?? null,
       is_consignment: o.is_consignment ?? false,
       day: null,
-      created_by: null,
-      created_by_role: null,
-      expected_ship_date: null,
-      shipped_at: finRow?.shipped_at ?? null,
-      delivered_at: finRow?.delivered_at ?? null,
+      created_by: metaRow?.created_by ?? null,
+      created_by_role: metaRow?.created_by_role ?? null,
+      source_order_numbers: metaRow?.source_order_numbers ?? [],
+      source_order_ids: metaRow?.source_order_ids ?? [],
+      returned_at: metaRow?.returned_at ?? null,
+      creation_channel: metaRow?.creation_channel ?? "web",
+      expected_ship_date: metaRow?.expected_ship_date ?? null,
+      shipped_at: metaRow?.shipped_at ?? finRow?.shipped_at ?? null,
+      delivered_at: metaRow?.delivered_at ?? finRow?.delivered_at ?? null,
+      list_created_at: metaRow?.list_created_at ?? o.created_at.toISOString(),
       status: o.status,
       qty: o.items
         .filter((i) => !i.is_bonus)
@@ -346,7 +464,7 @@ export async function listOrdersPaged(
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
       payment_method_ref: o.payment_method_ref?.trim() || null,
       created_at: o.created_at.toISOString(),
-      allowed_next_statuses: allowedNextForRole(o.status, viewerRole)
+      allowed_next_statuses: allowedNextForRole(o.status, viewerRole, o.order_type ?? "order")
     };
     }),
     total,

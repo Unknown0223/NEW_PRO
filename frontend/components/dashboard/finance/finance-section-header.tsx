@@ -1,10 +1,11 @@
 "use client";
 
+/** Shablon: `SectionHeader` */
 export function FinanceSectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="mb-4">
-      <h3 className="text-base font-bold text-slate-950">{title}</h3>
-      {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}
+    <div className="mb-4 min-w-0">
+      <h2 className="text-lg font-black text-slate-800">{title}</h2>
+      {subtitle ? <p className="mt-1 text-sm font-medium text-slate-500">{subtitle}</p> : null}
     </div>
   );
 }

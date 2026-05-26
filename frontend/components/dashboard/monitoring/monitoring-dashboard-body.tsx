@@ -1,11 +1,15 @@
 "use client";
 
-import { buildClientDayMatrix } from "@/components/dashboard/monitoring/client-day-matrix";
-import { toDonutSlices } from "@/components/dashboard/monitoring/donut-slices";
-import { MonitoringChartsRow } from "@/components/dashboard/monitoring/monitoring-charts-row";
-import { MonitoringClientMatrix } from "@/components/dashboard/monitoring/monitoring-client-matrix";
-import { MonitoringKpiStrip } from "@/components/dashboard/monitoring/monitoring-kpi-strip";
-import { MonitoringPerformanceTabs } from "@/components/dashboard/monitoring/monitoring-performance-tabs";
+import { MonitoringCategoryPanel } from "@/components/dashboard/monitoring/monitoring-category-panel";
+import { MonitoringDailyChannelsRow } from "@/components/dashboard/monitoring/monitoring-daily-channels-row";
+import {
+  MonitoringOkbAkbCard,
+  MonitoringSalesKpiCard
+} from "@/components/dashboard/monitoring/monitoring-kpi-top-row";
+import {
+  MonitoringPerformanceTable,
+  type MonitoringPerformanceRow
+} from "@/components/dashboard/monitoring/monitoring-performance-table";
 import { MonitoringPortfolioSection } from "@/components/dashboard/monitoring/monitoring-portfolio-section";
 import { MonitoringSkuTable } from "@/components/dashboard/monitoring/monitoring-sku-table";
 import { MonitoringYearSection } from "@/components/dashboard/monitoring/monitoring-year-section";
@@ -20,16 +24,11 @@ export const MonitoringDashboardBody = memo(function MonitoringDashboardBody({
   appliedYear,
   categorySlices,
   branchTotal,
-  supervisorTotal,
-  skuTotal,
   branchPage,
   branchPageSize,
   onBranchPageChange,
   onBranchPageSizeChange,
-  supervisorPage,
-  supervisorPageSize,
-  onSupervisorPageChange,
-  onSupervisorPageSizeChange,
+  skuTotal,
   skuPage,
   skuPageSize,
   onSkuPageChange,
@@ -37,7 +36,6 @@ export const MonitoringDashboardBody = memo(function MonitoringDashboardBody({
   skuRows,
   skuVisibleColumnOrder,
   onOpenSkuColumns,
-  clientMatrixRef,
   visibleSectionIds
 }: {
   data: MonitoringSnapshot;
@@ -45,16 +43,11 @@ export const MonitoringDashboardBody = memo(function MonitoringDashboardBody({
   appliedYear: number;
   categorySlices: ShareDonutSlice[];
   branchTotal: number;
-  supervisorTotal: number;
-  skuTotal: number;
   branchPage: number;
   branchPageSize: number;
   onBranchPageChange: (p: number) => void;
   onBranchPageSizeChange: (s: number) => void;
-  supervisorPage: number;
-  supervisorPageSize: number;
-  onSupervisorPageChange: (p: number) => void;
-  onSupervisorPageSizeChange: (s: number) => void;
+  skuTotal: number;
   skuPage: number;
   skuPageSize: number;
   onSkuPageChange: (p: number) => void;
@@ -62,60 +55,83 @@ export const MonitoringDashboardBody = memo(function MonitoringDashboardBody({
   skuRows: MonitoringSnapshot["sku_matrix"];
   skuVisibleColumnOrder: string[];
   onOpenSkuColumns: () => void;
-  clientMatrixRef?: React.Ref<HTMLDivElement>;
   visibleSectionIds: Set<MonitoringSectionId>;
 }) {
-  const clientMatrix = useMemo(
-    () => buildClientDayMatrix(data.client_daily_sales ?? []),
-    [data.client_daily_sales]
-  );
-
   const show = (id: MonitoringSectionId) => visibleSectionIds.has(id);
 
+  const branchRows: MonitoringPerformanceRow[] = useMemo(
+    () =>
+      data.branch_performance.map((r) => ({
+        key: r.branch,
+        name: r.branch,
+        akb: r.akb,
+        plan: r.plan_sales,
+        fact: r.fact_sales,
+        execution: r.execution_pct
+      })),
+    [data.branch_performance]
+  );
+
+  const directionRows: MonitoringPerformanceRow[] = useMemo(
+    () =>
+      data.trade_directions.map((r) => ({
+        key: r.direction,
+        name: r.direction,
+        akb: null,
+        plan: "—",
+        fact: r.sales_sum,
+        execution: r.share_pct,
+        executionIsShare: true
+      })),
+    [data.trade_directions]
+  );
+
+  const topVisible =
+    show("bySales") || show("okbAkb") || show("factByCategories");
+
   return (
-    <div className="flex flex-col gap-4">
-      {show("kpi_sales") ? (
-        <MonitoringKpiStrip data={data} month={appliedMonth} year={appliedYear} />
-      ) : null}
-      {show("charts") ? (
-        <MonitoringChartsRow data={data} categorySlices={categorySlices} month={appliedMonth} year={appliedYear} />
-      ) : null}
-      {show("performance") ? (
-      <MonitoringPerformanceTabs
-        data={data}
-        branchTotal={branchTotal}
-        supervisorTotal={supervisorTotal}
-        branchPage={branchPage}
-        branchPageSize={branchPageSize}
-        onBranchPageChange={onBranchPageChange}
-        onBranchPageSizeChange={onBranchPageSizeChange}
-        supervisorPage={supervisorPage}
-        supervisorPageSize={supervisorPageSize}
-        onSupervisorPageChange={onSupervisorPageChange}
-        onSupervisorPageSizeChange={onSupervisorPageSizeChange}
-      />
-      ) : null}
-      {show("portfolio") || show("year_comparison") ? (
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
-        {show("portfolio") ? (
-        <div className={show("year_comparison") ? "xl:col-span-7" : "col-span-full"}>
-          <MonitoringPortfolioSection branches={data.branch_performance} />
+    <div className="flex flex-col gap-6">
+      {topVisible ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {show("bySales") ? <MonitoringSalesKpiCard data={data} /> : null}
+          {show("okbAkb") ? <MonitoringOkbAkbCard data={data} /> : null}
+          {show("factByCategories") ? <MonitoringCategoryPanel slices={categorySlices} /> : null}
         </div>
-        ) : null}
-        {show("year_comparison") ? (
-        <div className={show("portfolio") ? "xl:col-span-5" : "col-span-full"}>
-          <MonitoringYearSection
-            tradeDirections={data.trade_directions ?? []}
-            yearComparison={data.year_comparison}
-            month={appliedMonth}
-            year={appliedYear}
-          />
-        </div>
-        ) : null}
-      </div>
       ) : null}
-      {show("sku") ? (
-      <div ref={clientMatrixRef}>
+
+      {show("byBranches") ? (
+        <MonitoringPerformanceTable
+          title="По филиалам"
+          rows={branchRows}
+          total={branchTotal}
+          page={branchPage}
+          pageSize={branchPageSize}
+          onPageChange={onBranchPageChange}
+          onPageSizeChange={onBranchPageSizeChange}
+          serverPaging
+        />
+      ) : null}
+
+      {show("byTradeDirections") ? (
+        <MonitoringPerformanceTable
+          title="По направлениям торговли"
+          rows={directionRows}
+          total={directionRows.length}
+          page={0}
+          pageSize={20}
+          onPageChange={() => {}}
+          onPageSizeChange={() => {}}
+          serverPaging={false}
+        />
+      ) : null}
+
+      <MonitoringDailyChannelsRow data={data} month={appliedMonth} year={appliedYear} />
+
+      {show("akbByPortfolios") ? (
+        <MonitoringPortfolioSection branches={data.branch_performance} />
+      ) : null}
+
+      {show("bySku") ? (
         <MonitoringSkuTable
           rows={skuRows}
           total={skuTotal}
@@ -126,9 +142,16 @@ export const MonitoringDashboardBody = memo(function MonitoringDashboardBody({
           visibleColumnOrder={skuVisibleColumnOrder}
           onOpenColumns={onOpenSkuColumns}
         />
-      </div>
       ) : null}
-      {show("client_matrix") ? <MonitoringClientMatrix clientMatrix={clientMatrix} /> : null}
+
+      {show("yearComparison") ? (
+        <MonitoringYearSection
+          tradeDirections={data.trade_directions ?? []}
+          yearComparison={data.year_comparison}
+          month={appliedMonth}
+          year={appliedYear}
+        />
+      ) : null}
     </div>
   );
 });

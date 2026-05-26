@@ -30,7 +30,8 @@ import {
   getAllowedNextStatuses,
   isBackwardTransition,
   isOperatorLateStageCancelForbidden,
-  isValidOrderStatus
+  isValidOrderStatus,
+  mayActorRevertOneStep
 } from "../order-status";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import {
@@ -64,12 +65,22 @@ import {
   type OrderDetailRow
 } from "./order.types";
 
+function parseOccurredAt(raw: string | undefined): Date | undefined {
+  if (raw == null || !String(raw).trim()) return undefined;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error("INVALID_OCCURRED_AT");
+  }
+  return d;
+}
+
 export async function updateOrderStatus(
   tenantId: number,
   orderId: number,
   nextStatus: string,
   actorUserId: number | null,
-  actorRole: string
+  actorRole: string,
+  occurredAtRaw?: string
 ): Promise<OrderDetailRow> {
   const trimmed = nextStatus.trim();
   if (!isValidOrderStatus(trimmed)) {
@@ -88,19 +99,17 @@ export async function updateOrderStatus(
     return enrichOrderDetailRow(tenantId, o as unknown as OrderDetailLoaded, actorRole);
   }
 
-  if (!canTransitionOrderStatus(o.status, trimmed)) {
+  const orderType = normalizeOrderType(o.order_type);
+
+  if (!canTransitionOrderStatus(o.status, trimmed, orderType)) {
     const err = new Error("INVALID_TRANSITION") as Error & { from: string; to: string };
     err.from = o.status;
     err.to = trimmed;
     throw err;
   }
 
-  if (isBackwardTransition(o.status, trimmed) && actorRole !== "admin") {
+  if (isBackwardTransition(o.status, trimmed, orderType) && !mayActorRevertOneStep(actorRole)) {
     throw new Error("FORBIDDEN_REVERT");
-  }
-
-  if (o.status === "cancelled" && trimmed === "new" && actorRole !== "admin") {
-    throw new Error("FORBIDDEN_REOPEN_CANCELLED");
   }
 
   if (actorRole === "operator" && isOperatorLateStageCancelForbidden(o.status, trimmed)) {
@@ -108,6 +117,7 @@ export async function updateOrderStatus(
   }
 
   const fromStatus = o.status;
+  const occurredAt = parseOccurredAt(occurredAtRaw);
   const updated = await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: o.id },
@@ -119,7 +129,8 @@ export async function updateOrderStatus(
         from_status: fromStatus,
         to_status: trimmed,
         user_id:
-          actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null
+          actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null,
+        created_at: occurredAt ?? new Date()
       }
     });
 
@@ -279,6 +290,56 @@ export async function updateOrderStatus(
   return enrichOrderDetailRow(tenantId, updated as unknown as OrderDetailLoaded, actorRole);
 }
 
+/** Mavjud holat logidagi birinchi `to_status` vaqtini tuzatish (masalan ожидаемая отгрузка). */
+export async function updateOrderMilestoneAt(
+  tenantId: number,
+  orderId: number,
+  milestone: string,
+  occurredAtRaw: string,
+  actorRole: string
+): Promise<OrderDetailRow> {
+  const milestoneStatus = milestone.trim();
+  if (!isValidOrderStatus(milestoneStatus)) {
+    throw new Error("INVALID_STATUS");
+  }
+  const occurredAt = parseOccurredAt(occurredAtRaw);
+  if (!occurredAt) {
+    throw new Error("INVALID_OCCURRED_AT");
+  }
+
+  const o = await prisma.order.findFirst({
+    where: { id: orderId, tenant_id: tenantId },
+    include: orderDetailInclude
+  });
+  if (!o) {
+    throw new Error("NOT_FOUND");
+  }
+
+  const log = await prisma.orderStatusLog.findFirst({
+    where: { order_id: orderId, to_status: milestoneStatus },
+    orderBy: { created_at: "asc" },
+    select: { id: true }
+  });
+  if (!log) {
+    throw new Error("MILESTONE_NOT_FOUND");
+  }
+
+  await prisma.orderStatusLog.update({
+    where: { id: log.id },
+    data: { created_at: occurredAt }
+  });
+
+  emitOrderUpdated(tenantId, orderId);
+  void invalidateOrdersListCache(tenantId);
+  void invalidateDashboard(tenantId);
+
+  const refreshed = await prisma.order.findFirstOrThrow({
+    where: { id: orderId, tenant_id: tenantId },
+    include: orderDetailInclude
+  });
+  return enrichOrderDetailRow(tenantId, refreshed as unknown as OrderDetailLoaded, actorRole);
+}
+
 export type BulkOrderStatusResult = {
   updated: number[];
   failed: { id: number; error: string; from?: string; to?: string }[];
@@ -290,14 +351,15 @@ export async function bulkUpdateOrderStatus(
   orderIds: number[],
   nextStatus: string,
   actorUserId: number | null,
-  actorRole: string
+  actorRole: string,
+  occurredAtRaw?: string
 ): Promise<BulkOrderStatusResult> {
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderStatusResult["failed"] = [];
   for (const id of ids) {
     try {
-      await updateOrderStatus(tenantId, id, nextStatus, actorUserId, actorRole);
+      await updateOrderStatus(tenantId, id, nextStatus, actorUserId, actorRole, occurredAtRaw);
       updated.push(id);
     } catch (e) {
       const code = getErrorCode(e) ?? "UNKNOWN";
@@ -337,6 +399,64 @@ export async function bulkUpdateOrderExpeditor(
         viewerRole,
         actorUserId
       );
+      updated.push(id);
+    } catch (e) {
+      failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
+    }
+  }
+  return { updated, failed };
+}
+
+export type BulkOrderConsignmentResult = {
+  updated: number[];
+  failed: { id: number; error: string }[];
+};
+
+/** Guruh: konsignatsiya belgisi va (ixtiyoriy) muddat. Faqat `new` / `confirmed` zakazlar. */
+export async function bulkUpdateOrderConsignment(
+  tenantId: number,
+  orderIds: number[],
+  isConsignment: boolean,
+  consignmentDueDateRaw: string | null | undefined,
+  _actorUserId: number | null
+): Promise<BulkOrderConsignmentResult> {
+  const { ORDER_LINES_EDITABLE_STATUSES } = await import("./order.lines");
+  const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
+  const updated: number[] = [];
+  const failed: BulkOrderConsignmentResult["failed"] = [];
+
+  let consignmentDueDate: Date | null = null;
+  if (isConsignment && consignmentDueDateRaw?.trim()) {
+    const d = new Date(consignmentDueDateRaw.trim());
+    if (!Number.isNaN(d.getTime())) consignmentDueDate = d;
+  }
+
+  for (const id of ids) {
+    try {
+      const existing = await prisma.order.findFirst({
+        where: { id, tenant_id: tenantId },
+        select: { id: true, status: true, order_type: true }
+      });
+      if (!existing) {
+        failed.push({ id, error: "NOT_FOUND" });
+        continue;
+      }
+      if (!ORDER_LINES_EDITABLE_STATUSES.has(existing.status)) {
+        failed.push({ id, error: "ORDER_NOT_EDITABLE" });
+        continue;
+      }
+      const ot = (existing.order_type ?? "order").trim();
+      if (ot !== "order") {
+        failed.push({ id, error: "BAD_ORDER_TYPE" });
+        continue;
+      }
+      await prisma.order.update({
+        where: { id },
+        data: {
+          is_consignment: isConsignment,
+          consignment_due_date: isConsignment ? consignmentDueDate : null
+        }
+      });
       updated.push(id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });

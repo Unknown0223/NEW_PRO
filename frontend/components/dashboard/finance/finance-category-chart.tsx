@@ -1,7 +1,7 @@
 "use client";
 
 import { FinanceSectionHeader } from "@/components/dashboard/finance/finance-section-header";
-import { fmtFinanceCompact, fmtFinanceMoney, fmtFinancePercent } from "@/components/dashboard/finance/format";
+import { fmtFinanceCompact, fmtFinancePercent } from "@/components/dashboard/finance/format";
 import type { FinanceDashboardSnapshot } from "@/components/dashboard/finance/types";
 import { useMemo } from "react";
 
@@ -12,10 +12,14 @@ const COLORS = [
   "#a3e635",
   "#f97316",
   "#ef4444",
+  "#f472b6",
   "#8b5cf6",
   "#14b8a6",
   "#64748b",
-  "#84cc16"
+  "#84cc16",
+  "#db2777",
+  "#2563eb",
+  "#92400e"
 ] as const;
 
 function buildConicGradient(segments: { value: number; color: string }[]) {
@@ -49,7 +53,10 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
 
   return (
     <section className="finance-motion-slide h-full rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-      <FinanceSectionHeader title="По категориям" subtitle="Топ категорий продаж" />
+      <FinanceSectionHeader
+        title="По категориям"
+        subtitle="Топ категорий с прокручиваемой легендой"
+      />
       <div className="grid min-h-[320px] grid-cols-1 items-center gap-6 lg:grid-cols-[minmax(240px,320px),minmax(0,1fr)]">
         <div
           className="mx-auto flex h-64 w-64 items-center justify-center rounded-full p-8 shadow-inner"
@@ -72,8 +79,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">{item.category}</p>
                 <span className="text-sm font-black text-slate-700">{fmtFinancePercent(item.sales_share_pct)}</span>
               </div>
-              <p className="text-xs tabular-nums text-slate-500">{fmtFinanceMoney(item.sales_sum)}</p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                 <div
                   className="finance-motion-bar h-full rounded-full bg-teal-500"
                   style={{ width: `${Math.min(100, item.sales_share_pct)}%` }}

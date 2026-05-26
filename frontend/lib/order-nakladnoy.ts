@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 import axios from "axios";
 import { getUserFacingError } from "@/lib/error-utils";
+import type { WarehouseLayoutId } from "@/lib/bulk-export-templates";
 
 /** Backend `bulk/nakladnoy` `template` qiymatlari bilan mos. */
 export const NAKLADNOY_TEMPLATE_OPTIONS = [
@@ -71,6 +72,14 @@ export function nakladnoyPrefsToApiBody(prefs: NakladnoyExportPrefs) {
 
 function parseFilenameFromContentDisposition(cd: string | undefined): string | null {
   if (!cd) return null;
+  const star = /filename\*=UTF-8''([^;\s]+)/i.exec(cd);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1]);
+    } catch {
+      return star[1];
+    }
+  }
   const m = /filename="([^"]+)"/.exec(cd) ?? /filename=([^;\s]+)/.exec(cd);
   if (!m?.[1]) return null;
   try {
@@ -89,8 +98,9 @@ export async function downloadOrdersNakladnoyXlsx(args: {
   template: NakladnoyTemplateId;
   prefs: NakladnoyExportPrefs;
   format?: NakladnoyFileFormat;
+  warehouseLayout?: WarehouseLayoutId;
 }): Promise<void> {
-  const { tenantSlug, orderIds, template, prefs, format = "xlsx" } = args;
+  const { tenantSlug, orderIds, template, prefs, format = "xlsx", warehouseLayout } = args;
   if (orderIds.length === 0) {
     throw new Error("Zakaz tanlanmagan.");
   }
@@ -101,6 +111,7 @@ export async function downloadOrdersNakladnoyXlsx(args: {
         order_ids: orderIds,
         template,
         format,
+        ...(warehouseLayout ? { warehouse_layout: warehouseLayout } : {}),
         ...nakladnoyPrefsToApiBody(prefs)
       },
       { responseType: "blob" }

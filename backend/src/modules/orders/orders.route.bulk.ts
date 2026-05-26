@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  bulkOrderConsignmentBodySchema,
   bulkOrderExpeditorBodySchema,
   bulkOrderNakladnoyBodySchema,
   bulkOrderStatusBodySchema,
@@ -13,6 +14,7 @@ import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.sche
 import { getErrorCode } from "../../lib/app-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { attachmentContentDisposition } from "../../lib/content-disposition";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
@@ -25,6 +27,7 @@ import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkag
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
+  bulkUpdateOrderConsignment,
   bulkUpdateOrderExpeditor,
   bulkUpdateOrderStatus,
   createOrder,
@@ -56,7 +59,8 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         parsed.data.order_ids,
         parsed.data.status,
         actorUserId,
-        actor.role
+        actor.role,
+        parsed.data.occurred_at
       );
       return reply.send(result);
     }
@@ -86,6 +90,29 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    "/api/:slug/orders/bulk/consignment",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderConsignmentBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      const actor = getAccessUser(request);
+      const actorSub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
+      const result = await bulkUpdateOrderConsignment(
+        request.tenant!.id,
+        parsed.data.order_ids,
+        parsed.data.is_consignment,
+        parsed.data.consignment_due_date ?? null,
+        actorUserId
+      );
+      return reply.send(result);
+    }
+  );
+
+  app.post(
     "/api/:slug/orders/bulk/nakladnoy",
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
     async (request, reply) => {
@@ -104,7 +131,8 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
             separateSheets: parsed.data.separate_sheets ?? false,
             groupBy: parsed.data.group_by ?? "agent"
           },
-          parsed.data.format ?? "xlsx"
+          parsed.data.format ?? "xlsx",
+          parsed.data.warehouse_layout ?? null
         );
         return reply
           .header(
@@ -113,7 +141,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
               ? "application/pdf"
               : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           )
-          .header("Content-Disposition", `attachment; filename="${result.filename}"`)
+          .header("Content-Disposition", attachmentContentDisposition(result.filename))
           .send(result.buffer);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
@@ -129,6 +157,12 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         }
         if (msg === "INVALID_NAKLADNOY_TEMPLATE") {
           return sendApiError(reply, request, 400, "InvalidNakladnoyTemplate");
+        }
+        if (msg === "INVALID_WAREHOUSE_LAYOUT" || msg === "WAREHOUSE_LAYOUT_XLSX_ONLY") {
+          return sendApiError(reply, request, 400, "InvalidWarehouseLayout");
+        }
+        if (msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:")) {
+          return sendApiError(reply, request, 500, "WarehouseTemplateMissing");
         }
         throw e;
       }

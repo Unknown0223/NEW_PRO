@@ -17,8 +17,7 @@ import {
   createPeriodReturn,
   createPeriodReturnBatch,
   createFullReturnFromOrder,
-  previewPolkiAutoBonusReverse,
-  MAX_RETURN_ITEMS
+  previewPolkiAutoBonusReverse
 } from "./returns-enhanced.service";
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -61,13 +60,14 @@ const periodReturnBody = z.object({
   note: z.string().max(2000).optional().nullable(),
   refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
   bonus_debt_amount: z.number().min(0).optional(),
-  /** Erkin polki (explicit paid/bonus): hujjat bo‘yicha 24 limit Zod da yo‘q — `createPeriodReturn`. */
   lines: z.array(periodReturnLine).min(1)
 });
 
 const polkiAutoBonusPreviewBody = z.object({
   client_id: z.number().int().positive(),
   order_id: z.number().int().positive().optional(),
+  date_from: z.string().optional(),
+  date_to: z.string().optional(),
   price_type: priceTypeOptional,
   category_ids: z.array(z.number().int().positive()).optional(),
   lines: z
@@ -174,8 +174,6 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (code === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
         if (code === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
-        if (code === "TOO_MANY_ITEMS")
-          return sendApiError(reply, request, 400, "TooManyItems", undefined, { max: MAX_RETURN_ITEMS });
         if (code === "RETURN_QTY_EXCEEDS_ORDERED")
           return sendApiError(reply, request, 400, "QtyExceedsOrdered");
         if (code === "NOTHING_TO_RETURN")
@@ -197,6 +195,22 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
             "Сумма возврата превышает остаток по этому заказу."
           );
         if (code === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
+        if (code === "RETURN_FILTER_EMPTY")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ReturnFilterEmpty",
+            "По настройкам возврата нет подходящих заказов (проверьте период и баланс 0)."
+          );
+        if (code === "RETURN_ORDER_OUT_OF_FILTER")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ReturnOrderOutOfFilter",
+            "Заказ не попадает в период или правило баланса 0."
+          );
         if (code === "ORDER_NOT_DELIVERED")
           return sendApiError(
             reply,
@@ -246,8 +260,6 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (code === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
         if (code === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
-        if (code === "TOO_MANY_ITEMS")
-          return sendApiError(reply, request, 400, "TooManyItems", undefined, { max: MAX_RETURN_ITEMS });
         if (code === "RETURN_QTY_EXCEEDS_ORDERED")
           return sendApiError(reply, request, 400, "QtyExceedsOrdered");
         if (code === "NOTHING_TO_RETURN")
@@ -269,6 +281,22 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
             "Сумма возврата превышает остаток по этому заказу."
           );
         if (code === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
+        if (code === "RETURN_FILTER_EMPTY")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ReturnFilterEmpty",
+            "По настройкам возврата нет подходящих заказов (проверьте период и баланс 0)."
+          );
+        if (code === "RETURN_ORDER_OUT_OF_FILTER")
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ReturnOrderOutOfFilter",
+            "Заказ не попадает в период или правило баланса 0."
+          );
         if (code === "ORDER_NOT_DELIVERED")
           return sendApiError(
             reply,

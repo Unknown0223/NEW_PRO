@@ -69,6 +69,15 @@ export type OrderItemRow = {
   line_weight_kg: string | null;
   /** (price×qty − total) / (price×qty) × 100, bonus yoki nol bo‘lsa null yoki «0.00» */
   discount_pct: string | null;
+  /** Guruh / katalog kategoriyasi (ro‘yxat expand). */
+  category_id: number | null;
+  category_name: string | null;
+  /** Berilgan bonus mahsulot nomi (pullik qator uchun). */
+  bonus_product_name?: string | null;
+  /** Berilgan bonus miqdori (dona). */
+  bonus_product_qty?: string | null;
+  /** Bonus sababi: bitta trigger nomi yoki «Аралаш (…)». */
+  bonus_trigger_label?: string | null;
 };
 
 export type OrderListRow = {
@@ -77,6 +86,8 @@ export type OrderListRow = {
   order_type: string | null;
   client_id: number;
   client_name: string;
+  /** Smart-kod (client_code). */
+  client_code: string | null;
   client_legal_name: string | null;
   warehouse_id: number | null;
   warehouse_name: string | null;
@@ -115,7 +126,22 @@ export type OrderListRow = {
   comment: string | null;
   /** «Причины заявок» tanlovi */
   request_type_ref: string | null;
+  client_phone: string | null;
+  client_inn: string | null;
+  client_address: string | null;
+  order_location: string | null;
+  sales_channel: string | null;
+  volume_m3: string | null;
+  cumulative_bonus: string | null;
+  consignment_due_date: string | null;
+  source_order_numbers: string[];
+  source_order_ids: number[];
+  returned_at: string | null;
+  /** `web` — ofis/operator; `mobile` — agent ilovasi */
+  creation_channel: "web" | "mobile";
   created_at: string;
+  /** Yaratilgan vaqt (ustun «Дата создания»). */
+  list_created_at: string | null;
   /** Yig‘ish: zakaz qaysi «доставщик bloki»da turishi (skladchi belgilaydi). */
   warehouse_block_id: number | null;
   warehouse_block_name: string | null;
@@ -228,7 +254,17 @@ export const orderDetailInclude: Prisma.OrderInclude = {
   items: {
     orderBy: { id: "asc" },
     include: {
-      product: { select: { sku: true, name: true, volume_m3: true, weight_kg: true } }
+      product: {
+        select: {
+          sku: true,
+          name: true,
+          volume_m3: true,
+          weight_kg: true,
+          category_id: true,
+          category: { select: { id: true, name: true } },
+          product_group: { select: { id: true, name: true } }
+        }
+      }
     }
   },
   /** So‘nggi yozuvlar (UI da eski → yangi tartibda). */
@@ -304,6 +340,9 @@ export type OrderDetailLoaded = {
       name: string;
       volume_m3: Prisma.Decimal | null;
       weight_kg: Prisma.Decimal | null;
+      category_id: number | null;
+      category: { id: number; name: string } | null;
+      product_group: { id: number; name: string } | null;
     };
   }>;
   status_logs: Array<{
@@ -338,6 +377,11 @@ export type ListOrdersQuery = {
   expeditor_user_id?: number;
   /** Mijoz `category` maydoni bilan to‘liq mos (trim) */
   client_category?: string;
+  client_region?: string;
+  client_city?: string;
+  client_zone?: string;
+  /** Agent savdo yo‘nalishi (code yoki name) */
+  agent_trade_direction?: string;
   /** Shu mahsulot qatori bo’lgan zakazlar */
   product_id?: number;
   /** YYYY-MM-DD (server vaqt zonasi — brauzer `date` input bilan mos) */
@@ -357,8 +401,14 @@ export type ListOrdersQuery = {
   product_category_id?: number;
   /** Shu payment_type bo‘lgan to‘lovi bor zakazlar */
   payment_type?: string;
+  /** Sozlamalar → request_type_entries (тип накладной) */
+  request_type_ref?: string;
   /** Zakazda saqlangan to‘lov usuli (`payment_method_ref`) */
   payment_method_ref?: string;
+  /** Jadval «Тип цены» — `payment_method_ref` bilan bir maydon */
+  list_price_type?: string;
+  /** Mijoz tashrif kuni (1=Пн … 7=Вс) */
+  visit_weekday?: number;
   /** Keyset pagination — `next_cursor` dan keyingi sahifa */
   cursor?: string;
 };

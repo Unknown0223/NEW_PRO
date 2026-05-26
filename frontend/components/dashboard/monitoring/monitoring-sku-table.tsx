@@ -33,7 +33,7 @@ export function MonitoringSkuTable({
 }) {
   return (
     <SalesSectionPanel
-      className="sales-motion-delay-200"
+      className="rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-200/70"
       title="Продажи по SKU (статусы)"
       subtitle="Кол-во и доли отмен/возвратов; маркер при высоких %"
       action={
@@ -45,7 +45,10 @@ export function MonitoringSkuTable({
         ) : null
       }
     >
-      <div className={cn(tableWrap, "max-h-[600px]")}>
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-slate-500">Нет продаж по SKU за период</p>
+      ) : (
+      <div className={cn(tableWrap, "max-h-[min(600px,70vh)]")}>
         <table className="w-full min-w-[1280px] table-fixed border-collapse text-xs sm:text-sm">
           <thead className={theadSticky}>
             <tr>
@@ -111,7 +114,10 @@ export function MonitoringSkuTable({
           </tbody>
         </table>
       </div>
-      <MonitoringTablePager total={total} page={page} pageSize={pageSize} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
+      )}
+      {rows.length > 0 ? (
+        <MonitoringTablePager total={total} page={page} pageSize={pageSize} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
+      ) : null}
     </SalesSectionPanel>
   );
 }

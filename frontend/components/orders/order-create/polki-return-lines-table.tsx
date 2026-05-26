@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { PolkiLinesTableProps, PolkiPairRowModel } from "./types";
-import { MAX_POLKI_RETURN_QTY, POLKI_TABLE_COLS } from "./constants";
+import { POLKI_TABLE_COLS } from "./constants";
 import { formatPolkiPieceQty, polkiRowMaxReturnQty, polkiSplitTotal } from "./utils";
 import { parsePolkiQty } from "./polki-bonus-balance.logic";
 import { PolkiReturnBonusSummary } from "./polki-return-bonus-summary";
@@ -68,7 +68,7 @@ export function PolkiReturnLinesTable({
                 title={
                   polkiUsesAutoBonus
                     ? "Введите «всего к возврату» по строке (не больше «макс. всего»). Система разделит оплату и бонус по заказу; недостающий бонус — долг на баланс клиента."
-                    : `Введите общее количество по строке (макс. см. подсказку). В одном документе не более ${MAX_POLKI_RETURN_QTY} шт на склад.`
+                    : "Введите общее количество по строке (не больше «макс. всего» по заказу)."
                 }
               >
                 Дата · всего к возврату

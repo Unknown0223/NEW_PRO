@@ -124,6 +124,10 @@ export const ordersListQuerySchema = z
     expeditor_id: z.string().optional(),
     expeditor_user_id: z.string().optional(),
     client_category: z.string().optional(),
+    client_region: z.string().optional(),
+    client_city: z.string().optional(),
+    client_zone: z.string().optional(),
+    trade_direction: z.string().optional(),
     product_id: z.string().optional(),
     date_from: z.string().optional(),
     date_to: z.string().optional(),
@@ -134,6 +138,9 @@ export const ordersListQuerySchema = z
     product_category_id: z.string().optional(),
     payment_type: z.string().optional(),
     payment_method_ref: z.string().optional(),
+    request_type_ref: z.string().optional(),
+    price_type: z.string().optional(),
+    visit_weekday: z.string().optional(),
     date_mode: z.string().optional(),
     cursor: z.string().optional()
   })
@@ -156,6 +163,10 @@ export const ordersListQuerySchema = z
       include_no_agent: include_no_agent || undefined,
       expeditor_user_id: parseOptionalPosInt(q.expeditor_id ?? q.expeditor_user_id),
       client_category: q.client_category?.trim() || undefined,
+      client_region: q.client_region?.trim() || undefined,
+      client_city: q.client_city?.trim() || undefined,
+      client_zone: q.client_zone?.trim() || undefined,
+      agent_trade_direction: q.trade_direction?.trim() || undefined,
       product_id: parseOptionalPosInt(q.product_id),
       date_from: q.date_from?.trim() || q.from?.trim() || undefined,
       date_to: q.date_to?.trim() || q.to?.trim() || undefined,
@@ -164,6 +175,12 @@ export const ordersListQuerySchema = z
       product_category_id: parseOptionalPosInt(q.product_category_id),
       payment_type: q.payment_type?.trim() || undefined,
       payment_method_ref: q.payment_method_ref?.trim() || undefined,
+      request_type_ref: q.request_type_ref?.trim() || undefined,
+      list_price_type: q.price_type?.trim() || undefined,
+      visit_weekday: (() => {
+        const n = Number.parseInt(q.visit_weekday ?? "", 10);
+        return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
+      })(),
       date_mode: q.date_mode?.trim() || undefined,
       cursor: q.cursor?.trim() || undefined
     };
@@ -175,19 +192,46 @@ const orderIdsBulkSchema = z.array(z.number().int().positive()).min(1).max(500);
 
 /** PATCH `/api/:slug/orders/:id/status` */
 export const patchOrderStatusBodySchema = z.object({
-  status: z.string().min(1)
+  status: z.string().min(1),
+  /** Holat logidagi vaqt (ISO 8601). Bo‘lmasa — hozir. */
+  occurred_at: z.string().datetime({ offset: true }).optional()
 });
 
 /** POST `/api/:slug/orders/bulk/status` */
 export const bulkOrderStatusBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
-  status: z.string().min(1)
+  status: z.string().min(1),
+  occurred_at: z.string().datetime({ offset: true }).optional()
+});
+
+/** PATCH `/api/:slug/orders/:id/milestone-at` — mavjud bosqich log vaqtini tuzatish */
+export const patchOrderMilestoneAtBodySchema = z.object({
+  milestone: z.string().min(1),
+  occurred_at: z.string().datetime({ offset: true })
 });
 
 /** POST `/api/:slug/orders/bulk/nakladnoy` */
 export const bulkOrderNakladnoyBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
   template: z.enum(["nakladnoy_warehouse", "nakladnoy_expeditor"]),
+  /** «Загруз зав.склада» — 13 ta alohida Excel andoza */
+  warehouse_layout: z
+    .enum([
+      "wh-1.1",
+      "wh-1.1.2",
+      "wh-4.1",
+      "wh-4.1.1",
+      "wh-4.1.2",
+      "wh-6.0",
+      "wh-6.0.1",
+      "wh-6.0.2",
+      "wh-7.0.0",
+      "wh-7.0.1",
+      "wh-xprinter",
+      "wh-7.0.3",
+      "wh-7.0.4"
+    ])
+    .optional(),
   format: z.enum(["xlsx", "pdf"]).optional(),
   code_column: z.enum(["sku", "barcode"]).optional(),
   separate_sheets: z.boolean().optional(),
@@ -199,6 +243,13 @@ export const bulkOrderExpeditorBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
   /** null — ekspeditordan yechish */
   expeditor_user_id: z.number().int().positive().nullable()
+});
+
+/** POST `/api/:slug/orders/bulk/consignment` */
+export const bulkOrderConsignmentBodySchema = z.object({
+  order_ids: orderIdsBulkSchema,
+  is_consignment: z.boolean(),
+  consignment_due_date: z.string().max(40).optional().nullable()
 });
 
 /** PATCH `/api/:slug/orders/:id/lines` */

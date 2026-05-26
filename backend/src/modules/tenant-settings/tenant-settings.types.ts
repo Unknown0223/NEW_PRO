@@ -3,6 +3,7 @@ import type {
   PaymentMethodEntryDto,
   PriceTypeEntryDto
 } from "./finance-refs";
+import type { ReturnFilterSettings } from "../returns/returns-filter.types";
 
 export type TerritoryNodeDto = {
   id: string;
@@ -76,6 +77,7 @@ export type TenantProfileDto = {
   address: string | null;
   logo_url: string | null;
   feature_flags: Record<string, unknown>;
+  return_filter: ReturnFilterSettings;
   references: {
     payment_types: string[];
     return_reasons: string[];

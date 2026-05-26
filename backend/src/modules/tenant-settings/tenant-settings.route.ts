@@ -170,6 +170,13 @@ const branchSchema: z.ZodType<BranchPatch> = z.object({
     .optional()
 });
 
+const returnFilterSchema = z.object({
+  period_enabled: z.boolean(),
+  period_unit: z.enum(["day", "month"]),
+  period_value: z.number().int().min(1).max(365),
+  balance_zero_enabled: z.boolean()
+});
+
 const profilePatchSchema = z
   .object({
     name: z.string().min(1).optional(),
@@ -177,6 +184,7 @@ const profilePatchSchema = z
     address: z.string().max(4000).nullable().optional(),
     logo_url: z.string().max(4000).nullable().optional(),
     feature_flags: z.record(z.string(), z.unknown()).optional(),
+    return_filter: returnFilterSchema.optional(),
     references: z
       .object({
         payment_types: z.array(z.string()).optional(),

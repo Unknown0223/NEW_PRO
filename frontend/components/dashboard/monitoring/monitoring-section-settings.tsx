@@ -7,7 +7,6 @@ import {
 import { SupervisorDashboardMultiFilter } from "@/components/dashboard/supervisor-dashboard-multi-filter";
 import { useMemo } from "react";
 
-/** «Настройки разделов» — shablon ro‘yxati; bir nechta yorliq bitta bo‘limga bog‘lanishi mumkin. */
 export function MonitoringSectionSettingsFilter({
   visibleSectionIds,
   onVisibleChange,
@@ -17,18 +16,15 @@ export function MonitoringSectionSettingsFilter({
   onVisibleChange: (next: Set<MonitoringSectionId>) => void;
   triggerClassName?: string;
 }) {
-  const selectedRowKeys = useMemo(() => {
-    const keys: string[] = [];
-    MONITORING_SECTION_SETTINGS_ITEMS.forEach((row, idx) => {
-      if (visibleSectionIds.has(row.id)) keys.push(`${row.id}::${idx}`);
-    });
-    return keys;
-  }, [visibleSectionIds]);
+  const selectedValues = useMemo(
+    () => MONITORING_SECTION_SETTINGS_ITEMS.filter((row) => visibleSectionIds.has(row.id)).map((r) => r.id),
+    [visibleSectionIds]
+  );
 
   const items = useMemo(
     () =>
-      MONITORING_SECTION_SETTINGS_ITEMS.map((row, idx) => ({
-        id: `${row.id}::${idx}`,
+      MONITORING_SECTION_SETTINGS_ITEMS.map((row) => ({
+        id: row.id,
         title: row.label,
         searchText: row.label
       })),
@@ -41,22 +37,13 @@ export function MonitoringSectionSettingsFilter({
       searchPlaceholder="Поиск"
       triggerClassName={triggerClassName}
       items={items}
-      selectedValues={selectedRowKeys}
+      selectedValues={selectedValues}
       minPopoverWidth={300}
       maxListHeightClass="max-h-64"
       onChange={(keys) => {
-        const next = new Set<MonitoringSectionId>();
-        for (const key of keys) {
-          const id = key.split("::")[0] as MonitoringSectionId;
-          next.add(id);
-        }
-        if (keys.length === 0) {
-          onVisibleChange(new Set());
-          return;
-        }
+        const next = new Set(keys as MonitoringSectionId[]);
         onVisibleChange(next);
       }}
     />
   );
 }
-

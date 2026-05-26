@@ -1,71 +1,104 @@
 import type { OrderListRow } from "@/components/orders/order-detail-view";
-import { ORDER_STATUS_LABELS } from "@/lib/order-status";
+import { formatOrderListDateTime } from "@/lib/format-order-list-datetime";
+import { orderListStatusLabel } from "@/lib/order-list-status-labels";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 
 /** Zakazlar ro‘yxati — `useUserTablePrefs` / TableColumnSettingsDialog */
 export const ORDERS_LIST_TABLE_ID = "orders.list.v1";
 
-export const ORDER_LIST_COLUMN_IDS = [
+/** To‘liq shablon ustunlari tartibi */
+export const ORDER_LIST_FULL_COLUMN_ORDER = [
   "number",
+  "source_order_number",
+  "request_source",
   "order_type",
   "created_at",
   "expected_ship_date",
   "shipped_at",
   "delivered_at",
+  "returned_at",
+  "list_created_at",
   "status",
   "client_name",
   "client_legal_name",
   "client_id",
+  "client_phone",
+  "client_inn",
   "qty",
+  "volume_m3",
   "total_sum",
+  "bonus_sum",
+  "cumulative_bonus",
   "discount_sum",
-  "bonus_qty",
   "balance",
   "debt",
   "price_type",
   "warehouse_name",
-  "warehouse_block_name",
   "agent_name",
   "agent_code",
-  "expeditors",
   "region",
   "city",
   "zone",
-  "consignment",
+  "expeditors",
+  "client_address",
+  "order_location",
+  "consignment_due_date",
+  "is_consignment",
+  "sales_channel",
+  "agent_trade_direction",
   "day",
+  "request_type_ref",
   "created_by",
   "comment",
   "created_by_role"
 ] as const;
 
+export const ORDER_LIST_COLUMN_IDS = [...ORDER_LIST_FULL_COLUMN_ORDER] as const;
+
+/** Barcha ustunlar ko‘rinadi (to‘liq jadval). */
+export const ORDER_LIST_DEFAULT_HIDDEN_COLUMN_IDS: readonly string[] = [];
+
 const LABELS: Record<(typeof ORDER_LIST_COLUMN_IDS)[number], string> = {
   number: "№",
+  source_order_number: "Исходный заказ",
+  request_source: "Источник заявки",
   order_type: "Тип",
   created_at: "Дата заказа",
   expected_ship_date: "Ожидаемая дата отгрузки",
   shipped_at: "Дата отгрузки",
   delivered_at: "Дата доставки",
-  status: "Holat",
+  returned_at: "Дата возврата",
+  list_created_at: "Дата создания",
+  status: "Статус",
   client_name: "Клиент",
   client_legal_name: "Юр. наз. клиента",
   client_id: "Ид клиента",
+  client_phone: "Телефон",
+  client_inn: "ИНН",
   qty: "Кол-во",
+  volume_m3: "Объем",
   total_sum: "Сумма",
+  bonus_sum: "Бонус",
+  cumulative_bonus: "Накопительный бонус",
   discount_sum: "Скидка",
-  bonus_qty: "Бонус (шт)",
   balance: "Баланс",
   debt: "Долг",
   price_type: "Тип цены",
   warehouse_name: "Склад",
-  warehouse_block_name: "Блок (доставщик)",
   agent_name: "Агент",
   agent_code: "Код агента",
-  expeditors: "Экспедиторы",
   region: "Область",
   city: "Город",
   zone: "Зона",
-  consignment: "Консигнация",
+  expeditors: "Экспедиторы",
+  client_address: "Адрес",
+  order_location: "Локация заказа",
+  consignment_due_date: "Консигнация (срок)",
+  is_consignment: "Консигнация",
+  sales_channel: "Канал продаж",
+  agent_trade_direction: "Направление торговли",
   day: "День",
+  request_type_ref: "Примечание",
   created_by: "Кто создал",
   comment: "Комментарий",
   created_by_role: "Роль(кто создал)"
@@ -90,36 +123,62 @@ export function formatOrderListDebtAsClientLiability(debt: string | null | undef
   return formatNumberGrouped(String(-n), { maxFractionDigits: 2 });
 }
 
+function requestSourceLabel(o: OrderListRow): string {
+  if (o.request_type_ref?.trim()) return o.request_type_ref.trim();
+  if (o.creation_channel === "mobile") return "Телефон (агент)";
+  if (o.creation_channel === "web") return "Веб";
+  return "";
+}
+
 export function orderListExportCell(o: OrderListRow, colId: string): string {
   switch (colId) {
     case "number":
       return o.number;
+    case "source_order_number":
+      return (o.source_order_numbers ?? []).join(", ");
+    case "request_source":
+      return requestSourceLabel(o);
     case "order_type":
       return o.order_type ?? "";
     case "created_at":
-      return new Date(o.created_at).toLocaleString();
+    case "list_created_at":
+      return formatOrderListDateTime(o.created_at);
     case "expected_ship_date":
-      return o.expected_ship_date ? new Date(o.expected_ship_date).toLocaleDateString() : "";
+      return formatOrderListDateTime(o.expected_ship_date);
     case "shipped_at":
-      return o.shipped_at ? new Date(o.shipped_at).toLocaleDateString() : "";
+      return formatOrderListDateTime(o.shipped_at);
     case "delivered_at":
-      return o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() : "";
+      return formatOrderListDateTime(o.delivered_at);
+    case "returned_at":
+      return formatOrderListDateTime(o.returned_at);
     case "status":
-      return ORDER_STATUS_LABELS[o.status] ?? o.status;
+      return orderListStatusLabel(o.status, o.order_type);
     case "client_name":
       return o.client_name;
     case "client_legal_name":
       return o.client_legal_name ?? "";
     case "client_id":
       return String(o.client_id);
+    case "client_phone":
+      return o.client_phone ?? "";
+    case "client_inn":
+      return o.client_inn ?? "";
     case "qty":
       return formatNumberGrouped(o.qty, { maxFractionDigits: 3 });
+    case "volume_m3":
+      return o.volume_m3
+        ? formatNumberGrouped(o.volume_m3, { maxFractionDigits: 4 })
+        : "";
     case "total_sum":
       return formatNumberGrouped(o.total_sum, { maxFractionDigits: 2 });
+    case "bonus_sum":
+      return formatNumberGrouped(o.bonus_sum ?? "0", { maxFractionDigits: 2 });
+    case "cumulative_bonus":
+      return o.cumulative_bonus
+        ? formatNumberGrouped(o.cumulative_bonus, { maxFractionDigits: 2 })
+        : "";
     case "discount_sum":
       return formatNumberGrouped(o.discount_sum ?? "0", { maxFractionDigits: 2 });
-    case "bonus_qty":
-      return formatNumberGrouped(o.bonus_qty ?? "0", { maxFractionDigits: 3 });
     case "balance":
       return o.balance == null ? "" : formatNumberGrouped(o.balance, { maxFractionDigits: 2 });
     case "debt":
@@ -128,8 +187,6 @@ export function orderListExportCell(o: OrderListRow, colId: string): string {
       return o.price_type ?? "";
     case "warehouse_name":
       return o.warehouse_name ?? "";
-    case "warehouse_block_name":
-      return o.warehouse_block_name ?? "";
     case "agent_name":
       return o.agent_name ?? "";
     case "agent_code":
@@ -142,10 +199,22 @@ export function orderListExportCell(o: OrderListRow, colId: string): string {
       return o.city ?? "";
     case "zone":
       return o.zone ?? "";
-    case "consignment":
-      return o.consignment == null ? "" : o.consignment ? "Ha" : "Yo‘q";
+    case "client_address":
+      return o.client_address ?? "";
+    case "order_location":
+      return o.order_location ?? "";
+    case "consignment_due_date":
+      return formatOrderListDateTime(o.consignment_due_date);
+    case "is_consignment":
+      return o.is_consignment ? "Да" : "Нет";
+    case "sales_channel":
+      return o.sales_channel ?? "";
+    case "agent_trade_direction":
+      return o.agent_trade_direction ?? "";
     case "day":
       return o.day ?? "";
+    case "request_type_ref":
+      return o.request_type_ref ?? "";
     case "created_by":
       return o.created_by ?? "";
     case "comment":

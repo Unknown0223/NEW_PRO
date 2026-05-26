@@ -12,7 +12,6 @@ import type {
   CreatePeriodReturnLine,
   OrderItemSummary
 } from "./returns-enhanced.types";
-import { MAX_RETURN_ITEMS } from "./returns-enhanced.types";
 import { R } from "./returns-enhanced.helpers";
 
 export function computeReturnSplitFromOrderSnapshot(
@@ -127,11 +126,6 @@ export function validateReturnQty(
       throw new Error("RETURN_QTY_EXCEEDS_ORDERED");
     }
   }
-
-  const totalQty = lines.reduce((a, l) => a + l.qty, 0);
-  if (totalQty > MAX_RETURN_ITEMS) {
-    throw new Error("TOO_MANY_ITEMS");
-  }
 }
 
 /** Pul qaytarishni `maxRefund` bilan cheklaganda qatorlardagi paid/bonus taqsimotini saqlab qolish. */
@@ -202,7 +196,7 @@ export function physicalQtyFromPeriodLine(l: CreatePeriodReturnLine | CreatePeri
   return (l.paid_qty ?? 0) + (l.bonus_qty ?? 0);
 }
 
-/** Erkin polki: paid/bonus explicit — hujjat bo‘yicha 24 dona limiti qo‘llanmaydi (faqat qator «макс»). */
+/** Erkin polki: paid/bonus explicit — faqat qator «макс» va tenant filtri (davr/balans). */
 export function periodReturnUsesExplicitLines(
   lines: Array<{
     qty?: number;

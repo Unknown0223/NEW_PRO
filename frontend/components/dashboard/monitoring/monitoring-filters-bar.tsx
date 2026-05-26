@@ -1,12 +1,11 @@
 "use client";
 
-import { addCalendarMonths, formatMonthYearRu, monthYearFromEndMinusDays } from "@/components/dashboard/monitoring/utils";
+import { addCalendarMonths, formatMonthYearRu } from "@/components/dashboard/monitoring/utils";
 import type { MonitoringDraft } from "@/components/dashboard/monitoring/types";
 import { MonitoringSectionSettingsFilter } from "@/components/dashboard/monitoring/monitoring-section-settings";
 import { MonitoringTerritoryTreeFilter } from "@/components/dashboard/monitoring/monitoring-territory-tree-filter";
 import { SupervisorDashboardMultiFilter } from "@/components/dashboard/supervisor-dashboard-multi-filter";
 import { financeFilterApplyButtonClassName } from "@/components/dashboard/finance/finance-filter-styles";
-import { Button } from "@/components/ui/button";
 import {
   MonthYearPickerPopover,
   parseYearMonthYm,
@@ -25,22 +24,18 @@ const selectCls =
 export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
   appliedDraft: MonitoringDraft;
   onApply: (draft: MonitoringDraft) => void;
-  selfSupervisorIdStr: string;
   territoryNodes: TerritoryNode[];
   branchOptions: Array<{ value: string; label: string }>;
   agentOptions: Array<{ id: string; title: string }>;
-  supervisorOptions: Array<{ id: string; title: string }>;
   visibleSectionIds: Set<MonitoringSectionId>;
   onVisibleSectionsChange: (next: Set<MonitoringSectionId>) => void;
 }) {
   const {
     appliedDraft,
     onApply,
-    selfSupervisorIdStr,
     territoryNodes,
     branchOptions,
     agentOptions,
-    supervisorOptions,
     visibleSectionIds,
     onVisibleSectionsChange
   } = props;
@@ -81,10 +76,6 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
 
   const onAgentChange = useCallback((next: string[]) => {
     setDraft((p) => ({ ...p, agent_ids: next }));
-  }, []);
-
-  const onSupervisorChange = useCallback((next: string[]) => {
-    setDraft((p) => ({ ...p, supervisor_ids: next }));
   }, []);
 
   return (
@@ -138,19 +129,11 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
               const parsed = parseYearMonthYm(ym);
               if (parsed) setDraft((p) => ({ ...p, year: parsed.y, month: parsed.m + 1 }));
             }}
-            extraPresets={
-              <>
-                <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-[10px]" onClick={() => { setDraft((p) => ({ ...p, ...addCalendarMonths(p.year, p.month, -1) })); setPeriodPickerOpen(false); }}>Пред.</Button>
-                <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-[10px]" onClick={() => { setDraft((p) => ({ ...p, year: p.year - 1 })); setPeriodPickerOpen(false); }}>−1 г.</Button>
-                <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-[10px]" onClick={() => { setDraft((p) => ({ ...p, ...monthYearFromEndMinusDays(7) })); setPeriodPickerOpen(false); }}>7д</Button>
-                <Button type="button" variant="secondary" size="sm" className="h-7 px-2 text-[10px]" onClick={() => { setDraft((p) => ({ ...p, ...monthYearFromEndMinusDays(30) })); setPeriodPickerOpen(false); }}>30д</Button>
-              </>
-            }
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 p-3 md:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2.5 p-3 md:grid-cols-4">
         <SupervisorDashboardMultiFilter
           placeholder="Филиалы"
           searchPlaceholder="Филиал"
@@ -173,17 +156,7 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
           selectedValues={draft.agent_ids}
           onChange={onAgentChange}
         />
-        <SupervisorDashboardMultiFilter
-          placeholder="Супервайзеры"
-          searchPlaceholder="Супервайзер"
-          triggerClassName={selectCls}
-          items={supervisorOptions}
-          selectedValues={draft.supervisor_ids}
-          disabled={Boolean(selfSupervisorIdStr)}
-          onChange={onSupervisorChange}
-        />
-
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end md:col-span-1">
           <button
             type="button"
             className={financeFilterApplyButtonClassName + " h-9 md:w-auto"}

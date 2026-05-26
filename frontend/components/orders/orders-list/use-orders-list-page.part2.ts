@@ -8,8 +8,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import {
   buildPaymentPrefillFromSelection,
+  formatConsignmentBulkFeedback,
   ordersMutationFeedback,
   rowStatusPatchError,
+  type BulkConsignmentResponse,
   type BulkExpeditorResponse,
   type BulkOrderStatusResponse
 } from "./types";
@@ -26,6 +28,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkTargetStatus,
     setNakladnoyFeedback,
     setBulkExpFeedback,
+    setBulkConsignmentFeedback,
     setBulkExpeditorChoice,
     statusRowError,
     setStatusRowError,
@@ -64,9 +67,18 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
   );
 
   const rowStatusMut = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+    mutationFn: async ({
+      id,
+      status,
+      occurred_at
+    }: {
+      id: number;
+      status: string;
+      occurred_at?: string;
+    }) => {
       const { data } = await api.patch<OrderDetailRow>(`/api/${tenantSlug}/orders/${id}/status`, {
-        status
+        status,
+        ...(occurred_at ? { occurred_at } : {})
       });
       return data;
     },
@@ -102,13 +114,15 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       template: typeof nakladnoyTemplate;
       prefs: typeof nakladnoyPrefs;
       format?: "xlsx" | "pdf";
+      warehouseLayout?: import("@/lib/bulk-export-templates").WarehouseLayoutId;
     }) => {
       await downloadOrdersNakladnoyXlsx({
         tenantSlug: tenantSlug!,
         orderIds: Array.from(selectedOrderIds),
         template: payload.template,
         prefs: payload.prefs,
-        format: payload.format ?? "xlsx"
+        format: payload.format ?? "xlsx",
+        warehouseLayout: payload.warehouseLayout
       });
     },
     onSuccess: (_data, vars) => {
@@ -116,6 +130,29 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     },
     onError: (err: unknown) => {
       setNakladnoyFeedback(ordersMutationFeedback(err, "Nakladnoyni yuklab bo‘lmadi."));
+    }
+  });
+
+  const bulkConsignmentMut = useMutation({
+    mutationFn: async (payload: {
+      order_ids: number[];
+      is_consignment: boolean;
+      consignment_due_date?: string | null;
+      skipped_ineligible?: number;
+    }) => {
+      const { skipped_ineligible = 0, ...body } = payload;
+      const { data } = await api.post<BulkConsignmentResponse>(
+        `/api/${tenantSlug}/orders/bulk/consignment`,
+        body
+      );
+      return { ...data, skipped_ineligible };
+    },
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      setBulkConsignmentFeedback(formatConsignmentBulkFeedback(res));
+    },
+    onError: (err: unknown) => {
+      setBulkConsignmentFeedback(ordersMutationFeedback(err, "Не удалось изменить консигнацию."));
     }
   });
 
@@ -142,8 +179,45 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     }
   });
 
+  const milestoneAtMut = useMutation({
+    mutationFn: async ({
+      id,
+      milestone,
+      occurred_at
+    }: {
+      id: number;
+      milestone: string;
+      occurred_at: string;
+    }) => {
+      const { data } = await api.patch<OrderDetailRow>(
+        `/api/${tenantSlug}/orders/${id}/milestone-at`,
+        { milestone, occurred_at }
+      );
+      return data;
+    },
+    onSuccess: (detail) => {
+      applyOrderDetailToListCaches(qc, tenantSlug, detail);
+      setStatusRowError((prev) => {
+        const n = { ...prev };
+        delete n[detail.id];
+        return n;
+      });
+    },
+    onError: (err: unknown, { id }) => {
+      setStatusRowError((prev) => ({ ...prev, [id]: rowStatusPatchError(err) }));
+    },
+    onSettled: (_data, _err, { id }) => {
+      void qc.invalidateQueries({ queryKey: ["order", tenantSlug, id] });
+      void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+    }
+  });
+
   const bulkStatusMut = useMutation({
-    mutationFn: async (payload: { order_ids: number[]; status: string }) => {
+    mutationFn: async (payload: {
+      order_ids: number[];
+      status: string;
+      occurred_at?: string;
+    }) => {
       const { data } = await api.post<BulkOrderStatusResponse>(
         `/api/${tenantSlug}/orders/bulk/status`,
         payload
@@ -182,8 +256,9 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       });
       setBulkFeedback(null);
       setNakladnoyFeedback(null);
+      setBulkConsignmentFeedback(null);
     },
-    [setBulkFeedback, setNakladnoyFeedback, setSelectedOrderIds]
+    [setBulkConsignmentFeedback, setBulkFeedback, setNakladnoyFeedback, setSelectedOrderIds]
   );
 
   const toggleSelectAllOnPage = useCallback(() => {
@@ -199,7 +274,15 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     });
     setBulkFeedback(null);
     setNakladnoyFeedback(null);
-  }, [allOnPageSelected, rows, setBulkFeedback, setNakladnoyFeedback, setSelectedOrderIds]);
+    setBulkConsignmentFeedback(null);
+  }, [
+    allOnPageSelected,
+    rows,
+    setBulkConsignmentFeedback,
+    setBulkFeedback,
+    setNakladnoyFeedback,
+    setSelectedOrderIds
+  ]);
 
   const clearSelection = useCallback(() => {
     setSelectedOrderIds(new Set());
@@ -207,8 +290,10 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkFeedback(null);
     setBulkExpeditorChoice("");
     setBulkExpFeedback(null);
+    setBulkConsignmentFeedback(null);
     p1.setDownloadsOpen(false);
     p1.setNakladnoySettingsOpen(false);
+    p1.setTotalsPanelOpen(false);
     setNakladnoyFeedback(null);
   }, [p1, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
 
@@ -217,8 +302,10 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     selectionTotals,
     paymentPrefill,
     rowStatusMut,
+    milestoneAtMut,
     nakladnoyMut,
     bulkExpeditorMut,
+    bulkConsignmentMut,
     bulkStatusMut,
     allOnPageSelected,
     toggleOrderSelect,

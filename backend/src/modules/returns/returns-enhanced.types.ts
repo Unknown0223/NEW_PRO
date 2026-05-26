@@ -30,6 +30,10 @@ export type OrderReturnBalance = {
   fully_returned: boolean;
 };
 
+import type { ReturnFilterMeta } from "./returns-filter.types";
+
+export type { ReturnFilterMeta };
+
 export type ClientReturnsData = {
   /** `period` — mijoz+davr (zakazsiz yig‘indi); `order` — bitta zakaz doirasi */
   polki_scope: "period" | "order";
@@ -53,10 +57,8 @@ export type ClientReturnsData = {
   max_returnable_value: string;
   client_balance: string;
   client_debt: string;
+  filter_meta?: ReturnFilterMeta;
 };
-
-/** Legacy qty-rejim / zakaz bo‘yicha polki: jami fizik dona hujjatda. Explicit erkin polki — cheklanmaydi. */
-export const MAX_RETURN_ITEMS = 24;
 
 export type CreatePeriodReturnLine = {
   product_id: number;

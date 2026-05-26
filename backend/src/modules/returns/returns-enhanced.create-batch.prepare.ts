@@ -14,7 +14,6 @@ import type {
   PeriodReturnResult
 } from "./returns-enhanced.types";
 import { effectiveReturnPriceType } from "./returns-enhanced.types";
-import { MAX_RETURN_ITEMS } from "./returns-enhanced.types";
 import { adjustOrderItemsQtyAfterPriorReturns, R } from "./returns-enhanced.helpers";
 import { findReturnWarehouse } from "./returns-enhanced.warehouse";
 import { createPolkiMirrorZayavka } from "./returns-enhanced.polki";
@@ -23,8 +22,6 @@ import {
   assertBatchLineModes,
   computeReturnSplitFromOrderSnapshot,
   finalizePolkiReturnLines,
-  periodReturnUsesExplicitLines,
-  physicalQtyFromPeriodLine,
   priceByProductFromItems,
   validateExplicitReturnAgainstItems,
   validateExplicitReturnQtyAgainstItems,
@@ -36,6 +33,7 @@ import {
 } from "./returns-order-balance";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
+import { assertOrdersInReturnFilter } from "./returns-filter.service";
 
 export type PreparedPeriodReturnSlice = {
   orderId: number;
@@ -77,11 +75,6 @@ export async function preparePeriodReturnBatch(
   if (!input.lines.length) throw new Error("EMPTY_LINES");
 
   assertBatchLineModes(input.lines);
-  const totalPhys = input.lines.reduce((a, l) => a + physicalQtyFromPeriodLine(l), 0);
-  const explicitPolki =
-    periodReturnUsesExplicitLines(input.lines) ||
-    (input.bonus_debt_amount != null && Number(input.bonus_debt_amount) > 0);
-  if (totalPhys > MAX_RETURN_ITEMS && !explicitPolki) throw new Error("TOO_MANY_ITEMS");
 
   const client = await prisma.client.findFirst({
     where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null }
@@ -167,6 +160,8 @@ export async function preparePeriodReturnBatch(
     });
     if (!ordOk) throw new Error("BAD_ORDER");
   }
+
+  await assertOrdersInReturnFilter(tenantId, input.client_id, [...byOrder.keys()]);
 
   type PreparedSlice = {
     orderId: number;

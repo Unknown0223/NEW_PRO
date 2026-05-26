@@ -29,6 +29,7 @@ import {
   referencesWithResolvedTerritoryNodes,
   territoryRegionPickerNames
 } from "./tenant-settings.territory";
+import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
 
 export async function getTenantDefaultCurrencyCode(tenantId: number): Promise<string> {
   const row = await prisma.tenant.findUnique({
@@ -115,6 +116,7 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
     address: row.address,
     logo_url: row.logo_url,
     feature_flags: ff,
+    return_filter: normalizeReturnFilterSettings(st.return_filter),
     references: {
       payment_types:
         payment_method_entries.length > 0

@@ -36,9 +36,15 @@ import type {
   FinanceDashboardFilters,
   FinanceDashboardSnapshot,
   FinancePaymentTypeRow,
+  FinancePeriodGranularity,
   FinancePeriodRow,
   FinanceTerritoryDebtRow
 } from "./dashboard.finance.types";
+import {
+  buildFinancePeriodBalance,
+  financePeriodGranularity,
+  financePeriodTruncSql
+} from "./dashboard.finance.period";
 import {
   financeClientFilterSql,
   financeDateExprByType,
@@ -55,6 +61,15 @@ export async function getFinanceDashboardSnapshot(
 
   const from = new Date(`${filters.from}T00:00:00.000Z`);
   const to = new Date(`${filters.to}T23:59:59.999Z`);
+  const periodGranularity: FinancePeriodGranularity = financePeriodGranularity(from, to);
+  const debtPeriodExpr = financePeriodTruncSql(
+    periodGranularity,
+    financeDateExprByType(filters.date_type)
+  );
+  const payPeriodExpr = financePeriodTruncSql(
+    periodGranularity,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at)`
+  );
   const orderScope = financeOrderScopeSql(tenantId, from, to, filters);
   const orderScopeO2 = financeOrderScopeSql(tenantId, from, to, filters, {
     aliases: { order: "o2", user: "u2", client: "c2" }
@@ -211,7 +226,7 @@ export async function getFinanceDashboardSnapshot(
     prisma.$queryRaw<Array<{ period: string; debt_sum: Prisma.Decimal; payment_sum: Prisma.Decimal }>>`
       WITH debts AS (
         SELECT
-          DATE_TRUNC('day', ${financeDateExprByType(filters.date_type)})::date AS p,
+          ${debtPeriodExpr} AS p,
           SUM(o.total_sum)::numeric(15,2) AS v
         FROM orders o
         JOIN users u ON u.id = o.agent_id
@@ -221,7 +236,7 @@ export async function getFinanceDashboardSnapshot(
       ),
       pays AS (
         SELECT
-          DATE_TRUNC('day', COALESCE(p.paid_at, p.created_at))::date AS p,
+          ${payPeriodExpr} AS p,
           SUM(p.amount)::numeric(15,2) AS v
         FROM client_payments p
         JOIN clients c ON c.id = p.client_id
@@ -241,7 +256,7 @@ export async function getFinanceDashboardSnapshot(
       FROM debts d
       FULL OUTER JOIN pays y ON y.p = d.p
       ORDER BY period ASC
-      LIMIT 120
+      LIMIT 180
     `,
     prisma.$queryRaw<
       Array<{
@@ -335,6 +350,8 @@ export async function getFinanceDashboardSnapshot(
     payment_sum: r.payment_sum.toString()
   }));
 
+  const period_balance = buildFinancePeriodBalance(paymentRows, totalPayments, totalDebt);
+
   const clients_debt_list: FinanceClientDebtRow[] = clientsDebtRows.map((r) => ({
     client_id: r.client_id,
     client_name: r.client_name,
@@ -361,6 +378,8 @@ export async function getFinanceDashboardSnapshot(
     territory_debts,
     general_balance,
     debt_and_payment_by_period,
+    period_balance,
+    period_granularity: periodGranularity,
     clients_debt_list
   };
   await setSnapshotCache(snapshotKey, result);

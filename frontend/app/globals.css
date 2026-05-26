@@ -7,6 +7,21 @@
 @tailwind utilities;
 
 @layer utilities {
+  @keyframes orders-expand-row {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-orders-expand {
+    animation: orders-expand-row 0.18s ease-out;
+  }
+
   @keyframes bonus-rule-shake {
     0%,
     100% {
@@ -522,9 +537,69 @@
     box-shadow: 0 8px 30px -10px color-mix(in srgb, var(--foreground) 18%, transparent);
   }
 
+  /** Pastki bulk-panel dropdown animatsiyasi (orders-page shablon) */
+  @keyframes orders-bulk-expand {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-expand {
+    animation: orders-bulk-expand 0.18s ease-out;
+  }
+
+  /** Bulk toolbar dropdown — faqat opacity (transform bilan pozitsiya ziddiyati yo‘q) */
+  @keyframes bulk-toolbar-dropdown-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .bulk-toolbar-dropdown-menu {
+    animation: bulk-toolbar-dropdown-in 0.12s ease-out;
+  }
+
+  /** Заявки: ichki scroll; thead sticky — shaffof emas, app-table-thead bilan bir xil fon */
+  .orders-list-table-scroll {
+    overscroll-behavior: contain;
+  }
+
+  .orders-list-table-scroll thead.app-table-thead > tr > th.orders-list-table-th-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 2px solid color-mix(in srgb, var(--border) 68%, var(--primary) 32%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--muted) 58%, var(--primary) 14%) 0%,
+      color-mix(in srgb, var(--muted) 36%, var(--card) 64%) 100%
+    );
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 55%, var(--primary) 45%);
+  }
+
+  .orders-list-table-scroll thead.app-table-thead > tr > th.orders-list-table-th-sticky-right {
+    z-index: 25;
+  }
+
   .orders-filter-field-label {
     @apply flex flex-col gap-1 text-xs font-medium;
     color: color-mix(in srgb, var(--foreground) 88%, transparent);
+  }
+
+  /** Заявки: 7 колонок как в шаблоне (горизонтальный скролл на узких экранах) */
+  .orders-filters-grid-7 {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.375rem;
+    align-items: center;
   }
 
   /* Ro‘yxat jadvallari: ustun nomlari qatori — fon va chiziq bilan ajratiladi */

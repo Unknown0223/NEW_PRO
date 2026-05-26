@@ -24,6 +24,8 @@ import {
 import { territoryRegionPickerNames } from "./tenant-settings.territory";
 import { getRedisForApp, tenantSettingsCacheKey } from "../../lib/redis-cache";
 import { getTenantProfile } from "./tenant-settings.profile.read";
+import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
+import type { ReturnFilterSettings } from "../returns/returns-filter.types";
 
 type ClientRefEntryPatch = {
   id: string;
@@ -76,6 +78,7 @@ export async function patchTenantProfile(
     address: string | null;
     logo_url: string | null;
     feature_flags: Record<string, unknown>;
+    return_filter?: ReturnFilterSettings;
     references: {
       payment_types?: string[];
       return_reasons?: string[];
@@ -134,8 +137,11 @@ export async function patchTenantProfile(
     data.logo_url = patch.logo_url?.trim() || null;
   }
 
-  if (patch.feature_flags != null || patch.references != null) {
+  if (patch.feature_flags != null || patch.references != null || patch.return_filter != null) {
     const nextSettings = { ...asRecord(row.settings) };
+    if (patch.return_filter != null) {
+      nextSettings.return_filter = normalizeReturnFilterSettings(patch.return_filter);
+    }
     if (patch.feature_flags != null) {
       nextSettings.feature_flags = {
         ...asRecord(nextSettings.feature_flags),

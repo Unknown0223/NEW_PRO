@@ -7,6 +7,8 @@ import { MonitoringFiltersBar } from "@/components/dashboard/monitoring/monitori
 import {
   MONITORING_SECTION_DEFAULT_ORDER,
   MONITORING_SECTION_PREFS_TABLE_ID,
+  hiddenMonitoringSectionIds,
+  visibleMonitoringSections,
   type MonitoringSectionId
 } from "@/components/dashboard/monitoring/monitoring-section-config";
 import { territoryTreeIdsToFilterLists } from "@/components/dashboard/monitoring/monitoring-territory-tree-utils";
@@ -16,10 +18,7 @@ import {
   MON_BRANCH_TABLE_ID,
   MON_SKU_COLS,
   MON_SKU_DEFAULT_ORDER,
-  MON_SKU_TABLE_ID,
-  MON_SUP_COLS,
-  MON_SUP_DEFAULT_ORDER,
-  MON_SUP_TABLE_ID
+  MON_SKU_TABLE_ID
 } from "@/components/dashboard/monitoring/table-constants";
 import type { MonitoringDraft } from "@/components/dashboard/monitoring/types";
 import { useMonitoringQueries } from "@/components/dashboard/monitoring/use-monitoring-queries";
@@ -47,36 +46,26 @@ export function DashboardSalesMonitoring() {
   const [applied, setApplied] = useState<MonitoringDraft>(() => defaultMonitoringDraft());
 
   const [branchPage, setBranchPage] = useState(0);
-  const [branchPageSize, setBranchPageSize] = useState(10);
-  const [supervisorPage, setSupervisorPage] = useState(0);
-  const [supervisorPageSize, setSupervisorPageSize] = useState(10);
+  const [branchPageSize, setBranchPageSize] = useState(20);
   const [skuPage, setSkuPage] = useState(0);
-  const [skuPageSize, setSkuPageSize] = useState(10);
+  const [skuPageSize, setSkuPageSize] = useState(20);
 
   const [branchColumnsOpen, setBranchColumnsOpen] = useState(false);
-  const [supColumnsOpen, setSupColumnsOpen] = useState(false);
   const [skuColumnsOpen, setSkuColumnsOpen] = useState(false);
 
   const branchTablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: MON_BRANCH_TABLE_ID,
     defaultColumnOrder: MON_BRANCH_DEFAULT_ORDER,
-    defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 30, 50]
-  });
-  const supTablePrefs = useUserTablePrefs({
-    tenantSlug,
-    tableId: MON_SUP_TABLE_ID,
-    defaultColumnOrder: MON_SUP_DEFAULT_ORDER,
-    defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 30, 50]
+    defaultPageSize: 20,
+    allowedPageSizes: [10, 20, 50]
   });
   const skuTablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: MON_SKU_TABLE_ID,
     defaultColumnOrder: MON_SKU_DEFAULT_ORDER,
-    defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 30, 50]
+    defaultPageSize: 20,
+    allowedPageSizes: [10, 20, 50]
   });
 
   const sectionPrefs = useUserTablePrefs({
@@ -95,44 +84,32 @@ export function DashboardSalesMonitoring() {
   }, [selfSupervisorIdStr]);
 
   const { agents, supervisors, profileRefs } = useDashboardMeta(tenantSlug, hydrated);
-
   const territoryNodes = profileRefs?.territory_nodes ?? [];
 
-  const visibleSectionIds = useMemo(() => {
-    const hidden = new Set(sectionPrefs.hiddenColumnIds);
-    return new Set(
-      MONITORING_SECTION_DEFAULT_ORDER.filter((id) => !hidden.has(id))
-    ) as Set<MonitoringSectionId>;
-  }, [sectionPrefs.hiddenColumnIds]);
+  const visibleSectionIds = useMemo(
+    () => visibleMonitoringSections(sectionPrefs.hiddenColumnIds),
+    [sectionPrefs.hiddenColumnIds]
+  );
 
   const sectionVisible = (id: MonitoringSectionId) => visibleSectionIds.has(id);
 
-  const chartsSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
   const branchSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
-  const supervisorSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
   const skuSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
-  const clientMatrixSection = useDashboardSectionVisible({ enabled: Boolean(tenantSlug) && hydrated });
 
-  const { data, isLoading, isError, branchTotal, supervisorTotal, skuTotal, queryString } = useMonitoringQueries({
+  const { data, isLoading, isError, branchTotal, skuTotal, queryString } = useMonitoringQueries({
     tenantSlug,
     hydrated,
     applied,
-    chartsVisible: chartsSection.visible && sectionVisible("charts"),
-    branchVisible: branchSection.visible && sectionVisible("performance"),
-    supervisorVisible: supervisorSection.visible && sectionVisible("performance"),
-    skuVisible: skuSection.visible && sectionVisible("sku"),
-    clientDailyVisible: clientMatrixSection.visible && sectionVisible("client_matrix"),
+    branchVisible: branchSection.visible && sectionVisible("byBranches"),
+    skuVisible: skuSection.visible && sectionVisible("bySku"),
     branchPage,
     branchPageSize,
-    supervisorPage,
-    supervisorPageSize,
     skuPage,
     skuPageSize
   });
 
   useEffect(() => {
     setBranchPage(0);
-    setSupervisorPage(0);
     setSkuPage(0);
   }, [queryString]);
 
@@ -177,10 +154,9 @@ export function DashboardSalesMonitoring() {
 
   const onVisibleSectionsChange = useCallback(
     (next: Set<MonitoringSectionId>) => {
-      const hidden = MONITORING_SECTION_DEFAULT_ORDER.filter((id) => !next.has(id));
       void sectionPrefs.saveColumnLayout({
         columnOrder: [...sectionPrefs.columnOrder],
-        hiddenColumnIds: hidden
+        hiddenColumnIds: hiddenMonitoringSectionIds(next)
       });
     },
     [sectionPrefs]
@@ -193,22 +169,41 @@ export function DashboardSalesMonitoring() {
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена.</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          <TableColumnSettingsDialog open={branchColumnsOpen} onOpenChange={setBranchColumnsOpen} title="Столбцы" columns={[...MON_BRANCH_COLS]} columnOrder={branchTablePrefs.columnOrder} hiddenColumnIds={branchTablePrefs.hiddenColumnIds} saving={branchTablePrefs.saving} onSave={(n) => branchTablePrefs.saveColumnLayout(n)} onReset={() => branchTablePrefs.resetColumnLayout()} />
-          <TableColumnSettingsDialog open={supColumnsOpen} onOpenChange={setSupColumnsOpen} title="Столбцы" columns={[...MON_SUP_COLS]} columnOrder={supTablePrefs.columnOrder} hiddenColumnIds={supTablePrefs.hiddenColumnIds} saving={supTablePrefs.saving} onSave={(n) => supTablePrefs.saveColumnLayout(n)} onReset={() => supTablePrefs.resetColumnLayout()} />
-          <TableColumnSettingsDialog open={skuColumnsOpen} onOpenChange={setSkuColumnsOpen} title="Столбцы" columns={[...MON_SKU_COLS]} columnOrder={skuTablePrefs.columnOrder} hiddenColumnIds={skuTablePrefs.hiddenColumnIds} saving={skuTablePrefs.saving} onSave={(n) => skuTablePrefs.saveColumnLayout(n)} onReset={() => skuTablePrefs.resetColumnLayout()} />
+        <div className="flex flex-col gap-6">
+          <TableColumnSettingsDialog
+            open={branchColumnsOpen}
+            onOpenChange={setBranchColumnsOpen}
+            title="Столбцы"
+            columns={[...MON_BRANCH_COLS]}
+            columnOrder={branchTablePrefs.columnOrder}
+            hiddenColumnIds={branchTablePrefs.hiddenColumnIds}
+            saving={branchTablePrefs.saving}
+            onSave={(n) => branchTablePrefs.saveColumnLayout(n)}
+            onReset={() => branchTablePrefs.resetColumnLayout()}
+          />
+          <TableColumnSettingsDialog
+            open={skuColumnsOpen}
+            onOpenChange={setSkuColumnsOpen}
+            title="Столбцы"
+            columns={[...MON_SKU_COLS]}
+            columnOrder={skuTablePrefs.columnOrder}
+            hiddenColumnIds={skuTablePrefs.hiddenColumnIds}
+            saving={skuTablePrefs.saving}
+            onSave={(n) => skuTablePrefs.saveColumnLayout(n)}
+            onReset={() => skuTablePrefs.resetColumnLayout()}
+          />
 
           <MonitoringFiltersBar
             appliedDraft={applied}
             onApply={apply}
-            selfSupervisorIdStr={selfSupervisorIdStr}
             territoryNodes={territoryNodes}
             visibleSectionIds={visibleSectionIds}
             onVisibleSectionsChange={onVisibleSectionsChange}
-            {...filterOptions}
+            branchOptions={filterOptions.branchOptions}
+            agentOptions={filterOptions.agentOptions}
           />
 
-          {isLoading ? <SalesMonitoringKpiSkeleton cards={6} /> : null}
+          {isLoading ? <SalesMonitoringKpiSkeleton cards={3} /> : null}
           {isError ? <p className="text-sm text-destructive">Не удалось загрузить мониторинг.</p> : null}
 
           {data ? (
@@ -218,24 +213,24 @@ export function DashboardSalesMonitoring() {
               appliedYear={applied.year}
               categorySlices={categorySlices}
               branchTotal={branchTotal}
-              supervisorTotal={supervisorTotal}
-              skuTotal={skuTotal}
               branchPage={branchPage}
               branchPageSize={branchPageSize}
               onBranchPageChange={setBranchPage}
-              onBranchPageSizeChange={(s) => { setBranchPageSize(s); setBranchPage(0); }}
-              supervisorPage={supervisorPage}
-              supervisorPageSize={supervisorPageSize}
-              onSupervisorPageChange={setSupervisorPage}
-              onSupervisorPageSizeChange={(s) => { setSupervisorPageSize(s); setSupervisorPage(0); }}
+              onBranchPageSizeChange={(s) => {
+                setBranchPageSize(s);
+                setBranchPage(0);
+              }}
+              skuTotal={skuTotal}
               skuPage={skuPage}
               skuPageSize={skuPageSize}
               onSkuPageChange={setSkuPage}
-              onSkuPageSizeChange={(s) => { setSkuPageSize(s); setSkuPage(0); }}
+              onSkuPageSizeChange={(s) => {
+                setSkuPageSize(s);
+                setSkuPage(0);
+              }}
               skuRows={data.sku_matrix}
               skuVisibleColumnOrder={skuTablePrefs.visibleColumnOrder}
               onOpenSkuColumns={() => setSkuColumnsOpen(true)}
-              clientMatrixRef={clientMatrixSection.ref}
               visibleSectionIds={visibleSectionIds}
             />
           ) : !isLoading ? (

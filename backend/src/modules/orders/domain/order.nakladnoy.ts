@@ -41,6 +41,12 @@ import {
   type NakladnoyOrderPayload,
   DEFAULT_NAKLADNOY_BUILD_OPTIONS
 } from "../order-nakladnoy-xlsx";
+import { buildWarehouseLoadXlsx } from "../warehouse-templates/build-warehouse-load-xlsx";
+import {
+  isWarehouseLayoutId,
+  warehouseLayoutDownloadFilename,
+  type WarehouseLayoutId
+} from "../warehouse-templates/warehouse-template-ids";
 import { buildNakladnoyPdf } from "../order-nakladnoy-pdf";
 import {
   loadDeliveryDebtByClient,
@@ -123,7 +129,7 @@ function fmtRuDateShort(d: Date): string {
   return `${dd}.${mm}.${yyyy}`;
 }
 
-function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderPayload {
+export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderPayload {
   const bal = o.client.client_balances[0]?.balance ?? null;
   const ag = o.agent;
   const agentLine = ag
@@ -248,12 +254,26 @@ export async function requestBulkOrderNakladnoy(
   orderIds: number[],
   template: string,
   buildOptions: NakladnoyBuildOptions = DEFAULT_NAKLADNOY_BUILD_OPTIONS,
-  format: "xlsx" | "pdf" = "xlsx"
+  format: "xlsx" | "pdf" = "xlsx",
+  warehouseLayout?: string | null
 ): Promise<BulkNakladnoyFileResult> {
   if (!NAKLADNOY_TEMPLATE_IDS.includes(template as NakladnoyTemplateId)) {
     throw new Error("INVALID_NAKLADNOY_TEMPLATE");
   }
   const tid = template as NakladnoyTemplateId;
+  let layoutId: WarehouseLayoutId | null = null;
+  if (warehouseLayout != null && warehouseLayout !== "") {
+    if (!isWarehouseLayoutId(warehouseLayout)) {
+      throw new Error("INVALID_WAREHOUSE_LAYOUT");
+    }
+    layoutId = warehouseLayout;
+    if (tid !== "nakladnoy_warehouse") {
+      throw new Error("INVALID_WAREHOUSE_LAYOUT");
+    }
+    if (format === "pdf") {
+      throw new Error("WAREHOUSE_LAYOUT_XLSX_ONLY");
+    }
+  }
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))].sort((a, b) => a - b);
   if (ids.length === 0) {
     throw new Error("EMPTY_ORDER_IDS");
@@ -340,14 +360,18 @@ export async function requestBulkOrderNakladnoy(
   const ordered = ids.map((id) => byId.get(id)!).map((o) => mapOrderToNakladnoyPayload(o as OrderNakladnoyDb));
 
   const buffer =
-    format === "pdf"
-      ? await buildNakladnoyPdf(tid, ordered)
-      : await buildNakladnoyXlsx(tid, ordered, buildOptions);
+    layoutId != null
+      ? await buildWarehouseLoadXlsx(layoutId, ordered, buildOptions)
+      : format === "pdf"
+        ? await buildNakladnoyPdf(tid, ordered)
+        : await buildNakladnoyXlsx(tid, ordered, buildOptions);
   const day = new Date().toISOString().slice(0, 10);
   const filename =
-    tid === "nakladnoy_warehouse"
-      ? `zagruz_zav_sklda_5_1_8_${day}.${format}`
-      : `nakladnye_2_1_0_${day}.${format}`;
+    layoutId != null
+      ? warehouseLayoutDownloadFilename(layoutId)
+      : tid === "nakladnoy_warehouse"
+        ? `zagruz_zav_sklda_5_1_8_${day}.${format}`
+        : `nakladnye_2_1_0_${day}.${format}`;
 
   return {
     buffer,

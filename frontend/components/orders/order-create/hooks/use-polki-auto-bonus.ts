@@ -54,6 +54,8 @@ type UsePolkiAutoBonusInput = {
   isPolkiFree: boolean;
   isPolkiByOrder: boolean;
   polkiOrderId: number | null;
+  polkiDateFrom: string;
+  polkiDateTo: string;
   polkiBonusCalcMode: PolkiBonusCalcMode;
   canShowPolkiGrid: boolean;
   clientId: string;
@@ -152,6 +154,8 @@ export function usePolkiAutoBonus(input: UsePolkiAutoBonusInput) {
       input.tenantSlug,
       cid,
       orderId,
+      input.polkiDateFrom,
+      input.polkiDateTo,
       input.priceType,
       input.selectedCategoryIds,
       debouncedLines
@@ -165,6 +169,10 @@ export function usePolkiAutoBonus(input: UsePolkiAutoBonusInput) {
       };
       if (input.isPolkiByOrder && orderId != null && orderId > 0) {
         body.order_id = orderId;
+      }
+      if (input.isPolkiFree) {
+        if (input.polkiDateFrom.trim()) body.date_from = input.polkiDateFrom.trim();
+        if (input.polkiDateTo.trim()) body.date_to = input.polkiDateTo.trim();
       }
       if (input.selectedCategoryIds.length > 0) {
         body.category_ids = input.selectedCategoryIds;

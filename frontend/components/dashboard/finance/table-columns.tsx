@@ -21,7 +21,7 @@ export function categoryTableColumns(): FinanceTableColumn<FinanceCategoryRow>[]
   return [
     {
       id: "category",
-      label: "Категория",
+      label: "Названия",
       className: "text-left",
       value: (row) => row.category,
       sortValue: (row) => row.category,
@@ -57,7 +57,7 @@ export function territoryTableColumns(
   return [
     {
       id: "territory",
-      label: "Территория",
+      label: "Названия",
       className: "text-left",
       value: (row) => resolveTerritoryDisplay(row.territory),
       sortValue: (row) => resolveTerritoryDisplay(row.territory),

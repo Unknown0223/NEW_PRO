@@ -15,7 +15,7 @@ export async function resolvePolkiBonusDebtAmount(
   tenantId: number,
   input: Pick<
     CreatePeriodReturnInput,
-    "client_id" | "price_type" | "lines" | "bonus_debt_amount" | "order_id"
+    "client_id" | "price_type" | "lines" | "bonus_debt_amount" | "order_id" | "date_from" | "date_to"
   >
 ): Promise<Prisma.Decimal> {
   const clientHint = Number(input.bonus_debt_amount);
@@ -40,6 +40,8 @@ export async function resolvePolkiBonusDebtAmount(
   const preview = await previewPolkiAutoBonusReverse(tenantId, {
     client_id: input.client_id,
     order_id: input.order_id,
+    date_from: input.date_from,
+    date_to: input.date_to,
     price_type: input.price_type,
     lines: previewLines
   });

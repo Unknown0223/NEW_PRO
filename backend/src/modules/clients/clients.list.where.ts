@@ -9,7 +9,7 @@ import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.se
 import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import type { ListClientsQuery } from "./clients.types";
 
-async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
+export async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
   const d = Math.floor(day);
   if (d < 1 || d > 7) return [];
   const json = JSON.stringify([d]);

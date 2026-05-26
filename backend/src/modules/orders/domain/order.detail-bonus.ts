@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import {
   getAllowedNextStatuses,
-  isOperatorLateStageCancelForbidden
+  isOperatorLateStageCancelForbidden,
+  normalizeOrderType
 } from "../order-status";
 import type {
   BonusGiftOverrideInput,
@@ -106,14 +107,19 @@ export function sumBonusQty(
     .toString();
 }
 
-export function allowedNextForRole(status: string, viewerRole: string | undefined): string[] {
-  if (status === "cancelled" && viewerRole !== "admin") {
-    return [];
+export function allowedNextForRole(
+  status: string,
+  viewerRole: string | undefined,
+  orderType?: string
+): string[] {
+  const type = normalizeOrderType(orderType);
+  if (status === "cancelled") {
+    return ["new"];
   }
   if (viewerRole === "operator") {
-    return getAllowedNextStatuses(status, { omitBackward: true }).filter(
+    return getAllowedNextStatuses(status, { omitBackward: false, orderType: type }).filter(
       (s) => !isOperatorLateStageCancelForbidden(status, s)
     );
   }
-  return getAllowedNextStatuses(status);
+  return getAllowedNextStatuses(status, { orderType: type });
 }

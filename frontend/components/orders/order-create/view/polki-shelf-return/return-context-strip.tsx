@@ -1,11 +1,11 @@
 "use client";
 
-import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { OrderCreateVm } from "../../hooks/use-order-create";
 import { formatPolkiMoneySum } from "./polki-format-display";
 
 export function ReturnContextStrip({ vm }: { vm: OrderCreateVm }) {
   const { clientSummaryQ, polkiContextQ, isPolkiFree, isPolkiByOrder } = vm;
+
   if (!clientSummaryQ.data && !polkiContextQ.data) return null;
 
   return (
@@ -23,7 +23,7 @@ export function ReturnContextStrip({ vm }: { vm: OrderCreateVm }) {
           </span>
         </p>
       ) : null}
-      {polkiContextQ.data ? (
+      {polkiContextQ.data && (polkiContextQ.data.items?.length ?? 0) > 0 ? (
         <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2">
           <span className="font-medium text-amber-900">Макс. к возврату: </span>
           <span className="tabular-nums font-medium text-amber-900">

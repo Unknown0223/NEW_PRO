@@ -20,7 +20,6 @@ import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
-import { MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT } from "@/lib/return-limits";
 import {
   activeRefSelectOptions,
   refEntryLabelByStored,
@@ -125,6 +124,18 @@ function ReturnsPageContent() {
 
   const activeTab = searchParams.get("tab") === "polki" ? "polki" : "list";
   const polkiMode = searchParams.get("polki_mode") === "order" ? "order" : "free";
+
+  useEffect(() => {
+    if (searchParams.get("tab") !== "polki") return;
+    const orderRaw =
+      searchParams.get("order_id")?.trim() ??
+      searchParams.get("order_ids")?.split(/[, ]+/)[0]?.trim() ??
+      "";
+    const params = new URLSearchParams();
+    params.set("type", orderRaw ? "return_by_order" : "return");
+    if (orderRaw) params.set("order_id", orderRaw);
+    router.replace(`/orders/new?${params.toString()}`);
+  }, [searchParams, router]);
 
   // ─── Returns list ──────────────────────────────────────────────────────
   const listQ = useQuery({
@@ -599,12 +610,6 @@ function ReturnsPageContent() {
     if (lines.length === 0) {
       setErr("Kamida bitta mahsulot va miqdor kiriting."); return;
     }
-    if (totalReturnQty > MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT) {
-      setErr(
-        `Max ${MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT} ta mahsulot qaytarish mumkin. Siz ${totalReturnQty} ta kiritdingiz.`
-      );
-      return;
-    }
     if (maxRet > 0 && totalReturnValue > maxRet) {
       setErr(`Qaytarish qiymati maksimal summadan (${maxReturnable}) oshmoqda.`); return;
     }
@@ -638,9 +643,7 @@ function ReturnsPageContent() {
       router.push("/returns");
     } catch (e: unknown) {
       const data = (e as { response?: { data?: { error?: string } } })?.response?.data;
-      if (data?.error === "TooManyItems")
-        setErr(`Max ${MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT} ta mahsulot qaytarish mumkin.`);
-      else if (data?.error === "QtyExceedsOrdered") setErr("Qaytarish miqdori buyurtma miqdoridan oshmoqda.");
+      if (data?.error === "QtyExceedsOrdered") setErr("Qaytarish miqdori buyurtma miqdoridan oshmoqda.");
       else if (data?.error === "NothingToReturn") setErr("Tanlangan davrda qaytariladigan mahsulot yo'q.");
       else if (data?.error === "BadClient") setErr("Mijoz topilmadi.");
       else if (data?.error === "BadProduct") setErr("Mahsulot topilmadi.");
@@ -1075,11 +1078,6 @@ function ReturnsPageContent() {
                       {formatNumberGrouped(totalReturnValue, { maxFractionDigits: 2 })}
                     </span>
                   </div>
-                  {totalReturnQty > MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT && (
-                    <p className="text-xs text-red-600">
-                      ⚠ Max {MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT} ta. Hozir {totalReturnQty} ta.
-                    </p>
-                  )}
                 </div>
 
                 {/* Submit */}

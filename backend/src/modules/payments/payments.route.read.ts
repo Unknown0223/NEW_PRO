@@ -3,6 +3,7 @@ import {
   batchConfirmPaymentsBodySchema,
   createPaymentBodySchema,
   deletePaymentQuerySchema,
+  orderCashInContextQuerySchema,
   parseOptPositiveInt,
   parsePaymentsListQuery,
   patchPaymentBodySchema,
@@ -33,6 +34,7 @@ import {
   getPaymentAllocations,
   listOpenOrdersForAllocation
 } from "./payment-allocations.service";
+import { getOrderCashInContext } from "./payment.order-cash-in";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerPaymentReadRoutes(app: FastifyInstance) {
@@ -140,6 +142,43 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         mode
       });
       return reply.send({ data });
+    }
+  );
+
+  app.get(
+    "/api/:slug/payments/order-cash-in/context",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = orderCashInContextQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          undefined,
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const orderIdsRaw = parsed.data.order_ids?.trim();
+      const order_ids = orderIdsRaw
+        ? orderIdsRaw
+            .split(/[,]+/)
+            .map((s) => Number.parseInt(s.trim(), 10))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        : undefined;
+      try {
+        const data = await getOrderCashInContext(request.tenant!.id, {
+          client_id: parsed.data.client_id,
+          order_ids
+        });
+        return reply.send({ data });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        throw e;
+      }
     }
   );
 

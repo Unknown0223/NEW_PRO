@@ -10,7 +10,8 @@ const nextConfig = {
     "@tanstack/react-query",
     "@tanstack/query-core",
     "@webdatarocks/react-webdatarocks",
-    "@webdatarocks/webdatarocks"
+    "@webdatarocks/webdatarocks",
+    "exceljs"
   ],
   /**
    * Dev: brauzer so‘rovlari `localhost:3000` orqali ketadi — API o‘chiq bo‘lsa

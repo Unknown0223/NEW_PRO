@@ -15,34 +15,15 @@ export function useMonitoringQueries(opts: {
   tenantSlug: string | null;
   hydrated: boolean;
   applied: MonitoringDraft;
-  chartsVisible: boolean;
   branchVisible: boolean;
-  supervisorVisible: boolean;
   skuVisible: boolean;
-  clientDailyVisible: boolean;
   branchPage: number;
   branchPageSize: number;
-  supervisorPage: number;
-  supervisorPageSize: number;
   skuPage: number;
   skuPageSize: number;
 }) {
-  const {
-    tenantSlug,
-    hydrated,
-    applied,
-    chartsVisible,
-    branchVisible,
-    supervisorVisible,
-    skuVisible,
-    clientDailyVisible,
-    branchPage,
-    branchPageSize,
-    supervisorPage,
-    supervisorPageSize,
-    skuPage,
-    skuPageSize
-  } = opts;
+  const { tenantSlug, hydrated, applied, branchVisible, skuVisible, branchPage, branchPageSize, skuPage, skuPageSize } =
+    opts;
 
   const queryString = useMemo(() => buildMonitoringQuery(applied), [applied]);
 
@@ -55,7 +36,7 @@ export function useMonitoringQueries(opts: {
 
   const chartsQ = useQuery({
     queryKey: ["sales-monitoring", "charts", tenantSlug, queryString],
-    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && chartsVisible,
+    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess,
     staleTime: STALE.report,
     queryFn: () => fetchMonitoringCharts(tenantSlug!, queryString)
   });
@@ -67,22 +48,6 @@ export function useMonitoringQueries(opts: {
     queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, branchPage + 1, branchPageSize, "branch")
   });
 
-  const supervisorTablesQ = useQuery({
-    queryKey: [
-      "sales-monitoring",
-      "tables",
-      "supervisor",
-      tenantSlug,
-      queryString,
-      supervisorPage,
-      supervisorPageSize
-    ],
-    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && supervisorVisible,
-    staleTime: STALE.report,
-    queryFn: () =>
-      fetchMonitoringTables(tenantSlug!, queryString, supervisorPage + 1, supervisorPageSize, "supervisor")
-  });
-
   const skuTablesQ = useQuery({
     queryKey: ["sales-monitoring", "tables", "sku", tenantSlug, queryString, skuPage, skuPageSize],
     enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && skuVisible,
@@ -90,34 +55,14 @@ export function useMonitoringQueries(opts: {
     queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, skuPage + 1, skuPageSize, "sku_matrix")
   });
 
-  const clientDailyTablesQ = useQuery({
-    queryKey: ["sales-monitoring", "tables", "client_daily", tenantSlug, queryString],
-    enabled: Boolean(tenantSlug) && hydrated && summaryQ.isSuccess && clientDailyVisible,
-    staleTime: STALE.report,
-    queryFn: () => fetchMonitoringTables(tenantSlug!, queryString, 1, 50, "client_daily")
-  });
-
   const merged = useMemo(() => {
     const summary = summaryQ.data;
     const charts = chartsQ.data;
     const branchTables = branchTablesQ.data;
-    const supervisorTables = supervisorTablesQ.data;
     const skuTables = skuTablesQ.data;
-    const clientTables = clientDailyTablesQ.data;
     const isFetching =
-      summaryQ.isFetching ||
-      chartsQ.isFetching ||
-      branchTablesQ.isFetching ||
-      supervisorTablesQ.isFetching ||
-      skuTablesQ.isFetching ||
-      clientDailyTablesQ.isFetching;
-    const isError =
-      summaryQ.isError ||
-      chartsQ.isError ||
-      branchTablesQ.isError ||
-      supervisorTablesQ.isError ||
-      skuTablesQ.isError ||
-      clientDailyTablesQ.isError;
+      summaryQ.isFetching || chartsQ.isFetching || branchTablesQ.isFetching || skuTablesQ.isFetching;
+    const isError = summaryQ.isError || chartsQ.isError || branchTablesQ.isError || skuTablesQ.isError;
 
     if (!summary?.plan_fact) {
       return {
@@ -126,7 +71,6 @@ export function useMonitoringQueries(opts: {
         isFetching,
         isError,
         branchTotal: 0,
-        supervisorTotal: 0,
         skuTotal: 0
       };
     }
@@ -145,9 +89,9 @@ export function useMonitoringQueries(opts: {
       daily_sales: charts?.daily_sales ?? [],
       sales_channels: charts?.sales_channels ?? [],
       branch_performance: branchTables?.branch_performance ?? [],
-      supervisor_performance: supervisorTables?.supervisor_performance ?? [],
+      supervisor_performance: [],
       sku_matrix: skuTables?.sku_matrix ?? [],
-      client_daily_sales: clientTables?.client_daily_sales ?? []
+      client_daily_sales: []
     };
 
     return {
@@ -156,10 +100,9 @@ export function useMonitoringQueries(opts: {
       isFetching,
       isError,
       branchTotal: branchTables?.sku_total ?? data.branch_performance.length,
-      supervisorTotal: supervisorTables?.sku_total ?? data.supervisor_performance.length,
       skuTotal: skuTables?.sku_total ?? data.sku_matrix.length
     };
-  }, [summaryQ, chartsQ, branchTablesQ, supervisorTablesQ, skuTablesQ, clientDailyTablesQ]);
+  }, [summaryQ, chartsQ, branchTablesQ, skuTablesQ]);
 
   return {
     queryString,

@@ -1,10 +1,6 @@
 /** Order create workspace — constants and lookup maps. */
-import { MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT } from "@/lib/return-limits";
-
 export const fieldClass =
   "flex h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-
-export const MAX_POLKI_RETURN_QTY = MAX_RETURN_PHYSICAL_UNITS_PER_DOCUMENT;
 
 export const POLKI_TABLE_COLS = 5;
 

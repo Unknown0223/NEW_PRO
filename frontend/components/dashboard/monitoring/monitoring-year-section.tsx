@@ -72,13 +72,10 @@ function buildYearRows(
     });
   }
 
-  if (rows.length === 0) {
-    return [{ direction: "—", akb: null, qty: null, sum: null }];
-  }
-
   return rows;
 }
 
+/** Shablon: to‘liq kenglikdagi «Сравнение по годам». */
 export function MonitoringYearSection({
   tradeDirections,
   yearComparison,
@@ -91,6 +88,7 @@ export function MonitoringYearSection({
   year: number;
 }) {
   const rows = useMemo(() => buildYearRows(tradeDirections, yearComparison), [tradeDirections, yearComparison]);
+  const hasContent = rows.length > 0;
 
   const prevMonth = yearComparison?.previous.month ?? month;
   const prevYear = yearComparison?.previous.year ?? year - 1;
@@ -98,35 +96,39 @@ export function MonitoringYearSection({
   const curYear = yearComparison?.current.year ?? year;
 
   return (
-    <section className="sales-dashboard-panel sales-motion-slide-up flex h-full min-h-[320px] flex-col p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-[14px] font-semibold text-slate-900">Сравнение по годам:</h3>
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold text-slate-800">Сравнение по годам</h2>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
+          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
             {monthBadgeLabel(prevMonth, prevYear)}
           </span>
           <span className="text-slate-400">↔</span>
-          <span className="rounded-lg bg-teal-50 px-2.5 py-1 text-[12px] font-medium text-teal-700">
+          <span className="rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700">
             {monthBadgeLabel(curMonth, curYear)}
           </span>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-0 overflow-auto pr-1">
-        {rows.map((y) => (
-          <div
-            key={y.direction}
-            className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 py-2 last:border-0"
-          >
-            <div className="col-span-3 truncate text-[12px] font-medium text-slate-700" title={y.direction}>
-              {y.direction}
+      {!hasContent ? (
+        <p className="py-8 text-center text-sm text-slate-500">Нет данных для сравнения по годам</p>
+      ) : (
+        <div className="space-y-0">
+          {rows.map((y) => (
+            <div
+              key={y.direction}
+              className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 py-2.5 last:border-0"
+            >
+              <div className="col-span-3 truncate text-sm font-medium text-slate-700" title={y.direction}>
+                {y.direction}
+              </div>
+              <GrowthMetric label="АКБ" value={y.akb} />
+              <GrowthMetric label="Кол-во" value={y.qty} />
+              <GrowthMetric label="Сумма" value={y.sum} />
             </div>
-            <GrowthMetric label="АКБ" value={y.akb} />
-            <GrowthMetric label="Кол-во" value={y.qty} />
-            <GrowthMetric label="Сумма" value={y.sum} />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -8,8 +8,14 @@ import type {
   FinanceDashboardFilters,
   FinanceDashboardSnapshot,
   FinancePaymentTypeRow,
+  FinancePeriodGranularity,
   FinancePeriodRow
 } from "./dashboard.finance.types";
+import {
+  buildFinancePeriodBalance,
+  financePeriodGranularity,
+  financePeriodTruncSql
+} from "./dashboard.finance.period";
 import {
   financeClientFilterSql,
   financeDateExprByType,
@@ -42,6 +48,15 @@ export async function getFinanceDashboardSummary(
 
   const { from, to, orderScope, orderScopeO2, receivableOrderScope, clientFilter } =
     await buildFinanceScopes(tenantId, filters);
+  const periodGranularity: FinancePeriodGranularity = financePeriodGranularity(from, to);
+  const debtPeriodExpr = financePeriodTruncSql(
+    periodGranularity,
+    financeDateExprByType(filters.date_type)
+  );
+  const payPeriodExpr = financePeriodTruncSql(
+    periodGranularity,
+    Prisma.sql`COALESCE(p.paid_at, p.created_at)`
+  );
 
   const [
     salesRows,
@@ -160,7 +175,7 @@ export async function getFinanceDashboardSummary(
     prisma.$queryRaw<Array<{ period: string; debt_sum: Prisma.Decimal; payment_sum: Prisma.Decimal }>>`
       WITH debts AS (
         SELECT
-          DATE_TRUNC('day', ${financeDateExprByType(filters.date_type)})::date AS p,
+          ${debtPeriodExpr} AS p,
           SUM(o.total_sum)::numeric(15,2) AS v
         FROM orders o
         JOIN users u ON u.id = o.agent_id
@@ -170,7 +185,7 @@ export async function getFinanceDashboardSummary(
       ),
       pays AS (
         SELECT
-          DATE_TRUNC('day', COALESCE(p.paid_at, p.created_at))::date AS p,
+          ${payPeriodExpr} AS p,
           SUM(p.amount)::numeric(15,2) AS v
         FROM client_payments p
         JOIN clients c ON c.id = p.client_id
@@ -190,7 +205,7 @@ export async function getFinanceDashboardSummary(
       FROM debts d
       FULL OUTER JOIN pays y ON y.p = d.p
       ORDER BY period ASC
-      LIMIT 120
+      LIMIT 180
     `
   ]);
 
@@ -228,6 +243,8 @@ export async function getFinanceDashboardSummary(
     payment_sum: r.payment_sum.toString()
   }));
 
+  const period_balance = buildFinancePeriodBalance(paymentRows, totalPayments, totalDebt);
+
   const result: FinanceDashboardSummaryPayload = {
     filters,
     summary: {
@@ -241,7 +258,9 @@ export async function getFinanceDashboardSummary(
     category_analytics,
     payment_type_analytics,
     general_balance,
-    debt_and_payment_by_period
+    debt_and_payment_by_period,
+    period_balance,
+    period_granularity: periodGranularity
   };
   await setSnapshotCache(snapshotKey, result);
   return result;

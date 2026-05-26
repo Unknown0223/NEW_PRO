@@ -21,7 +21,6 @@ import {
 } from "@/components/dashboard/finance/finance-filters-bar";
 import { FinanceKpiSection } from "@/components/dashboard/finance/finance-kpi-section";
 import { FinancePeriodChart } from "@/components/dashboard/finance/finance-period-chart";
-import { FinanceSummaryStrip } from "@/components/dashboard/finance/finance-summary-strip";
 import { FinanceDashboardKpiSkeleton } from "@/components/dashboard/finance/finance-dashboard-kpi-skeleton";
 import { FinanceDashboardTableSkeleton } from "@/components/dashboard/finance/finance-dashboard-table-skeleton";
 import { useFinanceQueries } from "@/components/dashboard/finance/use-finance-queries";
@@ -147,7 +146,7 @@ export function DashboardFinance() {
   const territoryTotals = useMemo(() => (data ? buildTerritoryTotalsRow(data) : undefined), [data]);
 
   return (
-    <PageShell>
+    <PageShell className="space-y-6">
       {!hydrated ? (
         <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
       ) : !tenantSlug ? (
@@ -192,46 +191,55 @@ export function DashboardFinance() {
                 <p className="text-xs font-medium text-teal-700">Обновление данных…</p>
               ) : null}
 
-              <FinanceSummaryStrip summary={data.summary} />
-
-              <FinanceKpiSection data={data} />
-              <FinanceBalanceSection data={data} />
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <div className="min-w-0 xl:col-span-7">
-                  <FinanceCategoryChart data={data} />
-                </div>
-                <div className="min-w-0 xl:col-span-5">
-                  <FinanceDebtChart debtRatioPct={data.summary.debt_ratio_pct} />
-                </div>
+              <div className="flex flex-col gap-6">
+                <section className="finance-motion-fade min-w-0">
+                  <FinanceKpiSection data={data} />
+                </section>
+                <section className="finance-motion-fade min-w-0" style={{ animationDelay: "80ms" }}>
+                  <FinanceBalanceSection data={data} />
+                </section>
               </div>
 
-              <FinancePeriodChart data={data} />
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                <section className="finance-motion-slide min-w-0 xl:col-span-7">
+                  <FinanceCategoryChart data={data} />
+                </section>
+                <section
+                  className="finance-motion-slide min-w-0 xl:col-span-5"
+                  style={{ animationDelay: "100ms" }}
+                >
+                  <FinanceDebtChart debtRatioPct={data.summary.debt_ratio_pct} />
+                </section>
+              </div>
+
+              <section className="finance-motion-fade" style={{ animationDelay: "140ms" }}>
+                <FinancePeriodChart data={data} />
+              </section>
 
               <FinanceDataTable
                 title="По категориям"
                 subtitle={
                   applied.payment_types.length > 0
                     ? "Суммы по выбранным способам оплаты"
-                    : "Общая сумма по категории"
+                    : "Сортировка, поиск и экспорт"
                 }
                 data={data.category_analytics}
                 columns={categoryCols}
                 totals={categoryTotals}
                 searchKeys={[(row) => row.category]}
                 exportFileName="finance-categories.csv"
-                minWidth={720}
+                minWidth={1120}
               />
 
               <FinanceDataTable
                 title="Долги по территориям"
-                subtitle="Агрегация задолженности"
+                subtitle="Агрегация задолженности по территориям"
                 data={data.territory_debts}
                 columns={territoryCols}
                 totals={territoryTotals}
                 searchKeys={[(row) => resolveTerritoryDisplay(row.territory)]}
                 exportFileName="territory-debt.csv"
-                minWidth={640}
+                minWidth={980}
               />
 
               <div ref={ledgerSection.ref}>

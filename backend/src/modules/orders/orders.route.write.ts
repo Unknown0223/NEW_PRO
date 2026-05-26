@@ -7,6 +7,7 @@ import {
   ordersListQuerySchema,
   patchOrderLinesBodySchema,
   patchOrderMetaBodySchema,
+  patchOrderMilestoneAtBodySchema,
   patchOrderStatusBodySchema
 } from "../../contracts/orders.schemas";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
@@ -33,6 +34,7 @@ import {
   requestBulkOrderNakladnoy,
   updateOrderLines,
   updateOrderMeta,
+  updateOrderMilestoneAt,
   updateOrderStatus
 } from "./orders.service";
 
@@ -61,11 +63,15 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
           id,
           parsed.data.status,
           actorUserId,
-          actor.role
+          actor.role,
+          parsed.data.occurred_at
         );
         return reply.send(row);
       } catch (e) {
         const msg = getErrorCode(e) ?? "";
+        if (msg === "INVALID_OCCURRED_AT") {
+          return sendApiError(reply, request, 400, "InvalidOccurredAt");
+        }
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "FORBIDDEN_REVERT") {
           return sendApiError(reply, request, 403, "ForbiddenRevert");
@@ -83,6 +89,43 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
             from: ex.from,
             to: ex.to
           });
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/api/:slug/orders/:id/milestone-at",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id)) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      const parsed = patchOrderMilestoneAtBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const actor = getAccessUser(request);
+        const row = await updateOrderMilestoneAt(
+          request.tenant!.id,
+          id,
+          parsed.data.milestone,
+          parsed.data.occurred_at,
+          actor.role
+        );
+        return reply.send(row);
+      } catch (e) {
+        const msg = getErrorCode(e) ?? "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "MILESTONE_NOT_FOUND") {
+          return sendApiError(reply, request, 404, "MilestoneNotFound");
+        }
+        if (msg === "INVALID_STATUS" || msg === "INVALID_OCCURRED_AT") {
+          return sendApiError(reply, request, 400, "ValidationError");
         }
         throw e;
       }

@@ -8,8 +8,14 @@ import type { ClientRow } from "@/lib/client-types";
 import type { ProductRow } from "@/lib/product-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { checkShelfReturnByOrder } from "@/lib/shelf-return-by-order";
+import { polkiReturnEmptyListMessage } from "@/lib/return-filter-messages";
 import type { AxiosError } from "axios";
 import { STALE } from "@/lib/query-stale";
+import { defaultPolkiDateRangeFromFilter } from "@/lib/return-filter-dates";
+import type { ReturnFilterMetaView } from "@/lib/return-filter-messages";
+import { returnFilterProfileQueryKey } from "@/lib/return-filter-settings";
 import {
   orderAgentFilterOption,
   orderClientPickerDisplayName,
@@ -30,7 +36,7 @@ import type {
   PolkiClientItem,
   PolkiOrderGroup
 } from "../types";
-import { MAX_POLKI_RETURN_QTY, POLKI_SKIDKA_OPTS } from "../constants";
+import { POLKI_SKIDKA_OPTS } from "../constants";
 import { polkiDefaultsFromOrderRow } from "../view/polki-shelf-return/polki-apply-order-defaults";
 import {
   tradeDirectionLabel,
@@ -64,6 +70,7 @@ const EMPTY_CREATE_PRODUCTS: ProductRow[] = [];
 
 export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: OrderCreateProps) {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const normalizedType = (orderType ?? "order").trim();
   const isExchangeFlow = normalizedType === "exchange";
   const isPolkiFree = normalizedType === "return";
@@ -99,6 +106,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const [polkiRangeOpen, setPolkiRangeOpen] = useState(false);
   const [polkiOrderIds, setPolkiOrderIds] = useState<number[]>([]);
   const polkiAutoCategoriesOrderRef = useRef<number | null>(null);
+  const polkiDeepLinkAppliedRef = useRef(false);
+
+  const deepLinkClientId = useMemo(() => {
+    const raw = searchParams.get("client_id")?.trim() ?? "";
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [searchParams]);
+
+  const deepLinkSourceOrderId = useMemo(() => {
+    const raw = searchParams.get("source_order_id")?.trim() ?? "";
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [searchParams]);
   const [polkiTotalQty, setPolkiTotalQty] = useState<Record<string, string>>({});
   const [polkiBonusToBalance, setPolkiBonusToBalance] = useState<Record<string, boolean>>({});
   const [polkiBonusCash, setPolkiBonusCash] = useState<Record<string, string>>({});
@@ -290,8 +310,39 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const clientIdNum = selectedClientIdNum;
 
+  const returnFilterSettingsQ = useQuery({
+    queryKey: returnFilterProfileQueryKey(tenantSlug),
+    enabled: Boolean(tenantSlug && isPolkiSheet),
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        return_filter: {
+          period_enabled: boolean;
+          period_unit: "day" | "month";
+          period_value: number;
+          balance_zero_enabled: boolean;
+        };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data.return_filter;
+    }
+  });
+
+  const polkiDefaultDatesAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!isPolkiFree || !returnFilterSettingsQ.data) return;
+    if (polkiDefaultDatesAppliedRef.current) return;
+    const range = defaultPolkiDateRangeFromFilter(returnFilterSettingsQ.data);
+    if (range) {
+      setPolkiDateFrom(range.dateFrom);
+      setPolkiDateTo(range.dateTo);
+    }
+    polkiDefaultDatesAppliedRef.current = true;
+  }, [isPolkiFree, returnFilterSettingsQ.data]);
+
+
   type ClientReturnDataPolki = {
     polki_scope?: "period" | "order";
+    filter_meta?: ReturnFilterMetaView;
     orders?: Array<{
       id: number;
       number: string;
@@ -354,21 +405,28 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     ),
     staleTime: STALE.list,
     queryFn: async () => {
-      const { data: body } = await api.get<{ data: OrderReturnBalanceView[] }>(
-        `/api/${tenantSlug}/returns/order-balances?client_id=${clientIdNum}`
-      );
-      return body.data ?? [];
+      const { data: body } = await api.get<{
+        balances: OrderReturnBalanceView[];
+        filter_meta?: ReturnFilterMetaView;
+        /** @deprecated eski API */
+        data?: OrderReturnBalanceView[];
+      }>(`/api/${tenantSlug}/returns/order-balances?client_id=${clientIdNum}`);
+      return {
+        balances: body.balances ?? body.data ?? [],
+        filter_meta: body.filter_meta ?? null
+      };
     }
   });
 
+  const polkiOrderFilterMeta = polkiOrderBalancesQ.data?.filter_meta ?? null;
+
   const polkiOrdersForPick = useMemo(() => {
-    const closedIds = new Set(
-      (polkiOrderBalancesQ.data ?? []).filter((b) => b.fully_returned).map((b) => b.order_id)
-    );
+    const eligibleIds = new Set((polkiOrderBalancesQ.data?.balances ?? []).map((b) => b.order_id));
+    const balancesReady = polkiOrderBalancesQ.isSuccess;
     return (polkiOrdersPickQ.data ?? [])
       .filter(isPolkiReturnByOrderPickable)
-      .filter((o) => !closedIds.has(o.id));
-  }, [polkiOrdersPickQ.data, polkiOrderBalancesQ.data]);
+      .filter((o) => !balancesReady || eligibleIds.has(o.id));
+  }, [polkiOrdersPickQ.data, polkiOrderBalancesQ.data, polkiOrderBalancesQ.isSuccess]);
 
   const exchangeOrderIdsSortedKey = useMemo(
     () => [...exchangeSourceOrderIds].sort((a, b) => a - b).join(","),
@@ -404,7 +462,11 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     }
   });
 
-  const polkiOrdersPickRawCount = polkiOrdersPickQ.data?.length ?? 0;
+  const polkiOrdersPickRawCount =
+    polkiOrderFilterMeta?.delivered_in_period ??
+    polkiOrderFilterMeta?.delivered_after_filter ??
+    polkiOrdersPickQ.data?.length ??
+    0;
 
   const polkiOrderPickHalfLists = useMemo((): [PolkiOrderPickRow[], PolkiOrderPickRow[]] => {
     const list = polkiOrdersForPick;
@@ -422,6 +484,13 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   }, [isPolkiByOrder, polkiOrdersForPick]);
 
   const polkiOrderFieldsFromOrder = isPolkiByOrder && polkiOrderIds.length > 0;
+
+  useEffect(() => {
+    if (!isPolkiByOrder || deepLinkClientId == null) return;
+    if (!clientId.trim()) {
+      setClientId(String(deepLinkClientId));
+    }
+  }, [isPolkiByOrder, deepLinkClientId, clientId]);
 
   const selectPolkiOrder = useCallback(
     (id: number) => {
@@ -453,6 +522,59 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     },
     [polkiOrdersForPick, createCtxQ.data]
   );
+
+  useEffect(() => {
+    if (!isPolkiByOrder || deepLinkSourceOrderId == null) return;
+    if (polkiDeepLinkAppliedRef.current) return;
+    if (!tenantSlug?.trim()) return;
+    if (!Number.isFinite(clientIdNum) || clientIdNum < 1) return;
+    if (deepLinkClientId != null && clientIdNum !== deepLinkClientId) return;
+    if (polkiOrdersPickQ.isLoading || polkiOrderBalancesQ.isLoading) return;
+    if (!polkiOrdersPickQ.isSuccess || !polkiOrderBalancesQ.isSuccess) return;
+
+    polkiDeepLinkAppliedRef.current = true;
+    const eligible = polkiOrdersForPick.some((o) => o.id === deepLinkSourceOrderId);
+    if (eligible) {
+      selectPolkiOrder(deepLinkSourceOrderId);
+      return;
+    }
+
+    void checkShelfReturnByOrder(tenantSlug, clientIdNum, deepLinkSourceOrderId)
+      .then((result) => {
+        if (result.allowed) {
+          selectPolkiOrder(deepLinkSourceOrderId);
+          return;
+        }
+        setSelectionNotice(
+          result.message?.trim() ||
+            polkiReturnEmptyListMessage({
+              filterMeta: polkiOrderFilterMeta,
+              deliveredOrdersCount: polkiOrdersPickRawCount,
+              returnableCount: polkiOrdersForPick.length,
+              isByOrder: true
+            })
+        );
+      })
+      .catch((e) => {
+        setSelectionNotice(
+          getUserFacingError(e, "Не удалось открыть возврат по заказу. Проверьте фильтр и баланс.")
+        );
+      });
+  }, [
+    isPolkiByOrder,
+    deepLinkSourceOrderId,
+    deepLinkClientId,
+    tenantSlug,
+    clientIdNum,
+    polkiOrdersPickQ.isLoading,
+    polkiOrdersPickQ.isSuccess,
+    polkiOrderBalancesQ.isLoading,
+    polkiOrderBalancesQ.isSuccess,
+    polkiOrdersForPick,
+    polkiOrderFilterMeta,
+    polkiOrdersPickRawCount,
+    selectPolkiOrder
+  ]);
 
   useEffect(() => {
     if (!isPolkiSheet) return;
@@ -524,7 +646,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const polkiOrderBalanceById = useMemo(() => {
     const m = new Map<number, OrderReturnBalanceView>();
-    for (const b of polkiOrderBalancesQ.data ?? []) {
+    for (const b of polkiOrderBalancesQ.data?.balances ?? []) {
       m.set(b.order_id, b);
     }
     for (const b of polkiContextQ.data?.order_balances ?? []) {
@@ -1053,6 +1175,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     isPolkiFree,
     isPolkiByOrder,
     polkiOrderId: isPolkiByOrder ? (polkiOrderIds[0] ?? null) : null,
+    polkiDateFrom,
+    polkiDateTo,
     polkiBonusCalcMode,
     canShowPolkiGrid: canShowPolkiGridForHook,
     clientId,
@@ -1766,7 +1890,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             }
           }
         }
-        if (!polkiUsesAutoBonus && sumPhysical > MAX_POLKI_RETURN_QTY) throw new Error("polki_too_many");
         const noteParts: string[] = [];
         if (polkiHeaderDate.trim()) noteParts.push(`Дата заявки: ${polkiHeaderDate.trim()}`);
         if (polkiTradeDirection.trim()) {
@@ -2033,12 +2156,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           setLocalError("Количество возврата не больше проданного.");
           return;
         }
-        if (e.message === "polki_too_many") {
-          setLocalError(
-            `В одном документе не более ${MAX_POLKI_RETURN_QTY} шт к возврату на склад.`
-          );
-          return;
-        }
         if (e.message === "polki_over_max") {
           setLocalError(
             "Количество к возврату не может превышать остаток по заказу (см. «макс. всего» в строке)."
@@ -2102,10 +2219,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       }
       if (e.message === "polki_qty_over") {
         setLocalError("Qaytarish miqdori sotilgan miqdordan oshmasin.");
-        return;
-      }
-      if (e.message === "polki_too_many") {
-        setLocalError(`Bir hujjatda jami qaytarish ${MAX_POLKI_RETURN_QTY} donadan oshmasin.`);
         return;
       }
       if (e.message === "polki_over_max") {
@@ -2234,13 +2347,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         setLocalError("Zakaz bu mijozga tegishli emas yoki topilmadi.");
         return;
       }
-      if (code === "TooManyItems") {
-        const m = (d as { max?: number } | undefined)?.max;
-        setLocalError(
-          m != null ? `Juda ko‘p qator: server limiti ${m} ta.` : "Juda ko‘p qator (server limiti)."
-        );
-        return;
-      }
       if (code === "QtyExceedsOrdered") {
         setLocalError("Qaytarish miqdori sotilgan / buyurtma miqdoridan oshmasin.");
         return;
@@ -2314,7 +2420,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           polkiContextQ.isSuccess &&
           polkiSelectedLinesCount > 0 &&
           (polkiTotalReturnQtySum > 0 || polkiTotalBonusCashSum > 0) &&
-          (polkiUsesAutoBonus || polkiTotalReturnQtySum <= MAX_POLKI_RETURN_QTY) &&
           !hasPolkiQtyOverMax &&
           !hasPolkiBonusCashOverMax &&
           !mutation.isPending &&
@@ -2348,29 +2453,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             (!requiresPaymentMethodForSubmit || Boolean(paymentMethodRef.trim()))
         );
 
-  /** Nega «Возврат» o‘chiq — foydalanuvchiga aniq sabab (rus.). */
-  const polkiOverDocumentLimit =
-    isPolkiSheet && !polkiUsesAutoBonus && polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY;
-
-  const applyPolkiQtyUnderDocumentLimit = useCallback(() => {
-    const active = polkiRowsAll.filter((r) => parsePolkiQty(polkiTotalQty[r.pair_key] ?? "") > 0);
-    if (active.length === 0) return;
-    const share = Math.floor(MAX_POLKI_RETURN_QTY / active.length);
-    setPolkiTotalQty((prev) => {
-      const next = { ...prev };
-      for (const r of active) {
-        const cap = polkiRowMaxReturnQty(r);
-        const q = cap > 0 ? Math.min(share, cap) : share;
-        next[r.pair_key] = formatPolkiPieceQty(q);
-      }
-      return next;
-    });
-    setLocalError(null);
-    setSelectionNotice(
-      `Подогнано под лимит: ~${share} шт в каждой из ${active.length} поз. (макс. ${MAX_POLKI_RETURN_QTY} шт на склад). Дождитесь «Пересчёт…» и нажмите «Оформить возврат».`
-    );
-  }, [polkiRowsAll, polkiTotalQty]);
-
   const polkiSubmitBlockedReason = useMemo((): string | null => {
     if (!isPolkiSheet || mutation.isPending) return null;
     if (!hasClient) return "Выберите клиента.";
@@ -2399,9 +2481,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     }
     if (polkiTotalReturnQtySum <= 0 && polkiTotalBonusCashSum <= 0) {
       return "Суммарно к возврату 0: укажите шт в колонке «всего к возврату».";
-    }
-    if (!polkiUsesAutoBonus && polkiTotalReturnQtySum > MAX_POLKI_RETURN_QTY) {
-      return `Превышен лимит документа: на склад (оплата + бонус) пойдёт ${polkiTotalReturnQtySum} шт, максимум ${MAX_POLKI_RETURN_QTY} шт в одном возврате. Уменьшите количество или оформите несколько возвратов.`;
     }
     if (hasPolkiQtyOverMax) {
       return "В строке больше, чем по заказу (см. «макс. всего») — уменьшите количество.";
@@ -2586,6 +2665,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiLineKeySet,
     polkiOrderBalanceById,
     polkiOrderBalancesQ,
+    polkiOrderFilterMeta,
     polkiSelectedOrderBalance,
     polkiOrderDateById,
     polkiOrderGroups,
@@ -2604,8 +2684,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiSelectedLinesCount,
     polkiSkidkaType,
     polkiSubmitBlockedReason,
-    polkiOverDocumentLimit,
-    applyPolkiQtyUnderDocumentLimit,
     polkiTotalBonusCashSum,
     polkiTotalQty,
     polkiEnteredTotalQtySum,

@@ -212,3 +212,26 @@ export const batchConfirmPaymentsBodySchema = z.object({
 export const deletePaymentQuerySchema = z.object({
   cancel_reason_ref: z.string().max(128).optional()
 });
+
+/** GET `/api/:slug/payments/order-cash-in/context` */
+export const orderCashInContextQuerySchema = z.object({
+  client_id: z.coerce.number().int().positive(),
+  order_ids: z.string().max(8000).optional()
+});
+
+/** POST `/api/:slug/payments/order-cash-in` */
+export const createOrderCashInBodySchema = z.object({
+  client_id: z.number().int().positive(),
+  cash_desk_id: z.number().int().positive().nullable().optional(),
+  paid_at: z.string().max(48).optional().nullable(),
+  lines: z
+    .array(
+      z.object({
+        order_id: z.number().int().positive(),
+        payment_type: z.string().min(1).max(64),
+        amount: z.number().positive()
+      })
+    )
+    .min(1)
+    .max(5000)
+});

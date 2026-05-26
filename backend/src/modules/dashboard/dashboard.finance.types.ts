@@ -54,6 +54,16 @@ export type FinancePeriodRow = {
   payment_sum: string;
 };
 
+export type FinancePeriodBalanceBlock = {
+  uzs: string;
+  cash: string;
+  transfer: string;
+  terminal: string;
+  tenge: string;
+};
+
+export type FinancePeriodGranularity = "day" | "week" | "month";
+
 export type FinanceClientDebtRow = {
   client_id: number;
   client_name: string;
@@ -73,5 +83,7 @@ export type FinanceDashboardSnapshot = {
   territory_debts: FinanceTerritoryDebtRow[];
   general_balance: FinanceBalanceBlock;
   debt_and_payment_by_period: FinancePeriodRow[];
+  period_balance: FinancePeriodBalanceBlock;
+  period_granularity: FinancePeriodGranularity;
   clients_debt_list: FinanceClientDebtRow[];
 };

@@ -12,7 +12,11 @@ import {
   listSalesReturnsForOrder,
   getSalesReturnById
 } from "./sales-returns.service";
-import { getClientReturnsData, listClientOrderPickBalances } from "./returns-enhanced.service";
+import {
+  checkShelfReturnByOrderEligibility,
+  getClientReturnsData,
+  listClientOrderPickBalancesWithMeta
+} from "./returns-enhanced.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -135,6 +139,40 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    "/api/:slug/returns/shelf-return-by-order/check",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const clientId = Number.parseInt(q.client_id ?? "0", 10);
+      const orderId = Number.parseInt(q.order_id ?? "0", 10);
+      if (!Number.isFinite(clientId) || clientId < 1) {
+        return sendApiError(reply, request, 400, "ClientIdRequired");
+      }
+      if (!Number.isFinite(orderId) || orderId < 1) {
+        return sendApiError(reply, request, 400, "OrderIdRequired");
+      }
+      const selected = parseSelectedMastersFromQuery(q);
+      const scope = await resolveConstraintScope(request.tenant!.id, selected);
+      if (scope.constrained && !scope.client_ids.includes(clientId)) {
+        return sendApiError(reply, request, 400, "BadClientScope");
+      }
+      try {
+        const result = await checkShelfReturnByOrderEligibility(
+          request.tenant!.id,
+          clientId,
+          orderId
+        );
+        return reply.send(result);
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        throw e;
+      }
+    }
+  );
+
+  app.get(
     "/api/:slug/returns/order-balances",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
@@ -150,8 +188,8 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "BadClientScope");
       }
       try {
-        const data = await listClientOrderPickBalances(request.tenant!.id, clientId);
-        return reply.send({ data });
+        const result = await listClientOrderPickBalancesWithMeta(request.tenant!.id, clientId);
+        return reply.send(result);
       } catch (e) {
         const code = e instanceof Error ? e.message : "";
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");

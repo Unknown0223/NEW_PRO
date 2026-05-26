@@ -1,45 +1,51 @@
 "use client";
 
-import { SalesSectionPanel } from "@/components/dashboard/sales/sales-section-panel";
 import type { MonitoringSnapshot } from "@/components/dashboard/monitoring/types";
 import { coverageClass, fmtCount, fmtMoney, pct } from "@/components/dashboard/monitoring/utils";
 import { cn } from "@/lib/utils";
 
-/** Упрощённая матрица портфеля: АКБ/ОКБ/покрытие по филиалам (полная SKU×филиал — отдельный источник). */
+/** Shablon: to‘liq kenglikdagi «Акб по портфелям и по филиалам». */
 export function MonitoringPortfolioSection({ branches }: { branches: MonitoringSnapshot["branch_performance"] }) {
-  const top = branches.slice(0, 12);
+  const hasRows = branches.length > 0;
+
   return (
-    <SalesSectionPanel
-      className="sales-motion-delay-200 h-full min-h-[320px]"
-      title="АКБ по портфелям и по филиалам"
-      subtitle="АКБ / ОКБ по филиалу"
-    >
-      <div className="overflow-auto rounded-lg border border-slate-200">
-        <table className="w-full min-w-[640px] text-[13px]">
-          <thead className="bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-2.5 text-left font-medium">Филиал</th>
-              <th className="px-3 py-2.5 text-right font-medium">АКБ</th>
-              <th className="px-3 py-2.5 text-right font-medium">ОКБ</th>
-              <th className="px-3 py-2.5 text-right font-medium">Покрытие</th>
-              <th className="px-3 py-2.5 text-right font-medium">Факт</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {top.map((r) => (
-              <tr key={r.branch} className="hover:bg-slate-50/70">
-                <td className="px-3 py-2.5 font-medium">{r.branch}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmtCount(r.akb)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmtCount(r.okb ?? 0)}</td>
-                <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", r.coverage_pct != null ? coverageClass(r.coverage_pct) : "")}>
-                  {r.coverage_pct != null ? pct(r.coverage_pct) : "—"}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmtMoney(r.fact_sales)}</td>
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <h2 className="mb-4 text-lg font-semibold text-slate-800">Акб по портфелям и по филиалам</h2>
+      {!hasRows ? (
+        <p className="py-8 text-center text-sm text-slate-500">Нет данных по филиалам за период</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Филиал</th>
+                <th className="px-4 py-3 text-right font-medium">АКБ</th>
+                <th className="px-4 py-3 text-right font-medium">ОКБ</th>
+                <th className="px-4 py-3 text-right font-medium">Покрытие</th>
+                <th className="px-4 py-3 text-right font-medium">Факт</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </SalesSectionPanel>
+            </thead>
+            <tbody>
+              {branches.map((r) => (
+                <tr key={r.branch} className="border-b border-slate-100 hover:bg-teal-50/50">
+                  <td className="px-4 py-3 font-medium text-slate-800">{r.branch}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtCount(r.akb)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtCount(r.okb ?? 0)}</td>
+                  <td
+                    className={cn(
+                      "px-4 py-3 text-right tabular-nums font-medium",
+                      r.coverage_pct != null ? coverageClass(r.coverage_pct) : ""
+                    )}
+                  >
+                    {r.coverage_pct != null ? pct(r.coverage_pct) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmtMoney(r.fact_sales)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

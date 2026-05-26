@@ -9,6 +9,7 @@ import {
   sumBonusQty
 } from "./order.detail-bonus";
 import { loadOrdersFinanceEnrichment } from "./order.detail-finance";
+import { enrichItemsBonusDisplay } from "./order.detail-items-bonus";
 import type { OrderDetailLoaded, OrderDetailRow, OrderItemRow } from "./order.types";
 
 export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDetailRow {
@@ -27,6 +28,7 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     order_type: o.order_type ?? "order",
     client_id: o.client_id,
     client_name: cl.name,
+    client_code: cl.client_code?.trim() || null,
     client_legal_name: cl.legal_name?.trim() || null,
     warehouse_id: o.warehouse_id,
     warehouse_name: o.warehouse?.name ?? null,
@@ -72,8 +74,8 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     created_at: o.created_at.toISOString(),
     warehouse_block_id: o.warehouse_block_id ?? null,
     warehouse_block_name: o.warehouse_block?.name ?? null,
-    items: mapItems(o.items),
-    allowed_next_statuses: allowedNextForRole(o.status, viewerRole),
+    items: enrichItemsBonusDisplay(mapItems(o.items)),
+    allowed_next_statuses: allowedNextForRole(o.status, viewerRole, o.order_type ?? "order"),
     status_logs: [...o.status_logs].reverse().map((l) => ({
       id: l.id,
       from_status: l.from_status,
@@ -128,6 +130,9 @@ export function mapItems(
       name: string;
       volume_m3: Prisma.Decimal | null;
       weight_kg: Prisma.Decimal | null;
+      category_id: number | null;
+      category: { id: number; name: string } | null;
+      product_group: { id: number; name: string } | null;
     };
   }>
 ): OrderItemRow[] {
@@ -142,11 +147,18 @@ export function mapItems(
     if (wgt != null) {
       lineWeight = i.qty.mul(wgt).toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP).toString();
     }
+    const categoryName =
+      i.product.product_group?.name?.trim() ||
+      i.product.category?.name?.trim() ||
+      null;
+    const categoryId = i.product.product_group?.id ?? i.product.category?.id ?? i.product.category_id ?? null;
     return {
       id: i.id,
       product_id: i.product_id,
       sku: i.product.sku,
       name: i.product.name,
+      category_id: categoryId,
+      category_name: categoryName,
       qty: i.qty.toString(),
       price: i.price.toString(),
       total: i.total.toString(),

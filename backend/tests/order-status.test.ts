@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { allowedNextForRole } from "../src/modules/orders/domain/order.detail-bonus";
 import {
   canTransitionOrderStatus,
   getAllowedNextStatuses,
   isBackwardTransition,
   isOperatorLateStageCancelForbidden,
+  isReopenCancelledTransition,
   isValidOrderStatus,
+  mayActorRevertOneStep,
   orderTypeHasTradeReceivableDebtSemantics,
   statusContributesToDeliveredReceivableDebt
 } from "../src/modules/orders/order-status";
@@ -31,11 +34,27 @@ describe("order-status", () => {
     expect(canTransitionOrderStatus("picking", "new")).toBe(false);
   });
 
-  it("returned -> cancelled for standard order; cancelled can reopen to new (admin enforced in API)", () => {
-    expect(getAllowedNextStatuses("returned")).toEqual(["cancelled"]);
+  it("returned -> cancelled for standard order; cancelled can reopen to new", () => {
+    expect(getAllowedNextStatuses("returned")).toEqual(["cancelled", "delivered"]);
     expect(getAllowedNextStatuses("cancelled")).toEqual(["new"]);
     expect(canTransitionOrderStatus("cancelled", "new")).toBe(true);
+    expect(isReopenCancelledTransition("cancelled", "new")).toBe(true);
     expect(isBackwardTransition("cancelled", "new")).toBe(false);
+    expect(allowedNextForRole("cancelled", "operator")).toEqual(["new"]);
+    expect(mayActorRevertOneStep("operator")).toBe(true);
+  });
+
+  it("return type: confirmed -> delivering only (not direct delivered)", () => {
+    expect(canTransitionOrderStatus("confirmed", "delivering", "return")).toBe(true);
+    expect(canTransitionOrderStatus("confirmed", "delivered", "return")).toBe(false);
+    expect(canTransitionOrderStatus("delivered", "delivering", "return")).toBe(true);
+  });
+
+  it("operator allowed next includes one-step backward from picking", () => {
+    const next = allowedNextForRole("picking", "operator", "order");
+    expect(next).toContain("confirmed");
+    expect(next).toContain("delivering");
+    expect(next).not.toContain("new");
   });
 
   it("same status transition is rejected", () => {

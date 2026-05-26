@@ -23,6 +23,9 @@ export const SupervisorDashboardMultiFilter = memo(function SupervisorDashboardM
   minPopoverWidth?: number;
   maxListHeightClass?: string;
   hidePopoverHeader?: boolean;
+  loading?: boolean;
+  closeToken?: number;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const {
     placeholder,
@@ -34,7 +37,10 @@ export const SupervisorDashboardMultiFilter = memo(function SupervisorDashboardM
     disabled,
     minPopoverWidth = 220,
     maxListHeightClass = "max-h-56",
-    hidePopoverHeader = true
+    hidePopoverHeader = true,
+    loading,
+    closeToken,
+    onOpenChange
   } = props;
   const [search, setSearch] = useState("");
   const selected = useMemo(() => new Set(selectedValues), [selectedValues]);
@@ -78,6 +84,9 @@ export const SupervisorDashboardMultiFilter = memo(function SupervisorDashboardM
       hidePopoverHeader={hidePopoverHeader}
       formatTriggerSummary={formatTriggerSummary}
       disabled={disabled}
+      loading={loading}
+      closeToken={closeToken}
+      onOpenChange={onOpenChange}
     />
   );
 });

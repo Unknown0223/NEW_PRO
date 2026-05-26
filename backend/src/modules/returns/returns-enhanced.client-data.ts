@@ -1,24 +1,32 @@
-import { randomUUID } from "node:crypto";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { emitOrderUpdated } from "../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../lib/redis-cache";
-import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { assertReturnProductsInterchangeableStrict } from "../products/product-catalog.service";
-import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-status";
-
 import type { ClientReturnsData, OrderItemSummary } from "./returns-enhanced.types";
-import { adjustOrderItemsQtyAfterPriorReturns, localDayEnd, localDayStart, R } from "./returns-enhanced.helpers";
-import { computeOrderReturnBalance, computeOrderRemainingPaidRefundCap } from "./returns-order-balance";
+import { adjustOrderItemsQtyAfterPriorReturns } from "./returns-enhanced.helpers";
+import {
+  computeOrderReturnBalance,
+  computeOrderRemainingPaidRefundCap
+} from "./returns-order-balance";
+import { loadClientReturnsPeriodData } from "./returns-enhanced.client-data.period";
+import { POLKI_SOURCE_ORDER_STATUS } from "./returns-enhanced.client-data.shared";
+import {
+  assertOrdersInReturnFilter,
+  buildOrderCreatedAtFilter,
+  resolveReturnEligibleWindow,
+  returnFilterMetaFromWindow
+} from "./returns-filter.service";
+import { buildReturnFilterMetaForClient } from "./returns-filter.stats";
+import { logReturnFilterDecision } from "./returns-filter.log";
+import type { OrderPickBalancesResult } from "./returns-order-pick.types";
 
-export const POLKI_SOURCE_ORDER_STATUS = "delivered" as const;
+export { POLKI_SOURCE_ORDER_STATUS };
 
-/** Bir nechta zakaz uchun qaytarish konteksti (har qator `order_id` bilan). */
 async function getClientReturnsDataMultipleOrders(
   tenantId: number,
   clientId: number,
   orderIds: number[]
 ): Promise<ClientReturnsData> {
+  await assertOrdersInReturnFilter(tenantId, clientId, orderIds);
+
   const uniqueSorted = [...new Set(orderIds)].sort((a, b) => a - b);
   const orders = await prisma.order.findMany({
     where: {
@@ -51,7 +59,6 @@ async function getClientReturnsDataMultipleOrders(
   if (orders.length !== uniqueSorted.length) throw new Error("ORDER_NOT_DELIVERED");
 
   const loadedOrderIds = orders.map((o) => o.id);
-
   const returns = await prisma.salesReturn.findMany({
     where: {
       tenant_id: tenantId,
@@ -133,12 +140,6 @@ async function getClientReturnsDataMultipleOrders(
   };
 }
 
-// ─── Get client returns data ────────────────────────────────────────────────
-//
-// Qayta «vozvrat s polki» shu zakazga: oldingi posted `sales_return` qatorlari
-// `adjustOrderItemsQtyAfterPriorReturns` orqali qoldiqni kamaytiradi — qoldiq
-// bo‘lsa, yana xuddi shu zakazdan qaytarish mumkin (backend tekshiruvi).
-
 export async function getClientReturnsData(
   tenantId: number,
   clientId: number,
@@ -166,9 +167,10 @@ export async function getClientReturnsData(
     return getClientReturnsDataMultipleOrders(tenantId, clientId, resolvedOrderIds);
   }
 
-  // ─── Bitta zakaz (polki po zakaz) ─────────────────────────────────────
   const singleOrderId = resolvedOrderIds.length === 1 ? resolvedOrderIds[0]! : null;
   if (singleOrderId != null) {
+    await assertOrdersInReturnFilter(tenantId, clientId, [singleOrderId]);
+
     const order = await prisma.order.findFirst({
       where: {
         id: singleOrderId,
@@ -276,113 +278,49 @@ export async function getClientReturnsData(
     };
   }
 
-  // Orders in period — faqat yetkazilgan sotuvlar (polki «с полки»)
-  const orderWhere: Prisma.OrderWhereInput = {
-    tenant_id: tenantId,
-    client_id: clientId,
-    status: POLKI_SOURCE_ORDER_STATUS
-  };
-  if (dateFrom) orderWhere.created_at = { gte: localDayStart(dateFrom) };
-  if (dateTo) orderWhere.created_at = { ...(orderWhere.created_at as object) ?? {}, lte: localDayEnd(dateTo) };
-
-  const orders = await prisma.order.findMany({
-    where: orderWhere,
-    orderBy: { created_at: "desc" },
-    select: {
-      id: true, number: true, status: true,
-      total_sum: true, bonus_sum: true, created_at: true,
-      items: {
-        select: {
-          product_id: true, qty: true, price: true, total: true, is_bonus: true,
-          product: { select: { sku: true, name: true, unit: true, category_id: true } }
-        }
-      }
-    }
-  });
-
-  // Aggregate returned qty per product from existing returns in period
-  const returnWhere: Prisma.SalesReturnWhereInput = {
-    tenant_id: tenantId, client_id: clientId, status: "posted"
-  };
-  if (dateFrom) returnWhere.created_at = { gte: localDayStart(dateFrom) };
-  if (dateTo) returnWhere.created_at = { ...(returnWhere.created_at as object) ?? {}, lte: localDayEnd(dateTo) };
-
-  const returns = await prisma.salesReturn.findMany({
-    where: returnWhere, select: { refund_amount: true, lines: { select: { product_id: true, qty: true } } }
-  });
-
-  const returnedQtyByProduct = new Map<number, number>();
-  for (const ret of returns) {
-    for (const ln of ret.lines) {
-      returnedQtyByProduct.set(ln.product_id, (returnedQtyByProduct.get(ln.product_id) ?? 0) + Number(ln.qty));
-    }
-  }
-  const totalReturnedQty = returns.reduce((a, ret) => a + ret.lines.reduce((b, l) => b + Number(l.qty), 0), 0);
-
-  const alreadyReturned = returns.reduce((a, r) => a.add(r.refund_amount ?? new Prisma.Decimal(0)), new Prisma.Decimal(0));
-
-  let totalPaidValue = new Prisma.Decimal(0);
-  const items: OrderItemSummary[] = [];
-
-  for (const o of orders) {
-    for (const item of o.items) {
-      items.push({
-        product_id: item.product_id,
-        sku: item.product.sku,
-        name: item.product.name,
-        unit: item.product.unit,
-        qty: item.qty.toString(),
-        price: item.price.toString(),
-        total: item.total.toString(),
-        is_bonus: item.is_bonus,
-        order_id: o.id,
-        order_number: o.number,
-        category_id: item.product.category_id
-      });
-      if (!item.is_bonus) totalPaidValue = totalPaidValue.add(item.total);
-    }
-  }
-
-  const bal = await prisma.clientBalance.findUnique({
-    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-    select: { balance: true }
-  });
-  const balance = bal?.balance ?? new Prisma.Decimal(0);
-  const maxReturnable = totalPaidValue.sub(alreadyReturned);
-
-  return {
-    polki_scope: "period",
-    orders: orders.map(o => ({
-      id: o.id, number: o.number, status: o.status,
-      total_sum: o.total_sum.toString(), bonus_sum: o.bonus_sum.toString(),
-      created_at: o.created_at.toISOString()
-    })),
-    items,
-    total_orders: orders.length,
-    total_returned_qty: String(totalReturnedQty),
-    total_paid_value: totalPaidValue.toString(),
-    already_returned_value: alreadyReturned.toString(),
-    max_returnable_value: maxReturnable.gt(0) ? maxReturnable.toString() : "0",
-    client_balance: balance.toString(),
-    client_debt: balance.lt(0) ? balance.abs().toString() : "0"
-  };
+  return loadClientReturnsPeriodData(
+    tenantId,
+    clientId,
+    dateFrom,
+    dateTo,
+    shrinkLineQtyAfterReturns
+  );
 }
 
-/** Mijozning yetkazilgan zakazlari uchun qoldiq — tanlash ro‘yxatini filtrlash. */
 export async function listClientOrderPickBalances(
   tenantId: number,
   clientId: number
 ): Promise<import("./returns-enhanced.types").OrderReturnBalance[]> {
+  const result = await listClientOrderPickBalancesWithMeta(tenantId, clientId);
+  return result.balances;
+}
+
+export async function listClientOrderPickBalancesWithMeta(
+  tenantId: number,
+  clientId: number
+): Promise<OrderPickBalancesResult> {
   const client = await prisma.client.findFirst({
     where: { id: clientId, tenant_id: tenantId, merged_into_client_id: null }
   });
   if (!client) throw new Error("BAD_CLIENT");
 
+  const { window: filterWindow, meta: filterMeta } = await buildReturnFilterMetaForClient(
+    tenantId,
+    clientId
+  );
+  logReturnFilterDecision(tenantId, clientId, filterMeta);
+  if (filterWindow.empty) {
+    return { balances: [], filter_meta: filterMeta };
+  }
+
+  const createdAt = buildOrderCreatedAtFilter(filterWindow);
+
   const orders = await prisma.order.findMany({
     where: {
       tenant_id: tenantId,
       client_id: clientId,
-      status: POLKI_SOURCE_ORDER_STATUS
+      status: POLKI_SOURCE_ORDER_STATUS,
+      ...(createdAt ? { created_at: createdAt } : {})
     },
     orderBy: { created_at: "desc" },
     select: {
@@ -399,7 +337,9 @@ export async function listClientOrderPickBalances(
       }
     }
   });
-  if (orders.length === 0) return [];
+  if (orders.length === 0) {
+    return { balances: [], filter_meta: filterMeta };
+  }
 
   const orderIds = orders.map((o) => o.id);
   const returns = await prisma.salesReturn.findMany({
@@ -431,7 +371,8 @@ export async function listClientOrderPickBalances(
       category_id: item.product.category_id
     }));
     const adjusted = adjustOrderItemsQtyAfterPriorReturns(items, returns);
-    out.push(computeOrderReturnBalance(order.id, items, adjusted, returns));
+    const bal = computeOrderReturnBalance(order.id, items, adjusted, returns);
+    if (!bal.fully_returned) out.push(bal);
   }
-  return out;
+  return { balances: out, filter_meta: filterMeta };
 }

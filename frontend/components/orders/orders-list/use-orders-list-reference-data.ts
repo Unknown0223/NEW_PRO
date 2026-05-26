@@ -6,11 +6,26 @@ import {
   paymentMethodSelectOptions,
   type ProfilePaymentMethodEntry
 } from "@/lib/payment-method-options";
+import {
+  salePriceTypeOptionsFromProfile,
+  type PolkiPriceTypeEntryRef
+} from "@/components/orders/order-create/view/polki-shelf-return/polki-price-type-options";
 import { STALE } from "@/lib/query-stale";
+import {
+  buildZoneRegionCityCascadeOptions,
+  type ClientRefsTerritoryBundle
+} from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
+import { activeRefSelectOptions } from "@/lib/profile-ref-entries";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
+import type { OrdersUrlFilters } from "./types";
 
-export function useOrdersListReferenceData(tenantSlug: string | null, effectiveRole: string | null | undefined) {
+export function useOrdersListReferenceData(
+  tenantSlug: string | null,
+  effectiveRole: string | null | undefined,
+  filterDraft: OrdersUrlFilters
+) {
   const canBulkCatalog = isAdminOrOperatorLikeRole(effectiveRole);
 
   const warehousesQ = useQuery({
@@ -49,21 +64,9 @@ export function useOrdersListReferenceData(tenantSlug: string | null, effectiveR
     }
   });
 
-  const productsFilterQ = useQuery({
-    queryKey: ["products", tenantSlug, "orders-filter"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data: body } = await api.get<{
-        data: { id: number; name: string; sku: string }[];
-      }>(`/api/${tenantSlug}/products?page=1&limit=100&is_active=true`);
-      return body.data ?? [];
-    }
-  });
-
   const productCategoriesQ = useQuery({
     queryKey: ["product-categories", tenantSlug, "orders-filter"],
-    enabled: Boolean(tenantSlug) && canBulkCatalog,
+    enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data: body } = await api.get<{
@@ -73,18 +76,78 @@ export function useOrdersListReferenceData(tenantSlug: string | null, effectiveR
     }
   });
 
+  const productsFilterQ = useQuery({
+    queryKey: [
+      "products",
+      tenantSlug,
+      "orders-filter",
+      filterDraft.product_category_id
+    ],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const sp = new URLSearchParams({ page: "1", limit: "100", is_active: "true" });
+      if (filterDraft.product_category_id.trim()) {
+        sp.set("category_id", filterDraft.product_category_id.trim());
+      }
+      const { data: body } = await api.get<{
+        data: { id: number; name: string; sku: string }[];
+      }>(`/api/${tenantSlug}/products?${sp.toString()}`);
+      return body.data ?? [];
+    }
+  });
+
   const ordersProfileRefsQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "orders-filters"],
-    enabled: Boolean(tenantSlug) && canBulkCatalog,
+    enabled: Boolean(tenantSlug),
     staleTime: STALE.profile,
     queryFn: async () => {
       const { data } = await api.get<{
         references?: {
           payment_types?: string[];
           payment_method_entries?: ProfilePaymentMethodEntry[];
+          client_categories?: string[];
+          trade_directions?: string[];
+          price_type_entries?: PolkiPriceTypeEntryRef[];
+          territory_nodes?: TerritoryNode[];
+          request_type_entries?: unknown;
         };
       }>(`/api/${tenantSlug}/settings/profile`);
       return data.references ?? {};
+    }
+  });
+
+  const agentsFilterOptQ = useQuery({
+    queryKey: ["agents-filter-options", tenantSlug, "orders-list"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
+        `/api/${tenantSlug}/agents/filter-options`
+      );
+      return data.data;
+    }
+  });
+
+  const clientRefsQ = useQuery({
+    queryKey: ["clients-references", tenantSlug, "orders-filters"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<ClientRefsTerritoryBundle>(`/api/${tenantSlug}/clients/references`);
+      return data;
+    }
+  });
+
+  const clientsFilterQ = useQuery({
+    queryKey: ["clients", tenantSlug, "orders-filter"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        data: { id: number; name: string; client_code: string | null }[];
+      }>(`/api/${tenantSlug}/clients?limit=200&is_active=yes&sort=name&order=asc`);
+      return data.data ?? [];
     }
   });
 
@@ -111,6 +174,55 @@ export function useOrdersListReferenceData(tenantSlug: string | null, effectiveR
     return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
   }, [ordersProfileRefsQ.data?.payment_types]);
 
+  const clientCategoryFilterOpts = useMemo(() => {
+    const raw = ordersProfileRefsQ.data?.client_categories;
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+    const seen = new Set<string>();
+    const out: { value: string; label: string }[] = [];
+    for (const x of raw) {
+      const t = String(x).trim().slice(0, 128);
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push({ value: t, label: t });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
+  }, [ordersProfileRefsQ.data?.client_categories]);
+
+  const tradeDirectionFilterOpts = useMemo(() => {
+    const fromAgents = agentsFilterOptQ.data?.trade_directions ?? [];
+    const fromProfile = ordersProfileRefsQ.data?.trade_directions ?? [];
+    const seen = new Set<string>();
+    const out: { value: string; label: string }[] = [];
+    for (const x of [...fromAgents, ...fromProfile]) {
+      const t = String(x).trim().slice(0, 128);
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push({ value: t, label: t });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
+  }, [agentsFilterOptQ.data?.trade_directions, ordersProfileRefsQ.data?.trade_directions]);
+
+  const nakladnoyTypeFilterOpts = useMemo(
+    () => activeRefSelectOptions(ordersProfileRefsQ.data?.request_type_entries),
+    [ordersProfileRefsQ.data?.request_type_entries]
+  );
+
+  const priceTypeFilterOpts = useMemo(() => {
+    const sale = salePriceTypeOptionsFromProfile(
+      ordersProfileRefsQ.data?.price_type_entries,
+      ordersProfileRefsQ.data?.payment_types ?? []
+    );
+    return sale.map((o) => ({ value: o.key, label: o.label }));
+  }, [ordersProfileRefsQ.data?.price_type_entries, ordersProfileRefsQ.data?.payment_types]);
+
+  const territoryNodes = ordersProfileRefsQ.data?.territory_nodes;
+
+  const buildTerritoryCascade = useCallback(
+    (current: { zone: string; region: string; city: string }) =>
+      buildZoneRegionCityCascadeOptions(clientRefsQ.data, undefined, territoryNodes, current),
+    [clientRefsQ.data, territoryNodes]
+  );
+
   return {
     canBulkCatalog,
     warehousesQ,
@@ -119,7 +231,15 @@ export function useOrdersListReferenceData(tenantSlug: string | null, effectiveR
     productsFilterQ,
     productCategoriesQ,
     ordersProfileRefsQ,
+    agentsFilterOptQ,
+    clientRefsQ,
+    clientsFilterQ,
     paymentMethodFilterOpts,
-    paymentTypeFilterOpts
+    paymentTypeFilterOpts,
+    nakladnoyTypeFilterOpts,
+    priceTypeFilterOpts,
+    clientCategoryFilterOpts,
+    tradeDirectionFilterOpts,
+    buildTerritoryCascade
   };
 }

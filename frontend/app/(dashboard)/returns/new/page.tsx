@@ -4,27 +4,24 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-/** Eski `/returns/new?...` havolalari → polki qaytarish sahifasi. */
+/** Eski `/returns/new?...` → `/orders/new?type=return|return_by_order`. */
 export default function ReturnsNewRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const next = new URLSearchParams();
-    next.set("tab", "polki");
-    const client_id = searchParams.get("client_id");
-    const order_id = searchParams.get("order_id");
-    if (client_id) next.set("client_id", client_id);
-    if (order_id) {
-      next.set("order_id", order_id);
-      next.set("polki_mode", "order");
-    }
-    router.replace(`/returns?${next.toString()}`);
+    const orderId = searchParams.get("order_id")?.trim();
+    const params = new URLSearchParams();
+    params.set("type", orderId ? "return_by_order" : "return");
+    const clientId = searchParams.get("client_id");
+    if (clientId) params.set("client_id", clientId);
+    if (orderId) params.set("order_id", orderId);
+    router.replace(`/orders/new?${params.toString()}`);
   }, [router, searchParams]);
 
   return (
     <PageShell>
-      <p className="text-sm text-muted-foreground">Qaytarish (polki) sahifasiga yo&apos;naltirilmoqda…</p>
+      <p className="text-sm text-muted-foreground">Qaytarish sahifasiga yo&apos;naltirilmoqda…</p>
     </PageShell>
   );
 }

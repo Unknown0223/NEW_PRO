@@ -1,7 +1,9 @@
 "use client";
 
 import { FinanceSectionHeader } from "@/components/dashboard/finance/finance-section-header";
+import { fmtFinanceCount, fmtFinanceMoney } from "@/components/dashboard/finance/format";
 import type { FinanceTableColumn } from "@/components/dashboard/finance/table-columns";
+import { Download, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export type { FinanceTableColumn };
@@ -45,6 +47,77 @@ function exportCsv<T>(fileName: string, columns: FinanceTableColumn<T>[], rows: 
   link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function SortIcon({ active, direction }: { active: boolean; direction: SortDir }) {
+  return (
+    <span className={`text-[10px] ${active ? "text-teal-600" : "text-slate-300"}`}>
+      {direction === "asc" ? "▲" : "▼"}
+    </span>
+  );
+}
+
+function FinanceTablePagination({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPageChange
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  const pages = Array.from(new Set([1, page - 1, page, page + 1, pageCount])).filter(
+    (value) => value >= 1 && value <= pageCount
+  );
+
+  return (
+    <div className="mt-3 flex flex-col gap-3 text-sm font-medium text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+      <span>
+        Показано {fmtFinanceCount(start)} - {fmtFinanceCount(end)} / {fmtFinanceCount(total)}
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+        >
+          ‹
+        </button>
+        {pages.map((item, index) => {
+          const previous = pages[index - 1];
+          return (
+            <span key={item} className="flex items-center gap-2">
+              {previous && item - previous > 1 ? <span className="px-1 text-slate-400">...</span> : null}
+              <button
+                type="button"
+                className={`h-9 min-w-9 rounded-lg px-3 font-bold transition ${
+                  item === page
+                    ? "bg-teal-600 text-white"
+                    : "border border-slate-200 text-slate-700 hover:border-teal-300"
+                }`}
+                onClick={() => onPageChange(item)}
+              >
+                {item}
+              </button>
+            </span>
+          );
+        })}
+        <button
+          type="button"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100"
+          onClick={() => onPageChange(Math.min(pageCount, page + 1))}
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function FinanceDataTable<T>({
@@ -106,15 +179,16 @@ export function FinanceDataTable<T>({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
             onClick={() => exportCsv(exportFileName, columns, sorted)}
           >
+            <Download className="h-4 w-4 text-emerald-600" />
             Excel
           </button>
           <select
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-teal-500"
           >
             {[10, 20, 50].map((n) => (
               <option key={n} value={n}>
@@ -123,12 +197,15 @@ export function FinanceDataTable<T>({
             ))}
           </select>
         </div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск"
-          className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium outline-none focus:border-teal-500 lg:w-[320px]"
-        />
+        <label className="relative w-full lg:w-[320px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+          />
+        </label>
       </div>
       <div className="overflow-hidden rounded-xl border border-slate-200">
         <div className="max-h-[560px] overflow-auto">
@@ -146,9 +223,7 @@ export function FinanceDataTable<T>({
                       onClick={() => handleSort(col.id)}
                     >
                       {col.label}
-                      <span className="text-[10px] text-teal-600">
-                        {sort.key === col.id ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
-                      </span>
+                      <SortIcon active={sort.key === col.id} direction={sort.direction} />
                     </button>
                   </th>
                 ))}
@@ -188,34 +263,13 @@ export function FinanceDataTable<T>({
           </table>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-        <span>
-          {sorted.length === 0
-            ? "0 записей"
-            : `${(safePage - 1) * pageSize + 1}–${Math.min(sorted.length, safePage * pageSize)} из ${sorted.length}`}
-        </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            className="h-8 rounded-md border px-2 disabled:opacity-50"
-            disabled={safePage <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Назад
-          </button>
-          <span className="flex h-8 items-center px-2 tabular-nums">
-            {safePage} / {pageCount}
-          </span>
-          <button
-            type="button"
-            className="h-8 rounded-md border px-2 disabled:opacity-50"
-            disabled={safePage >= pageCount}
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-          >
-            Вперёд
-          </button>
-        </div>
-      </div>
+      <FinanceTablePagination
+        page={safePage}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        total={sorted.length}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

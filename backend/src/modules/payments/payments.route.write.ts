@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   batchConfirmPaymentsBodySchema,
+  createOrderCashInBodySchema,
   createPaymentBodySchema,
   deletePaymentQuerySchema,
   parseOptPositiveInt,
@@ -33,6 +34,7 @@ import {
   getPaymentAllocations,
   listOpenOrdersForAllocation
 } from "./payment-allocations.service";
+import { createOrderCashInBatch } from "./payment.order-cash-in";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerPaymentWriteRoutes(app: FastifyInstance) {
@@ -179,6 +181,45 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
             "NotPending",
             "Запись не в статусе «ожидание подтверждения»."
           );
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/payments/order-cash-in",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = createOrderCashInBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Invalid request body",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        const data = await createOrderCashInBatch(
+          request.tenant!.id,
+          parsed.data,
+          actorUserIdOrNull(request)
+        );
+        return reply.status(201).send({ data });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
+        if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
+        if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
+        if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
+        if (msg === "NO_LINES") return sendApiError(reply, request, 400, "NoLines");
+        if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
+        if (msg === "BRANCH_SCOPE_VIOLATION") {
+          return sendApiError(reply, request, 403, "BranchScopeViolation");
         }
         throw e;
       }
