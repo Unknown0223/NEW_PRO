@@ -12,6 +12,7 @@ import {
   recordAgentVisitCheckin,
   upsertAgentRouteDay
 } from "./field.service";
+import { createClientRefusal } from "../refusals/refusals.service";
 
 const locationPingPostRoles = ["agent", ...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 
@@ -74,7 +75,9 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         latitude: z.number().finite().gte(-90).lte(90).optional().nullable(),
         longitude: z.number().finite().gte(-180).lte(180).optional().nullable(),
         notes: z.string().max(2000).optional().nullable(),
-        agent_id: z.number().int().positive().optional()
+        agent_id: z.number().int().positive().optional(),
+        /** Mijozdan «отказ» — `client_refusals` jadvaliga yoziladi */
+        refusal_reason_ref: z.string().trim().max(128).optional().nullable()
       })
       .parse(request.body);
     const viewer = getAccessUser(request);
@@ -97,11 +100,21 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         longitude: body.longitude ?? null,
         notes: body.notes ?? null
       });
-      return reply.status(201).send({ data });
+      let refusal = null;
+      const reasonRef = body.refusal_reason_ref?.trim();
+      if (reasonRef && body.client_id != null) {
+        refusal = await createClientRefusal(tenantId, agentId, {
+          client_id: body.client_id,
+          refusal_reason_ref: reasonRef,
+          comment: body.notes ?? null
+        });
+      }
+      return reply.status(201).send({ data, refusal });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AgentNotFound") return sendApiError(reply, request, 400, "AgentNotFound");
       if (msg === "ClientNotFound") return sendApiError(reply, request, 404, "ClientNotFound");
+      if (msg === "ReasonRequired") return sendApiError(reply, request, 400, "ReasonRequired");
       throw e;
     }
   });

@@ -132,7 +132,8 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
             groupBy: parsed.data.group_by ?? "agent"
           },
           parsed.data.format ?? "xlsx",
-          parsed.data.warehouse_layout ?? null
+          parsed.data.warehouse_layout ?? null,
+          parsed.data.expeditor_loading_layout ?? null
         );
         return reply
           .header(

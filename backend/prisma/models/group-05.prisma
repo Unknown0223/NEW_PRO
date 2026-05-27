@@ -285,6 +285,28 @@ model AgentVisit {
   @@map("agent_visits")
 }
 
+/// Agent mijoz oldida savdo/qaytarishsiz «отказ» (Отказы ro‘yxati).
+
+model ClientRefusal {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  client_id          Int
+  agent_id           Int
+  refusal_reason_ref String   @db.VarChar(128)
+  territory          String?  @db.VarChar(128)
+  comment            String?  @db.VarChar(2000)
+  created_at         DateTime @default(now())
+  client             Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  agent              User     @relation("ClientRefusalAgent", fields: [agent_id], references: [id], onDelete: Cascade)
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, agent_id, created_at(sort: Desc)])
+  @@index([tenant_id, client_id, created_at(sort: Desc)])
+  @@index([tenant_id, refusal_reason_ref])
+  @@map("client_refusals")
+}
+
 /// Agent GPS ping (mobil ilova / trek).
 
 model AgentLocationPing {

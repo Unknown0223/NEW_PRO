@@ -1,5 +1,6 @@
 import type ExcelJS from "exceljs";
 import { cellStr, clearRange } from "./warehouse-template-fill.helpers";
+import { removeEmptyWorksheets as removeGhostWorksheets } from "./warehouse-template-repair";
 
 /** Demo qiymatlarni tozalash — SKU/qator strukturasini saqlab. */
 export function clearNumericDataColumns(
@@ -37,14 +38,9 @@ export function scanTemplateSkuRows(
   return out;
 }
 
+/** @deprecated repair modulidagi removeEmptyWorksheets ishlatiladi */
 export function removeEmptyWorksheets(wb: ExcelJS.Workbook) {
-  for (let i = wb.worksheets.length - 1; i >= 0; i--) {
-    const ws = wb.worksheets[i]!;
-    const name = (ws.name || "").trim().toLowerCase();
-    if (name === "worksheet" || (ws.rowCount === 0 && ws.columnCount === 0)) {
-      if (wb.worksheets.length > 1) wb.removeWorksheet(ws.id);
-    }
-  }
+  removeGhostWorksheets(wb);
 }
 
 export function trimTrailingEmptyRows(ws: ExcelJS.Worksheet, fromRow: number) {

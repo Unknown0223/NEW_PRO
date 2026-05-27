@@ -200,6 +200,7 @@ model Client {
   /// Oxirgi agent tashrif vaqti (`agent_visits` check-in bilan yangilanadi, hisobot keshi).
   last_visit_at         DateTime?
   agent_visits          AgentVisit[]
+  client_refusals       ClientRefusal[]
   agent_assignments     ClientAgentAssignment[]
   audit_logs            ClientAuditLog[]
   client_balances                ClientBalance[]

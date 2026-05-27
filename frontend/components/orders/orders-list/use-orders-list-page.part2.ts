@@ -115,6 +115,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       prefs: typeof nakladnoyPrefs;
       format?: "xlsx" | "pdf";
       warehouseLayout?: import("@/lib/bulk-export-templates").WarehouseLayoutId;
+      expeditorLoadingLayout?: import("@/lib/bulk-export-templates").ExpeditorLoadingLayoutId;
     }) => {
       await downloadOrdersNakladnoyXlsx({
         tenantSlug: tenantSlug!,
@@ -122,7 +123,8 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
         template: payload.template,
         prefs: payload.prefs,
         format: payload.format ?? "xlsx",
-        warehouseLayout: payload.warehouseLayout
+        warehouseLayout: payload.warehouseLayout,
+        expeditorLoadingLayout: payload.expeditorLoadingLayout
       });
     },
     onSuccess: (_data, vars) => {

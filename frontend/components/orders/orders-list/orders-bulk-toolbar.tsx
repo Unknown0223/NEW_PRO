@@ -168,7 +168,8 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       template: template.apiTemplate,
       prefs: mergedPrefs,
       format: "xlsx",
-      warehouseLayout: template.warehouseLayout
+      warehouseLayout: template.warehouseLayout,
+      expeditorLoadingLayout: template.expeditorLoadingLayout
     });
     setBulkFeedback(`Загрузка: ${template.label}…`);
   };

@@ -42,6 +42,12 @@ import {
   DEFAULT_NAKLADNOY_BUILD_OPTIONS
 } from "../order-nakladnoy-xlsx";
 import { buildWarehouseLoadXlsx } from "../warehouse-templates/build-warehouse-load-xlsx";
+import { buildExpeditorLoadingXlsx } from "../warehouse-templates/build-expeditor-loading-xlsx";
+import {
+  isExpeditorLoadingLayoutId,
+  expeditorLoadingDownloadFilename,
+  type ExpeditorLoadingLayoutId
+} from "../warehouse-templates/expeditor-loading-template-ids";
 import {
   isWarehouseLayoutId,
   warehouseLayoutDownloadFilename,
@@ -255,13 +261,15 @@ export async function requestBulkOrderNakladnoy(
   template: string,
   buildOptions: NakladnoyBuildOptions = DEFAULT_NAKLADNOY_BUILD_OPTIONS,
   format: "xlsx" | "pdf" = "xlsx",
-  warehouseLayout?: string | null
+  warehouseLayout?: string | null,
+  expeditorLoadingLayout?: string | null
 ): Promise<BulkNakladnoyFileResult> {
   if (!NAKLADNOY_TEMPLATE_IDS.includes(template as NakladnoyTemplateId)) {
     throw new Error("INVALID_NAKLADNOY_TEMPLATE");
   }
   const tid = template as NakladnoyTemplateId;
   let layoutId: WarehouseLayoutId | null = null;
+  let expLayoutId: ExpeditorLoadingLayoutId | null = null;
   if (warehouseLayout != null && warehouseLayout !== "") {
     if (!isWarehouseLayoutId(warehouseLayout)) {
       throw new Error("INVALID_WAREHOUSE_LAYOUT");
@@ -272,6 +280,18 @@ export async function requestBulkOrderNakladnoy(
     }
     if (format === "pdf") {
       throw new Error("WAREHOUSE_LAYOUT_XLSX_ONLY");
+    }
+  }
+  if (expeditorLoadingLayout != null && expeditorLoadingLayout !== "") {
+    if (!isExpeditorLoadingLayoutId(expeditorLoadingLayout)) {
+      throw new Error("INVALID_EXPEDITOR_LOADING_LAYOUT");
+    }
+    expLayoutId = expeditorLoadingLayout;
+    if (layoutId != null) {
+      throw new Error("INVALID_EXPEDITOR_LOADING_LAYOUT");
+    }
+    if (format === "pdf") {
+      throw new Error("EXPEDITOR_LOADING_LAYOUT_XLSX_ONLY");
     }
   }
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))].sort((a, b) => a - b);
@@ -362,16 +382,20 @@ export async function requestBulkOrderNakladnoy(
   const buffer =
     layoutId != null
       ? await buildWarehouseLoadXlsx(layoutId, ordered, buildOptions)
-      : format === "pdf"
-        ? await buildNakladnoyPdf(tid, ordered)
-        : await buildNakladnoyXlsx(tid, ordered, buildOptions);
+      : expLayoutId != null
+        ? await buildExpeditorLoadingXlsx(expLayoutId, ordered, buildOptions)
+        : format === "pdf"
+          ? await buildNakladnoyPdf(tid, ordered)
+          : await buildNakladnoyXlsx(tid, ordered, buildOptions);
   const day = new Date().toISOString().slice(0, 10);
   const filename =
     layoutId != null
       ? warehouseLayoutDownloadFilename(layoutId)
-      : tid === "nakladnoy_warehouse"
-        ? `zagruz_zav_sklda_5_1_8_${day}.${format}`
-        : `nakladnye_2_1_0_${day}.${format}`;
+      : expLayoutId != null
+        ? expeditorLoadingDownloadFilename(expLayoutId)
+        : tid === "nakladnoy_warehouse"
+          ? `zagruz_zav_sklda_5_1_8_${day}.${format}`
+          : `nakladnye_2_1_0_${day}.${format}`;
 
   return {
     buffer,

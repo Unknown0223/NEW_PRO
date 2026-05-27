@@ -37,6 +37,7 @@ import { registerStockTakeRoutes } from "./modules/stock/stock-takes.route";
 import { registerWarehouseTransferRoutes } from "./modules/stock/warehouse-transfers.route";
 import { registerExpenseRoutes } from "./modules/expenses/expenses.route";
 import { registerFieldRoutes } from "./modules/field/field.route";
+import { registerRefusalRoutes } from "./modules/refusals/refusals.route";
 import { registerTerritoryRoutes } from "./modules/territory/territory.route";
 import { registerPriceMatrixRoutes } from "./modules/products/price-matrix.route";
 import { registerNotificationRoutes } from "./modules/notifications/notifications.route";
@@ -114,6 +115,7 @@ export function buildApp() {
   app.register(registerTerritoryRoutes);
   app.register(registerPriceMatrixRoutes);
   app.register(registerFieldRoutes);
+  app.register(registerRefusalRoutes);
   app.register(registerNotificationRoutes);
   app.register(registerMobileRoutes);
   app.register(registerLinkageRoutes);

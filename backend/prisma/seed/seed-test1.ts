@@ -8,6 +8,7 @@ import {
   mergeDefaultReasonReferences,
   prisma
 } from "./helpers";
+import { seedTest1ClientRefusals } from "./seed-test1-refusals";
 
 export async function seedTest1Tenant() {
   const password_hash = await bcrypt.hash("secret123", 10);
@@ -33,6 +34,9 @@ export async function seedTest1Tenant() {
       is_active: true
     }
   });
+
+  await mergeDefaultReasonReferences(test1.id);
+  await mergeDefaultReasonReferences(demo.id);
 
   for (const tenant of [test1, demo]) {
     await prisma.user.upsert({
@@ -395,4 +399,5 @@ export async function seedTest1Tenant() {
     }
   }
 
+  await seedTest1ClientRefusals(test1.id, seedAgent.id);
 }

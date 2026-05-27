@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
 import type { NakladnoyBuildOptions, NakladnoyOrderPayload } from "./order-nakladnoy-xlsx.types";
+import { repairWorkbookBeforeWrite } from "./warehouse-templates/warehouse-template-repair";
+import { patchWarehouseXlsxBuffer } from "./warehouse-templates/warehouse-template-zip-patch";
 import {
   applyBorderRange,
   blockCount,
@@ -260,6 +262,10 @@ export async function buildConsignmentWorkbook(
     };
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf);
+  repairWorkbookBeforeWrite(wb);
+  const raw = await wb.xlsx.writeBuffer({
+    useStyles: true,
+    useSharedStrings: true
+  });
+  return patchWarehouseXlsxBuffer(Buffer.from(raw));
 }

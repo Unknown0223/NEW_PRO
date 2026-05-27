@@ -99,8 +99,9 @@ export async function downloadOrdersNakladnoyXlsx(args: {
   prefs: NakladnoyExportPrefs;
   format?: NakladnoyFileFormat;
   warehouseLayout?: WarehouseLayoutId;
+  expeditorLoadingLayout?: import("@/lib/bulk-export-templates").ExpeditorLoadingLayoutId;
 }): Promise<void> {
-  const { tenantSlug, orderIds, template, prefs, format = "xlsx", warehouseLayout } = args;
+  const { tenantSlug, orderIds, template, prefs, format = "xlsx", warehouseLayout, expeditorLoadingLayout } = args;
   if (orderIds.length === 0) {
     throw new Error("Zakaz tanlanmagan.");
   }
@@ -112,6 +113,7 @@ export async function downloadOrdersNakladnoyXlsx(args: {
         template,
         format,
         ...(warehouseLayout ? { warehouse_layout: warehouseLayout } : {}),
+        ...(expeditorLoadingLayout ? { expeditor_loading_layout: expeditorLoadingLayout } : {}),
         ...nakladnoyPrefsToApiBody(prefs)
       },
       { responseType: "blob" }

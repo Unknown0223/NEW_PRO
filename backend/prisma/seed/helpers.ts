@@ -128,6 +128,13 @@ export async function mergeDefaultReasonReferences(tenantId: number) {
       settings: { ...st, references: ref } as Prisma.InputJsonValue
     }
   });
+
+  try {
+    const { invalidateTenantSettingsCache } = await import("../../src/lib/redis-cache");
+    await invalidateTenantSettingsCache(tenantId);
+  } catch {
+    /* seed/redis yo‘q muhitda e’tiborsiz */
+  }
 }
 
 export async function ensureClient(

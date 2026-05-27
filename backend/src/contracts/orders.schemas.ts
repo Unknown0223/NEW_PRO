@@ -232,6 +232,21 @@ export const bulkOrderNakladnoyBodySchema = z.object({
       "wh-7.0.4"
     ])
     .optional(),
+  /** «Загруз экспедитор» — 518 andoza (5.1.8) */
+  expeditor_loading_layout: z
+    .enum([
+      "ex-3.0",
+      "ex-4.0.1",
+      "ex-4.1.0",
+      "ex-5.0",
+      "ex-5.0.6",
+      "ex-5.1.0",
+      "ex-5.1.0.1",
+      "ex-5.1.6",
+      "ex-5.1.8",
+      "ex-5.2.0"
+    ])
+    .optional(),
   format: z.enum(["xlsx", "pdf"]).optional(),
   code_column: z.enum(["sku", "barcode"]).optional(),
   separate_sheets: z.boolean().optional(),

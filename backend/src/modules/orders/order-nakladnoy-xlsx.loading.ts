@@ -1,4 +1,6 @@
 import ExcelJS from "exceljs";
+import { repairWorkbookBeforeWrite } from "./warehouse-templates/warehouse-template-repair";
+import { patchWarehouseXlsxBuffer } from "./warehouse-templates/warehouse-template-zip-patch";
 import type { NakladnoyBuildOptions, NakladnoyLine, NakladnoyOrderPayload } from "./order-nakladnoy-xlsx.types";
 import {
   applyBorderRange,
@@ -221,6 +223,10 @@ export async function buildLoadingSheetWorkbook(
     addLoadingSheetWorksheet(wb, p, options);
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf);
+  repairWorkbookBeforeWrite(wb);
+  const raw = await wb.xlsx.writeBuffer({
+    useStyles: true,
+    useSharedStrings: true
+  });
+  return patchWarehouseXlsxBuffer(Buffer.from(raw));
 }

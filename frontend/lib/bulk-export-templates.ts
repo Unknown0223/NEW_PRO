@@ -16,6 +16,19 @@ export type WarehouseLayoutId =
   | "wh-7.0.3"
   | "wh-7.0.4";
 
+/** Backend `expeditor_loading_layout` — «Загруз экспедитор» (518 andoza) */
+export type ExpeditorLoadingLayoutId =
+  | "ex-3.0"
+  | "ex-4.0.1"
+  | "ex-4.1.0"
+  | "ex-5.0"
+  | "ex-5.0.6"
+  | "ex-5.1.0"
+  | "ex-5.1.0.1"
+  | "ex-5.1.6"
+  | "ex-5.1.8"
+  | "ex-5.2.0";
+
 export type BulkExportCategoryId = "warehouse" | "expeditor" | "invoices" | "register";
 
 export type BulkExportDownloadKind = "nakladnoy" | "register";
@@ -28,6 +41,8 @@ export type BulkExportTemplateDef = {
   apiTemplate?: NakladnoyTemplateId;
   /** «Загруз зав.склада» — alohida Excel andoza */
   warehouseLayout?: WarehouseLayoutId;
+  /** «Загруз экспедитор» — 518 Excel andoza */
+  expeditorLoadingLayout?: ExpeditorLoadingLayoutId;
 };
 
 export type BulkExportCategoryDef = {
@@ -53,16 +68,16 @@ const warehouseTemplates: BulkExportTemplateDef[] = [
 ];
 
 const expeditorTemplates: BulkExportTemplateDef[] = [
-  { id: "ex-3.0", label: "Загруз зав.склада 3.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-4.0.1", label: "Загруз зав.склада 4.0.1", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-4.1.0", label: "Загруз зав.склада 4.1.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.0", label: "Загруз зав.склада 5.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.0.6", label: "Загруз зав.склада 5.0.6", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.1.0", label: "Загруз зав.склада 5.1.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.1.0.1", label: "Загруз зав.склада 5.1.0.1", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.1.6", label: "Загруз зав.склада 5.1.6", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.1.8", label: "Загруз зав.склада 5.1.8", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" },
-  { id: "ex-5.2.0", label: "Загруз зав.склада 5.2.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor" }
+  { id: "ex-3.0", label: "Загруз зав.склада 3.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-3.0" },
+  { id: "ex-4.0.1", label: "Загруз зав.склада 4.0.1", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-4.0.1" },
+  { id: "ex-4.1.0", label: "Загруз зав.склада 4.1.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-4.1.0" },
+  { id: "ex-5.0", label: "Загруз зав.склада 5.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.0" },
+  { id: "ex-5.0.6", label: "Загруз зав.склада 5.0.6", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.0.6" },
+  { id: "ex-5.1.0", label: "Загруз зав.склада 5.1.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.1.0" },
+  { id: "ex-5.1.0.1", label: "Загруз зав.склада 5.1.0.1", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.1.0.1" },
+  { id: "ex-5.1.6", label: "Загруз зав.склада 5.1.6", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.1.6" },
+  { id: "ex-5.1.8", label: "Загруз зав.склада 5.1.8", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.1.8" },
+  { id: "ex-5.2.0", label: "Загруз зав.склада 5.2.0", category: "expeditor", downloadKind: "nakladnoy", apiTemplate: "nakladnoy_expeditor", expeditorLoadingLayout: "ex-5.2.0" }
 ];
 
 const invoiceTemplates: BulkExportTemplateDef[] = [

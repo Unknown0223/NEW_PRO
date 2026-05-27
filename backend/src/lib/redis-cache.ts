@@ -128,6 +128,16 @@ export function tenantSettingsCacheKey(tenantId: number): string {
   return `tenant:${tenantId}:settings`;
 }
 
+/** Tenant profil (settings) cache — patch/seed dan keyin */
+export async function invalidateTenantSettingsCache(tenantId: number): Promise<void> {
+  try {
+    const redis = await getRedisForApp();
+    await redis.del(tenantSettingsCacheKey(tenantId));
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Barcha tenant dashboard cache kalitlarini o'chirish */
 export async function invalidateDashboard(tenantId: number): Promise<void> {
   try {

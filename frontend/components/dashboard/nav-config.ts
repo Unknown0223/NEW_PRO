@@ -58,7 +58,7 @@ export const dashboardOrdersNav: {
       title: "УПРАВЛЕНИЕ ЗАКАЗАМИ",
       items: [
         { href: "/orders", label: "Заявки" },
-        { href: "/orders?status=cancelled", label: "Отказы" },
+        { href: "/orders/refusals", label: "Отказы" },
         { href: "/returns", label: "Список возвратов" }
       ]
     }
