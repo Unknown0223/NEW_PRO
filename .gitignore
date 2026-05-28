@@ -48,3 +48,24 @@ backend/scripts/data/excel/warehouse-aliases.json
 
 # Archive (rollback uchun saqlangan eski kod)
 archive/
+
+# Lokal login / vaqtinchalik andoza (commit qilinmasin)
+_login.json
+_template-refusals/
+_template_client_mgmt/
+_template_client_mgmt_v2/
+
+# Nakladnoy audit / debug chiqishlari (asosiy kod scripts/*.ts da)
+backend/scripts/audit-output/**/*.xlsx
+backend/scripts/audit-output/**/*.zip
+backend/scripts/audit-output/**/516-xml/
+backend/scripts/audit-output/**/diff-0527/
+backend/scripts/audit-output/**/expeditor-smoke/
+backend/scripts/audit-output/**/u14/
+backend/scripts/audit-output/**/xlsx-unzip/
+backend/scripts/audit-output/**/xml-check/
+backend/scripts/audit-output/**/warehouse-templates/
+backend/scripts/audit-output/**/nakladnoy_fixes*/
+backend/scripts/audit-output/**/_unzip/
+backend/scripts/audit-output/**/_verify*/
+backend/scripts/audit-output/order-nakladnoy-xlsx.*.ts
