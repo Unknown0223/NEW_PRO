@@ -10,16 +10,39 @@ export function cellStr(v: ExcelJS.CellValue): string {
     return rt.map((x) => x.text).join("");
   }
   if (typeof v === "object" && "formula" in (v as object)) {
-    return String((v as ExcelJS.CellFormulaValue).result ?? "");
+    const r = (v as ExcelJS.CellFormulaValue).result;
+    if (r == null) return "";
+    if (typeof r === "number" && !Number.isFinite(r)) return "";
+    const s = String(r).trim();
+    return s === "NaN" ? "" : s;
   }
-  return String(v).trim();
+  if (typeof v === "number" && !Number.isFinite(v)) return "";
+  const out = String(v).trim();
+  return out === "NaN" ? "" : out;
+}
+
+function resolveMergeMaster(cell: ExcelJS.Cell): ExcelJS.Cell {
+  let c: ExcelJS.Cell = cell;
+  const seen = new Set<ExcelJS.Cell>();
+  while (c.isMerged && c.master && !seen.has(c.master)) {
+    seen.add(c);
+    c = c.master;
+  }
+  return c;
 }
 
 export function setCell(ws: ExcelJS.Worksheet, row: number, col: number, value: ExcelJS.CellValue) {
   const c = ws.getCell(row, col);
   if (value === undefined) return;
+  if (c.formula) return;
   const safe = sanitizeCellValue(value);
-  c.value = safe === undefined ? null : safe;
+  resolveMergeMaster(c).value = safe === undefined ? null : safe;
+}
+
+export function clearCellValueMerged(ws: ExcelJS.Worksheet, row: number, col: number) {
+  const c = ws.getCell(row, col);
+  if (c.formula) return;
+  resolveMergeMaster(c).value = null;
 }
 
 export function clearRange(ws: ExcelJS.Worksheet, r1: number, c1: number, r2: number, c2: number) {
@@ -54,8 +77,18 @@ export function writeLineCols(
   }
 }
 
-export function fmtRuDateShort(d: Date): string {
-  return fmtDate(d);
+export function findHeaderColumn(
+  ws: ExcelJS.Worksheet,
+  headerRow: number,
+  needle: string,
+  maxCol = 12
+): number | null {
+  const n = needle.toLowerCase();
+  for (let c = 1; c <= maxCol; c++) {
+    const t = cellStr(ws.getCell(headerRow, c).value).toLowerCase();
+    if (t.includes(n)) return c;
+  }
+  return null;
 }
 
 export function fmtRuDateTimeShort(d: Date): string {

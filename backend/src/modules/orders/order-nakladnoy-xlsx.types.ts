@@ -42,12 +42,16 @@ export type NakladnoyOrderPayload = {
 export type NakladnoyCodeColumn = "sku" | "barcode";
 export type NakladnoyGroupBy = "territory" | "agent" | "expeditor";
 
+import type { WarehouseExportOptions } from "./warehouse-templates/warehouse-export-options";
+
 export type NakladnoyBuildOptions = {
   codeColumn: NakladnoyCodeColumn;
   /** true: agent / ekspeditor / hudud bo‘yicha alohida varaqlar (Загрузочный лист) */
   separateSheets: boolean;
   /** separateSheets true bo‘lganda */
   groupBy: NakladnoyGroupBy;
+  /** 112 / 410 / 600 — shablon sozlamalari */
+  warehouseExport?: WarehouseExportOptions;
 };
 
 export const DEFAULT_NAKLADNOY_BUILD_OPTIONS: NakladnoyBuildOptions = {

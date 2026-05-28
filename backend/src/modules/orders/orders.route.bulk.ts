@@ -3,6 +3,9 @@ import {
   bulkOrderConsignmentBodySchema,
   bulkOrderExpeditorBodySchema,
   bulkOrderNakladnoyBodySchema,
+  bulkOrderNakladnoyPreviewBodySchema,
+  bulkOrderLoading520BodySchema,
+  bulkOrderExpeditorLoadingBodySchema,
   bulkOrderStatusBodySchema,
   createOrderBodySchema,
   ordersListQuerySchema,
@@ -33,7 +36,11 @@ import {
   createOrder,
   getOrderDetail,
   listOrdersPaged,
+  nakladnoyBuildOptionsFromApi,
   requestBulkOrderNakladnoy,
+  requestBulkOrderNakladnoyPreview,
+  requestBulkOrderNakladnoyLoading520,
+  requestBulkOrderNakladnoyExpeditorLoading,
   updateOrderLines,
   updateOrderMeta,
   updateOrderStatus
@@ -126,11 +133,13 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           request.tenant!.id,
           parsed.data.order_ids,
           parsed.data.template,
-          {
-            codeColumn: parsed.data.code_column ?? "sku",
-            separateSheets: parsed.data.separate_sheets ?? false,
-            groupBy: parsed.data.group_by ?? "agent"
-          },
+          nakladnoyBuildOptionsFromApi({
+            code_column: parsed.data.code_column,
+            separate_sheets: parsed.data.separate_sheets,
+            group_by: parsed.data.group_by,
+            warehouse_layout: parsed.data.warehouse_layout ?? null,
+            warehouse_export_options: parsed.data.warehouse_export_options
+          }),
           parsed.data.format ?? "xlsx",
           parsed.data.warehouse_layout ?? null,
           parsed.data.expeditor_loading_layout ?? null
@@ -164,6 +173,150 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
         }
         if (msg.startsWith("WAREHOUSE_TEMPLATE_ASSET_MISSING:")) {
           return sendApiError(reply, request, 500, "WarehouseTemplateMissing");
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/orders/bulk/nakladnoy/preview",
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderNakladnoyPreviewBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const preview = await requestBulkOrderNakladnoyPreview(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          {
+            template: parsed.data.template,
+            label: parsed.data.label,
+            warehouseLayout: parsed.data.warehouse_layout ?? null,
+            expeditorLoadingLayout: parsed.data.expeditor_loading_layout ?? null,
+            buildOptions: nakladnoyBuildOptionsFromApi({
+              code_column: parsed.data.code_column,
+              separate_sheets: parsed.data.separate_sheets,
+              group_by: parsed.data.group_by,
+              warehouse_layout: parsed.data.warehouse_layout ?? null,
+              warehouse_export_options: parsed.data.warehouse_export_options
+            })
+          }
+        );
+        return reply.send(preview);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "ORDERS_NOT_FOUND") {
+          const ex = e as Error & { missing_ids?: number[] };
+          return sendApiError(reply, request, 400, "OrdersNotFound", undefined, { missing_ids: ex.missing_ids ?? [] });
+        }
+        if (msg === "EMPTY_ORDER_IDS") {
+          return sendApiError(reply, request, 400, "EmptyOrderIds");
+        }
+        if (msg === "TOO_MANY_ORDERS") {
+          return sendApiError(reply, request, 400, "TooManyOrders");
+        }
+        if (msg === "PREVIEW_LAYOUT_NOT_SUPPORTED" || msg === "PREVIEW_PDF_NOT_SUPPORTED") {
+          return sendApiError(reply, request, 400, "PreviewNotSupported");
+        }
+        if (
+          msg === "INVALID_NAKLADNOY_TEMPLATE" ||
+          msg === "INVALID_WAREHOUSE_LAYOUT" ||
+          msg === "INVALID_EXPEDITOR_LOADING_LAYOUT" ||
+          msg === "WAREHOUSE_LAYOUT_XLSX_ONLY" ||
+          msg === "EXPEDITOR_LOADING_LAYOUT_XLSX_ONLY"
+        ) {
+          return sendApiError(reply, request, 400, "InvalidNakladnoyPreview");
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/orders/bulk/nakladnoy/expeditor-loading",
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderExpeditorLoadingBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const result = await requestBulkOrderNakladnoyExpeditorLoading(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          parsed.data.expeditor_loading_layout,
+          nakladnoyBuildOptionsFromApi({
+            code_column: parsed.data.code_column,
+            separate_sheets: parsed.data.separate_sheets,
+            group_by: parsed.data.group_by
+          })
+        );
+        return reply
+          .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+          .header("Content-Disposition", attachmentContentDisposition(result.filename))
+          .send(result.buffer);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "ORDERS_NOT_FOUND") {
+          const ex = e as Error & { missing_ids?: number[] };
+          return sendApiError(reply, request, 400, "OrdersNotFound", undefined, { missing_ids: ex.missing_ids ?? [] });
+        }
+        if (msg === "EMPTY_ORDER_IDS") {
+          return sendApiError(reply, request, 400, "EmptyOrderIds");
+        }
+        if (msg === "TOO_MANY_ORDERS") {
+          return sendApiError(reply, request, 400, "TooManyOrders");
+        }
+        if (msg === "INVALID_EXPEDITOR_LOADING_LAYOUT") {
+          return sendApiError(reply, request, 400, "InvalidExpeditorLoadingLayout");
+        }
+        if (msg.startsWith("EXPEDITOR_LOADING_TEMPLATE_ASSET_MISSING:")) {
+          return sendApiError(reply, request, 500, "ExpeditorLoadingTemplateMissing");
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/orders/bulk/nakladnoy/loading-520",
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderLoading520BodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const result = await requestBulkOrderNakladnoyLoading520(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          {
+            codeColumn: parsed.data.code_column ?? "sku",
+            separateSheets: parsed.data.separate_sheets ?? false,
+            groupBy: parsed.data.group_by ?? "agent"
+          }
+        );
+        return reply
+          .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+          .header("Content-Disposition", attachmentContentDisposition(result.filename))
+          .send(result.buffer);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "ORDERS_NOT_FOUND") {
+          const ex = e as Error & { missing_ids?: number[] };
+          return sendApiError(reply, request, 400, "OrdersNotFound", undefined, { missing_ids: ex.missing_ids ?? [] });
+        }
+        if (msg === "EMPTY_ORDER_IDS") {
+          return sendApiError(reply, request, 400, "EmptyOrderIds");
+        }
+        if (msg === "TOO_MANY_ORDERS") {
+          return sendApiError(reply, request, 400, "TooManyOrders");
         }
         throw e;
       }

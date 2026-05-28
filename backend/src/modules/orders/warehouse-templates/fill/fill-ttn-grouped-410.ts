@@ -1,9 +1,18 @@
 import type ExcelJS from "exceljs";
+import type { NakladnoyBuildOptions } from "../../order-nakladnoy-xlsx.types";
+import { lineCodeDisplay } from "../../order-nakladnoy-xlsx.format";
 import type { WarehouseLayoutId } from "../warehouse-template-ids";
 import type { WarehouseAggregateContext } from "../warehouse-template-shared";
 import { blockLabel, lookupLine, metaExpeditors } from "../warehouse-template-shared";
 import { primaryDataSheet } from "../warehouse-template-assets";
-import { cellStr, setCell, fmtRuDateShort, sumLines } from "../warehouse-template-fill.helpers";
+import {
+  cellStr,
+  setCell,
+  fmtRuDateShort,
+  sumLines,
+  findHeaderColumn
+} from "../warehouse-template-fill.helpers";
+import { DEFAULT_WAREHOUSE_EXPORT_OPTIONS } from "../warehouse-export-options";
 type TtnVariant = "410" | "411" | "412";
 
 function variantOf(layoutId: WarehouseLayoutId): TtnVariant {
@@ -31,20 +40,45 @@ function isProductRow(ws: ExcelJS.Worksheet, row: number): boolean {
 export function fillTtnGrouped410(
   wb: ExcelJS.Workbook,
   ctx: WarehouseAggregateContext,
-  layoutId: WarehouseLayoutId
+  layoutId: WarehouseLayoutId,
+  options: NakladnoyBuildOptions
 ) {
   const variant = variantOf(layoutId);
   const ws = primaryDataSheet(wb);
   const now = ctx.now;
+  const exp = options.warehouseExport ?? DEFAULT_WAREHOUSE_EXPORT_OPTIONS;
 
   setCell(ws, 1, 7, fmtRuDateShort(now));
   setCell(ws, 3, 2, metaExpeditors(ctx));
+
+  let barcodeCol: number | null = null;
+  let skuCol: number | null = null;
+  if (layoutId === "wh-4.1") {
+    for (const hr of [3, 4, 5]) {
+      barcodeCol ??= findHeaderColumn(ws, hr, "штрих");
+      skuCol ??= findHeaderColumn(ws, hr, "код");
+    }
+  }
 
   for (let row = 5; row <= ws.rowCount; row++) {
     if (!isProductRow(ws, row)) continue;
     const name = cellStr(ws.getCell(row, 2).value);
     const ln = lookupLine(ctx, name);
     if (!ln) continue;
+
+    if (layoutId === "wh-4.1") {
+      if (barcodeCol != null) {
+        setCell(
+          ws,
+          row,
+          barcodeCol,
+          exp.showBarcode !== false ? lineCodeDisplay(ln, "barcode") : ""
+        );
+      }
+      if (skuCol != null) {
+        setCell(ws, row, skuCol, exp.showSku !== false ? ln.sku : "");
+      }
+    }
 
     if (variant === "412") {
       setCell(ws, row, 3, blockLabel(ln));

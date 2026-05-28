@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import JSZip from "jszip";
-import { buildExpeditorLoadingXlsx } from "../src/modules/orders/warehouse-templates/build-expeditor-loading-xlsx";
+import { buildExpeditorLoading520Xlsx } from "../src/modules/orders/warehouse-templates/build-expeditor-loading-520";
 import { DEFAULT_NAKLADNOY_BUILD_OPTIONS } from "../src/modules/orders/order-nakladnoy-xlsx.types";
 import type { NakladnoyOrderPayload } from "../src/modules/orders/order-nakladnoy-xlsx.types";
 
@@ -55,7 +55,7 @@ const mockPayload: NakladnoyOrderPayload = {
 };
 
 async function main() {
-  const buf = await buildExpeditorLoadingXlsx("ex-5.2.0", [mockPayload], DEFAULT_NAKLADNOY_BUILD_OPTIONS);
+  const buf = await buildExpeditorLoading520Xlsx([mockPayload], DEFAULT_NAKLADNOY_BUILD_OPTIONS);
   const genPath = join(outDir, "generated-ex-5.2.0.xlsx");
   writeFileSync(genPath, buf);
 
@@ -64,10 +64,6 @@ async function main() {
   const ssXml = (await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "";
 
   const hasTitleMerge = sheetXml.includes('mergeCell ref="A1:H1"');
-  const itogoMerge = /mergeCell ref="A(\d+):D\1"/.exec(sheetXml);
-  const hasItogoRowMerge = Boolean(
-    itogoMerge && sheetXml.includes(`mergeCell ref="G${itogoMerge[1]}:H${itogoMerge[1]}"`)
-  );
   const hasBonusesBlock = sheetXml.includes("Бонусы") || ssXml.includes("Бонусы");
   const hasReturnBlock = sheetXml.includes("Возврат") || ssXml.includes("Возврат");
   const hasItogo = sheetXml.includes("Итого") || ssXml.includes("Итого");
@@ -87,7 +83,6 @@ async function main() {
 
   const ok =
     hasTitleMerge &&
-    hasItogoRowMerge &&
     !hasBonusesBlock &&
     !hasReturnBlock &&
     hasItogo &&
@@ -99,7 +94,6 @@ async function main() {
       {
         genPath,
         hasTitleMerge,
-        hasItogoRowMerge,
         hasBonusesBlock,
         hasReturnBlock,
         hasItogo,

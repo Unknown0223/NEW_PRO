@@ -210,6 +210,24 @@ export const patchOrderMilestoneAtBodySchema = z.object({
   occurred_at: z.string().datetime({ offset: true })
 });
 
+/** 112 / 410 / 600 — «Загруз зав.склада» maydonlari */
+export const warehouseExportOptionsSchema = z
+  .object({
+    sort_products: z.boolean().optional(),
+    show_barcode: z.boolean().optional(),
+    show_sku: z.boolean().optional(),
+    show_load_date: z.boolean().optional(),
+    show_agents: z.boolean().optional(),
+    show_territory: z.boolean().optional(),
+    show_expeditor: z.boolean().optional(),
+    show_agent_phone: z.boolean().optional(),
+    products_by_order_only: z.boolean().optional(),
+    show_product_id: z.boolean().optional(),
+    show_product_code: z.boolean().optional(),
+    show_product_price: z.boolean().optional()
+  })
+  .optional();
+
 /** POST `/api/:slug/orders/bulk/nakladnoy` */
 export const bulkOrderNakladnoyBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
@@ -232,22 +250,104 @@ export const bulkOrderNakladnoyBodySchema = z.object({
       "wh-7.0.4"
     ])
     .optional(),
-  /** «Загруз экспедитор» — 518 andoza (5.1.8) */
+  /** «Загруз экспедитор» */
   expeditor_loading_layout: z
     .enum([
+      "ex-2.0",
       "ex-3.0",
       "ex-4.0.1",
-      "ex-4.1.0",
-      "ex-5.0",
-      "ex-5.0.6",
-      "ex-5.1.0",
-      "ex-5.1.0.1",
+      "ex-5.1.1",
+      "ex-5.1.2",
+      "ex-5.1.3",
+      "ex-5.1.4",
+      "ex-5.1.5",
       "ex-5.1.6",
+      "ex-5.1.7",
       "ex-5.1.8",
+      "ex-5.1.9",
       "ex-5.2.0"
     ])
     .optional(),
   format: z.enum(["xlsx", "pdf"]).optional(),
+  code_column: z.enum(["sku", "barcode"]).optional(),
+  separate_sheets: z.boolean().optional(),
+  group_by: z.enum(["territory", "agent", "expeditor"]).optional(),
+  warehouse_export_options: warehouseExportOptionsSchema
+});
+
+/** POST `/api/:slug/orders/bulk/nakladnoy/preview` — virtual ko‘rinish (barcha nakladnoy shablonlari) */
+export const bulkOrderNakladnoyPreviewBodySchema = z.object({
+  order_ids: orderIdsBulkSchema,
+  template: z.enum(["nakladnoy_warehouse", "nakladnoy_expeditor"]),
+  label: z.string().min(1).max(120),
+  warehouse_layout: z
+    .enum([
+      "wh-1.1",
+      "wh-1.1.2",
+      "wh-4.1",
+      "wh-4.1.1",
+      "wh-4.1.2",
+      "wh-6.0",
+      "wh-6.0.1",
+      "wh-6.0.2",
+      "wh-7.0.0",
+      "wh-7.0.1",
+      "wh-xprinter",
+      "wh-7.0.3",
+      "wh-7.0.4"
+    ])
+    .optional(),
+  expeditor_loading_layout: z
+    .enum([
+      "ex-2.0",
+      "ex-3.0",
+      "ex-4.0.1",
+      "ex-5.1.1",
+      "ex-5.1.2",
+      "ex-5.1.3",
+      "ex-5.1.4",
+      "ex-5.1.5",
+      "ex-5.1.6",
+      "ex-5.1.7",
+      "ex-5.1.8",
+      "ex-5.1.9",
+      "ex-5.2.0"
+    ])
+    .optional(),
+  code_column: z.enum(["sku", "barcode"]).optional(),
+  separate_sheets: z.boolean().optional(),
+  group_by: z.enum(["territory", "agent", "expeditor"]).optional(),
+  warehouse_export_options: warehouseExportOptionsSchema
+});
+
+/** POST `/api/:slug/orders/bulk/nakladnoy/loading-520` — 5.2.0 Excel (preview bilan bir xil hujjat) */
+export const bulkOrderLoading520BodySchema = z.object({
+  order_ids: orderIdsBulkSchema,
+  code_column: z.enum(["sku", "barcode"]).optional(),
+  separate_sheets: z.boolean().optional(),
+  group_by: z.enum(["territory", "agent", "expeditor"]).optional()
+});
+
+const expeditorLoadingLayoutEnum = z.enum([
+  "ex-2.0",
+  "ex-3.0",
+  "ex-4.0.1",
+  "ex-5.1.1",
+  "ex-5.1.2",
+  "ex-5.1.3",
+  "ex-5.1.4",
+  "ex-5.1.5",
+  "ex-5.1.6",
+  "ex-5.1.7",
+  "ex-5.1.8",
+  "ex-5.1.9",
+  "ex-5.2.0"
+]);
+
+/** POST `/api/:slug/orders/bulk/nakladnoy/expeditor-loading` — shablon Excel (preview bilan bir xil buffer) */
+export const bulkOrderExpeditorLoadingBodySchema = z.object({
+  order_ids: orderIdsBulkSchema,
+  expeditor_loading_layout: expeditorLoadingLayoutEnum,
   code_column: z.enum(["sku", "barcode"]).optional(),
   separate_sheets: z.boolean().optional(),
   group_by: z.enum(["territory", "agent", "expeditor"]).optional()

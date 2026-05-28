@@ -35,6 +35,8 @@
     "test:supervisor-dashboard": "vitest run tests/dashboard-supervisor.integration.test.ts",
     "test:client-qr": "vitest run tests/client-qr.integration.test.ts",
     "test:work-slots": "vitest run tests/work-slots.pure.test.ts tests/work-slots.integration.test.ts",
+    "smoke:order-automation": "tsx scripts/smoke-order-automation.ts",
+    "test:order-automation": "vitest run tests/order-automation.engine.test.ts tests/order-automation.integration.test.ts",
     "test:report-builder": "vitest run tests/report-builder-validate.test.ts tests/report-builder.integration.test.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

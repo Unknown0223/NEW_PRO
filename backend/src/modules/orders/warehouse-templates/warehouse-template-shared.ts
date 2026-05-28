@@ -142,6 +142,16 @@ export function metaTerritories(ctx: WarehouseAggregateContext): string {
   );
 }
 
+export function metaAgentPhones(ctx: WarehouseAggregateContext): string {
+  const phones = ctx.orders
+    .map((o) => {
+      const m = /(\+?\d[\d\s\-()]{8,})/.exec(o.agentLine);
+      return m?.[1]?.trim() ?? "";
+    })
+    .filter(Boolean);
+  return uniqJoin([...new Set(phones)]);
+}
+
 export function bonusLabel(qty: number): string {
   if (qty <= 0) return "";
   return `${qty} бонус`;

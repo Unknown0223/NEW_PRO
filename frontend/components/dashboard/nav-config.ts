@@ -59,7 +59,7 @@ export const dashboardOrdersNav: {
       items: [
         { href: "/orders", label: "Заявки" },
         { href: "/orders/refusals", label: "Отказы" },
-        { href: "/returns", label: "Список возвратов" }
+        { href: "/orders/automation", label: "Автоматизация заявок" }
       ]
     }
   ]

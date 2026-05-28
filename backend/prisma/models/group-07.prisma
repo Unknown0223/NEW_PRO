@@ -1,0 +1,94 @@
+/// Zakaz yaratishda bloklash qoidalari (Ограничение заявок)
+model OrderRestrictionRule {
+  id                    Int      @id @default(autoincrement())
+  tenant_id             Int
+  name                  String
+  is_active             Boolean  @default(true)
+  comment               String   @default("")
+  currency_code         String   @default("UZS") @db.VarChar(8)
+  amount_from           Decimal? @db.Decimal(15, 2)
+  amount_to             Decimal? @db.Decimal(15, 2)
+  scope_agent_user_ids  Int[]    @default([])
+  scope_warehouse_ids   Int[]    @default([])
+  scope_territory_refs  String[] @default([])
+  scope_zones           String[] @default([])
+  scope_regions         String[] @default([])
+  scope_cities          String[] @default([])
+  payment_method_ref         String?  @db.VarChar(64)
+  /// Eski bitta qiymat (CSV / moslik); yangi qoidalarda `scope_trade_direction_refs` ishlatiladi
+  trade_direction_ref        String?  @db.VarChar(128)
+  scope_trade_direction_refs String[] @default([])
+  /// all | yes | no
+  consignment_mode           String   @default("all") @db.VarChar(8)
+  created_by_user_id         Int?
+  updated_by_user_id         Int?
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+  tenant                     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  created_by                 User?    @relation("OrderRestrictionRuleCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by            User?    @relation("OrderRestrictionRuleUpdatedBy", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, is_active])
+  @@map("order_restriction_rules")
+}
+
+/// Zakazlarni avtomatik tasdiqlash qoidalari (Авто-подтверждение)
+model OrderAutoConfirmRule {
+  id                    Int      @id @default(autoincrement())
+  tenant_id             Int
+  name                  String
+  is_active             Boolean  @default(true)
+  comment               String   @default("")
+  currency_code         String   @default("UZS") @db.VarChar(8)
+  amount_from           Decimal? @db.Decimal(15, 2)
+  amount_to             Decimal? @db.Decimal(15, 2)
+  scope_agent_user_ids  Int[]    @default([])
+  scope_warehouse_ids   Int[]    @default([])
+  scope_territory_refs  String[] @default([])
+  scope_zones           String[] @default([])
+  scope_regions         String[] @default([])
+  scope_cities          String[] @default([])
+  payment_method_ref         String?  @db.VarChar(64)
+  trade_direction_ref        String?  @db.VarChar(128)
+  scope_trade_direction_refs String[] @default([])
+  consignment_mode           String   @default("all") @db.VarChar(8)
+  request_type_refs          String[] @default([])
+  /// web | mobile
+  source_channels       String[] @default([])
+  /// instant | exact_time | business_days_n
+  execution_type        String   @default("instant") @db.VarChar(32)
+  execution_time        DateTime?
+  n_value               Int?
+  created_by_user_id    Int?
+  updated_by_user_id    Int?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  tenant                Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  created_by            User?    @relation("OrderAutoConfirmRuleCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  updated_by            User?    @relation("OrderAutoConfirmRuleUpdatedBy", fields: [updated_by_user_id], references: [id], onDelete: SetNull)
+  schedules             OrderAutoConfirmSchedule[]
+
+  @@index([tenant_id, is_active])
+  @@map("order_auto_confirm_rules")
+}
+
+/// Rejalashtirilgan avto-tasdiq (BullMQ / worker)
+model OrderAutoConfirmSchedule {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  order_id    Int
+  rule_id     Int
+  run_at      DateTime
+  /// pending | done | cancelled | failed
+  status      String   @default("pending") @db.VarChar(16)
+  last_error  String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  rule        OrderAutoConfirmRule @relation(fields: [rule_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, status, run_at])
+  @@index([order_id])
+  @@map("order_auto_confirm_schedules")
+}

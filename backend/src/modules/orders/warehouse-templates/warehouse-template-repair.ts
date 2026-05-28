@@ -1,5 +1,4 @@
 import type ExcelJS from "exceljs";
-import { filterValidNonOverlappingMergeRefs, getWorksheetMergeRefs, setWorksheetMergeRefs } from "./worksheet-merge-utils";
 
 /**
  * Excel nakladnoy repair engine (archive: excel-generator-fixed.ts).
@@ -50,9 +49,18 @@ export function sanitizeWorksheetCells(ws: ExcelJS.Worksheet): void {
 }
 
 export function repairInvalidMerges(ws: ExcelJS.Worksheet): void {
-  const merges = getWorksheetMergeRefs(ws);
-  if (!merges.length) return;
-  setWorksheetMergeRefs(ws, filterValidNonOverlappingMergeRefs(merges));
+  const model = ws as ExcelJS.Worksheet & { model?: { merges?: string[] } };
+  const merges = model.model?.merges;
+  if (!merges?.length) return;
+  model.model!.merges = merges.filter((ref) => {
+    const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(ref);
+    if (!m) return true;
+    const c1 = m[1]!.toUpperCase();
+    const r1 = m[2]!;
+    const c2 = m[3]!.toUpperCase();
+    const r2 = m[4]!;
+    return c1 !== c2 || r1 !== r2;
+  });
 }
 
 export function stripInvalidPageSetupDpi(ws: ExcelJS.Worksheet): void {
@@ -103,11 +111,35 @@ export function repairWorkbookAfterLoad(wb: ExcelJS.Workbook): void {
 /** Loyiha nomi — loadWarehouseTemplateWorkbook uchun alias. */
 export const repairWorkbookAfterExcelJsLoad = repairWorkbookAfterLoad;
 
+/** Formula natijasi NaN/bo‘sh bo‘lsa — preview va Excelda «NaN» chiqmasin. */
+export function stripBrokenFormulaCells(ws: ExcelJS.Worksheet): void {
+  ws.eachRow({ includeEmpty: true }, (row) => {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      const v = cell.value;
+      if (v == null || typeof v !== "object" || !("formula" in v)) return;
+      const fv = v as ExcelJS.CellFormulaValue;
+      const r = fv.result;
+      if (r == null) {
+        cell.value = null;
+        return;
+      }
+      if (typeof r === "number" && !Number.isFinite(r)) {
+        cell.value = null;
+        return;
+      }
+      if (String(r).trim() === "NaN") {
+        cell.value = null;
+      }
+    });
+  });
+}
+
 /** writeBuffer dan oldin. */
 export function repairWorkbookBeforeWrite(wb: ExcelJS.Workbook): void {
   removeEmptyWorksheets(wb);
   for (const ws of wb.worksheets) {
     sanitizeWorksheetCells(ws);
+    stripBrokenFormulaCells(ws);
     repairInvalidMerges(ws);
     stripInvalidPageSetupDpi(ws);
   }

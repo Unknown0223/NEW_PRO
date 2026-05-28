@@ -50,6 +50,15 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     return { ok: true };
   }
 
+  if (job.name === "order_auto_confirm") {
+    const d = job.data as import("../modules/order-automation/order-automation.jobs").OrderAutoConfirmJobData;
+    const { executeAutoConfirmSchedule } = await import(
+      "../modules/order-automation/order-automation.auto-confirm"
+    );
+    await executeAutoConfirmSchedule(d.tenant_id, d.schedule_id);
+    return { ok: true };
+  }
+
   if (job.name === "import_clients_xlsx") {
     const d = job.data as ImportClientsXlsxJobData;
     const fp = d.file_path;

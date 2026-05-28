@@ -1,13 +1,13 @@
 "use client";
 
 import { ClientsDataTable } from "@/components/clients/clients-data-table";
-import { ClientsTableFilters, ClientsTableListToolbarStrip } from "@/components/clients/clients-table-toolbar";
+import {
+  ClientsListPagination,
+  ClientsTemplateListToolbar
+} from "@/components/clients/clients-table-toolbar";
+import { ClientsTemplateFiltersPanel } from "@/components/clients/clients-template-filters-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { ClientRow } from "@/lib/client-types";
 import { CLIENT_COLUMN_TO_SORT, type ClientSortField } from "@/lib/client-list-sort";
@@ -33,7 +33,6 @@ import { mergeRefSelectOptions, optionsToValueLabelMap } from "@/lib/ref-select-
 import { buildZoneRegionCityCascadeOptions, type ClientRefsTerritoryBundle } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { api, apiBaseURL } from "@/lib/api";
-import { formatGroupedInteger } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { clientsFilterDebugEnabled, logClientsFilters } from "@/lib/clients-filter-debug";
 import {
@@ -47,10 +46,9 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { isAxiosError, type AxiosProgressEvent } from "axios";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { FileSpreadsheet, Upload, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function normTrim(s: string): string {
   return String(s ?? "").trim();
@@ -151,6 +149,10 @@ const CLIENTS_LIST_TABLE_ID = "clients.list.v1";
 const CLIENTS_DEFAULT_HIDDEN_COLUMN_IDS = getDefaultHiddenClientColumnIds();
 const CLIENT_MANAGEABLE_COLUMNS = CLIENT_TABLE_COLUMNS.filter((c) => c.id !== "_actions");
 
+function sanitizeToolbarForApi(t: ClientToolbarFiltersState): ClientToolbarFiltersState {
+  return { ...t };
+}
+
 export default function ClientsPage() {
   const router = useRouter();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -249,7 +251,7 @@ export default function ClientsPage() {
 
   const filterBundleForApi = useMemo<ClientListFilterBundle>(
     () => ({
-      ...appliedToolbar,
+      ...sanitizeToolbarForApi(appliedToolbar),
       search: debouncedSearch,
       sortField,
       sortOrder
@@ -853,6 +855,11 @@ export default function ClientsPage() {
     }));
   }, [refData, draftToolbar.salesChannelFilter]);
 
+  const equipmentSelectOptions = useMemo(() => {
+    if (!refData?.equipment_filter_values?.length) return [];
+    return refData.equipment_filter_values.map((v) => ({ value: v, label: v }));
+  }, [refData?.equipment_filter_values]);
+
   const refDisplayMaps = useMemo(() => {
     if (!refData) return undefined;
     const strListToMap = (arr: string[] | undefined): Record<string, string> | undefined => {
@@ -972,6 +979,22 @@ export default function ClientsPage() {
     setPage(1);
   };
 
+  const handleResetToolbarFilters = () => {
+    const cleared = { ...INITIAL_CLIENT_TOOLBAR_FILTERS };
+    setDraftToolbar(cleared);
+    setAppliedToolbar(cleared);
+    setPage(1);
+  };
+
+  const handleDateRangeApplied = useCallback((dateFrom: string, dateTo: string) => {
+    setDraftToolbar((prev) => {
+      const next = { ...prev, createdFrom: dateFrom, createdTo: dateTo };
+      setAppliedToolbar(next);
+      setPage(1);
+      return next;
+    });
+  }, []);
+
   const rows = data?.data ?? [];
   const visibleColumnOrder = useMemo(
     () => tablePrefs.visibleColumnOrder.filter((id) => id !== "agent_assignments_badge"),
@@ -1062,7 +1085,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="min-h-0 space-y-0 bg-[#F5F7FA] p-0 pb-0">
       <ClientImportLaunchDialog
         open={importLaunchOpen}
         onOpenChange={setImportLaunchOpen}
@@ -1096,39 +1119,24 @@ export default function ClientsPage() {
           importMut.mutate({ file: importStagingFile, importMode: importDialogMode, ...mappingPayload });
         }}
       />
-      <PageHeader
-        title="Клиенты"
-        description={tenantSlug ? `Tenant: ${tenantSlug}` : "Список клиентов, фильтры и столбцы"}
-        actions={
-          <>
-            <Link className={cn(buttonVariants({ variant: "default", size: "sm" }))} href="/clients/new">
-              Добавить клиента
-            </Link>
-            <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/dashboard">
-              Панель управления
-            </Link>
-            <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/products">
-              Товары
-            </Link>
-          </>
-        }
-      />
-
       {importMsg ? (
-        <p className="mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        <p className="mx-6 mt-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
           {importMsg}
         </p>
       ) : null}
 
-      <ClientsTableFilters
+      <ClientsTemplateFiltersPanel
         draft={draftToolbar}
         onDraftChange={onToolbarDraftChange}
-        onApplyToolbar={handleApplyToolbarFilters}
+        onApply={handleApplyToolbarFilters}
+        onReset={handleResetToolbarFilters}
+        onDateRangeApplied={handleDateRangeApplied}
         categorySelectOptions={categorySelectOptions}
-        territoryCascade={territoryCascade}
         clientTypeSelectOptions={clientTypeSelectOptions}
         clientFormatSelectOptions={clientFormatSelectOptions}
         salesChannelSelectOptions={salesChannelSelectOptions}
+        equipmentSelectOptions={equipmentSelectOptions}
+        territoryCascade={territoryCascade}
         agentOptions={agentsFilterQ.data ?? []}
         expeditorOptions={filteredExpeditorOptions}
         supervisorOptions={supervisorsFilterQ.data ?? []}
@@ -1149,149 +1157,97 @@ export default function ClientsPage() {
 
       {!authHydrated ? (
         showSessionLoadingHint ? (
-          <div className="max-w-xl rounded-md border border-rose-200/60 bg-rose-50/60 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
-            Sessiya yuklanishi biroz cho'zildi. Internet va login holatini tekshirib ko'ring.
+          <div className="mx-6 max-w-xl rounded-md border border-rose-200/60 bg-rose-50/60 px-3 py-2 text-sm text-rose-700">
+            Sessiya yuklanishi biroz cho&apos;zildi. Internet va login holatini tekshirib ko&apos;ring.
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
+          <p className="px-6 text-sm text-gray-500">Загрузка сессии…</p>
         )
       ) : !tenantSlug ? (
-        <p className="text-sm text-destructive">
+        <p className="px-6 text-sm text-red-600">
           <Link href="/login" className="underline">
             Войти снова
           </Link>
         </p>
       ) : isLoading && !data ? (
-        <p className="text-sm text-muted-foreground">Загрузка…</p>
+        <p className="px-6 text-sm text-gray-500">Загрузка…</p>
       ) : isError ? (
-        <QueryErrorState message={getUserFacingError(error, "Не удалось загрузить клиентов.")} onRetry={() => void refetch()} />
+        <div className="px-6">
+          <QueryErrorState message={getUserFacingError(error, "Не удалось загрузить клиентов.")} onRetry={() => void refetch()} />
+        </div>
       ) : (
         <div
           className={cn(
-            "orders-hub-section orders-hub-section--table mt-4",
+            "flex-1 space-y-4 p-6",
             isFetching && isPlaceholderData && "opacity-70 transition-opacity"
           )}
         >
-          <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-            <CardContent className="p-0">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/20 px-3 py-2.5 sm:px-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">Список клиентов</h2>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5"
-                    disabled={importMut.isPending || !tenantSlug}
-                    onClick={() => {
-                      openImportLaunch("update");
-                    }}
-                  >
-                    <FileSpreadsheet className="h-3.5 w-3.5" />
-                    Обновление клиентов с Excel
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5"
-                    disabled={importMut.isPending || !tenantSlug}
-                    onClick={() => {
-                      openImportLaunch("create");
-                    }}
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    Импорт
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 opacity-70" disabled>
-                    <UsersRound className="h-3.5 w-3.5" />
-                    Групповая обработка
-                  </Button>
-                </div>
-              </div>
-              <ClientsTableListToolbarStrip
-                search={search}
-                onSearchChange={(v) => {
-                  setSearch(v);
-                  setPage(1);
-                }}
-                pageLimit={tablePrefs.pageSize}
-                onPageLimitChange={(v) => {
-                  tablePrefs.setPageSize(v);
-                  setPage(1);
-                }}
-                onOpenColumnSettings={() => setColumnDialogOpen(true)}
-                totalRecords={data?.total}
+          <ClientsTemplateListToolbar
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            pageLimit={tablePrefs.pageSize}
+            onPageLimitChange={(v) => {
+              tablePrefs.setPageSize(v);
+              setPage(1);
+            }}
+            onOpenColumnSettings={() => setColumnDialogOpen(true)}
+            onRefresh={() => void refetch()}
+            refreshing={isFetching}
+            onResetView={() => {
+              setSearch("");
+              setPage(1);
+            }}
+            onImportUpdate={() => openImportLaunch("update")}
+            onImportCreate={() => openImportLaunch("create")}
+            importDisabled={importMut.isPending || !tenantSlug}
+          />
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+            <ClientsDataTable
+              rows={rows}
+              visibility={getDefaultColumnVisibility()}
+              orderedVisibleColumnIds={visibleColumnOrder}
+              refDisplayMaps={refDisplayMaps}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onSortByColumn={handleSortByColumn}
+              bulkSelect
+              selectedIds={selectedIds}
+              onToggleRow={(id, selected) => {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (selected) next.add(id);
+                  else next.delete(id);
+                  return next;
+                });
+              }}
+              onTogglePage={(selectAll) => {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (selectAll) {
+                    for (const r of rows) next.add(r.id);
+                  } else {
+                    for (const r of rows) next.delete(r.id);
+                  }
+                  return next;
+                });
+              }}
+              onEdit={(row) => {
+                router.push(`/clients/${row.id}/edit`);
+              }}
+            />
+            {data ? (
+              <ClientsListPagination
+                page={page}
+                totalPages={clientsTotalPages}
+                total={data.total}
+                pageSize={tablePrefs.pageSize}
+                onPageChange={setPage}
               />
-              <ClientsDataTable
-                rows={rows}
-                visibility={getDefaultColumnVisibility()}
-                orderedVisibleColumnIds={visibleColumnOrder}
-                refDisplayMaps={refDisplayMaps}
-                sortField={sortField}
-                sortOrder={sortOrder}
-                onSortByColumn={handleSortByColumn}
-                bulkSelect={false}
-                selectedIds={selectedIds}
-                onToggleRow={(id, selected) => {
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (selected) next.add(id);
-                    else next.delete(id);
-                    return next;
-                  });
-                }}
-                onTogglePage={(selectAll) => {
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (selectAll) {
-                      for (const r of rows) next.add(r.id);
-                    } else {
-                      for (const r of rows) next.delete(r.id);
-                    }
-                    return next;
-                  });
-                }}
-                onEdit={(row) => {
-                  router.push(`/clients/${row.id}/edit`);
-                }}
-              />
-              {data ? (
-                <div className="table-content-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/80 bg-muted/25 px-3 py-3 text-sm sm:px-4">
-                  <span className="text-foreground/80">
-                    Страница{" "}
-                    <span className="font-medium tabular-nums text-foreground">
-                      {formatGroupedInteger(Math.min(page, clientsTotalPages))}
-                    </span>{" "}
-                    /{" "}
-                    <span className="tabular-nums text-foreground">
-                      {formatGroupedInteger(clientsTotalPages)}
-                    </span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      Назад
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= clientsTotalPages}
-                      onClick={() => setPage((p) => p + 1)}
-                    >
-                      Далее
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+            ) : null}
+          </div>
         </div>
       )}
 

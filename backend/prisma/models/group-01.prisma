@@ -72,6 +72,9 @@ model Tenant {
   work_slots                    WorkSlot[]
   slot_user_links               SlotUserLink[]
   slot_audit_entries            SlotAuditEntry[]
+  order_restriction_rules       OrderRestrictionRule[]
+  order_auto_confirm_rules      OrderAutoConfirmRule[]
+  order_auto_confirm_schedules  OrderAutoConfirmSchedule[]
 
   @@map("tenants")
 }
@@ -219,6 +222,10 @@ model User {
   slot_user_links               SlotUserLink[]          @relation("SlotUserLinks")
   assignment_locks_set          ClientAgentAssignment[] @relation("AssignmentLockSetter")
   slot_audit_entries_as_actor   SlotAuditEntry[]        @relation("SlotAuditActor")
+  order_restriction_rules_created OrderRestrictionRule[] @relation("OrderRestrictionRuleCreatedBy")
+  order_restriction_rules_updated OrderRestrictionRule[] @relation("OrderRestrictionRuleUpdatedBy")
+  order_auto_confirm_rules_created OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleCreatedBy")
+  order_auto_confirm_rules_updated OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleUpdatedBy")
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])

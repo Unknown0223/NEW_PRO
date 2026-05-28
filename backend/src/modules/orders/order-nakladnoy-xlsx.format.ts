@@ -104,7 +104,7 @@ export function mergeLoadingLines(lines: NakladnoyLine[]): NakladnoyLine[] {
     ex.qty += ln.qty;
     ex.bonusQty += ln.bonusQty;
     ex.sum += ln.sum;
-    ex.price = ex.qty > 0 ? ex.sum / ex.qty : 0;
+    ex.price = ex.qty > 0 ? Math.round(ex.sum / ex.qty) : 0;
   }
   return [...m.values()];
 }

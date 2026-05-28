@@ -74,8 +74,8 @@ export function RefusalsFilters({
   };
 
   return (
-    <div className="orders-hub-section orders-hub-section--filters border-b border-border/70 px-4 py-2 sm:px-5">
-      <Card className="rounded-lg border border-border bg-card shadow-sm">
+    <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight mx-4 mt-2 border-b-0">
+      <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
         <CardContent className="space-y-2.5 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border/60 pb-2.5">
             {isError ? (

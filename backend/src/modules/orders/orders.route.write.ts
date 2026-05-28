@@ -189,6 +189,16 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
             order_total: ex.order_total
           });
         }
+        if (msg === "ORDER_RESTRICTED") {
+          const ex = e as Error & { rule_id?: number; rule_name?: string };
+          const detail = ex.rule_name
+            ? `Заказ заблокирован правилом: ${ex.rule_name}`
+            : "Заказ заблокирован правилом ограничения";
+          return sendApiError(reply, request, 403, "OrderRestricted", detail, {
+            rule_id: ex.rule_id,
+            rule_name: ex.rule_name
+          });
+        }
         if (msg === "ORDER_REQUIRES_AGENT") {
           return sendApiError(reply, request, 400, "OrderRequiresAgent");
         }

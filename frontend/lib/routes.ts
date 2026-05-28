@@ -11,6 +11,7 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/initial-client-balances",
   "/client-balances",
   "/returns",
+  "/orders/automation",
   "/reports",
   "/stock",
   "/suppliers",

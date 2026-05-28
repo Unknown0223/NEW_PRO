@@ -2375,6 +2375,24 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         );
         return;
       }
+      if (code === "OrderRestricted") {
+        const ruleName =
+          typeof d?.rule_name === "string" && d.rule_name.trim()
+            ? d.rule_name
+            : null;
+        const apiMsg = typeof d?.message === "string" ? d.message : ax.response?.data?.message;
+        setLocalError(
+          withApiSupportLine(
+            ruleName
+              ? `Заказ заблокирован правилом «${ruleName}».`
+              : typeof apiMsg === "string" && apiMsg.trim()
+                ? apiMsg
+                : "Заказ заблокирован правилом ограничения.",
+            e
+          )
+        );
+        return;
+      }
       if (code === "ConsignmentRequiresAgent") {
         setLocalError("Konsignatsiya zakazi uchun agentni tanlang.");
         return;

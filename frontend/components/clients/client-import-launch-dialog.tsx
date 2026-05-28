@@ -1,16 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
-import { Download, FileSpreadsheet, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { FileSpreadsheet, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   open: boolean;
@@ -21,6 +14,7 @@ type Props = {
   onConfirm: (file: File) => void;
 };
 
+/** Zip shablon ImportModal — 700px, 2 ustunli grid, backdrop blur */
 export function ClientImportLaunchDialog({
   open,
   onOpenChange,
@@ -30,85 +24,116 @@ export function ClientImportLaunchDialog({
   onConfirm
 }: Props) {
   const hiddenInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setFile(null);
     setErr(null);
     if (hiddenInputRef.current) hiddenInputRef.current.value = "";
-  };
+  }, []);
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset();
-        onOpenChange(next);
-      }}
+  const close = useCallback(() => {
+    reset();
+    onOpenChange(false);
+  }, [onOpenChange, reset]);
+
+  useEffect(() => {
+    if (!open) reset();
+  }, [open, reset]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t)) return;
+      close();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, close]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  const title = mode === "update" ? "Обновление клиентов с Excel" : "Импорт клиент";
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9998] flex animate-in fade-in items-center justify-center bg-[#013532]/30 backdrop-blur-[1px] duration-150"
+      role="presentation"
     >
-      <DialogContent className="max-w-[26rem] border-border/70 p-0">
-        <DialogHeader className="border-b border-border/70 px-4 py-3">
-          <DialogTitle>{mode === "update" ? "Обновление клиентов с Excel" : "Импорт клиент"}</DialogTitle>
-          <DialogDescription>
-            Выберите файл Excel и сохраните. При необходимости сначала скачайте шаблон.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted-foreground">Шаг 1: скачайте шаблон</p>
-            <Button
+      <div
+        ref={panelRef}
+        className="mx-4 w-full max-w-[700px] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        role="dialog"
+        aria-modal
+        aria-labelledby="client-import-launch-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4">
+          <h3 id="client-import-launch-title" className="text-lg font-bold text-gray-800">
+            {title}
+          </h3>
+          <div className="flex items-center gap-3">
+            <button
               type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1.5"
+              disabled={busy}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
               onClick={() => void onDownloadTemplate()}
             >
-              <Download className="h-3.5 w-3.5" />
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
               Скачать шаблон
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Шаг 2: выберите файл Excel</p>
-            <input
-              ref={hiddenInputRef}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="hidden"
-              onChange={(e) => {
-                setErr(null);
-                setFile(e.target.files?.[0] ?? null);
-              }}
-            />
-            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                onClick={() => hiddenInputRef.current?.click()}
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                Выбрать Excel файл
-              </Button>
-              <span className="min-w-0 truncate text-xs text-muted-foreground">
-                {file ? file.name : "Файл не выбран"}
-              </span>
-            </div>
-            {err ? <p className="text-xs text-destructive">{err}</p> : null}
+            </button>
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-lg p-1 transition-colors hover:bg-gray-100"
+              aria-label="Закрыть"
+            >
+              <X className="h-5 w-5 text-gray-500" />
+            </button>
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-4 py-3">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy} className="h-8">
-            Отмена
-          </Button>
-          <Button
+        <div className="grid grid-cols-2 gap-3 px-6 pb-6">
+          <button
             type="button"
             disabled={busy}
-            className="h-8 gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
+            onClick={() => hiddenInputRef.current?.click()}
+            className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <Upload className="h-4 w-4 shrink-0 text-gray-500" />
+            <span className="truncate">{file ? file.name : "Выберите Excel файл"}</span>
+          </button>
+          <input
+            ref={hiddenInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              setErr(null);
+              setFile(e.target.files?.[0] ?? null);
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy || !file}
+            className={cn(
+              "rounded-lg py-3 text-sm font-bold text-white transition-colors",
+              file && !busy
+                ? "bg-emerald-500 hover:bg-emerald-600"
+                : "cursor-not-allowed bg-emerald-300"
+            )}
             onClick={() => {
               if (!file) {
                 setErr("Сначала выберите Excel файл.");
@@ -117,11 +142,12 @@ export function ClientImportLaunchDialog({
               onConfirm(file);
             }}
           >
-            <Upload className="h-3.5 w-3.5" />
             Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </button>
+        </div>
+        {err ? <p className="px-6 pb-4 text-xs text-red-600">{err}</p> : null}
+      </div>
+    </div>,
+    document.body
   );
 }

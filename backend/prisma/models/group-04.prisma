@@ -138,6 +138,7 @@ model Order {
   warehouse_block             WarehouseBlock?  @relation(fields: [warehouse_block_id], references: [id], onDelete: SetNull)
   sales_returns               SalesReturn[]
   client_photo_reports        ClientPhotoReport[]
+  auto_confirm_schedules      OrderAutoConfirmSchedule[]
 
   @@unique([tenant_id, number])
   @@index([tenant_id, status])

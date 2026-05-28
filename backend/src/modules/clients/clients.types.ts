@@ -95,6 +95,8 @@ export type ListClientsQuery = {
   district?: string;
   neighborhood?: string;
   zone?: string;
+  /** Bir nechta zona (OR) */
+  zones?: string[];
   /** Shahar (kod yoki nom) — aniq moslik */
   city?: string;
   client_type_code?: string;
@@ -102,10 +104,14 @@ export type ListClientsQuery = {
   sales_channel?: string;
   /** Asosiy `agent_id` yoki istalgan jamoa qatoridagi agent */
   agent_id?: number;
+  /** Bir nechta agent (OR) */
+  agent_ids?: number[];
   /** Jamoa qatoridagi ekspeditor foydalanuvchi */
   expeditor_user_id?: number;
+  expeditor_user_ids?: number[];
   /** 1=Du … 7=Ya — istalgan jamoa qatorida shu kun tanlangan mijozlar */
   visit_weekday?: number;
+  visit_weekdays?: number[];
   /** INN qismiy moslik */
   inn?: string;
   /** Telefon qismiy moslik */
@@ -128,6 +134,11 @@ export type ListClientsQuery = {
   created_to?: string;
   /** Asosiy agent yoki jamoa qatoridagi agentning `supervisor_user_id` */
   supervisor_user_id?: number;
+  supervisor_user_ids?: number[];
+  /** INN mavjudligi */
+  has_inn?: boolean;
+  /** Telefon mavjudligi */
+  has_phone?: boolean;
   sort?:
     | "name"
     | "phone"
@@ -154,6 +165,8 @@ export type ListClientsQuery = {
   order?: "asc" | "desc";
   /** Faqat kenglik/uzunligi bor yozuvlar (xarita) */
   has_coords?: boolean;
+  /** GPS koordinatasi yo‘q yozuvlar */
+  missing_coords?: boolean;
 };
 
 

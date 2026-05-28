@@ -100,8 +100,21 @@ export async function downloadOrdersNakladnoyXlsx(args: {
   format?: NakladnoyFileFormat;
   warehouseLayout?: WarehouseLayoutId;
   expeditorLoadingLayout?: import("@/lib/bulk-export-templates").ExpeditorLoadingLayoutId;
+  warehouseExportOptions?: Record<string, boolean>;
+  /** Preview API dan kelgan nom — Content-Disposition bo‘lmasa ishlatiladi */
+  fallbackFilename?: string;
 }): Promise<void> {
-  const { tenantSlug, orderIds, template, prefs, format = "xlsx", warehouseLayout, expeditorLoadingLayout } = args;
+  const {
+    tenantSlug,
+    orderIds,
+    template,
+    prefs,
+    format = "xlsx",
+    warehouseLayout,
+    expeditorLoadingLayout,
+    warehouseExportOptions,
+    fallbackFilename
+  } = args;
   if (orderIds.length === 0) {
     throw new Error("Zakaz tanlanmagan.");
   }
@@ -114,7 +127,10 @@ export async function downloadOrdersNakladnoyXlsx(args: {
         format,
         ...(warehouseLayout ? { warehouse_layout: warehouseLayout } : {}),
         ...(expeditorLoadingLayout ? { expeditor_loading_layout: expeditorLoadingLayout } : {}),
-        ...nakladnoyPrefsToApiBody(prefs)
+        ...nakladnoyPrefsToApiBody(prefs),
+        ...(warehouseExportOptions
+          ? { warehouse_export_options: warehouseExportOptions }
+          : {})
       },
       { responseType: "blob" }
     );
@@ -133,6 +149,7 @@ export async function downloadOrdersNakladnoyXlsx(args: {
     const blob = res.data as Blob;
     const name =
       parseFilenameFromContentDisposition(res.headers["content-disposition"]) ??
+      fallbackFilename ??
       `nakladnoy_${new Date().toISOString().slice(0, 10)}.${format}`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

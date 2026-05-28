@@ -107,6 +107,45 @@ export function defaultReconciliationRange(): { from: Date; toEnd: Date } {
   return { from, toEnd };
 }
 
+function parsePositiveIntList(raw: string | undefined, maxItems = 40): number[] {
+  if (!raw?.trim()) return [];
+  const parsed = raw
+    .split(/[,|]/)
+    .map((s) => Number.parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return [...new Set(parsed)].slice(0, maxItems);
+}
+
+function parseWeekdayList(raw: string | undefined): number[] {
+  return parsePositiveIntList(raw, 7).filter((n) => n >= 1 && n <= 7);
+}
+
+function parseStringList(raw: string | undefined, maxItems = 30): string[] {
+  if (!raw?.trim()) return [];
+  const parsed = raw
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set(parsed)].slice(0, maxItems);
+}
+
+function mergeIntList(multiRaw: string | undefined, singleRaw: string | undefined): number[] {
+  const fromMulti = parsePositiveIntList(multiRaw);
+  if (fromMulti.length > 0) return fromMulti;
+  if (singleRaw != null && singleRaw !== "") {
+    const n = Number.parseInt(singleRaw, 10);
+    if (Number.isFinite(n) && n > 0) return [n];
+  }
+  return [];
+}
+
+function mergeStringList(multiRaw: string | undefined, singleRaw: string | undefined): string[] {
+  const fromMulti = parseStringList(multiRaw);
+  if (fromMulti.length > 0) return fromMulti;
+  const one = singleRaw?.trim();
+  return one ? [one] : [];
+}
+
 const CLIENT_LIST_ALLOWED_SORT = new Set<string>([
   "name",
   "phone",
@@ -147,26 +186,18 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   const region = q.region?.trim() || undefined;
   const district = q.district?.trim() || undefined;
   const neighborhood = q.neighborhood?.trim() || undefined;
-  const zone = q.zone?.trim() || undefined;
   const city = q.city?.trim() || undefined;
   const client_type_code = q.client_type_code?.trim() || undefined;
   const client_format = q.client_format?.trim() || undefined;
   const sales_channel = q.sales_channel?.trim() || undefined;
-  let agent_id: number | undefined;
-  if (q.agent_id != null && q.agent_id !== "") {
-    const n = Number.parseInt(q.agent_id, 10);
-    if (Number.isFinite(n) && n > 0) agent_id = n;
-  }
-  let expeditor_user_id: number | undefined;
-  if (q.expeditor_user_id != null && q.expeditor_user_id !== "") {
-    const n = Number.parseInt(q.expeditor_user_id, 10);
-    if (Number.isFinite(n) && n > 0) expeditor_user_id = n;
-  }
-  let visit_weekday: number | undefined;
-  if (q.visit_weekday != null && q.visit_weekday !== "") {
-    const n = Number.parseInt(q.visit_weekday, 10);
-    if (Number.isFinite(n) && n >= 1 && n <= 7) visit_weekday = n;
-  }
+  const agent_ids = mergeIntList(q.agent_ids, q.agent_id);
+  const agent_id = agent_ids.length === 1 ? agent_ids[0] : undefined;
+  const expeditor_user_ids = mergeIntList(q.expeditor_user_ids, q.expeditor_user_id);
+  const expeditor_user_id = expeditor_user_ids.length === 1 ? expeditor_user_ids[0] : undefined;
+  const visit_weekdays = mergeIntList(q.visit_weekdays, q.visit_weekday).filter((n) => n >= 1 && n <= 7);
+  const visit_weekday = visit_weekdays.length === 1 ? visit_weekdays[0] : undefined;
+  const zones = mergeStringList(q.zones, q.zone);
+  const zone = zones.length === 1 ? zones[0] : undefined;
   const inn = q.inn?.trim() || undefined;
   const phone = q.phone?.trim() || undefined;
   const client_pinfl = q.client_pinfl?.trim() || undefined;
@@ -187,11 +218,14 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   else if (aclRaw === "no" || aclRaw === "false" || aclRaw === "0") agent_consignment_limited = "no";
   const created_from = q.created_from?.trim() || undefined;
   const created_to = q.created_to?.trim() || undefined;
-  let supervisor_user_id: number | undefined;
-  if (q.supervisor_user_id != null && q.supervisor_user_id !== "") {
-    const n = Number.parseInt(q.supervisor_user_id, 10);
-    if (Number.isFinite(n) && n > 0) supervisor_user_id = n;
-  }
+  const supervisor_user_ids = mergeIntList(q.supervisor_user_ids, q.supervisor_user_id);
+  const supervisor_user_id = supervisor_user_ids.length === 1 ? supervisor_user_ids[0] : undefined;
+  let has_inn: boolean | undefined;
+  if (q.has_inn === "true" || q.has_inn === "1") has_inn = true;
+  else if (q.has_inn === "false" || q.has_inn === "0") has_inn = false;
+  let has_phone: boolean | undefined;
+  if (q.has_phone === "true" || q.has_phone === "1") has_phone = true;
+  else if (q.has_phone === "false" || q.has_phone === "0") has_phone = false;
   const sortRaw = q.sort?.trim();
   const sort: NonNullable<ListClientsQuery["sort"]> =
     sortRaw && CLIENT_LIST_ALLOWED_SORT.has(sortRaw)
@@ -199,6 +233,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
       : "name";
   const order = q.order === "desc" ? "desc" : "asc";
   const has_coords = q.has_coords === "1" || q.has_coords === "true";
+  const missing_coords = q.missing_coords === "1" || q.missing_coords === "true";
 
   let client_ids: number[] | undefined;
   const rawClientIds = q.client_ids?.trim();
@@ -221,13 +256,17 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     district,
     neighborhood,
     ...(zone ? { zone } : {}),
+    ...(zones.length > 1 ? { zones } : {}),
     ...(city ? { city } : {}),
     ...(client_type_code ? { client_type_code } : {}),
     ...(client_format ? { client_format } : {}),
     ...(sales_channel ? { sales_channel } : {}),
     ...(agent_id !== undefined ? { agent_id } : {}),
+    ...(agent_ids.length > 1 ? { agent_ids } : {}),
     ...(expeditor_user_id !== undefined ? { expeditor_user_id } : {}),
+    ...(expeditor_user_ids.length > 1 ? { expeditor_user_ids } : {}),
     ...(visit_weekday !== undefined ? { visit_weekday } : {}),
+    ...(visit_weekdays.length > 1 ? { visit_weekdays } : {}),
     ...(inn ? { inn } : {}),
     ...(phone ? { phone } : {}),
     ...(client_pinfl ? { client_pinfl } : {}),
@@ -239,9 +278,13 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     ...(created_from ? { created_from } : {}),
     ...(created_to ? { created_to } : {}),
     ...(supervisor_user_id !== undefined ? { supervisor_user_id } : {}),
+    ...(supervisor_user_ids.length > 1 ? { supervisor_user_ids } : {}),
+    ...(has_inn !== undefined ? { has_inn } : {}),
+    ...(has_phone !== undefined ? { has_phone } : {}),
     sort,
     order,
     ...(has_coords ? { has_coords: true } : {}),
+    ...(missing_coords ? { missing_coords: true } : {}),
     ...(client_ids?.length ? { client_ids } : {})
   };
 }

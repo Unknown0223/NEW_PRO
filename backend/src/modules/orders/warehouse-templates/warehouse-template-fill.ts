@@ -19,7 +19,7 @@ export function fillWarehouseTemplate(
   layoutId: WarehouseLayoutId,
   wb: ExcelJS.Workbook,
   ctx: WarehouseAggregateContext,
-  _options: NakladnoyBuildOptions
+  options: NakladnoyBuildOptions
 ): void {
   const def = getWarehouseLayoutDef(layoutId);
   switch (def.family) {
@@ -27,13 +27,13 @@ export function fillWarehouseTemplate(
       fillCatalogDual110(wb, ctx);
       break;
     case "list_simple_112":
-      fillListSimple112(wb, ctx);
+      fillListSimple112(wb, ctx, options);
       break;
     case "ttn_grouped_410":
-      fillTtnGrouped410(wb, ctx, layoutId);
+      fillTtnGrouped410(wb, ctx, layoutId, options);
       break;
     case "matrix_agents_600":
-      fillMatrixAgents600(wb, ctx);
+      fillMatrixAgents600(wb, ctx, options);
       break;
     case "matrix_clients_601":
       fillMatrixClients601(wb, ctx);

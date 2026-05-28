@@ -4,13 +4,17 @@ import { BulkToolbarDropdownPortal } from "@/components/orders/orders-list/bulk-
 import { OrdersBulkConsignmentDialog } from "@/components/orders/orders-list/orders-bulk-consignment-dialog";
 import { OrdersBulkExpeditorDialog } from "@/components/orders/orders-list/orders-bulk-expeditor-dialog";
 import { OrdersBulkStatusDialog } from "@/components/orders/orders-list/orders-bulk-status-dialog";
+import { OrdersNakladnoyPreviewModal } from "@/components/orders/orders-list/orders-nakladnoy-preview-modal";
 import { OrdersBulkUploadPanel } from "@/components/orders/orders-list/orders-bulk-upload-panel";
 import type { BulkExportTemplateDef } from "@/lib/bulk-export-templates";
 import {
   loadBulkExportPrefsStore,
-  resolveNakladnoyPrefsForDownload
+  resolveNakladnoyPrefsForDownload,
+  resolveWarehouseExportApiBody
 } from "@/lib/bulk-export-template-prefs";
-import { saveNakladnoyExportPrefs } from "@/lib/order-nakladnoy";
+import { downloadExpeditorLoadingLayoutXlsx } from "@/lib/expeditor-loading-download";
+import type { NakladnoyPreviewResponse } from "@/lib/nakladnoy-preview";
+import { downloadOrdersNakladnoyXlsx, saveNakladnoyExportPrefs } from "@/lib/order-nakladnoy";
 import { downloadStyledXlsxSheet } from "@/lib/download-xlsx-styled";
 import { formatGroupedInteger } from "@/lib/format-numbers";
 import {
@@ -114,6 +118,14 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   }>({ status: "", step: "status" });
   const [expeditorDialogOpen, setExpeditorDialogOpen] = useState(false);
   const [consignmentOpen, setConsignmentOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<BulkExportTemplateDef | null>(null);
+  const [previewPrefs, setPreviewPrefs] = useState(nakladnoyPrefs);
+  const [previewWarehouseExport, setPreviewWarehouseExport] = useState<
+    Record<string, boolean> | undefined
+  >(undefined);
+  const [previewInitial, setPreviewInitial] = useState<NakladnoyPreviewResponse | null>(null);
+  const [previewDownloading, setPreviewDownloading] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   const consignmentEligibleIds = useMemo(
@@ -150,11 +162,53 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     setBulkFeedback("Excel: выбранные заказы загружены.");
   };
 
-  const downloadTemplate = (template: BulkExportTemplateDef) => {
+  const buildRegisterPreview = (template: BulkExportTemplateDef): NakladnoyPreviewResponse => {
+    const order = tablePrefs.visibleColumnOrder;
+    const headers = order.map((id) => ORDER_LIST_COLUMNS.find((c) => c.id === id)?.label ?? id);
+    const dataRows = selectedRows.map((o) => order.map((colId) => orderListExportCell(o, colId)));
+    const day = new Date().toISOString().slice(0, 10);
+    return {
+      label: template.label,
+      filename: `zakazlar_tanlangan_${day}.xlsx`,
+      pages: [
+        {
+          sheetName: "Реестр",
+          kind: "grid",
+          grid: {
+            colCount: headers.length,
+            rows: [
+              headers.map((h) => ({
+                v: h,
+                bold: true,
+                bg: "#d9d9d9",
+                align: "left" as const
+              })),
+              ...dataRows.map((row) =>
+                row.map((cell) => {
+                  const raw = cell ?? "";
+                  const n = typeof raw === "number" ? raw : Number(String(raw).replace(/\s/g, ""));
+                  const v =
+                    Number.isFinite(n) && String(raw).match(/^-?[\d\s.,]+$/)
+                      ? new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n)
+                      : String(raw);
+                  return { v, align: "left" as const };
+                })
+              )
+            ]
+          }
+        }
+      ]
+    };
+  };
+
+  const openTemplatePreview = (template: BulkExportTemplateDef) => {
     setNakladnoyFeedback(null);
     if (template.downloadKind === "register") {
-      exportSelectedExcel();
-      setBulkFeedback(`Скачано: ${template.label}`);
+      setPreviewInitial(buildRegisterPreview(template));
+      setPreviewPrefs(nakladnoyPrefs);
+      setPreviewTemplate(template);
+      setPreviewOpen(true);
+      setBulkFeedback(`Просмотр: ${template.label}`);
       return;
     }
     if (!canBulkCatalog || !template.apiTemplate) {
@@ -164,14 +218,16 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     setNakladnoyTemplate(template.apiTemplate);
     const prefsStore = loadBulkExportPrefsStore();
     const mergedPrefs = resolveNakladnoyPrefsForDownload(prefsStore, template, nakladnoyPrefs);
-    nakladnoyMut.mutate({
-      template: template.apiTemplate,
-      prefs: mergedPrefs,
-      format: "xlsx",
-      warehouseLayout: template.warehouseLayout,
-      expeditorLoadingLayout: template.expeditorLoadingLayout
-    });
-    setBulkFeedback(`Загрузка: ${template.label}…`);
+    setPreviewInitial(null);
+    setPreviewPrefs(mergedPrefs);
+    setPreviewWarehouseExport(resolveWarehouseExportApiBody(prefsStore, template));
+    setPreviewTemplate(template);
+    setPreviewOpen(true);
+    setBulkFeedback(`Просмотр: ${template.label}`);
+  };
+
+  const downloadTemplate = (template: BulkExportTemplateDef) => {
+    openTemplatePreview(template);
   };
 
   const downloadOneFile = () => {
@@ -207,21 +263,82 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     </div>
   );
 
+  const downloadFromPreview = async (fallbackFilename?: string) => {
+    if (!previewTemplate) return;
+    setNakladnoyFeedback(null);
+    setPreviewDownloading(true);
+    setBulkFeedback(`Загрузка: ${previewTemplate.label}…`);
+    try {
+      if (previewTemplate.downloadKind === "register") {
+        exportSelectedExcel();
+      } else if (!tenantSlug || !previewTemplate.apiTemplate) {
+        throw new Error("Yuklab bo‘lmadi.");
+      } else if (previewTemplate.expeditorLoadingLayout) {
+        await downloadExpeditorLoadingLayoutXlsx({
+          tenantSlug,
+          orderIds: Array.from(selectedOrderIds),
+          layout: previewTemplate.expeditorLoadingLayout,
+          prefs: previewPrefs,
+          fallbackFilename
+        });
+      } else {
+        await downloadOrdersNakladnoyXlsx({
+          tenantSlug,
+          orderIds: Array.from(selectedOrderIds),
+          template: previewTemplate.apiTemplate,
+          prefs: previewPrefs,
+          format: "xlsx",
+          warehouseLayout: previewTemplate.warehouseLayout,
+          expeditorLoadingLayout: previewTemplate.expeditorLoadingLayout,
+          warehouseExportOptions: previewWarehouseExport,
+          fallbackFilename
+        });
+      }
+      setNakladnoyFeedback("Excel fayl yuklab olindi.");
+      setBulkFeedback(`Скачано: ${previewTemplate.label}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Excelni yuklab bo‘lmadi.";
+      setNakladnoyFeedback(msg);
+      setBulkFeedback(msg);
+    } finally {
+      setPreviewDownloading(false);
+    }
+  };
+
   const uploadView = (
-    <OrdersBulkUploadPanel
-      disabled={nakladnoyMut.isPending}
-      canBulkCatalog={canBulkCatalog}
-      separateSheets={nakladnoyPrefs.separateSheets}
-      onSeparateSheetsChange={(v) => {
-        const next = { ...nakladnoyPrefs, separateSheets: v };
-        setNakladnoyPrefs(next);
-        saveNakladnoyExportPrefs(next);
-      }}
-      onDownloadOneFile={downloadOneFile}
-      onDownloadTemplate={downloadTemplate}
-      onBack={() => setViewMode("main")}
-      onClose={handleClose}
-    />
+    <>
+      <OrdersBulkUploadPanel
+        disabled={nakladnoyMut.isPending || previewDownloading}
+        canBulkCatalog={canBulkCatalog}
+        separateSheets={nakladnoyPrefs.separateSheets}
+        onSeparateSheetsChange={(v) => {
+          const next = { ...nakladnoyPrefs, separateSheets: v };
+          setNakladnoyPrefs(next);
+          saveNakladnoyExportPrefs(next);
+        }}
+        onDownloadOneFile={downloadOneFile}
+        onDownloadTemplate={downloadTemplate}
+        onBack={() => setViewMode("main")}
+        onClose={handleClose}
+      />
+      {tenantSlug || previewTemplate?.downloadKind === "register" ? (
+        <OrdersNakladnoyPreviewModal
+          open={previewOpen}
+          onOpenChange={(open) => {
+            setPreviewOpen(open);
+            if (!open) setPreviewInitial(null);
+          }}
+          tenantSlug={tenantSlug ?? ""}
+          orderIds={ids}
+          template={previewTemplate}
+          prefs={previewPrefs}
+          warehouseExportOptions={previewWarehouseExport}
+          initialPreview={previewInitial}
+          onDownload={downloadFromPreview}
+          downloadPending={previewDownloading || nakladnoyMut.isPending}
+        />
+      ) : null}
+    </>
   );
 
   const mainView = barShell(

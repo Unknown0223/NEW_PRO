@@ -30,6 +30,8 @@ export type FilterSearchableSelectProps = {
   emptyMessage?: string;
   /** O‘sganda barcha ochiq portal-dropdownlar yopiladi (boshqa filtr panellari bilan to‘qnashmaslik uchun) */
   closeToken?: number;
+  /** false — tashqi floating label bilan ishlatiladi (clients filter) */
+  focusRing?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
 
@@ -48,6 +50,7 @@ export function FilterSearchableSelect({
   className,
   emptyMessage = "Нет вариантов",
   closeToken,
+  focusRing = true,
   onOpenChange
 }: FilterSearchableSelectProps) {
   const [open, setOpen] = useState(false);
@@ -248,7 +251,7 @@ export function FilterSearchableSelect({
           "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 text-left text-xs shadow-sm outline-none transition-colors",
           "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-50",
-          open && "ring-2 ring-ring ring-offset-2",
+          focusRing && open && "ring-2 ring-ring ring-offset-2",
           className
         )}
         aria-expanded={open}

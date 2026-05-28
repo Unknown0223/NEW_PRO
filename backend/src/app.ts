@@ -8,6 +8,7 @@ import { getAccessUser, jwtAccessVerify } from "./modules/auth/auth.prehandlers"
 import { registerAuthRoutes } from "./modules/auth/auth.route";
 import { registerClientRoutes } from "./modules/clients/clients.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
+import { registerOrderAutomationRoutes } from "./modules/order-automation/order-automation.route";
 import { registerOrderRoutes } from "./modules/orders/orders.route";
 import { registerOrderStreamRoutes } from "./modules/orders/order-stream.route";
 import { registerReferenceRoutes } from "./modules/reference/reference.route";
@@ -84,6 +85,7 @@ export function buildApp() {
   app.register(registerConsignmentRoutes);
   app.register(registerSalesDirectionRoutes);
   app.register(registerBonusRuleRoutes);
+  app.register(registerOrderAutomationRoutes);
   app.register(registerOrderRoutes);
   app.register(registerOrderStreamRoutes);
   app.register(registerDashboardRoutes);

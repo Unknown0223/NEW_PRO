@@ -2,7 +2,10 @@
 
 import {
   InvoiceTemplateSettingsPanel,
-  NakladnoyTemplateSettingsPanel
+  NakladnoyTemplateSettingsPanel,
+  Warehouse112SettingsPanel,
+  Warehouse410SettingsPanel,
+  Warehouse600SettingsPanel
 } from "@/components/orders/orders-list/orders-bulk-export-template-settings-panels";
 import {
   getBulkExportCategory,
@@ -10,12 +13,15 @@ import {
 } from "@/lib/bulk-export-templates";
 import {
   defaultTemplateSettings,
-  getCategorySettingsMode,
-  normalizeInvoiceTemplateSettings,
-  normalizeNakladnoyTemplateSettings,
+  getTemplateSettingsMode,
+  normalizeTemplateSettings,
+  type BulkExportSettingsMode,
   type BulkExportTemplateSettings,
   type InvoiceTemplateFieldSettings,
-  type NakladnoyTemplateSettings
+  type NakladnoyTemplateSettings,
+  type Warehouse112Settings,
+  type Warehouse410Settings,
+  type Warehouse600Settings
 } from "@/lib/bulk-export-template-settings";
 import {
   type BulkExportCategoryPrefs,
@@ -51,7 +57,6 @@ export function OrdersBulkExportSettingsDialog({
   const [draft, setDraft] = useState<BulkExportCategoryPrefs | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const settingsMode = categoryId ? getCategorySettingsMode(categoryId) : "none";
 
   useEffect(() => {
     if (!open || !categoryId) {
@@ -84,15 +89,12 @@ export function OrdersBulkExportSettingsDialog({
     });
   };
 
+  const getSettingsMode = (id: string): BulkExportSettingsMode =>
+    categoryId ? getTemplateSettingsMode(categoryId, id) : "none";
+
   const getSettings = (id: string): BulkExportTemplateSettings | undefined => {
-    const raw = draft.templateSettings[id];
-    if (settingsMode === "nakladnoy") {
-      return normalizeNakladnoyTemplateSettings(raw ?? defaultTemplateSettings("nakladnoy"));
-    }
-    if (settingsMode === "invoice") {
-      return normalizeInvoiceTemplateSettings(raw ?? defaultTemplateSettings("invoice"));
-    }
-    return undefined;
+    const mode = getSettingsMode(id);
+    return normalizeTemplateSettings(mode, draft.templateSettings[id] ?? defaultTemplateSettings(mode));
   };
 
   return (
@@ -126,9 +128,7 @@ export function OrdersBulkExportSettingsDialog({
         <div className="flex-1 overflow-y-auto px-4 py-3">
           <p className="mb-3 text-xs text-muted-foreground">
             Отметьте отчёты для списка загрузки.
-            {settingsMode !== "none"
-              ? " Нажмите ⚙ у шаблона, чтобы настроить параметры экспорта."
-              : null}
+            . Нажмите ⚙ у шаблона, чтобы настроить поля экспорта (112, 410, 600 и др.).
           </p>
           <ul className="space-y-2">
             {draft.order.map((id) => {
@@ -136,7 +136,8 @@ export function OrdersBulkExportSettingsDialog({
               if (!tpl) return null;
               const on = draft.enabled[id] !== false;
               const expanded = expandedId === id;
-              const showGear = settingsMode !== "none" && on;
+              const tplMode = getSettingsMode(id);
+              const showGear = tplMode !== "none" && on;
 
               return (
                 <li
@@ -178,7 +179,7 @@ export function OrdersBulkExportSettingsDialog({
                     ) : null}
                   </div>
 
-                  {expanded && settingsMode === "nakladnoy" ? (
+                  {expanded && tplMode === "nakladnoy" ? (
                     <NakladnoyTemplateSettingsPanel
                       templateId={id}
                       settings={getSettings(id) as NakladnoyTemplateSettings}
@@ -186,9 +187,30 @@ export function OrdersBulkExportSettingsDialog({
                     />
                   ) : null}
 
-                  {expanded && settingsMode === "invoice" ? (
+                  {expanded && tplMode === "invoice" ? (
                     <InvoiceTemplateSettingsPanel
                       settings={getSettings(id) as InvoiceTemplateFieldSettings}
+                      onChange={(next) => updateTemplateSettings(id, next)}
+                    />
+                  ) : null}
+
+                  {expanded && tplMode === "warehouse-112" ? (
+                    <Warehouse112SettingsPanel
+                      settings={getSettings(id) as Warehouse112Settings}
+                      onChange={(next) => updateTemplateSettings(id, next)}
+                    />
+                  ) : null}
+
+                  {expanded && tplMode === "warehouse-410" ? (
+                    <Warehouse410SettingsPanel
+                      settings={getSettings(id) as Warehouse410Settings}
+                      onChange={(next) => updateTemplateSettings(id, next)}
+                    />
+                  ) : null}
+
+                  {expanded && tplMode === "warehouse-600" ? (
+                    <Warehouse600SettingsPanel
+                      settings={getSettings(id) as Warehouse600Settings}
                       onChange={(next) => updateTemplateSettings(id, next)}
                     />
                   ) : null}

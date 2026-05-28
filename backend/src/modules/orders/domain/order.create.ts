@@ -200,6 +200,26 @@ export async function createOrder(
       await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
     : new Map<number, number>();
 
+  const roleNorm = (viewerRole ?? "").toLowerCase();
+  const creationChannel: "web" | "mobile" =
+    roleNorm.includes("agent") || roleNorm.includes("expeditor") ? "mobile" : "web";
+
+  const { assertCreateOrderNotRestricted, planAutoConfirmAfterCreate } = await import(
+    "../../order-automation/order-automation.apply"
+  );
+  await assertCreateOrderNotRestricted(tenantId, input, {
+    client: {
+      region: client.region,
+      city: client.city,
+      zone: client.zone,
+      district: client.district,
+      neighborhood: client.neighborhood
+    },
+    agent_trade_direction: null,
+    total_sum: Number(totalSum),
+    creation_channel: creationChannel
+  });
+
   const order = await prisma.$transaction((tx) =>
     runCreateOrderTransaction(tx, {
       tenantId,
@@ -225,6 +245,26 @@ export async function createOrder(
   void invalidateOrdersListCache(tenantId);
   void invalidateDashboard(tenantId);
   void invalidateStock(tenantId, input.warehouse_id);
+
+  void planAutoConfirmAfterCreate(
+    tenantId,
+    order.id,
+    input,
+    {
+      client: {
+        region: client.region,
+        city: client.city,
+        zone: client.zone,
+        district: client.district,
+        neighborhood: client.neighborhood
+      },
+      agent_trade_direction: null,
+      total_sum: Number(totalSum),
+      creation_channel: creationChannel
+    },
+    order.created_at
+  ).catch(() => undefined);
+
   const detail = await enrichOrderDetailRow(tenantId, order as unknown as OrderDetailLoaded, viewerRole);
 
   // Finance — post-commit hisoblash (yangi zakaz kiritilgan joriy holatni qaytarish)

@@ -10,7 +10,8 @@ import type { ClientToolbarFiltersState } from "@/lib/client-list-toolbar-filter
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import { cn } from "@/lib/utils";
-import { CalendarDays, ListOrdered, Search } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Layers, ListOrdered, RefreshCw, RotateCcw, Search } from "lucide-react";
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 const VISIT_WEEKDAY_OPTIONS: { value: string; label: string }[] = [
@@ -37,6 +38,8 @@ export type ClientsTableListToolbarStripProps = {
   pageLimit: number;
   onPageLimitChange: (v: number) => void;
   onOpenColumnSettings: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
   /** Jadval kartochkasi ichida — pastki border bilan ajratiladi */
   totalRecords?: number;
 };
@@ -45,7 +48,10 @@ type FiltersProps = {
   draft: ClientToolbarFiltersState;
   onDraftChange: (patch: Partial<ClientToolbarFiltersState>) => void;
   onApplyToolbar: () => void;
+  onResetToolbar?: () => void;
+  onDateRangeApplied?: (dateFrom: string, dateTo: string) => void;
   categorySelectOptions: RefSelectOption[];
+  equipmentSelectOptions?: RefSelectOption[];
   /** Zona → viloyat → shahar: `buildZoneRegionCityCascadeOptions` */
   territoryCascade: { zones: RefSelectOption[]; regions: RefSelectOption[]; cities: RefSelectOption[] };
   clientTypeSelectOptions: RefSelectOption[];
@@ -60,7 +66,10 @@ export function ClientsTableFilters({
   draft,
   onDraftChange,
   onApplyToolbar,
+  onResetToolbar,
+  onDateRangeApplied,
   categorySelectOptions,
+  equipmentSelectOptions = [],
   territoryCascade,
   clientTypeSelectOptions,
   clientFormatSelectOptions,
@@ -280,9 +289,32 @@ export function ClientsTableFilters({
                 minPopoverWidth={260}
               />
             </div>
+            {equipmentSelectOptions.length > 0 ? (
+              <label className="orders-filter-field-label">
+                Оборудование
+                <select
+                  className={filterPanelSelectClassName}
+                  value={d.equipmentKindFilter}
+                  onChange={(e) => patchDraft(onDraftChange, { equipmentKindFilter: e.target.value })}
+                >
+                  <option value="">Все</option>
+                  {equipmentSelectOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 pt-3">
+            {onResetToolbar ? (
+              <Button type="button" variant="outline" size="sm" className="h-9 gap-1" onClick={onResetToolbar}>
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                Сброс
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -300,7 +332,11 @@ export function ClientsTableFilters({
             dateFrom={d.createdFrom}
             dateTo={d.createdTo}
             onApply={({ dateFrom, dateTo }) => {
-              patchDraft(onDraftChange, { createdFrom: dateFrom, createdTo: dateTo });
+              if (onDateRangeApplied) {
+                onDateRangeApplied(dateFrom, dateTo);
+              } else {
+                patchDraft(onDraftChange, { createdFrom: dateFrom, createdTo: dateTo });
+              }
             }}
           />
         </CardContent>
@@ -315,6 +351,8 @@ export function ClientsTableListToolbarStrip({
   pageLimit,
   onPageLimitChange,
   onOpenColumnSettings,
+  onRefresh,
+  refreshing = false,
   totalRecords
 }: ClientsTableListToolbarStripProps) {
   return (
@@ -358,6 +396,19 @@ export function ClientsTableListToolbarStrip({
         <ListOrdered className="h-4 w-4" />
         Колонки
       </Button>
+      {onRefresh ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          onClick={onRefresh}
+          disabled={refreshing}
+          title="Обновить"
+        >
+          <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} aria-hidden />
+        </Button>
+      ) : null}
       {totalRecords != null ? (
         <span className="ml-auto self-end pb-0.5 text-sm text-foreground/80">
           Всего записей:{" "}
@@ -366,6 +417,267 @@ export function ClientsTableListToolbarStrip({
           </span>
         </span>
       ) : null}
+    </div>
+  );
+}
+
+export function ClientsTemplateListToolbar({
+  search,
+  onSearchChange,
+  pageLimit,
+  onPageLimitChange,
+  onOpenColumnSettings,
+  onRefresh,
+  refreshing = false,
+  onResetView,
+  onImportUpdate,
+  onImportCreate,
+  importDisabled = false,
+  onExportExcel
+}: {
+  search: string;
+  onSearchChange: (v: string) => void;
+  pageLimit: number;
+  onPageLimitChange: (v: number) => void;
+  onOpenColumnSettings: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  onResetView?: () => void;
+  onImportUpdate: () => void;
+  onImportCreate: () => void;
+  importDisabled?: boolean;
+  onExportExcel?: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl font-bold text-gray-800">Список клиенты</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={importDisabled}
+            onClick={onImportUpdate}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className="h-4 w-4 text-gray-500" aria-hidden />
+            Обновление клиентов с Excel
+          </button>
+          <button
+            type="button"
+            disabled={importDisabled}
+            onClick={onImportCreate}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4 text-gray-500" aria-hidden />
+            Импорт
+          </button>
+          <Link
+            href="/clients/merge"
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+          >
+            <Layers className="h-4 w-4 text-gray-500" aria-hidden />
+            Групповая обработка
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm">
+        <div className="flex items-center gap-0.5">
+          {onResetView ? (
+            <button
+              type="button"
+              onClick={onResetView}
+              className="rounded p-1.5 transition-colors hover:bg-gray-100"
+              title="Сбросить"
+            >
+              <RotateCcw className="h-4 w-4 text-gray-500" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onOpenColumnSettings}
+            className="rounded p-1.5 transition-colors hover:bg-gray-100"
+            title="Колонки"
+          >
+            <ListOrdered className="h-4 w-4 text-gray-500" />
+          </button>
+          <select
+            className="cursor-pointer border-none bg-transparent pr-6 text-sm font-medium text-gray-700 focus:ring-0"
+            value={pageLimit}
+            onChange={(e) => onPageLimitChange(Number(e.target.value))}
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mx-1 h-5 w-px bg-gray-200" />
+
+        <div className="relative max-w-[300px] w-full flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="search"
+            placeholder="Поиск"
+            className="w-full border-none bg-transparent py-1 pl-8 pr-4 text-sm outline-none placeholder:text-gray-400 focus:ring-0"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-1 items-center justify-end gap-1">
+          {onExportExcel ? (
+            <button
+              type="button"
+              onClick={onExportExcel}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-50"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Excel
+            </button>
+          ) : null}
+          {onRefresh ? (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50"
+              title="Обновить"
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** @deprecated ClientsTemplateListToolbar ishlating */
+export function ClientsTableSectionHeader({
+  onImportUpdate,
+  onImportCreate,
+  importDisabled = false
+}: {
+  onImportUpdate: () => void;
+  onImportCreate: () => void;
+  importDisabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 className="text-xl font-bold tracking-tight text-gray-800">Список клиенты</h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={importDisabled}
+          onClick={onImportUpdate}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw className="h-4 w-4 text-gray-500" aria-hidden />
+          Обновление клиентов с Excel
+        </button>
+        <button
+          type="button"
+          disabled={importDisabled}
+          onClick={onImportCreate}
+          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <Download className="h-4 w-4 text-gray-500" aria-hidden />
+          Импорт
+        </button>
+        <Link
+          href="/clients/merge"
+          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+        >
+          <Layers className="h-4 w-4 text-gray-500" aria-hidden />
+          Групповая обработка
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function buildPageNumbers(page: number, totalPages: number): (number | "...")[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const pages: (number | "...")[] = [1];
+  if (page > 3) pages.push("...");
+  const start = Math.max(2, page - 1);
+  const end = Math.min(totalPages - 1, page + 1);
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (page < totalPages - 2) pages.push("...");
+  pages.push(totalPages);
+  return pages;
+}
+
+export function ClientsListPagination({
+  page,
+  totalPages,
+  total,
+  pageSize,
+  onPageChange
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  const pageNumbers = buildPageNumbers(page, totalPages);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 bg-white px-4 py-3">
+      <div className="text-sm text-gray-500">
+        Показано{" "}
+        <span className="font-medium text-gray-900">
+          {start} – {end}
+        </span>{" "}
+        / <span className="font-medium text-gray-900">{total}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Предыдущая страница"
+        >
+          <ChevronLeft className="h-4 w-4 text-gray-600" />
+        </button>
+        {pageNumbers.map((p, i) =>
+          p === "..." ? (
+            <span key={`dots-${i}`} className="flex h-8 w-8 items-center justify-center text-sm text-gray-500">
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPageChange(p)}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded border text-sm font-medium transition-colors",
+                page === p
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Следующая страница"
+        >
+          <ChevronRight className="h-4 w-4 text-gray-600" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -130,7 +130,11 @@ function dashboardNavChildActive(pathname: string): boolean {
 }
 
 function ordersNavModuleOpen(pathname: string): boolean {
-  return pathname.startsWith("/orders") || pathname.startsWith("/returns");
+  return (
+    pathname.startsWith("/orders") ||
+    pathname.startsWith("/returns") ||
+    pathname.startsWith("/orders/automation")
+  );
 }
 
 function invoicesNavChildActive(pathname: string): boolean {

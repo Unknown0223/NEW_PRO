@@ -97,9 +97,13 @@ export async function buildClientListWhereInput(
   const andList: Prisma.ClientWhereInput[] = [{ tenant_id: tenantId, merged_into_client_id: null }];
 
   const regionQ = q.region?.trim();
-  const zoneQ = q.zone?.trim();
+  const zoneList = [
+    ...(q.zones?.map((z) => z.trim()).filter(Boolean) ?? []),
+    ...(q.zone?.trim() ? [q.zone.trim()] : [])
+  ];
+  const zoneKeys = [...new Set(zoneList)];
   const territoryBundle =
-    regionQ || zoneQ
+    regionQ || zoneKeys.length > 0
       ? await loadTenantReferencesForClientTerritoryFilters(tenantId)
       : { hints: {} as Record<string, CityTerritoryHintDto>, ref: undefined as Record<string, unknown> | undefined };
 
@@ -120,13 +124,16 @@ export async function buildClientListWhereInput(
   if (district) andList.push({ district });
   const neighborhood = q.neighborhood?.trim();
   if (neighborhood) andList.push({ neighborhood });
-  if (zoneQ) {
-    const cityKeys = cityKeysMatchingZoneInHints(territoryBundle.hints, zoneQ);
-    const orZone: Prisma.ClientWhereInput[] = [
-      { zone: zoneQ },
-      { zone: { equals: zoneQ, mode: "insensitive" } }
-    ];
-    if (cityKeys.length > 0) orZone.push({ city: { in: cityKeys } });
+  if (zoneKeys.length > 0) {
+    const orZone: Prisma.ClientWhereInput[] = [];
+    for (const zoneQ of zoneKeys) {
+      const cityKeys = cityKeysMatchingZoneInHints(territoryBundle.hints, zoneQ);
+      orZone.push(
+        { zone: zoneQ },
+        { zone: { equals: zoneQ, mode: "insensitive" } },
+        ...(cityKeys.length > 0 ? [{ city: { in: cityKeys } }] : [])
+      );
+    }
     andList.push({ OR: orZone });
   }
   const city = q.city?.trim();
@@ -138,12 +145,16 @@ export async function buildClientListWhereInput(
   const sc = q.sales_channel?.trim();
   if (sc) andList.push({ sales_channel: sc });
 
-  if (q.agent_id != null && Number.isFinite(q.agent_id) && q.agent_id > 0) {
+  const agentIds = [
+    ...(q.agent_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
+    ...(q.agent_id != null && Number.isFinite(q.agent_id) && q.agent_id > 0 ? [q.agent_id] : [])
+  ];
+  const uniqAgentIds = [...new Set(agentIds)];
+  if (uniqAgentIds.length > 0) {
     andList.push({
-      OR: [
-        { agent_id: q.agent_id },
-        { agent_assignments: { some: { agent_id: q.agent_id } } }
-      ]
+      OR: uniqAgentIds.map((aid) => ({
+        OR: [{ agent_id: aid }, { agent_assignments: { some: { agent_id: aid } } }]
+      }))
     });
   }
 
@@ -155,18 +166,38 @@ export async function buildClientListWhereInput(
     andList.push({ id: { in: ids } });
   }
 
-  if (q.expeditor_user_id != null && Number.isFinite(q.expeditor_user_id) && q.expeditor_user_id > 0) {
+  const expeditorIds = [
+    ...(q.expeditor_user_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
+    ...(q.expeditor_user_id != null && Number.isFinite(q.expeditor_user_id) && q.expeditor_user_id > 0
+      ? [q.expeditor_user_id]
+      : [])
+  ];
+  const uniqExpeditorIds = [...new Set(expeditorIds)];
+  if (uniqExpeditorIds.length > 0) {
     andList.push({
-      agent_assignments: { some: { expeditor_user_id: q.expeditor_user_id } }
+      OR: uniqExpeditorIds.map((eid) => ({
+        agent_assignments: { some: { expeditor_user_id: eid } }
+      }))
     });
   }
 
-  if (q.visit_weekday != null && Number.isFinite(q.visit_weekday)) {
-    const ids = await clientIdsWithVisitWeekday(tenantId, q.visit_weekday);
-    if (ids.length === 0) {
+  const visitDays = [
+    ...(q.visit_weekdays?.filter((n) => n >= 1 && n <= 7) ?? []),
+    ...(q.visit_weekday != null && Number.isFinite(q.visit_weekday) && q.visit_weekday >= 1 && q.visit_weekday <= 7
+      ? [q.visit_weekday]
+      : [])
+  ];
+  const uniqVisitDays = [...new Set(visitDays)];
+  if (uniqVisitDays.length > 0) {
+    const clientIdSet = new Set<number>();
+    for (const day of uniqVisitDays) {
+      const ids = await clientIdsWithVisitWeekday(tenantId, day);
+      ids.forEach((id) => clientIdSet.add(id));
+    }
+    if (clientIdSet.size === 0) {
       return null;
     }
-    andList.push({ id: { in: ids } });
+    andList.push({ id: { in: [...clientIdSet] } });
   }
 
   const innQ = q.inn?.trim();
@@ -274,13 +305,41 @@ export async function buildClientListWhereInput(
     andList.push({ created_at: createdAtFilter });
   }
 
-  if (q.supervisor_user_id != null && Number.isFinite(q.supervisor_user_id) && q.supervisor_user_id > 0) {
-    const sid = Math.floor(q.supervisor_user_id);
+  const supervisorIds = [
+    ...(q.supervisor_user_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
+    ...(q.supervisor_user_id != null && Number.isFinite(q.supervisor_user_id) && q.supervisor_user_id > 0
+      ? [Math.floor(q.supervisor_user_id)]
+      : [])
+  ];
+  const uniqSupervisorIds = [...new Set(supervisorIds)];
+  if (uniqSupervisorIds.length > 0) {
     andList.push({
-      OR: [
-        { agent: { supervisor_user_id: sid } },
-        { agent_assignments: { some: { agent: { supervisor_user_id: sid } } } }
-      ]
+      OR: uniqSupervisorIds.map((sid) => ({
+        OR: [
+          { agent: { supervisor_user_id: sid } },
+          { agent_assignments: { some: { agent: { supervisor_user_id: sid } } } }
+        ]
+      }))
+    });
+  }
+
+  if (q.has_inn === true) {
+    andList.push({
+      AND: [{ inn: { not: null } }, { NOT: { inn: "" } }]
+    });
+  } else if (q.has_inn === false) {
+    andList.push({
+      OR: [{ inn: null }, { inn: "" }]
+    });
+  }
+
+  if (q.has_phone === true) {
+    andList.push({
+      AND: [{ phone: { not: null } }, { NOT: { phone: "" } }]
+    });
+  } else if (q.has_phone === false) {
+    andList.push({
+      OR: [{ phone: null }, { phone: "" }]
     });
   }
 
@@ -315,6 +374,12 @@ export async function buildClientListWhereInput(
     andList.push({
       latitude: { not: null },
       longitude: { not: null }
+    });
+  }
+
+  if (q.missing_coords === true) {
+    andList.push({
+      OR: [{ latitude: null }, { longitude: null }]
     });
   }
 

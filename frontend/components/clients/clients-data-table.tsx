@@ -25,6 +25,7 @@ import {
   type ClientColumnId
 } from "@/lib/client-table-columns";
 import { formatDigitsGroupedLoose, formatGroupedInteger, formatNumberGrouped } from "@/lib/format-numbers";
+import { ClientsListPopup } from "@/components/clients/clients-list-popup";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -94,24 +95,71 @@ function agentSlotFromColumnId(colId: string): number | null {
   return null;
 }
 
-const WD_SHORT = ["", "Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"];
+const WD_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function WeekdayTags({ days }: { days: number[] }) {
-  const show = days.slice(0, 5);
-  const rest = days.length - show.length;
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const labels = days.map((d) => WD_SHORT[d] ?? String(d));
+  const show = labels.slice(0, 2);
+  const rest = labels.slice(2);
+
   return (
-    <span className="flex max-w-[14rem] flex-wrap gap-1">
-      {show.map((d, i) => (
+    <div ref={anchorRef} className="flex items-center gap-1 whitespace-nowrap">
+      {show.map((day, i) => (
         <span
-          key={`${d}-${i}`}
-          className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+          key={`${day}-${i}`}
+          className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600"
         >
-          {WD_SHORT[d] ?? d}
+          {day}
         </span>
       ))}
-      {rest > 0 ? (
-        <span className="self-center text-[10px] text-muted-foreground">+{rest}</span>
+      {rest.length > 0 ? (
+        <ClientsListPopup
+          items={labels}
+          title="Дни"
+          anchorRef={anchorRef}
+          trigger={
+            <span className="cursor-pointer rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-100">
+              ещё {rest.length}
+            </span>
+          }
+        />
       ) : null}
+    </div>
+  );
+}
+
+function AgentAssignCell({ labels }: { labels: string[] }) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  if (labels.length === 0) return <Dash />;
+  const first = labels[0]!;
+  const rest = labels.slice(1);
+
+  return (
+    <div ref={anchorRef} className="flex min-w-[220px] items-center gap-1">
+      <span className="block min-w-0 flex-1 truncate rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-[11px] leading-tight text-emerald-700">
+        {first}
+      </span>
+      {rest.length > 0 ? (
+        <ClientsListPopup
+          items={labels}
+          title="ВСЕ АГЕНТЫ"
+          anchorRef={anchorRef}
+          trigger={
+            <span className="shrink-0 cursor-pointer whitespace-nowrap rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-100">
+              ещё {rest.length}
+            </span>
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FormatBadge({ value }: { value: string }) {
+  return (
+    <span className="rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-600">
+      {value}
     </span>
   );
 }
@@ -146,7 +194,8 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
     }
     case "agent_assignments_badge": {
       const sorted = [...row.agent_assignments].sort((a, b) => a.slot - b.slot);
-      const chips: ReactNode[] = [];
+      const labels: string[] = [];
+      const wdRu = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
       for (const a of sorted) {
         const name = a.agent_name?.trim();
         const code = a.agent_code?.trim();
@@ -154,54 +203,25 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
         const label = [code, name].filter(Boolean).join(" ");
         const date = displayVisitDateShort(a.visit_date);
         const wdays = getVisitWeekdaysForSlot(row, a.slot);
-        const wdRu = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
         const wdPart =
           wdays.length > 0
-            ? ` · ${wdays
-                .slice(0, 4)
-                .map((d) => wdRu[d] ?? String(d))
-                .join(" ")}${wdays.length > 4 ? ` +${wdays.length - 4}` : ""}`
+            ? ` · ${wdays.map((d) => wdRu[d] ?? String(d)).join(" ")}`
             : "";
         const datePart = wdays.length === 0 && date ? ` · ${date}` : "";
-        chips.push(
-          <span
-            key={a.slot}
-            className="block rounded-md bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium leading-snug text-primary"
-          >
-            {label}
-            {wdPart}
-            {datePart}
-          </span>
-        );
+        labels.push(`${label}${wdPart}${datePart}`);
       }
-      if (chips.length === 0) {
+      if (labels.length === 0) {
         const legacy = row.agent_name?.trim();
         if (legacy) {
           const d = displayVisitDateShort(row.visit_date);
           const wdays = getVisitWeekdaysForSlot(row, 1);
-          const wdRu = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
           const wdPart =
-            wdays.length > 0
-              ? ` · ${wdays
-                  .slice(0, 4)
-                  .map((k) => wdRu[k] ?? String(k))
-                  .join(" ")}${wdays.length > 4 ? ` +${wdays.length - 4}` : ""}`
-              : "";
+            wdays.length > 0 ? ` · ${wdays.map((k) => wdRu[k] ?? String(k)).join(" ")}` : "";
           const datePart = d && wdays.length === 0 ? ` · ${d}` : "";
-          chips.push(
-            <span
-              key={0}
-              className="block rounded-md bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium leading-snug text-primary"
-            >
-              {legacy}
-              {wdPart}
-              {datePart}
-            </span>
-          );
+          labels.push(`${legacy}${wdPart}${datePart}`);
         }
       }
-      if (chips.length === 0) return dash;
-      return <div className="flex max-w-[16rem] flex-col gap-1">{chips}</div>;
+      return <AgentAssignCell labels={labels} />;
     }
     case "contact_person":
       return Txt(row.responsible_person);
@@ -222,12 +242,22 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
       if (sc) return Txt(maps?.salesChannel?.[sc] ?? sc);
       return Txt(row.logistics_service);
     }
-    case "client_category_code":
-      return Txt(displayMapped(row.category, maps?.category));
+    case "client_category_code": {
+      const t = displayMapped(row.category, maps?.category);
+      if (!t) return dash;
+      return (
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-[10px] font-bold text-gray-500">
+          {t}
+        </span>
+      );
+    }
     case "client_type_code":
       return Txt(displayMapped(row.client_type_code, maps?.clientType));
-    case "format_code":
-      return Txt(displayMapped(row.client_format, maps?.clientFormat));
+    case "format_code": {
+      const t = displayMapped(row.client_format, maps?.clientFormat);
+      if (!t) return dash;
+      return <FormatBadge value={t} />;
+    }
     case "client_region": {
       const fromDb = displayMapped(row.region, maps?.region);
       if (fromDb) return Txt(fromDb);
@@ -344,18 +374,20 @@ export function ClientsDataTable({
   }, [someOnPage, allOnPage]);
 
   const colCount = cols.length + (bulkSelect ? 1 : 0);
+  const thCls =
+    "px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b border-gray-200 whitespace-nowrap";
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-max min-w-full max-w-none border-separate border-spacing-0 text-left text-sm table-auto">
-        <thead className="app-table-thead">
+    <div className="overflow-x-auto bg-white">
+      <table className="w-full min-w-[2200px] border-collapse text-left text-sm">
+        <thead>
           <tr>
             {bulkSelect ? (
-              <th className="w-10 whitespace-nowrap px-2 py-2">
+              <th className={cn(thCls, "w-10 text-center")}>
                 <input
                   ref={headerCbRef}
                   type="checkbox"
-                  className="h-4 w-4 rounded border-input accent-primary"
+                  className="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                   checked={allOnPage}
                   onChange={(e) => onTogglePage?.(e.target.checked)}
                   aria-label="Sahifani tanlash"
@@ -366,29 +398,26 @@ export function ClientsDataTable({
               const sortKey = CLIENT_COLUMN_TO_SORT[c.id];
               const interactive = Boolean(sortKey && onSortByColumn);
               return (
-                <th
-                  key={c.id}
-                  className="whitespace-nowrap px-2 py-2.5 text-left align-bottom text-xs !font-bold leading-tight text-foreground"
-                >
+                <th key={c.id} className={thCls}>
                   {interactive ? (
                     <button
                       type="button"
                       className={cn(
-                        "-mx-1 inline-flex max-w-none shrink-0 items-center gap-1 rounded px-1 py-0.5 text-left text-xs !font-bold hover:bg-muted/80",
-                        sortField === sortKey ? "text-foreground" : "text-muted-foreground"
+                        "inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase hover:bg-gray-100",
+                        sortField === sortKey ? "text-gray-700" : "text-gray-400"
                       )}
                       onClick={() => onSortByColumn!(c.id)}
                       title="Tartiblash"
                     >
-                      <span className="text-left">{c.label}</span>
+                      <span>{c.label}</span>
                       {sortField === sortKey ? (
                         sortOrder === "asc" ? (
-                          <ArrowUp className="size-3.5 shrink-0 text-primary" strokeWidth={2.5} aria-hidden />
+                          <ArrowUp className="size-3 shrink-0 text-emerald-600" strokeWidth={2.5} aria-hidden />
                         ) : (
-                          <ArrowDown className="size-3.5 shrink-0 text-primary" strokeWidth={2.5} aria-hidden />
+                          <ArrowDown className="size-3 shrink-0 text-emerald-600" strokeWidth={2.5} aria-hidden />
                         )
                       ) : (
-                        <ArrowUpDown className="size-3.5 shrink-0 opacity-40" aria-hidden />
+                        <ArrowUpDown className="size-3 shrink-0 opacity-40" aria-hidden />
                       )}
                     </button>
                   ) : (
@@ -402,20 +431,25 @@ export function ClientsDataTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={colCount} className="px-3 py-8 text-center">
-                <div className="mx-auto max-w-xl rounded-md border border-rose-200/60 bg-rose-50/60 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300">
-                  Hozircha mos ma'lumot topilmadi. Filtrlarni tekshirib ko'ring yoki yangi klient qo'shing.
-                </div>
+              <td colSpan={colCount} className="px-3 py-10 text-center text-sm text-gray-500">
+                Нет данных. Попробуйте изменить фильтры
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr key={row.id} className="border-b last:border-0">
+            rows.map((row, idx) => (
+              <tr
+                key={row.id}
+                className={cn(
+                  "group border-b border-gray-100 transition-colors hover:bg-emerald-50/30",
+                  sel.has(row.id) && "bg-emerald-50/50",
+                  idx % 2 === 1 && !sel.has(row.id) && "bg-gray-50/40"
+                )}
+              >
                 {bulkSelect ? (
-                  <td className="w-10 px-2 py-2 align-top">
+                  <td className="px-3 py-3 text-center align-top">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-input accent-primary"
+                      className="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                       checked={sel.has(row.id)}
                       onChange={(e) => onToggleRow?.(row.id, e.target.checked)}
                       aria-label={`Клиент №${row.id}`}
@@ -426,9 +460,8 @@ export function ClientsDataTable({
                   <td
                     key={c.id}
                     className={cn(
-                      "px-2 py-2 align-top",
-                      c.id !== "_actions" &&
-                        "min-w-0 max-w-[13rem] break-words [word-break:break-word]"
+                      "px-3 py-3 align-top text-xs text-gray-600",
+                      c.id !== "_actions" && "min-w-0 max-w-[13rem] break-words [word-break:break-word]"
                     )}
                   >
                     {c.id === "_actions" ? (
@@ -437,7 +470,7 @@ export function ClientsDataTable({
                           type="button"
                           size="icon-sm"
                           variant="outline"
-                          className="text-muted-foreground hover:text-foreground"
+                          className="text-amber-400 opacity-0 transition-opacity hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100"
                           onClick={() => onEdit(row)}
                           title="Tahrirlash"
                           aria-label="Tahrirlash"
@@ -448,7 +481,7 @@ export function ClientsDataTable({
                           href={`/clients/${row.id}/balances`}
                           className={cn(
                             buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                            "text-primary hover:bg-primary/10 hover:text-primary"
+                            "text-emerald-600 opacity-0 transition-opacity hover:bg-emerald-50 hover:text-emerald-700 group-hover:opacity-100"
                           )}
                           title="Kartochka"
                           aria-label="Kartochka"

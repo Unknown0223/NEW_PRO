@@ -5,13 +5,16 @@ import {
 } from "@/lib/bulk-export-templates";
 import {
   defaultTemplateSettings,
-  getCategorySettingsMode,
+  getTemplateSettingsMode,
   mergeNakladnoyPrefsForTemplate,
   normalizeInvoiceTemplateSettings,
   normalizeNakladnoyTemplateSettings,
+  normalizeTemplateSettings,
+  warehouseSettingsToApiBody,
   type BulkExportTemplateSettings,
   type InvoiceTemplateFieldSettings,
-  type NakladnoyTemplateSettings
+  type NakladnoyTemplateSettings,
+  type WarehouseExportSettings
 } from "@/lib/bulk-export-template-settings";
 import type { NakladnoyExportPrefs } from "@/lib/order-nakladnoy";
 
@@ -42,15 +45,18 @@ const DEFAULT_ENABLED_BY_CATEGORY: Partial<
     "inv-2.1.7": true
   },
   expeditor: {
+    "ex-2.0": false,
     "ex-3.0": false,
     "ex-4.0.1": false,
-    "ex-4.1.0": false,
-    "ex-5.0": false,
-    "ex-5.0.6": false,
-    "ex-5.1.0": false,
-    "ex-5.1.0.1": false,
+    "ex-5.1.1": false,
+    "ex-5.1.2": false,
+    "ex-5.1.3": false,
+    "ex-5.1.4": false,
+    "ex-5.1.5": false,
     "ex-5.1.6": true,
+    "ex-5.1.7": false,
     "ex-5.1.8": true,
+    "ex-5.1.9": false,
     "ex-5.2.0": true
   }
 };
@@ -64,15 +70,11 @@ function defaultEnabledFor(categoryId: BulkExportCategoryId, templateIds: string
 
 function defaultCategoryPrefs(categoryId: BulkExportCategoryId): BulkExportCategoryPrefs {
   const templates = BULK_EXPORT_CATEGORIES.find((c) => c.id === categoryId)!.templates;
-  const mode = getCategorySettingsMode(categoryId);
   const templateSettings: Record<string, BulkExportTemplateSettings> = {};
-  if (mode !== "none") {
+  for (const t of templates) {
+    const mode = getTemplateSettingsMode(categoryId, t.id);
     const def = defaultTemplateSettings(mode);
-    if (def) {
-      for (const t of templates) {
-        templateSettings[t.id] = { ...def } as BulkExportTemplateSettings;
-      }
-    }
+    if (def) templateSettings[t.id] = { ...def } as BulkExportTemplateSettings;
   }
   const ids = templates.map((t) => t.id);
   return {
@@ -110,21 +112,14 @@ function mergeCategoryPrefs(
     }
   }
 
-  const mode = getCategorySettingsMode(categoryId);
   const templateSettings: Record<string, BulkExportTemplateSettings> = {
     ...base.templateSettings
   };
   for (const id of order) {
     const rawSettings = raw.templateSettings?.[id];
-    if (mode === "nakladnoy") {
-      templateSettings[id] = normalizeNakladnoyTemplateSettings(
-        rawSettings ?? base.templateSettings[id]
-      );
-    } else if (mode === "invoice") {
-      templateSettings[id] = normalizeInvoiceTemplateSettings(
-        rawSettings ?? base.templateSettings[id]
-      );
-    }
+    const mode = getTemplateSettingsMode(categoryId, id);
+    const normalized = normalizeTemplateSettings(mode, rawSettings ?? base.templateSettings[id]);
+    if (normalized) templateSettings[id] = normalized;
   }
 
   return { order, enabled, templateSettings };
@@ -177,13 +172,40 @@ export function getInvoiceSettingsForTemplate(
   return normalizeInvoiceTemplateSettings(s);
 }
 
+export function getWarehouseSettingsForTemplate(
+  store: BulkExportPrefsStore,
+  templateId: string
+): WarehouseExportSettings | undefined {
+  const s = store.warehouse.templateSettings[templateId];
+  if (!s) return undefined;
+  const mode = getTemplateSettingsMode("warehouse", templateId);
+  if (mode === "warehouse-112" || mode === "warehouse-410" || mode === "warehouse-600") {
+    return normalizeTemplateSettings(mode, s) as WarehouseExportSettings;
+  }
+  return undefined;
+}
+
 export function resolveNakladnoyPrefsForDownload(
   store: BulkExportPrefsStore,
   template: BulkExportTemplateDef,
   globalPrefs: NakladnoyExportPrefs
 ): NakladnoyExportPrefs {
-  const perTemplate = getNakladnoySettingsForTemplate(store, template.category, template.id);
-  return mergeNakladnoyPrefsForTemplate(globalPrefs, perTemplate);
+  if (template.category === "expeditor") {
+    const perTemplate = getNakladnoySettingsForTemplate(store, template.category, template.id);
+    return mergeNakladnoyPrefsForTemplate(globalPrefs, perTemplate);
+  }
+  return globalPrefs;
+}
+
+export function resolveWarehouseExportApiBody(
+  store: BulkExportPrefsStore,
+  template: BulkExportTemplateDef
+): Record<string, boolean> | undefined {
+  if (template.category !== "warehouse") return undefined;
+  return warehouseSettingsToApiBody(
+    template.id,
+    store.warehouse.templateSettings[template.id]
+  );
 }
 
 export function getVisibleTemplates(

@@ -13,6 +13,7 @@ const CORE_PANEL_PATHS = [
   "/clients/qr",
   "/clients/map",
   "/products",
+  "/orders/automation",
   "/returns",
   "/payments",
   "/currency-rates",
