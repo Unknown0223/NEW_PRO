@@ -1,5 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
+import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { getErrorCode } from "../../lib/app-error";
+import { ensureTenantContext } from "../../lib/tenant-context";
+import { getAccessUser } from "../auth/auth.prehandlers";
+import { listOrderDebtsReport } from "../reports/order-debts-report.service";
+import { previewMobileOrderBonus } from "./mobile-order-bonus-preview.service";
 import {
   mobileCreateClientBodySchema,
   mobileCreateOrderBodySchema,
@@ -10,14 +17,7 @@ import {
   mobileOrdersHistoryQuerySchema,
   mobilePatchClientBodySchema,
   mobileWarehouseStockQuerySchema
-} from "../../contracts/mobile.schemas";
-import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
-import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import { getErrorCode } from "../../lib/app-error";
-import { ensureTenantContext } from "../../lib/tenant-context";
-import { getAccessUser } from "../auth/auth.prehandlers";
-import { listOrderDebtsReport } from "../reports/order-debts-report.service";
-import { previewMobileOrderBonus } from "./mobile-order-bonus-preview.service";
+} from "./mobile.route.agent.schemas";
 import {
   createMobileAgentClient,
   createMobileOrder,

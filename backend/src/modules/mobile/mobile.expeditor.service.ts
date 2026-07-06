@@ -27,3 +27,19 @@ export {
   listMobileExpeditorReturns,
   previewMobileExpeditorReturnByOrder
 } from "./mobile.expeditor.returns.service";
+export {
+  confirmMobileExpeditorShipmentDocument,
+  getMobileExpeditorClientBalanceDetail,
+  getMobileExpeditorClientDetail,
+  getMobileExpeditorClientLedger,
+  getMobileExpeditorDashboard,
+  getMobileExpeditorShipmentDocumentDetail,
+  getMobileExpeditorVehicleStock,
+  listMobileExpeditorClientOrders,
+  listMobileExpeditorDebtors,
+  listMobileExpeditorPayments,
+  listMobileExpeditorReturnedPayments,
+  listMobileExpeditorShipmentDocuments,
+  listMobileExpeditorVisits,
+  listMobileExpeditorWarehouses
+} from "./mobile.expeditor.workflow.service";

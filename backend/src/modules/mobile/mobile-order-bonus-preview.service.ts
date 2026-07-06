@@ -5,7 +5,7 @@ import {
   mapBonusRuleFull,
   type BonusRuleRow
 } from "../bonus-rules/bonus-rules.service";
-import { parseBonusStackPolicy, bonusPolicyToJson, resolveBonusSlotTakeCount } from "../orders/bonus-stack-policy";
+import { parseBonusStackPolicy, bonusPolicyToJson } from "../orders/bonus-stack-policy";
 import {
   fetchClientUsedAutoBonusRuleIds,
   findQtyBonusPeeks,
@@ -17,19 +17,9 @@ import {
   fetchClientMonthPaidQtyByProductExclOrder,
   BONUS_SUM_THRESHOLD_TIMEZONE,
   materializeQtyPeeks,
-  ruleTreeSatisfiedForOrder,
   type OrderAgentBonusContext
 } from "../orders/order-bonus-apply";
-import {
-  effectiveSubtotalForSumMinRule,
-  ruleBlockedByOncePerClient,
-  ruleMatchesClient,
-  ruleMatchesOrderAgentScope,
-  ruleMatchesOrderProductScope,
-  ruleNeedsOrderContext,
-  ruleRelatesToOrderSelection,
-  type OrderBonusPrereqEnv
-} from "../orders/order-bonus-context";
+import { ruleRelatesToOrderSelection } from "../orders/order-bonus-context";
 import { bonusGiftSelectionMeta, resolveAllowedGiftProductIdsForRule } from "../orders/bonus-gift-selection";
 import { findWinningDiscountRuleWithPrereqs } from "../orders/order-bonus-discount";
 import { calcExpectedDiscountSum } from "../orders/order-discount-alert";
@@ -37,6 +27,13 @@ import { activeRuleWhere } from "../orders/order-bonus-context.match-gifts";
 import { buildCreateOrderLineData } from "../orders/domain/order.create-lines";
 import type { BonusGiftOverrideInput } from "../orders/domain/order.types";
 import { validateBonusGiftOverrides } from "../orders/domain/order.detail-mappers";
+import {
+  dedupeEligibleBonusRows,
+  filterEligibleBonusesForPreview,
+  rulesLinked,
+  type EligibleBonusRow
+} from "./mobile-order-bonus-preview.compute";
+import { findAllEligibleDiscountRules, mapGiftProducts } from "./mobile-order-bonus-preview.query";
 
 export type MobileBonusPreviewInput = {
   client_id: number;
@@ -45,143 +42,6 @@ export type MobileBonusPreviewInput = {
   items: { product_id: number; qty: number }[];
   bonus_gift_overrides?: BonusGiftOverrideInput[];
 };
-
-async function findAllEligibleDiscountRules(
-  discountRulesSorted: BonusRuleRow[],
-  client: { id: number; category: string | null },
-  orderedProductIds: ReadonlySet<number>,
-  productById: ReadonlyMap<number, { id: number; category_id: number | null }>,
-  clientUsedAutoBonusRuleIds: ReadonlySet<number>,
-  prereqEnv: OrderBonusPrereqEnv,
-  now: Date
-): Promise<BonusRuleRow[]> {
-  const out: BonusRuleRow[] = [];
-  const orderAgent = prereqEnv.orderAgent;
-  const candidates = discountRulesSorted
-    .filter((r) => {
-      if (r.type === "discount") {
-        return !ruleNeedsOrderContext(r) && !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds);
-      }
-      if (r.type === "sum") {
-        return (
-          r.min_sum != null &&
-          r.discount_pct != null &&
-          Number(r.discount_pct) > 0 &&
-          !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds)
-        );
-      }
-      return false;
-    })
-    .filter((r) => ruleMatchesClient(r, client))
-    .filter((r) => ruleMatchesOrderAgentScope(r, orderAgent))
-    .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
-    .filter((r) => r.discount_pct != null && Number(r.discount_pct) > 0);
-
-  for (const r of candidates) {
-    if (!(await ruleTreeSatisfiedForOrder(r, prereqEnv, now, new Set()))) continue;
-    if (r.type === "sum") {
-      if (r.min_sum == null) continue;
-      const effective = effectiveSubtotalForSumMinRule(
-        r,
-        prereqEnv.baseSubtotalBeforeDiscount,
-        prereqEnv.clientMonthMerchandiseSubtotalExclOrder
-      );
-      if (effective.lt(new Prisma.Decimal(r.min_sum))) continue;
-    }
-    if (!ruleRelatesToOrderSelection(r, orderedProductIds, productById)) continue;
-    out.push(r);
-  }
-  return out;
-}
-
-function rulesLinked(a: BonusRuleRow, b: BonusRuleRow): boolean {
-  const aPre = a.prerequisite_rule_ids ?? [];
-  const bPre = b.prerequisite_rule_ids ?? [];
-  return aPre.includes(b.id) || bPre.includes(a.id);
-}
-
-async function mapGiftProducts(
-  giftIds: number[],
-  productMap: Map<number, { id: number; name: string; category: { name: string } | null }>,
-  availableByProductId: Map<number, number>,
-  qtyByProduct: ReadonlyMap<number, number>
-) {
-  return giftIds.map((pid) => {
-    const p = productMap.get(pid);
-    const warehouseQty = availableByProductId.get(pid) ?? 0;
-    const orderedQty = qtyByProduct.get(pid) ?? 0;
-    return {
-      product_id: pid,
-      name: p?.name ?? `#${pid}`,
-      category_name: p?.category?.name ?? null,
-      stock_available: Math.max(0, warehouseQty - orderedQty)
-    };
-  });
-}
-
-type EligibleBonusRow = {
-  rule_id: number;
-  name: string;
-  type: string;
-  bonus_qty: number;
-  max_bonus_qty: number | null;
-  prerequisite_rule_ids: number[];
-  default_gift_product_id: number | null;
-  gift_selection_kind: string;
-  allow_gift_swap: boolean;
-  gift_products: Awaited<ReturnType<typeof mapGiftProducts>>;
-};
-
-/** Mobil preview: stack siyosatiga mos barcha mos bonuslar (faqat bittasini emas). */
-function filterEligibleBonusesForPreview(
-  rows: EligibleBonusRow[],
-  stackPolicy: ReturnType<typeof parseBonusStackPolicy>,
-  appliedAutoBonusRuleIds: number[]
-): EligibleBonusRow[] {
-  const eligible = rows.filter((r) => r.bonus_qty > 0);
-  if (eligible.length === 0) return [];
-
-  if (stackPolicy.mode === "all") {
-    return eligible;
-  }
-
-  const take = resolveBonusSlotTakeCount(eligible.length, stackPolicy);
-  if (take <= 0) return [];
-
-  const ordered: EligibleBonusRow[] = [];
-  for (const id of appliedAutoBonusRuleIds) {
-    const hit = eligible.find((r) => r.rule_id === id);
-    if (hit && !ordered.some((x) => x.rule_id === hit.rule_id)) ordered.push(hit);
-  }
-  for (const r of eligible) {
-    if (!ordered.some((x) => x.rule_id === r.rule_id)) ordered.push(r);
-  }
-  return ordered.slice(0, take);
-}
-
-function dedupeEligibleBonusRows(rows: EligibleBonusRow[]): EligibleBonusRow[] {
-  const byId = new Map<number, EligibleBonusRow>();
-  for (const row of rows) {
-    const prev = byId.get(row.rule_id);
-    if (!prev) {
-      byId.set(row.rule_id, row);
-      continue;
-    }
-    const gifts = new Map(prev.gift_products.map((g) => [g.product_id, g]));
-    for (const g of row.gift_products) {
-      gifts.set(g.product_id, g);
-    }
-    byId.set(row.rule_id, {
-      ...prev,
-      bonus_qty: prev.bonus_qty + row.bonus_qty,
-      max_bonus_qty:
-        (prev.max_bonus_qty ?? 0) + (row.max_bonus_qty ?? row.bonus_qty),
-      default_gift_product_id: prev.default_gift_product_id ?? row.default_gift_product_id,
-      gift_products: [...gifts.values()]
-    });
-  }
-  return [...byId.values()];
-}
 
 export async function previewMobileOrderBonus(
   tenantId: number,
@@ -439,7 +299,7 @@ export async function previewMobileOrderBonus(
         peek.rule,
         peek.giftPid > 0 ? peek.giftPid : undefined
       );
-      const gift_products = await mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
+      const gift_products = mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
       const meta = bonusGiftSelectionMeta(peek.rule, gift_products.length);
       eligibleBonuses.push({
         rule_id: peek.rule.id,
@@ -462,7 +322,7 @@ export async function previewMobileOrderBonus(
         sumPeek.rule,
         sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined
       );
-      const gift_products = await mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
+      const gift_products = mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
       const meta = bonusGiftSelectionMeta(sumPeek.rule, gift_products.length);
       eligibleBonuses.push({
         rule_id: sumPeek.rule.id,

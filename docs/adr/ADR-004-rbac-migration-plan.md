@@ -1,6 +1,6 @@
 # ADR-004: Legacy RBAC → strukturali CRUD migratsiya rejasi
 
-**Status:** Accepted  
+**Status:** Accepted (R-03 infra: deprecation + ADR yangilandi; prod migratsiya alohida)  
 **Date:** 2026-07-06
 
 ## Context
@@ -39,6 +39,19 @@ Quyidagilar bajarilgunga qadar legacy fayllar **o‘chirilmaydi**:
 | `legacy-key-map.ts` | Migratsiya va audit |
 | `tools/legacy_permissions_raw.txt` | Referens ro‘yxat |
 | `scripts/migrate-permissions-to-crud.ts` | Migratsiya skripti |
+| `legacy-permissions.generated.ts` | Deprecated — M4 gacha saqlanadi |
+
+## R-03 alignment (2026-07-06)
+
+### Status: In Progress → Completed (qisman)
+
+### Bajarildi
+
+- [x] `migrate-permissions-to-crud.ts` skripti yozildi
+- [x] `legacy-key-map.ts` to'liq mapping
+- [x] `legacy-permissions.generated.ts` ga `@deprecated` JSDoc qo'shildi
+- [ ] `--all` flag bilan barcha tenant'larda ishlatildi: prod deploy alohida
+- [ ] `legacy-permissions.generated.ts` o'chiriladi: keyingi sprint (M4 shartlari bajarilgach)
 
 ## Audit natijasi (2026-07-06)
 
