@@ -18,6 +18,25 @@
 3. Redis memory
 4. Egress (APK download, export)
 
+## Billing alertlar (Railway)
+
+Railway dashboard → **Account** → **Usage** → **Spending limit** / email notifications:
+
+| Chegara | Harakat |
+|---------|---------|
+| **$50** | Email ogohlantirish — usage review (staging scale-down?) |
+| **$100** | Email + Slack/Telegram (qo‘lda) — API/worker RAM audit, Redis plan |
+
+**Oylik checklist (1-chi ish kuni):**
+
+- [ ] Railway invoice / projected spend
+- [ ] Postgres storage trend (oxirgi 30 kun)
+- [ ] Redis memory peak
+- [ ] GitHub Actions minutes (path filter ishlayaptimi?)
+- [ ] R2/storage egress (APK download hajmi)
+
+Agar $100 dan oshsa: worker alohida servisga ajratish yoki staging ni vaqtincha to‘xtatishni ko‘rib chiqing.
+
 ## Staging vs Production
 
 - Staging: kichik Postgres/Redis plan, `workflow_dispatch` deploy

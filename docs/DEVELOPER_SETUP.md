@@ -32,11 +32,19 @@ npm run dev
 
 ## Git hooks (Husky)
 
-Backend papkasida `prepare` skripti Husky ni ulaydi:
+Backend papkasida `prepare` skripti Husky ni ulaydi. Git `core.hooksPath` = `backend/.husky/_` (repo ildizidan `npm install` dan keyin avtomatik).
 
 ```bash
 cd backend
 npm install          # "prepare": "husky" avtomatik ishlaydi
+```
+
+Agar hooklar ishlamasa (monorepo ildizida `.git` bor, lekin `backend/` ichida yo‘q):
+
+```bash
+# repo ildizidan
+node backend/node_modules/husky/bin.js backend/.husky
+git config core.hooksPath backend/.husky/_
 ```
 
 Pre-commit tekshiruvi: `backend/.husky/pre-commit` → `scripts/pre-commit-check.sh` (tsc + audit:max-loc).

@@ -29,7 +29,25 @@ Skriptlar: `backend/scripts/backup/pg-backup.sh` (bash), `pg-backup.ps1` (PowerS
 
 ## Redis
 
-Docker Compose: AOF yoqilgan (`appendonly yes`, `appendfsync everysec`). Production Redis (Railway/Upstash) uchun provider snapshot/AOF sozlamalarini tekshiring.
+Docker Compose: AOF yoqilgan (`appendonly yes`, `appendfsync everysec`).
+
+### Railway Redis AOF checklist
+
+Production Redis (Railway managed) uchun quyidagilarni tekshiring:
+
+1. **Railway dashboard** → Redis servisi → **Settings** → persistence/AOF yoqilganligi
+2. `appendonly yes` va `appendfsync everysec` (yoki provider ekvivalenti) — RPO ≤ 1 soat maqsadiga mos
+3. **Snapshot backup** — Railway avtomatik snapshot yoqilgan bo‘lsa, retention muddatini yozib qo‘ying
+4. DR drill: Redis qayta ishga tushganda BullMQ navbatlari tiklanishi (`/ready` + worker smoke)
+5. Alternativa: [Upstash](https://upstash.com/) — ADR ixtiyoriy; migratsiya oldidan `REDIS_URL` staging da sinov
+
+**Tekshiruv (oylik):**
+
+```bash
+# Railway CLI (agar o‘rnatilgan bo‘lsa)
+railway variables --service redis
+# yoki dashboard: Metrics → memory, persistence status
+```
 
 ## BullMQ job log
 

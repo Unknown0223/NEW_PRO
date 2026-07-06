@@ -54,8 +54,8 @@ jobs:
       PORT: 4000
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/savdo_db
       REDIS_URL: redis://localhost:6379
-      JWT_ACCESS_SECRET: access-secret-key-min-32-characters-123
-      JWT_REFRESH_SECRET: refresh-secret-key-min-32-characters-123
+      JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.CI_JWT_REFRESH_SECRET }}
 
     steps:
       - name: Checkout

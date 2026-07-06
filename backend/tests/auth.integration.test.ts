@@ -161,7 +161,7 @@ vi.mock("../src/modules/auth/app-access.service", async (importOriginal) => {
 
 vi.mock("../src/modules/work-slots/work-slots.query", () => ({
   loadActiveWorkSlotsByUserIds: vi.fn(async () => new Map()),
-  getActiveSlotForUser: vi.fn(async () => null)
+  getActiveSlotForUser: vi.fn(async () => ({ slot_id: 42, slot_code: "WS-42" }))
 }));
 
 import { buildApp } from "../src/app";
@@ -277,6 +277,8 @@ describe("auth + tenant integration", () => {
 
     expect(meResponse.status).toBe(200);
     expect(meResponse.body.user.tenantId).toBe(1);
+    expect(meResponse.body.user.work_slot_id).toBe(42);
+    expect(meResponse.body.user.work_slot_code).toBe("WS-42");
   });
 
   it("refresh rotates refresh token", async () => {

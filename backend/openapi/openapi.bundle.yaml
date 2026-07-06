@@ -470,6 +470,16 @@ components:
         zone:
           type: string
           nullable: true
+        warehouse_id:
+          type: integer
+          exclusiveMinimum: true
+          minimum: 0
+          nullable: true
+        cash_desk_id:
+          type: integer
+          exclusiveMinimum: true
+          minimum: 0
+          nullable: true
         agent_id:
           type: integer
           exclusiveMinimum: true
@@ -683,6 +693,62 @@ components:
           exclusiveMinimum: true
           minimum: 0
           nullable: true
+        segment_ids:
+          type: array
+          items:
+            type: integer
+            exclusiveMinimum: true
+            minimum: 0
+          maxItems: 50
+        trade_direction_ids:
+          type: array
+          items:
+            type: integer
+            exclusiveMinimum: true
+            minimum: 0
+          maxItems: 50
+        image_url:
+          type: string
+          maxLength: 2800000
+          nullable: true
+        packagings:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 120
+              quantity:
+                type: integer
+                exclusiveMinimum: true
+                minimum: 0
+                nullable: true
+              width_cm:
+                anyOf:
+                  - type: number
+                  - type: string
+                nullable: true
+              height_cm:
+                anyOf:
+                  - type: number
+                  - type: string
+                nullable: true
+              length_cm:
+                anyOf:
+                  - type: number
+                  - type: string
+                nullable: true
+              is_main:
+                type: boolean
+              sort_order:
+                type: integer
+                nullable: true
+            required:
+              - name
+            additionalProperties: false
+          maxItems: 30
         weight_kg:
           anyOf:
             - type: number

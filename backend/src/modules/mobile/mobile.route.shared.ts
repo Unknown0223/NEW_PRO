@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import {
   MOBILE_FIELD_ROLE_NAMES,
@@ -63,4 +64,29 @@ export function parseDateLike(raw: string | null | undefined): Date | null | und
   if (!raw) return null;
   const dt = new Date(raw);
   return Number.isNaN(dt.getTime()) ? undefined : dt;
+}
+
+export const mobileQrBodySchema = z.object({
+  qr_code: z.string().trim().min(1).max(128),
+  client_id: z.number().int().positive().optional()
+});
+
+export function parseClientPhotoPathParams(params: { id?: string; photoId?: string }):
+  | { ok: true; clientId: number; photoId: number }
+  | { ok: false } {
+  const clientId = Number.parseInt(params.id ?? "", 10);
+  const photoId = Number.parseInt(params.photoId ?? "", 10);
+  if (!Number.isFinite(clientId) || clientId < 1 || !Number.isFinite(photoId) || photoId < 1) {
+    return { ok: false };
+  }
+  return { ok: true, clientId, photoId };
+}
+
+export function isAgentOrExpeditorRole(role: string): boolean {
+  return role === "agent" || role === "expeditor";
+}
+
+/** Agent sync marshrutlari — expeditor uchun taqiqlangan. */
+export function isExpeditorRole(role: string): boolean {
+  return role === "expeditor";
 }

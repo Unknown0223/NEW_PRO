@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "prepare": "husky",
+    "prepare": "node scripts/install-husky.cjs",
     "postinstall": "prisma generate",
     "dev:prep": "node scripts/wait-for-postgres.cjs && prisma migrate deploy && node scripts/prisma-generate-if-needed.cjs",
     "predev": "node scripts/wait-for-postgres.cjs && prisma migrate deploy && node scripts/prisma-generate-if-needed.cjs",
@@ -23,7 +23,7 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "test:contracts": "vitest run tests/contracts-schemas.unit.test.ts tests/report-builder-schemas.unit.test.ts tests/mobile-schemas.unit.test.ts",
-    "test:coverage:orders": "vitest run tests/order-bonus-apply.pure.test.ts tests/bonus-and-discount.pure.test.ts tests/order-bonus-match-scope.pure.test.ts tests/orders-domain-coverage.smoke.test.ts --coverage",
+    "test:coverage:orders": "vitest run tests/order-bonus-apply.pure.test.ts tests/bonus-and-discount.pure.test.ts tests/order-bonus-match-scope.pure.test.ts tests/order-status.test.ts tests/permission-crud-model.pure.test.ts tests/mobile-bonus-preview-filter.unit.test.ts tests/coverage-gate.pure.test.ts --coverage",
     "perf:explain": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf/run-all-explain.ps1",
     "perf:p95": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf/summarize-p95-from-log.ps1",
     "perf:sample-p95": "tsx scripts/perf/sample-foundation-p95.ts",

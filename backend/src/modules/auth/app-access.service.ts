@@ -1,16 +1,15 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { prisma } from "../../config/database";
 import { sendApiError } from "../../lib/api-error";
+import {
+  MOBILE_FIELD_ROLE_NAMES,
+  MOBILE_FIELD_ROLES,
+  isMobileFieldRole,
+  type MobileFieldRole
+} from "../../lib/constants";
 import { getAccessUser } from "./auth.prehandlers";
 
-export const MOBILE_FIELD_ROLE_NAMES = ["agent", "expeditor", "supervisor"] as const;
-export type MobileFieldRole = (typeof MOBILE_FIELD_ROLE_NAMES)[number];
-
-export const MOBILE_FIELD_ROLES = new Set<string>(MOBILE_FIELD_ROLE_NAMES);
-
-export function isMobileFieldRole(role: string): role is MobileFieldRole {
-  return MOBILE_FIELD_ROLES.has(role);
-}
+export { MOBILE_FIELD_ROLE_NAMES, MOBILE_FIELD_ROLES, isMobileFieldRole, type MobileFieldRole };
 
 /**
  * Ajratilgan sessiya cheklovi qo'llanmaydigan rollar.

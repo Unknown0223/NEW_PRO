@@ -3,6 +3,7 @@ import { catalogRoles } from "./clients.route.shared";
 
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES } from "../../lib/client-photo-limits";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
 import {
@@ -174,7 +175,7 @@ export async function registerClientAssetsRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/clients/:id/photo-reports",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], bodyLimit: CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);

@@ -17,9 +17,7 @@ import { registerBusinessMetricsRoutes } from "./modules/health/business-metrics
 import { ExcelImportTooLargeError } from "./lib/multipart-limits";
 import { checkReadiness } from "./modules/health/health.service";
 import { buildCorsOrigin } from "./lib/cors-options";
-import {
-  CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES
-} from "./lib/client-photo-limits";
+import { GLOBAL_HTTP_BODY_LIMIT_BYTES } from "./lib/constants";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
 import { registerAllRoutes } from "./route-registry";
 
@@ -28,8 +26,8 @@ export function buildApp() {
     logger: loggerOptions,
     disableRequestLogging: true,
     requestIdHeader: "x-request-id",
-    /** Mobil foto hisobot (base64, ≤10 MiB JPEG). */
-    bodyLimit: CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES
+    /** Standart JSON body; foto marshrutlari alohida kattaroq limit oladi. */
+    bodyLimit: GLOBAL_HTTP_BODY_LIMIT_BYTES
   });
 
   app.register(cors, { origin: buildCorsOrigin(), credentials: true });

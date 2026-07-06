@@ -94,7 +94,7 @@ const DASHBOARD_MAP: Record<string, string> = {
 };
 
 /** To'g'ridan-to'g'ri (qo'lda) moslashtirishlar — heuristika noto'g'ri ishlaganda. */
-const EXPLICIT_MAP: Record<string, string> = {
+export const EXPLICIT_MAP: Record<string, string> = {
   ...DASHBOARD_MAP,
   "orders.zakaz.spisok_zakazov": "orders.zakaz.view",
   "orders.zakaz.prosmotr_zakaza": "orders.zakaz.view",

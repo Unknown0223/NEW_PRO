@@ -52,3 +52,6 @@ backend/scripts/data/excel/warehouse-aliases.json
 
 # Archive (rollback uchun saqlangan eski kod)
 archive/
+
+# KPI planning template (repoda saqlanmaydi)
+_template-kpi-planning/

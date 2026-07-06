@@ -15,6 +15,8 @@
  *    aks holda avtomatik manzilga qaytiladi.
  */
 
+import { prisma } from "../../config/database";
+
 export type PeresortPreviewLine = {
   product_id: number;
   paid_qty: number;
@@ -37,6 +39,87 @@ export type PeresortReturnLine = {
   paid_qty: number;
   bonus_qty: number;
 };
+
+export type ReturnByOrderLineInput = {
+  product_id: number;
+  qty?: number;
+  paid_qty?: number;
+  bonus_qty?: number;
+  return_qty?: number;
+  bonus_target_product_id?: number;
+};
+
+/** «Возврат с полки по заказу» — AUTO va MANUAL qatorlarni ajratish. */
+export function parseReturnByOrderLineRequests(lines: ReturnByOrderLineInput[]): {
+  autoReq: Map<number, PeresortRequest>;
+  manualReq: Map<number, ManualPeresortRequest>;
+  targetByProduct: Map<number, number>;
+} {
+  const autoReq = new Map<number, PeresortRequest>();
+  const manualReq = new Map<number, ManualPeresortRequest>();
+  const targetByProduct = new Map<number, number>();
+
+  for (const l of lines) {
+    const target =
+      l.bonus_target_product_id != null && l.bonus_target_product_id > 0
+        ? l.bonus_target_product_id
+        : undefined;
+    if (l.return_qty != null && l.return_qty > 0) {
+      const cur = autoReq.get(l.product_id) ?? { return_qty: 0 };
+      cur.return_qty += l.return_qty;
+      if (target != null) cur.target = target;
+      autoReq.set(l.product_id, cur);
+      continue;
+    }
+    const paid = l.paid_qty ?? 0;
+    const bonus = l.bonus_qty ?? 0;
+    if (paid > 0 || bonus > 0) {
+      const cur = manualReq.get(l.product_id) ?? { paid_qty: 0, bonus_qty: 0 };
+      cur.paid_qty += paid;
+      cur.bonus_qty += bonus;
+      if (target != null) cur.target = target;
+      manualReq.set(l.product_id, cur);
+      continue;
+    }
+    const legacy = l.qty ?? 0;
+    if (legacy > 0) {
+      const cur = autoReq.get(l.product_id) ?? { return_qty: 0 };
+      cur.return_qty += legacy;
+      if (target != null) cur.target = target;
+      autoReq.set(l.product_id, cur);
+    }
+  }
+
+  for (const [pid, v] of autoReq) if (v.target != null && v.target !== pid) targetByProduct.set(pid, v.target);
+  for (const [pid, v] of manualReq) if (v.target != null && v.target !== pid) targetByProduct.set(pid, v.target);
+
+  return { autoReq, manualReq, targetByProduct };
+}
+
+export function mergeReturnByOrderQtyMaps(
+  manualReq: Map<number, ManualPeresortRequest>,
+  previewLines: PeresortPreviewLine[]
+): { merged: Map<number, { paid: number; bonus: number }>; totalDebt: number } {
+  const merged = new Map<number, { paid: number; bonus: number }>();
+  const addMerged = (pid: number, paid: number, bonus: number) => {
+    const c = merged.get(pid) ?? { paid: 0, bonus: 0 };
+    c.paid += paid;
+    c.bonus += bonus;
+    merged.set(pid, c);
+  };
+  let totalDebt = 0;
+
+  for (const pl of previewLines) {
+    if (pl.paid_qty + pl.bonus_qty > 0) addMerged(pl.product_id, pl.paid_qty, pl.bonus_qty);
+    totalDebt += Math.max(0, pl.bonus_debt_amount - pl.peresort_debt_amount);
+  }
+
+  for (const [pid, v] of manualReq) {
+    if (v.paid_qty + v.bonus_qty > 0) addMerged(pid, v.paid_qty, v.bonus_qty);
+  }
+
+  return { merged, totalDebt };
+}
 
 /**
  * «По продуктам» (qo'lda) — foydalanuvchi kiritgan savdo/bonus AYNAN hurmat qilinadi
@@ -164,4 +247,40 @@ export function buildPeresortReturnLines(args: {
     }));
 
   return { lines, bonusDebt: totalDebt > 0 ? Number(totalDebt.toFixed(2)) : 0 };
+}
+
+/** Zakaz tarkibidagi mahsulotlar uchun interchangeable peresort variantlari. */
+export async function buildPeresortOptionsForOrder(
+  tenantId: number,
+  productIdsInOrder: number[],
+  siblingsMap: Map<number, Array<{ id: number }>>
+): Promise<Record<string, Array<{ id: number; name: string; sku: string }>>> {
+  const peresort: Record<string, Array<{ id: number; name: string; sku: string }>> = {};
+  if (productIdsInOrder.length === 0 || siblingsMap.size === 0) return peresort;
+
+  const sibIds = new Set<number>();
+  for (const pid of productIdsInOrder) {
+    for (const s of siblingsMap.get(pid) ?? []) sibIds.add(s.id);
+  }
+  const sibInfo = new Map<number, { name: string; sku: string }>();
+  if (sibIds.size > 0) {
+    const rows = await prisma.product.findMany({
+      where: { tenant_id: tenantId, id: { in: [...sibIds] }, is_active: true },
+      select: { id: true, name: true, sku: true }
+    });
+    for (const r of rows) sibInfo.set(r.id, { name: r.name, sku: r.sku });
+  }
+  for (const pid of productIdsInOrder) {
+    const sibs = siblingsMap.get(pid);
+    if (!sibs || sibs.length === 0) continue;
+    const options = sibs
+      .filter((s) => sibInfo.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        name: sibInfo.get(s.id)!.name,
+        sku: sibInfo.get(s.id)!.sku
+      }));
+    if (options.length > 0) peresort[String(pid)] = options;
+  }
+  return peresort;
 }

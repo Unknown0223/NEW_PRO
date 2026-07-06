@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import { MOBILE_FIELD_ROLE_NAMES } from "../../lib/constants";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -14,7 +15,7 @@ import {
 } from "./field.service";
 import { createClientRefusal } from "../refusals/refusals.service";
 
-const locationPingPostRoles = ["agent", "expeditor", ...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
+const locationPingPostRoles = [...MOBILE_FIELD_ROLE_NAMES, ...ADMIN_AND_OPERATOR_LIKE_ROLES] as const;
 
 function parseUserId(request: FastifyRequest) {
   const viewer = getAccessUser(request);

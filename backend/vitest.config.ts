@@ -15,15 +15,21 @@ export default defineConfig({
         "src/modules/orders/order-bonus-apply.ts",
         "src/modules/orders/order-bonus-qty.ts",
         "src/modules/orders/order-bonus-context.match-scope.ts",
-        "src/modules/orders/order-bonus-context.fetch.ts",
+        "src/modules/orders/bonus-stack-policy.ts",
+        "src/modules/orders/order-status.ts",
+        "src/modules/access/legacy-key-map.ts",
+        "src/modules/access/permission-model.ts",
         "src/domain/phone-number.ts",
-        "src/domain/tenant-id.ts"
+        "src/domain/tenant-id.ts",
+        "src/domain/events/**/*.ts",
+        "src/lib/constants.ts",
+        "src/lib/cors-options.ts"
       ],
       thresholds: {
-        lines: 30,
-        functions: 30,
-        branches: 25,
-        statements: 30
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70
       }
     }
   }
