@@ -23,7 +23,7 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-001")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")
@@ -69,7 +69,7 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
     expect(whRes.status).toBe(200);
     const warehouses = whRes.body.data as { id: number; name: string }[];
     expect(warehouses.length).toBeGreaterThanOrEqual(2);
-    const whMain = await mainWarehouseId(app, token);
+    const whMain = await mainWarehouseId(ctx.app, token);
     const whB = warehouses.find((w) => w.id !== whMain)?.id ?? warehouses[1].id;
 
     const clientsRes = await request(ctx.app.server)
@@ -124,7 +124,7 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-001")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")

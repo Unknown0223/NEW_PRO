@@ -73,7 +73,7 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
   subtreeIdsByNodeId: Map<string, readonly string[]>;
 }) {
   return (
-    <div className={cn(depth > 0 && "ml-3 border-l border-dashed border-slate-200 pl-2")}>
+    <div className={cn(depth > 0 && "ml-3 border-l border-dashed border-border pl-2")}>
       {nodes.map((node) => {
         if (node.active === false) return null;
         if (searchQ && !nodeMatchesSearch(node, searchQ)) return null;
@@ -91,7 +91,7 @@ const TerritoryTreeRows = memo(function TerritoryTreeRows({
               {hasChildren ? (
                 <button
                   type="button"
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-muted"
                   onClick={() =>
                     setExpanded((prev) => {
                       const n = new Set(prev);
@@ -262,10 +262,10 @@ export const MonitoringTerritoryTreeFilter = memo(function MonitoringTerritoryTr
         ref={popRef}
         id={listId}
         role="dialog"
-        className="fixed z-[200] flex max-h-[min(420px,70vh)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg"
+        className="fixed z-[200] flex max-h-[min(420px,70vh)] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg"
         style={{ top: coords.top, left: coords.left, width: coords.width }}
       >
-        <div className="border-b border-slate-100 p-2">
+        <div className="border-b border-border p-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <Input
@@ -306,7 +306,7 @@ export const MonitoringTerritoryTreeFilter = memo(function MonitoringTerritoryTr
         aria-haspopup="dialog"
         aria-controls={open ? listId : undefined}
         className={cn(
-          "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-xs text-slate-700 shadow-sm hover:border-slate-300",
+          "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 text-left text-xs text-slate-700 shadow-sm hover:border-border",
           disabled && "pointer-events-none opacity-50",
           triggerClassName
         )}

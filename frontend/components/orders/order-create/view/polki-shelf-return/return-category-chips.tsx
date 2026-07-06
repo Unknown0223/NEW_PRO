@@ -47,9 +47,7 @@ export const ReturnCategoryChips = memo(function ReturnCategoryChips({
   canShowPolkiGrid,
   categories,
   contextLoading,
-  contextSuccess,
   contextEmpty,
-  categoryFilterActive,
   selectedCategoryIds,
   disabled,
   onSelectAll,
@@ -58,9 +56,7 @@ export const ReturnCategoryChips = memo(function ReturnCategoryChips({
   canShowPolkiGrid: boolean;
   categories: Cat[] | null | undefined;
   contextLoading: boolean;
-  contextSuccess: boolean;
   contextEmpty: boolean;
-  categoryFilterActive: boolean;
   selectedCategoryIds: number[];
   disabled: boolean;
   onSelectAll: () => void;

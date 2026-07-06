@@ -22,6 +22,8 @@ async function interchangeableGroupIdsForProduct(tenantId: number, productId: nu
   const rows = await prisma.interchangeableGroupProduct.findMany({
     where: {
       product_id: productId,
+      // Noaktiv mahsulot interchangeable mantiqda ishlatilmaydi.
+      product: { is_active: true },
       group: { tenant_id: tenantId, is_active: true }
     },
     select: { group_id: true }
@@ -51,7 +53,8 @@ export async function assertExchangeInterchangeableProducts(
     const g = await prisma.interchangeableProductGroup.findFirst({
       where: { id: gid, tenant_id: tenantId, is_active: true },
       include: {
-        products: { select: { product_id: true } },
+        // Faqat faol mahsulotlar obmen uchun ruxsat etilgan to'plamga kiradi.
+        products: { where: { product: { is_active: true } }, select: { product_id: true } },
         price_type_links: { select: { price_type: true } }
       }
     });
@@ -91,6 +94,7 @@ export async function assertReturnProductsInterchangeableStrict(
   const links = await prisma.interchangeableGroupProduct.findMany({
     where: {
       product_id: { in: ids },
+      product: { is_active: true },
       group: { tenant_id: tenantId, is_active: true }
     },
     include: {
@@ -133,6 +137,8 @@ export async function getInterchangeableExchangeLookupForProduct(
     where: { id: gid, tenant_id: tenantId, is_active: true },
     include: {
       products: {
+        // Obmen ro'yxatida faqat faol mahsulotlar ko'rsatiladi.
+        where: { product: { is_active: true } },
         include: {
           product: { select: { id: true, sku: true, name: true } }
         }

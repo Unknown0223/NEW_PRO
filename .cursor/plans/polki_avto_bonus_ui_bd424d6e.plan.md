@@ -20,8 +20,13 @@ todos:
   - id: verify-tests
     content: Vitest/tsc + erkin polki smoke (preview → submit → ledger)
     status: completed
+  - id: verify-final
+    content: "polki:verify (BE 16 + FE 8 test), ledger «Долг бонус», hujjat"
+    status: completed
 isProject: false
 ---
+
+> **✅ YAKUNLANDI (2026-06-26)** — [docs/POLKI_AVTO_BONUS_YAKUNLANDI.md](../../docs/POLKI_AVTO_BONUS_YAKUNLANDI.md)
 
 # Polki: to‘liq avto bonus va o‘qiladigan «Бонус / баланс»
 
@@ -142,9 +147,9 @@ Har qator uchun (preview + peresort + mahsulot nomlari):
 
 **Tekshiruv:**
 
-- `cd frontend && npx tsc --noEmit` + `vitest polki-bonus-balance`
-- `cd backend && vitest returns-bonus-reverse.preview`
-- Smoke: `?type=return&isPolkiFree=1` — qty kiritish → bonus ustuni avtomatik → submit → mijoz ledgerda «Долг бонус»
+- `cd backend && npm run polki:verify` — **16/16** ✅
+- `cd frontend && npm run polki:verify && npm run typecheck` — **8/8** + typecheck ✅
+- Smoke: `?type=return&isPolkiFree=1` — qty → bonus ustuni → submit → «Долг бонус» ledger
 
 ---
 

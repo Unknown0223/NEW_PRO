@@ -52,7 +52,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
   );
 
   return (
-    <section className="finance-motion-slide h-full rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="finance-motion-slide h-full rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
         title="По категориям"
         subtitle="Топ категорий с прокручиваемой легендой"
@@ -62,7 +62,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
           className="mx-auto flex h-64 w-64 items-center justify-center rounded-full p-8 shadow-inner"
           style={{ background: gradient }}
         >
-          <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center ring-1 ring-slate-100">
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-card text-center ring-1 ring-slate-100">
             <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Total</span>
             <strong className="mt-1 text-2xl font-black text-slate-950">{fmtFinanceCompact(total)}</strong>
             <span className="text-sm font-medium text-slate-500">UZS</span>
@@ -70,7 +70,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
         </div>
         <div className="max-h-[320px] min-w-0 space-y-2 overflow-y-auto pr-2">
           {chartRows.map((item, index) => (
-            <div key={item.category} className="rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+            <div key={item.category} className="rounded-xl bg-muted px-3 py-2 ring-1 ring-slate-100">
               <div className="mb-2 flex items-center gap-3">
                 <span
                   className="h-3 w-3 shrink-0 rounded-full"
@@ -79,7 +79,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">{item.category}</p>
                 <span className="text-sm font-black text-slate-700">{fmtFinancePercent(item.sales_share_pct)}</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
                   className="finance-motion-bar h-full rounded-full bg-teal-500"
                   style={{ width: `${Math.min(100, item.sales_share_pct)}%` }}

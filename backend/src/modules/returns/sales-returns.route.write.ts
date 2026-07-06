@@ -19,6 +19,8 @@ import {
   createFullReturnFromOrder,
   previewPolkiAutoBonusReverse
 } from "./returns-enhanced.service";
+import { acceptSalesReturn, rejectSalesReturn } from "./returns-enhanced.accept";
+import { acceptDailyReturnWaybill } from "./returns-daily-waybills";
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 const priceTypeOptional = z.string().trim().min(1).max(128).optional().nullable();
@@ -382,6 +384,94 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
         if (msg === "REFUND_NEEDS_CLIENT") return sendApiError(reply, request, 400, "RefundNeedsClient");
         if (msg === "RETURN_NOT_INTERCHANGEABLE") return sendReturnNotInterchangeable(reply, request, e);
+        throw e;
+      }
+    }
+  );
+
+  // ─── Zavsklad: vazvratni qabul qilish ──────────────────────────────────
+  app.post(
+    "/api/:slug/returns/:id/accept",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number((request.params as { id?: string }).id);
+      if (!Number.isInteger(id) || id < 1) {
+        return sendApiError(reply, request, 400, "BadId");
+      }
+      try {
+        const data = await acceptSalesReturn(request.tenant!.id, id, actorUserIdOrNull(request));
+        return reply.send(data);
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "RETURN_NOT_FOUND") return sendApiError(reply, request, 404, "ReturnNotFound");
+        if (code === "RETURN_ALREADY_ACCEPTED")
+          return sendApiError(reply, request, 409, "ReturnAlreadyAccepted", "Возврат уже принят.");
+        if (code === "RETURN_CANCELLED")
+          return sendApiError(reply, request, 409, "ReturnCancelled", "Возврат отменён.");
+        if (code === "RETURN_NOT_PENDING")
+          return sendApiError(reply, request, 409, "ReturnNotPending", "Возврат не в статусе ожидания.");
+        throw e;
+      }
+    }
+  );
+
+  // ─── Zavsklad: kunlik yaxlit nakladnoyni qabul qilish ──────────────────
+  app.post(
+    "/api/:slug/returns/daily-waybills/:courierId/:date/accept",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const p = request.params as { courierId?: string; date?: string };
+      const courierId = Number.parseInt(p.courierId ?? "", 10);
+      const date = (p.date ?? "").trim();
+      if (!Number.isInteger(courierId) || courierId < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return sendApiError(reply, request, 400, "BadParams");
+      }
+      try {
+        const data = await acceptDailyReturnWaybill(
+          request.tenant!.id,
+          courierId,
+          date,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(data);
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "WAYBILL_NOT_FOUND") return sendApiError(reply, request, 404, "WaybillNotFound");
+        if (code === "WAYBILL_NOTHING_PENDING")
+          return sendApiError(reply, request, 409, "NothingPending", "Накладная уже принята.");
+        throw e;
+      }
+    }
+  );
+
+  // ─── Zavsklad: vazvratni rad etish ─────────────────────────────────────
+  app.post(
+    "/api/:slug/returns/:id/reject",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number((request.params as { id?: string }).id);
+      if (!Number.isInteger(id) || id < 1) {
+        return sendApiError(reply, request, 400, "BadId");
+      }
+      const reason =
+        typeof (request.body as { reason?: unknown })?.reason === "string"
+          ? (request.body as { reason: string }).reason
+          : null;
+      try {
+        const data = await rejectSalesReturn(request.tenant!.id, id, actorUserIdOrNull(request), reason);
+        return reply.send(data);
+      } catch (e) {
+        const code = e instanceof Error ? e.message : "";
+        if (code === "RETURN_NOT_FOUND") return sendApiError(reply, request, 404, "ReturnNotFound");
+        if (code === "RETURN_ALREADY_ACCEPTED")
+          return sendApiError(reply, request, 409, "ReturnAlreadyAccepted", "Возврат уже принят.");
+        if (code === "RETURN_CANCELLED")
+          return sendApiError(reply, request, 409, "ReturnCancelled", "Возврат уже отменён.");
+        if (code === "RETURN_NOT_PENDING")
+          return sendApiError(reply, request, 409, "ReturnNotPending", "Возврат не в статусе ожидания.");
         throw e;
       }
     }

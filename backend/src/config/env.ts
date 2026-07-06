@@ -5,6 +5,10 @@ import { z } from "zod";
 // cwd ga bog‘liq emas: `backend/.env` va loyiha ildizidagi `.env` (masalan monorepo)
 config({ path: resolve(__dirname, "../../.env") });
 config({ path: resolve(__dirname, "../../../.env") });
+// Lokal dev: backend/.env.local production Railway o‘zgaruvchilarini ustiga yozmaydi
+if (process.env.NODE_ENV !== "production") {
+  config({ path: resolve(process.cwd(), ".env.local"), override: true });
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -19,15 +23,23 @@ const envSchema = z.object({
     .default(
       process.env.NODE_ENV === "production"
         ? (undefined as unknown as string)
-        : "postgresql://postgres:0223@localhost:5432/savdo_db"
+        : "postgresql://postgres:changeme_local_dev@localhost:15432/savdo_db"
     ),
   REDIS_URL: z.string().min(1).default(
     process.env.NODE_ENV === "production"
       ? (undefined as unknown as string)
       : "redis://localhost:6379"
   ),
-  /** Excel import va boshqa multipart fayllar (baytlarda). */
-  MULTIPART_MAX_FILE_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
+  /** Sentinel: vergul bilan `host:port` (port ixtiyoriy, default 26379). */
+  REDIS_SENTINEL_HOSTS: z.string().optional(),
+  /** Sentinel master nomi (masalan `mymaster`). `REDIS_SENTINEL_HOSTS` bilan birga. */
+  REDIS_SENTINEL_MASTER_NAME: z.string().optional(),
+  /** Global multipart limit (Fastify). APK route alohida yuqori limit bilan ro‘yxatdan o‘tadi. */
+  MULTIPART_MAX_FILE_BYTES: z.coerce.number().int().positive().default(32 * 1024 * 1024),
+  /** Excel import route-level limit (baytlarda). */
+  MULTIPART_EXCEL_MAX_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+  /** Mobil APK upload limit (baytlarda). */
+  MULTIPART_APK_MAX_BYTES: z.coerce.number().int().positive().default(120 * 1024 * 1024),
   /**
    * JWT secrets — productionda majburiy, faqat dev/test uchun default.
    * Generatsiya: openssl rand -hex 32
@@ -48,6 +60,9 @@ const envSchema = z.object({
   AUTH_LOGIN_RATE_MAX: z.coerce.number().int().positive().default(30),
   /** Login rate limit oynasi (ms), masalan 900000 = 15 daqiqa */
   AUTH_LOGIN_RATE_WINDOW_MS: z.coerce.number().int().positive().default(900_000),
+  /** POST write API (zakaz/to‘lov/mijoz) — bir IP dan maksimal so‘rovlar (oyna) */
+  WRITE_API_RATE_MAX: z.coerce.number().int().positive().default(120),
+  WRITE_API_RATE_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   /**
    * `1` bo‘lsa: `/dashboard/*` so‘rovlari uchun `request.log` ga `dashboard.request` yoziladi
    * va javobga `X-Dashboard-Duration-Ms` qo‘shiladi (ms).
@@ -62,7 +77,44 @@ const envSchema = z.object({
   /** Shu vaqtda parallel `findMany` chaqiruvlari soni. */
   ORDER_CREATE_PRODUCT_CHUNK_PARALLEL: z.coerce.number().int().min(1).max(16).default(4),
   /** Agent katalogi: `order_items` dan `GROUP BY product_id` LIMIT. */
-  LINKAGE_AGENT_SOLD_PRODUCT_IDS_LIMIT: z.coerce.number().int().min(500).max(20000).default(8000)
+  LINKAGE_AGENT_SOLD_PRODUCT_IDS_LIMIT: z.coerce.number().int().min(500).max(20000).default(8000),
+  /** FCM legacy HTTP API server key (ixtiyoriy — push xabarlari uchun). */
+  FCM_SERVER_KEY: z.string().optional(),
+  /**
+   * `1` bo‘lsa: markazlashgan strukturali ruxsat tekshiruvi (route-permission-guard) yoqiladi.
+   * Default `0` — faqat migratsiya + rol default'lari seed qilingach yoqing (aks holda eski
+   * foydalanuvchilar 403 oladi). Tekshiruv `admin` rolni chetlab o‘tadi.
+   */
+  RBAC_ENFORCE_PERMISSIONS: z.enum(["0", "1"]).default("0"),
+
+  /**
+   * Foydalanuvchi xatti-harakat kuzatuvi (page-view, davomiylik, form niyatlari).
+   * Default `1` (yoqilgan). Xavfsiz rollout uchun `0` bilan o‘chiriladi.
+   */
+  ACTIVITY_TRACKING_ENABLED: z.enum(["0", "1"]).default("1"),
+
+  /** UserActivityEvent yozuvlarining saqlash muddati (kun). Eskilari cron bilan tozalanadi. */
+  ACTIVITY_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+
+  /** `/ready` endpoint: `x-internal-token` header bilan himoya (ixtiyoriy). */
+  INTERNAL_HEALTH_TOKEN: z.string().min(16).optional(),
+
+  /** Sentry DSN — berilmasa Sentry o‘chiq. */
+  SENTRY_DSN: z.string().url().optional(),
+
+  /** OpenTelemetry OTLP endpoint (masalan http://otel-collector:4318/v1/traces). */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_SERVICE_NAME: z.string().default("salec-backend"),
+
+  /** Verbose request log sampling (0.0–1.0). Default 1.0 = har doim. */
+  LOG_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1),
+
+  /** S3/R2 object storage (ixtiyoriy — yoqilmasa lokal disk). */
+  STORAGE_ENDPOINT: z.string().url().optional(),
+  STORAGE_BUCKET: z.string().optional(),
+  STORAGE_ACCESS_KEY: z.string().optional(),
+  STORAGE_SECRET_KEY: z.string().optional(),
+  STORAGE_PUBLIC_BASE_URL: z.string().url().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -75,7 +127,12 @@ export const env = parsed.data;
 
 if (env.NODE_ENV === "production") {
   const badProdDefaults: string[] = [];
-  if (env.DATABASE_URL === "postgresql://postgres:0223@localhost:5432/savdo_db") {
+  const unsafeDbUrls = new Set([
+    "postgresql://postgres:0223@localhost:5432/savdo_db",
+    "postgresql://postgres:0223@localhost:15432/savdo_db",
+    "postgresql://postgres:changeme_local_dev@localhost:15432/savdo_db"
+  ]);
+  if (unsafeDbUrls.has(env.DATABASE_URL)) {
     badProdDefaults.push("DATABASE_URL");
   }
   if (env.REDIS_URL === "redis://localhost:6379") {
@@ -94,6 +151,12 @@ if (env.NODE_ENV === "production") {
   }
   if (!env.CORS_ALLOWED_ORIGINS?.trim()) {
     throw new Error("Production requires CORS_ALLOWED_ORIGINS (comma-separated origins, e.g. https://app.example.com)");
+  }
+  if (env.RBAC_ENFORCE_PERMISSIONS !== "1") {
+    throw new Error(
+      "RBAC_ENFORCE_PERMISSIONS must be '1' in production. " +
+        "Ensure all tenants have run: npm run seed:rbac-defaults"
+    );
   }
 }
 

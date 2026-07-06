@@ -27,6 +27,8 @@ export async function listInterchangeableProductGroups(
       orderBy: [{ sort_order: "asc" }, { name: "asc" }, { id: "asc" }],
       include: {
         products: {
+          // Noaktiv mahsulotlar guruh tarkibida ko'rsatilmaydi.
+          where: { product: { is_active: true } },
           include: {
             product: { select: { id: true, sku: true, name: true } }
           }
@@ -194,6 +196,8 @@ export async function getInterchangeableProductGroup(
     where: { id, tenant_id: tenantId },
     include: {
       products: {
+        // Noaktiv mahsulotlar guruh tarkibida ko'rsatilmaydi.
+        where: { product: { is_active: true } },
         include: {
           product: { select: { id: true, sku: true, name: true } }
         }

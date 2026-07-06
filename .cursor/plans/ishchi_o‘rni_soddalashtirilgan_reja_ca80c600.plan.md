@@ -59,8 +59,13 @@ todos:
   - id: future-1c-excel
     content: "Kelajak: 1C slot_code kalit + Excel import/export"
     status: completed
+  - id: verify-final
+    content: "work-slots:verify (BE 30 + FE 5 test), backfill hujjati, yakunlandi md"
+    status: completed
 isProject: false
 ---
+
+> **✅ YAKUNLANDI (2026-06-26)** — [docs/WORK_SLOTS_YAKUNLANDI.md](../../docs/WORK_SLOTS_YAKUNLANDI.md)
 
 # Ishchi o‘rni — to‘liq reja (v1, hujjat asosida)
 

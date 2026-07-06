@@ -20,6 +20,7 @@ import { OrderDetailSkeleton } from "./order-detail/order-detail-skeleton";
 import { OrderSummaryTiles } from "./order-detail/order-summary-tiles";
 import { OrderProductsTable } from "./order-detail/products-table";
 import { OrderDetailStatusSection } from "./order-detail/status-section";
+import { OrderApprovalPanel } from "./order-detail/order-approval-panel";
 import { OrderPrintView } from "./order-print-view";
 
 function parseDec(s: string | null | undefined): number {
@@ -56,12 +57,18 @@ export type OrderListRow = {
   shipped_at: string | null;
   delivered_at: string | null;
   status: string;
+  /** Buyurtma tasdiqlash zanjiri holati (null — zanjir yo‘q). */
+  approval_status?: string | null;
   qty: string;
   total_sum: string;
   /** Bonus mahsulotlar jami donasi (API yangilangach doim keladi) */
   bonus_qty?: string;
   /** Foizli chegirma summasi */
   discount_sum?: string;
+  /** Skidka kutilgan, lekin qo‘llanmagan */
+  discount_alert?: string | null;
+  /** Bonus yetarli emas */
+  bonus_alert?: string | null;
   /** Bonus qatorlarining narxlangan qiymati */
   bonus_sum: string;
   balance: string | null;
@@ -150,6 +157,7 @@ export type OrderDetailRow = OrderListRow & {
   change_logs: OrderChangeLogRow[];
   bonus_gift_selections?: Record<string, number>;
   bonus_gift_swap_options?: BonusGiftSwapOptionRow[];
+  applied_bonus_rules_snapshot?: import("@/components/orders/order-bonus-snapshot-types").AppliedBonusRuleSnapshot[];
   client_finance?: {
     account_balance: string;
     credit_limit: string;
@@ -596,6 +604,12 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
               statusPending={statusMut.isPending}
               statusError={statusError ?? undefined}
               onStatusChange={(id, status) => statusMut.mutate({ status })}
+            />
+            <OrderApprovalPanel
+              tenantSlug={tenantSlug}
+              orderId={orderId}
+              orderStatus={data.status}
+              approvalStatus={data.approval_status}
             />
             <OrderSummaryTiles
               volumeM3={itemAggregates.vol}

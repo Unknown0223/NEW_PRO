@@ -45,7 +45,6 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { isAxiosError, type AxiosProgressEvent } from "axios";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -102,6 +101,7 @@ type BackgroundJobStatusDto = {
   state: string;
   failedReason?: string;
   returnvalue?: ClientImportApiResult;
+  workersConnected?: number;
   progress?: {
     stage?: string;
     percent?: number;
@@ -167,7 +167,6 @@ export default function ClientsPage() {
   const [importStagingFile, setImportStagingFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search, 400);
   const [appliedToolbar, setAppliedToolbar] = useState<ClientToolbarFiltersState>(() => ({
     ...INITIAL_CLIENT_TOOLBAR_FILTERS
   }));
@@ -210,8 +209,8 @@ export default function ClientsPage() {
     tenantSlug,
     tableId: CLIENTS_LIST_TABLE_ID,
     defaultColumnOrder: CLIENT_TABLE_PREF_COLUMN_IDS,
-    defaultPageSize: 30,
-    allowedPageSizes: [10, 20, 30, 50, 100],
+    defaultPageSize: 15,
+    allowedPageSizes: [10, 15, 20, 25, 30, 50, 100, 500],
     defaultHiddenColumnIds: CLIENTS_DEFAULT_HIDDEN_COLUMN_IDS
   });
   useEffect(() => {
@@ -234,7 +233,7 @@ export default function ClientsPage() {
             [CLIENTS_LIST_TABLE_ID]: {
               columnOrder: [...CLIENT_TABLE_PREF_COLUMN_IDS],
               hiddenColumnIds: hidden,
-              pageSize: 30
+              pageSize: 15
             }
           }
         });
@@ -252,27 +251,27 @@ export default function ClientsPage() {
   const filterBundleForApi = useMemo<ClientListFilterBundle>(
     () => ({
       ...sanitizeToolbarForApi(appliedToolbar),
-      search: debouncedSearch,
+      search,
       sortField,
       sortOrder
     }),
-    [appliedToolbar, debouncedSearch, sortField, sortOrder]
+    [appliedToolbar, search, sortField, sortOrder]
   );
 
-  const prevDebouncedSearchRef = useRef<string | null>(null);
+  const prevSearchRef = useRef<string | null>(null);
   useEffect(() => {
-    if (prevDebouncedSearchRef.current === null) {
-      prevDebouncedSearchRef.current = debouncedSearch;
+    if (prevSearchRef.current === null) {
+      prevSearchRef.current = search;
       return;
     }
-    if (prevDebouncedSearchRef.current === debouncedSearch) return;
-    prevDebouncedSearchRef.current = debouncedSearch;
+    if (prevSearchRef.current === search) return;
+    prevSearchRef.current = search;
     setPage(1);
-  }, [debouncedSearch]);
+  }, [search]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [tenantSlug, debouncedSearch, appliedToolbar, sortField, sortOrder, tablePrefs.pageSize]);
+  }, [tenantSlug, search, appliedToolbar, sortField, sortOrder, tablePrefs.pageSize]);
 
   const normalizeImportProgress = (raw: {
     stage?: string;
@@ -550,6 +549,16 @@ export default function ClientsPage() {
           );
         }
 
+        if (
+          (job.state === "waiting" || job.state === "delayed") &&
+          job.workersConnected === 0 &&
+          attempt >= 8
+        ) {
+          throw new Error(
+            "Import navbati ishlamayapti: background worker yo‘q. Backend qayta deploy qiling (worker bilan) yoki admin bilan bog‘laning."
+          );
+        }
+
         if (job.state === "completed") {
           const result = job.returnvalue as ClientImportApiResult | undefined;
           if (!result || !Array.isArray(result.errors)) {
@@ -648,7 +657,7 @@ export default function ClientsPage() {
       "clients",
       tenantSlug,
       page,
-      debouncedSearch,
+      search,
       appliedToolbar,
       sortField,
       sortOrder,
@@ -996,10 +1005,7 @@ export default function ClientsPage() {
   }, []);
 
   const rows = data?.data ?? [];
-  const visibleColumnOrder = useMemo(
-    () => tablePrefs.visibleColumnOrder.filter((id) => id !== "agent_assignments_badge"),
-    [tablePrefs.visibleColumnOrder]
-  );
+  const visibleColumnOrder = tablePrefs.visibleColumnOrder;
 
   const clientsTotalPages = useMemo(() => {
     if (!data) return 1;
@@ -1085,7 +1091,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <PageShell className="min-h-0 space-y-0 bg-[#F5F7FA] p-0 pb-0">
+    <PageShell className="flex min-h-0 flex-1 flex-col gap-4 bg-transparent p-0 pb-0">
       <ClientImportLaunchDialog
         open={importLaunchOpen}
         onOpenChange={setImportLaunchOpen}
@@ -1120,11 +1126,12 @@ export default function ClientsPage() {
         }}
       />
       {importMsg ? (
-        <p className="mx-6 mt-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+        <p className="mx-4 mt-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-gray-600 sm:mx-6">
           {importMsg}
         </p>
       ) : null}
 
+      <div className="shrink-0 px-4 sm:px-6">
       <ClientsTemplateFiltersPanel
         draft={draftToolbar}
         onDraftChange={onToolbarDraftChange}
@@ -1141,6 +1148,7 @@ export default function ClientsPage() {
         expeditorOptions={filteredExpeditorOptions}
         supervisorOptions={supervisorsFilterQ.data ?? []}
       />
+      </div>
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
@@ -1161,27 +1169,28 @@ export default function ClientsPage() {
             Sessiya yuklanishi biroz cho&apos;zildi. Internet va login holatini tekshirib ko&apos;ring.
           </div>
         ) : (
-          <p className="px-6 text-sm text-gray-500">Загрузка сессии…</p>
+          <p className="px-4 text-sm text-gray-600 sm:px-6">Загрузка сессии…</p>
         )
       ) : !tenantSlug ? (
-        <p className="px-6 text-sm text-red-600">
+        <p className="px-4 text-sm text-red-600 sm:px-6">
           <Link href="/login" className="underline">
             Войти снова
           </Link>
         </p>
       ) : isLoading && !data ? (
-        <p className="px-6 text-sm text-gray-500">Загрузка…</p>
+        <p className="px-4 text-sm text-gray-600 sm:px-6">Загрузка…</p>
       ) : isError ? (
-        <div className="px-6">
+        <div className="px-4 sm:px-6">
           <QueryErrorState message={getUserFacingError(error, "Не удалось загрузить клиентов.")} onRetry={() => void refetch()} />
         </div>
       ) : (
         <div
           className={cn(
-            "flex-1 space-y-4 p-6",
+            "flex min-h-0 flex-1 flex-col overflow-hidden",
             isFetching && isPlaceholderData && "opacity-70 transition-opacity"
           )}
         >
+          <div className="flex min-h-0 flex-1 flex-col space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
           <ClientsTemplateListToolbar
             search={search}
             onSearchChange={(v) => {
@@ -1204,7 +1213,8 @@ export default function ClientsPage() {
             onImportCreate={() => openImportLaunch("create")}
             importDisabled={importMut.isPending || !tenantSlug}
           />
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+            <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-contain">
             <ClientsDataTable
               rows={rows}
               visibility={getDefaultColumnVisibility()}
@@ -1238,6 +1248,7 @@ export default function ClientsPage() {
                 router.push(`/clients/${row.id}/edit`);
               }}
             />
+            </div>
             {data ? (
               <ClientsListPagination
                 page={page}
@@ -1247,6 +1258,7 @@ export default function ClientsPage() {
                 onPageChange={setPage}
               />
             ) : null}
+          </div>
           </div>
         </div>
       )}

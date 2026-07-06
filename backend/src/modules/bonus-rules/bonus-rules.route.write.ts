@@ -4,8 +4,8 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { catalogRoles } from "./bonus-rules.route.shared";
-import { createBodySchema, updateBodySchema } from "./bonus-rules.route.schemas";
-import { createBonusRule, updateBonusRule } from "./bonus-rules.service";
+import { createBodySchema, orderScopeBodySchema, updateBodySchema } from "./bonus-rules.route.schemas";
+import { createBonusRule, updateBonusRule, updateBonusRuleOrderScope } from "./bonus-rules.service";
 
 
 export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
@@ -81,6 +81,45 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
           );
         }
         if (msg === "BAD_DATE") return sendApiError(reply, request, 400, "BadDate");
+        if (msg === "RULE_LOCKED") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "RuleLocked",
+            "Правило уже применялось в заказах — можно менять дату окончания, активность и привязку к заказу."
+          );
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.patch(
+    "/api/:slug/bonus-rules/:id/order-scope",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id)) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      const parsed = orderScopeBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const row = await updateBonusRuleOrderScope(
+          request.tenant!.id,
+          id,
+          parsed.data,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(row);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         throw e;
       }
     }

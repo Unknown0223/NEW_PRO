@@ -34,6 +34,9 @@ export const createBodySchema = z.object({
   consignment: z.boolean().optional(),
   consignment_limit_amount: z.union([z.string(), z.null()]).optional(),
   consignment_ignore_previous_months_debt: z.boolean().optional(),
+  consignment_close_day: z.number().int().min(1).max(31).optional(),
+  consignment_close_hour: z.number().int().min(0).max(23).optional(),
+  consignment_close_minute: z.number().int().min(0).max(59).optional(),
   apk_version: z.string().nullable().optional(),
   device_name: z.string().nullable().optional(),
   can_authorize: z.boolean().optional(),
@@ -67,6 +70,9 @@ export const patchStaffMutableBody = z.object({
   consignment: z.boolean().optional(),
   consignment_limit_amount: z.union([z.string(), z.null()]).optional(),
   consignment_ignore_previous_months_debt: z.boolean().optional(),
+  consignment_close_day: z.number().int().min(1).max(31).optional(),
+  consignment_close_hour: z.number().int().min(0).max(23).optional(),
+  consignment_close_minute: z.number().int().min(0).max(59).optional(),
   apk_version: z.string().nullable().optional(),
   device_name: z.string().nullable().optional(),
   can_authorize: z.boolean().optional(),
@@ -178,6 +184,13 @@ export const bulkAgentsBody = z.union([
     consignment: z.boolean()
   }),
   z.object({
+    action: z.literal("set_consignment_close"),
+    agent_ids: bulkAgentIds,
+    close_day: z.number().int().min(1).max(31),
+    close_hour: z.number().int().min(0).max(23),
+    close_minute: z.number().int().min(0).max(59)
+  }),
+  z.object({
     action: z.literal("set_app_access"),
     agent_ids: bulkAgentIds,
     app_access: z.boolean()
@@ -195,6 +208,16 @@ export const bulkAgentsBody = z.union([
     action: z.literal("adjust_max_sessions"),
     agent_ids: bulkAgentIds,
     delta: z.number().int().min(-98).max(98).refine((d) => d !== 0, { message: "nonzero" })
+  }),
+  z.object({
+    action: z.literal("patch_mobile_config"),
+    agent_ids: bulkAgentIds,
+    mobile_config: z
+      .object({
+        schema_version: z.union([z.literal(1), z.literal("1")]).optional()
+      })
+      .passthrough()
+      .refine((o) => Object.keys(o).length > 0, { message: "empty_mobile_config_patch" })
   })
 ]);
 

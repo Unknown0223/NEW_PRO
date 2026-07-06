@@ -38,8 +38,13 @@ todos:
   - id: ref-ci-coverage
     content: Coverage bosqichma CI
     status: completed
+  - id: verify-final
+    content: "refaktoring:verify (98 test + max-loc), yakunlandi hujjat"
+    status: completed
 isProject: false
 ---
+
+> **✅ YAKUNLANDI (2026-06-26)** — [docs/BACKEND_REFACTORING_V1_YAKUNLANDI.md](../../docs/BACKEND_REFACTORING_V1_YAKUNLANDI.md)
 
 # SALEC — kod refaktoring rejasi (v1, yangilangan)
 

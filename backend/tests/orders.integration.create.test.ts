@@ -23,7 +23,7 @@ describeOrdersIntegrationSuite("create and pricing", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-001")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")
@@ -104,7 +104,7 @@ describeOrdersIntegrationSuite("create and pricing", (ctx) => {
       .set("Authorization", `Bearer ${token}`);
     const id1 = p1.body.data[0].id as number;
     const id2 = p2.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")
@@ -143,7 +143,7 @@ describeOrdersIntegrationSuite("create and pricing", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-001")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")
@@ -182,7 +182,7 @@ describeOrdersIntegrationSuite("create and pricing", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-002")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")
@@ -217,7 +217,7 @@ describeOrdersIntegrationSuite("create and pricing", (ctx) => {
       .get("/api/test1/products?page=1&limit=5&search=SKU-001")
       .set("Authorization", `Bearer ${token}`);
     const productId = productsRes.body.data[0].id as number;
-    const warehouseId = await mainWarehouseId(app, token);
+    const warehouseId = await mainWarehouseId(ctx.app, token);
 
     const create = await request(ctx.app.server)
       .post("/api/test1/orders")

@@ -404,7 +404,7 @@ export async function requestBulkOrderNakladnoyPreview(
     };
   }
 
-  if (expeditorLoadingLayout) {
+  if (expeditorLoadingLayout && isExpeditorLoadingLayoutId(expeditorLoadingLayout)) {
     const file = await requestBulkOrderNakladnoyExpeditorLoading(
       tenantId,
       orderIds,

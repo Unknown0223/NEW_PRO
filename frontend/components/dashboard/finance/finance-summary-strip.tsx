@@ -27,7 +27,7 @@ export function FinanceSummaryStrip({ summary }: { summary: FinanceSummaryBlock 
         return (
           <div
             key={item.key}
-            className="rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200/70"
+            className="rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-slate-200/70"
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
             <p className="mt-1 truncate text-lg font-black tabular-nums text-slate-950">{value}</p>

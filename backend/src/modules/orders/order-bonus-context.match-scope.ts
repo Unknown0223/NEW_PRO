@@ -1,4 +1,5 @@
 import type { BonusRuleRow } from "../bonus-rules/bonus-rules.service";
+import { bonusGiftSelectionMeta } from "./bonus-gift-selection";
 import type { OrderAgentBonusContext, ProductLite } from "./order-bonus-context.fetch";
 import { ruleMatchesClient, ruleNeedsOrderContext } from "./order-bonus-context.fetch";
 
@@ -77,6 +78,115 @@ export function ruleHasPurchaseScope(rule: BonusRuleRow): boolean {
   return rule.product_ids.length > 0 || rule.product_category_ids.length > 0;
 }
 
+function productMatchesQtyRuleScope(rule: BonusRuleRow, product: ProductLite): boolean {
+  if (rule.product_ids.length > 0 && !rule.product_ids.includes(product.id)) {
+    return false;
+  }
+  if (rule.product_category_ids.length > 0) {
+    if (product.category_id == null || !rule.product_category_ids.includes(product.category_id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Qty qoida doirasi bo‘yicha zakazdagi har bir mos SKU (sotib olingan miqdor > 0). */
+export function qtyRuleMatchingProductIds(
+  rule: BonusRuleRow,
+  qtyByProduct: ReadonlyMap<number, number>,
+  productById: ReadonlyMap<number, ProductLite>
+): number[] {
+  const out: number[] = [];
+  for (const [pid, q] of qtyByProduct) {
+    if (q <= 0) continue;
+    const product = productById.get(pid);
+    if (!product || !productMatchesQtyRuleScope(rule, product)) continue;
+    out.push(pid);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/**
+ * Qty qoida doirasi bo‘yicha zakazdagi mos qatorlar miqdorini yig‘adi.
+ * `heroProductId` — eng ko‘p sotilgan mos SKU (prereq / umumiy kontekst uchun).
+ */
+export function sumMatchingOrderQtyForQtyRule(
+  rule: BonusRuleRow,
+  qtyByProduct: ReadonlyMap<number, number>,
+  productById: ReadonlyMap<number, ProductLite>
+): { totalQty: number; heroProductId: number } {
+  let totalQty = 0;
+  let heroProductId = 0;
+  let heroQ = 0;
+
+  for (const [pid, q] of qtyByProduct) {
+    if (q <= 0) continue;
+    const product = productById.get(pid);
+    if (!product || !productMatchesQtyRuleScope(rule, product)) continue;
+    totalQty += q;
+    if (q > heroQ) {
+      heroQ = q;
+      heroProductId = pid;
+    }
+  }
+
+  return { totalQty, heroProductId };
+}
+
+/**
+ * Zakazdagi tanlangan mahsulotlar bilan qoida bog‘langanligi.
+ * Sotib olish doirasi bo‘lsa — `ruleMatchesOrderProductScope` yetarli.
+ * Doira bo‘lmasa — zakazda qoida SKU/kategoriyasi (yoki sovg‘a SKU kategoriyasi) bo‘lishi kerak;
+ * aks holda faqat umumiy `min_sum` / umumiy miqdor bo‘yicha begona sovg‘a chiqmaydi.
+ */
+export function ruleRelatesToOrderSelection(
+  rule: BonusRuleRow,
+  orderedProductIds: ReadonlySet<number>,
+  productById: ReadonlyMap<number, ProductLite>
+): boolean {
+  if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) {
+    return false;
+  }
+  if (ruleHasPurchaseScope(rule)) {
+    return true;
+  }
+
+  const hasProductLink =
+    rule.product_ids.length > 0 ||
+    rule.bonus_product_ids.length > 0 ||
+    rule.product_category_ids.length > 0;
+  if (!hasProductLink) {
+    return true;
+  }
+
+  for (const id of rule.product_ids) {
+    if (orderedProductIds.has(id)) return true;
+  }
+  for (const id of rule.bonus_product_ids) {
+    if (orderedProductIds.has(id)) return true;
+  }
+  if (rule.product_category_ids.length > 0) {
+    for (const pid of orderedProductIds) {
+      const p = productById.get(pid);
+      if (p?.category_id != null && rule.product_category_ids.includes(p.category_id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  for (const bid of rule.bonus_product_ids) {
+    const bp = productById.get(bid);
+    if (!bp?.category_id) continue;
+    for (const pid of orderedProductIds) {
+      const op = productById.get(pid);
+      if (op?.category_id === bp.category_id) return true;
+    }
+  }
+
+  return false;
+}
+
 /** Umumiy miqdor (asortimentsiz qty) peeklarida `purchasedPid` o‘rniga. */
 export const QTY_AGGREGATE_PURCHASED_PID = 0;
 
@@ -127,6 +237,15 @@ export function resolveQtyGiftProductId(
   const allowed = rule.bonus_product_ids;
   const minUnits = Math.max(1, ctx?.minUnits ?? 1);
   const avail = ctx?.availableByProductId;
+
+  /** 5+1 assortiment: sovg‘a — xarid qilingan SKU; ombor qoldig‘i alohida tekshirilmaydi. */
+  const selectionMeta = bonusGiftSelectionMeta(
+    rule,
+    allowed.length > 0 ? allowed.length : Math.max(1, purchasedPid > 0 ? 1 : 0)
+  );
+  if (selectionMeta.kind === "assortment_auto" && purchasedPid > 0) {
+    return purchasedPid;
+  }
 
   const override = giftOverrides.get(rule.id);
   if (override !== undefined && Number.isFinite(override) && override > 0) {

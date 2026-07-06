@@ -18,7 +18,7 @@ echo To'liq stack: Docker, migrate, seed, Next tozalash, keyin API + worker + we
 echo Tez takrorlash ^(DB allaqachon tayyor bo'lsa^): start-dev-quick.cmd yoki npm run dev:quick
 echo.
 echo Docker servislarini ishga tushirish ^(Postgres, Redis^)...
-docker compose -f "infrastructure\docker-compose.yml" up -d
+docker compose --env-file "infrastructure\.env.local" -f "infrastructure\docker-compose.yml" up -d postgres redis
 if errorlevel 1 (
   echo.
   echo [XATO] Docker servislarini ishga tushirib bo'lmadi.
@@ -49,7 +49,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo Seed ma'lumotlarini tekshirish ^(db:seed^)...
+echo Seed ma'lumotlarini tekshirish ^(db:seed, ~30 soniya^)...
 call npm run db:seed
 if errorlevel 1 (
   echo [XATO] db:seed bajarilmadi.

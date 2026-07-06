@@ -17,7 +17,7 @@ const CONSIGNATION_UI = [
 ];
 
 const INPUT_CLASS =
-  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:border-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500";
+  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-gray-700 transition-colors hover:border-border focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500";
 
 const LABEL_CLASS = "mb-1 block text-xs font-medium text-gray-500";
 
@@ -110,7 +110,7 @@ function ConsignmentRadio({
               name="consignment_mode"
               checked={value === opt.value}
               onChange={() => onChange(opt.value)}
-              className="h-4 w-4 border-gray-300 text-teal-600 focus:ring-teal-500"
+              className="h-4 w-4 border-border text-teal-600 focus:ring-teal-500"
             />
             {opt.label}
           </label>
@@ -134,7 +134,7 @@ function ActiveSwitch({ active, onChange }: { active: boolean; onChange: (v: boo
         }`}
       >
         <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          className={`inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ${
             active ? "translate-x-6" : "translate-x-1"
           }`}
         />
@@ -172,7 +172,7 @@ function CheckboxGroup({
                 if (e.target.checked) onChange([...value, opt.value]);
                 else onChange(value.filter((v) => v !== opt.value));
               }}
-              className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              className="h-4 w-4 rounded border-border text-teal-600 focus:ring-teal-500"
             />
             <span>{opt.label}</span>
           </label>
@@ -199,28 +199,28 @@ function ModalShell({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
       <div
-        className={`relative flex max-h-[min(90vh,720px)] flex-col overflow-hidden rounded-xl bg-white shadow-xl ${
+        className={`relative flex max-h-[min(90vh,720px)] flex-col overflow-hidden rounded-xl bg-card shadow-xl ${
           wide ? "w-full max-w-3xl" : "w-full max-w-[420px]"
         }`}
         role="dialog"
         aria-modal
         aria-labelledby="rule-form-modal-title"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <h2 id="rule-form-modal-title" className="text-base font-semibold text-gray-800">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="rounded p-1 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
             aria-label="Закрыть"
           >
             <X size={18} />
           </button>
         </div>
         <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        <div className="shrink-0 border-t border-gray-100 px-5 py-4">{footer}</div>
+        <div className="shrink-0 border-t border-border px-5 py-4">{footer}</div>
       </div>
     </div>
   );
@@ -402,7 +402,7 @@ export function RuleFormModal({
                   className={`${INPUT_CLASS} resize-none`}
                 />
               </div>
-              <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+              <div className="space-y-3 rounded-lg bg-muted p-4">
                 <h4 className="text-sm font-medium text-gray-700">Ожидаемая дата отгрузки</h4>
                 <SelectField
                   label="Тип выполнения"
@@ -460,7 +460,7 @@ export function RuleFormModal({
             {currencyFilterOpts.length <= 1 ? (
               <div>
                 <label className={LABEL_CLASS}>Валюта</label>
-                <div className={`${INPUT_CLASS} bg-gray-50 text-gray-600`}>
+                <div className={`${INPUT_CLASS} bg-muted text-gray-600`}>
                   {currencyFilterOpts[0]?.label ?? form.currency_code}
                 </div>
               </div>

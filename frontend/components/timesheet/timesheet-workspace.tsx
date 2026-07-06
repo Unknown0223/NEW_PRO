@@ -46,7 +46,7 @@ function statusClass(s: AttendanceStatus) {
   if (s === "absent") return "bg-rose-100 text-rose-700";
   if (s === "vacation") return "bg-sky-100 text-sky-700";
   if (s === "sick") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+  return "bg-muted text-slate-700";
 }
 
 function statusLabel(s: AttendanceStatus) {

@@ -2,13 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -16,22 +13,55 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
-import { FilterSelect } from "@/components/ui/filter-select";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
-import { ListOrdered, MonitorSmartphone, Pencil, RefreshCw, Settings2, UserMinus } from "lucide-react";
+import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { AgentConfigurationsDialog } from "@/components/staff/agent-configurations-dialog";
+import { SupervisorFormModal } from "@/components/staff/supervisor-form-modal";
+import { messageFromStaffCreateError, messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
+import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import {
+  StaffFilterSelect,
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { formatPersonDisplayName } from "@/lib/person-display";
+import {
+  StaffKomandaActiveSessionsCell,
+  StaffKomandaApkCell,
+  StaffKomandaAppAccessToggle,
+  StaffKomandaBranchCell,
+  StaffKomandaCodeCell,
+  StaffKomandaFioCell,
+  StaffKomandaLoginCell,
+  StaffKomandaMaxSessionsCell,
+  StaffKomandaPinflCell,
+  StaffKomandaPositionCell
+} from "@/components/staff/staff-komanda-table-cells";
 
-export type SuperviseeRow = { id: number; fio: string; code: string | null };
+export type SuperviseeRow = {
+  id: number;
+  fio: string;
+  code: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
+  is_active?: boolean;
+};
 
 export type SupervisorRow = {
   id: number;
   fio: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
   code: string | null;
   pinfl: string | null;
   branch: string | null;
@@ -70,7 +100,7 @@ const COLS = [
   "Ф.И.О",
   "Агент",
   "Код",
-  "Логин",
+  "Авторизоваться",
   "ПИНФЛ",
   "Филиал",
   "Должность",
@@ -98,35 +128,60 @@ const SUPERVISOR_COLUMNS = SUPERVISOR_COLUMN_IDS.map((id, i) => ({
   id,
   label: COLS[i] ?? id
 }));
+const SUPERVISOR_COLUMN_LABEL_BY_ID = new Map<string, string>(
+  SUPERVISOR_COLUMNS.map((c) => [c.id, c.label])
+);
 
-const VISIBLE_AGENTS = 3;
-
-type Props = { tenantSlug: string };
+type Props = { tenantSlug: string; initialCreateOpen?: boolean };
 
 function SuperviseeCell({ list }: { list: SuperviseeRow[] }) {
-  if (!list.length) return <span className="text-muted-foreground">—</span>;
-  const shown = list.slice(0, VISIBLE_AGENTS);
-  const rest = list.length - shown.length;
+  if (!list.length) return <span className="text-slate-500">—</span>;
+
+  const active = list.filter((s) => s.is_active !== false);
+  const inactive = list.filter((s) => s.is_active === false);
+  const maxVisible = 3;
+
+  const visibleActive = active.slice(0, maxVisible);
+  const slotsLeft = maxVisible - visibleActive.length;
+  const visibleInactive = slotsLeft > 0 ? inactive.slice(0, slotsLeft) : [];
+  const hiddenActive = Math.max(0, active.length - visibleActive.length);
+  const hiddenInactive = Math.max(0, inactive.length - visibleInactive.length);
+
   return (
-    <div className="flex max-w-[22rem] flex-col gap-1">
-      <div className="flex flex-wrap gap-1">
-        {shown.map((a) => (
-          <span
-            key={a.id}
-            className="inline-block max-w-[14rem] truncate rounded-md bg-muted px-1.5 py-0.5 text-[10px]"
-            title={a.fio}
-          >
-            {a.code ? `${a.code} — ` : ""}
-            {a.fio}
-          </span>
-        ))}
-      </div>
-      {rest > 0 && <span className="text-[10px] text-primary">+ ещё {rest}</span>}
+    <div className="flex flex-wrap gap-1">
+      {visibleActive.map((a) => (
+        <span
+          key={a.id}
+          className="rounded-md bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 ring-1 ring-teal-200"
+        >
+          {formatPersonDisplayName(a)}
+        </span>
+      ))}
+      {visibleInactive.map((a) => (
+        <span
+          key={a.id}
+          className="rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200"
+          title="Неактивный агент — открепите в редактировании"
+        >
+          {formatPersonDisplayName(a)}
+        </span>
+      ))}
+      {hiddenActive > 0 ? (
+        <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-slate-600">ещё {hiddenActive}</span>
+      ) : null}
+      {hiddenInactive > 0 ? (
+        <span
+          className="rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200"
+          title="Неактивные агенты — открепите в редактировании"
+        >
+          ещё {hiddenInactive} неакт.
+        </span>
+      ) : null}
     </div>
   );
 }
 
-export function SupervisorsWorkspace({ tenantSlug }: Props) {
+export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftPos, setDraftPos] = useState("");
@@ -145,11 +200,14 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
     tableId: SUPERVISOR_TABLE_ID,
     defaultColumnOrder: [...SUPERVISOR_COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
 
   const [editRow, setEditRow] = useState<SupervisorRow | null>(null);
+  const [addOpen, setAddOpen] = useState(initialCreateOpen);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [sessionSup, setSessionSup] = useState<SupervisorRow | null>(null);
   const [configSup, setConfigSup] = useState<SupervisorRow | null>(null);
   const [configSaving, setConfigSaving] = useState(false);
@@ -177,13 +235,10 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const branchOptions = useMemo(() => {
-    return (profileQ.data?.references.branches ?? [])
-      .filter((b) => b.active !== false)
-      .map((b) => b.name.trim())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "ru"));
-  }, [profileQ.data]);
+  const branchOptions = useMemo(
+    () => activeBranchNamesFromProfile(profileQ.data?.references.branches),
+    [profileQ.data]
+  );
 
   const listQ = useQuery({
     queryKey: ["supervisors", tenantSlug, tab, appliedPos],
@@ -202,15 +257,38 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
 
   const agentsQ = useQuery({
     queryKey: ["agents", tenantSlug, "supervisors-ws-pick"],
-    enabled: Boolean(tenantSlug) && Boolean(editRow),
+    enabled: Boolean(tenantSlug) && (Boolean(editRow) || addOpen),
     staleTime: STALE.reference,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("is_active", "true");
-      const { data } = await api.get<{ data: { id: number; fio: string; code: string | null }[] }>(
-        `/api/${tenantSlug}/agents?${params.toString()}`
-      );
+      const { data } = await api.get<{
+        data: { id: number; fio: string; code: string | null; supervisor_user_id: number | null }[];
+      }>(`/api/${tenantSlug}/agents?${params.toString()}`);
       return data.data;
+    }
+  });
+
+  const createMut = useMutation({
+    mutationFn: async (vars: { body: Record<string, unknown>; superviseeIds: number[] }) => {
+      const { data } = await api.post<SupervisorRow>(`/api/${tenantSlug}/supervisors`, vars.body);
+      if (vars.superviseeIds.length > 0) {
+        await api.patch(`/api/${tenantSlug}/supervisors/${data.id}`, {
+          supervisee_agent_ids: vars.superviseeIds
+        });
+      }
+      return data;
+    },
+    onSuccess: () => {
+      setCreateError(null);
+      setAddOpen(false);
+      void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug, "staff-agent-dropdown"] });
+      void qc.invalidateQueries({ queryKey: ["agents", tenantSlug, "supervisors-ws-pick"] });
+    },
+    onError: (e: Error) => {
+      setCreateError(messageFromStaffCreateError(e));
     }
   });
 
@@ -221,8 +299,10 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["supervisor-detail", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug, "staff-agent-dropdown"] });
+      void qc.invalidateQueries({ queryKey: ["agents", tenantSlug, "supervisors-ws-pick"] });
     }
   });
 
@@ -276,15 +356,52 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
     setAppliedPos(draftPos);
   };
 
+  const resetFilters = () => {
+    setDraftPos("");
+    setAppliedPos("");
+    setPage(1);
+  };
+
+  const toggleSupervisorSelection = (id: number, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleAllSupervisorsOnPage = (checked: boolean) => {
+    if (checked) setSelected(new Set(pageRows.map((r) => r.id)));
+    else setSelected(new Set());
+  };
+
   const allPageSelected =
     pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((r) => selected.has(r.id)),
+    [filteredRows, selected]
+  );
+
+  const bulk = useStaffKomandaBulk({
+    tenantSlug,
+    apiSegment: "supervisors",
+    invalidateQueryKeys: [
+      ["supervisors", tenantSlug],
+      ["supervisors-filter-options", tenantSlug]
+    ],
+    selectedIds: selected,
+    setSelectedIds: setSelected,
+    selectedRows
+  });
 
   function supervisorExportCellString(r: SupervisorRow, colId: string): string {
     switch (colId) {
       case "fio":
-        return r.fio;
+        return formatPersonDisplayName(r);
       case "supervisees":
-        return r.supervisees.map((s) => `${s.code ?? ""} ${s.fio}`.trim()).join("; ");
+        return r.supervisees.map((s) => formatPersonDisplayName(s)).join("; ");
       case "code":
         return r.code ?? "";
       case "login":
@@ -311,85 +428,105 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
   function renderSupervisorDataCell(colId: string, r: SupervisorRow) {
     switch (colId) {
       case "fio":
-        return r.fio;
+        return (
+          <StaffKomandaFioCell
+            first_name={r.first_name}
+            last_name={r.last_name}
+            middle_name={r.middle_name}
+            fio={r.fio}
+            kpiColor={r.kpi_color}
+          />
+        );
       case "supervisees":
         return <SuperviseeCell list={r.supervisees} />;
       case "code":
-        return <span className="font-mono">{r.code ?? "—"}</span>;
+        return <StaffKomandaCodeCell code={r.code} />;
       case "login":
-        return <span className="font-mono">{r.login}</span>;
+        return <StaffKomandaLoginCell login={r.login} />;
       case "pinfl":
-        return <span className="font-mono">{r.pinfl ?? "—"}</span>;
+        return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "branch":
-        return r.branch ?? "—";
+        return <StaffKomandaBranchCell branch={r.branch} />;
       case "position":
-        return r.position ?? "—";
+        return <StaffKomandaPositionCell position={r.position} />;
       case "apk_version":
-        return r.apk_version ?? "—";
+        return <StaffKomandaApkCell version={r.apk_version} />;
       case "app_access":
         return (
-          <label className="inline-flex cursor-pointer items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Вкл / выкл</span>
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={r.app_access}
-              onChange={(e) => {
-                patchMut.mutate({ id: r.id, body: { app_access: e.target.checked } });
-              }}
-            />
-          </label>
+          <StaffKomandaAppAccessToggle
+            checked={r.app_access}
+            disabled={patchMut.isPending}
+            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
+          />
         );
       case "active_sessions":
         return (
-          <button
-            type="button"
-            className="font-medium text-primary underline-offset-2 hover:underline"
+          <StaffKomandaActiveSessionsCell
+            count={r.active_session_count}
+            max={r.max_sessions}
             onClick={() => setSessionSup(r)}
-          >
-            {r.active_session_count}
-          </button>
+          />
         );
       case "max_sessions":
-        return r.max_sessions;
+        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
   }
 
   return (
-    <div className="space-y-0">
-      <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
-        <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Должность</span>
-          <FilterSelect
-            aria-label="Должность"
-            emptyLabel="Должность"
+    <StaffWorkspaceLayout>
+      <StaffWorkspaceHeader
+        title="Супервайзер"
+        subtitle="Управление супервайзерами и привязкой агентов"
+        addLabel="Добавить супервайзера"
+        onAdd={() => {
+          setCreateError(null);
+          setAddOpen(true);
+        }}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
+
+      <StaffWorkspaceFilterPanel
+        filters={
+          <StaffFilterSelect
+            label="Должность"
             value={draftPos}
-            onChange={(e) => setDraftPos(e.target.value)}
+            onChange={setDraftPos}
+            emptyLabel="Все должности"
           >
             {(filterOptQ.data?.positions ?? []).map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-          </FilterSelect>
-        </label>
-        <Button
-          type="button"
-          size="sm"
-          className="bg-teal-700 text-white hover:bg-teal-800"
-          onClick={applyFilters}
-        >
-          Применить
-        </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </StaffFilterSelect>
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => tablePrefs.setPageSize(n)}
+        allOnPageSelected={allPageSelected}
+        onToggleAllOnPage={toggleAllSupervisorsOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, коду, логину…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map((id) => SUPERVISOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+          const exportData = filteredRows.map((r) => order.map((colId) => supervisorExportCellString(r, colId)));
+          downloadXlsxSheet(
+            `supervisors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Супервайзеры",
+            headers,
+            exportData
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+      />
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
@@ -404,257 +541,60 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
         onReset={() => tablePrefs.resetColumnLayout()}
       />
 
-      <div className="orders-hub-section orders-hub-section--table mt-4">
-        <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-0">
-            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border bg-muted/25 px-3 py-0 sm:px-4">
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "active" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("active")}
-                >
-                  Активный
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "inactive" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("inactive")}
-                >
-                  Не активный
-                </button>
-              </div>
-              <div className="py-1">
-                <Link
-                  href="/settings/spravochnik/supervisors/new"
-                  className={cn(buttonVariants({ variant: "default", size: "sm" }), "inline-flex h-9 items-center")}
-                >
-                  Добавить Супервайзера
-                </Link>
-              </div>
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={SUPERVISOR_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="супервайзеров"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selected}
+        onToggleSelection={toggleSupervisorSelection}
+        renderCell={(colId, row) => renderSupervisorDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Конфигурации" onClick={() => setConfigSup(r)}>
+                <Settings2 className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Сессии" onClick={() => setSessionSup(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton title="Деактивировать" onClick={() => setDeactivateRow(r)}>
+                  <UserMinus className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : null}
             </div>
+          );
+        }}
+      />
 
-            <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                value={pageSize}
-                onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
-              >
-                {[10, 20, 25, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <div className="flex h-9 shrink-0 items-center">
-                <input
-                  type="checkbox"
-                  className="size-4 rounded border-input accent-primary"
-                  checked={allPageSelected}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelected(new Set(pageRows.map((r) => r.id)));
-                    } else {
-                      setSelected(new Set());
-                    }
-                  }}
-                  aria-label="Выбрать всех на странице"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 px-2 text-xs"
-                title="Управление столбцами"
-                onClick={() => setColumnDialogOpen(true)}
-              >
-                <ListOrdered className="size-3.5" />
-                Столбцы
-              </Button>
-              <Input
-                placeholder="Поиск"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 max-w-xs bg-background text-xs text-foreground"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs"
-                onClick={() => {
-                  const order = tablePrefs.visibleColumnOrder;
-                  const headers = order.map((id) => SUPERVISOR_COLUMNS.find((c) => c.id === id)?.label ?? id);
-                  const exportData = filteredRows.map((r) =>
-                    order.map((colId) => supervisorExportCellString(r, colId))
-                  );
-                  downloadXlsxSheet(
-                    `supervisors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-                    "Супервайзеры",
-                    headers,
-                    exportData
-                  );
-                }}
-              >
-                Excel
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-9 w-9"
-                onClick={() => void listQ.refetch()}
-              >
-                <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="ml-auto h-9 text-xs"
-                disabled={selected.size === 0}
-                onClick={() =>
-                  window.alert(
-                    `Выбрано супервайзеров: ${selected.size}. Массовые действия будут добавлены в следующем обновлении.`
-                  )
-                }
-              >
-                Групповая обработка
-              </Button>
-            </div>
+      <StaffBulkFloatingBar
+        count={selected.size}
+        allAccessOn={bulk.allAccessOn}
+        isActiveTab={tab === "active"}
+        busy={bulk.bulkBusy}
+        onToggleAccess={bulk.onToggleAccess}
+        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
+        onClearSessions={bulk.onClearSessions}
+        onClearSelection={() => setSelected(new Set())}
+      />
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1400px] text-xs">
-          <thead className="app-table-thead">
-            <tr>
-              <th className="w-8 px-2 py-2" />
-              {tablePrefs.visibleColumnOrder.map((colId) => {
-                const meta = SUPERVISOR_COLUMNS.find((c) => c.id === colId);
-                return (
-                  <th key={colId} className="whitespace-nowrap px-2 py-2 text-left">
-                    {meta?.label ?? colId}
-                  </th>
-                );
-              })}
-              <th className="whitespace-nowrap px-2 py-2 text-left">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((r) => (
-              <tr key={r.id} className="border-t even:bg-muted/20">
-                <td className="px-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(r.id)}
-                    onChange={(e) => {
-                      const n = new Set(selected);
-                      if (e.target.checked) n.add(r.id);
-                      else n.delete(r.id);
-                      setSelected(n);
-                    }}
-                  />
-                </td>
-                {tablePrefs.visibleColumnOrder.map((colId) => (
-                  <td key={colId} className="px-2 py-2">
-                    {renderSupervisorDataCell(colId, r)}
-                  </td>
-                ))}
-                <td className="px-2 py-2 text-right">
-                  <TableRowActionGroup className="justify-end" ariaLabel="Supervisor">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Конфигурации"
-                      aria-label="Конфигурации"
-                      onClick={() => setConfigSup(r)}
-                    >
-                      <Settings2 className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Сессии и лимит"
-                      aria-label="Сессии и лимит"
-                      onClick={() => setSessionSup(r)}
-                    >
-                      <MonitorSmartphone className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Редактировать"
-                      aria-label="Редактировать"
-                      onClick={() => setEditRow(r)}
-                    >
-                      <Pencil className="size-3.5" aria-hidden />
-                    </Button>
-                    {tab === "active" && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Деактивировать"
-                        aria-label="Деактивировать"
-                        onClick={() => setDeactivateRow(r)}
-                      >
-                        <UserMinus className="size-3.5" aria-hidden />
-                      </Button>
-                    )}
-                  </TableRowActionGroup>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-            </div>
-            <div className="table-content-footer flex flex-wrap items-center justify-between gap-2 border-t border-border/80 bg-muted/25 px-3 py-3 text-xs sm:px-4">
-              <span className="text-foreground/80">
-                Показано {total === 0 ? 0 : (safePage - 1) * pageSize + 1} —{" "}
-                {Math.min(safePage * pageSize, total)} из {total}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  ‹
-                </Button>
-                <span className="tabular-nums text-foreground">
-                  {safePage} / {pageCount}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  disabled={safePage >= pageCount}
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                >
-                  ›
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AgentTemplateConfirmDialog
+        open={bulk.confirmBulk != null}
+        message={bulk.confirmMessage}
+        busy={bulk.bulkBusy}
+        onCancel={() => bulk.setConfirmBulk(null)}
+        onConfirm={bulk.handleConfirmBulk}
+      />
 
       <AgentConfigurationsDialog
         open={configSup != null}
@@ -685,14 +625,54 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <SupervisorEditDialog
-        row={editRow}
-        onClose={() => setEditRow(null)}
+      <SupervisorFormModal
+        mode="create"
+        open={addOpen}
+        row={null}
         tenantSlug={tenantSlug}
         branchOptions={branchOptions}
         positionSuggestions={filterOptQ.data?.positions ?? []}
         agents={agentsQ.data ?? []}
-        onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
+        supervisorId={null}
+        loading={createMut.isPending}
+        errorMessage={createError}
+        onClose={() => {
+          setAddOpen(false);
+          setCreateError(null);
+        }}
+        onSubmitCreate={(body, superviseeIds) => {
+          setCreateError(null);
+          createMut.mutate({ body, superviseeIds });
+        }}
+        onSubmitEdit={async () => {}}
+      />
+
+      <SupervisorFormModal
+        mode="edit"
+        open={editRow != null}
+        row={editRow}
+        tenantSlug={tenantSlug}
+        branchOptions={branchOptions}
+        positionSuggestions={filterOptQ.data?.positions ?? []}
+        agents={agentsQ.data ?? []}
+        supervisorId={editRow?.id ?? null}
+        loading={patchMut.isPending}
+        errorMessage={editError}
+        onClose={() => {
+          setEditRow(null);
+          setEditError(null);
+        }}
+        onSubmitCreate={() => {}}
+        onSubmitEdit={async (id, body) => {
+          try {
+            setEditError(null);
+            await patchMut.mutateAsync({ id, body });
+            setEditRow(null);
+          } catch (e) {
+            setEditError(messageFromSupervisorPatchError(e));
+            throw e;
+          }
+        }}
       />
 
       <StaffActiveSessionsDialog
@@ -701,7 +681,7 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="supervisor"
         userId={sessionSup?.id ?? null}
-        maxSessions={sessionSup?.max_sessions ?? 2}
+        maxSessions={sessionSup?.max_sessions ?? 1}
         onPatched={() => {
           void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
         }}
@@ -728,196 +708,6 @@ export function SupervisorsWorkspace({ tenantSlug }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaffWorkspaceLayout>
   );
 }
-
-function SupervisorEditDialog({
-  row,
-  onClose,
-  tenantSlug,
-  branchOptions,
-  positionSuggestions,
-  agents,
-  onPatch
-}: {
-  row: SupervisorRow | null;
-  onClose: () => void;
-  tenantSlug: string;
-  branchOptions: string[];
-  positionSuggestions: string[];
-  agents: { id: number; fio: string; code: string | null }[];
-  onPatch: (id: number, body: Record<string, unknown>) => Promise<unknown>;
-}) {
-  const detailQ = useQuery({
-    queryKey: ["supervisor-detail", tenantSlug, row?.id],
-    enabled: Boolean(row),
-    staleTime: STALE.detail,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: SupervisorRow }>(`/api/${tenantSlug}/supervisors/${row!.id}`);
-      return data.data;
-    }
-  });
-
-  const r = detailQ.data ?? row;
-  const [first_name, setFirst] = useState("");
-  const [last_name, setLast] = useState("");
-  const [middle_name, setMid] = useState("");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPosition] = useState("");
-  const [agSel, setAgSel] = useState<Set<number>>(new Set());
-  const [login, setLogin] = useState("");
-  const [pwMode, setPwMode] = useState(false);
-  const [password, setPassword] = useState("");
-  const [kpi_color, setKpi] = useState("#0d9488");
-  const [consignment, setConsignment] = useState(false);
-  const [agSearch, setAgSearch] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!r) return;
-    const parts = r.fio.split(/\s+/);
-    setFirst(parts[1] ?? parts[0] ?? "");
-    setLast(parts[0] ?? "");
-    setMid(parts[2] ?? "");
-    setPhone(r.phone ?? "");
-    setCode(r.code ?? "");
-    setPinfl(r.pinfl ?? "");
-    setBranch(r.branch ?? "");
-    setPosition(r.position ?? "");
-    setLogin(r.login);
-    setKpi(r.kpi_color || "#0d9488");
-    setConsignment(r.consignment);
-    setPwMode(false);
-    setPassword("");
-    setAgSearch("");
-    setAgSel(new Set(r.supervisees.map((s) => s.id)));
-  }, [r]);
-
-  const filteredAgents = useMemo(() => {
-    const q = agSearch.trim().toLowerCase();
-    if (!q) return agents;
-    return agents.filter((a) =>
-      `${a.fio} ${a.code ?? ""} ${a.id}`.toLowerCase().includes(q)
-    );
-  }, [agents, agSearch]);
-
-  if (!row || !r) return null;
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const body: Record<string, unknown> = {
-        first_name: first_name.trim(),
-        last_name: last_name.trim() || null,
-        middle_name: middle_name.trim() || null,
-        phone: phone.trim() || null,
-        code: code.trim() || null,
-        pinfl: pinfl.trim() || null,
-        branch: branch.trim() || null,
-        position: position.trim() || null,
-        supervisee_agent_ids: Array.from(agSel),
-        consignment,
-        kpi_color: kpi_color || null
-      };
-      if (pwMode && password.length >= 6) body.password = password;
-      await onPatch(r.id, body);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Редактировать</DialogTitle>
-        </DialogHeader>
-        <div className="grid max-h-[calc(92vh-8rem)] gap-3 overflow-y-auto pr-1">
-          <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
-          <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
-          <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
-          <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
-          <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Филиал
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Филиал"
-              aria-label="Филиал"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              {branchOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Должность
-            <Input
-              className="mt-1"
-              list="supervisor-pos-suggestions"
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              placeholder="Должность"
-            />
-            <datalist id="supervisor-pos-suggestions">
-              {positionSuggestions.map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-          </label>
-          <SearchableMultiSelectPanel
-            label="Агент"
-            searchPlaceholder="Поиск агента"
-            search={agSearch}
-            onSearchChange={setAgSearch}
-            items={filteredAgents.map((a) => ({
-              id: a.id,
-              subtitle: a.code != null && String(a.code).trim() !== "" ? String(a.code) : `#${a.id}`,
-              title: a.fio
-            }))}
-            selected={agSel}
-            onSelectedChange={setAgSel}
-            emptyMessage="Нет агентов"
-          />
-          <Input placeholder="Логин для входа" value={login} onChange={(e) => setLogin(e.target.value)} disabled />
-          {!pwMode ? (
-            <Button type="button" variant="outline" className="w-full" onClick={() => setPwMode(true)}>
-              Изменить пароль
-            </Button>
-          ) : (
-            <Input
-              placeholder="Новый пароль (мин. 6)"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={consignment} onChange={(e) => setConsignment(e.target.checked)} />
-            Консигнация
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            Выбрать цвет для KPI
-            <input type="color" value={kpi_color} onChange={(e) => setKpi(e.target.value)} className="h-8 w-12" />
-          </label>
-        </div>
-        <DialogFooter>
-          <Button type="button" className="w-full" disabled={saving || !first_name.trim()} onClick={() => void save()}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-

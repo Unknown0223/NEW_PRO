@@ -72,12 +72,10 @@ type ItemsProps = {
 
 function EquipmentItemsTab({
   tenantSlug,
-  isAdmin,
   statusTab,
   search
 }: {
   tenantSlug: string | null;
-  isAdmin: boolean;
   statusTab: "active" | "inactive";
   search: string;
 }) {
@@ -186,6 +184,10 @@ function EquipmentItemsTab({
       setEditOpen(false);
       setEditRow(null);
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
+      // Nom o'zgargani uchun — uni nom bo'yicha ko'rsatadigan keshlar ham yangilansin.
+      await qc.invalidateQueries({ queryKey: ["catalog-interchangeable", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["products-pick", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["interchangeable-live-names", tenantSlug] });
       setMsg(null);
     } finally {
       setSavingId(null);
@@ -699,8 +701,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                   size="sm"
                   className="h-9 rounded-r-none px-3"
                   onClick={() => {
-                    setFullProductId(null);
-                    setFullProductOpen(true);
+                    setQuickAddOpen(true);
                     setAddMenuOpen(false);
                   }}
                 >
@@ -733,17 +734,6 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                       }}
                     >
                       Полная форма
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted"
-                      onClick={() => {
-                        setQuickAddOpen(true);
-                        setAddMenuOpen(false);
-                      }}
-                    >
-                      Быстрое добавление
                     </button>
                     <button
                       type="button"
@@ -1098,7 +1088,6 @@ function ProductsCatalogWorkspaceInner({
         return (
           <EquipmentItemsTab
             tenantSlug={tenantSlug}
-            isAdmin={isAdmin}
             statusTab={statusTab}
             search={search}
           />

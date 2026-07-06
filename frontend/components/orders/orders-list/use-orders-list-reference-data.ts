@@ -117,18 +117,6 @@ export function useOrdersListReferenceData(
     }
   });
 
-  const agentsFilterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "orders-list"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
-      );
-      return data.data;
-    }
-  });
-
   const clientRefsQ = useQuery({
     queryKey: ["clients-references", tenantSlug, "orders-filters"],
     enabled: Boolean(tenantSlug),
@@ -189,18 +177,17 @@ export function useOrdersListReferenceData(
   }, [ordersProfileRefsQ.data?.client_categories]);
 
   const tradeDirectionFilterOpts = useMemo(() => {
-    const fromAgents = agentsFilterOptQ.data?.trade_directions ?? [];
-    const fromProfile = ordersProfileRefsQ.data?.trade_directions ?? [];
+    const raw = ordersProfileRefsQ.data?.trade_directions ?? [];
     const seen = new Set<string>();
     const out: { value: string; label: string }[] = [];
-    for (const x of [...fromAgents, ...fromProfile]) {
+    for (const x of raw) {
       const t = String(x).trim().slice(0, 128);
       if (!t || seen.has(t)) continue;
       seen.add(t);
       out.push({ value: t, label: t });
     }
     return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
-  }, [agentsFilterOptQ.data?.trade_directions, ordersProfileRefsQ.data?.trade_directions]);
+  }, [ordersProfileRefsQ.data?.trade_directions]);
 
   const nakladnoyTypeFilterOpts = useMemo(
     () => activeRefSelectOptions(ordersProfileRefsQ.data?.request_type_entries),
@@ -231,7 +218,6 @@ export function useOrdersListReferenceData(
     productsFilterQ,
     productCategoriesQ,
     ordersProfileRefsQ,
-    agentsFilterOptQ,
     clientRefsQ,
     clientsFilterQ,
     paymentMethodFilterOpts,

@@ -47,6 +47,8 @@ export function mapSupervisorVisitRows(visitRows: SupervisorVisitRawRow[]): {
       visits_without_orders: Math.max(visitedTotal - successful, 0),
       gps_visits: bigToNum(r.gps_visits),
       photo_reports: bigToNum(r.photo_reports),
+      photo_outlets: bigToNum(r.photo_outlets),
+      photo_count: bigToNum(r.photo_count),
       sales_sum: decToString(r.sales_sum),
       sales_qty: decToString(r.sales_qty),
       plan_detail: planDetail,
@@ -66,6 +68,8 @@ export function mapSupervisorVisitRows(visitRows: SupervisorVisitRawRow[]): {
       visits_without_orders: acc.visits_without_orders + row.visits_without_orders,
       gps_visits: acc.gps_visits + row.gps_visits,
       photo_reports: acc.photo_reports + row.photo_reports,
+      photo_outlets: acc.photo_outlets + row.photo_outlets,
+      photo_count: acc.photo_count + row.photo_count,
       sales_sum: new Prisma.Decimal(acc.sales_sum).plus(row.sales_sum).toFixed(2),
       sales_qty: new Prisma.Decimal(acc.sales_qty).plus(row.sales_qty).toFixed(3),
       plan_detail: {
@@ -112,6 +116,8 @@ export function mapSupervisorVisitRows(visitRows: SupervisorVisitRawRow[]): {
       visits_without_orders: 0,
       gps_visits: 0,
       photo_reports: 0,
+      photo_outlets: 0,
+      photo_count: 0,
       sales_sum: "0",
       sales_qty: "0",
       plan_detail: {

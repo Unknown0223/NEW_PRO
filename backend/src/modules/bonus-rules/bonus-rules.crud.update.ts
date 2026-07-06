@@ -17,6 +17,7 @@ import {
   normalizeScopePositiveIds,
   parseOptionalDate
 } from "./bonus-rules.mappers";
+import { bonusRuleHasBeenUsed } from "./bonus-rules.usage";
 import {
   normalizeConditions,
   validateAutoBonusProductScope,
@@ -37,6 +38,23 @@ export async function updateBonusRule(
   });
   if (!existing) {
     throw new Error("NOT_FOUND");
+  }
+
+  const locked = await bonusRuleHasBeenUsed(tenantId, id);
+  if (locked) {
+    const allowed = new Set([
+      "is_active",
+      "valid_to",
+      "scope_branch_codes",
+      "scope_agent_user_ids",
+      "scope_trade_direction_ids",
+      "target_all_clients",
+      "selected_client_ids"
+    ]);
+    const keys = Object.keys(input) as (keyof UpdateBonusRuleInput)[];
+    if (keys.some((k) => !allowed.has(k))) {
+      throw new Error("RULE_LOCKED");
+    }
   }
 
   const type = input.type ?? existing.type;
@@ -64,8 +82,17 @@ export async function updateBonusRule(
     sales_channel: input.sales_channel !== undefined ? input.sales_channel : existing.sales_channel,
     price_type: input.price_type !== undefined ? input.price_type : existing.price_type,
     product_ids: input.product_ids ?? [...existing.product_ids],
-    bonus_product_ids: input.bonus_product_ids ?? [...existing.bonus_product_ids],
+    bonus_product_ids:
+      type === "discount" ||
+      (type === "sum" &&
+        (input.discount_pct ?? existing.discount_pct) != null &&
+        Number(input.discount_pct ?? existing.discount_pct) > 0)
+        ? []
+        : (input.bonus_product_ids ?? [...existing.bonus_product_ids]),
     product_category_ids: input.product_category_ids ?? [...existing.product_category_ids],
+    scope_restrict_assortment:
+      input.scope_restrict_assortment ?? existing.scope_restrict_assortment ?? false,
+    scope_restrict_category: input.scope_restrict_category ?? existing.scope_restrict_category ?? false,
     target_all_clients: input.target_all_clients ?? existing.target_all_clients,
     selected_client_ids:
       input.target_all_clients === true
@@ -147,7 +174,9 @@ export async function updateBonusRule(
       type,
       merged.is_manual ?? false,
       merged.product_ids ?? [],
-      merged.product_category_ids ?? []
+      merged.product_category_ids ?? [],
+      merged.scope_restrict_assortment,
+      merged.scope_restrict_category
     );
   }
 
@@ -186,6 +215,12 @@ export async function updateBonusRule(
   if (input.product_ids !== undefined) data.product_ids = merged.product_ids;
   if (input.bonus_product_ids !== undefined) data.bonus_product_ids = merged.bonus_product_ids;
   if (input.product_category_ids !== undefined) data.product_category_ids = merged.product_category_ids;
+  if (input.scope_restrict_assortment !== undefined) {
+    data.scope_restrict_assortment = merged.scope_restrict_assortment;
+  }
+  if (input.scope_restrict_category !== undefined) {
+    data.scope_restrict_category = merged.scope_restrict_category;
+  }
   if (input.target_all_clients !== undefined) {
     data.target_all_clients = merged.target_all_clients;
     if (merged.target_all_clients) {
@@ -247,13 +282,83 @@ export async function updateBonusRule(
 
   const full = await fetchBonusRuleFull(tenantId, id);
   if (!full) throw new Error("NOT_FOUND");
+  if (locked) {
+    full.has_been_used = true;
+  }
   await appendTenantAuditEvent({
     tenantId,
     actorUserId,
     entityType: AuditEntityType.bonus_rule,
     entityId: id,
     action: "update",
-    payload: { changed_keys: Object.keys(input) }
+    payload: { changed_keys: Object.keys(input), locked }
+  });
+  return full;
+}
+
+/** Buyurtma scope (filial/agent/klient) — ishlatilgan qoidalarda ham yangilanadi. */
+export async function updateBonusRuleOrderScope(
+  tenantId: number,
+  id: number,
+  input: Pick<
+    UpdateBonusRuleInput,
+    | "scope_branch_codes"
+    | "scope_agent_user_ids"
+    | "scope_trade_direction_ids"
+    | "target_all_clients"
+    | "selected_client_ids"
+  >,
+  actorUserId: number | null = null
+): Promise<BonusRuleRow> {
+  const existing = await prisma.bonusRule.findFirst({
+    where: { id, tenant_id: tenantId },
+    include: bonusRuleInclude
+  });
+  if (!existing) {
+    throw new Error("NOT_FOUND");
+  }
+
+  const targetAll =
+    input.target_all_clients !== undefined ? input.target_all_clients : existing.target_all_clients;
+  const data: Record<string, unknown> = {};
+  if (input.scope_branch_codes !== undefined) {
+    data.scope_branch_codes = normalizeScopeBranchCodes(input.scope_branch_codes);
+  }
+  if (input.scope_agent_user_ids !== undefined) {
+    data.scope_agent_user_ids = normalizeScopePositiveIds(input.scope_agent_user_ids);
+  }
+  if (input.scope_trade_direction_ids !== undefined) {
+    data.scope_trade_direction_ids = normalizeScopePositiveIds(input.scope_trade_direction_ids);
+  }
+  if (input.target_all_clients !== undefined) {
+    data.target_all_clients = targetAll;
+    if (targetAll) {
+      data.selected_client_ids = [];
+    }
+  }
+  if (input.selected_client_ids !== undefined && !targetAll) {
+    data.selected_client_ids = normalizeScopePositiveIds(input.selected_client_ids);
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw new Error("VALIDATION");
+  }
+
+  await prisma.bonusRule.update({ where: { id }, data });
+
+  const full = await fetchBonusRuleFull(tenantId, id);
+  if (!full) throw new Error("NOT_FOUND");
+  const locked = await bonusRuleHasBeenUsed(tenantId, id);
+  if (locked) {
+    full.has_been_used = true;
+  }
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.bonus_rule,
+    entityId: id,
+    action: "update_order_scope",
+    payload: { changed_keys: Object.keys(input), locked }
   });
   return full;
 }

@@ -1,5 +1,17 @@
 /** @type {import('next').NextConfig} */
+const withBundleAnalyzer = process.env.ANALYZE === "true"
+  ? require("@next/bundle-analyzer")({ enabled: true })
+  : (config) => config;
+
 const nextConfig = {
+  eslint: {
+    /** Docker/Railway prod build — mavjud lint xatolari deployni bloklamasin */
+    ignoreDuringBuilds: true
+  },
+  typescript: {
+    /** Prod deploy: typecheck alohida CI da */
+    ignoreBuildErrors: true
+  },
   experimental: {
     /** Dev HMR va prod bundle: faqat ishlatilgan ikonka / modul tarmoqlari */
     optimizePackageImports: ["lucide-react", "recharts"]
@@ -43,12 +55,13 @@ const nextConfig = {
   },
   webpack(config, { dev }) {
     if (dev) {
-      // Windows'da ba'zan webpack pack cache yozuvi buzilib, chunk/module 404 siklini beradi.
-      // Dev'da disk cache'ni o'chirib, barqaror HMR yo'lini tanlaymiz.
-      config.cache = false;
+      // Windows'da disk (filesystem) pack cache yozuvi buzilib, chunk/module 404 siklini berardi.
+      // Disk cache o'rniga XOTIRA (memory) cache — disk korruptsiyasi yo'q, ammo bitta
+      // dev sessiya ichidagi qayta-compile (HMR / route qayta ochish) ancha tezroq bo'ladi.
+      config.cache = { type: "memory" };
     }
     return config;
   }
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

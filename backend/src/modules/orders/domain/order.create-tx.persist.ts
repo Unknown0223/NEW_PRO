@@ -1,16 +1,22 @@
 import { Prisma } from "@prisma/client";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
+import { buildAppliedBonusRulesSnapshotForOrder } from "../order-bonus-snapshot.persist";
 import { bonusGiftMapToJson } from "./order.detail-mappers";
 import { orderDetailInclude } from "./order.types";
 import type { CreateOrderLimitsResult } from "./order.create-tx.limits";
 import type { CreateOrderPaidBundle } from "./order.create-tx.bonus";
+import type { DiscountAlertCode } from "../order-discount-alert";
+import type { BonusAlertCode } from "../order-bonus-stock-cap";
+
 import type { CreateOrderTxParams } from "./order.create-tx.types";
 
 export async function persistCreateOrderInTransaction(
   tx: Prisma.TransactionClient,
   p: CreateOrderTxParams,
   paid: CreateOrderPaidBundle,
-  limits: CreateOrderLimitsResult
+  limits: CreateOrderLimitsResult,
+  discountAlert: DiscountAlertCode | null = null,
+  bonusAlert: BonusAlertCode | null = null
 ) {
   const { tenantId, input, client, orderType, priceType, exchangeMetaJson, validatedGiftOverrides, tempOrderNumber, isInboundShelfReturn } =
     p;
@@ -70,6 +76,11 @@ export async function persistCreateOrderInTransaction(
         ? "returned"
         : "new";
 
+  const bonusSnapshot =
+    appliedAutoBonusRuleIds.length > 0
+      ? await buildAppliedBonusRulesSnapshotForOrder(tx, tenantId, appliedAutoBonusRuleIds)
+      : [];
+
   const created = await tx.order.create({
     data: {
       tenant_id: tenantId,
@@ -83,7 +94,10 @@ export async function persistCreateOrderInTransaction(
       total_sum: paidTotal,
       bonus_sum: bonusSum,
       discount_sum: discountSum,
+      discount_alert: discountAlert,
+      bonus_alert: bonusAlert,
       applied_auto_bonus_rule_ids: appliedAutoBonusRuleIds,
+      applied_bonus_rules_snapshot: bonusSnapshot as Prisma.InputJsonValue,
       bonus_gift_selections: bonusGiftMapToJson(new Map(validatedGiftOverrides)),
       comment: commentTrim,
       request_type_ref: requestTypeRefTrim,
@@ -172,7 +186,13 @@ export async function persistCreateOrderInTransaction(
 
   return tx.order.update({
     where: { id: created.id },
-    data: { number: String(created.id) },
+    data: {
+      number: String(created.id),
+      comment:
+        commentTrim != null
+          ? commentTrim.replace(/заказ \(новый\)/g, `заказ #${created.id}`)
+          : null
+    },
     include: orderDetailInclude
   });
 }

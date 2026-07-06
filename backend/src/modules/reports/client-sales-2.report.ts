@@ -13,10 +13,12 @@ import {
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import type { ClientSales2Filters, ReportActor } from "./client-sales-2.types";
 import { buildClientScopeSql, buildOrderWhereSql, productFilterSql } from "./client-sales-2.where";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 export async function getClientSales2Report(tenantId: number, f: ClientSales2Filters, actor?: ReportActor) {
-  const whereSql = buildOrderWhereSql(tenantId, f, actor);
-  const clientScopeSql = buildClientScopeSql(tenantId, f, actor);
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const whereSql = buildOrderWhereSql(tenantId, f, scopedActor);
+  const clientScopeSql = buildClientScopeSql(tenantId, f, scopedActor);
   const itemSql = productFilterSql(f);
   const hasItemFilter = Boolean(
     (f.product_ids && f.product_ids.length) ||

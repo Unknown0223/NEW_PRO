@@ -22,8 +22,8 @@ const SKIP_REL =
   /(?:^|\/)(?:.*\.backup\.|openapi\.bundle\.yaml$|package-lock\.json$|components\.json$|\.woff2?$)|\.monolith\.tsx?$/i;
 const SKIP_TEST = /\.(backup|test|spec)\.(ts|tsx)$/i;
 
-function loadLegacyAllowlist() {
-  const p = path.join(repoRoot, "scripts", "legacy-max-loc-frontend.txt");
+function loadLegacyAllowlist(filename) {
+  const p = path.join(repoRoot, "scripts", filename);
   if (!existsSync(p)) return new Set();
   return new Set(
     readFileSync(p, "utf8")
@@ -31,6 +31,17 @@ function loadLegacyAllowlist() {
       .map((l) => l.trim())
       .filter(Boolean)
   );
+}
+
+function buildLegacySet() {
+  const set = new Set();
+  if (flags.frontend) {
+    for (const f of loadLegacyAllowlist("legacy-max-loc-frontend.txt")) set.add(f);
+  }
+  if (flags.backend) {
+    for (const f of loadLegacyAllowlist("legacy-max-loc-backend.txt")) set.add(f);
+  }
+  return set;
 }
 
 function defaultRoots() {
@@ -98,7 +109,7 @@ for (const root of scanRoots) {
   }
 }
 
-const legacy = flags.frontend ? loadLegacyAllowlist() : new Set();
+const legacy = buildLegacySet();
 const unexpected = violations.filter((v) => !legacy.has(v.file));
 const legacyHits = violations.filter((v) => legacy.has(v.file));
 
@@ -115,6 +126,12 @@ for (const v of unexpected) {
   console.error(`  ${v.lines}\t${v.file}`);
 }
 if (legacyHits.length > 0) {
-  console.error(`(${legacyHits.length} additional legacy file(s) still >${MAX} — see scripts/legacy-max-loc-frontend.txt)`);
+  const legacyFiles = [
+    flags.frontend ? "scripts/legacy-max-loc-frontend.txt" : null,
+    flags.backend ? "scripts/legacy-max-loc-backend.txt" : null
+  ]
+    .filter(Boolean)
+    .join(", ");
+  console.error(`(${legacyHits.length} additional legacy file(s) still >${MAX} — see ${legacyFiles})`);
 }
 process.exit(1);

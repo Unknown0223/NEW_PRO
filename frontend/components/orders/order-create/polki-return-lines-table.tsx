@@ -11,7 +11,6 @@ import { formatPolkiPieceQty, polkiRowMaxReturnQty, polkiSplitTotal } from "./ut
 import { parsePolkiQty } from "./polki-bonus-balance.logic";
 import { PolkiReturnBonusSummary } from "./polki-return-bonus-summary";
 import { PolkiManualPeresortSelect } from "./view/polki-shelf-return/polki-manual-peresort-select";
-import type { PolkiBonusCalcMode } from "./view/polki-shelf-return/polki-bonus-calc";
 
 export function PolkiReturnLinesTable({
   canShowPolkiGrid,
@@ -25,10 +24,6 @@ export function PolkiReturnLinesTable({
   polkiOrderGroups,
   polkiTotalQty,
   setPolkiTotalQty,
-  polkiBonusToBalance,
-  setPolkiBonusToBalance,
-  polkiBonusCash,
-  setPolkiBonusCash,
   mutationPending,
   polkiTotalReturnQtySum,
   polkiVolumeM3,

@@ -82,6 +82,8 @@ export function shouldShowSettingsSecondaryAside(pathname: string): boolean {
   if (isSettingsSpravochnikBranchPath(pathname)) return false;
   /** Kassalar — asosiy yon paneldagi havola; ikkinchi sozlamalar paneli kerak emas */
   if (path === "/settings/cash-desks" || path.startsWith("/settings/cash-desks/")) return false;
+  /** Xarita chegaralari — to‘liq ekran xarita; ichki sozlamalar paneli kerak emas */
+  if (path === "/settings/geo-boundaries") return false;
   return path === "/settings" || path.startsWith("/settings/");
 }
 
@@ -90,6 +92,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
   const hideSettingsAside = !shouldShowSettingsSecondaryAside(pathname);
+  const isGeoBoundariesPage = normalizeSettingsPathname(pathname) === "/settings/geo-boundaries";
   const role = useEffectiveRole();
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -147,8 +150,8 @@ export function SettingsShell({ children }: { children: ReactNode }) {
 
   if (hideSettingsAside) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-4 md:py-5">
+      <div className="min-w-0">
+        <main className={cn("min-w-0", isGeoBoundariesPage ? "p-0" : "px-3 py-4 md:px-4 md:py-5")}>
           {children}
         </main>
       </div>
@@ -156,11 +159,11 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:items-stretch">
       <aside
         className={cn(
-          "scrollbar-none flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-border/80 bg-card md:w-[min(100%,300px)] md:shrink-0",
-          "max-h-[min(40vh,320px)] border-b md:max-h-none md:border-b-0 md:border-r"
+          "flex min-h-0 shrink-0 flex-col overflow-hidden border-border/80 bg-card",
+          "max-h-[min(40vh,320px)] border-b md:w-[min(100%,300px)] md:max-h-none md:border-b-0 md:border-r"
         )}
       >
         <div className="shrink-0 space-y-2 border-b border-border/60 px-3 py-3 md:px-4">
@@ -188,7 +191,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav
-          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 md:px-3 md:py-3"
+          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 md:px-3 md:py-3"
           aria-label="Внутреннее меню настроек"
         >
           {filteredSections.map((section, sectionIndex) => (

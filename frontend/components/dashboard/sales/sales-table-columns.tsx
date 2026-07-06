@@ -61,6 +61,7 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
 }
 
 export function useSalesCoverageColumns(data: CategoryRow[]) {
+  void data;
   return useMemo(() => {
     const cols: SalesTableColumn<CategoryRow>[] = [
       {
@@ -86,7 +87,7 @@ export function useSalesCoverageColumns(data: CategoryRow[]) {
       }
     ];
     return cols;
-  }, [data]);
+  }, []);
 }
 
 export function useSalesTerritoryColumns(resolveTerritory: (t: string) => string) {

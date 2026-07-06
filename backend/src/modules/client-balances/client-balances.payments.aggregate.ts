@@ -9,7 +9,7 @@ import {
   type PaymentMethodEntryDto
 } from "../tenant-settings/finance-refs";
 
-import { LARGE_CLIENT_IDS_CHUNK } from "./client-balances.constants";
+import { LARGE_CLIENT_IDS_CHUNK, DISCOUNT_SETTLEMENT_PAY_TYPE_KEY } from "./client-balances.constants";
 import type { ClientBalancePaymentTypeSummary } from "./client-balances.types";
 import { normPayTypeKey, sqlIntIdToNumber } from "./client-balances.payments.util";
 import { PAYMENT_COUNTS_FOR_RECEIVABLE_NET } from "./client-balances.constants";
@@ -55,9 +55,11 @@ export async function loadPaymentNetTotalsByTypeGlobally(
     const dateClause = asOfEnd
       ? Prisma.sql`AND COALESCE(p.paid_at, p.created_at) <= ${asOfEnd}`
       : Prisma.empty;
-    const rows = await prisma.$queryRaw<Array<{ payment_type: string; net: Prisma.Decimal }>>`
-      SELECT p.payment_type,
-        SUM(CASE WHEN p.entry_kind = 'payment' THEN p.amount
+    const rows = await prisma.$queryRaw<
+      Array<{ payment_type: string; entry_kind: string; net: Prisma.Decimal }>
+    >`
+      SELECT p.payment_type, p.entry_kind,
+        SUM(CASE WHEN p.entry_kind IN ('payment', 'discount_settlement') THEN p.amount
                  WHEN p.entry_kind = 'client_expense' THEN -p.amount
                  ELSE 0 END)::decimal(15,2) AS net
       FROM client_payments p
@@ -66,11 +68,13 @@ export async function loadPaymentNetTotalsByTypeGlobally(
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
         ${dateClause}
-      GROUP BY p.payment_type
+      GROUP BY p.payment_type, p.entry_kind
     `;
     for (const r of rows) {
-      const rawKey = (r.payment_type ?? "").trim();
-      const catalogKey = resolvePaymentMethodRefToLabel(r.payment_type, entries) ?? rawKey;
+      const catalogKey =
+        String(r.entry_kind ?? "") === "discount_settlement"
+          ? DISCOUNT_SETTLEMENT_PAY_TYPE_KEY
+          : (resolvePaymentMethodRefToLabel(r.payment_type, entries) ?? (r.payment_type ?? "").trim());
       const cur = merged.get(catalogKey) ?? new Prisma.Decimal(0);
       merged.set(catalogKey, cur.add(r.net));
     }

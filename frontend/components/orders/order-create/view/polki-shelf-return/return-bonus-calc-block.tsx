@@ -40,7 +40,7 @@ export function ReturnPolkiBonusModeBlock({ vm }: { vm: OrderCreateVm }) {
             modeBtn,
             polkiBonusCalcMode === "auto"
               ? "border-[#0a8f7e] bg-[#0a8f7e]/10 text-teal-900"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              : "border-border bg-card text-slate-600 hover:bg-muted"
           )}
           disabled={disabled}
           onClick={() => setMode("auto")}
@@ -53,7 +53,7 @@ export function ReturnPolkiBonusModeBlock({ vm }: { vm: OrderCreateVm }) {
             modeBtn,
             polkiBonusCalcMode === "manual"
               ? "border-[#0a8f7e] bg-[#0a8f7e]/10 text-teal-900"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              : "border-border bg-card text-slate-600 hover:bg-muted"
           )}
           disabled={disabled}
           onClick={() => setMode("manual")}

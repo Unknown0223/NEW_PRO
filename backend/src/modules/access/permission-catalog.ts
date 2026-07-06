@@ -29,5 +29,10 @@ export const DEFAULT_PERMISSION_METADATA: Record<string, { description: string; 
   },
   "users.manage": { description: "Пользователи: управление", section: "Пользователи" },
   "access.manage": { description: "Доступ: управление", section: "Доступ" },
-  "audit.view": { description: "Аудит: просмотр", section: "Аудит" }
+  "access.upravlenie.view": { description: "Доступ: просмотр раздела", section: "Доступ" },
+  "access.upravlenie.update": { description: "Доступ: изменение прав", section: "Доступ" },
+  "access.upravlenie.history": { description: "Доступ: история изменений", section: "Доступ" },
+  "audit.view": { description: "Аудит: просмотр", section: "Аудит" },
+  "audit.log.view": { description: "Журнал аудита: просмотр", section: "Аудит" },
+  "audit.log.copy": { description: "Журнал аудита: выгрузка", section: "Аудит" }
 };

@@ -23,6 +23,8 @@ function row(p: Partial<BonusRuleRow>): BonusRuleRow {
     product_ids: [],
     bonus_product_ids: [],
     product_category_ids: [],
+    scope_restrict_assortment: false,
+    scope_restrict_category: false,
     target_all_clients: true,
     selected_client_ids: [],
     is_manual: false,

@@ -7,6 +7,7 @@ import { STALE } from "@/lib/query-stale";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { formatPersonDisplayName } from "@/lib/person-display";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -189,7 +190,7 @@ export function StaffManageView({ kind, tenantSlug }: Props) {
               <tr key={r.id} className="border-t">
                 {kind === "agent" ? (
                   <>
-                    <td className="px-2 py-2">{r.fio}</td>
+                    <td className="px-2 py-2">{formatPersonDisplayName(r)}</td>
                     <td className="px-2 py-2">{r.product ?? "—"}</td>
                     <td className="px-2 py-2">{r.agent_type ?? "—"}</td>
                     <td className="px-2 py-2">{r.code ?? "—"}</td>
@@ -231,7 +232,7 @@ export function StaffManageView({ kind, tenantSlug }: Props) {
                   </>
                 ) : kind === "supervisor" ? (
                   <>
-                    <td className="px-2 py-2">{r.fio}</td>
+                    <td className="px-2 py-2">{formatPersonDisplayName(r)}</td>
                     <td className="px-2 py-2 font-mono">{r.login}</td>
                     <td className="px-2 py-2">{r.phone ?? "—"}</td>
                     <td className="px-2 py-2">{r.supervisee_count}</td>
@@ -239,7 +240,7 @@ export function StaffManageView({ kind, tenantSlug }: Props) {
                   </>
                 ) : (
                   <>
-                    <td className="px-2 py-2">{r.fio}</td>
+                    <td className="px-2 py-2">{formatPersonDisplayName(r)}</td>
                     <td className="px-2 py-2">{r.can_authorize ? "Да" : "Нет"}</td>
                     <td className="px-2 py-2">{r.phone ?? "—"}</td>
                     <td className="px-2 py-2">{r.code ?? "—"}</td>

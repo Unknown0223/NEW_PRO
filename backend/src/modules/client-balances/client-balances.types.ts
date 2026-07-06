@@ -12,20 +12,30 @@ export type ClientBalanceListQuery = {
   allow_large_export?: boolean;
   search?: string;
   agent_id?: number;
+  agent_ids?: number[];
   expeditor_user_id?: number;
+  expeditor_user_ids?: number[];
   supervisor_user_id?: number;
+  supervisor_user_ids?: number[];
   trade_direction?: string;
+  trade_directions?: string[];
   category?: string;
+  categories?: string[];
   /** all | active | inactive */
   status?: string;
+  statuses?: string[];
   /** all | debt | credit */
   balance_filter?: string;
+  balance_filters?: string[];
   /** all | regular | consignment — agent.consignment */
   agent_consignment?: string;
   territory_region?: string;
+  territory_regions?: string[];
   territory_city?: string;
+  territory_cities?: string[];
   territory_district?: string;
   territory_zone?: string;
+  territory_zones?: string[];
   /** YYYY-MM-DD — balans harakatlari bo‘yicha shu sanagacha (UTC kun oxiri) yig‘indi */
   balance_as_of?: string;
   /** Konsignatsiya / litsenziya muddati (client.license_until) oralig‘i */
@@ -37,6 +47,7 @@ export type ClientBalanceListQuery = {
   agent_branches?: string[];
   /** Mijozda shu turdagi kirim to‘lovi bo‘lganlar */
   agent_payment_type?: string;
+  agent_payment_types?: string[];
   /** Konsignatsiya zakazlari: `orders.created_at` oralig‘i (YYYY-MM-DD) */
   order_date_from?: string;
   order_date_to?: string;

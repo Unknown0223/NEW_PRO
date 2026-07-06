@@ -50,6 +50,11 @@ export type SupervisorKpi = {
   cash_sales_sum: string;
   /** Kunlik savdo `payment_method_ref` bo‘yicha (filtrlangan orderScope). */
   sales_by_payment_method: Array<{ method: string; sum: string }>;
+  /** KPI reja (oy) — «Установка планов», faqat «Одобрено». */
+  monthly_kpi_plan_sum: string;
+  /** Joriy oy boshidan tanlangan kungacha fakt savdo. */
+  monthly_kpi_fact_mtd_sum: string;
+  monthly_kpi_execution_pct: number | null;
   planned_visits: number;
   visited_planned: number;
   visited_total: number;
@@ -125,6 +130,8 @@ export type SupervisorVisitRow = {
   visits_without_orders: number;
   gps_visits: number;
   photo_reports: number;
+  photo_outlets: number;
+  photo_count: number;
   sales_sum: string;
   sales_qty: string;
   plan_detail: SupervisorVisitPlanDetail;
@@ -134,6 +141,8 @@ export type SupervisorVisitRow = {
 export type SupervisorEfficiencyRow = {
   id: number;
   name: string;
+  /** Agent kodi (foto hisobot sarlavhasi uchun) */
+  agent_code?: string | null;
   order_count: number;
   cancelled_count: number;
   planned_visits: number;
@@ -142,6 +151,10 @@ export type SupervisorEfficiencyRow = {
   unvisited: number;
   visit_pct: number;
   photo_reports: number;
+  /** T.T. — foto yuborgan alohida klientlar */
+  photo_outlets: number;
+  /** Jami foto soni */
+  photo_count: number;
   total_sales_sum: string;
 };
 

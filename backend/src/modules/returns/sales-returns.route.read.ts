@@ -17,6 +17,10 @@ import {
   getClientReturnsData,
   listClientOrderPickBalancesWithMeta
 } from "./returns-enhanced.service";
+import {
+  listDailyReturnWaybills,
+  getDailyReturnWaybillDetail
+} from "./returns-daily-waybills";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
@@ -76,6 +80,56 @@ export async function registerSalesReturnReadRoutes(app: FastifyInstance) {
         client_ids: scope.constrained ? scope.client_ids : undefined
       });
       return reply.send(result);
+    }
+  );
+
+  // ─── Daily aggregated return waybills (per courier · per day) ──────────
+  app.get(
+    "/api/:slug/returns/daily-waybills",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const warehouse_id = q.warehouse_id ? Number.parseInt(q.warehouse_id, 10) : undefined;
+      const courier_id = q.courier_id
+        ? Number.parseInt(q.courier_id, 10)
+        : q.expeditor_id
+          ? Number.parseInt(q.expeditor_id, 10)
+          : undefined;
+      const statusRaw = q.status?.trim();
+      const status =
+        statusRaw === "pending" || statusRaw === "posted" || statusRaw === "cancelled"
+          ? statusRaw
+          : undefined;
+      const selected = parseSelectedMastersFromQuery(q);
+      const scope = await resolveConstraintScope(request.tenant!.id, selected);
+      const result = await listDailyReturnWaybills(request.tenant!.id, {
+        warehouse_id: warehouse_id != null && warehouse_id > 0 ? warehouse_id : undefined,
+        courier_id: courier_id != null && courier_id >= 0 ? courier_id : undefined,
+        status,
+        date_from: q.date_from?.trim() || undefined,
+        date_to: q.date_to?.trim() || undefined,
+        warehouse_ids: scope.constrained ? scope.warehouse_ids : undefined,
+        client_ids: scope.constrained ? scope.client_ids : undefined
+      });
+      return reply.send(result);
+    }
+  );
+
+  app.get(
+    "/api/:slug/returns/daily-waybills/:courierId/:date",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const p = request.params as { courierId?: string; date?: string };
+      const courierId = Number.parseInt(p.courierId ?? "", 10);
+      const date = (p.date ?? "").trim();
+      if (!Number.isInteger(courierId) || courierId < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return sendApiError(reply, request, 400, "BadParams");
+      }
+      const detail = await getDailyReturnWaybillDetail(request.tenant!.id, courierId, date);
+      if (!detail) return sendApiError(reply, request, 404, "NotFound");
+      return reply.send(detail);
     }
   );
 

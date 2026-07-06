@@ -27,7 +27,7 @@ export async function createWebStaff(
   const ms =
     input.max_sessions != null && Number.isInteger(input.max_sessions) && input.max_sessions >= 1
       ? input.max_sessions
-      : 4;
+      : 1;
   const displayName = [input.last_name, input.first_name, input.middle_name]
     .filter((x) => x && String(x).trim().length > 0)
     .join(" ")

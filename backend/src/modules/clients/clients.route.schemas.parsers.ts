@@ -1,4 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { env } from "../../config/env";
+import { assertExcelImportSize } from "../../lib/multipart-limits";
 import type { ListClientsQuery } from "./clients.service";
 import { buildClientUpdateImportTemplateBuffer } from "./clients.service";
 
@@ -36,7 +38,7 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
   let duplicateKeyFields: string[] | undefined;
   let updateApplyFields: string[] | undefined;
 
-  const parts = request.parts();
+  const parts = request.parts({ limits: { fileSize: env.MULTIPART_EXCEL_MAX_BYTES } });
   for await (const part of parts) {
     if (part.type === "file") {
       buf = await part.toBuffer();
@@ -80,6 +82,7 @@ export async function parseClientImportMultipart(request: FastifyRequest): Promi
   if (!buf || buf.length === 0) {
     return null;
   }
+  assertExcelImportSize(buf.length);
   return { buf, sheetName, headerRowIndex, columnMap, importMode, duplicateKeyFields, updateApplyFields };
 }
 
@@ -174,8 +177,9 @@ const CLIENT_LIST_ALLOWED_SORT = new Set<string>([
 export function parseClientListQuery(q: Record<string, string | undefined>): ListClientsQuery {
   const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const mapMode = q.map === "1" || q.map === "true";
-  const maxLimit = mapMode ? 4000 : 100;
-  const defaultLimit = mapMode ? 2500 : 50;
+  const visitPlanner = q.visit_planner === "1" || q.visit_planner === "true";
+  const maxLimit = visitPlanner ? 60_000 : mapMode ? 4000 : 100;
+  const defaultLimit = visitPlanner ? 50_000 : mapMode ? 2500 : 50;
   const parsedLimit = Number.parseInt(q.limit ?? String(defaultLimit), 10) || defaultLimit;
   const limitNum = Math.min(maxLimit, Math.max(1, parsedLimit));
   const search = q.search?.trim() || undefined;

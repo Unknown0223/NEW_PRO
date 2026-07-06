@@ -8,16 +8,56 @@ import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export type ClientPhotoRow = {
   id: number;
-  image_url: string;
+  image_url?: string;
   caption: string | null;
   order_id: number | null;
   created_at: string;
 };
+
+function ClientPhotoThumb({
+  tenantSlug,
+  clientId,
+  photoId,
+  alt
+}: {
+  tenantSlug: string;
+  clientId: number;
+  photoId: number;
+  alt: string;
+}) {
+  const imgQ = useQuery({
+    queryKey: ["client-photo-report-image", tenantSlug, clientId, photoId],
+    staleTime: STALE.list,
+    queryFn: async () => {
+      const { data } = await api.get<ClientPhotoRow>(
+        `/api/${tenantSlug}/clients/${clientId}/photo-reports/${photoId}`
+      );
+      return data.image_url ?? "";
+    }
+  });
+
+  if (imgQ.isLoading) {
+    return (
+      <div className="flex aspect-square w-full items-center justify-center bg-muted">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!imgQ.data) {
+    return <div className="aspect-square w-full bg-muted" />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={imgQ.data} alt={alt} className="aspect-square w-full object-cover" loading="lazy" />
+  );
+}
 
 export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantSlug: string; clientId: number }) {
   const qc = useQueryClient();
@@ -106,8 +146,7 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {rows.map((r) => (
             <li key={r.id} className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={r.image_url} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+              <ClientPhotoThumb tenantSlug={tenantSlug} clientId={clientId} photoId={r.id} alt={r.caption ?? ""} />
               <div className="space-y-1 p-2">
                 {r.caption ? <p className="line-clamp-2 text-xs text-foreground">{r.caption}</p> : null}
                 <p className="text-[10px] text-muted-foreground">

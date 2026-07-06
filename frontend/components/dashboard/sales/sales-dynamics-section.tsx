@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
 const chartLoading = () => (
-  <div className="h-[280px] animate-pulse rounded-lg bg-slate-100" aria-hidden />
+  <div className="h-[280px] animate-pulse rounded-lg bg-muted" aria-hidden />
 );
 
 const ReportsTrendCharts = dynamic(
@@ -32,7 +32,7 @@ export function SalesDynamicsSection({
   );
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+    <section className="flex min-h-0 min-w-0 flex-col rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
       <SalesSectionHeader
         title="Динамика продаж"
         exportAction={

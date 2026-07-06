@@ -8,6 +8,7 @@ import {
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useOrderListCellRenderer } from "@/components/orders/orders-list/order-list-table-cell";
 import { OrdersListExpandedRow } from "@/components/orders/orders-list/orders-list-expanded-row";
+import { orderListColumnTdClass } from "@/lib/orders-list-columns";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Copy, Eye, Globe, Smartphone } from "lucide-react";
 import Link from "next/link";
@@ -27,7 +28,8 @@ export type OrdersListTableRowProps = {
   onStatusChange: (id: number, status: string) => void;
   onChangeShipDate?: (id: number) => void;
   onPrefetchDetail: (id: number) => void;
-  tableViewportWidth: number;
+  /** Scroll konteyner kengligi — expand panel sticky layout (orders-list-expand-layout.ts). */
+  expandPanelWidth: number | null;
 };
 
 export const OrdersListTableRow = memo(function OrdersListTableRow({
@@ -44,7 +46,7 @@ export const OrdersListTableRow = memo(function OrdersListTableRow({
   onStatusChange,
   onChangeShipDate,
   onPrefetchDetail,
-  tableViewportWidth
+  expandPanelWidth
 }: OrdersListTableRowProps) {
   const [hover, setHover] = useState(false);
   const renderCell = useOrderListCellRenderer({
@@ -103,6 +105,7 @@ export const OrdersListTableRow = memo(function OrdersListTableRow({
               key={colId}
               className={cn(
                 "px-2 py-2.5 text-xs",
+                orderListColumnTdClass(colId),
                 right && "text-right tabular-nums",
                 colId === "number" && "font-mono"
               )}
@@ -187,7 +190,7 @@ export const OrdersListTableRow = memo(function OrdersListTableRow({
           orderId={order.id}
           orderNumber={order.number}
           colSpan={colSpan}
-          viewportWidth={tableViewportWidth}
+          panelWidth={expandPanelWidth}
         />
       ) : null}
     </Fragment>

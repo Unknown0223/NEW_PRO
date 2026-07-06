@@ -89,10 +89,7 @@ function parseFilenameFromContentDisposition(cd: string | undefined): string | n
   }
 }
 
-/**
- * `POST .../orders/bulk/nakladnoy` — bitta yoki bir nechta zakaz uchun Excel (.xlsx) yuklab oladi.
- */
-export async function downloadOrdersNakladnoyXlsx(args: {
+export async function fetchOrdersNakladnoyXlsxBlob(args: {
   tenantSlug: string;
   orderIds: number[];
   template: NakladnoyTemplateId;
@@ -101,9 +98,8 @@ export async function downloadOrdersNakladnoyXlsx(args: {
   warehouseLayout?: WarehouseLayoutId;
   expeditorLoadingLayout?: import("@/lib/bulk-export-templates").ExpeditorLoadingLayoutId;
   warehouseExportOptions?: Record<string, boolean>;
-  /** Preview API dan kelgan nom — Content-Disposition bo‘lmasa ishlatiladi */
   fallbackFilename?: string;
-}): Promise<void> {
+}): Promise<{ blob: Blob; filename: string }> {
   const {
     tenantSlug,
     orderIds,
@@ -147,19 +143,11 @@ export async function downloadOrdersNakladnoyXlsx(args: {
       throw new Error(msg);
     }
     const blob = res.data as Blob;
-    const name =
+    const filename =
       parseFilenameFromContentDisposition(res.headers["content-disposition"]) ??
       fallbackFilename ??
       `nakladnoy_${new Date().toISOString().slice(0, 10)}.${format}`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    return { blob, filename };
   } catch (e: unknown) {
     if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
       const text = await e.response.data.text();
@@ -175,4 +163,22 @@ export async function downloadOrdersNakladnoyXlsx(args: {
     }
     throw new Error(getUserFacingError(e, "Nakladnoyni yuklab bo‘lmadi."));
   }
+}
+
+/**
+ * `POST .../orders/bulk/nakladnoy` — bitta yoki bir nechta zakaz uchun Excel (.xlsx) yuklab oladi.
+ */
+export async function downloadOrdersNakladnoyXlsx(
+  args: Parameters<typeof fetchOrdersNakladnoyXlsxBlob>[0]
+): Promise<void> {
+  const { blob, filename } = await fetchOrdersNakladnoyXlsxBlob(args);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

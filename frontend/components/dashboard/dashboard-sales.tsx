@@ -111,7 +111,7 @@ export function DashboardSales() {
   const exportBtn = (
     <button
       type="button"
-      className="inline-flex h-12 shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+      className="inline-flex h-12 shrink-0 items-center rounded-xl border border-border bg-card px-3 text-xs font-semibold text-slate-700 hover:bg-muted disabled:opacity-50"
       disabled={!exporters}
       onClick={() => exporters && void exporters.all()}
     >

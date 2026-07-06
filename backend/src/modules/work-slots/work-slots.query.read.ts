@@ -115,6 +115,14 @@ export async function loadActiveWorkSlotsByUserIds(
   return map;
 }
 
+export async function getActiveSlotForUser(
+  userId: number
+): Promise<{ slot_id: number; slot_code: string } | null> {
+  if (!Number.isFinite(userId) || userId < 1) return null;
+  const map = await loadActiveWorkSlotsByUserIds([userId]);
+  return map.get(userId) ?? null;
+}
+
 /** Agent kodi boshqa xodimning faol slotida band bo‘lsa — ogohlantirish matni. */
 export async function getWorkSlotCodeOccupancyWarning(
   tenantId: number,

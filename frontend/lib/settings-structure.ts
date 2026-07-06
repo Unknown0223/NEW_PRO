@@ -60,6 +60,13 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/returns/filter",
         status: "available",
         requiredRoles: ["admin"] as const
+      },
+      {
+        title: "Mobil ilova",
+        slug: "mobil-ilova",
+        href: "/settings/mobile-app",
+        status: "available",
+        requiredRoles: ["admin"] as const
       }
     ]
   },
@@ -69,8 +76,13 @@ export const settingsSections: SettingsSection[] = [
     items: [
       makeItem("osnovnye-nastroiki", "Территория", "available", 0),
       makeItem("osnovnye-nastroiki", "Единицы измерения", "available", 1),
-      makeItem("osnovnye-nastroiki", "Поставщики", "available", 2),
-      makeItem("osnovnye-nastroiki", "Филиалы", "available", 3),
+      makeItem("osnovnye-nastroiki", "Филиалы", "available", 2),
+      {
+        title: "Xarita chegaralari",
+        slug: "geo-boundaries",
+        href: "/settings/geo-boundaries",
+        status: "available"
+      },
       {
         title: "Должности",
         slug: "dolzhnosti-osnovnye",
@@ -167,8 +179,7 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/discount-rules",
         status: "available"
       },
-      makeItem("bonusy-i-skidki", "RLP бонусы", "available", 2),
-      makeItem("bonusy-i-skidki", "Надбавки и вычеты к зарплате", "available", 3)
+      makeItem("bonusy-i-skidki", "RLP бонусы", "available", 2)
     ]
   },
   {
@@ -179,9 +190,8 @@ export const settingsSections: SettingsSection[] = [
       makeItem("prichiny-i-kategorii", "Причины отказа", "available", 1),
       makeItem("prichiny-i-kategorii", "Причины отмены оплаты", "available", 2),
       makeItem("prichiny-i-kategorii", "Примечание к заказу", "available", 3),
-      makeItem("prichiny-i-kategorii", "Типы задач", "available", 4),
-      makeItem("prichiny-i-kategorii", "Категория фотоотчёта", "available", 5),
-      makeItem("prichiny-i-kategorii", "Категория доходов/расходов", "available", 6)
+      makeItem("prichiny-i-kategorii", "Категория фотоотчёта", "available", 4),
+      makeItem("prichiny-i-kategorii", "Категория доходов/расходов", "available", 5)
     ]
   },
   {
@@ -209,23 +219,39 @@ export const settingsSections: SettingsSection[] = [
     ]
   },
   {
-    title: "Справочники и персонал",
-    slug: "spravochniki-personal",
+    title: "Компания и персонал",
+    slug: "kompaniya-personal",
     items: [
-      makeItem("spravochniki-personal", "Справочники", "available", 0),
-      makeItem("spravochniki-personal", "Компания", "available", 1),
-      makeItem("spravochniki-personal", "Должности веб-сотрудников", "available", 2, ["admin"] as const)
+      makeItem("kompaniya-personal", "Компания", "available", 0),
+      makeItem("kompaniya-personal", "Должности веб-сотрудников", "available", 1, ["admin"] as const)
     ]
   },
   {
     title: "Система",
     slug: "sistema",
-    items: [makeItem("sistema", "Аудит", "available", 0, ["admin"] as const)]
+    items: [
+      {
+        title: "Boshlang‘ich sozlash",
+        slug: "initial-setup",
+        href: "/settings/initial-setup",
+        status: "available",
+        requiredRoles: ["admin"] as const
+      },
+      {
+        title: "Tizim migratsiyasi",
+        slug: "system-migration",
+        href: "/settings/system-migration",
+        status: "available",
+        requiredRoles: ["admin"] as const
+      },
+      makeItem("sistema", "Аудит", "available", 0, ["admin"] as const)
+    ]
   }
 ];
 
 const existingHrefByItemTitle: Record<string, string> = {
   "территория": "/settings/territories",
+  "xarita chegaralari": "/settings/geo-boundaries",
   "единицы измерения": "/settings/units",
   "настройка счёта": "/settings/catalog/osnovnye-nastroiki/item-3",
   "филиалы": "/settings/branches",
@@ -244,7 +270,6 @@ const existingHrefByItemTitle: Record<string, string> = {
   "тип цены": "/settings/price-types",
   "валюты": "/settings/currencies",
   "цена": "/settings/prices",
-  "кассы": "/settings/cash-desks",
   "направление торговли": "/settings/sales-directions/trade",
   "канал продаж": "/settings/sales-directions/sales-channels",
   "группа kpi": "/settings/sales-directions/kpi-groups",
@@ -252,18 +277,6 @@ const existingHrefByItemTitle: Record<string, string> = {
   "скидки": "/settings/discount-rules",
   "rlp бонусы": "/settings/bonus-stack",
   "причины отказа": "/settings/reasons/refusal-reasons",
-  "справочники": "/settings/spravochnik",
-  "пользователи": "/settings/spravochnik/agents",
-  "агент": "/settings/spravochnik/agents",
-  "агенты": "/settings/spravochnik/agents",
-  "экспедиторы": "/settings/spravochnik/expeditors",
-  "супервайзер": "/settings/spravochnik/supervisors",
-  "супервизоры": "/settings/spravochnik/supervisors",
-  "оператор": "/settings/spravochnik/operators",
-  "операторы": "/settings/spravochnik/operators",
-  "веб-сотрудники": "/settings/spravochnik/operators",
-  "веб сотрудники": "/settings/spravochnik/operators",
-  "сотрудники": "/settings/spravochnik/operators",
   "компания": "/settings/company",
   "qaytarish filtri": "/settings/returns/filter",
   "фильтр возврата": "/settings/returns/filter",
@@ -275,7 +288,6 @@ const existingHrefByItemTitle: Record<string, string> = {
   "причины заявок": "/settings/reasons/request-types",
   "причины отмены оплаты": "/settings/reasons/cancel-payment-reasons",
   "примечание к заказу": "/settings/reasons/order-notes",
-  "типы задач": "/settings/reasons/task-types",
   "категория фотоотчёта": "/settings/reasons/photo-categories",
   "категория доходов/расходов": "/settings/reasons/finance-categories",
   "тип инвентаря": "/settings/inventory/type",
@@ -284,9 +296,9 @@ const existingHrefByItemTitle: Record<string, string> = {
   "тара": "/settings/equipment/tare",
   "тип базы знания": "/settings/knowledge-base/type",
   "база знаний": "/settings/knowledge-base/base",
-  "надбавки и вычеты к зарплате": "/settings/payroll/adjustments",
-  "поставщики": "/suppliers",
-  "тема и цвета": "/settings/appearance"
+  "тема и цвета": "/settings/appearance",
+  "boshlang‘ich sozlash": "/settings/initial-setup",
+  "начальная настройка": "/settings/initial-setup"
 };
 
 export function resolveSettingsItemHref(item: SettingsItem): string {

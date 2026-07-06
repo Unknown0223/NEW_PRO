@@ -60,6 +60,8 @@ export const patchClientBodySchema = z
     latitude: clientCoordInput,
     longitude: clientCoordInput,
     zone: z.string().nullable().optional(),
+    warehouse_id: z.number().int().positive().nullable().optional(),
+    cash_desk_id: z.number().int().positive().nullable().optional(),
     agent_id: z.number().int().positive().nullable().optional(),
     agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(10).optional(),
     contact_persons: z.array(clientContactSlotSchema).max(10).optional(),

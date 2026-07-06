@@ -14,11 +14,11 @@ export function AutomationPageHeader({
   onCreateClick: () => void;
 }) {
   return (
-    <div className="border-b border-gray-200 bg-white">
+    <div className="border-b border-border bg-card">
       <div className="flex items-center justify-between px-4 py-4">
         <h1 className="text-lg font-semibold text-gray-800">Автоматизация заявок</h1>
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg bg-gray-100 p-0.5">
+          <div className="flex items-center rounded-lg bg-muted p-0.5">
             <button
               type="button"
               onClick={() => onTabChange("restrictions")}

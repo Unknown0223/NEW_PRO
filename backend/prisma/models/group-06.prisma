@@ -203,6 +203,23 @@ model UserPaymentMethodLink {
 }
 
 
+model UserTradeDirectionLink {
+  id                 Int            @id @default(autoincrement())
+  tenant_id          Int
+  user_id            Int
+  trade_direction_id Int
+  created_at         DateTime       @default(now())
+  tenant             Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user               User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  trade_direction    TradeDirection @relation(fields: [trade_direction_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id, trade_direction_id])
+  @@index([tenant_id, trade_direction_id])
+  @@index([user_id])
+  @@map("user_trade_directions")
+}
+
+
 model AccessLog {
   id             Int      @id @default(autoincrement())
   tenant_id      Int

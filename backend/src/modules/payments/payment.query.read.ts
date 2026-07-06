@@ -158,7 +158,7 @@ export type CreatePaymentInput = {
   cash_desk_id?: number | null;
   /** ISO 8601; bo‘lmasa — hozirgi vaqt */
   paid_at?: string | null;
-  entry_kind?: "payment" | "client_expense";
+  entry_kind?: "payment" | "client_expense" | "discount_settlement";
   /** «Расход клиента» — zakazsiz ekskpeditor */
   expeditor_user_id?: number | null;
   /** Vedoma: `COALESCE(ledger_agent_id, zakaz.agent, mijoz.agent)` */

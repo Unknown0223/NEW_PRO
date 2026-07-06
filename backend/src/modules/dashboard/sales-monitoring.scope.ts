@@ -80,7 +80,7 @@ export function monthBoundsUtc(year: number, month: number): { from: Date; to: D
   return { from, to, fromYmd, toYmd };
 }
 
-function buildSalesTerritoryAliasClause(alias: string, terms: string[]): Prisma.Sql {
+export function buildSalesTerritoryAliasClause(alias: string, terms: string[]): Prisma.Sql {
   if (terms.length === 0) return Prisma.empty;
   const vals = Prisma.join(terms.map((t) => Prisma.sql`${t}`));
   return Prisma.sql`AND (

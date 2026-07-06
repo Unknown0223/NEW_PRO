@@ -218,7 +218,8 @@ export async function listCorrectionWorkspaceRows(
   return products.map((p) => {
     const st = p.stock[0];
     const qty = st?.qty ?? new Prisma.Decimal(0);
-    const res = st?.reserved_qty ?? new Prisma.Decimal(0);
+    const resRaw = st?.reserved_qty ?? new Prisma.Decimal(0);
+    const res = resRaw.lt(0) ? new Prisma.Decimal(0) : resRaw;
     const avail = qty.sub(res);
     const priceRow = priceType ? p.prices?.[0] : undefined;
     return {

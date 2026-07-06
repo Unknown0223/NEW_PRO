@@ -58,6 +58,8 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager, listUsersQuerySchema } from "./access.route.shared";
+import { filterAccessWebPanelUsers } from "./access-web-users.filter";
+import { MOBILE_ONLY_KOMANDA_ROLES } from "../../lib/tenant-user-roles";
 
 export async function registerAccessUsersListRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/users", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -99,6 +101,10 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
     if (q.data.is_active === "true") where.is_active = true;
     else if (q.data.is_active === "false") where.is_active = false;
     if (q.data.role?.trim()) where.role = q.data.role.trim();
+    else {
+      /** Veb «Доступ»: faqat web-panel foydalanuvchilari (mobil-only KOMANDA chiqariladi). */
+      where.role = { notIn: [...MOBILE_ONLY_KOMANDA_ROLES] };
+    }
     if (q.data.search?.trim()) {
       const s = q.data.search.trim();
       where.OR = [
@@ -116,7 +122,8 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
         warehouse_links: { select: { warehouse_id: true, link_role: true } },
         cash_desk_links: { select: { cash_desk_id: true } },
         branch_links: { select: { branch_code: true } },
-        payment_method_links: { select: { payment_method: true } }
+        payment_method_links: { select: { payment_method: true } },
+        trade_direction_links: { select: { trade_direction_id: true } }
       }
     });
     const userIds = rows.map((u) => u.id);
@@ -158,19 +165,21 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
         warehouse_delegate_ids: u.warehouse_links.filter((x) => x.link_role === "manager").map((x) => x.warehouse_id),
         cash_desks: u.cash_desk_links.map((x) => x.cash_desk_id),
         payment_methods: u.payment_method_links.map((x) => x.payment_method),
-        territories: territoryIdsByUser.get(u.id) ?? []
+        territories: territoryIdsByUser.get(u.id) ?? [],
+        trade_directions: u.trade_direction_links.map((x) => x.trade_direction_id)
       }
     }));
-    if (q.data.include_access_manage === "true" && data.length > 0) {
+    const webPanelData = filterAccessWebPanelUsers(data);
+    if (q.data.include_access_manage === "true" && webPanelData.length > 0) {
       const manageSet = await getUsersHaveAccessManage(
         tenantId,
-        data.map((r) => ({ id: r.id, role: r.role }))
+        webPanelData.map((r) => ({ id: r.id, role: r.role }))
       );
       return reply.send({
-        data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        data: webPanelData.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
       });
     }
-    return reply.send({ data });
+    return reply.send({ data: webPanelData });
   });
 
   /**

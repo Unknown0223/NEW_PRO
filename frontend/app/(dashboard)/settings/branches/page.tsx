@@ -20,6 +20,7 @@ import {
   type SearchableMultiSelectItem
 } from "@/components/ui/searchable-multi-select-panel";
 import { filterSelectClassName } from "@/components/ui/filter-select";
+import { saveProfileReferenceArrayItem, saveProfileReferenceArrayMerged } from "@/lib/settings-profile-save";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -281,12 +282,13 @@ export default function BranchesSettingsPage() {
   }, [usersQ.data]);
 
   const saveMut = useMutation({
-    mutationFn: async (next: Branch[]) => {
+    mutationFn: async (payload: { item: Branch; editId: string | null }) => {
       if (!tenantSlug) throw new Error("no tenant");
-      await api.patch(`/api/${tenantSlug}/settings/profile`, { references: { branches: next } });
+      await saveProfileReferenceArrayItem(tenantSlug, "branches", payload.item, payload.editId, sortRows);
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["geo-boundaries", tenantSlug] });
       setServerFieldErrs({});
       setMsg("Saqlandi.");
     },
@@ -394,7 +396,7 @@ export default function BranchesSettingsPage() {
       user_links: prev?.user_links
     };
     const merged = editId ? rows.map((x) => (x.id === editId ? next : x)) : [...rows, next];
-    saveMut.mutate(sortRows(merged), {
+    saveMut.mutate({ item: next, editId }, {
       onSuccess: () => {
         setOpen(false);
         resetForm();
@@ -435,18 +437,31 @@ export default function BranchesSettingsPage() {
     });
   }
 
+  const saveUsersMut = useMutation({
+    mutationFn: async ({ branchId, links }: { branchId: string; links: Branch["user_links"] }) => {
+      if (!tenantSlug) throw new Error("no tenant");
+      await saveProfileReferenceArrayMerged<Branch>(
+        tenantSlug,
+        "branches",
+        (current) => current.map((r) => (r.id === branchId ? { ...r, user_links: links } : r)),
+        sortRows
+      );
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
+      setUsersOpen(false);
+      setUsersBranchId(null);
+      setMsg("Saqlandi.");
+    },
+    onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xatolik."))
+  });
+
   function applyUsersToBranch() {
-    if (!usersBranchId) return;
+    if (!usersBranchId || !tenantSlug) return;
     const links = Object.entries(usersSelected)
       .map(([role, ids]) => ({ role, user_ids: Array.from(ids).sort((a, b) => a - b) }))
       .filter((x) => x.user_ids.length > 0);
-    const merged = rows.map((r) => (r.id === usersBranchId ? { ...r, user_links: links } : r));
-    saveMut.mutate(sortRows(merged), {
-      onSuccess: () => {
-        setUsersOpen(false);
-        setUsersBranchId(null);
-      }
-    });
+    saveUsersMut.mutate({ branchId: usersBranchId, links });
   }
 
   if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Sessiya...</p></PageShell>;

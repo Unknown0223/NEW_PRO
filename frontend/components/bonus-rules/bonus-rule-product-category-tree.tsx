@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
-import { Button } from "@/components/ui/button";
+import { BonusRuleTemplateCheckbox } from "@/components/bonus-rules/bonus-rule-form-fields";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +29,33 @@ type TreeNode = ProductCategoryRow & { children: TreeNode[] };
 export const UNCATEGORIZED_KEY = "__uncategorized__" as const;
 
 const checkboxCls = "mt-0.5 h-4 w-4 shrink-0 rounded border border-input accent-primary";
+
+function TreeCheckbox({
+  checked,
+  muted,
+  disabled,
+  onChange,
+  id
+}: {
+  checked: boolean;
+  muted?: boolean;
+  disabled?: boolean;
+  onChange?: (checked: boolean) => void;
+  id?: string;
+}) {
+  if (onChange) {
+    return (
+      <BonusRuleTemplateCheckbox
+        id={id}
+        checked={checked}
+        muted={muted}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    );
+  }
+  return <input id={id} type="checkbox" className={checkboxCls} checked={checked} disabled={disabled} readOnly />;
+}
 
 function nestCategories(flat: ProductCategoryRow[]): TreeNode[] {
   const map = new Map<number, TreeNode>();
@@ -54,6 +81,59 @@ function nestCategories(flat: ProductCategoryRow[]): TreeNode[] {
   };
   sortRec(roots);
   return roots;
+}
+
+function addCategoryAncestors(
+  catId: number,
+  flat: ProductCategoryRow[],
+  into: Set<number>
+): void {
+  into.add(catId);
+  const row = flat.find((c) => c.id === catId);
+  if (row?.parent_id != null) addCategoryAncestors(row.parent_id, flat, into);
+}
+
+function addCategoryDescendants(
+  catId: number,
+  flat: ProductCategoryRow[],
+  into: Set<number>
+): void {
+  into.add(catId);
+  for (const c of flat) {
+    if (c.parent_id === catId) addCategoryDescendants(c.id, flat, into);
+  }
+}
+
+/** Kategoriya va barcha ichki kategoriyalardagi faol mahsulot id lari. */
+export async function fetchProductIdsForCategorySubtree(
+  tenantSlug: string,
+  categoryId: number,
+  flat: ProductCategoryRow[],
+  search = ""
+): Promise<number[]> {
+  const catIds = new Set<number>();
+  addCategoryDescendants(categoryId, flat, catIds);
+  const productIds: number[] = [];
+  for (const cid of catIds) {
+    const p = new URLSearchParams({ is_active: "true", category_id: String(cid) });
+    const s = search.trim();
+    if (s) p.set("search", s);
+    const rows = await fetchAllActiveProductsPage(tenantSlug, p);
+    productIds.push(...rows.map((r) => r.id));
+  }
+  return [...new Set(productIds)];
+}
+
+function filterTreeByVisibleCategories(nodes: TreeNode[], visible: Set<number>): TreeNode[] {
+  const out: TreeNode[] = [];
+  for (const n of nodes) {
+    if (!visible.has(n.id)) continue;
+    out.push({
+      ...n,
+      children: filterTreeByVisibleCategories(n.children, visible)
+    });
+  }
+  return out;
 }
 
 export async function fetchAllActiveProductsPage(
@@ -122,6 +202,8 @@ type CategoryProductsPanelProps = {
   search?: string;
   /** React Query instance (ikki ustun bir vaqtda) */
   querySuffix?: string;
+  /** Qulflangan qoida: faqat tanlangan mahsulotlar */
+  visibleProductIds?: Set<number>;
 };
 
 function CategoryProductsPanel({
@@ -134,7 +216,8 @@ function CategoryProductsPanel({
   disabled = false,
   selectionDisabled = false,
   search = "",
-  querySuffix = "tree"
+  querySuffix = "tree",
+  visibleProductIds
 }: CategoryProductsPanelProps) {
   const searchTrim = search.trim();
   const q = useQuery({
@@ -154,9 +237,15 @@ function CategoryProductsPanel({
   });
 
   const ids = useMemo(() => q.data?.map((x) => x.id) ?? [], [q.data]);
+  const rows = useMemo(() => {
+    const data = q.data ?? [];
+    if (!visibleProductIds?.size) return data;
+    return data.filter((p) => visibleProductIds.has(p.id));
+  }, [q.data, visibleProductIds]);
   const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
   const someSelected = ids.some((id) => selected.has(id)) && !allSelected;
   const checkDis = disabled || selectionDisabled;
+  const readOnlyList = Boolean(visibleProductIds?.size) && selectionDisabled;
 
   const toggleAll = (checked: boolean) => {
     onToggleCategoryIds(ids, checked);
@@ -172,7 +261,7 @@ function CategoryProductsPanel({
       <div className={cn("py-2 text-sm text-destructive", depth > 0 && "pl-6")}>Mahsulotlarni yuklab bo‘lmadi.</div>
     );
   }
-  if (!q.data?.length) {
+  if (!rows.length) {
     return (
       <div className={cn("py-2 text-sm text-muted-foreground", depth > 0 && "pl-6")}>
         {searchTrim ? "Qidiruv bo‘yicha mahsulot yo‘q." : "Bu kategoriyada mahsulot yo‘q."}
@@ -182,6 +271,7 @@ function CategoryProductsPanel({
 
   return (
     <div className={cn("space-y-1 border-l border-border/60 py-1", depth > 0 && "ml-3 pl-3")}>
+      {!readOnlyList ? (
       <div className="flex items-center gap-2 py-1">
         <SelectAllCheckbox
           inputId={`br-cat-all-${querySuffix}-${String(categoryKey)}`}
@@ -194,19 +284,18 @@ function CategoryProductsPanel({
           htmlFor={`br-cat-all-${querySuffix}-${String(categoryKey)}`}
           className="cursor-pointer text-xs text-muted-foreground"
         >
-          Barchasini tanlash ({q.data.length})
+          Выбрать все ({q.data?.length ?? 0})
         </Label>
       </div>
+      ) : null}
       <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
-        {q.data.map((p) => (
+        {rows.map((p) => (
           <li key={p.id} className="flex items-start gap-2 rounded-md px-1 py-0.5 hover:bg-muted/50">
-            <input
+            <TreeCheckbox
               id={`br-prod-${querySuffix}-${p.id}`}
-              type="checkbox"
-              className={checkboxCls}
               checked={selected.has(p.id)}
               disabled={checkDis}
-              onChange={(e) => onToggleProduct(p.id, e.target.checked)}
+              onChange={(checked) => onToggleProduct(p.id, checked)}
             />
             <Label
               htmlFor={`br-prod-${querySuffix}-${p.id}`}
@@ -230,12 +319,19 @@ type CategoryNodeProps = {
   selected: Set<number>;
   onToggleProduct: (id: number, checked: boolean) => void;
   onToggleCategoryIds: (ids: number[], checked: boolean) => void;
+  categoryScopeSelected?: Set<number>;
+  onToggleCategoryScope?: (categoryId: number, checked: boolean) => void;
   expanded: Set<number>;
   toggleExpanded: (id: number) => void;
   disabled?: boolean;
   selectionDisabled?: boolean;
   search?: string;
   querySuffix?: string;
+  allowExpandWhenDisabled?: boolean;
+  visibleProductIds?: Set<number>;
+  /** Kategoriya checkbox — ichidagi barcha mahsulotlarni tanlaydi (KPI va h.k.) */
+  categoryCheckSelectsProducts?: boolean;
+  flatCategories?: ProductCategoryRow[];
 };
 
 function CategoryNode({
@@ -245,34 +341,68 @@ function CategoryNode({
   selected,
   onToggleProduct,
   onToggleCategoryIds,
+  categoryScopeSelected,
+  onToggleCategoryScope,
   expanded,
   toggleExpanded,
   disabled = false,
   selectionDisabled = false,
   search = "",
-  querySuffix = "tree"
+  querySuffix = "tree",
+  allowExpandWhenDisabled = false,
+  visibleProductIds,
+  categoryCheckSelectsProducts = false,
+  flatCategories = []
 }: CategoryNodeProps) {
   const isOpen = expanded.has(node.id);
+  const categoryPickEnabled = Boolean(onToggleCategoryScope && categoryScopeSelected);
+  const categoryChecked = categoryScopeSelected?.has(node.id) ?? false;
+  const expandDisabled = disabled && !allowExpandWhenDisabled;
+  const searchTrim = search.trim();
+
+  const subtreeIdsQ = useQuery({
+    queryKey: ["category-subtree-product-ids", tenantSlug, node.id, searchTrim, querySuffix],
+    enabled: categoryCheckSelectsProducts && Boolean(tenantSlug) && flatCategories.length > 0,
+    queryFn: () => fetchProductIdsForCategorySubtree(tenantSlug, node.id, flatCategories, searchTrim),
+    staleTime: STALE.list
+  });
+  const subtreeIds = subtreeIdsQ.data ?? [];
+  const subtreeAllSelected = subtreeIds.length > 0 && subtreeIds.every((id) => selected.has(id));
+  const subtreeSomeSelected = subtreeIds.some((id) => selected.has(id)) && !subtreeAllSelected;
 
   return (
     <div className={cn(depth > 0 && "ml-2 border-l border-border/40 pl-2")}>
-      <div className="flex items-center gap-1 py-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          onClick={() => toggleExpanded(node.id)}
-          aria-expanded={isOpen}
-          disabled={disabled}
-        >
-          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </Button>
+      <div className="flex min-h-11 items-center gap-2 px-1 py-2">
+        {categoryCheckSelectsProducts ? (
+          <SelectAllCheckbox
+            inputId={`br-cat-scope-${querySuffix}-${node.id}`}
+            allSelected={subtreeAllSelected}
+            someSelected={subtreeSomeSelected}
+            disabled={disabled || selectionDisabled || subtreeIdsQ.isLoading || subtreeIds.length === 0}
+            onChange={(checked) => onToggleCategoryIds(subtreeIds, checked)}
+          />
+        ) : categoryPickEnabled ? (
+          <TreeCheckbox
+            checked={categoryChecked}
+            disabled={disabled || selectionDisabled}
+            onChange={(checked) => onToggleCategoryScope!(node.id, checked)}
+          />
+        ) : null}
         <button
           type="button"
-          className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline disabled:opacity-50"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
           onClick={() => toggleExpanded(node.id)}
-          disabled={disabled}
+          aria-expanded={isOpen}
+          aria-label={isOpen ? "Свернуть" : "Развернуть"}
+          disabled={expandDisabled}
+        >
+          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground hover:underline disabled:opacity-50"
+          onClick={() => toggleExpanded(node.id)}
+          disabled={expandDisabled}
         >
           {node.name}
         </button>
@@ -290,12 +420,18 @@ function CategoryNode({
                   selected={selected}
                   onToggleProduct={onToggleProduct}
                   onToggleCategoryIds={onToggleCategoryIds}
+                  categoryScopeSelected={categoryScopeSelected}
+                  onToggleCategoryScope={onToggleCategoryScope}
                   expanded={expanded}
                   toggleExpanded={toggleExpanded}
                   disabled={disabled}
                   selectionDisabled={selectionDisabled}
                   search={search}
                   querySuffix={querySuffix}
+                  allowExpandWhenDisabled={allowExpandWhenDisabled}
+                  visibleProductIds={visibleProductIds}
+                  categoryCheckSelectsProducts={categoryCheckSelectsProducts}
+                  flatCategories={flatCategories}
                 />
               ))}
             </div>
@@ -312,6 +448,7 @@ function CategoryNode({
               selectionDisabled={selectionDisabled}
               search={search}
               querySuffix={querySuffix}
+              visibleProductIds={visibleProductIds}
             />
           </div>
         </div>
@@ -324,6 +461,9 @@ export type BonusRuleProductCategoryTreeProps = {
   tenantSlug: string;
   value: number[];
   onChange: (productIds: number[]) => void;
+  /** «Kategoriya» rejimi: tanlangan kategoriya ID lari (`product_category_ids`) */
+  categoryScopeIds?: number[];
+  onCategoryScopeChange?: (categoryIds: number[]) => void;
   /** Saqlash kutilayotganda */
   disabled?: boolean;
   /** Ro‘yxat ochiladi, lekin belgilash o‘chiriladi */
@@ -334,6 +474,14 @@ export type BonusRuleProductCategoryTreeProps = {
   querySuffix?: string;
   /** Mahsulot belgisi o‘zgarmasidan oldin (masalan kategoriya filtrini tozalash) */
   onSelectionIntent?: () => void;
+  /** Qulflangan qoida: faqat tanlangan kategoriya/mahsulotlar */
+  restrictToSelection?: boolean;
+  /** `disabled` bo‘lsa ham kategoriyani ochish/yopish */
+  allowExpandWhenDisabled?: boolean;
+  /** Dialog ochilganda barcha kategoriyalarni yoyish (mahsulotlar darhol ko‘rinadi) */
+  defaultExpandAll?: boolean;
+  /** Kategoriya checkbox — ichidagi barcha mahsulotlarni tanlaydi */
+  categoryCheckSelectsProducts?: boolean;
 };
 
 /**
@@ -343,14 +491,24 @@ export function BonusRuleProductCategoryTree({
   tenantSlug,
   value,
   onChange,
+  categoryScopeIds,
+  onCategoryScopeChange,
   disabled = false,
   selectionDisabled = false,
   search = "",
   className,
   querySuffix = "tree",
-  onSelectionIntent
+  onSelectionIntent,
+  restrictToSelection = false,
+  allowExpandWhenDisabled = false,
+  defaultExpandAll = false,
+  categoryCheckSelectsProducts = false
 }: BonusRuleProductCategoryTreeProps) {
   const selected = useMemo(() => new Set(value), [value]);
+  const categoryScopeSelected = useMemo(
+    () => new Set(categoryScopeIds ?? []),
+    [categoryScopeIds]
+  );
   const [expandedCats, setExpandedCats] = useState<Set<number>>(new Set());
   const [uncOpen, setUncOpen] = useState(false);
 
@@ -366,6 +524,71 @@ export function BonusRuleProductCategoryTree({
   });
 
   const tree = useMemo(() => nestCategories(catsQ.data ?? []), [catsQ.data]);
+
+  const scopeOnlyCategories =
+    restrictToSelection && (categoryScopeIds?.length ?? 0) > 0 && value.length === 0;
+
+  const visibleProductIds = useMemo(() => {
+    if (!restrictToSelection || scopeOnlyCategories) return undefined;
+    if (value.length === 0) return undefined;
+    return new Set(value);
+  }, [restrictToSelection, scopeOnlyCategories, value]);
+
+  const filterProductsQ = useQuery({
+    queryKey: ["bonus-rule-locked-products", tenantSlug, value.join(",")],
+    enabled: Boolean(tenantSlug) && restrictToSelection && value.length > 0,
+    staleTime: STALE.list,
+    queryFn: async () => {
+      const all = await fetchAllActiveProductsPage(
+        tenantSlug,
+        new URLSearchParams({ is_active: "true" })
+      );
+      const want = new Set(value);
+      return all.filter((p) => want.has(p.id));
+    }
+  });
+
+  const lockedProductRows = useMemo(() => filterProductsQ.data ?? [], [filterProductsQ.data]);
+
+  const visibleCategoryIdsResolved = useMemo(() => {
+    if (!restrictToSelection) return null;
+    const flat = catsQ.data ?? [];
+    if (!flat.length) return new Set<number>();
+    const visible = new Set<number>();
+    for (const id of categoryScopeIds ?? []) {
+      addCategoryDescendants(id, flat, visible);
+    }
+    for (const p of lockedProductRows) {
+      if (p.category_id != null) addCategoryAncestors(p.category_id, flat, visible);
+    }
+    return visible;
+  }, [restrictToSelection, catsQ.data, categoryScopeIds, lockedProductRows]);
+
+  const displayTree = useMemo(() => {
+    if (!restrictToSelection) return tree;
+    if (!visibleCategoryIdsResolved?.size) return [];
+    return filterTreeByVisibleCategories(tree, visibleCategoryIdsResolved);
+  }, [tree, restrictToSelection, visibleCategoryIdsResolved]);
+
+  const showUncategorizedSection = useMemo(() => {
+    if (!restrictToSelection) return true;
+    return lockedProductRows.some((p) => p.category_id == null);
+  }, [restrictToSelection, lockedProductRows]);
+
+  useLayoutEffect(() => {
+    if (!restrictToSelection || !visibleCategoryIdsResolved?.size) return;
+    setExpandedCats(new Set(visibleCategoryIdsResolved));
+    if (showUncategorizedSection) setUncOpen(true);
+  }, [restrictToSelection, visibleCategoryIdsResolved, showUncategorizedSection]);
+
+  useLayoutEffect(() => {
+    if (!defaultExpandAll) return;
+    const flat = catsQ.data ?? [];
+    if (!flat.length) return;
+    const allIds = new Set(flat.map((c) => c.id));
+    setExpandedCats(allIds);
+    setUncOpen(true);
+  }, [defaultExpandAll, catsQ.data]);
 
   /**
    * Qidiruv bo‘yicha natijani ko‘rish uchun kategoriyalarni ochish.
@@ -430,6 +653,14 @@ export function BonusRuleProductCategoryTree({
     onChange(Array.from(next).sort((a, b) => a - b));
   };
 
+  const onToggleCategoryScope = (categoryId: number, checked: boolean) => {
+    if (!onCategoryScopeChange || selectionDisabled) return;
+    const next = new Set(categoryScopeSelected);
+    if (checked) next.add(categoryId);
+    else next.delete(categoryId);
+    onCategoryScopeChange(Array.from(next).sort((a, b) => a - b));
+  };
+
   if (!tenantSlug) return null;
 
   if (catsQ.isLoading) {
@@ -439,44 +670,58 @@ export function BonusRuleProductCategoryTree({
     return <p className="px-1 py-4 text-sm text-destructive">Kategoriyalarni yuklab bo‘lmadi.</p>;
   }
 
+  if (restrictToSelection && filterProductsQ.isLoading && value.length > 0) {
+    return <p className="px-1 py-4 text-sm text-muted-foreground">Tanlangan mahsulotlar yuklanmoqda…</p>;
+  }
+
   return (
-    <div className={cn("space-y-2 pr-1", className)}>
-      {tree.map((n) => (
+    <div className={cn("pr-1", className)}>
+      {displayTree.length === 0 && restrictToSelection ? (
+        <p className="px-1 py-4 text-sm text-muted-foreground">Tanlangan kategoriya yoki mahsulot yo‘q.</p>
+      ) : null}
+      {displayTree.map((n, index) => (
+        <div key={n.id} className={cn(index > 0 && "border-t border-border/70")}>
         <CategoryNode
-          key={n.id}
           tenantSlug={tenantSlug}
           node={n}
           depth={0}
           selected={selected}
           onToggleProduct={onToggleProduct}
           onToggleCategoryIds={onToggleCategoryIds}
+          categoryScopeSelected={onCategoryScopeChange ? categoryScopeSelected : undefined}
+          onToggleCategoryScope={onCategoryScopeChange ? onToggleCategoryScope : undefined}
           expanded={expandedCats}
           toggleExpanded={toggleExpanded}
           disabled={disabled}
           selectionDisabled={selectionDisabled}
           search={search}
           querySuffix={querySuffix}
+          allowExpandWhenDisabled={allowExpandWhenDisabled}
+          visibleProductIds={visibleProductIds}
+          categoryCheckSelectsProducts={categoryCheckSelectsProducts}
+          flatCategories={catsQ.data ?? []}
         />
+        </div>
       ))}
 
-      <div className="border-t border-border/60 pt-2">
-        <div className="flex items-center gap-1 py-0.5">
-          <Button
+      {showUncategorizedSection ? (
+      <div className="border-t border-border/70 pt-1">
+        <div className="flex items-center gap-2 px-1 py-2.5">
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-lg border border-border text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
             onClick={() => setUncOpen((v) => !v)}
             aria-expanded={uncOpen}
-            disabled={disabled}
+            aria-label={uncOpen ? "Свернуть" : "Развернуть"}
+            disabled={disabled && !allowExpandWhenDisabled}
           >
             {uncOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
+          </button>
           <button
             type="button"
             className="flex-1 truncate text-left text-sm font-medium hover:underline disabled:opacity-50"
             onClick={() => setUncOpen((v) => !v)}
-            disabled={disabled}
+            disabled={disabled && !allowExpandWhenDisabled}
           >
             Kategoriyasiz mahsulotlar
           </button>
@@ -493,9 +738,11 @@ export function BonusRuleProductCategoryTree({
             selectionDisabled={selectionDisabled}
             search={search}
             querySuffix={querySuffix}
+            visibleProductIds={visibleProductIds}
           />
         ) : null}
       </div>
+      ) : null}
     </div>
   );
 }

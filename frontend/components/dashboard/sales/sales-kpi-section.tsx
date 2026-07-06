@@ -17,7 +17,7 @@ export function SalesKpiSection({ data }: { data: SalesDashboardSnapshot }) {
       {cards.map((c) => (
         <div
           key={c.label}
-          className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70"
+          className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-slate-200/70"
         >
           <p className="text-xs font-medium text-slate-500">{c.label}</p>
           <p className="mt-1 text-xl font-bold tabular-nums text-slate-950">{c.value}</p>

@@ -1,0 +1,66 @@
+/// Backend `CLIENT_FIELD_KEYS` bilan mos (agent-mobile-config.types.ts).
+const kClientFieldKeys = [
+  'name',
+  'legal_name',
+  'category',
+  'client_type',
+  'sales_channel',
+  'territory',
+  'inn',
+  'phone',
+  'visit_day',
+  'coordinates',
+  'client_pc',
+  'bank',
+  'mfo',
+  'oked',
+  'pinfl',
+  'agreement_number',
+  'address',
+  'notes',
+];
+
+const kClientFieldLabelsUz = <String, String>{
+  'name': 'Nomi',
+  'legal_name': 'Yuridik nomi',
+  'category': 'Kategoriya',
+  'client_type': 'Mijoz turi',
+  'sales_channel': 'Savdo kanali',
+  'territory': 'Hudud',
+  'inn': 'INN',
+  'phone': 'Telefon',
+  'visit_day': 'Tashrif kuni',
+  'coordinates': 'Koordinatalar',
+  'client_pc': 'Mijoz PK',
+  'bank': 'Bank',
+  'mfo': 'MFO',
+  'oked': 'OKED',
+  'pinfl': 'PINFL',
+  'agreement_number': 'Shartnoma raqami',
+  'address': 'Manzil',
+  'notes': 'Izoh',
+};
+
+const kClientFieldLabelsRu = <String, String>{
+  'name': 'Название',
+  'legal_name': 'Название компании',
+  'category': 'Категория',
+  'client_type': 'Тип клиента',
+  'sales_channel': 'Канал продаж',
+  'territory': 'Территория',
+  'inn': 'ИНН',
+  'phone': 'Телефон',
+  'visit_day': 'Дни посещения',
+  'coordinates': 'Координаты',
+  'client_pc': 'Клиент ПК',
+  'bank': 'Банк',
+  'mfo': 'МФО',
+  'oked': 'ОКЭД',
+  'pinfl': 'ПИНФЛ',
+  'agreement_number': 'Номер договора',
+  'address': 'Адрес',
+  'notes': 'Примечание',
+};
+
+/// UI shabloni ruscha label’lar bilan.
+String clientFieldLabel(String key) => kClientFieldLabelsRu[key] ?? key;

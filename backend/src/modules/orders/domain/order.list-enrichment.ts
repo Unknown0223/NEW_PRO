@@ -35,7 +35,9 @@ function parseSourceFromComment(comment: string | null): string | null {
 }
 
 function roleToChannel(role: string | null | undefined): "web" | "mobile" {
-  if (role === "agent") return "mobile";
+  const r = (role ?? "").toLowerCase();
+  // Agent va ekspeditor (dastavchik) — mobil ilovadan yaratadi.
+  if (r.includes("agent") || r.includes("expeditor")) return "mobile";
   return "web";
 }
 

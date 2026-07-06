@@ -112,7 +112,7 @@ describe.skipIf(!dbReady)("client-qr-codes API (database)", () => {
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
     expect(typeof res.text).toBe("string");
     expect(res.text.length).toBeGreaterThan(10);
-    expect(res.text).toContain("qr_code");
+    expect(res.text).toContain("QR код");
   });
 
   it("GET clients-without-qr/export returns CSV", async () => {
@@ -123,8 +123,7 @@ describe.skipIf(!dbReady)("client-qr-codes API (database)", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
-    expect(res.text).toContain("id");
-    expect(res.text).toContain("name");
+    expect(res.text).toContain("Клиент");
   });
 
   it("bind and unbind cycle on a free QR", async () => {

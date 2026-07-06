@@ -10,8 +10,8 @@ export function AutomationStatusTabs({
   onChange: (s: "active" | "inactive") => void;
 }) {
   return (
-    <div className="bg-white px-4 pt-3 pb-0">
-      <div className="flex items-center gap-4 border-b border-gray-200">
+    <div className="bg-card px-4 pt-3 pb-0">
+      <div className="flex items-center gap-4 border-b border-border">
         {(["active", "inactive"] as const).map((s) => (
           <button
             key={s}
@@ -48,17 +48,17 @@ export function AutomationListToolbar({
   onExport: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
+    <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
       <button
         type="button"
-        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
         title="Настройки колонок"
       >
         <SlidersHorizontal size={16} />
       </button>
       <button
         type="button"
-        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
         title="Сортировка"
       >
         <ArrowUpDown size={16} />
@@ -66,7 +66,7 @@ export function AutomationListToolbar({
       <select
         value={itemsPerPage}
         onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-        className="cursor-pointer rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+        className="cursor-pointer rounded-lg border border-border px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
       >
         <option value={10}>10</option>
         <option value={25}>25</option>
@@ -79,7 +79,7 @@ export function AutomationListToolbar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Поиск"
-          className="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-sm transition-colors hover:border-gray-300 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="w-full rounded-lg border border-border py-1.5 pl-8 pr-3 text-sm transition-colors hover:border-border focus:border-transparent focus:outline-none focus:ring-2 focus:ring-teal-500"
         />
       </div>
       <button

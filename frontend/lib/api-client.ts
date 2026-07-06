@@ -64,7 +64,8 @@ export async function apiFetch<T = unknown>(path: string, init?: RequestInit): P
         const r = await fetch(`${base}/auth/refresh`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken })
+          credentials: "include",
+          body: JSON.stringify(refreshToken ? { refreshToken } : {})
         });
         if (r.ok) {
           const data = (await r.json()) as { accessToken: string; refreshToken: string };

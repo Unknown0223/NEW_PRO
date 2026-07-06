@@ -17,6 +17,10 @@ type AccessBulkBottomBarProps = {
   onDeny?: () => void;
   /** Подсказка для кнопки «Запретить» */
   denyTitle?: string;
+  /** Подсказка для кнопки «Открепить» */
+  detachTitle?: string;
+  /** «Открепить» недоступна — нет строк с личной настройкой */
+  detachDisabled?: boolean;
   /** Иконка у кнопки «Открепить» (матрица операций пользователя) */
   detachWithLinkIcon?: boolean;
   className?: string;
@@ -35,13 +39,15 @@ export function AccessBulkBottomBar({
   busy,
   onDeny,
   denyTitle,
+  detachTitle,
+  detachDisabled,
   detachWithLinkIcon,
   className
 }: AccessBulkBottomBarProps) {
   const showDeny = typeof onDeny === "function";
   return (
     <div
-      className={cn("pointer-events-none shrink-0 px-2 pb-2 pt-0.5 sm:px-2.5 sm:pb-2.5", className)}
+      className={cn("pointer-events-none shrink-0 px-2 pb-1 pt-0 sm:px-2", className)}
       role="presentation"
     >
       <div
@@ -99,8 +105,9 @@ export function AccessBulkBottomBar({
           <Button
             type="button"
             size="sm"
-            className="h-7 shrink-0 gap-1 whitespace-nowrap rounded-md border-0 bg-teal-600 px-2 text-[11px] font-semibold leading-none text-white shadow-none hover:bg-teal-700 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:px-2.5"
-            disabled={busy}
+            className="h-7 shrink-0 gap-1 whitespace-nowrap rounded-md border-0 bg-orange-600 px-2 text-[11px] font-semibold leading-none text-white shadow-none hover:bg-orange-700 disabled:opacity-50 dark:bg-orange-600 dark:hover:bg-orange-500 sm:px-2.5"
+            disabled={busy || detachDisabled}
+            title={detachTitle ?? "Снять личные настройки у выбранных строк"}
             onClick={onDetach}
           >
             {detachWithLinkIcon ? <Link2 className="h-3 w-3 shrink-0" aria-hidden /> : null}

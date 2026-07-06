@@ -11,6 +11,7 @@ import {
 } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
+import { formatPersonDisplayName } from "@/lib/person-display";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import { formatGroupedInteger } from "@/lib/format-numbers";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Pencil, RefreshCw } from "lucide-react";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
+import { KpiProductCategoryTreeSelect } from "@/components/settings/sales-directions/kpi-product-category-tree-select";
 
 type KpiListRow = {
   id: number;
@@ -44,8 +46,6 @@ type KpiDetail = {
   product_ids: number[];
   agent_user_ids: number[];
 };
-
-type ProductPick = { id: number; name: string; sku: string };
 
 type Props = { tenantSlug: string };
 
@@ -272,7 +272,7 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
                   <TagOverflow
                     items={r.agents.map((a) => ({
                       key: String(a.id),
-                      text: `${a.code ?? a.id} — ${a.fio}`.trim()
+                      text: formatPersonDisplayName(a)
                     }))}
                     label="аг."
                     total={r.agent_total}
@@ -391,22 +391,6 @@ function KpiFormDialog({
     }
   });
 
-  const [prodSearch, setProdSearch] = useState("");
-  const productsQ = useQuery({
-    queryKey: ["products-kpi-pick", tenantSlug, prodSearch],
-    enabled: open && Boolean(tenantSlug),
-    staleTime: STALE.list,
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set("is_active", "true");
-      params.set("limit", "80");
-      const s = prodSearch.trim();
-      if (s) params.set("search", s);
-      const { data } = await api.get<{ data: ProductPick[] }>(`/api/${tenantSlug}/products?${params.toString()}`);
-      return data.data;
-    }
-  });
-
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [sort_order, setSort] = useState("0");
@@ -422,7 +406,6 @@ function KpiFormDialog({
     if (!open) return;
     setServerFieldErrs({});
     setMsg(null);
-    setProdSearch("");
     setAgSearch("");
     if (mode === "add") {
       setName("");
@@ -455,8 +438,6 @@ function KpiFormDialog({
     if (!q) return true;
     return `${a.fio} ${a.code ?? ""} ${a.id}`.toLowerCase().includes(q);
   });
-
-  const products = productsQ.data ?? [];
 
   const submit = async () => {
     setServerFieldErrs({});
@@ -500,7 +481,7 @@ function KpiFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "add" ? "Добавить" : "Редактировать"}</DialogTitle>
         </DialogHeader>
@@ -516,23 +497,10 @@ function KpiFormDialog({
                 <p className="mt-1 text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "name")}</p>
               ) : null}
             </label>
-            <SearchableMultiSelectPanel
-              label="Продукт"
-              searchPlaceholder="Поиск SKU / название"
-              search={prodSearch}
-              onSearchChange={setProdSearch}
-              items={products.map((p) => ({
-                id: p.id,
-                subtitle: p.sku,
-                title: p.name
-              }))}
+            <KpiProductCategoryTreeSelect
+              tenantSlug={tenantSlug}
               selected={prodSel}
               onSelectedChange={setProdSel}
-              loading={productsQ.isFetching}
-              emptyMessage="Нет строк — измените поиск"
-              maxListHeightClass="max-h-52"
-              selectAllLabel="Выбрать все на экране"
-              clearVisibleLabel="Снять на экране"
             />
             {pickZodLeaf(serverFieldErrs, "product_ids") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "product_ids")}</p>

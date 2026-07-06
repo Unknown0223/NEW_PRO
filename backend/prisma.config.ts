@@ -14,6 +14,14 @@ for (const p of envPaths) {
   loadEnv({ path: p, override: true });
 }
 
+const backendDir = cwdIsBackend ? cwd : path.join(cwd, "backend");
+if (process.env.NODE_ENV !== "production") {
+  const localPath = path.join(backendDir, ".env.local");
+  if (existsSync(localPath)) {
+    loadEnv({ path: localPath, override: true });
+  }
+}
+
 let databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
   delete process.env.DATABASE_URL;

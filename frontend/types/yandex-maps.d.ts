@@ -5,6 +5,9 @@ declare global {
       destroy: () => void;
       setCenter: (center: [number, number], zoom?: number) => void;
       setBounds?: (bounds: [[number, number], [number, number]], opts?: Record<string, unknown>) => void;
+      getZoom?: () => number;
+      setZoom?: (zoom: number) => void;
+      behaviors: { enable: (name: string) => void; disable: (name: string) => void };
       events: { add: (name: string, fn: (e: { get: (k: string) => unknown }) => void) => void };
       geoObjects: { add: (obj: unknown) => void; remove?: (obj: unknown) => void };
     };
@@ -12,8 +15,20 @@ declare global {
       coords: [number, number],
       props?: Record<string, unknown>,
       opts?: Record<string, unknown>
-    ) => { geometry?: { setCoordinates: (coords: [number, number]) => void } };
-    Clusterer?: new (opts?: Record<string, unknown>) => { add: (items: unknown[]) => void };
+    ) => {
+      geometry?: { setCoordinates: (coords: [number, number]) => void };
+      events: { add: (name: string, fn: (e?: unknown) => void) => void };
+      balloon?: { open: () => void };
+    };
+    Clusterer?: new (opts?: Record<string, unknown>) => {
+      add: (items: unknown[]) => void;
+      removeAll: () => void;
+    };
+    Polygon?: new (
+      coords: Array<Array<[number, number]>>,
+      props?: Record<string, unknown>,
+      opts?: Record<string, unknown>
+    ) => unknown;
     Polyline?: new (
       coords: Array<[number, number]>,
       props?: Record<string, unknown>,

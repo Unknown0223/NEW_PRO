@@ -12,6 +12,7 @@ import type {
 import { orderScopeSql, planScopeSql, visitScopeSql } from "./dashboard.supervisor.scope";
 import { loadSupervisorProductAnalyticsBlocks } from "./dashboard.supervisor.snapshot-products";
 import { loadSupervisorVisitAndSalesBlocks } from "./dashboard.supervisor.snapshot-visits";
+import { loadSupervisorMonthlyKpiPlanBlock } from "../plans/plans.monitoring-aggregates";
 
 async function buildSupervisorScopes(tenantId: number, filters: SupervisorDashboardFilters) {
   const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
@@ -30,6 +31,7 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
   const byAgents: SupervisorEfficiencyRow[] = mappedVisitRows.map((r) => ({
     id: r.agent_id,
     name: r.agent_name,
+    agent_code: r.agent_code,
     order_count: r.visits_with_orders,
     cancelled_count: 0,
     planned_visits: r.planned_visits,
@@ -38,6 +40,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
     unvisited: r.not_visited,
     visit_pct: clampPct(r.planned_visits > 0 ? (r.visited_planned / r.planned_visits) * 100 : 0),
     photo_reports: r.photo_reports,
+    photo_outlets: r.photo_outlets,
+    photo_count: r.photo_count,
     total_sales_sum: r.sales_sum
   }));
 
@@ -55,6 +59,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
       unvisited: 0,
       visit_pct: 0,
       photo_reports: 0,
+      photo_outlets: 0,
+      photo_count: 0,
       total_sales_sum: "0"
     };
     prev.order_count += row.visits_with_orders;
@@ -63,6 +69,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
     prev.rejected_visits += row.visits_without_orders;
     prev.unvisited += row.not_visited;
     prev.photo_reports += row.photo_reports;
+    prev.photo_outlets += row.photo_outlets;
+    prev.photo_count += row.photo_count;
     prev.total_sales_sum = new Prisma.Decimal(prev.total_sales_sum).plus(row.sales_sum).toFixed(2);
     supMap.set(row.supervisor_id, prev);
   }
@@ -80,7 +88,8 @@ function buildKpi(
   salesAgg: Awaited<ReturnType<typeof loadSupervisorVisitAndSalesBlocks>>["salesAgg"],
   cashAgg: Awaited<ReturnType<typeof loadSupervisorVisitAndSalesBlocks>>["cashAgg"],
   paymentBreakdownRows: Awaited<ReturnType<typeof loadSupervisorVisitAndSalesBlocks>>["paymentBreakdownRows"],
-  totals: Awaited<ReturnType<typeof loadSupervisorVisitAndSalesBlocks>>["totals"]
+  totals: Awaited<ReturnType<typeof loadSupervisorVisitAndSalesBlocks>>["totals"],
+  monthlyPlan: { planSum: string; factMtdSum: string; executionPct: number | null }
 ): SupervisorKpi {
   const salesByPaymentMethod = paymentBreakdownRows.map((row) => ({
     method: row.method === "_" ? "" : row.method,
@@ -90,6 +99,9 @@ function buildKpi(
     total_sales_sum: decToString(salesAgg[0]?.s),
     cash_sales_sum: decToString(cashAgg[0]?.s),
     sales_by_payment_method: salesByPaymentMethod,
+    monthly_kpi_plan_sum: monthlyPlan.planSum,
+    monthly_kpi_fact_mtd_sum: monthlyPlan.factMtdSum,
+    monthly_kpi_execution_pct: monthlyPlan.executionPct,
     planned_visits: totals.planned_visits,
     visited_planned: totals.visited_planned,
     visited_total: totals.visited_total,
@@ -151,10 +163,11 @@ export async function getSupervisorSummary(
       scopes.visitScope,
       scopes.planScope
     );
+  const monthlyPlan = await loadSupervisorMonthlyKpiPlanBlock(tenantId, filters);
 
   const result: SupervisorSummaryPayload = {
     filters,
-    kpi: buildKpi(salesAgg, cashAgg, paymentBreakdownRows, totals),
+    kpi: buildKpi(salesAgg, cashAgg, paymentBreakdownRows, totals, monthlyPlan),
     visit_totals: totals,
     efficiency_report: buildEfficiencyReport(mappedVisitRows)
   };

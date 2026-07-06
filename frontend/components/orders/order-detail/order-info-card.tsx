@@ -1,6 +1,10 @@
 "use client";
 
+import { DiscountAlertIcon } from "@/components/orders/discount-alert-icon";
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
+import { bonusAlertLabel } from "@/lib/bonus-alert";
+import { discountAlertLabel } from "@/lib/discount-alert";
+import { formatNumberGrouped } from "@/lib/format-numbers";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -139,11 +143,23 @@ export function OrderInfoCard({
 
         <InfoRow icon={Percent} label="Скидка">
           <InfoValueBox>
-            {Number(data.discount_sum ?? 0) > 0 ? (
-              <span className="font-medium">Avto</span>
-            ) : (
-              <span className="text-muted-foreground">Без скидки</span>
-            )}
+            <span className="inline-flex items-center gap-1.5">
+              {Number(data.discount_sum ?? 0) > 0 ? (
+                <span className="font-medium tabular-nums">
+                  {formatNumberGrouped(Number(data.discount_sum), { maxFractionDigits: 2 })}
+                </span>
+              ) : data.discount_alert ? (
+                <span className="text-amber-700 dark:text-amber-300">Не применена</span>
+              ) : (
+                <span className="text-muted-foreground">Без скидки</span>
+              )}
+              {data.discount_alert ? <DiscountAlertIcon code={data.discount_alert} size={16} /> : null}
+            </span>
+            {data.discount_alert ? (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {discountAlertLabel(data.discount_alert)}
+              </p>
+            ) : null}
           </InfoValueBox>
         </InfoRow>
 
@@ -177,9 +193,22 @@ export function OrderInfoCard({
 
         <InfoRow icon={Gift} label="Бонус">
           <InfoValueBox>
-            <span className="inline-flex rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-              {data.apply_bonus ? "Авто" : "Нет"}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="tabular-nums font-medium">
+                {formatNumberGrouped(Number(data.bonus_sum ?? 0), { maxFractionDigits: 2 })}
+              </span>
+              {Number(data.bonus_qty ?? 0) > 0 ? (
+                <span className="text-muted-foreground text-xs">
+                  ({formatNumberGrouped(Number(data.bonus_qty), { maxFractionDigits: 0 })} шт.)
+                </span>
+              ) : null}
+              {data.bonus_alert ? <DiscountAlertIcon code={data.bonus_alert} size={16} /> : null}
             </span>
+            {data.bonus_alert ? (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {bonusAlertLabel(data.bonus_alert)}
+              </p>
+            ) : null}
           </InfoValueBox>
         </InfoRow>
 
@@ -204,6 +233,22 @@ export function OrderInfoCard({
         ) : null}
 
         <div className="sm:col-span-2">
+          {data.bonus_alert || data.discount_alert ? (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              {data.bonus_alert ? (
+                <p>
+                  <span className="font-medium">Бонус: </span>
+                  {bonusAlertLabel(data.bonus_alert)}
+                </p>
+              ) : null}
+              {data.discount_alert ? (
+                <p className={data.bonus_alert ? "mt-1" : undefined}>
+                  <span className="font-medium">Скидка: </span>
+                  {discountAlertLabel(data.discount_alert)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MessageSquare className="size-5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
             <span>Комментарий</span>

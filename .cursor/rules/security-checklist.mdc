@@ -1,0 +1,48 @@
+---
+description: SALEC xavfsizlik checklist — PR va release oldidan
+globs:
+  - backend/**/*
+  - frontend/**/*
+  - mobile/**/*
+  - infrastructure/**/*
+---
+
+# Xavfsizlik checklist
+
+## Har bir PR
+
+- [ ] Maxfiy ma'lumotlar (`.env`, parollar, tokenlar) commit qilinmagan
+- [ ] Yangi API marshrutlari RBAC guard bilan (`route-permission-guard.ts`)
+- [ ] Raw SQL: faqat `Prisma.sql` — `queryRawUnsafe` yo'q
+- [ ] Input validatsiya: Zod schema (`contracts/`)
+- [ ] Rate limit write API uchun (`writeApiRateLimitRouteOpts`)
+
+## Production deploy
+
+- [ ] `RBAC_ENFORCE_PERMISSIONS=1`
+- [ ] `CORS_ALLOWED_ORIGINS` aniq ro'yxat (wildcard yo'q)
+- [ ] JWT secrets ≥ 32 belgi, default emas
+- [ ] `INTERNAL_HEALTH_TOKEN` — `/ready` va `/metrics`
+- [ ] `npm run backup:pre-release` bajarilgan
+- [ ] Migratsiya: `npm run db:deploy`
+
+## Monitoring
+
+- [ ] Sentry DSN (ixtiyoriy) yoki log shipping
+- [ ] Uptime: `/health` tashqi monitor
+- [ ] Grafana alert qoidalari yangilangan (kerak bo'lsa)
+
+## Frontend / Mobile
+
+- [ ] Auth cookie: `SameSite=Strict`, HTTPS da `Secure`
+- [ ] Mobile: `.env.local` repoda yo'q
+- [ ] APK/foto upload limitlari tekshirilgan
+
+## Tekshiruv buyruqlari
+
+```bash
+cd backend && npm run prod:verify
+cd backend && npm run build
+```
+
+TruffleHog: CI `secret-scan` job.

@@ -114,7 +114,7 @@ function kpiCardTone(status: string): { head: string; body: string } {
     case "new":
       return { head: "bg-sky-100/90 text-sky-800", body: "bg-sky-50/50" };
     case "cancelled":
-      return { head: "bg-slate-100/90 text-slate-700", body: "bg-slate-50/50" };
+      return { head: "bg-muted/90 text-slate-700", body: "bg-muted/50" };
     case "confirmed":
       return { head: "bg-lime-100/90 text-lime-800", body: "bg-lime-50/50" };
     case "delivering":

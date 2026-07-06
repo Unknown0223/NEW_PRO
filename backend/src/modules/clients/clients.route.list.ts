@@ -3,16 +3,18 @@ import { catalogRoles } from "./clients.route.shared";
 
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
 import {
   bulkSetClientsActive,
+  bulkPatchClients,
   exportClientsFilteredCsv,
   getClientReferences,
   listClientsForTenantPaged
 } from "./clients.service";
 import { listDuplicateCandidates } from "./client-dedupe.service";
-import { bulkActiveBodySchema, parseClientListQuery } from "./clients.route.schemas";
+import { bulkActiveBodySchema, bulkPatchBodySchema, parseClientListQuery } from "./clients.route.schemas";
 
 export async function registerClientListRoutes(app: FastifyInstance) {
   app.get(
@@ -100,7 +102,7 @@ export async function registerClientListRoutes(app: FastifyInstance) {
 
   app.patch(
     "/api/:slug/clients/bulk-active",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkActiveBodySchema.safeParse(request.body);
@@ -121,6 +123,35 @@ export async function registerClientListRoutes(app: FastifyInstance) {
         request.tenant!.id,
         parsed.data.client_ids,
         parsed.data.is_active,
+        actorUserId
+      );
+      return reply.send(result);
+    }
+  );
+
+  app.patch(
+    "/api/:slug/clients/bulk",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkPatchBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Request validation failed",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const actor = getAccessUser(request);
+      const sub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+      const result = await bulkPatchClients(
+        request.tenant!.id,
+        parsed.data.client_ids,
+        parsed.data.patch,
         actorUserId
       );
       return reply.send(result);

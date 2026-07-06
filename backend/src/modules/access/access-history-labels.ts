@@ -79,6 +79,7 @@ export function deriveAccessHistoryOperationLabel(row: AccessHistoryLabelInput):
     if (nv.cash_desk_ids !== undefined) return "Кассы пользователя";
     if (nv.payment_methods !== undefined) return "Способы оплаты пользователя";
     if (nv.territory_ids !== undefined) return "Территории пользователя";
+    if (nv.trade_direction_ids !== undefined) return "Направления пользователя";
     if (nv.supervisee_user_ids !== undefined) return "Подчинённые супервайзера";
   }
   if (entity_type === "user" && entity_id) {

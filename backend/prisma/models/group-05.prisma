@@ -96,6 +96,10 @@ model BonusRule {
   product_ids          Int[]                @default([])
   bonus_product_ids    Int[]                @default([])
   product_category_ids Int[]                @default([])
+  /// UI «Только ассортимент» — mahsulot ro‘yxati bilan cheklash
+  scope_restrict_assortment Boolean         @default(false)
+  /// UI «Категория» — `product_category_ids` (+ ixtiyoriy SKU) bilan cheklash
+  scope_restrict_category   Boolean         @default(false)
   target_all_clients   Boolean              @default(true)
   selected_client_ids  Int[]                @default([])
   is_manual            Boolean              @default(false)
@@ -149,6 +153,10 @@ model CashDesk {
   is_active  Boolean            @default(true)
   /// Yopilgan / yakunlangan sessiya holati (UI «статус закрытия»)
   is_closed  Boolean            @default(false)
+  /// Oddiy mijoz to‘lovlari (oplata)
+  accepts_client_payments   Boolean @default(true)
+  /// Skidka bo‘yicha hisob-kitob / «skidka oplata»
+  accepts_discount_payments Boolean @default(true)
   created_at DateTime           @default(now())
   updated_at DateTime           @updatedAt
   shifts                      CashDeskShift[]
@@ -157,6 +165,7 @@ model CashDesk {
   opening_balance_entries     ClientOpeningBalanceEntry[]
   supplier_payments           SupplierPayment[]
   tenant                      Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  clients                     Client[]           @relation("ClientCashDesk")
 
   @@index([tenant_id, is_active])
   @@map("cash_desks")

@@ -8,15 +8,19 @@ import {
 import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.service";
 import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import type { ListClientsQuery } from "./clients.types";
+import { buildClientListSearchOrClause } from "./clients.list.search";
 
 export async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
   const d = Math.floor(day);
   if (d < 1 || d > 7) return [];
   const json = JSON.stringify([d]);
-  const rows = await prisma.$queryRawUnsafe<{ client_id: number }[]>(
-    `SELECT DISTINCT client_id FROM client_agent_assignments WHERE tenant_id = $1 AND visit_weekdays::jsonb @> $2::jsonb`,
-    tenantId,
-    json
+  const rows = await prisma.$queryRaw<{ client_id: number }[]>(
+    Prisma.sql`
+      SELECT DISTINCT client_id
+      FROM client_agent_assignments
+      WHERE tenant_id = ${tenantId}
+        AND visit_weekdays::jsonb @> CAST(${json} AS jsonb)
+    `
   );
   return rows.map((r) => r.client_id);
 }
@@ -343,31 +347,9 @@ export async function buildClientListWhereInput(
     });
   }
 
-  const search = q.search?.trim();
-  if (search) {
-    const orClause: Prisma.ClientWhereInput[] = [
-      { name: { contains: search, mode: "insensitive" } },
-      { legal_name: { contains: search, mode: "insensitive" } },
-      { client_code: { contains: search, mode: "insensitive" } },
-      { phone: { contains: search, mode: "insensitive" } },
-      { inn: { contains: search, mode: "insensitive" } },
-      { client_pinfl: { contains: search, mode: "insensitive" } },
-      { region: { contains: search, mode: "insensitive" } },
-      { city: { contains: search, mode: "insensitive" } },
-      { district: { contains: search, mode: "insensitive" } },
-      { landmark: { contains: search, mode: "insensitive" } },
-      { responsible_person: { contains: search, mode: "insensitive" } },
-      { notes: { contains: search, mode: "insensitive" } },
-      { street: { contains: search, mode: "insensitive" } }
-    ];
-    const idDigits = search.replace(/\s+/g, "");
-    if (/^\d+$/.test(idDigits)) {
-      const idNum = Number.parseInt(idDigits, 10);
-      if (Number.isFinite(idNum) && idNum > 0) {
-        orClause.push({ id: idNum });
-      }
-    }
-    andList.push({ OR: orClause });
+  const searchOr = buildClientListSearchOrClause(q.search ?? "");
+  if (searchOr.length > 0) {
+    andList.push({ OR: searchOr });
   }
 
   if (q.has_coords === true) {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type TableSortDir } from "@/components/ui/table-sort-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

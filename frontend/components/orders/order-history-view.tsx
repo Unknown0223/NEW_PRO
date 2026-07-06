@@ -12,8 +12,10 @@ import { OrderHistoryBonusTable } from "@/components/orders/order-history/order-
 import { OrderHistoryInfoSection } from "@/components/orders/order-history/order-history-info-section";
 import { OrderHistoryPageHeader } from "@/components/orders/order-history/order-history-page-header";
 import { OrderHistorySkeleton } from "@/components/orders/order-history/order-history-skeleton";
+import { HistoryTimeline } from "@/components/history/history-timeline";
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { api } from "@/lib/api";
+import { useEntityHistory } from "@/lib/use-entity-history";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
@@ -34,6 +36,8 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
       return body;
     }
   });
+
+  const timeline = useEntityHistory({ tenantSlug, entityType: "order", entityId: orderId });
 
   const derived = useMemo(() => {
     if (!q.data) return null;
@@ -81,6 +85,15 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
         <OrderHistoryInfoSection versions={derived.versions} products={derived.products} />
 
         <OrderHistoryBonusTable section={derived.bonusSection} />
+
+        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Хронология действий</h2>
+          {timeline.isLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка хронологии...</p>
+          ) : (
+            <HistoryTimeline items={timeline.data?.items ?? []} />
+          )}
+        </section>
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ export function SalesDateTypeFieldset({
 }) {
   return (
     <fieldset
-      className={cn("min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2", className)}
+      className={cn("min-w-0 rounded-xl border border-border bg-card px-3 py-2", className)}
     >
       <legend className="px-1 text-xs font-medium text-slate-500">Дата применяется по</legend>
       <div

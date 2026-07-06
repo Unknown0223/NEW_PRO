@@ -100,14 +100,39 @@ const KPI_BLOCK_SHELL =
 export function SupervisorEnterpriseKpiPanel({
   paymentSlots,
   visitKpi,
+  salesPlanKpi,
   currency = "UZS"
 }: {
   paymentSlots: SupervisorPaymentSlot[];
   visitKpi: VisitKpi;
+  salesPlanKpi?: { planSum: string; factMtdSum: string; executionPct: number | null };
   currency?: string;
 }) {
   return (
     <section className="grid gap-3 lg:grid-cols-2 lg:items-stretch">
+      {salesPlanKpi ? (
+        <div className={cn(KPI_BLOCK_SHELL, "lg:col-span-2")}>
+          <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">
+            KPI план продаж (месяц)
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-muted/60 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">План (одобрено)</p>
+              <p className="text-lg font-bold tabular-nums">{salesPlanKpi.planSum}</p>
+            </div>
+            <div className="rounded-lg bg-muted/60 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">Факт MTD</p>
+              <p className="text-lg font-bold tabular-nums">{salesPlanKpi.factMtdSum}</p>
+            </div>
+            <div className="rounded-lg bg-muted/60 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">Выполнение</p>
+              <p className="text-lg font-bold tabular-nums">
+                {salesPlanKpi.executionPct != null ? `${salesPlanKpi.executionPct.toFixed(1)}%` : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className={KPI_BLOCK_SHELL}>
         <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">
           Продажи по способам оплаты

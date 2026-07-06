@@ -24,6 +24,7 @@ import {
   ensureTenantRolesForRoleDefaults,
   getOperationsCountsForUsers,
   getUsersHaveAccessManage,
+  getUsersAccessDelegationFlags,
   type AccessManageRoleCatalog,
   resolveUserPermissionKeys,
   setRolePermissions
@@ -58,6 +59,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager } from "./access.route.shared";
+import { filterAccessWebAssignableUsers, accessWebAssignableUserWhere } from "./access-web-users.filter";
 
 export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/dimensions/users", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -65,7 +67,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const schema = z.object({
-      type: z.enum(["operations", "cash_desks", "warehouses", "branches", "payment_methods"]),
+      type: z.enum(["operations", "cash_desks", "warehouses", "branches", "payment_methods", "trade_directions"]),
       key: z.string().trim().min(1)
     });
     const parsed = schema.safeParse(request.query ?? {});
@@ -78,7 +80,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
       if (!Number.isInteger(cashDeskId) || cashDeskId < 1)
         return sendApiError(reply, request, 400, "ValidationError", "Invalid cash desk key");
       const rows = await prisma.cashDeskUserLink.findMany({
-        where: { cash_desk_id: cashDeskId, user: { tenant_id: tenantId } },
+        where: { cash_desk_id: cashDeskId, user: accessWebAssignableUserWhere(tenantId) },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -99,7 +101,9 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         data.map((r) => ({ id: r.id, role: r.role }))
       );
       return reply.send({
-        data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        data: filterAccessWebAssignableUsers(
+          data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        )
       });
     }
 
@@ -108,7 +112,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
       if (!Number.isInteger(warehouseId) || warehouseId < 1)
         return sendApiError(reply, request, 400, "ValidationError", "Invalid warehouse key");
       const rows = await prisma.warehouseUserLink.findMany({
-        where: { warehouse_id: warehouseId, user: { tenant_id: tenantId } },
+        where: { warehouse_id: warehouseId, user: accessWebAssignableUserWhere(tenantId) },
         select: {
           link_role: true,
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
@@ -132,13 +136,15 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         data.map((r) => ({ id: r.id, role: r.role }))
       );
       return reply.send({
-        data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        data: filterAccessWebAssignableUsers(
+          data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        )
       });
     }
 
     if (type === "branches") {
       const rows = await prisma.userBranchLink.findMany({
-        where: { tenant_id: tenantId, branch_code: key },
+        where: { tenant_id: tenantId, branch_code: key, user: accessWebAssignableUserWhere(tenantId) },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -159,13 +165,15 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         data.map((r) => ({ id: r.id, role: r.role }))
       );
       return reply.send({
-        data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        data: filterAccessWebAssignableUsers(
+          data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        )
       });
     }
 
     if (type === "payment_methods") {
       const rows = await prisma.userPaymentMethodLink.findMany({
-        where: { tenant_id: tenantId, payment_method: key },
+        where: { tenant_id: tenantId, payment_method: key, user: accessWebAssignableUserWhere(tenantId) },
         select: {
           user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
         },
@@ -186,7 +194,42 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         data.map((r) => ({ id: r.id, role: r.role }))
       );
       return reply.send({
-        data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        data: filterAccessWebAssignableUsers(
+          data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        )
+      });
+    }
+
+    if (type === "trade_directions") {
+      const directionId = Number(key);
+      if (!Number.isInteger(directionId) || directionId < 1) {
+        return sendApiError(reply, request, 400, "ValidationError", "Invalid trade direction key");
+      }
+      const rows = await prisma.userTradeDirectionLink.findMany({
+        where: { tenant_id: tenantId, trade_direction_id: directionId, user: accessWebAssignableUserWhere(tenantId) },
+        select: {
+          user: { select: { id: true, login: true, name: true, code: true, role: true, position: true, is_active: true } }
+        },
+        orderBy: [{ user: { name: "asc" } }, { user: { login: "asc" } }]
+      });
+      const data = rows.map((r) => ({
+        id: r.user.id,
+        login: r.user.login,
+        full_name: r.user.name,
+        code: r.user.code,
+        role: r.user.role,
+        position: r.user.position,
+        is_active: r.user.is_active,
+        source: "scope"
+      }));
+      const manageSet = await getUsersHaveAccessManage(
+        tenantId,
+        data.map((r) => ({ id: r.id, role: r.role }))
+      );
+      return reply.send({
+        data: filterAccessWebAssignableUsers(
+          data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+        )
       });
     }
 
@@ -305,13 +348,17 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
         from_direct_allow: x.from_direct_allow,
         from_direct_deny: x.from_direct_deny,
         from_role: x.from_role
-      }));
+      }))
+      .filter((x) => !x.from_direct_deny && (x.from_direct_allow || x.from_role));
 
     const MANAGE_CHUNK = 350;
     const manageRows = data.map((r) => ({ id: r.id, role: r.role }));
     let manageSet = new Set<number>();
+    let moduleViewSet = new Set<number>();
     if (manageRows.length <= MANAGE_CHUNK) {
-      manageSet = await getUsersHaveAccessManage(tenantId, manageRows);
+      const flags = await getUsersAccessDelegationFlags(tenantId, manageRows);
+      manageSet = flags.canGrant;
+      moduleViewSet = flags.hasModuleView;
     } else {
       const roleRowsCached = await prisma.role.findMany({
         where: { tenant_id: tenantId },
@@ -323,12 +370,19 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
       const catalog: AccessManageRoleCatalog = new Map(roleRowsCached.map((r) => [r.key, r]));
       for (let i = 0; i < manageRows.length; i += MANAGE_CHUNK) {
         const chunk = manageRows.slice(i, i + MANAGE_CHUNK);
-        const part = await getUsersHaveAccessManage(tenantId, chunk, catalog);
-        for (const id of part) manageSet.add(id);
+        const flags = await getUsersAccessDelegationFlags(tenantId, chunk, catalog);
+        for (const id of flags.canGrant) manageSet.add(id);
+        for (const id of flags.hasModuleView) moduleViewSet.add(id);
       }
     }
     return reply.send({
-      data: data.map((r) => ({ ...r, has_access_manage: manageSet.has(r.id) }))
+      data: filterAccessWebAssignableUsers(
+        data.map((r) => ({
+          ...r,
+          has_access_manage: manageSet.has(r.id),
+          has_access_module_view: moduleViewSet.has(r.id)
+        }))
+      )
     });
   });
 }

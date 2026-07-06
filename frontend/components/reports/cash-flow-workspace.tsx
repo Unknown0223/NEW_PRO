@@ -369,25 +369,25 @@ export function CashFlowWorkspace() {
   const payload = reportQ.data;
 
   const panelClass =
-    "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-border dark:bg-card dark:shadow-none";
+    "rounded-xl border border-border bg-card shadow-sm dark:border-border dark:bg-card dark:shadow-none";
 
   return (
     <PageShell className="space-y-4">
       <PageHeader
-        className="border-b border-slate-200 pb-4 dark:border-border/70"
+        className="border-b border-border pb-4 dark:border-border/70"
         title={<span className="text-slate-900 dark:text-foreground">Движение денежных средств</span>}
         description="Фильтр: from, to, cash_desk_id или cashbox_id (код кассы, напр. asosiy_kassa). Остаток на начало — сумма подтверждённых движений по кассе до периода; приход/расход — в периоде; закрытие = начало + приход − расход (по Terminal и Naqd отдельно)."
       />
 
       <div className={cn(panelClass, "p-4 sm:p-5")}>
-        <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 dark:border-border/60 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border pb-4 dark:border-border/60 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Касса</Label>
             <select
               className={cn(
                 filterPanelSelectClassName,
-                "h-10 min-w-[min(100%,240px)] bg-white text-slate-900 shadow-sm dark:bg-background sm:min-w-[260px]",
-                "border-slate-200 focus:border-teal-500 focus:ring-teal-500/20 dark:border-input"
+                "h-10 min-w-[min(100%,240px)] bg-card text-slate-900 shadow-sm dark:bg-background sm:min-w-[260px]",
+                "border-border focus:border-teal-500 focus:ring-teal-500/20 dark:border-input"
               )}
               value={deskDraft}
               onChange={(e) => setDeskDraft(e.target.value)}
@@ -408,7 +408,7 @@ export function CashFlowWorkspace() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-10 min-w-[220px] justify-start gap-2 border-slate-200 bg-white font-normal text-slate-800 shadow-sm dark:border-input dark:bg-background dark:text-foreground"
+                className="h-10 min-w-[220px] justify-start gap-2 border-border bg-card font-normal text-slate-800 shadow-sm dark:border-input dark:bg-background dark:text-foreground"
                 onClick={() => setDateRangeOpen((o) => !o)}
               >
                 <CalendarDays className="size-4 text-slate-500" />
@@ -427,18 +427,18 @@ export function CashFlowWorkspace() {
               />
             </div>
             <details className="relative">
-              <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm dark:border-input dark:bg-background [&::-webkit-details-marker]:hidden">
+              <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-md border border-border bg-card text-slate-600 shadow-sm dark:border-input dark:bg-background [&::-webkit-details-marker]:hidden">
                 <Filter className="size-4" aria-hidden />
                 <span className="sr-only">Связанные разделы</span>
               </summary>
-              <div className="absolute right-0 z-20 mt-1 w-[min(100vw-2rem,22rem)] rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg dark:border-border dark:bg-popover">
+              <div className="absolute right-0 z-20 mt-1 w-[min(100vw-2rem,22rem)] rounded-lg border border-border bg-card p-3 text-xs shadow-lg dark:border-border dark:bg-popover">
                 <p className="mb-2 font-medium text-slate-700 dark:text-foreground">Связанные разделы</p>
                 <div className="flex flex-col gap-1">
                   {RELATED_LINKS.map((l) => (
                     <Link
                       key={l.href}
                       href={l.href}
-                      className="rounded-md px-2 py-1.5 text-slate-700 hover:bg-slate-100 dark:text-foreground dark:hover:bg-muted"
+                      className="rounded-md px-2 py-1.5 text-slate-700 hover:bg-muted dark:text-foreground dark:hover:bg-muted"
                     >
                       {l.label}
                     </Link>
@@ -450,7 +450,7 @@ export function CashFlowWorkspace() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-10 gap-1 border-slate-200 bg-white px-2 text-slate-600 shadow-sm dark:border-input dark:bg-background"
+              className="h-10 gap-1 border-border bg-card px-2 text-slate-600 shadow-sm dark:border-input dark:bg-background"
               onClick={reset}
               title="Сброс периода и кассы"
             >
@@ -499,7 +499,7 @@ export function CashFlowWorkspace() {
             Сводка за период
           </p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 shadow-sm dark:border-border dark:bg-muted/20">
+            <div className="rounded-lg border border-border bg-muted/60 p-4 shadow-sm dark:border-border dark:bg-muted/20">
               <div className="flex items-start gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-teal-500 text-white shadow-sm dark:bg-teal-600">
                   <Wallet className="size-5" />
@@ -509,7 +509,7 @@ export function CashFlowWorkspace() {
                   <p className="text-xl font-semibold tabular-nums text-slate-900 dark:text-foreground">
                     {formatNumberGrouped(payload.summary.opening.total, { minFractionDigits: 0, maxFractionDigits: 0 })}
                   </p>
-                  <div className="mt-2 space-y-0.5 border-t border-slate-200/80 pt-2 text-[11px] dark:border-border/60">
+                  <div className="mt-2 space-y-0.5 border-t border-border/80 pt-2 text-[11px] dark:border-border/60">
                     <div className="flex justify-between gap-2 text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
@@ -540,7 +540,7 @@ export function CashFlowWorkspace() {
             </div>
             <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 p-4 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/30">
               <div className="flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-200/80 dark:bg-background dark:text-emerald-400 dark:ring-emerald-800">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-card text-emerald-600 shadow-sm ring-1 ring-emerald-200/80 dark:bg-background dark:text-emerald-400 dark:ring-emerald-800">
                   <ArrowDownLeft className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -570,7 +570,7 @@ export function CashFlowWorkspace() {
             </div>
             <div className="rounded-lg border border-rose-200/80 bg-rose-50/90 p-4 shadow-sm dark:border-rose-900/40 dark:bg-rose-950/30">
               <div className="flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-white text-rose-600 shadow-sm ring-1 ring-rose-200/80 dark:bg-background dark:text-rose-400 dark:ring-rose-800">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-card text-rose-600 shadow-sm ring-1 ring-rose-200/80 dark:bg-background dark:text-rose-400 dark:ring-rose-800">
                   <ArrowUpRight className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -598,7 +598,7 @@ export function CashFlowWorkspace() {
                 </div>
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4 shadow-sm dark:border-border dark:bg-muted/20">
+            <div className="rounded-lg border border-border bg-muted/60 p-4 shadow-sm dark:border-border dark:bg-muted/20">
               <div className="flex items-start gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-teal-500 text-white shadow-sm dark:bg-teal-600">
                   <Wallet className="size-5" />
@@ -608,7 +608,7 @@ export function CashFlowWorkspace() {
                   <p className="text-xl font-semibold tabular-nums text-slate-900 dark:text-foreground">
                     {formatNumberGrouped(payload.summary.closing.total, { minFractionDigits: 0, maxFractionDigits: 0 })}
                   </p>
-                  <div className="mt-2 space-y-0.5 border-t border-slate-200/80 pt-2 text-[11px] dark:border-border/60">
+                  <div className="mt-2 space-y-0.5 border-t border-border/80 pt-2 text-[11px] dark:border-border/60">
                     <div className="flex justify-between gap-2 text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <CreditCard className="size-3 opacity-70" />
@@ -635,7 +635,7 @@ export function CashFlowWorkspace() {
               Приход за период: Terminal / Naqd
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
+              <div className="rounded-lg border border-border bg-card p-4 shadow-sm dark:border-border dark:bg-card">
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-foreground">
                     <CreditCard className="size-4 text-blue-600 dark:text-blue-400" />
@@ -656,7 +656,7 @@ export function CashFlowWorkspace() {
                   })}
                 </p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-card">
+              <div className="rounded-lg border border-border bg-card p-4 shadow-sm dark:border-border dark:bg-card">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-slate-800 dark:text-foreground">Naqd</span>
                   {payload.payment_type_breakdown.cash_share_pct != null ? (
@@ -683,7 +683,7 @@ export function CashFlowWorkspace() {
               const wT = (t / tot) * 100;
               const wC = (c / tot) * 100;
               return (
-                <div className="flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-muted">
+                <div className="flex h-2 overflow-hidden rounded-full bg-muted dark:bg-muted">
                   <div
                     className="h-full bg-blue-600 transition-[width] dark:bg-blue-500"
                     style={{ width: `${wT}%` }}
@@ -699,14 +699,14 @@ export function CashFlowWorkspace() {
             })()}
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-border dark:bg-card">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-white px-2 py-2 dark:border-border dark:bg-card">
+          <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm dark:border-border dark:bg-card">
+            <div className="flex items-center justify-between border-b border-border bg-card px-2 py-2 dark:border-border dark:bg-card">
               <div className="flex gap-0.5">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-9 text-slate-600 hover:bg-slate-100 dark:hover:bg-muted"
+                  className="size-9 text-slate-600 hover:bg-muted dark:hover:bg-muted"
                   aria-label="Развернуть все группы"
                   onClick={() => setExpanded(new Set(["income", "expense"]))}
                 >
@@ -716,7 +716,7 @@ export function CashFlowWorkspace() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-9 text-slate-600 hover:bg-slate-100 dark:hover:bg-muted"
+                  className="size-9 text-slate-600 hover:bg-muted dark:hover:bg-muted"
                   aria-label="Свернуть все группы"
                   onClick={() => setExpanded(new Set())}
                 >
@@ -726,7 +726,7 @@ export function CashFlowWorkspace() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-9 text-slate-600 hover:bg-slate-100 dark:hover:bg-muted"
+                  className="size-9 text-slate-600 hover:bg-muted dark:hover:bg-muted"
                   aria-label="Обновить таблицу"
                   onClick={() => void reportQ.refetch()}
                 >
@@ -759,7 +759,7 @@ export function CashFlowWorkspace() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-border dark:bg-muted/50 dark:text-muted-foreground">
+                  <tr className="border-b border-border bg-muted text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-border dark:bg-muted/50 dark:text-muted-foreground">
                       <th className="px-3 py-2.5">Статья движения денежных средств</th>
                       <th className="px-3 py-2.5 text-right tabular-nums">Terminal</th>
                       <th className="px-3 py-2.5 text-right tabular-nums">Naqd</th>
@@ -771,7 +771,7 @@ export function CashFlowWorkspace() {
                       const isIncome = row.kind === "income";
                       const isExpense = row.kind === "expense";
                       const rowBg =
-                        isIncome ? "bg-emerald-50 dark:bg-emerald-950/30" : isExpense ? "bg-rose-50 dark:bg-rose-950/30" : "bg-white dark:bg-background";
+                        isIncome ? "bg-emerald-50 dark:bg-emerald-950/30" : isExpense ? "bg-rose-50 dark:bg-rose-950/30" : "bg-card dark:bg-background";
                       const hasChildren = row.children.length > 0;
                       const open = expanded.has(row.key);
                       return (
@@ -812,7 +812,7 @@ export function CashFlowWorkspace() {
                             ? row.children.map((c) => {
                                 const src = childRowSourceLink(c.key);
                                 return (
-                                <tr key={`${row.key}-${c.key}`} className="border-b border-slate-100 bg-slate-50/80 dark:border-border dark:bg-muted/20">
+                                <tr key={`${row.key}-${c.key}`} className="border-b border-border bg-muted/80 dark:border-border dark:bg-muted/20">
                                   <td className="px-3 py-2 pl-12 text-muted-foreground">
                                     {src ? (
                                       <Link href={src} className="text-primary underline hover:text-primary/90">
@@ -843,7 +843,7 @@ export function CashFlowWorkspace() {
               </div>
             </div>
 
-          <details className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs dark:border-border dark:bg-muted/30">
+          <details className="rounded-lg border border-border bg-muted/80 px-3 py-2 text-xs dark:border-border dark:bg-muted/30">
             <summary className="cursor-pointer list-none font-medium text-slate-700 dark:text-foreground [&::-webkit-details-marker]:hidden">
               Дополнительно: ledger и источники данных
             </summary>
@@ -861,7 +861,7 @@ export function CashFlowWorkspace() {
                   {payload.data_model_mapping.map((m) => (
                     <li key={m.concept}>
                       <span className="font-medium text-slate-800 dark:text-foreground/90">{m.concept}</span> —{" "}
-                      <code className="rounded bg-white px-1 py-0.5 font-mono text-[11px] dark:bg-muted">{m.source}</code>
+                      <code className="rounded bg-card px-1 py-0.5 font-mono text-[11px] dark:bg-muted">{m.source}</code>
                       {m.comment ? <span> — {m.comment}</span> : null}
                     </li>
                   ))}

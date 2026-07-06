@@ -22,7 +22,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Download, FileSpreadsheet, LayoutGrid, ListFilter, Pencil, RefreshCw, Search, Upload, X } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 const TABLE_ID = "goods_receipts.list.v1";
 const COLS = [
@@ -293,7 +293,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
     staleTime: STALE.list
   });
 
-  const rows = listQ.data?.data ?? [];
+  const rows = useMemo(() => listQ.data?.data ?? [], [listQ.data?.data]);
   const total = listQ.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / tablePrefs.pageSize));
 

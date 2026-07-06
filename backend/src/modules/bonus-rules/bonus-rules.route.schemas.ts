@@ -20,6 +20,8 @@ const targetingFields = {
   product_ids: z.array(z.number().int().positive()).optional(),
   bonus_product_ids: z.array(z.number().int().positive()).optional(),
   product_category_ids: z.array(z.number().int().positive()).optional(),
+  scope_restrict_assortment: z.boolean().optional(),
+  scope_restrict_category: z.boolean().optional(),
   target_all_clients: z.boolean().optional(),
   selected_client_ids: z.array(z.number().int().positive()).optional(),
   is_manual: z.boolean().optional(),
@@ -50,6 +52,16 @@ export const createBodySchema = z
   .extend(targetingFields);
 
 export const updateBodySchema = createBodySchema.partial();
+
+export const orderScopeBodySchema = z
+  .object({
+    scope_branch_codes: z.array(z.string().max(500)).max(200).optional(),
+    scope_agent_user_ids: z.array(z.number().int().positive()).max(2000).optional(),
+    scope_trade_direction_ids: z.array(z.number().int().positive()).max(200).optional(),
+    target_all_clients: z.boolean().optional(),
+    selected_client_ids: z.array(z.number().int().positive()).optional()
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "EmptyBody" });
 
 export const activeBodySchema = z.object({
   is_active: z.boolean()

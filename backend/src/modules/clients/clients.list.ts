@@ -1,5 +1,9 @@
 /** Clients list — export, bulk, paged. */
+import type { PatchClientBody } from "../../contracts/clients.schemas";
+import { updateClientFields } from "./clients.write.update";
 export * from "./clients.list.where";
+export { exportClientsFilteredCsv } from "./clients.list.export";
+export { clientListOrderBy } from "./clients.list.sort";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
@@ -14,101 +18,9 @@ import {
   mergeAgentDisplayFromAssignments
 } from "./clients.agent-assignments";
 import { appendClientAuditLogsBatch } from "./clients.audit";
+import { invalidateClientDetailCache } from "../../lib/redis-cache";
 import { buildClientListWhereInput } from "./clients.list.where";
-
-const CLIENTS_EXPORT_MAX = 10_000;
-
-function csvEscapeCell(v: string): string {
-  const t = String(v).replace(/\r?\n/g, " ").replace(/"/g, '""');
-  if (/[";\n]/.test(t)) return `"${t}"`;
-  return t;
-}
-
-export async function exportClientsFilteredCsv(
-  tenantId: number,
-  q: ListClientsQuery
-): Promise<{ csv: string; truncated: boolean; totalMatched: number }> {
-  const where = await buildClientListWhereInput(tenantId, q);
-  const headers = [
-    "ID",
-    "Nomi",
-    "Firma",
-    "Telefon",
-    "INN",
-    "Viloyat",
-    "Shahar",
-    "Tuman",
-    "Zona",
-    "Toifa",
-    "Tur",
-    "Format",
-    "Savdo kanali",
-    "Faol",
-    "Yaratilgan"
-  ];
-  if (where === null) {
-    return {
-      csv: `\ufeff${headers.map(csvEscapeCell).join(";")}\n`,
-      truncated: false,
-      totalMatched: 0
-    };
-  }
-
-  const totalMatched = await prisma.client.count({ where });
-  const rows = await prisma.client.findMany({
-    where,
-    take: CLIENTS_EXPORT_MAX,
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      legal_name: true,
-      phone: true,
-      inn: true,
-      region: true,
-      city: true,
-      district: true,
-      zone: true,
-      category: true,
-      client_type_code: true,
-      client_format: true,
-      sales_channel: true,
-      is_active: true,
-      created_at: true
-    }
-  });
-
-  const lines = [
-    headers.map(csvEscapeCell).join(";"),
-    ...rows.map((r) =>
-      [
-        String(r.id),
-        r.name ?? "",
-        r.legal_name ?? "",
-        r.phone ?? "",
-        r.inn ?? "",
-        r.region ?? "",
-        r.city ?? "",
-        r.district ?? "",
-        r.zone ?? "",
-        r.category ?? "",
-        r.client_type_code ?? "",
-        r.client_format ?? "",
-        r.sales_channel ?? "",
-        r.is_active ? "ha" : "yo‘q",
-        r.created_at.toISOString().slice(0, 10)
-      ]
-        .map(csvEscapeCell)
-        .join(";")
-    )
-  ];
-
-  return {
-    csv: `\ufeff${lines.join("\n")}`,
-    truncated: totalMatched > CLIENTS_EXPORT_MAX,
-    totalMatched
-  };
-}
+import { clientListOrderBy } from "./clients.list.sort";
 
 export async function bulkSetClientsActive(
   tenantId: number,
@@ -140,61 +52,53 @@ export async function bulkSetClientsActive(
   });
 
   await appendClientAuditLogsBatch(tenantId, ok, actorUserId, "client.bulk_set_active", { is_active });
+  await Promise.all(ok.map((id) => invalidateClientDetailCache(tenantId, id)));
 
   return { updated: ok.length };
 }
 
-export function clientListOrderBy(
-  sortField: NonNullable<ListClientsQuery["sort"]>,
-  ord: Prisma.SortOrder
-): Prisma.ClientOrderByWithRelationInput {
-  switch (sortField) {
-    case "phone":
-      return { phone: ord };
-    case "id":
-      return { id: ord };
-    case "created_at":
-      return { created_at: ord };
-    case "region":
-      return { region: ord };
-    case "legal_name":
-      return { legal_name: ord };
-    case "address":
-      return { address: ord };
-    case "responsible_person":
-      return { responsible_person: ord };
-    case "landmark":
-      return { landmark: ord };
-    case "inn":
-      return { inn: ord };
-    case "client_pinfl":
-      return { client_pinfl: ord };
-    case "sales_channel":
-      return { sales_channel: ord };
-    case "category":
-      return { category: ord };
-    case "client_type_code":
-      return { client_type_code: ord };
-    case "client_format":
-      return { client_format: ord };
-    case "district":
-      return { district: ord };
-    case "neighborhood":
-      return { neighborhood: ord };
-    case "zone":
-      return { zone: ord };
-    case "city":
-      return { city: ord };
-    case "client_code":
-      return { client_code: ord };
-    case "latitude":
-      return { latitude: ord };
-    case "longitude":
-      return { longitude: ord };
-    case "name":
-    default:
-      return { name: ord };
+function mapBulkPatchInput(patch: PatchClientBody) {
+  return {
+    ...patch,
+    contact_persons: patch.contact_persons?.map((s) => ({
+      firstName: s.firstName ?? null,
+      lastName: s.lastName ?? null,
+      phone: s.phone ?? null
+    }))
+  };
+}
+
+export async function bulkPatchClients(
+  tenantId: number,
+  clientIds: number[],
+  patch: PatchClientBody,
+  actorUserId: number | null
+): Promise<{ updated: number; failed: Array<{ id: number; error: string }> }> {
+  const MAX = 500;
+  const ids = [...new Set(clientIds.map((x) => Math.floor(Number(x))).filter((x) => Number.isFinite(x) && x > 0))].slice(
+    0,
+    MAX
+  );
+  if (ids.length === 0) {
+    return { updated: 0, failed: [] };
   }
+
+  const mapped = mapBulkPatchInput(patch);
+  let updated = 0;
+  const failed: Array<{ id: number; error: string }> = [];
+
+  for (const id of ids) {
+    try {
+      await updateClientFields(tenantId, id, mapped, actorUserId);
+      await invalidateClientDetailCache(tenantId, id);
+      updated += 1;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "UNKNOWN";
+      failed.push({ id, error: msg });
+    }
+  }
+
+  return { updated, failed };
 }
 
 export async function listClientsForTenantPaged(
@@ -260,12 +164,21 @@ export async function listClientsForTenantPaged(
         latitude: true,
         longitude: true,
         zone: true,
+        warehouse_id: true,
+        cash_desk_id: true,
         contact_persons: true,
         agent_id: true,
         agent: { select: { name: true, code: true } },
+        warehouse: { select: { name: true } },
+        cash_desk: { select: { name: true } },
         agent_assignments: {
           orderBy: { slot: "asc" },
           select: agentAssignmentSelectFields
+        },
+        _count: {
+          select: {
+            client_equipment: { where: { removed_at: null } }
+          }
         },
         client_balances: { take: 1, select: { balance: true } }
       }
@@ -330,11 +243,16 @@ export async function listClientsForTenantPaged(
         latitude: c.latitude != null ? c.latitude.toString() : null,
         longitude: c.longitude != null ? c.longitude.toString() : null,
         zone: c.zone,
+        warehouse_id: c.warehouse_id,
+        warehouse_name: c.warehouse?.name ?? null,
+        cash_desk_id: c.cash_desk_id,
+        cash_desk_name: c.cash_desk?.name ?? null,
         agent_id: disp.agent_id,
         agent_name: disp.agent_name,
         agent_assignments,
         contact_persons: parseContactPersonsJson(c.contact_persons),
-        created_at: c.created_at.toISOString()
+        created_at: c.created_at.toISOString(),
+        active_equipment_count: c._count.client_equipment
       };
     }),
     total,

@@ -1,7 +1,8 @@
 # Ishchi o‘rni (WorkSlot) — qilingan ishlar va tekshirish
 
-Oxirgi yangilanish: 2026-05-16  
-Reja: `.cursor/plans/ishchi_o‘rni_soddalashtirilgan_reja_ca80c600.plan.md`
+Oxirgi yangilanish: 2026-06-26  
+Reja: `.cursor/plans/ishchi_o‘rni_soddalashtirilgan_reja_ca80c600.plan.md`  
+Yakun hujjati: `docs/WORK_SLOTS_YAKUNLANDI.md`
 
 ---
 
@@ -257,4 +258,5 @@ Mijoz → tahrirlash → slot 1 → qulflash «Shartnoma» + keyin (agar UI da b
 | UI ro‘yxat | `frontend/components/work-slots/work-slots-workspace.tsx` |
 | UI batafsil | `frontend/components/work-slots/work-slot-detail.tsx` |
 | Mijoz qulfi | `frontend/components/work-slots/assignment-lock-panel.tsx` |
-| Testlar | `backend/tests/work-slots.*.test.ts` |
+| Testlar | `backend/tests/work-slots.*.test.ts`, `frontend/tests/work-slots-utils.test.ts` |
+| Verify | `npm run work-slots:verify` (backend 30 + frontend 5) |

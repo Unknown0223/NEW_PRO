@@ -4,28 +4,67 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { CalendarDays, ChevronLeft, ChevronRight, Filter, RotateCcw, Search } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Filter,
+  RotateCcw,
+  Search,
+  Smartphone,
+  Monitor
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { api } from "@/lib/api";
+import {
+  DailyReturnWaybillModal,
+  type DailyWaybillRef
+} from "@/components/orders/daily-return-waybill-modal";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 
 type Row = {
-  id: number;
-  number: string;
-  client_name: string | null;
-  order_number?: string | null;
-  warehouse_name: string;
-  expeditor_display?: string | null;
-  status: string;
-  refund_amount: string | null;
+  id: string;
+  courier_id: number;
+  courier_name: string | null;
+  creation_channel: "web" | "mobile";
+  date: string;
   created_at: string;
+  warehouse_name: string;
+  warehouse_count: number;
+  return_count: number;
+  item_count: number;
+  total_qty: number;
+  refund_total: string;
+  status: "pending" | "posted" | "cancelled";
+  pending_count: number;
+  accepted_at: string | null;
 };
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Ожидает приёмки",
+  posted: "Принят",
+  cancelled: "Отклонён"
+};
+
+function fmtQty(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, "");
+}
 
 export default function ReturnInvoicesPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const role = useEffectiveRole();
+  const canAccept = isAdminOrOperatorLikeRole(role);
   const hydrated = useAuthStoreHydrated();
+
+  const [openWaybill, setOpenWaybill] = useState<{ ref: DailyWaybillRef; confirm: boolean } | null>(
+    null
+  );
+
   const [warehouseDraft, setWarehouseDraft] = useState("all");
   const [expeditorDraft, setExpeditorDraft] = useState("all");
   const [statusDraft, setStatusDraft] = useState<"all" | "pending" | "posted" | "cancelled">("all");
@@ -43,7 +82,9 @@ export default function ReturnInvoicesPage() {
     queryKey: ["return-invoices-warehouses", tenantSlug],
     enabled: Boolean(tenantSlug) && hydrated,
     queryFn: async () => {
-      const { data } = await api.get<{ data: { id: number; name: string }[] }>(`/api/${tenantSlug}/warehouses`);
+      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
+        `/api/${tenantSlug}/warehouses`
+      );
       return data.data ?? [];
     }
   });
@@ -51,37 +92,52 @@ export default function ReturnInvoicesPage() {
     queryKey: ["return-invoices-expeditors", tenantSlug],
     enabled: Boolean(tenantSlug) && hydrated,
     queryFn: async () => {
-      const { data } = await api.get<{ data: { id: number; fio: string }[] }>(`/api/${tenantSlug}/expeditors`);
+      const { data } = await api.get<{ data: { id: number; fio: string }[] }>(
+        `/api/${tenantSlug}/expeditors`
+      );
       return data.data ?? [];
     }
   });
 
   const listQ = useQuery({
-    queryKey: ["return-invoices", tenantSlug, warehouse, expeditor, status, search, dateFrom, dateTo],
+    queryKey: ["return-invoices", tenantSlug, warehouse, status, dateFrom, dateTo],
     enabled: Boolean(tenantSlug) && hydrated,
     queryFn: async () => {
-      const params = new URLSearchParams({ page: "1", limit: "50" });
+      const params = new URLSearchParams();
       if (warehouse !== "all") params.set("warehouse_id", warehouse);
-      if (expeditor !== "all") params.set("expeditor_id", expeditor);
       if (status !== "all") params.set("status", status);
-      if (search.trim()) params.set("search", search.trim());
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo) params.set("date_to", dateTo);
-      const { data } = await api.get<{ data: Row[] }>(`/api/${tenantSlug}/returns?${params.toString()}`);
+      const { data } = await api.get<{ data: Row[] }>(
+        `/api/${tenantSlug}/returns/daily-waybills?${params.toString()}`
+      );
       return data.data ?? [];
     }
   });
-  const rows = listQ.data ?? [];
+
+  const selectedExpeditorFio = useMemo(() => {
+    if (expeditor === "all") return null;
+    return (expeditorsQ.data ?? []).find((e) => String(e.id) === expeditor)?.fio ?? null;
+  }, [expeditor, expeditorsQ.data]);
+
+  const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
   const filteredRows = useMemo(() => {
-    if (!search.trim()) return rows;
-    const needle = search.toLowerCase();
-    return rows.filter((r) =>
-      [r.number, r.client_name ?? "", r.warehouse_name, r.status, r.expeditor_display ?? ""]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle)
-    );
-  }, [rows, search]);
+    let out = rows;
+    if (selectedExpeditorFio) {
+      const fio = selectedExpeditorFio.toLowerCase();
+      out = out.filter((r) => (r.courier_name ?? "").toLowerCase().includes(fio));
+    }
+    if (search.trim()) {
+      const needle = search.toLowerCase();
+      out = out.filter((r) =>
+        [r.courier_name ?? "", r.warehouse_name, r.date, STATUS_LABELS[r.status] ?? r.status]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle)
+      );
+    }
+    return out;
+  }, [rows, search, selectedExpeditorFio]);
 
   const statusBadgeClass = (v: string) => {
     if (v === "posted") return "bg-emerald-100 text-emerald-700";
@@ -90,10 +146,42 @@ export default function ReturnInvoicesPage() {
     return "bg-muted text-foreground";
   };
 
+  const applyFilters = () => {
+    setWarehouse(warehouseDraft);
+    setExpeditor(expeditorDraft);
+    setStatus(statusDraft);
+    setSearch(searchDraft);
+  };
+  const resetFilters = () => {
+    setWarehouseDraft("all");
+    setExpeditorDraft("all");
+    setStatusDraft("all");
+    setSearchDraft("");
+    setWarehouse("all");
+    setExpeditor("all");
+    setStatus("all");
+    setSearch("");
+  };
+
   return (
     <div className="space-y-4">
+      {openWaybill && tenantSlug && (
+        <DailyReturnWaybillModal
+          slug={tenantSlug}
+          waybill={openWaybill.ref}
+          canAccept={canAccept}
+          startInConfirm={openWaybill.confirm}
+          onClose={() => setOpenWaybill(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Возвратные накладные</h1>
+        <div>
+          <h1 className="text-xl font-semibold">Возвратные накладные</h1>
+          <p className="text-xs text-muted-foreground">
+            Сводные накладные — по каждому экспедитору за день
+          </p>
+        </div>
         <div className="flex items-center gap-1 rounded-md border border-input bg-background px-1.5 py-1">
           <button type="button" className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted/50">
             <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
@@ -146,9 +234,9 @@ export default function ReturnInvoicesPage() {
                 className="h-8 w-[190px] rounded-md border border-input bg-background px-2 text-sm"
               >
                 <option value="all">Статус</option>
-                <option value="pending">Ожидает</option>
-                <option value="posted">Подтвержден</option>
-                <option value="cancelled">Отменен</option>
+                <option value="pending">Ожидает приёмки</option>
+                <option value="posted">Принят</option>
+                <option value="cancelled">Отклонён</option>
               </select>
             </div>
             <div className="flex items-center justify-end gap-2">
@@ -158,30 +246,11 @@ export default function ReturnInvoicesPage() {
               <Button
                 size="sm"
                 className="h-8 bg-teal-700 px-3 text-xs text-white hover:bg-teal-800"
-                onClick={() => {
-                  setWarehouse(warehouseDraft);
-                  setExpeditor(expeditorDraft);
-                  setStatus(statusDraft);
-                  setSearch(searchDraft);
-                }}
+                onClick={applyFilters}
               >
                 Применить
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 w-8 px-0"
-                onClick={() => {
-                  setWarehouseDraft("all");
-                  setExpeditorDraft("all");
-                  setStatusDraft("all");
-                  setSearchDraft("");
-                  setWarehouse("all");
-                  setExpeditor("all");
-                  setStatus("all");
-                  setSearch("");
-                }}
-              >
+              <Button size="sm" variant="outline" className="h-8 w-8 px-0" onClick={resetFilters}>
                 <RotateCcw className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -209,11 +278,6 @@ export default function ReturnInvoicesPage() {
             <div className="overflow-x-auto">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <select className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-                    <option>10</option>
-                    <option>25</option>
-                    <option>50</option>
-                  </select>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -222,53 +286,112 @@ export default function ReturnInvoicesPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") setSearch(searchDraft);
                       }}
-                      placeholder="Поиск"
-                      className="h-8 w-[180px] pl-7 text-xs"
+                      placeholder="Поиск (экспедитор, склад, дата)"
+                      className="h-8 w-[240px] pl-7 text-xs"
                     />
                   </div>
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setSearch(searchDraft)}>
                     Поиск
                   </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" className="h-8">Excel</Button>
-                  <div className="text-xs text-muted-foreground">Всего: {filteredRows.length}</div>
-                </div>
+                <div className="text-xs text-muted-foreground">Всего: {filteredRows.length}</div>
               </div>
-              <table className="w-full min-w-[1200px] border-collapse text-sm">
+              <table className="w-full min-w-[1000px] border-collapse text-sm">
                 <thead className="app-table-thead text-left">
                   <tr>
-                    <th className="px-3 py-2">ID</th>
-                    <th className="px-3 py-2">Дата создания</th>
-                    <th className="px-3 py-2">Склад</th>
-                    <th className="px-3 py-2">Дата отгрузки</th>
+                    <th className="px-3 py-2">Дата</th>
                     <th className="px-3 py-2">Экспедитор</th>
-                    <th className="px-3 py-2">Дата подтверждения</th>
-                    <th className="px-3 py-2">Подтвержденная дата отправки</th>
+                    <th className="px-3 py-2">Источник</th>
+                    <th className="px-3 py-2">Склад</th>
+                    <th className="px-3 py-2 text-right">Возвратов</th>
+                    <th className="px-3 py-2 text-right">Позиций</th>
+                    <th className="px-3 py-2 text-right">Кол-во</th>
                     <th className="px-3 py-2">Статус</th>
-                    <th className="px-3 py-2">Подтверждение экспедитора</th>
-                    <th className="px-3 py-2">Подтверждение складчика</th>
-                    <th className="px-3 py-2">Подтверждение оператора</th>
-                    <th className="px-3 py-2 text-right">Сумма возврата</th>
+                    <th className="px-3 py-2">Принял зав.склад</th>
+                    <th className="px-3 py-2 text-center">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRows.map((r) => (
                     <tr key={r.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2 font-mono text-xs">{r.number}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
-                      <td className="px-3 py-2">{r.warehouse_name}</td>
-                      <td className="px-3 py-2">{new Date(r.created_at).toLocaleDateString()}</td>
-                      <td className="px-3 py-2">{r.expeditor_display ?? "—"}</td>
-                      <td className="px-3 py-2">{new Date(r.created_at).toLocaleDateString()}</td>
-                      <td className="px-3 py-2">{new Date(r.created_at).toLocaleDateString()}</td>
-                      <td className="px-3 py-2">
-                        <span className={`rounded px-2 py-1 text-xs ${statusBadgeClass(r.status)}`}>{r.status}</span>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {new Date(`${r.date}T00:00:00`).toLocaleDateString("ru-RU")}
                       </td>
-                      <td className="px-3 py-2">Нет</td>
-                      <td className="px-3 py-2">Да</td>
-                      <td className="px-3 py-2">Нет</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{r.refund_amount ?? "—"}</td>
+                      <td className="px-3 py-2">{r.courier_name ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs">
+                          {r.creation_channel === "mobile" ? (
+                            <Smartphone className="h-3 w-3" />
+                          ) : (
+                            <Monitor className="h-3 w-3" />
+                          )}
+                          {r.creation_channel === "mobile" ? "Моб." : "Веб"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{r.warehouse_name || "—"}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.return_count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.item_count}</td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtQty(r.total_qty)}</td>
+                      <td className="px-3 py-2">
+                        <span className={`rounded px-2 py-1 text-xs ${statusBadgeClass(r.status)}`}>
+                          {STATUS_LABELS[r.status] ?? r.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {r.status === "posted" ? (
+                          <span className="text-emerald-700">
+                            Да{r.accepted_at ? ` · ${new Date(r.accepted_at).toLocaleString("ru-RU")}` : ""}
+                          </span>
+                        ) : r.status === "pending" ? (
+                          <span className="text-amber-700">Ожидает</span>
+                        ) : (
+                          <span className="text-rose-700">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            title="Просмотр / Печать"
+                            aria-label="Просмотр"
+                            className="inline-flex h-7 items-center gap-1 rounded border border-input px-2 text-xs hover:bg-muted/60"
+                            onClick={() =>
+                              setOpenWaybill({
+                                ref: {
+                                  courier_id: r.courier_id,
+                                  courier_name: r.courier_name,
+                                  date: r.date,
+                                  status: r.status
+                                },
+                                confirm: false
+                              })
+                            }
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Просмотр
+                          </button>
+                          {canAccept && r.status === "pending" && (
+                            <button
+                              type="button"
+                              title="Подтвердить приёмку"
+                              aria-label="Подтвердить"
+                              className="inline-flex h-7 items-center gap-1 rounded border border-emerald-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50"
+                              onClick={() =>
+                                setOpenWaybill({
+                                  ref: {
+                                    courier_id: r.courier_id,
+                                    courier_name: r.courier_name,
+                                    date: r.date,
+                                    status: r.status
+                                  },
+                                  confirm: true
+                                })
+                              }
+                            >
+                              <Check className="h-3.5 w-3.5" /> Подтвердить
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

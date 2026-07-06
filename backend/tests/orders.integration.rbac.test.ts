@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { expect, it } from "vitest";
 import { prisma } from "../src/config/database";
 import { describeOrdersIntegrationSuite, mainWarehouseId } from "./orders.integration.harness";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 describeOrdersIntegrationSuite("RBAC status and lines", (ctx) => {
   it("operator can revert one step; invalid multi-step still forbidden", async () => {
@@ -46,7 +47,7 @@ describeOrdersIntegrationSuite("RBAC status and lines", (ctx) => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ status: "picking" });
 
-    const opLogin = await request(ctx.app.server).post("/api/auth/login").send({
+    const opLogin = await loginForIntegrationTest(ctx.app, {
       slug: "test1",
       login: "operator",
       password: "secret123"
@@ -106,7 +107,7 @@ describeOrdersIntegrationSuite("RBAC status and lines", (ctx) => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ status: "cancelled" });
 
-    const opLogin = await request(ctx.app.server).post("/api/auth/login").send({
+    const opLogin = await loginForIntegrationTest(ctx.app, {
       slug: "test1",
       login: "operator",
       password: "secret123"
@@ -160,7 +161,7 @@ describeOrdersIntegrationSuite("RBAC status and lines", (ctx) => {
     expect(create.status).toBe(201);
     const orderId = create.body.id as number;
 
-    const opLogin = await request(ctx.app.server).post("/api/auth/login").send({
+    const opLogin = await loginForIntegrationTest(ctx.app, {
       slug: "test1",
       login: "operator",
       password: "secret123"
@@ -228,7 +229,7 @@ describeOrdersIntegrationSuite("RBAC status and lines", (ctx) => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ status: "picking" });
 
-    const opLogin = await request(ctx.app.server).post("/api/auth/login").send({
+    const opLogin = await loginForIntegrationTest(ctx.app, {
       slug: "test1",
       login: "operator",
       password: "secret123"

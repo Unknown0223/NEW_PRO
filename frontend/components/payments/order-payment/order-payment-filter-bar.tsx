@@ -110,11 +110,10 @@ export function OrderPaymentFilterBar({
             <Label className="sr-only">Касса</Label>
             <FilterSelect
               className="flex h-10 min-w-[10rem] rounded-md border border-input bg-background px-2 text-sm"
-              emptyLabel="Касса"
+              emptyLabel="Все кассы"
               value={filters.cashDeskId}
               onChange={(e) => onChange({ ...filters, cashDeskId: e.target.value })}
             >
-              <option value="">Все кассы</option>
               {cashDesks.map((d) => (
                 <option key={d.id} value={String(d.id)}>
                   {d.name}

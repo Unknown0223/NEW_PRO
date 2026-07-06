@@ -14,16 +14,25 @@ import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popove
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
-import { CalendarDays, FileSpreadsheet, Search, Upload } from "lucide-react";
+import { CalendarDays, Download, FileSpreadsheet, Search, Upload } from "lucide-react";
+import { formatConsignmentCloseSchedule } from "@/lib/consignment-close-schedule";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 
 type ConsignmentAgentApi = {
   id: number;
   code: string | null;
+  work_slot_code: string | null;
   name: string;
+  is_active: boolean;
   consignment: boolean;
   consignment_limit_amount: string | null;
   consignment_ignore_previous_months_debt: boolean;
   consignment_updated_at: string | null;
+  consignment_period_closed_at: string | null;
+  consignment_debt_cleared_at: string | null;
+  consignment_close_day?: number;
+  consignment_close_hour?: number;
+  consignment_close_minute?: number;
   supervisor_user_id: number | null;
   supervisor_name: string | null;
   outstanding_debt: string;
@@ -103,6 +112,34 @@ function formatAmountRuReadable(raw: string | null | undefined): string {
   return x.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+function formatDateRu(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("ru-RU");
+}
+
+function formatDateTimeRu(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("ru-RU");
+}
+
+/** Guruh: barcha agentlar qarzini yopganda — oxirgi sana. */
+function groupDebtClearedAt(rows: ConsignmentAgentApi[]): string | null {
+  const withCons = rows.filter((r) => r.consignment);
+  if (withCons.length === 0) return null;
+  let max: Date | null = null;
+  for (const r of withCons) {
+    if (!r.consignment_debt_cleared_at) return null;
+    const d = new Date(r.consignment_debt_cleared_at);
+    if (Number.isNaN(d.getTime())) return null;
+    if (max == null || d > max) max = d;
+  }
+  return max?.toISOString() ?? null;
+}
+
 function formatRemainingCell(raw: string | null | undefined): string {
   if (raw == null || raw === "" || raw === "—") return "—";
   return formatAmountRuReadable(raw);
@@ -162,6 +199,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const monthPickerAnchorRef = useRef<HTMLButtonElement>(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [yearMonth, setYearMonth] = useState(ymNow);
+  const [tradeDirectionId, setTradeDirectionId] = useState("");
   const [supervisorSelected, setSupervisorSelected] = useState<Set<string>>(() => new Set());
   const [consFilter, setConsFilter] = useState<"" | "yes" | "no">("");
   const [search, setSearch] = useState("");
@@ -170,7 +208,18 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
   const [savingGroupKey, setSavingGroupKey] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [limitFocusedRowId, setLimitFocusedRowId] = useState<number | null>(null);
+
+  const tradeDirectionsQ = useActiveTradeDirectionsCatalog(tenantSlug, "consignment");
+  const directionSelected =
+    tradeDirectionId.trim() !== "" && Number.parseInt(tradeDirectionId, 10) > 0;
+
+  useEffect(() => {
+    setSupervisorSelected(new Set());
+    setDrafts({});
+    setGroupSearch({});
+  }, [tradeDirectionId]);
 
   const supervisorsQ = useQuery({
     queryKey: ["supervisors", tenantSlug, "consignment"],
@@ -192,13 +241,29 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
 
   const supKeyForQuery = Array.from(supervisorSelected).sort().join(",");
 
+  const syncClosuresOnNextFetchRef = useRef(false);
+
   const listQ = useQuery({
-    queryKey: ["consignment", tenantSlug, yearMonth, supKeyForQuery, consFilter, search],
-    enabled: Boolean(tenantSlug),
+    queryKey: [
+      "consignment",
+      "v4",
+      tenantSlug,
+      yearMonth,
+      tradeDirectionId,
+      supKeyForQuery,
+      consFilter,
+      search
+    ],
+    enabled: Boolean(tenantSlug) && directionSelected,
     staleTime: 30_000,
     queryFn: async () => {
       const p = new URLSearchParams();
       p.set("year_month", yearMonth);
+      p.set("trade_direction_id", tradeDirectionId);
+      if (syncClosuresOnNextFetchRef.current) {
+        p.set("sync_closures", "1");
+        syncClosuresOnNextFetchRef.current = false;
+      }
       if (consFilter === "yes" || consFilter === "no") p.set("consignment", consFilter);
       if (search.trim()) p.set("search", search.trim());
       if (supervisorSelected.has("__no_sup__")) {
@@ -217,7 +282,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     }
   });
 
-  const rows = listQ.data ?? [];
+  const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
 
   /** После обновления списка с сервера — сбрасываем черновики, совпавшие с данными */
   useEffect(() => {
@@ -273,7 +338,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     setDrafts((prev) => {
       const next = { ...prev };
       for (const r of list) {
-        let cur = { ...(next[r.id] ?? baseDraft(r)), ...patch };
+        const cur = { ...(next[r.id] ?? baseDraft(r)), ...patch };
         if (patch.consignment === false) cur.ignoreDebt = false;
         if (patch.limitStr !== undefined && !hasPositiveLimit(patch.limitStr)) cur.ignoreDebt = false;
         next[r.id] = cur;
@@ -361,18 +426,27 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     visible.some((r) => isRowDirty(r, drafts[r.id]));
 
   const exportExcel = async () => {
+    if (!directionSelected || rows.length === 0) {
+      setToast("Сначала выберите направление и дождитесь загрузки данных");
+      return;
+    }
     const headers = [
+      "Смарт-код",
       "Код",
       "Название Т.П.",
       "Валюта",
       "Вкл/откл консигнация",
       "Дата последнего изменения",
+      "Расписание закрытия",
+      "Дата закрытия периода",
+      "Дата погашения долга за месяц",
       "Лимит без учёта долгов за прошлые месяцы",
       "Установленный лимит",
       "Текущий лимит",
       "Супервайзер"
     ];
     const dataRows = rows.map((r) => [
+      r.work_slot_code ?? "",
       r.code ?? "",
       r.name,
       CURRENCY_LABEL,
@@ -380,6 +454,15 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       r.consignment_updated_at
         ? new Date(r.consignment_updated_at).toLocaleString("ru-RU")
         : "",
+      r.consignment
+        ? formatConsignmentCloseSchedule(
+            r.consignment_close_day ?? 25,
+            r.consignment_close_hour ?? 0,
+            r.consignment_close_minute ?? 0
+          )
+        : "",
+      formatDateRu(r.consignment_period_closed_at),
+      formatDateRu(r.consignment_debt_cleared_at),
       r.consignment_ignore_previous_months_debt ? "Да" : "Нет",
       r.consignment_limit_amount ?? "",
       r.remaining_limit ?? "",
@@ -390,8 +473,65 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       "Консигнация",
       headers,
       dataRows,
-      { colWidths: [10, 28, 8, 12, 18, 14, 14, 14, 22] }
+      { colWidths: [14, 10, 28, 8, 12, 18, 18, 14, 14, 14, 14, 14, 22] }
     );
+  };
+
+  const downloadImportTemplate = async () => {
+    if (!directionSelected) {
+      setToast("Сначала выберите направление торговли");
+      return;
+    }
+    try {
+      const res = await api.get(
+        `/api/${tenantSlug}/consignment/import-template?trade_direction_id=${encodeURIComponent(tradeDirectionId)}`,
+        { responseType: "blob" }
+      );
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `konsignatsiya-shablon-${yearMonth}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setToast("Шаблон загружен — заполните лимиты и импортируйте обратно");
+    } catch {
+      setToast("Не удалось скачать шаблон");
+    }
+  };
+
+  const importFromExcel = async (file: File) => {
+    if (!directionSelected) {
+      setToast("Сначала выберите направление торговли");
+      return;
+    }
+    setImporting(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const { data } = await api.post<{
+        data: { updated: number; skipped: number; errors: string[] };
+      }>(
+        `/api/${tenantSlug}/consignment/import.xlsx?trade_direction_id=${encodeURIComponent(tradeDirectionId)}`,
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      const r = data.data;
+      if (r.errors.length > 0) {
+        setToast(
+          `Импорт: обновлено ${r.updated}. Ошибки (${r.errors.length}): ${r.errors.slice(0, 3).join("; ")}${r.errors.length > 3 ? "…" : ""}`
+        );
+      } else {
+        setToast(
+          `Импорт завершён: обновлено ${r.updated}${r.skipped ? `, пропущено пустых строк ${r.skipped}` : ""}`
+        );
+      }
+      void qc.invalidateQueries({ queryKey: ["consignment", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
+    } catch {
+      setToast("Ошибка импорта — проверьте шаблон и смарт-коды агентов");
+    } finally {
+      setImporting(false);
+    }
   };
 
   const filterRowsInGroup = (groupKey: string, list: ConsignmentAgentApi[]) => {
@@ -399,6 +539,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     if (!q) return list;
     return list.filter(
       (r) =>
+        (r.work_slot_code ?? "").toLowerCase().includes(q) ||
         (r.code ?? "").toLowerCase().includes(q) ||
         r.name.toLowerCase().includes(q)
     );
@@ -431,13 +572,36 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Консигнация</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!directionSelected}
+            onClick={() => void downloadImportTemplate()}
+          >
+            <Download className="size-4" />
+            Шаблон
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={!directionSelected || importing}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="size-4" />
+            {importing ? "Импорт…" : "Импорт из Excel"}
+          </Button>
           <input
             ref={importInputRef}
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
-            onChange={() => {
-              setToast("Импорт из Excel — в разработке");
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importFromExcel(f);
               if (importInputRef.current) importInputRef.current.value = "";
             }}
           />
@@ -447,20 +611,10 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             size="sm"
             className="gap-1.5"
             onClick={() => void exportExcel()}
-            disabled={rows.length === 0}
+            disabled={!directionSelected || rows.length === 0}
           >
             <FileSpreadsheet className="size-4" />
             Excel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => importInputRef.current?.click()}
-          >
-            <Upload className="size-4" />
-            Импортировать с excel
           </Button>
         </div>
       </div>
@@ -510,6 +664,24 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   onChange={(ym) => setYearMonth(ym)}
                 />
               </div>
+              <label className="grid min-w-[12rem] max-w-[18rem] flex-[1_1_14rem] gap-2 text-xs font-medium text-foreground/88">
+                <span>Направление торговли</span>
+                <FilterSelect
+                  className="h-9 w-full"
+                  emptyLabel="Выберите направление"
+                  value={tradeDirectionId}
+                  onChange={(e) => setTradeDirectionId(e.target.value)}
+                  disabled={tradeDirectionsQ.isLoading}
+                >
+                  {(
+                    tradeDirectionsQ.rows as Array<{ id: number; name: string; code: string | null }>
+                  ).map((td) => (
+                    <option key={td.id} value={String(td.id)}>
+                      {td.code?.trim() ? `${td.name} (${td.code})` : td.name}
+                    </option>
+                  ))}
+                </FilterSelect>
+              </label>
               <div className="grid min-w-[12rem] max-w-[20rem] flex-[1_1_14rem] gap-2">
                 <SearchableMultiSelectPanel
                   label="Супервайзер"
@@ -518,10 +690,11 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   onSelectedChange={toggleSupervisorSingleSelect}
                   loading={supervisorsQ.isLoading}
                   searchPlaceholder="Поиск"
-                  triggerPlaceholder="Все"
+                  triggerPlaceholder={directionSelected ? "Все" : "Сначала направление"}
                   emptyMessage="Нет супервайзеров"
                   className="w-full"
                   minPopoverWidth={320}
+                  disabled={!directionSelected}
                 />
               </div>
               <label className="grid min-w-[9.5rem] max-w-[11rem] flex-[0_1_auto] gap-2 text-xs font-medium text-foreground/88">
@@ -530,6 +703,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   className="h-9 w-full"
                   emptyLabel="Все"
                   value={consFilter}
+                  disabled={!directionSelected}
                   onChange={(e) => setConsFilter(e.target.value as "" | "yes" | "no")}
                 >
                   <option value="yes">Да</option>
@@ -544,6 +718,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     className="h-9 pl-9"
                     placeholder="Код, название Т.П.…"
                     value={search}
+                    disabled={!directionSelected}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
@@ -554,7 +729,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   variant="default"
                   size="sm"
                   className="h-9 shrink-0 bg-emerald-600 px-4 text-white hover:bg-emerald-700 disabled:opacity-50"
-                  disabled={!anyDirtyGlobal || savingAll || savingGroupKey != null}
+                  disabled={!directionSelected || !anyDirtyGlobal || savingAll || savingGroupKey != null}
                   onClick={() => void saveAllDrafts()}
                 >
                   Сохранить всё
@@ -564,8 +739,12 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   variant="secondary"
                   size="sm"
                   className="h-9 shrink-0 px-4"
-                  disabled={savingAll || savingGroupKey != null}
-                  onClick={() => void listQ.refetch()}
+                  disabled={!directionSelected || savingAll || savingGroupKey != null}
+                  onClick={() => {
+                    if (!directionSelected) return;
+                    syncClosuresOnNextFetchRef.current = true;
+                    void listQ.refetch();
+                  }}
                 >
                   Обновить
                 </Button>
@@ -575,23 +754,30 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
         </Card>
       </div>
 
-      {listQ.isLoading ? (
+      {!directionSelected ? (
+        <div className="mt-6 rounded-lg border border-dashed bg-card py-16 text-center text-sm text-muted-foreground">
+          Выберите направление торговли — данные загружаются только для одного направления
+        </div>
+      ) : null}
+
+      {directionSelected && listQ.isLoading ? (
         <div className="mt-6 rounded-lg border bg-card py-12 text-center text-sm text-muted-foreground">
           Загрузка…
         </div>
       ) : null}
-      {listQ.isError ? (
+      {directionSelected && listQ.isError ? (
         <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/5 py-12 text-center text-sm text-destructive">
           Не удалось загрузить список
         </div>
       ) : null}
 
-      {!listQ.isLoading && !listQ.isError && grouped.length === 0 ? (
+      {directionSelected && !listQ.isLoading && !listQ.isError && grouped.length === 0 ? (
         <div className="mt-6 rounded-lg border bg-card py-12 text-center text-sm text-muted-foreground">
           Нет данных
         </div>
       ) : null}
 
+      {directionSelected ? (
       <div className="mt-6 space-y-3 md:mt-8 md:space-y-4">
         {grouped.map(([groupTitle, groupRows]) => {
           const visible = filterRowsInGroup(groupTitle, groupRows);
@@ -609,6 +795,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const dirty = groupHasDirty(visible);
           const sumEstablished = parseSum(visible.map((r) => r.consignment_limit_amount));
           const sumCurrent = parseSum(visible.map((r) => r.remaining_limit));
+          const groupClearedAt = groupDebtClearedAt(visible);
           return (
             <div
               key={groupTitle}
@@ -621,6 +808,15 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
                     {groupTitle}
                   </h3>
+                  {groupClearedAt ? (
+                    <p className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+                      Все агенты закрыли долг: {formatDateRu(groupClearedAt)}
+                    </p>
+                  ) : visible.some((r) => r.consignment && r.consignment_period_closed_at) ? (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      Ожидается погашение долга агентами
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div className="relative w-full min-w-0 sm:w-[min(100%,240px)]">
@@ -664,7 +860,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
               </div>
 
               <div className="overflow-x-auto bg-card">
-                <table className="w-full min-w-[860px] border-collapse text-sm">
+                <table className="w-full min-w-[1060px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/20 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       <th className="px-2 py-1.5">Код</th>
@@ -690,6 +886,32 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                         </div>
                       </th>
                       <th className="min-w-[9rem] px-2 py-1.5">Дата изм.</th>
+                      <th
+                        className="min-w-[8rem] px-2 py-1.5 leading-tight normal-case"
+                        title="Расписание закрытия — настраивается в разделе Агенты"
+                      >
+                        Закрытие
+                      </th>
+                      <th
+                        className="min-w-[8rem] px-2 py-1.5 leading-tight normal-case"
+                        title="Фактическая дата закрытия периода"
+                      >
+                        Период
+                        <br />
+                        <span className="text-[9px] font-normal normal-case text-muted-foreground">
+                          закрыт
+                        </span>
+                      </th>
+                      <th
+                        className="min-w-[8rem] px-2 py-1.5 leading-tight normal-case"
+                        title="Когда долг за выбранный месяц полностью погашен (после закрытия)"
+                      >
+                        Долг
+                        <br />
+                        <span className="text-[9px] font-normal normal-case text-muted-foreground">
+                          закрыт
+                        </span>
+                      </th>
                       <th
                         className="w-[6rem] px-2 py-1.5 text-center align-middle leading-tight normal-case"
                         title="Без учёта долгов за прошлые месяцы"
@@ -721,7 +943,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   <tbody>
                     {visible.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                        <td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">
                           Нет строк
                         </td>
                       </tr>
@@ -752,8 +974,32 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                             />
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs text-muted-foreground tabular-nums">
-                            {r.consignment_updated_at
-                              ? new Date(r.consignment_updated_at).toLocaleString("ru-RU")
+                            {formatDateTimeRu(r.consignment_updated_at)}
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">
+                            {r.consignment
+                              ? formatConsignmentCloseSchedule(
+                                  r.consignment_close_day ?? 25,
+                                  r.consignment_close_hour ?? 0,
+                                  r.consignment_close_minute ?? 0
+                                )
+                              : "—"}
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">
+                            {r.consignment
+                              ? formatDateTimeRu(r.consignment_period_closed_at)
+                              : "—"}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-2 py-1.5 align-middle text-xs tabular-nums",
+                              r.consignment_debt_cleared_at
+                                ? "font-medium text-emerald-700 dark:text-emerald-400"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {r.consignment
+                              ? formatDateRu(r.consignment_debt_cleared_at)
                               : "—"}
                           </td>
                           <td className="px-2 py-1.5 text-center align-middle">
@@ -821,7 +1067,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     })}
                     {visible.length > 0 ? (
                       <tr className="border-t border-border bg-muted/35 font-semibold">
-                        <td colSpan={6} className="px-2 py-1.5 text-right text-sm text-foreground">
+                        <td colSpan={8} className="px-2 py-1.5 text-right text-sm text-foreground">
                           Итого по группе:
                         </td>
                         <td className="px-2 py-1.5 text-right font-mono text-sm text-sky-700 dark:text-sky-400 tabular-nums">
@@ -841,6 +1087,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           );
         })}
       </div>
+      ) : null}
     </div>
   );
 }

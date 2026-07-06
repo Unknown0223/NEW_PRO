@@ -89,7 +89,6 @@ export function normalizeDuplicateKeyFields(raw: string[] | undefined | null): s
     seen.add(k);
     out.push(k);
   }
-  if (out.length === 0) return [...DEFAULT_DUPLICATE_KEY_FIELDS];
   return out;
 }
 

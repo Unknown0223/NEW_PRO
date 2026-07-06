@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { DialogHeaderActions } from "@/components/ui/dialog-header-actions";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatGroupedInteger, formatNumberGrouped } from "@/lib/format-numbers";
@@ -98,11 +99,11 @@ export function OrdersSelectionTotalsDialog({
       <DialogContent
         overlayClassName="bg-black/35 supports-backdrop-filter:backdrop-blur-[2px]"
         className="flex h-auto w-[min(calc(100vw-2rem),72rem)] max-h-[min(90vh,900px)] max-w-none flex-col gap-3 overflow-hidden rounded-xl p-4 sm:max-w-none sm:gap-4 sm:p-5"
-        showCloseButton
+        showCloseButton={false}
       >
-        <DialogHeader className="shrink-0 space-y-2">
-          <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
-            <div className="min-w-0">
+        <DialogHeader className="shrink-0 space-y-0">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1 space-y-2">
               <DialogTitle>Итог по заказу</DialogTitle>
               <DialogDescription>
                 Сводка по {formatGroupedInteger(selectionTotals.count)} выбранным заказам — товары
@@ -110,17 +111,19 @@ export function OrdersSelectionTotalsDialog({
                 заказа.
               </DialogDescription>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 shrink-0 gap-1.5"
-              disabled={excelBusy || linesQ.isLoading || aggregated.length === 0}
-              onClick={() => void onExcel()}
-            >
-              <Download className="size-3.5" />
-              Excel
-            </Button>
+            <DialogHeaderActions>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                disabled={excelBusy || linesQ.isLoading || aggregated.length === 0}
+                onClick={() => void onExcel()}
+              >
+                <Download className="size-3.5" />
+                Excel
+              </Button>
+            </DialogHeaderActions>
           </div>
         </DialogHeader>
 

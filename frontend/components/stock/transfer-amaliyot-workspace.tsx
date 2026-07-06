@@ -112,8 +112,8 @@ export function TransferAmaliyotWorkspace() {
   const canWrite = isAdminOrOperatorLikeRole(role);
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [agents, setAgents] = useState<AgentPick[]>([]);
-  const [agentFilterId, setAgentFilterId] = useState("");
+  const [, setAgents] = useState<AgentPick[]>([]);
+  const [agentFilterId] = useState("");
   const [loadWh, setLoadWh] = useState(true);
   const [whError, setWhError] = useState<string | null>(null);
 
@@ -124,7 +124,7 @@ export function TransferAmaliyotWorkspace() {
   const [sourceId, setSourceId] = useState<string>("");
   const [destId, setDestId] = useState<string>("");
   const [comment, setComment] = useState("");
-  const [plannedDate, setPlannedDate] = useState("");
+  const [plannedDate] = useState("");
 
   const [categoryId, setCategoryId] = useState<string>("");
   const [products, setProducts] = useState<ProductRow[]>([]);

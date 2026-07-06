@@ -14,7 +14,7 @@ export default function AccessRoleDefaultsPage() {
   const gate = useAccessModuleGate(tenantSlug, role);
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
-  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или access.manage).</p>;
+  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или доступ к разделу «Доступ»).</p>;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -31,7 +31,7 @@ export default function AccessRoleDefaultsPage() {
         </Link>
         <h1 className="text-xl font-semibold tracking-tight">Состав ролей по умолчанию</h1>
       </div>
-      <AccessRoleDefaultsWorkspace tenantSlug={tenantSlug} />
+      <AccessRoleDefaultsWorkspace tenantSlug={tenantSlug} className="min-h-0 flex-1" />
     </div>
   );
 }

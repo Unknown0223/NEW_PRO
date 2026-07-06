@@ -52,6 +52,11 @@ export async function registerProductListRoutes(app: FastifyInstance) {
       if (listQ.manufacturer_id !== undefined) where.manufacturer_id = listQ.manufacturer_id;
       if (listQ.segment_id !== undefined) where.segment_id = listQ.segment_id;
 
+      // `ids` — aniq id'lar bo'yicha (masalan tanlangan mahsulotlarning joriy
+      // nomlarini olish uchun). Berilganda pagination o'rniga hammasi qaytadi.
+      const byIds = listQ.ids && listQ.ids.length > 0 ? listQ.ids.slice(0, 1000) : null;
+      if (byIds) where.id = { in: byIds };
+
       const includePrices = listQ.include_prices;
 
       const include = {
@@ -69,8 +74,8 @@ export async function registerProductListRoutes(app: FastifyInstance) {
         prisma.product.count({ where }),
         prisma.product.findMany({
           where,
-          skip: (listQ.page - 1) * listQ.limit,
-          take: listQ.limit,
+          skip: byIds ? 0 : (listQ.page - 1) * listQ.limit,
+          take: byIds ? byIds.length : listQ.limit,
           orderBy: [{ sort_order: "asc" }, { name: "asc" }, { id: "asc" }],
           include
         })

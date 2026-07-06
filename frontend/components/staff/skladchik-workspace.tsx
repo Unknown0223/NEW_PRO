@@ -8,12 +8,9 @@ import { firstMessagePerField, firstValidationUserHint, getZodFlattenFromApiErro
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
-import { formatGroupedInteger } from "@/lib/format-numbers";
 import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -24,10 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   KeyRound,
-  ListOrdered,
   MonitorSmartphone,
   Pencil,
-  RefreshCw,
   Settings,
   UserRoundCheck,
   UserRoundX
@@ -35,10 +30,35 @@ import {
 import Link from "next/link";
 import { SKLADCHIK_ENTITLEMENT_GROUPS, flattenEntitlementKeys } from "@/lib/skladchik-entitlements-ui";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
+import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import {
+  StaffFilterSelect,
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { formatPersonDisplayName } from "@/lib/person-display";
+import {
+  StaffKomandaActiveSessionsCell,
+  StaffKomandaAppAccessToggle,
+  StaffKomandaBranchCell,
+  StaffKomandaCodeCell,
+  StaffKomandaFioCell,
+  StaffKomandaLoginCell,
+  StaffKomandaMaxSessionsCell,
+  StaffKomandaPhoneCell,
+  StaffKomandaPinflCell,
+  StaffKomandaPositionCell,
+  StaffKomandaTagList,
+  StaffKomandaYesNoCell
+} from "@/components/staff/staff-komanda-table-cells";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
@@ -50,7 +70,6 @@ function FieldHint({ name, errors }: { name: string; errors: Record<string, stri
 
 const tealPrimary =
   "bg-teal-600 text-white shadow-sm hover:bg-teal-700 focus-visible:ring-teal-600/40 disabled:opacity-60";
-const tealOutline = "border-teal-700/40 text-teal-800 hover:bg-teal-50 dark:hover:bg-teal-950/40";
 
 type WebStaffRow = {
   id: number;
@@ -79,6 +98,22 @@ type FilterOptions = { branches: string[]; positions: string[]; position_presets
 
 type WarehousePickerRow = { id: number; name: string };
 
+const SKLADCHIK_COLS = [
+  "Ф.И.О",
+  "Авторизоваться",
+  "Код",
+  "ПИНФЛ",
+  "Email",
+  "Склад",
+  "Телефон",
+  "Филиал",
+  "Должность",
+  "Количество активных сессий",
+  "Максимальное количество сессий",
+  "Доступ к приложение",
+  "Авторизация"
+] as const;
+
 const SKLADCHIK_TABLE_ID = "staff.skladchik.v1";
 
 const SKLADCHIK_COLUMN_IDS = [
@@ -97,30 +132,18 @@ const SKLADCHIK_COLUMN_IDS = [
   "can_authorize"
 ] as const;
 
-const SKLADCHIK_COLUMNS = SKLADCHIK_COLUMN_IDS.map((id) => ({
+const SKLADCHIK_COLUMNS = SKLADCHIK_COLUMN_IDS.map((id, i) => ({
   id,
-  label:
-    {
-      fio: "F.I.Sh",
-      login: "Login",
-      code: "Kod",
-      pinfl: "PINFL",
-      email: "Email",
-      warehouses: "Omborlar",
-      phone: "Telefon",
-      branch: "Filial",
-      position: "Lavozim",
-      active_sessions: "Faol sessiyalar",
-      max_sessions: "Maks. sessiya",
-      app_access: "Mobil ilova",
-      can_authorize: "Kirish"
-    }[id] ?? id
+  label: SKLADCHIK_COLS[i] ?? id
 }));
+const SKLADCHIK_COLUMN_LABEL_BY_ID = new Map<string, string>(
+  SKLADCHIK_COLUMNS.map((c) => [c.id, c.label])
+);
 
 function skladExportCellString(r: WebStaffRow, colId: string): string {
   switch (colId) {
     case "fio":
-      return r.fio;
+      return formatPersonDisplayName(r);
     case "login":
       return r.login;
     case "code":
@@ -142,9 +165,9 @@ function skladExportCellString(r: WebStaffRow, colId: string): string {
     case "max_sessions":
       return String(r.max_sessions);
     case "app_access":
-      return r.app_access ? "Ha" : "Yo‘q";
+      return r.app_access ? "Да" : "Нет";
     case "can_authorize":
-      return r.can_authorize ? "Ha" : "Yo‘q";
+      return r.can_authorize ? "Да" : "Нет";
     default:
       return "";
   }
@@ -153,42 +176,36 @@ function skladExportCellString(r: WebStaffRow, colId: string): string {
 function renderSkladDataCell(colId: string, r: WebStaffRow) {
   switch (colId) {
     case "fio":
-      return r.fio;
+      return (
+        <StaffKomandaFioCell
+          first_name={r.first_name}
+          last_name={r.last_name}
+          middle_name={r.middle_name}
+          fio={r.fio}
+        />
+      );
     case "login":
-      return <span className="font-mono text-xs">{r.login}</span>;
+      return <StaffKomandaLoginCell login={r.login} />;
     case "code":
-      return <span className="text-xs">{r.code ?? "—"}</span>;
+      return <StaffKomandaCodeCell code={r.code} />;
     case "pinfl":
-      return <span className="text-xs">{r.pinfl ?? "—"}</span>;
+      return <StaffKomandaPinflCell pinfl={r.pinfl} />;
     case "email":
-      return <span className="text-xs">{r.email ?? "—"}</span>;
+      return <span className="text-xs text-slate-700">{r.email ?? "—"}</span>;
     case "position":
-      return <span className="text-xs">{r.position?.trim() || "—"}</span>;
+      return <StaffKomandaPositionCell position={r.position} />;
     case "warehouses":
-      return (r.warehouses ?? []).length === 0 ? (
-        <span className="text-xs text-muted-foreground">—</span>
-      ) : (
-        <div className="flex max-w-[14rem] flex-wrap gap-1">
-          {(r.warehouses ?? []).map((w) => (
-            <span
-              key={w.id}
-              className="inline-block rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary"
-            >
-              {w.name}
-            </span>
-          ))}
-        </div>
+      return (
+        <StaffKomandaTagList items={(r.warehouses ?? []).map((w) => w.name)} maxVisible={2} />
       );
     case "phone":
-      return <span className="text-xs">{r.phone ?? "—"}</span>;
+      return <StaffKomandaPhoneCell phone={r.phone} />;
     case "branch":
-      return <span className="text-xs">{r.branch ?? "—"}</span>;
+      return <StaffKomandaBranchCell branch={r.branch} />;
     case "max_sessions":
-      return (
-        <span className="text-xs tabular-nums">{formatGroupedInteger(r.max_sessions)}</span>
-      );
+      return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
     case "can_authorize":
-      return <span className="text-xs">{r.can_authorize ? "Ha" : "Yo‘q"}</span>;
+      return <StaffKomandaYesNoCell value={r.can_authorize} />;
     default:
       return "—";
   }
@@ -217,6 +234,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
   const [bulkLimitsRows, setBulkLimitsRows] = useState<WebStaffRow[] | null>(null);
   const [limitsDraft, setLimitsDraft] = useState<Record<number, number>>({});
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const [sessionRow, setSessionRow] = useState<WebStaffRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [configRow, setConfigRow] = useState<WebStaffRow | null>(null);
@@ -226,7 +244,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     tableId: SKLADCHIK_TABLE_ID,
     defaultColumnOrder: [...SKLADCHIK_COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100, 500, 1000]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
 
@@ -326,35 +344,20 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
   function renderDataCell(colId: string, r: WebStaffRow) {
     if (colId === "active_sessions") {
       return (
-        <button
-          type="button"
-          className="text-xs font-medium text-teal-700 tabular-nums underline-offset-2 hover:underline dark:text-teal-400"
+        <StaffKomandaActiveSessionsCell
+          count={r.active_session_count}
+          max={r.max_sessions}
           onClick={() => setSessionRow(r)}
-        >
-          {r.active_session_count}
-        </button>
+        />
       );
     }
     if (colId === "app_access") {
       return (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={r.app_access}
+        <StaffKomandaAppAccessToggle
+          checked={r.app_access}
           disabled={appAccessMut.isPending}
-          className={cn(
-            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-transparent transition-colors",
-            r.app_access ? "bg-teal-600" : "bg-muted"
-          )}
-          onClick={() => appAccessMut.mutate({ id: r.id, app_access: !r.app_access })}
-        >
-          <span
-            className={cn(
-              "pointer-events-none inline-block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform",
-              r.app_access && "translate-x-5"
-            )}
-          />
-        </button>
+          onChange={(next) => appAccessMut.mutate({ id: r.id, app_access: next })}
+        />
       );
     }
     return renderSkladDataCell(colId, r);
@@ -375,11 +378,37 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     );
   }, [listQ.data, search]);
 
-  const pageRows = useMemo(() => rows.slice(0, pageSize), [rows, pageSize]);
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, safePage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, appliedBranch, appliedPosition, appliedWarehouseId, search, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedBranch, appliedPosition, appliedWarehouseId]);
+  }, [tab, appliedBranch, appliedPosition, appliedWarehouseId, safePage, pageSize]);
+
+  const applyFilters = () => {
+    setAppliedBranch(filterBranch);
+    setAppliedPosition(filterPosition);
+    setAppliedWarehouseId(filterWarehouseId);
+  };
+
+  const resetFilters = () => {
+    setFilterBranch("");
+    setFilterPosition("");
+    setFilterWarehouseId("");
+    setAppliedBranch("");
+    setAppliedPosition("");
+    setAppliedWarehouseId("");
+    setPage(1);
+  };
 
   /** Guruh amali: tanlov bo‘lsa faqat tanlanganlar, aks holda joriy jadvaldagi hammasi */
   function computeBulkTargets(): WebStaffRow[] {
@@ -389,27 +418,30 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
 
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
-  function toggleAllOnPage() {
-    if (allOnPageSelected) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        for (const r of pageRows) next.delete(r.id);
-        return next;
-      });
-    } else {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        for (const r of pageRows) next.add(r.id);
-        return next;
-      });
-    }
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selected.has(r.id)),
+    [rows, selected]
+  );
+
+  const bulk = useStaffKomandaBulk({
+    tenantSlug,
+    apiSegment: "skladchik",
+    invalidateQueryKeys: [["skladchik", tenantSlug]],
+    selectedIds: selected,
+    setSelectedIds: setSelected,
+    selectedRows
+  });
+
+  function toggleAllOnPage(checked: boolean) {
+    if (checked) setSelected(new Set(pageRows.map((r) => r.id)));
+    else setSelected(new Set());
   }
 
-  function toggleOne(id: number) {
+  function toggleOne(id: number, checked: boolean) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (checked) next.add(id);
+      else next.delete(id);
       return next;
     });
   }
@@ -463,120 +495,87 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
   }
 
   return (
-    <div className="space-y-4">
-      {rows.length > 0 ? (
-        <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-          <span className="font-medium text-foreground">Guruh amallari qamrovi: </span>
-          {selected.size > 0 ? (
-            <>
-              <strong>{selected.size}</strong> ta xodim tanlangan — sessiya yopish / limitlar{" "}
-              <strong>faqat shu tanlanganlarga</strong> qo‘llanadi.
-            </>
-          ) : (
-            <>
-              Hech qanday qator belgilanmagan — sessiya yopish yoki limit o‘zgartirish{" "}
-              <strong>joriy jadvaldagi barcha {rows.length} ta</strong> xodimga qo‘llanadi (yuqoridagi filtr
-              «Qo‘llash» va qidiruv natijasidagi qatorlar).
-            </>
-          )}
-        </div>
-      ) : null}
+    <StaffWorkspaceLayout>
+      <StaffWorkspaceHeader
+        title="Складчик"
+        subtitle="Управление сотрудниками склада, привязкой к складам и сессиями"
+        addLabel="Добавить сотрудника"
+        onAdd={() => setCreateOpen(true)}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
 
-      <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
-        <Card className="rounded-lg border border-teal-800/15 bg-card/80 shadow-sm hover:shadow-md dark:border-teal-700/25">
-          <CardContent className="space-y-3 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex gap-1 border-b border-border pb-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1 text-xs font-medium text-foreground",
-                      tab === "active" ? "border-b-2 border-primary" : "text-foreground/65"
-                    )}
-                    onClick={() => setTab("active")}
-                  >
-                    Faol
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1 text-xs font-medium text-foreground",
-                      tab === "inactive" ? "border-b-2 border-primary" : "text-foreground/65"
-                    )}
-                    onClick={() => setTab("inactive")}
-                  >
-                    Nofaol
-                  </button>
-                </div>
-                <label className="grid gap-0.5 text-xs font-medium text-foreground/88">
-                  <span className="sr-only">Filial</span>
-                  <FilterSelect
-                    aria-label="Filial"
-                    emptyLabel="Filial"
-                    value={filterBranch}
-                    onChange={(e) => setFilterBranch(e.target.value)}
-                  >
-                    {(filterOptsQ.data?.branches ?? []).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </label>
-                <label className="grid gap-0.5 text-xs font-medium text-foreground/88">
-                  <span className="sr-only">Lavozim</span>
-                  <FilterSelect
-                    aria-label="Lavozim"
-                    emptyLabel="Lavozim"
-                    value={filterPosition}
-                    onChange={(e) => setFilterPosition(e.target.value)}
-                  >
-                    {(filterOptsQ.data?.positions ?? []).map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </label>
-                <label className="grid gap-0.5 text-xs font-medium text-foreground/88">
-                  <span className="sr-only">Ombor</span>
-                  <FilterSelect
-                    aria-label="Ombor"
-                    emptyLabel="Ombor"
-                    value={filterWarehouseId}
-                    onChange={(e) => setFilterWarehouseId(e.target.value)}
-                  >
-                    {(warehousesPickerQ.data ?? []).map((w) => (
-                      <option key={w.id} value={String(w.id)}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </label>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className={cn("h-9 shrink-0 px-4 text-xs font-medium", tealPrimary)}
-                onClick={() => {
-                  setAppliedBranch(filterBranch);
-                  setAppliedPosition(filterPosition);
-                  setAppliedWarehouseId(filterWarehouseId);
-                }}
-              >
-                Применить
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <StaffWorkspaceFilterPanel
+        filters={
+          <>
+            <StaffFilterSelect
+              label="Филиал"
+              value={filterBranch}
+              onChange={setFilterBranch}
+              emptyLabel="Все филиалы"
+            >
+              {(filterOptsQ.data?.branches ?? []).map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </StaffFilterSelect>
+            <StaffFilterSelect
+              label="Должность"
+              value={filterPosition}
+              onChange={setFilterPosition}
+              emptyLabel="Все должности"
+            >
+              {(filterOptsQ.data?.positions ?? []).map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </StaffFilterSelect>
+            <StaffFilterSelect
+              label="Склад"
+              value={filterWarehouseId}
+              onChange={setFilterWarehouseId}
+              emptyLabel="Все склады"
+            >
+              {(warehousesPickerQ.data ?? []).map((w) => (
+                <option key={w.id} value={String(w.id)}>
+                  {w.name}
+                </option>
+              ))}
+            </StaffFilterSelect>
+          </>
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => tablePrefs.setPageSize(n)}
+        allOnPageSelected={allOnPageSelected}
+        onToggleAllOnPage={toggleAllOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, логину, коду…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map((id) => SKLADCHIK_COLUMN_LABEL_BY_ID.get(id) ?? id);
+          const dataRows = rows.map((r) => order.map((colId) => skladExportCellString(r, colId)));
+          downloadXlsxSheet(
+            `skladchik_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Складчики",
+            headers,
+            dataRows
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+      />
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlar boshqaruvi"
-        description="Ko‘rinadigan ustunlar va tartib akkauntingizga saqlanadi."
+        title="Управление столбцами"
+        description="Выберите видимые столбцы и порядок. Сохраняется для вашей учётной записи."
         columns={SKLADCHIK_COLUMNS}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -585,258 +584,76 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         onReset={() => tablePrefs.resetColumnLayout()}
       />
 
-      <div className="orders-hub-section orders-hub-section--table mt-4">
-        <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-0">
-            <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
-              <label className="grid shrink-0 gap-1 text-xs font-medium text-foreground/85">
-                <span className="whitespace-nowrap leading-none">Qator</span>
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                  value={pageSize}
-                  onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
-                >
-                  {[10, 20, 25, 50, 100, 500, 1000].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 px-2 text-xs"
-                title="Ustunlar va tartib"
-                onClick={() => setColumnDialogOpen(true)}
-              >
-                <ListOrdered className="size-3.5" />
-                Ustunlar
-              </Button>
-              <Input
-                className="h-9 max-w-[220px] bg-background text-foreground"
-                placeholder="Qidiruv"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-9 shrink-0"
-                onClick={() => {
-                  const order = tablePrefs.visibleColumnOrder;
-                  const headers = order.map((id) => SKLADCHIK_COLUMNS.find((c) => c.id === id)?.label ?? id);
-                  const dataRows = rows.map((r) => order.map((colId) => skladExportCellString(r, colId)));
-                  downloadXlsxSheet(
-                    `skladchik_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-                    "Skladchik",
-                    headers,
-                    dataRows
-                  );
-                }}
-              >
-                Excel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-9 w-9 shrink-0 p-0"
-                title="Ro‘yxat va faol sessiyalar sonini yangilash"
-                disabled={listQ.isFetching}
-                onClick={() => void listQ.refetch()}
-              >
-                <RefreshCw className={cn("mx-auto size-3.5", listQ.isFetching && "animate-spin")} />
-              </Button>
-              <div className="shrink-0">
-                <select
-                  aria-label="Guruh ishlovi"
-                  className={cn(filterSelectClassName, "min-w-[10rem] max-w-[14rem]")}
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "revoke" && rows.length > 0) openBulkRevoke();
-                    if (v === "limits" && rows.length > 0) openBulkLimits();
-                    e.target.value = "";
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={SKLADCHIK_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="сотрудников"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selected}
+        onToggleSelection={toggleOne}
+        renderCell={(colId, row) =>
+          renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)
+        }
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+                <Settings className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Активные сессии" onClick={() => setSessionRow(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                <KeyRound className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton
+                  title="Деактивировать"
+                  onClick={() => {
+                    if (window.confirm(`${r.fio} — деактивировать пользователя?`)) {
+                      deactivateMut.mutate(r);
+                    }
                   }}
                 >
-                  <option value="">Guruh ishlovi…</option>
-                  <option value="revoke" disabled={rows.length === 0}>
-                    Sessiyalarni yopish
-                  </option>
-                  <option value="limits" disabled={rows.length === 0}>
-                    Sessiya limitlari
-                  </option>
-                </select>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className={cn("h-9 shrink-0 px-4 text-xs font-medium", tealPrimary)}
-                onClick={() => setCreateOpen(true)}
-              >
-                + Добавить
-              </Button>
+                  <UserRoundX className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : (
+                <AgentIconButton title="Активировать" onClick={() => deactivateMut.mutate(r)}>
+                  <UserRoundCheck className="h-4 w-4 text-teal-600" />
+                </AgentIconButton>
+              )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
-          <thead className="app-table-thead text-left text-xs">
-            <tr>
-              <th className="w-10 px-2 py-2">
-                <input
-                  type="checkbox"
-                  className="size-4 rounded border-input"
-                  checked={allOnPageSelected}
-                  onChange={toggleAllOnPage}
-                  aria-label="Barchasini tanlash"
-                />
-              </th>
-              {tablePrefs.visibleColumnOrder.map((colId) => {
-                const meta = SKLADCHIK_COLUMNS.find((c) => c.id === colId);
-                return (
-                  <th key={colId} className="px-2 py-2">
-                    {meta?.label ?? colId}
-                  </th>
-                );
-              })}
-              <th className="px-2 py-2 text-right">Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listQ.isLoading ? (
-              <tr>
-                <td
-                  colSpan={2 + tablePrefs.visibleColumnOrder.length}
-                  className="px-3 py-6 text-center text-muted-foreground"
-                >
-                  Загрузка…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={2 + tablePrefs.visibleColumnOrder.length}
-                  className="px-3 py-8 text-center text-muted-foreground"
-                >
-                  Bo‘sh
-                </td>
-              </tr>
-            ) : (
-              pageRows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input"
-                      checked={selected.has(r.id)}
-                      onChange={() => toggleOne(r.id)}
-                      aria-label={`Tanlash ${r.login}`}
-                    />
-                  </td>
-                  {tablePrefs.visibleColumnOrder.map((colId) => (
-                    <td key={colId} className="px-2 py-1.5">
-                      {renderDataCell(colId, r)}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1.5 text-right">
-                    <TableRowActionGroup className="justify-end" ariaLabel="Skladchik">
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className={cn(tealOutline, "text-teal-800 dark:text-teal-300")}
-                        title="Конфигурации"
-                        aria-label="Конфигурации"
-                        onClick={() => setConfigRow(r)}
-                      >
-                        <Settings className="size-3.5" aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Faol sessiyalar"
-                        aria-label="Faol sessiyalar"
-                        onClick={() => setSessionRow(r)}
-                      >
-                        <MonitorSmartphone className="size-3.5" aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Parolni o‘zgartirish"
-                        aria-label="Parolni o‘zgartirish"
-                        onClick={() => setPasswordRow(r)}
-                      >
-                        <KeyRound className="size-3.5" aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Maʼlumotlarni tahrirlash"
-                        aria-label="Tahrirlash"
-                        onClick={() => setEditRow(r)}
-                      >
-                        <Pencil className="size-3.5" aria-hidden />
-                      </Button>
-                      {tab === "active" ? (
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          title="Nofaol qilish"
-                          aria-label="Nofaol qilish"
-                          disabled={deactivateMut.isPending}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `${r.fio} foydalanuvchini nofaol qilasizmi?`
-                              )
-                            ) {
-                              deactivateMut.mutate(r);
-                            }
-                          }}
-                        >
-                          <UserRoundX className="size-3.5" aria-hidden />
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          className="text-primary hover:bg-primary/10"
-                          title="Faollashtirish"
-                          aria-label="Faollashtirish"
-                          disabled={deactivateMut.isPending}
-                          onClick={() => deactivateMut.mutate(r)}
-                        >
-                          <UserRoundCheck className="size-3.5" aria-hidden />
-                        </Button>
-                      )}
-                    </TableRowActionGroup>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-              </table>
-            </div>
-            {rows.length > 0 ? (
-              <div className="table-content-footer border-t border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground sm:px-4">
-                Ko‘rsatilmoqda {pageRows.length} / {rows.length}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+          );
+        }}
+      />
+
+      <StaffBulkFloatingBar
+        count={selected.size}
+        allAccessOn={bulk.allAccessOn}
+        isActiveTab={tab === "active"}
+        busy={bulk.bulkBusy}
+        onToggleAccess={bulk.onToggleAccess}
+        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
+        onClearSessions={bulk.onClearSessions}
+        onClearSelection={() => setSelected(new Set())}
+      />
+
+      <AgentTemplateConfirmDialog
+        open={bulk.confirmBulk != null}
+        message={bulk.confirmMessage}
+        busy={bulk.bulkBusy}
+        onCancel={() => bulk.setConfirmBulk(null)}
+        onConfirm={bulk.handleConfirmBulk}
+      />
 
       <p className="text-xs text-muted-foreground">
         <strong className="text-foreground">Skladchik</strong> — ombor xodimlari (<code className="text-foreground">skladchik</code>{" "}
@@ -876,7 +693,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="skladchik"
         userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 4}
+        maxSessions={sessionRow?.max_sessions ?? 1}
         onPatched={() => {
           void qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
         }}
@@ -1066,7 +883,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaffWorkspaceLayout>
   );
 }
 
@@ -1098,7 +915,7 @@ function SkladchikCreateModal({
     pinfl: "",
     branch: "",
     position: "",
-    max_sessions: "4",
+    max_sessions: "1",
     app_access: false,
     can_authorize: true
   });
@@ -1122,7 +939,7 @@ function SkladchikCreateModal({
       pinfl: "",
       branch: "",
       position: "",
-      max_sessions: "4",
+      max_sessions: "1",
       app_access: false,
       can_authorize: true
     });
@@ -1144,7 +961,7 @@ function SkladchikCreateModal({
         pinfl: form.pinfl.trim() || null,
         branch: form.branch.trim() || null,
         position: form.position.trim() || null,
-        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 4,
+        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
         app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true
@@ -1644,7 +1461,7 @@ function WebStaffEditDialog({
   const [pinfl, setPinfl] = useState("");
   const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
-  const [max_sessions, setMaxS] = useState("4");
+  const [max_sessions, setMaxS] = useState("1");
   const [app_access, setAppAccess] = useState(false);
   const [can_authorize, setCanAuth] = useState(true);
   const [warehouseIds, setWarehouseIds] = useState<number[]>([]);

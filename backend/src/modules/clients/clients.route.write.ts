@@ -4,6 +4,7 @@ import { catalogRoles } from "./clients.route.shared";
 import { z } from "zod";
 import { patchClientBodySchema } from "../../contracts/clients.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
 import { createClientMinimal, updateClientFields } from "./clients.service";
@@ -12,7 +13,7 @@ import { bulkActiveBodySchema, createClientBodySchema } from "./clients.route.sc
 export async function registerClientWriteRoutes(app: FastifyInstance) {
   app.post(
     "/api/:slug/clients",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createClientBodySchema.safeParse(request.body);
@@ -104,7 +105,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
 
   app.patch(
     "/api/:slug/clients/:id",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
@@ -141,7 +142,13 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "VALIDATION" || msg === "EMPTY") {
-          return sendApiError(reply, request, 400, msg === "EMPTY" ? "EmptyBody" : "ValidationError");
+          return sendApiError(
+            reply,
+            request,
+            400,
+            msg === "EMPTY" ? "EmptyBody" : "ValidationError",
+            msg === "EMPTY" ? "Request body is empty" : "Проверьте поля формы (ПИНФЛ — 14 цифр, координаты, команда)"
+          );
         }
         throw e;
       }

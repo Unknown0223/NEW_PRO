@@ -21,11 +21,16 @@ export async function recordAgentLocationPing(
   agentId: number,
   input: { latitude: number; longitude: number; accuracy_meters?: number | null }
 ): Promise<AgentLocationPingRow> {
-  const agent = await prisma.user.findFirst({
-    where: { id: agentId, tenant_id: tenantId, role: "agent", is_active: true },
+  const user = await prisma.user.findFirst({
+    where: {
+      id: agentId,
+      tenant_id: tenantId,
+      role: { in: ["agent", "expeditor"] },
+      is_active: true
+    },
     select: { id: true }
   });
-  if (!agent) throw new Error("AgentNotFound");
+  if (!user) throw new Error("AgentNotFound");
 
   const row = await prisma.agentLocationPing.create({
     data: {
@@ -107,7 +112,7 @@ export async function recordAgentVisitCheckin(
   }
 ): Promise<AgentVisitRow> {
   const agent = await prisma.user.findFirst({
-    where: { id: agentId, tenant_id: tenantId, role: "agent", is_active: true },
+    where: { id: agentId, tenant_id: tenantId, role: { in: ["agent", "expeditor"] }, is_active: true },
     select: { id: true }
   });
   if (!agent) throw new Error("AgentNotFound");

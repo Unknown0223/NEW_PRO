@@ -42,7 +42,7 @@ describe("contract smoke (foundation)", () => {
     }
   });
 
-  describe.skipIf(!dbReady)("seed DB (test1) — xato va muvaffaqiyat kontrakti", () => {
+  describe.skipIf(!contractSmokeDbReady)("seed DB (test1) — xato va muvaffaqiyat kontrakti", () => {
     it("POST /api/auth/login — noto‘g‘ri parol — 401 + INVALID_CREDENTIALS", async () => {
       const res = await request(app.server).post("/api/auth/login").send({
         slug: "test1",

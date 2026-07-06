@@ -138,7 +138,10 @@ export function aggregateByProduct(lines: RawBalanceLine[]): AggRow[] {
     }
   }
   return [...agg.entries()].map(([product_id, v]) => {
-    let available = v.qty.minus(v.reserved);
+    // Reserved hech qachon manfiy bo'lmasligi kerak; eski/buzuq ma'lumotda manfiy
+    // bo'lsa "Доступно" sun'iy oshib ketmasligi uchun 0 deb olamiz.
+    const reservedForAvail = v.reserved.lt(0) ? new Prisma.Decimal(0) : v.reserved;
+    let available = v.qty.minus(reservedForAvail);
     if (available.lt(0)) {
       available = new Prisma.Decimal(0);
     }
@@ -147,7 +150,7 @@ export function aggregateByProduct(lines: RawBalanceLine[]): AggRow[] {
       sku: v.sku,
       name: v.name,
       qty: v.qty,
-      reserved: v.reserved,
+      reserved: reservedForAvail,
       available
     };
   });
@@ -206,7 +209,8 @@ type ByWhAgg = {
 
 export function linesToByWarehouseRows(lines: RawBalanceLine[]): ByWhAgg[] {
   return lines.map((s) => {
-    let available = s.qty.minus(s.reserved_qty);
+    const reservedForAvail = s.reserved_qty.lt(0) ? new Prisma.Decimal(0) : s.reserved_qty;
+    let available = s.qty.minus(reservedForAvail);
     if (available.lt(0)) {
       available = new Prisma.Decimal(0);
     }
@@ -219,7 +223,7 @@ export function linesToByWarehouseRows(lines: RawBalanceLine[]): ByWhAgg[] {
       sku: s.product.sku,
       name: s.product.name,
       qty: s.qty,
-      reserved: s.reserved_qty,
+      reserved: reservedForAvail,
       available
     };
   });

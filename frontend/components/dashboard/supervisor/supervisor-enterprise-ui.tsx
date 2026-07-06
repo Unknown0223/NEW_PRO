@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export const enterpriseSelectClass =
-  "h-10 rounded-xl border border-gray-200 bg-gray-50/50 px-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-border dark:bg-muted/50";
+  "h-10 rounded-xl border border-border bg-muted/50 px-3 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-border dark:bg-muted/50";
 
 export const enterpriseInputClass =
-  "h-10 rounded-xl border border-gray-200 bg-gray-50/50 pl-10 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-border dark:bg-muted/50";
+  "h-10 rounded-xl border border-border bg-muted/50 pl-10 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-border dark:bg-muted/50";
 
 export function SupervisorEnterpriseSegmentTabs({
   tabs,
@@ -23,7 +23,7 @@ export function SupervisorEnterpriseSegmentTabs({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1 dark:bg-muted", className)}>
+    <div className={cn("flex flex-wrap gap-1 rounded-xl bg-muted p-1 dark:bg-muted", className)}>
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -32,7 +32,7 @@ export function SupervisorEnterpriseSegmentTabs({
           className={cn(
             "rounded-lg px-4 py-2 text-sm font-medium transition-all",
             value === t.key
-              ? "bg-white text-teal-700 shadow-sm dark:bg-card dark:text-teal-300"
+              ? "bg-card text-teal-700 shadow-sm dark:bg-card dark:text-teal-300"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -101,7 +101,7 @@ export function SupervisorEnterpriseToolbar({
           <button
             type="button"
             onClick={onExcel}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-medium hover:bg-muted dark:border-border"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium hover:bg-muted dark:border-border"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" aria-hidden />
             Excel
@@ -112,7 +112,7 @@ export function SupervisorEnterpriseToolbar({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 hover:bg-muted disabled:opacity-50 dark:border-border"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border hover:bg-muted disabled:opacity-50 dark:border-border"
             aria-label="Обновить"
           >
             <Loader2 className={cn("h-4 w-4", refreshing && "animate-spin")} />
@@ -134,7 +134,7 @@ export function SupervisorEnterpriseTableWrap({
   className?: string;
 }) {
   return (
-    <div className={cn("overflow-x-auto rounded-xl border border-gray-200 dark:border-border", className)}>
+    <div className={cn("overflow-x-auto rounded-xl border border-border dark:border-border", className)}>
       {children}
     </div>
   );
@@ -166,7 +166,7 @@ export function SupervisorEnterprisePager({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-sm hover:bg-muted disabled:opacity-50 dark:border-border dark:bg-card"
+          className="h-9 rounded-xl border border-border bg-card px-3 text-sm hover:bg-muted disabled:opacity-50 dark:border-border dark:bg-card"
           disabled={page <= 1}
           onClick={() => onPage(page - 1)}
         >
@@ -177,7 +177,7 @@ export function SupervisorEnterprisePager({
         </span>
         <button
           type="button"
-          className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-sm hover:bg-muted disabled:opacity-50 dark:border-border dark:bg-card"
+          className="h-9 rounded-xl border border-border bg-card px-3 text-sm hover:bg-muted disabled:opacity-50 dark:border-border dark:bg-card"
           disabled={page >= totalPages}
           onClick={() => onPage(page + 1)}
         >

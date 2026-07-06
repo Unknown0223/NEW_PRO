@@ -1,0 +1,55 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch/tag/SHA)
+        required: false
+        default: main
+      skip_migrations:
+        description: Skip database migrations
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Deploy backend (template)
+        run: |
+          echo "Deploy staging backend from ref: ${{ inputs.ref }}"
+          echo "Configure Railway/GitHub deployment secrets for your staging project."
+          echo "Suggested: railway up --service backend --environment staging"
+          # railway CLI yoki API chaqiruvi shu yerda ulang
+
+      - name: Deploy frontend (template)
+        run: |
+          echo "Deploy staging frontend from ref: ${{ inputs.ref }}"
+          echo "Suggested: railway up --service frontend --environment staging"
+
+      - name: Run migrations
+        if: ${{ !inputs.skip_migrations }}
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          cd backend
+          npm ci
+          npx prisma migrate deploy
+
+      - name: Smoke check
+        env:
+          STAGING_HEALTH_URL: ${{ vars.STAGING_HEALTH_URL }}
+        run: |
+          if [ -n "$STAGING_HEALTH_URL" ]; then
+            curl -sf "$STAGING_HEALTH_URL" | head -c 500
+          else
+            echo "STAGING_HEALTH_URL not configured — skip smoke"
+          fi

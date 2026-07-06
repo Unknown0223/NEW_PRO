@@ -12,6 +12,7 @@ import {
 } from "../tenant-settings/finance-refs";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import type { ReportActor } from "./client-sales-2.types";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 
 export async function getClientSales2FilterOptions(tenantId: number, actor?: ReportActor) {
   const tenant = await prisma.tenant.findUnique({
@@ -24,12 +25,7 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
       : {};
   const profilePriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries).filter((x) => x.active !== false);
 
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, is_active: true }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId, is_active: true }
-        : { tenant_id: tenantId, role: "agent", is_active: true };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const [agents, categories, products, groups, segments] = await Promise.all([
     prisma.user.findMany({

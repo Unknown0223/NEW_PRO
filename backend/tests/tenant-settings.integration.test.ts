@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
 import { prisma } from "../src/config/database";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 const marker = join(__dirname, ".db-integration-ready");
 const dbReady = existsSync(marker) && readFileSync(marker, "utf8").trim() === "1";
@@ -17,6 +18,20 @@ describe.skipIf(!dbReady)("tenant settings bonus-stack (database)", () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  beforeEach(async () => {
+    const adminLogin = await request(app.server).post("/api/auth/login").send({
+      slug: "test1",
+      login: "admin",
+      password: "secret123"
+    });
+    if (adminLogin.status !== 200) return;
+    const adminToken = adminLogin.body.accessToken as string;
+    await request(app.server)
+      .patch("/api/test1/settings/bonus-stack")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ mode: "all", max_units: null, forbid_apply_all_eligible: false });
   });
 
   it("admin GET/PATCH bonus-stack; operator GET 200, PATCH 403", async () => {
@@ -47,7 +62,7 @@ describe.skipIf(!dbReady)("tenant settings bonus-stack (database)", () => {
     expect(patch.body.bonus_stack.max_units).toBe(2);
     expect(patch.body.bonus_stack.forbid_apply_all_eligible).toBe(true);
 
-    const opLogin = await request(app.server).post("/api/auth/login").send({
+    const opLogin = await loginForIntegrationTest(app, {
       slug: "test1",
       login: "operator",
       password: "secret123"

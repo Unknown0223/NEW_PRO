@@ -1,11 +1,18 @@
 "use client";
 
 import type { ClientRow } from "@/lib/client-types";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { buildClientMapBalloonHtml } from "@/lib/client-map-balloon";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 export type ClientMapPoint = ClientRow & { lat: number; lon: number };
 
-const PALETTE = ["#10b981", "#0ea5e9", "#f59e0b", "#ec4899", "#8b5cf6", "#f97316", "#6366f1"] as const;
+export type ClientMapControlsHandle = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+  flyTo: (lat: number, lon: number, zoom?: number) => void;
+};
+
 const DEFAULT_HEIGHT_PX = 640;
 const YANDEX_LANG = "ru_RU";
 
@@ -14,10 +21,13 @@ type YMapLike = {
   geoObjects: { add: (obj: unknown) => void };
   setBounds?: (bounds: [[number, number], [number, number]], opts?: Record<string, unknown>) => void;
   setCenter: (center: [number, number], zoom: number) => void;
+  getZoom?: () => number;
+  setZoom?: (zoom: number) => void;
 };
 
-type YClustererLike = {
-  add: (items: unknown[]) => void;
+type YPlacemarkLike = {
+  events: { add: (event: string, handler: () => void) => void };
+  balloon?: { open: () => void };
 };
 
 function escapeHtml(v: string): string {
@@ -27,12 +37,6 @@ function escapeHtml(v: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function shortText(v: string | null | undefined, max = 52): string {
-  const t = (v ?? "").trim();
-  if (!t) return "—";
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
 function loadYandexMapsApi(): Promise<YMapsLike> {
@@ -74,7 +78,13 @@ function loadYandexMapsApi(): Promise<YMapsLike> {
         reject(new Error("YandexMapsUnavailable"));
         return;
       }
-      resolve(window.ymaps);
+      window.ymaps.ready(() => {
+        if (!window.ymaps) {
+          reject(new Error("YandexMapsUnavailable"));
+          return;
+        }
+        resolve(window.ymaps);
+      });
     };
     script.onerror = () => reject(new Error("YandexMapsScriptError"));
     document.head.appendChild(script);
@@ -85,17 +95,41 @@ function loadYandexMapsApi(): Promise<YMapsLike> {
 export function ClientsLeafletMap({
   clients,
   selectedClientId,
-  heightPx
+  selectedClientIds,
+  heightPx,
+  fillHeight,
+  mapControlsRef,
+  onClientClick,
+  hideBuiltinControls
 }: {
   clients: ClientMapPoint[];
   selectedClientId?: number | null;
+  selectedClientIds?: number[];
   /** По умолчанию 640 — для встраиваемых панелей (merge и т.п.) задайте меньше */
   heightPx?: number;
+  /** Растянуть на высоту родителя (страница «Клиенты на карте») */
+  fillHeight?: boolean;
+  mapControlsRef?: MutableRefObject<ClientMapControlsHandle | null>;
+  onClientClick?: (client: ClientMapPoint) => void;
+  /** Скрыть встроенные кнопки Яндекс (кастомный тулбар) */
+  hideBuiltinControls?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapHeight = heightPx ?? DEFAULT_HEIGHT_PX;
   const points = useMemo(() => clients.filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon)), [clients]);
-  const mapKey = useMemo(() => points.map((p) => p.id).join("-"), [points]);
+  const selectedSet = useMemo(() => {
+    const s = new Set<number>();
+    if (selectedClientIds?.length) {
+      for (const id of selectedClientIds) s.add(id);
+    } else if (selectedClientId != null) {
+      s.add(selectedClientId);
+    }
+    return s;
+  }, [selectedClientIds, selectedClientId]);
+  const mapKey = useMemo(
+    () => `${points.map((p) => p.id).join("-")}|sel:${[...selectedSet].join(",")}`,
+    [points, selectedSet]
+  );
   const [yandexFailed, setYandexFailed] = useState(false);
 
   useEffect(() => {
@@ -113,12 +147,15 @@ export function ClientsLeafletMap({
         ymaps.ready(() => {
           if (cancelled || !host) return;
           try {
+            const mapControls = hideBuiltinControls
+              ? ["typeSelector", "fullscreenControl", "trafficControl", "rulerControl"]
+              : ["zoomControl", "typeSelector", "fullscreenControl", "trafficControl", "rulerControl"];
             map = new ymaps.Map(
               host,
               {
                 center: [points[0]!.lat, points[0]!.lon],
                 zoom: 5,
-                controls: ["zoomControl", "typeSelector", "fullscreenControl", "trafficControl", "rulerControl"]
+                controls: mapControls
               },
               { suppressMapOpenBlock: true }
             );
@@ -133,37 +170,24 @@ export function ClientsLeafletMap({
               maxLat = Math.max(maxLat, c.lat);
               minLon = Math.min(minLon, c.lon);
               maxLon = Math.max(maxLon, c.lon);
-              const isSelected = selectedClientId != null && c.id === selectedClientId;
-              const color = isSelected ? "#ef4444" : "#14b8a6";
+              const isSelected = selectedSet.has(c.id);
+              const color = isSelected ? "#ef4444" : c.is_active ? "#14b8a6" : "#94a3b8";
               const safeName = escapeHtml(c.name);
-              const coords = `${String(c.latitude).slice(0, 10)}, ${String(c.longitude).slice(0, 10)}`;
-              const phone = shortText(c.phone, 24);
-              const place = shortText([c.city, c.region].filter(Boolean).join(", "), 40);
-              const status = c.is_active ? "Активный" : "Неактивный";
-              const code = shortText(c.client_code, 20);
               const placemark = new ymaps.Placemark(
                 [c.lat, c.lon],
                 {
-                  balloonContent: `
-                  <div style="min-width:210px;max-width:260px;font-size:12px;line-height:1.35;color:#0f172a">
-                    <a href="/clients/${c.id}" style="font-size:13px;font-weight:700;color:#0369a1;text-decoration:none">${safeName}</a>
-                    <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
-                      <span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:${c.is_active ? "#22c55e" : "#94a3b8"}"></span>
-                      <span style="color:#334155">${escapeHtml(status)}</span>
-                    </div>
-                    <div style="margin-top:6px;color:#334155">Тел: <span style="font-weight:600">${escapeHtml(phone)}</span></div>
-                    <div style="margin-top:2px;color:#334155">Локация: <span>${escapeHtml(place)}</span></div>
-                    <div style="margin-top:2px;color:#64748b">Код: ${escapeHtml(code)} • ID: ${c.id}</div>
-                    <div style="margin-top:4px;font-family:monospace;font-size:10px;color:#64748b">${escapeHtml(coords)}</div>
-                  </div>
-                `,
+                  balloonContent: buildClientMapBalloonHtml(c),
                   hintContent: safeName
                 },
                 {
                   preset: isSelected ? "islands#redIcon" : "islands#blueIcon",
                   iconColor: color
                 }
-              );
+              ) as YPlacemarkLike;
+              placemark.events.add("click", () => {
+                onClientClick?.(c);
+                placemark.balloon?.open();
+              });
               marks.push(placemark);
             });
 
@@ -176,19 +200,49 @@ export function ClientsLeafletMap({
             clusterer.add(marks);
             map?.geoObjects.add(clusterer);
 
-            const selected = selectedClientId != null ? points.find((p) => p.id === selectedClientId) : undefined;
-            if (selected) {
-              map?.setCenter([selected.lat, selected.lon], 16);
-            } else if (points.length === 1) {
-              map?.setCenter([points[0]!.lat, points[0]!.lon], 14);
-            } else if (map?.setBounds) {
-              map.setBounds(
-                [
-                  [minLat, minLon],
-                  [maxLat, maxLon]
-                ],
-                { checkZoomRange: true, zoomMargin: [24, 24, 24, 24] }
-              );
+            const fitAll = () => {
+              const selectedPoints = points.filter((p) => selectedSet.has(p.id));
+              if (selectedPoints.length === 1) {
+                map?.setCenter([selectedPoints[0]!.lat, selectedPoints[0]!.lon], 16);
+              } else if (selectedPoints.length > 1 && map?.setBounds) {
+                const lats = selectedPoints.map((p) => p.lat);
+                const lons = selectedPoints.map((p) => p.lon);
+                map.setBounds(
+                  [
+                    [Math.min(...lats), Math.min(...lons)],
+                    [Math.max(...lats), Math.max(...lons)]
+                  ],
+                  { checkZoomRange: true, zoomMargin: [40, 40, 40, 40] }
+                );
+              } else if (points.length === 1) {
+                map?.setCenter([points[0]!.lat, points[0]!.lon], 14);
+              } else if (map?.setBounds) {
+                map.setBounds(
+                  [
+                    [minLat, minLon],
+                    [maxLat, maxLon]
+                  ],
+                  { checkZoomRange: true, zoomMargin: [24, 24, 24, 24] }
+                );
+              }
+            };
+            fitAll();
+
+            if (mapControlsRef) {
+              mapControlsRef.current = {
+                zoomIn: () => {
+                  const z = map?.getZoom?.() ?? 5;
+                  map?.setZoom?.(Math.min(19, z + 1));
+                },
+                zoomOut: () => {
+                  const z = map?.getZoom?.() ?? 5;
+                  map?.setZoom?.(Math.max(1, z - 1));
+                },
+                resetView: () => fitAll(),
+                flyTo: (lat, lon, zoom = 14) => {
+                  map?.setCenter([lat, lon], zoom);
+                }
+              };
             }
           } catch {
             if (!cancelled) setYandexFailed(true);
@@ -200,9 +254,10 @@ export function ClientsLeafletMap({
       });
     return () => {
       cancelled = true;
+      if (mapControlsRef) mapControlsRef.current = null;
       map?.destroy();
     };
-  }, [mapKey, points, selectedClientId]);
+  }, [mapKey, points, selectedSet, mapControlsRef, onClientClick, hideBuiltinControls]);
 
   if (points.length === 0) return null;
 
@@ -220,8 +275,12 @@ export function ClientsLeafletMap({
   return (
     <div
       ref={hostRef}
-      style={{ height: mapHeight, width: "100%", borderRadius: 8 }}
-      className="z-0 overflow-hidden border border-border/50"
+      style={fillHeight ? { width: "100%", height: "100%" } : { height: mapHeight, width: "100%" }}
+      className={
+        fillHeight
+          ? "z-0 h-full min-h-[460px] w-full overflow-hidden"
+          : "z-0 overflow-hidden rounded-lg border border-border/50"
+      }
     />
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
+import { ORDERS_LIST_EXPANDED_PANEL_CLASS } from "@/components/orders/orders-list/orders-list-expand-layout";
 import { OrdersProductsByCategoryView } from "@/components/orders/orders-list/orders-products-by-category-view";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
+import type { CSSProperties } from "react";
 
 function OrdersListExpandedBody({
   tenantSlug,
@@ -30,6 +32,7 @@ function OrdersListExpandedBody({
     <div
       role="region"
       aria-label={orderNumber ? `Товары заказа ${orderNumber}` : "Товары заказа"}
+      className="min-w-0 max-w-full"
     >
       {q.isLoading ? (
         <p className="text-xs text-muted-foreground">Загрузка товаров…</p>
@@ -41,54 +44,59 @@ function OrdersListExpandedBody({
           Нет строк товаров
         </p>
       ) : (
-        <OrdersProductsByCategoryView items={items} />
+        <OrdersProductsByCategoryView items={items} discount_sum={q.data?.discount_sum} />
       )}
     </div>
   );
 }
 
+function expandedPanelStyle(panelWidth: number | null | undefined): CSSProperties | undefined {
+  if (panelWidth == null || panelWidth <= 0) return undefined;
+  return { width: panelWidth, maxWidth: panelWidth };
+}
+
 /**
- * Mahsulot bloki — zakaz qatori tagida, gorizontal scrolldan mustaqil (sticky + viewport kengligi).
+ * CURSOR / AI AGENT — DO NOT MODIFY expand layout without explicit user request.
+ *
+ * Mahsulot bloki zakaz qatori tagida ochiladi. Gorizontal scrollsiz:
+ * - `panelWidth` = scroll konteyner clientWidth (orders-list-table.tsx)
+ * - `orders-list-expanded-panel` = sticky left:0 (globals.css)
+ * - `w-full` ishlatilmaydi — 3200px jadval kengligiga cho‘ziladi.
+ *
+ * Sabab: min-w-[3200px] jadval + colSpan → panel butun jadvalga cho‘zilardi.
  */
 export function OrdersListExpandedRow({
   tenantSlug,
   orderId,
   orderNumber,
   colSpan,
-  viewportWidth
+  panelWidth
 }: {
   tenantSlug: string;
   orderId: number;
   orderNumber?: string;
   colSpan: number;
-  viewportWidth: number;
+  panelWidth?: number | null;
 }) {
-  const panelWidth = viewportWidth > 0 ? viewportWidth : undefined;
-
   return (
-    <tr className="border-b border-gray-200 bg-transparent" onClick={(e) => e.stopPropagation()}>
+    <tr className="border-b border-border bg-transparent" onClick={(e) => e.stopPropagation()}>
       <td colSpan={colSpan} className="bg-transparent p-0 align-top">
-        <div className="animate-orders-expand py-2 pl-1 sm:pl-2">
-          <div
-            className="sticky left-0 z-[5] box-border rounded-lg bg-[#f0fdfc] px-4 py-4 sm:px-5 dark:bg-teal-950/25"
-            style={{
-              width: panelWidth,
-              maxWidth: panelWidth
-            }}
-          >
-            <OrdersListExpandedBody
-              tenantSlug={tenantSlug}
-              orderId={orderId}
-              orderNumber={orderNumber}
-            />
-          </div>
+        <div
+          className={`${ORDERS_LIST_EXPANDED_PANEL_CLASS} animate-orders-expand border-y border-teal-100/90 bg-[#f0fdfc] px-4 py-4 sm:px-5 dark:border-teal-900/50 dark:bg-teal-950/25`}
+          style={expandedPanelStyle(panelWidth)}
+        >
+          <OrdersListExpandedBody
+            tenantSlug={tenantSlug}
+            orderId={orderId}
+            orderNumber={orderNumber}
+          />
         </div>
       </td>
     </tr>
   );
 }
 
-/** Jadvaldan tashqarida (to‘liq kenglik) */
+/** Jadvaldan tashqarida (to‘liq kenglik) — boshqa kontekstlar uchun */
 export function OrdersListExpandedPanel(props: {
   tenantSlug: string;
   orderId: number;

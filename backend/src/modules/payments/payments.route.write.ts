@@ -3,14 +3,13 @@ import {
   batchConfirmPaymentsBodySchema,
   createOrderCashInBodySchema,
   createPaymentBodySchema,
-  deletePaymentQuerySchema,
   parseOptPositiveInt,
   parsePaymentsListQuery,
   patchPaymentBodySchema,
   rejectPaymentBodySchema
 } from "../../contracts/payments.schemas";
-import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -20,13 +19,12 @@ import {
   createPayment,
   confirmPendingPayment,
   confirmPendingPaymentsBatch,
-  deletePayment,
   getPaymentDetail,
   listPayments,
   listPaymentsForClient,
   listPaymentsForOrder,
   rejectPendingPayment,
-  restorePayment,
+  returnPaymentToExpeditor,
   updatePayment
 } from "./payments.service";
 import {
@@ -35,12 +33,13 @@ import {
   listOpenOrdersForAllocation
 } from "./payment-allocations.service";
 import { createOrderCashInBatch } from "./payment.order-cash-in";
+import { registerPaymentAdminWriteRoutes } from "./payments.route.write.admin";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerPaymentWriteRoutes(app: FastifyInstance) {
   app.patch(
     "/api/:slug/payments/:id",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -75,9 +74,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
         if (msg === "BAD_EXPEDITOR_SCOPE") return sendApiError(reply, request, 400, "BadExpeditorScope");
         if (msg === "BAD_LEDGER_AGENT") return sendApiError(reply, request, 400, "BadLedgerAgent");
-        if (msg === "AMOUNT_BELOW_ALLOCATED") {
-          return sendApiError(reply, request, 400, "AmountBelowAllocated");
-        }
         if (msg === "ORDER_LOCKED_BY_ALLOCATIONS") {
           return sendApiError(reply, request, 400, "OrderLockedByAllocations");
         }
@@ -88,7 +84,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/payments/:id/allocate",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -117,7 +113,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/payments/:id/confirm",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -148,7 +144,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/payments/:id/reject",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenantId = request.tenant!.id;
@@ -188,8 +184,55 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    "/api/:slug/payments/:id/return-to-expeditor",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const tenantId = request.tenant!.id;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id) || id < 1) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      const parsed = rejectPaymentBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Invalid request body",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const rawDuration = (request.body as { duration_minutes?: unknown } | null)?.duration_minutes;
+      const durationMinutes =
+        typeof rawDuration === "number" && Number.isFinite(rawDuration) ? rawDuration : null;
+      try {
+        const result = await returnPaymentToExpeditor(
+          tenantId,
+          id,
+          actorUserIdOrNull(request),
+          parsed.data.reason ?? null,
+          durationMinutes
+        );
+        return reply.status(200).send(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
+        if (msg === "ALREADY_RETURNED") return sendApiError(reply, request, 409, "AlreadyReturned");
+        if (msg === "NOT_RETURNABLE") {
+          return sendApiError(reply, request, 409, "NotReturnable", "Оплату нельзя вернуть в этом статусе.");
+        }
+        if (msg === "BAD_ENTRY_KIND") return sendApiError(reply, request, 400, "BadEntryKind");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
     "/api/:slug/payments/order-cash-in",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createOrderCashInBodySchema.safeParse(request.body);
@@ -228,7 +271,7 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/payments/batch-confirm",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = batchConfirmPaymentsBodySchema.safeParse(request.body ?? {});
@@ -251,51 +294,5 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
     }
   );
 
-  app.delete(
-    "/api/:slug/payments/:id",
-    { preHandler: [jwtAccessVerify, requireRoles("admin")] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (Number.isNaN(id)) {
-        return sendApiError(reply, request, 400, "InvalidId");
-      }
-      const q = deletePaymentQuerySchema.parse((request.query as Record<string, unknown>) ?? {});
-      try {
-        await deletePayment(
-          request.tenant!.id,
-          id,
-          actorUserIdOrNull(request),
-          q.cancel_reason_ref?.trim() || null
-        );
-        return reply.status(204).send();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-        throw e;
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/payments/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRoles("admin")] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (Number.isNaN(id) || id < 1) {
-        return sendApiError(reply, request, 400, "InvalidId");
-      }
-      try {
-        await restorePayment(request.tenant!.id, id, actorUserIdOrNull(request));
-        return reply.status(204).send();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
-        throw e;
-      }
-    }
-  );
+  registerPaymentAdminWriteRoutes(app);
 }

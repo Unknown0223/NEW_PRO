@@ -35,7 +35,7 @@ export function CompositionSubmitRow({
   }, [warehouseId, warehouses]);
 
   return (
-    <div className="sticky bottom-0 z-10 -mx-1 mt-4 rounded-[10px] border border-slate-200/90 bg-white/95 px-4 py-4 shadow-[0_-4px_24px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-0">
+    <div className="sticky bottom-0 z-10 -mx-1 mt-4 rounded-[10px] border border-border/90 bg-card/95 px-4 py-4 shadow-[0_-4px_24px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-0">
       {localError ? (
         <p className="mb-3 text-sm text-destructive" role="alert">
           {localError}

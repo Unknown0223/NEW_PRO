@@ -14,6 +14,35 @@ export const CASH_DESK_LINK_ROLES = [
 ] as const;
 export type CashDeskLinkRole = (typeof CASH_DESK_LINK_ROLES)[number];
 
+/** Kassa faqat bitta maqsad: mijoz to‘lovi yoki skidka to‘lovi. */
+export function normalizeCashDeskPurposes(
+  clientRaw: boolean | undefined,
+  discountRaw: boolean | undefined,
+  existing?: { accepts_client_payments: boolean; accepts_discount_payments: boolean }
+): { accepts_client_payments: boolean; accepts_discount_payments: boolean } {
+  if (clientRaw === true && discountRaw === true) {
+    throw new Error("CASH_DESK_PURPOSE_CONFLICT");
+  }
+
+  let client =
+    clientRaw !== undefined ? clientRaw : (existing?.accepts_client_payments ?? true);
+  let discount =
+    discountRaw !== undefined ? discountRaw : (existing?.accepts_discount_payments ?? false);
+
+  if (client && discount) {
+    if (discountRaw === true) {
+      client = false;
+    } else {
+      discount = false;
+    }
+  }
+  if (!client && !discount) {
+    client = true;
+    discount = false;
+  }
+  return { accepts_client_payments: client, accepts_discount_payments: discount };
+}
+
 const ROLE_FOR_LINK: Record<CashDeskLinkRole, string> = {
   agent: "agent",
   cashier: "operator",
@@ -136,6 +165,8 @@ export async function listCashDesks(
       longitude: d.longitude != null ? String(d.longitude) : null,
       is_active: d.is_active,
       is_closed: d.is_closed,
+      accepts_client_payments: d.accepts_client_payments,
+      accepts_discount_payments: d.accepts_discount_payments,
       created_at: d.created_at.toISOString(),
       user_total: d.links.length,
       role_counts,
@@ -217,6 +248,8 @@ export async function createCashDesk(
     longitude?: number | null;
     is_active?: boolean;
     is_closed?: boolean;
+    accepts_client_payments?: boolean;
+    accepts_discount_payments?: boolean;
     links?: { user_id: number; link_role: string }[];
   }
 ) {
@@ -229,6 +262,10 @@ export async function createCashDesk(
   }
   const links = body.links ?? [];
   await assertUsersFitRoles(tenantId, links);
+  const purposes = normalizeCashDeskPurposes(
+    body.accepts_client_payments,
+    body.accepts_discount_payments
+  );
   const desk = await prisma.cashDesk.create({
     data: {
       tenant_id: tenantId,
@@ -241,6 +278,8 @@ export async function createCashDesk(
       longitude: body.longitude != null ? new Prisma.Decimal(body.longitude) : null,
       is_active: body.is_active !== false,
       is_closed: body.is_closed === true,
+      accepts_client_payments: purposes.accepts_client_payments,
+      accepts_discount_payments: purposes.accepts_discount_payments,
       links: {
         create: links.map((l) => ({
           user_id: l.user_id,
@@ -266,6 +305,8 @@ export async function patchCashDesk(
     longitude?: number | null;
     is_active?: boolean;
     is_closed?: boolean;
+    accepts_client_payments?: boolean;
+    accepts_discount_payments?: boolean;
     links?: { user_id: number; link_role: string }[];
   }
 ) {
@@ -295,6 +336,18 @@ export async function patchCashDesk(
   }
   if (body.is_active !== undefined) data.is_active = body.is_active;
   if (body.is_closed !== undefined) data.is_closed = body.is_closed;
+  if (body.accepts_client_payments !== undefined || body.accepts_discount_payments !== undefined) {
+    const purposes = normalizeCashDeskPurposes(
+      body.accepts_client_payments,
+      body.accepts_discount_payments,
+      {
+        accepts_client_payments: existing.accepts_client_payments,
+        accepts_discount_payments: existing.accepts_discount_payments
+      }
+    );
+    data.accepts_client_payments = purposes.accepts_client_payments;
+    data.accepts_discount_payments = purposes.accepts_discount_payments;
+  }
 
   await prisma.$transaction(async (tx) => {
     if (Object.keys(data).length > 0) {

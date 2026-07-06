@@ -8,18 +8,49 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { FilterSelect } from "@/components/ui/filter-select";
-import { cn } from "@/lib/utils";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MonitorSmartphone, Pencil, RefreshCw, UserMinus } from "lucide-react";
+import { downloadXlsxSheet } from "@/lib/download-xlsx";
+import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
+import { MonitorSmartphone, Pencil, UserMinus } from "lucide-react";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
+import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import {
+  StaffFilterSelect,
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { formatPersonDisplayName } from "@/lib/person-display";
+import {
+  StaffKomandaActiveSessionsCell,
+  StaffKomandaApkCell,
+  StaffKomandaAppAccessToggle,
+  StaffKomandaBranchCell,
+  StaffKomandaCodeCell,
+  StaffKomandaDeviceCell,
+  StaffKomandaFioCell,
+  StaffKomandaLoginCell,
+  StaffKomandaMaxSessionsCell,
+  StaffKomandaPhoneCell,
+  StaffKomandaPinflCell,
+  StaffKomandaPositionCell,
+  StaffKomandaTagList,
+  StaffKomandaTerritoryCell
+} from "@/components/staff/staff-komanda-table-cells";
+
 type CollectorRow = {
   id: number;
   fio: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
   login: string;
   phone: string | null;
   code: string | null;
@@ -36,6 +67,48 @@ type CollectorRow = {
   is_active: boolean;
 };
 
+const COLS = [
+  "Ф.И.О",
+  "Авторизоваться",
+  "Кассы",
+  "Территории",
+  "Телефон",
+  "Код",
+  "Название устройства",
+  "ПИНФЛ",
+  "Филиал",
+  "Должность",
+  "Версия APK",
+  "Доступ к приложение",
+  "Количество активных сессий",
+  "Максимальное количество сессий"
+] as const;
+
+const COLLECTOR_TABLE_ID = "staff.collectors.v1";
+const COLLECTOR_COLUMN_IDS = [
+  "fio",
+  "login",
+  "cash_desks",
+  "territory",
+  "phone",
+  "code",
+  "device_name",
+  "pinfl",
+  "branch",
+  "position",
+  "apk_version",
+  "app_access",
+  "active_sessions",
+  "max_sessions"
+] as const;
+const COLLECTOR_COLUMNS = COLLECTOR_COLUMN_IDS.map((id, i) => ({
+  id,
+  label: COLS[i] ?? id
+}));
+const COLLECTOR_COLUMN_LABEL_BY_ID = new Map<string, string>(
+  COLLECTOR_COLUMNS.map((c) => [c.id, c.label])
+);
+
 type Props = { tenantSlug: string };
 
 export function CollectorsWorkspace({ tenantSlug }: Props) {
@@ -46,11 +119,27 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
   const [draftTerritory, setDraftTerritory] = useState("");
   const [appliedPos, setAppliedPos] = useState("");
   const [appliedTerritory, setAppliedTerritory] = useState("");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [editRow, setEditRow] = useState<CollectorRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [sessionRow, setSessionRow] = useState<CollectorRow | null>(null);
   const [deactivateRow, setDeactivateRow] = useState<CollectorRow | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const tablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: COLLECTOR_TABLE_ID,
+    defaultColumnOrder: [...COLLECTOR_COLUMN_IDS],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const pageSize = tablePrefs.pageSize;
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab]);
 
   const filterQ = useQuery({
     queryKey: ["collectors-filter-options", tenantSlug],
@@ -105,7 +194,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
       const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
       if (flat) {
         const hint = firstValidationUserHint(flat);
-        setCreateError(withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", e));
+        setCreateError(withApiSupportLine(hint ?? "Ma'lumotlarni tekshiring.", e));
         return;
       }
       setCreateError(messageFromStaffCreateError(e));
@@ -122,7 +211,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const rows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     const src = listQ.data ?? [];
     if (!q) return src;
@@ -145,132 +234,291 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
     );
   }, [listQ.data, search]);
 
+  const total = filteredRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, safePage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, appliedPos, appliedTerritory, search, pageSize]);
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [tab, appliedPos, appliedTerritory, safePage, pageSize]);
+
+  const applyFilters = () => {
+    setAppliedPos(draftPos);
+    setAppliedTerritory(draftTerritory);
+  };
+
+  const resetFilters = () => {
+    setDraftPos("");
+    setDraftTerritory("");
+    setAppliedPos("");
+    setAppliedTerritory("");
+    setPage(1);
+  };
+
+  const toggleSelection = (id: number, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleAllOnPage = (checked: boolean) => {
+    if (checked) setSelected(new Set(pageRows.map((r) => r.id)));
+    else setSelected(new Set());
+  };
+
+  const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((r) => selected.has(r.id)),
+    [filteredRows, selected]
+  );
+
+  const bulk = useStaffKomandaBulk({
+    tenantSlug,
+    apiSegment: "collectors",
+    invalidateQueryKeys: [
+      ["collectors", tenantSlug],
+      ["collectors-filter-options", tenantSlug]
+    ],
+    selectedIds: selected,
+    setSelectedIds: setSelected,
+    selectedRows
+  });
+
+  function exportCellString(r: CollectorRow, colId: string): string {
+    switch (colId) {
+      case "fio":
+        return formatPersonDisplayName(r);
+      case "login":
+        return r.login;
+      case "cash_desks":
+        return (r.cash_desks ?? []).map((c) => c.name).join("; ");
+      case "territory":
+        return r.territory ?? "";
+      case "phone":
+        return r.phone ?? "";
+      case "code":
+        return r.code ?? "";
+      case "device_name":
+        return r.device_name ?? "";
+      case "pinfl":
+        return r.pinfl ?? "";
+      case "branch":
+        return r.branch ?? "";
+      case "position":
+        return r.position ?? "";
+      case "apk_version":
+        return r.apk_version ?? "";
+      case "app_access":
+        return r.app_access ? "Да" : "Нет";
+      case "active_sessions":
+        return String(r.active_session_count);
+      case "max_sessions":
+        return String(r.max_sessions);
+      default:
+        return "";
+    }
+  }
+
+  function renderDataCell(colId: string, r: CollectorRow) {
+    switch (colId) {
+      case "fio":
+        return (
+          <StaffKomandaFioCell
+            first_name={r.first_name}
+            last_name={r.last_name}
+            middle_name={r.middle_name}
+            fio={r.fio}
+          />
+        );
+      case "login":
+        return <StaffKomandaLoginCell login={r.login} />;
+      case "cash_desks":
+        return (
+          <StaffKomandaTagList items={(r.cash_desks ?? []).map((x) => x.name)} maxVisible={2} />
+        );
+      case "territory":
+        return <StaffKomandaTerritoryCell territory={r.territory} />;
+      case "phone":
+        return <StaffKomandaPhoneCell phone={r.phone} />;
+      case "code":
+        return <StaffKomandaCodeCell code={r.code} />;
+      case "device_name":
+        return <StaffKomandaDeviceCell name={r.device_name} />;
+      case "pinfl":
+        return <StaffKomandaPinflCell pinfl={r.pinfl} />;
+      case "branch":
+        return <StaffKomandaBranchCell branch={r.branch} />;
+      case "position":
+        return <StaffKomandaPositionCell position={r.position} />;
+      case "apk_version":
+        return <StaffKomandaApkCell version={r.apk_version} />;
+      case "app_access":
+        return (
+          <StaffKomandaAppAccessToggle
+            checked={r.app_access}
+            disabled={patchMut.isPending}
+            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
+          />
+        );
+      case "active_sessions":
+        return (
+          <StaffKomandaActiveSessionsCell
+            count={r.active_session_count}
+            max={r.max_sessions}
+            onClick={() => setSessionRow(r)}
+          />
+        );
+      case "max_sessions":
+        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
+      default:
+        return "—";
+    }
+  }
+
   return (
-    <div className="space-y-0">
-      <Card className="rounded-none border-0 bg-transparent shadow-none">
-        <CardContent className="space-y-0 p-0">
-          <div className="flex flex-wrap items-end gap-3 border-b border-border/80 bg-muted/30 px-4 py-3">
-            <FilterSelect emptyLabel="Должность" value={draftPos} onChange={(e) => setDraftPos(e.target.value)}>
+    <StaffWorkspaceLayout>
+      <StaffWorkspaceHeader
+        title="Инкассатор"
+        subtitle="Управление инкассаторами: территории, кассы, доступ к приложению и контроль сессий"
+        addLabel="Добавить инкассатора"
+        onAdd={() => {
+          setCreateError(null);
+          setAddOpen(true);
+        }}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
+
+      <StaffWorkspaceFilterPanel
+        filters={
+          <>
+            <StaffFilterSelect
+              label="Должность"
+              value={draftPos}
+              onChange={setDraftPos}
+              emptyLabel="Все должности"
+            >
               {(filterQ.data?.positions ?? []).map((x) => (
                 <option key={x} value={x}>
                   {x}
                 </option>
               ))}
-            </FilterSelect>
-            <FilterSelect emptyLabel="Территория" value={draftTerritory} onChange={(e) => setDraftTerritory(e.target.value)}>
+            </StaffFilterSelect>
+            <StaffFilterSelect
+              label="Территория"
+              value={draftTerritory}
+              onChange={setDraftTerritory}
+              emptyLabel="Все территории"
+            >
               {(filterQ.data?.territories ?? []).map((x) => (
                 <option key={x} value={x}>
                   {x}
                 </option>
               ))}
-            </FilterSelect>
-            <Input className="h-9 max-w-xs bg-background text-xs" placeholder="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button
-              type="button"
-              size="sm"
-              className="h-9 bg-teal-700 text-white hover:bg-teal-800"
-              onClick={() => {
-                setAppliedPos(draftPos);
-                setAppliedTerritory(draftTerritory);
-              }}
-            >
-              Применить
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" className="h-9 w-9" onClick={() => void listQ.refetch()}>
-              <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
-            </Button>
-            <Button type="button" size="sm" className="ml-auto h-9" onClick={() => setAddOpen(true)}>
-              Добавить
-            </Button>
-          </div>
+            </StaffFilterSelect>
+          </>
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => tablePrefs.setPageSize(n)}
+        allOnPageSelected={allPageSelected}
+        onToggleAllOnPage={toggleAllOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, коду, телефону…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map((id) => COLLECTOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+          const exportData = filteredRows.map((r) => order.map((colId) => exportCellString(r, colId)));
+          downloadXlsxSheet(
+            `collectors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Инкассаторы",
+            headers,
+            exportData
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+      />
 
-          <div className="flex border-b border-border/80 px-4">
-            <button
-              type="button"
-              className={cn("-mb-px border-b-2 px-3 py-2 text-sm", tab === "active" ? "border-primary text-primary" : "border-transparent")}
-              onClick={() => setTab("active")}
-            >
-              Активный
-            </button>
-            <button
-              type="button"
-              className={cn("-mb-px border-b-2 px-3 py-2 text-sm", tab === "inactive" ? "border-primary text-primary" : "border-transparent")}
-              onClick={() => setTab("inactive")}
-            >
-              Не активный
-            </button>
-          </div>
+      <TableColumnSettingsDialog
+        open={columnDialogOpen}
+        onOpenChange={setColumnDialogOpen}
+        title="Управление столбцами"
+        description="Выберите видимые столбцы и порядок. Сохраняется для вашей учётной записи."
+        columns={COLLECTOR_COLUMNS}
+        columnOrder={tablePrefs.columnOrder}
+        hiddenColumnIds={tablePrefs.hiddenColumnIds}
+        saving={tablePrefs.saving}
+        onSave={(next) => tablePrefs.saveColumnLayout(next)}
+        onReset={() => tablePrefs.resetColumnLayout()}
+      />
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1500px] text-xs">
-              <thead className="app-table-thead">
-                <tr>
-                  <th className="px-2 py-2 text-left">Ф.И.О</th>
-                  <th className="px-2 py-2 text-left">Кассы</th>
-                  <th className="px-2 py-2 text-left">Территории</th>
-                  <th className="px-2 py-2 text-left">Телефон</th>
-                  <th className="px-2 py-2 text-left">Код</th>
-                  <th className="px-2 py-2 text-left">Название устройства</th>
-                  <th className="px-2 py-2 text-left">ПИНФЛ</th>
-                  <th className="px-2 py-2 text-left">Филиал</th>
-                  <th className="px-2 py-2 text-left">Должность</th>
-                  <th className="px-2 py-2 text-left">Версия APK</th>
-                  <th className="px-2 py-2 text-left">Доступ к прилож.</th>
-                  <th className="px-2 py-2 text-left">Активные сессии</th>
-                  <th className="px-2 py-2 text-left">Макс. сессии</th>
-                  <th className="px-2 py-2 text-left">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t even:bg-muted/20">
-                    <td className="px-2 py-2">{r.fio}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex max-w-[14rem] flex-wrap gap-1">
-                        {(r.cash_desks ?? []).length ? (r.cash_desks ?? []).map((x) => (
-                          <span key={x.id} className="rounded bg-muted px-1.5 py-0.5">{x.name}</span>
-                        )) : "—"}
-                      </div>
-                    </td>
-                    <td className="px-2 py-2">{r.territory ?? "—"}</td>
-                    <td className="px-2 py-2">{r.phone ?? "—"}</td>
-                    <td className="px-2 py-2">{r.code ?? "—"}</td>
-                    <td className="px-2 py-2">{r.device_name ?? "—"}</td>
-                    <td className="px-2 py-2">{r.pinfl ?? "—"}</td>
-                    <td className="px-2 py-2">{r.branch ?? "—"}</td>
-                    <td className="px-2 py-2">{r.position ?? "—"}</td>
-                    <td className="px-2 py-2">{r.apk_version ?? "—"}</td>
-                    <td className="px-2 py-2">
-                      <input type="checkbox" className="size-4 accent-primary" checked={r.app_access} onChange={(e) => patchMut.mutate({ id: r.id, body: { app_access: e.target.checked } })} />
-                    </td>
-                    <td className="px-2 py-2">
-                      <button type="button" className="text-primary hover:underline" onClick={() => setSessionRow(r)}>
-                        {r.active_session_count}
-                      </button>
-                    </td>
-                    <td className="px-2 py-2">{r.max_sessions}</td>
-                    <td className="px-2 py-2 text-right">
-                      <TableRowActionGroup className="justify-end" ariaLabel="Collector">
-                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSessionRow(r)}>
-                          <MonitorSmartphone className="size-3.5" />
-                        </Button>
-                        <Button type="button" variant="outline" size="icon-sm" onClick={() => setEditRow(r)}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        {tab === "active" ? (
-                          <Button type="button" variant="ghost" size="icon-sm" className="text-destructive" onClick={() => setDeactivateRow(r)}>
-                            <UserMinus className="size-3.5" />
-                          </Button>
-                        ) : null}
-                      </TableRowActionGroup>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={COLLECTOR_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="инкассаторов"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selected}
+        onToggleSelection={toggleSelection}
+        renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton title="Деактивировать" onClick={() => setDeactivateRow(r)}>
+                  <UserMinus className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : null}
+            </div>
+          );
+        }}
+      />
+
+      <StaffBulkFloatingBar
+        count={selected.size}
+        allAccessOn={bulk.allAccessOn}
+        isActiveTab={tab === "active"}
+        busy={bulk.bulkBusy}
+        onToggleAccess={bulk.onToggleAccess}
+        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
+        onClearSessions={bulk.onClearSessions}
+        onClearSelection={() => setSelected(new Set())}
+      />
+
+      <AgentTemplateConfirmDialog
+        open={bulk.confirmBulk != null}
+        message={bulk.confirmMessage}
+        busy={bulk.bulkBusy}
+        onCancel={() => bulk.setConfirmBulk(null)}
+        onConfirm={bulk.handleConfirmBulk}
+      />
 
       <CollectorEditDialog row={editRow} onClose={() => setEditRow(null)} onPatch={(id, body) => patchMut.mutateAsync({ id, body })} />
       <CollectorAddDialog
@@ -293,7 +541,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="collector"
         userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 2}
+        maxSessions={sessionRow?.max_sessions ?? 1}
         onPatched={() => void qc.invalidateQueries({ queryKey: ["collectors", tenantSlug] })}
       />
 
@@ -307,13 +555,18 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
             <Button type="button" variant="outline" onClick={() => setDeactivateRow(null)}>
               Нет
             </Button>
-            <Button type="button" variant="destructive" disabled={deactivateMut.isPending} onClick={() => deactivateRow && deactivateMut.mutate(deactivateRow.id)}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deactivateMut.isPending}
+              onClick={() => deactivateRow && deactivateMut.mutate(deactivateRow.id)}
+            >
               Да
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaffWorkspaceLayout>
   );
 }
 
@@ -369,7 +622,9 @@ function CollectorEditDialog({
           <Input className="sm:col-span-2" placeholder="Территория" value={territory} onChange={(e) => setTerritory(e.target.value)} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
+          <Button variant="outline" onClick={onClose}>
+            Отмена
+          </Button>
           <Button
             disabled={saving || !row}
             onClick={async () => {

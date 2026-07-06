@@ -1,3 +1,13 @@
+export type ProductPackagingInput = {
+  name: string;
+  quantity?: number | null;
+  width_cm?: number | string | null;
+  height_cm?: number | string | null;
+  length_cm?: number | string | null;
+  is_main?: boolean;
+  sort_order?: number | null;
+};
+
 export type CreateProductInput = {
   sku: string;
   name: string;
@@ -9,6 +19,10 @@ export type CreateProductInput = {
   brand_id?: number | null;
   manufacturer_id?: number | null;
   segment_id?: number | null;
+  segment_ids?: number[];
+  trade_direction_ids?: number[];
+  image_url?: string | null;
+  packagings?: ProductPackagingInput[];
   weight_kg?: number | string | null;
   volume_m3?: number | string | null;
   qty_per_block?: number | null;

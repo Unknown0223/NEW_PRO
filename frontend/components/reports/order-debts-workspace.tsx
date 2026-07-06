@@ -28,6 +28,7 @@ import {
 } from "@/lib/order-debts-table-columns";
 import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
 import { STALE } from "@/lib/query-stale";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { buildClientTerritoryFilterLevels, buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { cn } from "@/lib/utils";
@@ -470,18 +471,6 @@ export function OrderDebtsWorkspace() {
     }
   });
 
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "order-debts"],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
-      );
-      return data.data;
-    }
-  });
-
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "order-debts-paytypes"],
     enabled: Boolean(tenantSlug) && hydrated,
@@ -594,20 +583,8 @@ export function OrderDebtsWorkspace() {
     return Array.from(new Set([...fromOptions, ...fromList])).sort((a, b) => a.localeCompare(b, "ru"));
   }, [clientRefsQ.data]);
 
-  const tradeDirectionSelectValues = useMemo(() => {
-    const fromAgents = filterOptQ.data?.trade_directions ?? [];
-    const fromProfile = profileQ.data?.trade_directions ?? [];
-    const s = new Set<string>();
-    for (const x of fromAgents) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    for (const x of fromProfile) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data?.trade_directions, profileQ.data?.trade_directions]);
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "order-debts");
+  const tradeDirectionSelectValues = tradeDirectionsCatalog.labels;
 
   const territoryCascade = useMemo(
     () =>

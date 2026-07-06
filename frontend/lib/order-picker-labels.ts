@@ -2,6 +2,8 @@
  * Zakaz / dashboard tanlovlari: ko‘rinishda faqat FIO (nom), qidiruvda id, login, kod.
  */
 
+import { formatPersonDisplayName, staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
+
 export function orderAgentFilterOption(u: { id: number; name: string; login: string }) {
   const label = (u.name ?? "").trim() || (u.login ?? "").trim();
   return {
@@ -12,11 +14,11 @@ export function orderAgentFilterOption(u: { id: number; name: string; login: str
 }
 
 export function orderExpeditorFilterOption(r: { id: number; fio: string; login: string }) {
-  const label = (r.fio ?? "").trim() || (r.login ?? "").trim();
+  const label = staffPickerDisplayName(r);
   return {
     value: String(r.id),
     label,
-    searchText: [String(r.id), r.login, r.fio].filter((x) => String(x).trim()).join(" ")
+    searchText: staffPickerSearchText(r)
   };
 }
 
@@ -29,14 +31,17 @@ export function orderClientPickerDisplayName(c: { id: number; name: string }) {
 export function staffDashboardMultiItem(s: {
   id: number;
   fio: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
   code?: string | null;
   login?: string | null;
 }) {
   return {
     id: String(s.id),
-    title: (s.fio ?? "").trim() || `ID ${s.id}`,
-    searchText: [String(s.id), s.code, s.login, s.fio]
-      .filter((x) => x != null && String(x).trim())
-      .join(" ")
+    title: staffPickerDisplayName(s),
+    searchText: staffPickerSearchText(s)
   };
 }
+
+export { formatPersonDisplayName };

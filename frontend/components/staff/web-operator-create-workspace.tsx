@@ -58,7 +58,7 @@ export function WebOperatorCreateWorkspace({
     pinfl: "",
     branch: "",
     position: "",
-    max_sessions: "4",
+    max_sessions: "1",
     app_access: false,
     can_authorize: true,
     cash_desk_id: null as number | null,
@@ -111,7 +111,7 @@ export function WebOperatorCreateWorkspace({
         pinfl: form.pinfl.trim() || null,
         branch: form.branch.trim() || null,
         position: form.position.trim() || null,
-        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 4,
+        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
         app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true

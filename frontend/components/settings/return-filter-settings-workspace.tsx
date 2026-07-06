@@ -145,7 +145,7 @@ export function ReturnFilterSettingsWorkspace() {
                   "rounded-xl border p-4 text-left transition-colors",
                   active
                     ? "border-teal-600 bg-teal-50/90 ring-1 ring-teal-600/30"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80"
+                    : "border-border bg-card hover:border-border hover:bg-muted/80"
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -246,11 +246,11 @@ export function ReturnFilterSettingsWorkspace() {
         </label>
       </section>
 
-      <section className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-xs text-slate-600">
+      <section className="rounded-xl border border-dashed border-border bg-muted/60 p-4 text-xs text-slate-600">
         <p className="font-medium text-slate-800">Test mijoz</p>
         <p className="mt-1">
-          <code className="rounded bg-white px-1 py-0.5">FILTR-TEST mijoz (polki)</code> — backend:{" "}
-          <code className="rounded bg-white px-1 py-0.5">npm run seed:return-filter-test</code>
+          <code className="rounded bg-card px-1 py-0.5">FILTR-TEST mijoz (polki)</code> — backend:{" "}
+          <code className="rounded bg-card px-1 py-0.5">npm run seed:return-filter-test</code>
         </p>
       </section>
 

@@ -41,7 +41,7 @@ export function MonitoringChannelsBar({
     <div className="relative" style={{ height }}>
       {!hasFact ? (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <span className="rounded-md bg-white/80 px-2 py-1 text-[11px] text-slate-500">Нет продаж по каналам</span>
+          <span className="rounded-md bg-card/80 px-2 py-1 text-[11px] text-slate-500">Нет продаж по каналам</span>
         </div>
       ) : null}
       <ResponsiveContainer width="100%" height="100%">
@@ -77,7 +77,7 @@ export function CategoryDonutLegend({ slices }: { slices: Array<{ name: string; 
     return (
       <div className="mt-2 space-y-1.5 text-[12px] text-slate-500">
         <div className="flex items-center gap-2">
-          <span className="size-2.5 rounded-full bg-slate-200" />
+          <span className="size-2.5 rounded-full bg-muted" />
           <span className="flex-1">Нет данных</span>
           <span className="font-medium">0%</span>
         </div>

@@ -189,7 +189,10 @@ export async function listStaff(
   }
 
   let superviseeCountMap = new Map<number, number>();
-  const superviseesBySupervisor = new Map<number, Array<{ id: number; fio: string; code: string | null }>>();
+  const superviseesBySupervisor = new Map<
+    number,
+    Array<{ id: number; fio: string; code: string | null; is_active: boolean }>
+  >();
   if (kind === "supervisor") {
     const grouped = await prisma.user.groupBy({
       by: ["supervisor_user_id"],
@@ -221,6 +224,7 @@ export async function listStaff(
           middle_name: true,
           name: true,
           code: true,
+          is_active: true,
           supervisor_user_id: true
         },
         orderBy: { id: "asc" }
@@ -229,7 +233,7 @@ export async function listStaff(
         const sid = a.supervisor_user_id;
         if (sid == null) continue;
         const list = superviseesBySupervisor.get(sid) ?? [];
-        list.push({ id: a.id, fio: toFio(a), code: a.code });
+        list.push({ id: a.id, fio: toFio(a), code: a.code, is_active: a.is_active });
         superviseesBySupervisor.set(sid, list);
       }
     }
@@ -250,6 +254,9 @@ export async function listStaff(
     consignment_limit_amount: u.consignment_limit_amount?.toString() ?? null,
     consignment_ignore_previous_months_debt: u.consignment_ignore_previous_months_debt ?? false,
     consignment_updated_at: u.consignment_updated_at?.toISOString() ?? null,
+    consignment_close_day: u.consignment_close_day,
+    consignment_close_hour: u.consignment_close_hour,
+    consignment_close_minute: u.consignment_close_minute,
     apk_version: u.apk_version,
     device_name: u.device_name,
     last_sync_at: u.last_sync_at ? u.last_sync_at.toISOString() : null,
@@ -268,7 +275,7 @@ export async function listStaff(
     territory: u.territory,
     login: u.login,
     is_active: u.is_active,
-    max_sessions: u.max_sessions ?? 2,
+    max_sessions: u.max_sessions ?? 1,
     active_session_count: sessMap.get(u.id) ?? 0,
     kpi_color: u.kpi_color ?? null,
     agent_entitlements: parseEntitlements(u.agent_entitlements),

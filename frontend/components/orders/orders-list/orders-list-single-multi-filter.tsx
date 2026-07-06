@@ -13,7 +13,6 @@ type Props = {
   onChange: (value: string) => void;
   triggerClassName?: string;
   disabled?: boolean;
-  searchable?: boolean;
   minPopoverWidth?: number;
 };
 
@@ -26,7 +25,6 @@ export function OrdersListSingleMultiFilter({
   onChange,
   triggerClassName,
   disabled,
-  searchable = true,
   minPopoverWidth = 220
 }: Props) {
   return (

@@ -57,14 +57,14 @@ export function MonitoringPerformanceTable({
     : filtered.slice(safePage * effectivePageSize, (safePage + 1) * effectivePageSize);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <h2 className="mb-4 text-lg font-semibold text-slate-800">{title}</h2>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {serverPaging ? (
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700"
           >
             {[10, 20, 50].map((n) => (
               <option key={n} value={n}>
@@ -74,7 +74,7 @@ export function MonitoringPerformanceTable({
           </select>
         ) : (
           <select
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700"
             defaultValue={20}
             disabled
           >
@@ -97,10 +97,10 @@ export function MonitoringPerformanceTable({
           <RotateCcw className="h-4 w-4 text-teal-600" />
         </Button>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-border bg-muted text-xs uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3 text-left font-medium">Названия</th>
               <th className="px-4 py-3 text-right font-medium">АКБ</th>
               <th className="px-4 py-3 text-right font-medium">План</th>
@@ -110,7 +110,7 @@ export function MonitoringPerformanceTable({
           </thead>
           <tbody>
             {visibleRows.map((row) => (
-              <tr key={row.key} className="border-b border-slate-100 hover:bg-teal-50/50">
+              <tr key={row.key} className="border-b border-border hover:bg-teal-50/50">
                 <td className="px-4 py-3 font-medium text-slate-800">{row.name}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                   {row.akb != null ? fmtCount(row.akb) : "—"}

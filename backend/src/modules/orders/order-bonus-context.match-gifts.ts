@@ -33,7 +33,8 @@ export async function loadAvailableQtyByProductId(
   });
   const map = new Map<number, number>();
   for (const s of rows) {
-    const free = Number(s.qty) - Number(s.reserved_qty);
+    // Manfiy reserved (eski/buzuq ma'lumot) mavjudlikni oshirmasin.
+    const free = Number(s.qty) - Math.max(0, Number(s.reserved_qty));
     map.set(s.product_id, Math.max(0, free));
   }
   for (const id of ids) {

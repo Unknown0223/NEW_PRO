@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtCount, fmtMoney, formatReasonLabel } from "@/components/dashboard/sales/format";
+import { fmtCount, formatReasonLabel } from "@/components/dashboard/sales/format";
 import {
   SALES_CHART_COLORS,
   SALES_GREEN,
@@ -14,7 +14,7 @@ import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
 const chartLoading = () => (
-  <div className="h-[280px] animate-pulse rounded-lg bg-slate-100" aria-hidden />
+  <div className="h-[280px] animate-pulse rounded-lg bg-muted" aria-hidden />
 );
 
 const RechartsBundle = dynamic(() => import("@/components/dashboard/sales/sales-recharts-bundle"), {
@@ -110,7 +110,7 @@ export function SalesOrdersRefusalsChart({ data }: { data: SalesDashboardSnapsho
       className="sales-motion-delay-150"
     >
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-sm font-semibold text-slate-500">ОКБ</p>
           <p className="mt-2 text-2xl font-black text-slate-950">{fmtCount(okb)}</p>
           <p className="mt-1 text-xs text-slate-400">planned customers</p>
@@ -120,7 +120,7 @@ export function SalesOrdersRefusalsChart({ data }: { data: SalesDashboardSnapsho
           <p className="mt-2 text-2xl font-black text-emerald-600">{fmtCount(akb)}</p>
           <p className="mt-1 text-xs text-slate-400">actual ordered customers</p>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-sm font-semibold text-slate-500">Conversion</p>
           <p className="mt-2 text-2xl font-black text-slate-950">{coverage_pct.toFixed(1)}%</p>
           <p className="mt-1 text-xs text-slate-400">АКБ / ОКБ × 100</p>

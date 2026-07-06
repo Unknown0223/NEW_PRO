@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { clientAgentAssignmentSlotSchema } from "../../contracts/clients.schemas";
+import { CLIENT_PHOTO_MAX_IMAGE_URL_LEN } from "../../lib/client-photo-limits";
+import { clientAgentAssignmentSlotSchema, patchClientBodySchema } from "../../contracts/clients.schemas";
 
 const optionalRefString = z.string().max(500).nullable().optional();
 const coordIn = z.union([z.number().finite(), z.string(), z.null()]).optional();
@@ -13,7 +14,7 @@ export const createClientEquipmentBodySchema = z.object({
 });
 
 export const createClientPhotoBodySchema = z.object({
-  image_url: z.string().min(1).max(4000),
+  image_url: z.string().min(1).max(CLIENT_PHOTO_MAX_IMAGE_URL_LEN),
   caption: z.string().max(1000).nullable().optional(),
   order_id: z.number().int().positive().nullable().optional()
 });
@@ -65,4 +66,10 @@ export const balanceMovementBodySchema = z.object({
 export const bulkActiveBodySchema = z.object({
   client_ids: z.array(z.number().int().positive()).min(1).max(500),
   is_active: z.boolean()
+});
+
+/** PATCH `/api/:slug/clients/bulk` — bir xil maydonlarni ko‘p klientga */
+export const bulkPatchBodySchema = z.object({
+  client_ids: z.array(z.number().int().positive()).min(1).max(500),
+  patch: patchClientBodySchema
 });

@@ -109,7 +109,7 @@ export const CompositionBlock = memo(function CompositionBlock({
               <div
                 role="tablist"
                 aria-label="Категории возврата"
-                className="mt-3 flex flex-wrap border-b border-slate-200"
+                className="mt-3 flex flex-wrap border-b border-border"
               >
                 {selectedCategoryIds.map((cid) => {
                   const row = categories.find((c) => c.id === cid);

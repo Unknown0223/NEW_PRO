@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -122,6 +123,19 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "currency_rate",
+          entityId: (row as { id?: number })?.id ?? parsed.data.rate_date,
+          action: "currency_rate.create",
+          payload: {
+            rate_date: parsed.data.rate_date,
+            base_currency: parsed.data.base_currency,
+            quote_currency: parsed.data.quote_currency,
+            rate: parsed.data.rate
+          }
+        });
         return reply.status(201).send(row);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
@@ -151,6 +165,14 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "currency_rate",
+          entityId: id,
+          action: "currency_rate.update",
+          payload: { fields: Object.keys(parsed.data), ...parsed.data }
+        });
         return reply.send(row);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
@@ -171,6 +193,14 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
       }
       try {
         await deleteCurrencyExchangeRate(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "currency_rate",
+          entityId: id,
+          action: "currency_rate.delete",
+          payload: { id }
+        });
         return reply.status(204).send();
       } catch (e) {
         if (e instanceof Error && sendKnownDomainError(reply, request, e.message)) return;

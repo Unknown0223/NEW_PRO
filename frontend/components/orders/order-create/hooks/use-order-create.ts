@@ -3,7 +3,7 @@
 import { api } from "@/lib/api";
 import { ORDER_TYPE_VALUES } from "@/lib/order-types";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
-import { getUserFacingError, isApiUnreachable, withApiSupportLine } from "@/lib/error-utils";
+import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import type { ClientRow } from "@/lib/client-types";
 import type { ProductRow } from "@/lib/product-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,11 +45,7 @@ import {
 import type { PolkiPriceTypeEntryRef } from "../view/polki-shelf-return/polki-price-type-options";
 import {
   parsePriceAmount,
-  parseStockQty,
   availableOrderQty,
-  formatQtyState,
-  formatPolkiPieceQty,
-  orderStatusLabelRu,
   currentMonthEndIsoDate,
   unitPriceForType,
   buildPolkiPairRows,
@@ -57,9 +53,7 @@ import {
   capPolkiQtyToRow,
   polkiRowMaxReturnQty,
   polkiProductMaxReturnPool,
-  isPolkiShelfSourceOrder,
-  isPolkiReturnByOrderPickable,
-  polkiOrderRowHasBonus
+  isPolkiReturnByOrderPickable
 } from "../utils";
 import { applyPolkiOrderPieceRebalance } from "../view/polki-shelf-return/polki-order-composition";
 import { usePolkiAutoBonus } from "./use-polki-auto-bonus";
@@ -773,7 +767,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     [ctxProfile]
   );
 
-  const clients = createCtxQ.data?.clients ?? [];
+  const clients = useMemo(() => createCtxQ.data?.clients ?? [], [createCtxQ.data?.clients]);
   const eligibleClients = useMemo(
     () =>
       clients.filter((c) => {
@@ -812,9 +806,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     () => (agentCatalogReady ? (createCtxQ.data?.products ?? EMPTY_CREATE_PRODUCTS) : EMPTY_CREATE_PRODUCTS),
     [agentCatalogReady, createCtxQ.data?.products]
   );
-  const warehouses = createCtxQ.data?.warehouses ?? [];
-  const users = createCtxQ.data?.users ?? [];
-  const categories = agentCatalogReady ? (createCtxQ.data?.product_categories ?? []) : [];
+  const warehouses = useMemo(() => createCtxQ.data?.warehouses ?? [], [createCtxQ.data?.warehouses]);
+  const users = useMemo(() => createCtxQ.data?.users ?? [], [createCtxQ.data?.users]);
+  const categories = useMemo(
+    () => (agentCatalogReady ? (createCtxQ.data?.product_categories ?? []) : []),
+    [agentCatalogReady, createCtxQ.data?.product_categories]
+  );
   const selectedClientRow = useMemo(() => {
     const id = Number.parseInt(clientId.trim(), 10);
     if (!Number.isFinite(id) || id < 1) return null;
@@ -1328,7 +1325,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       t += Math.min(cash, maxCash);
     }
     return t;
-  }, [isPolkiSheet, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
+  }, [isPolkiSheet, polkiUsesAutoBonus, polkiRowsAll, polkiTotalQty, polkiBonusToBalance, polkiBonusCash]);
 
   const polkiSelectedLinesCount = useMemo(() => {
     if (!isPolkiSheet) return 0;
@@ -1757,7 +1754,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         const distinctOrderCount = new Set(polkiRowsAll.map((row) => row.order_id)).size;
         const usePeriodBatch = isPolkiFree && distinctOrderCount > 1;
 
-        let sumPhysical = 0;
         const batchLines: {
           order_id: number;
           product_id: number;
@@ -1810,7 +1806,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           }
 
           if (pq + bq + cash <= 0) continue;
-          sumPhysical += pq + bq;
           const peresortRaw =
             isPolkiByOrder && polkiBonusCalcMode === "manual"
               ? polkiPeresortByPairKey[pk]
@@ -2244,6 +2239,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         credit_limit?: string;
         outstanding?: string;
         order_total?: string;
+        rule_name?: string;
         details?: unknown;
       }>;
       const code = ax.response?.data?.error;
@@ -2524,7 +2520,6 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiAutoBonusPreviewReady,
     polkiAutoBonusPreviewQ.isError,
     polkiTotalReturnQtySum,
-    polkiEnteredTotalQtySum,
     polkiTotalBonusCashSum,
     hasPolkiQtyOverMax,
     hasPolkiBonusCashOverMax,

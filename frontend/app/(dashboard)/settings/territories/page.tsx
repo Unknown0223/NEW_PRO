@@ -49,7 +49,7 @@ import {
   Trash2
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type TenantProfile = {
   references: {
@@ -306,7 +306,13 @@ export default function TerritoriesSettingsPage() {
   const [editActive, setEditActive] = useState(true);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveNodeId, setMoveNodeId] = useState<string | null>(null);
-  const [autoSync, setAutoSync] = useState(true);
+  const [autoSync, setAutoSync] = useState(false);
+  const treeDirtyRef = useRef(false);
+
+  const setNodesTracked = useCallback((action: React.SetStateAction<TerritoryNode[]>) => {
+    treeDirtyRef.current = true;
+    setNodes(action);
+  }, []);
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug],
@@ -322,6 +328,7 @@ export default function TerritoriesSettingsPage() {
   });
 
   useEffect(() => {
+    if (treeDirtyRef.current) return;
     const fromApi = profileQ.data?.references?.territory_nodes;
     const lv = profileQ.data?.references?.territory_levels ?? [];
     if (lv.length) setLevels(lv.slice(0, 12));
@@ -356,7 +363,7 @@ export default function TerritoriesSettingsPage() {
     if (!name) return;
     const code = editCode.trim().toUpperCase();
     const sortOrder = editSort.trim() === "" ? null : Number(editSort.trim());
-    setNodes((prev) =>
+    setNodesTracked((prev) =>
       sortForest(
         updateNode(prev, editNodeId, {
           name,
@@ -387,6 +394,7 @@ export default function TerritoriesSettingsPage() {
       setMsg(null);
     },
     onSuccess: async () => {
+      treeDirtyRef.current = false;
       setServerFieldErrs({});
       setMsg("Saqlandi.");
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
@@ -418,7 +426,7 @@ export default function TerritoriesSettingsPage() {
 
   const applyMove = (newParentId: string | null) => {
     if (!moveNodeId) return;
-    setNodes((prev) => sortForest(moveNode(prev, moveNodeId, newParentId)));
+    setNodesTracked((prev) => sortForest(moveNode(prev, moveNodeId, newParentId)));
     setMoveOpen(false);
     setMoveNodeId(null);
   };
@@ -532,7 +540,7 @@ export default function TerritoriesSettingsPage() {
                     disabled={saveMut.isPending}
                     onClick={() => {
                       const n = emptyNode("Yangi territoriya");
-                      setNodes((prev) => sortForest(addRoot(prev, n)));
+                      setNodesTracked((prev) => sortForest(addRoot(prev, n)));
                       setExpanded((e) => new Set(e).add(n.id));
                     }}
                   >
@@ -564,7 +572,7 @@ export default function TerritoriesSettingsPage() {
                       startEdit={openEditModal}
                       onAddChild={(parentId) => {
                         const child = emptyNode("Yangi");
-                        setNodes((prev) => sortForest(addChild(prev, parentId, child)));
+                        setNodesTracked((prev) => sortForest(addChild(prev, parentId, child)));
                         setExpanded((e) => new Set(e).add(parentId).add(child.id));
                       }}
                       onMove={(id) => {
@@ -575,7 +583,7 @@ export default function TerritoriesSettingsPage() {
                         void navigator.clipboard.writeText(JSON.stringify(sub, null, 2));
                         setMsg("Tugun JSON buferga nusxalandi.");
                       }}
-                      onDelete={(id) => setNodes((prev) => sortForest(removeNode(prev, id)))}
+                      onDelete={(id) => setNodesTracked((prev) => sortForest(removeNode(prev, id)))}
                     />
                   ))}
                 </div>
@@ -644,7 +652,7 @@ export default function TerritoriesSettingsPage() {
                   disabled={!isAdmin || saveMut.isPending}
                   onClick={() => {
                     const s = sampleForest();
-                    setNodes(sortForest(s));
+                    setNodesTracked(() => sortForest(s));
                     setExpanded(new Set(s.map((x) => x.id)));
                     setMsg("Namuna (Lalaku zona/viloyatlar, import:once bilan bir xil) yuklandi. Saqlashni bosing.");
                   }}

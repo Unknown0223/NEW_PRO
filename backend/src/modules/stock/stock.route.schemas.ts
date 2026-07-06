@@ -1,5 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
+import { env } from "../../config/env";
+import { assertExcelImportSize } from "../../lib/multipart-limits";
 import {
   stockBalancesExportQuerySchema,
   stockBalancesQuerySchema
@@ -163,7 +165,7 @@ type StockImportMultipartOk = {
 export async function parseStockImportMultipart(request: FastifyRequest): Promise<StockImportMultipartOk | null> {
   let buf: Buffer | null = null;
   let defaultWarehouseId: number | undefined;
-  const parts = request.parts();
+  const parts = request.parts({ limits: { fileSize: env.MULTIPART_EXCEL_MAX_BYTES } });
   for await (const part of parts) {
     if (part.type === "file") {
       buf = await part.toBuffer();
@@ -174,7 +176,7 @@ export async function parseStockImportMultipart(request: FastifyRequest): Promis
     }
   }
   if (!buf || buf.length === 0) {
-    const file = await request.file();
+    const file = await request.file({ limits: { fileSize: env.MULTIPART_EXCEL_MAX_BYTES } });
     if (!file) {
       return null;
     }
@@ -183,6 +185,7 @@ export async function parseStockImportMultipart(request: FastifyRequest): Promis
   if (!buf || buf.length === 0) {
     return null;
   }
+  assertExcelImportSize(buf.length);
   return { buf, defaultWarehouseId };
 }
 

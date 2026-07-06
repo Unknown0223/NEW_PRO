@@ -1,13 +1,17 @@
 import { EventEmitter } from "node:events";
 import type { Redis } from "ioredis";
+import {
+  ORDER_EVENT_CHANNEL,
+  createOrderUpdatedPayload,
+  isOrderUpdatedPayload,
+  type OrderUpdatedPayload
+} from "../domain/events/order.events";
+import { createRedisClient } from "./redis-client";
 
-export type OrderStreamPayload = {
-  type: "order.updated";
-  tenant_id: number;
-  order_id: number;
-};
+/** @deprecated Use `OrderUpdatedPayload` from domain catalog. */
+export type OrderStreamPayload = OrderUpdatedPayload;
 
-const CHANNEL = "order-events";
+const CHANNEL = ORDER_EVENT_CHANNEL;
 
 const bus = new EventEmitter();
 bus.setMaxListeners(500);
@@ -16,20 +20,35 @@ let pub: Redis | null = null;
 let sub: Redis | null = null;
 let useRedis = false;
 
+type OrderEventBusLog = {
+  warn: (obj: unknown, msg?: string) => void;
+  info: (obj: unknown, msg?: string) => void;
+  error?: (obj: unknown, msg?: string) => void;
+};
+
 function emitLocal(payload: OrderStreamPayload): void {
   bus.emit("order", payload);
+}
+
+function logRedisError(
+  log: OrderEventBusLog | undefined,
+  client: "pub" | "sub",
+  err: unknown
+): void {
+  const payload = { err, redisContext: `order-event-bus-${client}` };
+  if (log?.error) {
+    log.error(payload, "redis_connection_error");
+  } else if (log?.warn) {
+    log.warn(payload, "redis_connection_error");
+  }
 }
 
 /**
  * Redis mavjud bo‘lsa: `emit` faqat `PUBLISH` (barcha instanslar `SUBSCRIBE` orqali lokal busga ulashadi).
  * Redis yo‘q yoki ulanish xato bo‘lsa: faqat jarayon ichidagi EventEmitter.
  */
-export async function initOrderEventBusRedis(
-  redisUrl: string,
-  log?: { warn: (obj: unknown, msg?: string) => void; info: (obj: unknown, msg?: string) => void }
-): Promise<void> {
+export async function initOrderEventBusRedis(log?: OrderEventBusLog): Promise<void> {
   try {
-    const { default: IORedis } = await import("ioredis");
     const opts = {
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
@@ -37,27 +56,21 @@ export async function initOrderEventBusRedis(
       connectTimeout: 3000,
       retryStrategy: (): null => null
     };
-    pub = new IORedis(redisUrl, opts);
-    sub = new IORedis(redisUrl, opts);
-    const swallow = (): void => {};
-    pub.on("error", swallow);
-    sub.on("error", swallow);
+    pub = await createRedisClient(opts, "order-event-bus-pub");
+    sub = await createRedisClient(opts, "order-event-bus-sub");
+    pub.on("error", (err) => logRedisError(log, "pub", err));
+    sub.on("error", (err) => logRedisError(log, "sub", err));
+    await Promise.all([pub.connect(), sub.connect()]);
     await Promise.all([pub.ping(), sub.ping()]);
-    pub.off("error", swallow);
-    sub.off("error", swallow);
     await sub.subscribe(CHANNEL);
     sub.on("message", (_ch, message) => {
       try {
-        const payload = JSON.parse(message) as OrderStreamPayload;
-        if (
-          payload?.type === "order.updated" &&
-          typeof payload.tenant_id === "number" &&
-          typeof payload.order_id === "number"
-        ) {
+        const payload: unknown = JSON.parse(message);
+        if (isOrderUpdatedPayload(payload)) {
           emitLocal(payload);
         }
       } catch {
-        /* ignore */
+        /* ignore malformed payload */
       }
     });
     useRedis = true;
@@ -101,13 +114,10 @@ export async function closeOrderEventBusRedis(): Promise<void> {
 }
 
 export function emitOrderUpdated(tenantId: number, orderId: number): void {
-  const payload: OrderStreamPayload = {
-    type: "order.updated",
-    tenant_id: tenantId,
-    order_id: orderId
-  };
+  const payload = createOrderUpdatedPayload(tenantId, orderId);
   if (useRedis && pub) {
-    void pub.publish(CHANNEL, JSON.stringify(payload)).catch(() => {
+    void pub.publish(CHANNEL, JSON.stringify(payload)).catch((err) => {
+      logRedisError(undefined, "pub", err);
       emitLocal(payload);
     });
   } else {

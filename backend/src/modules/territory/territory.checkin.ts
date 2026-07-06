@@ -73,65 +73,59 @@ export async function pointInPolygonSQL(
   });
   if (!territory) return false;
 
-  const sql = `
-    WITH edges AS (
-      SELECT
-        row_num,
-        elem.v->>'lat' AS lat_str,
-        elem.v->>'lng' AS lng_str,
-        LEAD(elem.v->>'lat') OVER (ORDER BY row_num) AS next_lat_str,
-        LEAD(elem.v->>'lng') OVER (ORDER BY row_num) AS next_lng_str
-      FROM territories t
-      CROSS JOIN LATERAL (
-        SELECT value AS v, ordinality AS row_num
-        FROM jsonb_array_elements(t.polygon::jsonb)
-      ) AS elem
-      WHERE t.id = $1
-    )
-    SELECT (
-      COALESCE(SUM(
-        CASE WHEN (
-          (edges.lat_str::float > $2) <> (COALESCE(edges.next_lat_str, first_lat.first) > $2)
-          AND $3::float < (
-            (COALESCE(edges.next_lng_str, first_lng.first)::float - edges.lng_str::float)
-            / (COALESCE(edges.next_lat_str, first_lat.first)::float - edges.lat_str::float)
-            * ($2 - edges.lat_str::float)
-            + edges.lng_str::float
-          )
-        ) THEN 1 ELSE 0 END
-      )::int % 2, 0) = 1
-    ) AS inside
-    FROM edges
-    CROSS JOIN LATERAL (
-      SELECT elem.v->>'lat' AS first
-      FROM territories t
-      CROSS JOIN LATERAL jsonb_array_elements(t.polygon::jsonb) AS elem
-      WHERE t.id = $1
-      LIMIT 1
-    ) first_lat
-    CROSS JOIN LATERAL (
-      SELECT elem.v->>'lng' AS first
-      FROM territories t
-      CROSS JOIN LATERAL jsonb_array_elements(t.polygon::jsonb) AS elem
-      WHERE t.id = $1
-      LIMIT 1
-    ) first_lng
-    WHERE edges.next_lat_str IS NOT NULL
-       OR (
-         edges.lat_str::float <> first_lat.first::float
-      )
-  `;
-
   try {
-    const result = await prisma.$queryRawUnsafe(
-      sql,
-      territoryId,
-      lat,
-      lng
+    const result = await prisma.$queryRaw<Array<{ inside: boolean }>>(
+      Prisma.sql`
+        WITH edges AS (
+          SELECT
+            row_num,
+            elem.v->>'lat' AS lat_str,
+            elem.v->>'lng' AS lng_str,
+            LEAD(elem.v->>'lat') OVER (ORDER BY row_num) AS next_lat_str,
+            LEAD(elem.v->>'lng') OVER (ORDER BY row_num) AS next_lng_str
+          FROM territories t
+          CROSS JOIN LATERAL (
+            SELECT value AS v, ordinality AS row_num
+            FROM jsonb_array_elements(t.polygon::jsonb)
+          ) AS elem
+          WHERE t.id = ${territoryId}
+        )
+        SELECT (
+          COALESCE(SUM(
+            CASE WHEN (
+              (edges.lat_str::float > ${lat}) <> (COALESCE(edges.next_lat_str, first_lat.first) > ${lat})
+              AND ${lng}::float < (
+                (COALESCE(edges.next_lng_str, first_lng.first)::float - edges.lng_str::float)
+                / (COALESCE(edges.next_lat_str, first_lat.first)::float - edges.lat_str::float)
+                * (${lat} - edges.lat_str::float)
+                + edges.lng_str::float
+              )
+            ) THEN 1 ELSE 0 END
+          )::int % 2, 0) = 1
+        ) AS inside
+        FROM edges
+        CROSS JOIN LATERAL (
+          SELECT elem.v->>'lat' AS first
+          FROM territories t
+          CROSS JOIN LATERAL jsonb_array_elements(t.polygon::jsonb) AS elem
+          WHERE t.id = ${territoryId}
+          LIMIT 1
+        ) first_lat
+        CROSS JOIN LATERAL (
+          SELECT elem.v->>'lng' AS first
+          FROM territories t
+          CROSS JOIN LATERAL jsonb_array_elements(t.polygon::jsonb) AS elem
+          WHERE t.id = ${territoryId}
+          LIMIT 1
+        ) first_lng
+        WHERE edges.next_lat_str IS NOT NULL
+           OR (
+             edges.lat_str::float <> first_lat.first::float
+          )
+      `
     );
-    const row = result as Array<{ inside: boolean }>;
-    if (!row || row.length === 0) return false;
-    return Boolean(row[0].inside);
+    if (!result || result.length === 0) return false;
+    return Boolean(result[0].inside);
   } catch {
     // Fallback to JS if raw SQL fails
     const t = await prisma.territory.findFirst({

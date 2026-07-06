@@ -23,6 +23,8 @@ export type PaymentListRow = {
   consignment: boolean;
   expeditor_user_id: number | null;
   expeditor_name: string | null;
+  /** To'lov mobil ekspeditor ilovasida yaratilgan (yozuvda expeditor_user_id bor) */
+  created_via_mobile: boolean;
   cash_desk_name: string | null;
   /** Doimiy: mijoz balansiga kirim / «Расход» */
   payment_kind: string;
@@ -32,6 +34,8 @@ export type PaymentListRow = {
   paid_at: string | null;
   received_at: string | null;
   confirmed_at: string | null;
+  /** «Отклонено» (rejected) holatida — to'g'rilash taymeri tugash vaqti (faol grant). */
+  return_expires_at: string | null;
   /** Mijoz manzili / hudud (chek guruhlash) */
   client_region: string | null;
   client_city: string | null;
@@ -109,7 +113,7 @@ export type PaymentListQuery = {
   cash_desk_ids?: number[];
   warehouse_ids?: number[];
   /** payment — faqat to‘lovlar; client_expense — «расходы клиента» */
-  entry_kind?: "payment" | "client_expense";
+  entry_kind?: "payment" | "client_expense" | "discount_settlement";
   /** Sanani qaysi maydonga qo‘llash (filtr) */
   date_field?: "created_at" | "paid_at" | "confirmed_at";
   /** GET /payments ro‘yxati tartibi (whitelist) */

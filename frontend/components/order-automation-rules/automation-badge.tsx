@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom";
 
 export function AutomationBadge({ value }: { value: string }) {
-  const colorClass = AUTOMATION_BADGE_COLORS[value] ?? "bg-gray-50 text-gray-700 border-gray-200";
+  const colorClass = AUTOMATION_BADGE_COLORS[value] ?? "bg-muted text-gray-700 border-border";
   return (
     <span
       className={cn(
@@ -112,16 +112,17 @@ function AutomationMorePopover({
     <div
       ref={menuRef}
       style={style}
-      className="rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+      className="rounded-lg border border-border bg-card py-1 shadow-lg"
       role="listbox"
     >
       {items.map((item, i) => (
         <div
           key={item.key}
           role="option"
+          aria-selected={false}
           className={cn(
             "px-3 py-1.5 text-xs text-gray-700",
-            i < items.length - 1 && "border-b border-gray-100"
+            i < items.length - 1 && "border-b border-border"
           )}
         >
           {item.label}

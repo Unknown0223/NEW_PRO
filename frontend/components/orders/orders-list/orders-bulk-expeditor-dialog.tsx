@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { formatGroupedInteger } from "@/lib/format-numbers";
+import { staffPickerDisplayName } from "@/lib/person-display";
 import { Link2, Link2Off } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -47,7 +48,7 @@ export function OrdersBulkExpeditorDialog({
     () =>
       expeditors.map((ex) => ({
         value: String(ex.id),
-        label: ex.code ? `${ex.fio} (${ex.code})` : ex.fio,
+        label: staffPickerDisplayName(ex),
         searchText: ex.code ?? undefined
       })),
     [expeditors]

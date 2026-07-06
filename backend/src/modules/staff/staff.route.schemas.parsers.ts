@@ -70,6 +70,7 @@ export const operatorLikeRoleEnum = z.enum([
   "operator",
   "director",
   "sales_director",
+  "manager",
   "regional_manager",
   "accountant",
   "warehouse_manager"

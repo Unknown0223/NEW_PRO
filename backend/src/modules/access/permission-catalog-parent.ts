@@ -18,6 +18,10 @@ export const MODULE_PARENT_LABEL_RU: Record<string, string> = {
   users: "Пользователи",
   access: "Доступ",
   audit: "Аудит",
+  routes: "Маршруты",
+  automation: "Автоматизация",
+  pivot: "Pivot отчёты",
+  work_slots: "Рабочее место",
   general: "Общее",
   misc: "Разное"
 };

@@ -13,20 +13,9 @@ import { ReturnSelectedOrderSummary } from "./return-selected-order-summary";
 
 export function PolkiShelfReturnView({ vm }: { vm: OrderCreateVm }) {
   const {
-    mutation,
     createCtxQ,
     localError,
     selectionNotice,
-    hasClient,
-    isPolkiByOrder,
-    polkiOrderIds,
-    hasWarehouse,
-    polkiTotalReturnQtySum,
-    polkiTotalBonusCashSum,
-    hasPolkiBonusCashOverMax,
-    hasPolkiQtyOverMax,
-    stockReadyForLines,
-    canShowPolkiGrid,
     canSubmit,
     polkiSubmitBlockedReason
   } = vm;

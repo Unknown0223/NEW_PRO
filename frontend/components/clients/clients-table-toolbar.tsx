@@ -5,12 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
-import { Input } from "@/components/ui/input";
 import type { ClientToolbarFiltersState } from "@/lib/client-list-toolbar-filters";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import { cn } from "@/lib/utils";
-import { CalendarDays, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Layers, ListOrdered, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { ClientsListSearchInput } from "@/components/clients/clients-list-search-input";
+import { CalendarDays, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Layers, ListOrdered, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
@@ -361,7 +361,7 @@ export function ClientsTableListToolbarStrip({
       role="toolbar"
       aria-label="Таблица: поиск и колонки"
     >
-      <label className="grid shrink-0 gap-1 text-xs font-medium text-foreground/85">
+      <label className="grid shrink-0 gap-1 text-xs font-semibold text-foreground">
         <span className="whitespace-nowrap leading-none">На стр.</span>
         <select
           className="h-9 min-w-[4.5rem] rounded-md border border-input bg-background px-2 text-sm font-medium text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -375,16 +375,7 @@ export function ClientsTableListToolbarStrip({
           ))}
         </select>
       </label>
-      <div className="relative flex min-w-[200px] flex-1 max-w-md">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder="Поиск: наименование, телефон, ИНН, ПИНФЛ, адрес…"
-          className="h-9 border pl-9 font-medium text-foreground"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-        />
-      </div>
+      <ClientsListSearchInput value={search} onChange={onSearchChange} />
       <Button
         type="button"
         variant="outline"
@@ -410,7 +401,7 @@ export function ClientsTableListToolbarStrip({
         </Button>
       ) : null}
       {totalRecords != null ? (
-        <span className="ml-auto self-end pb-0.5 text-sm text-foreground/80">
+        <span className="ml-auto self-end pb-0.5 text-sm text-foreground">
           Всего записей:{" "}
           <span className="font-semibold tabular-nums text-foreground">
             {formatNumberGrouped(totalRecords, { maxFractionDigits: 0 })}
@@ -448,65 +439,44 @@ export function ClientsTemplateListToolbar({
   importDisabled?: boolean;
   onExportExcel?: () => void;
 }) {
+  const toolbarBtn =
+    "flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50";
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-xl font-bold text-gray-800">Список клиенты</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={importDisabled}
-            onClick={onImportUpdate}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-          >
-            <RefreshCw className="h-4 w-4 text-gray-500" aria-hidden />
-            Обновление клиентов с Excel
-          </button>
-          <button
-            type="button"
-            disabled={importDisabled}
-            onClick={onImportCreate}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
-          >
-            <Download className="h-4 w-4 text-gray-500" aria-hidden />
-            Импорт
-          </button>
-          <Link
-            href="/clients/merge"
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
-          >
-            <Layers className="h-4 w-4 text-gray-500" aria-hidden />
-            Групповая обработка
-          </Link>
-        </div>
-      </div>
+      <h3 className="text-xl font-bold text-gray-800">Список клиентов</h3>
 
-      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 shadow-sm">
-        <div className="flex items-center gap-0.5">
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5 shadow-sm"
+        role="toolbar"
+        aria-label="Список клиентов: поиск и действия"
+      >
+        <div className="flex shrink-0 items-center gap-0.5">
           {onResetView ? (
             <button
               type="button"
               onClick={onResetView}
-              className="rounded p-1.5 transition-colors hover:bg-gray-100"
+              className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted"
               title="Сбросить"
             >
-              <RotateCcw className="h-4 w-4 text-gray-500" />
+              <RotateCcw className="h-4 w-4 text-gray-600" />
             </button>
           ) : null}
           <button
             type="button"
             onClick={onOpenColumnSettings}
-            className="rounded p-1.5 transition-colors hover:bg-gray-100"
+            className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted"
             title="Колонки"
           >
-            <ListOrdered className="h-4 w-4 text-gray-500" />
+            <ListOrdered className="h-4 w-4 text-gray-600" />
           </button>
           <select
-            className="cursor-pointer border-none bg-transparent pr-6 text-sm font-medium text-gray-700 focus:ring-0"
+            className="h-8 cursor-pointer rounded-md border-none bg-transparent pr-6 text-xs font-semibold text-gray-800 focus:ring-0"
             value={pageLimit}
             onChange={(e) => onPageLimitChange(Number(e.target.value))}
+            aria-label="Строк на странице"
           >
-            {[10, 20, 50, 100].map((n) => (
+            {[10, 15, 20, 30, 50, 100].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -514,25 +484,38 @@ export function ClientsTemplateListToolbar({
           </select>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-gray-200" />
+        <div className="mx-1 hidden h-5 w-px shrink-0 bg-muted md:block" />
 
-        <div className="relative max-w-[300px] w-full flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            placeholder="Поиск"
-            className="w-full border-none bg-transparent py-1 pl-8 pr-4 text-sm outline-none placeholder:text-gray-400 focus:ring-0"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
+        <ClientsListSearchInput value={search} onChange={onSearchChange} className="min-w-[9rem] flex-1" />
+
+        <div className="mx-1 hidden h-5 w-px shrink-0 bg-muted lg:block" />
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            disabled={importDisabled}
+            onClick={onImportUpdate}
+            className={toolbarBtn}
+          >
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+            Обновление клиентов с Excel
+          </button>
+          <button type="button" disabled={importDisabled} onClick={onImportCreate} className={toolbarBtn}>
+            <Download className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+            Импорт
+          </button>
+          <Link href="/clients/merge" className={toolbarBtn}>
+            <Layers className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+            Групповая обработка
+          </Link>
         </div>
 
-        <div className="flex flex-1 items-center justify-end gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {onExportExcel ? (
             <button
               type="button"
               onClick={onExportExcel}
-              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-50"
+              className="flex h-8 items-center gap-1 rounded-md px-2 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-50"
             >
               <FileSpreadsheet className="h-4 w-4" />
               Excel
@@ -543,8 +526,8 @@ export function ClientsTemplateListToolbar({
               type="button"
               onClick={onRefresh}
               disabled={refreshing}
-              className="rounded p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50"
-              title="Обновить"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-muted disabled:opacity-50"
+              title="Обновить список"
             >
               <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
             </button>
@@ -573,25 +556,25 @@ export function ClientsTableSectionHeader({
           type="button"
           disabled={importDisabled}
           onClick={onImportUpdate}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
         >
-          <RefreshCw className="h-4 w-4 text-gray-500" aria-hidden />
+          <RefreshCw className="h-4 w-4 text-gray-600" aria-hidden />
           Обновление клиентов с Excel
         </button>
         <button
           type="button"
           disabled={importDisabled}
           onClick={onImportCreate}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
         >
-          <Download className="h-4 w-4 text-gray-500" aria-hidden />
+          <Download className="h-4 w-4 text-gray-600" aria-hidden />
           Импорт
         </button>
         <Link
           href="/clients/merge"
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted"
         >
-          <Layers className="h-4 w-4 text-gray-500" aria-hidden />
+          <Layers className="h-4 w-4 text-gray-600" aria-hidden />
           Групповая обработка
         </Link>
       </div>
@@ -629,8 +612,8 @@ export function ClientsListPagination({
   const pageNumbers = buildPageNumbers(page, totalPages);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 bg-white px-4 py-3">
-      <div className="text-sm text-gray-500">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-4 py-3">
+      <div className="text-sm text-gray-600">
         Показано{" "}
         <span className="font-medium text-gray-900">
           {start} – {end}
@@ -642,14 +625,14 @@ export function ClientsListPagination({
           type="button"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
-          className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded border border-border transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Предыдущая страница"
         >
           <ChevronLeft className="h-4 w-4 text-gray-600" />
         </button>
         {pageNumbers.map((p, i) =>
           p === "..." ? (
-            <span key={`dots-${i}`} className="flex h-8 w-8 items-center justify-center text-sm text-gray-500">
+            <span key={`dots-${i}`} className="flex h-8 w-8 items-center justify-center text-sm text-gray-600">
               …
             </span>
           ) : (
@@ -661,7 +644,7 @@ export function ClientsListPagination({
                 "flex h-8 w-8 items-center justify-center rounded border text-sm font-medium transition-colors",
                 page === p
                   ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  : "border-border text-gray-600 hover:bg-muted"
               )}
             >
               {p}
@@ -672,7 +655,7 @@ export function ClientsListPagination({
           type="button"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded border border-border transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Следующая страница"
         >
           <ChevronRight className="h-4 w-4 text-gray-600" />

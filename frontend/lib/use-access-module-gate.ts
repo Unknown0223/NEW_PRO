@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
-/** «Доступ» va tegishli sahifalar: `admin` yoki `access.manage`. */
+/** «Доступ» va tegishli sahifalar: `admin` yoki `access.upravlenie.view`. */
 export function useAccessModuleGate(tenantSlug: string | null | undefined, effectiveRole: string | null) {
   const q = useQuery({
     queryKey: ["me", "access-permissions", tenantSlug],
@@ -16,6 +16,6 @@ export function useAccessModuleGate(tenantSlug: string | null | undefined, effec
   });
   const keys =
     q.data instanceof Set ? q.data : new Set(Array.isArray(q.data) ? q.data : []);
-  const allowed = effectiveRole === "admin" || keys.has("access.manage");
+  const allowed = effectiveRole === "admin" || keys.has("access.upravlenie.view");
   return { allowed, isLoading: q.isLoading };
 }

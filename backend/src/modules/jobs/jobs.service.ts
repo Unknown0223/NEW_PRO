@@ -180,6 +180,8 @@ export type JobStatusPayload = {
   returnvalue: unknown;
   failedReason: string | undefined;
   data: unknown;
+  /** BullMQ worker ulanishlari soni (0 bo‘lsa import navbatda qoladi). */
+  workersConnected?: number;
 };
 
 export type JobProgressPayload =
@@ -195,7 +197,8 @@ export type JobProgressPayload =
 function normalizeClientImportProgress(
   state: string,
   rawProgress: unknown,
-  returnvalue: unknown
+  returnvalue: unknown,
+  workersConnected?: number
 ): JobProgressPayload {
   if (rawProgress != null && typeof rawProgress === "object" && !Array.isArray(rawProgress)) {
     const p = rawProgress as Record<string, unknown>;
@@ -239,11 +242,17 @@ function normalizeClientImportProgress(
   if (state === "failed") {
     return { stage: "failed", percent: 100, processedRows: 0, totalRows: 0 };
   }
+  const noWorkers =
+    workersConnected === 0 &&
+    (state === "waiting" || state === "delayed");
   return {
     stage: state === "active" ? "writing" : "queued",
     percent: state === "active" ? 15 : 0,
     processedRows: 0,
-    totalRows: 0
+    totalRows: 0,
+    message: noWorkers
+      ? "Фоновый worker не запущен — задача в очереди. Обратитесь к администратору или перезапустите backend с worker."
+      : undefined
   };
 }
 
@@ -261,22 +270,33 @@ export async function getBackgroundJobForTenant(
     return null;
   }
   const state = await job.getState();
+  let workersConnected: number | undefined;
+  if (state === "waiting" || state === "delayed") {
+    try {
+      const workers = await q.getWorkers();
+      workersConnected = workers.length;
+    } catch {
+      workersConnected = undefined;
+    }
+  }
+  const progress =
+    job.name === "import_clients_xlsx"
+      ? normalizeClientImportProgress(state, job.progress, job.returnvalue, workersConnected)
+      : {
+          stage: state,
+          percent: state === "completed" || state === "failed" ? 100 : 0,
+          processedRows: 0,
+          totalRows: 0
+        };
   return {
     queue: BACKGROUND_QUEUE_NAME,
     id: String(job.id),
     name: job.name,
     state,
-    progress:
-      job.name === "import_clients_xlsx"
-        ? normalizeClientImportProgress(state, job.progress, job.returnvalue)
-        : {
-            stage: state,
-            percent: state === "completed" || state === "failed" ? 100 : 0,
-            processedRows: 0,
-            totalRows: 0
-          },
+    progress,
     returnvalue: job.returnvalue,
     failedReason: job.failedReason,
-    data: sanitizeJobDataForResponse(job.name, job.data)
+    data: sanitizeJobDataForResponse(job.name, job.data),
+    workersConnected
   };
 }

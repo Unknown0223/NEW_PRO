@@ -76,7 +76,7 @@ export function ReturnHeaderBlock({ vm }: { vm: OrderCreateVm }) {
             onChange={(e) => setPolkiHeaderDate(e.target.value)}
             disabled={mutation.isPending}
           />
-          <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-1">
+          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1">
             <button
               type="button"
               className="p-1 text-slate-400 hover:text-slate-600"
@@ -111,7 +111,7 @@ export function ReturnHeaderBlock({ vm }: { vm: OrderCreateVm }) {
           <div className="relative min-w-[min(100%,280px)] flex-1 sm:min-w-[280px] sm:flex-none">
             <label
               htmlFor="oc-client-polki"
-              className="pointer-events-none absolute left-3 top-[-8px] z-[1] bg-white px-1.5 text-xs text-slate-500"
+              className="pointer-events-none absolute left-3 top-[-8px] z-[1] bg-card px-1.5 text-xs text-slate-500"
             >
               Клиенты
             </label>

@@ -305,9 +305,11 @@ type PanelProps = {
   dateTo?: string;
   onApply: (next: { dateFrom: string; dateTo: string }) => void;
   onClose: () => void;
+  /** true — «Применить» yo‘q; tanlov darhol `onApply` orqali saqlanadi */
+  autoSave?: boolean;
 };
 
-function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
+function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }: PanelProps) {
   /** Base UI Input: `value` birinchi renderda `undefined` bo‘lmasin — uncontrolled → controlled ogohlantirishi */
   const from0 = dateFrom ?? "";
   const to0 = dateTo ?? "";
@@ -360,6 +362,15 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
     }
   }, []);
 
+  const commitRange = useCallback(
+    (from: string, to: string) => {
+      if (!autoSave) return;
+      if (!from || !to || !parseYmd(from) || !parseYmd(to)) return;
+      onApply({ dateFrom: from, dateTo: to });
+    },
+    [autoSave, onApply]
+  );
+
   const pickDay = useCallback(
     (iso: string) => {
       if (!dayAnchor) {
@@ -373,8 +384,9 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
       setDf(a);
       setDt(b);
       setDayAnchor(null);
+      commitRange(a, b);
     },
-    [dayAnchor]
+    [dayAnchor, commitRange]
   );
 
   const handleMonthPick = useCallback(
@@ -385,6 +397,7 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
         const { from, to } = monthBoundsFromYm(y, monthIndex0);
         setDf(from);
         setDt(to);
+        commitRange(from, to);
         return;
       }
       const i1 = ymIndex(monthRangeAnchor.y, monthRangeAnchor.m);
@@ -398,9 +411,16 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
       setDt(toStr);
       setMonthRangeAnchor(null);
       syncViewsFromRange(fromStr, toStr);
+      commitRange(fromStr, toStr);
     },
-    [pickYear, monthRangeAnchor, syncViewsFromRange]
+    [pickYear, monthRangeAnchor, syncViewsFromRange, commitRange]
   );
+
+  useEffect(() => {
+    if (!autoSave) return;
+    const t = window.setTimeout(() => commitRange(df, dt), 400);
+    return () => window.clearTimeout(t);
+  }, [autoSave, df, dt, commitRange]);
 
   const presets = useMemo(() => buildPresets(), []);
 
@@ -447,7 +467,7 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
                 />
               </div>
 
-              <div className="flex flex-row flex-nowrap items-start justify-center gap-2 overflow-x-auto pb-0.5 [scrollbar-gutter:stable]">
+              <div className="scrollbar-none flex flex-row flex-nowrap items-start justify-center gap-2 overflow-x-auto pb-0.5">
                 <MonthCalendar
                   year={viewLeft.y}
                   month={viewLeft.m}
@@ -501,6 +521,7 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
                   setMonthRangeAnchor(null);
                   setPanelMode("days");
                   syncViewsFromRange(p.from, p.to);
+                  commitRange(p.from, p.to);
                 }}
               >
                 {p.label}
@@ -538,22 +559,24 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose }: PanelProps) {
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-border/50 bg-muted/30 px-2.5 py-2">
-        <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
-          Отмена
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => {
-            onApply({ dateFrom: df, dateTo: dt });
-            onClose();
-          }}
-        >
-          Применить
-        </Button>
-      </div>
+      {!autoSave ? (
+        <div className="flex justify-end gap-2 border-t border-border/50 bg-muted/30 px-2.5 py-2">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              onApply({ dateFrom: df, dateTo: dt });
+              onClose();
+            }}
+          >
+            Применить
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -566,6 +589,8 @@ export type DateRangePopoverProps = {
   dateFrom?: string;
   dateTo?: string;
   onApply: (next: { dateFrom: string; dateTo: string }) => void;
+  /** Tanlovni darhol `onApply` ga uzatadi; pastdagi «Применить» tugmasi ko‘rinmaydi */
+  autoSave?: boolean;
 };
 
 export function DateRangePopover({
@@ -574,7 +599,8 @@ export function DateRangePopover({
   anchorRef,
   dateFrom,
   dateTo,
-  onApply
+  onApply,
+  autoSave = false
 }: DateRangePopoverProps) {
   const safeFrom = dateFrom ?? "";
   const safeTo = dateTo ?? "";
@@ -652,7 +678,7 @@ export function DateRangePopover({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[100] w-max max-w-[min(628px,calc(100vw-1rem))] max-h-[min(85vh,calc(100vh-1rem))] overflow-y-auto overflow-x-auto rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-black/5"
+      className="scrollbar-none fixed z-[100] w-max max-w-[min(628px,calc(100vw-1rem))] max-h-[min(85vh,calc(100vh-1rem))] overflow-y-auto overflow-x-auto rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-black/5"
       style={{
         top: box.top,
         left: box.left
@@ -664,6 +690,7 @@ export function DateRangePopover({
         dateTo={safeTo}
         onApply={onApply}
         onClose={() => onOpenChange(false)}
+        autoSave={autoSave}
       />
     </div>,
     document.body

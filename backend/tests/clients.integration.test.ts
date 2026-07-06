@@ -3,6 +3,7 @@ import { join } from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 const marker = join(__dirname, ".db-integration-ready");
 const dbReady = existsSync(marker) && readFileSync(marker, "utf8").trim() === "1";
@@ -91,7 +92,7 @@ describe.skipIf(!dbReady)("clients API (database)", () => {
   });
 
   it("POST balance-movements adjusts account_balance for admin", async () => {
-    const loginResponse = await request(app.server).post("/api/auth/login").send({
+    const loginResponse = await loginForIntegrationTest(app, {
       slug: "test1",
       login: "admin",
       password: "secret123"
@@ -99,10 +100,19 @@ describe.skipIf(!dbReady)("clients API (database)", () => {
     expect(loginResponse.status).toBe(200);
     const token = loginResponse.body.accessToken as string;
 
-    const listResponse = await request(app.server)
-      .get("/api/test1/clients?page=1&limit=1")
-      .set("Authorization", `Bearer ${token}`);
-    const id = (listResponse.body.data[0] as { id: number }).id;
+    const unique = `BalMov-${Date.now()}`;
+    const create = await request(app.server)
+      .post("/api/test1/clients")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: unique,
+        phone: `+99890${String(Date.now()).slice(-7)}`,
+        region: "Toshkent vil.",
+        latitude: 41.31,
+        longitude: 69.24
+      });
+    expect(create.status).toBe(201);
+    const id = create.body.id as number;
 
     const before = await request(app.server)
       .get(`/api/test1/clients/${id}`)
@@ -184,7 +194,7 @@ describe.skipIf(!dbReady)("clients API (database)", () => {
   });
 
   it("PATCH clients/bulk-active toggles is_active", async () => {
-    const loginResponse = await request(app.server).post("/api/auth/login").send({
+    const loginResponse = await loginForIntegrationTest(app, {
       slug: "test1",
       login: "admin",
       password: "secret123"
@@ -192,10 +202,19 @@ describe.skipIf(!dbReady)("clients API (database)", () => {
     expect(loginResponse.status).toBe(200);
     const token = loginResponse.body.accessToken as string;
 
-    const listResponse = await request(app.server)
-      .get("/api/test1/clients?page=1&limit=1")
-      .set("Authorization", `Bearer ${token}`);
-    const id = (listResponse.body.data[0] as { id: number }).id;
+    const unique = `BulkAct-${Date.now()}`;
+    const create = await request(app.server)
+      .post("/api/test1/clients")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: unique,
+        phone: `+99891${String(Date.now()).slice(-7)}`,
+        region: "Toshkent vil.",
+        latitude: 41.31,
+        longitude: 69.24
+      });
+    expect(create.status).toBe(201);
+    const id = create.body.id as number;
 
     const off = await request(app.server)
       .patch("/api/test1/clients/bulk-active")

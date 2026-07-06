@@ -1,6 +1,6 @@
 "use client";
 
-import { formatPaymentTypeLabel, formatStatusLabel } from "@/components/dashboard/sales/format";
+import { formatStatusLabel } from "@/components/dashboard/sales/format";
 import type { SalesFilterDraft } from "@/components/dashboard/sales/types";
 import { buildPaymentMethodOptions } from "@/components/dashboard/finance/payment-method-options";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";

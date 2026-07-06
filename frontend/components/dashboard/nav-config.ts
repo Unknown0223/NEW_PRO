@@ -5,6 +5,11 @@ export type NavItem = {
   /** Agar berilsa: ushbu permissionlardan kamida bittasi bo‘lsa ham ko‘rinadi (`roles` bilan OR). */
   showIfAnyPermission?: string[];
   disabled?: boolean;
+  /**
+   * Loyihada hali mavjud bo‘lmagan bo‘lim — sariq, bosib bo‘lmaydigan label.
+   * Keyinchalik qo‘shish uchun tayyorlab qo‘yilgan «placeholder».
+   */
+  placeholder?: boolean;
 };
 
 export type NavGroup = { title: string; items: NavItem[] };
@@ -14,6 +19,7 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Дашборды",
   items: [
     { href: "/dashboard", label: "Супервайзер" },
+    { href: "/dashboard/expeditors", label: "Доставщики" },
     { href: "/dashboard/finance", label: "Финансы" },
     { href: "/dashboard/sales", label: "Дашборд продаж" },
     { href: "/dashboard/sales-monitoring", label: "Мониторинг продаж и планов" }
@@ -34,7 +40,7 @@ export const dashboardStockNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/stock/transfers", label: "Перемещение товара" },
     { href: "/stock/correction", label: "Корректировка склада", roles: ["admin"] },
     { href: "/stock/material-report", label: "Материальный отчёт" },
-    { href: "#", label: "Списание", disabled: true }
+    { href: "#", label: "Списание", placeholder: true }
   ]
 };
 
@@ -50,7 +56,7 @@ export const dashboardOrdersNav: {
       items: [
         { href: "/orders/new?type=order", label: "Создать заказ" },
         { href: "/orders/new?type=return", label: "Создать возврат с полки" },
-        { href: "/orders/new?type=return_by_order", label: "Возврат с полки по заказу" },
+        { href: "/orders/new?type=return_by_order", label: "Создать возврат с полки по заказу" },
         { href: "/orders/new?type=exchange", label: "Создать обмен" }
       ]
     },
@@ -59,6 +65,7 @@ export const dashboardOrdersNav: {
       items: [
         { href: "/orders", label: "Заявки" },
         { href: "/orders/refusals", label: "Отказы" },
+        { href: "#", label: "Предложения для создания заказов", placeholder: true },
         { href: "/orders/automation", label: "Автоматизация заявок" }
       ]
     }
@@ -74,12 +81,13 @@ export const dashboardInvoicesNav: {
   items: [
     { href: "/invoices/assembly", label: "Сборочные накладные" },
     { href: "/invoices/shipment", label: "Отгрузочные накладные" },
-    { href: "/invoices/returns", label: "Возвратные накладные" }
+    { href: "/invoices/returns", label: "Возвратные накладные" },
+    { href: "#", label: "Списания накладные", placeholder: true }
   ]
 };
 
 export function dashboardOrdersNavFlatItems(): NavItem[] {
-  return dashboardOrdersNav.groups.flatMap((g) => g.items);
+  return dashboardOrdersNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && !i.placeholder && i.href !== "#");
 }
 
 /**
@@ -116,10 +124,10 @@ export const dashboardKassaNav: {
       items: [
         { href: "/settings/cash-desks", label: "Касса" },
         { href: "/currency-rates", label: "Курс валют" },
-        { href: "#", label: "Приходы", disabled: true },
+        { href: "#", label: "Приходы", placeholder: true },
         { href: "/expenses", label: "Расходы" },
         { href: "/expeditor-payment-requests", label: "Заявки на оплату" },
-        { href: "#", label: "Долги экспедитора", disabled: true }
+        { href: "#", label: "Долги экспедитора", placeholder: true }
       ]
     }
   ]
@@ -159,11 +167,13 @@ export const dashboardUsersNav: {
       title: "ПРОЧИЕ",
       items: [
         { href: "/settings/spravochnik/operators", label: "Сотрудники", roles: ["admin"] },
-        { href: "#", label: "Партнёры", disabled: true },
+        { href: "#", label: "Партнёры", placeholder: true },
         { href: "/settings/spravochnik/consignment", label: "Консигнация" },
-        { href: "/settings/reasons/task-types", label: "Задачи" },
-        { href: "#", label: "Рабочие дни", disabled: true },
-        { href: "/users/timesheet", label: "Табель" }
+        { href: "#", label: "Настройки бонусов и зарплат", placeholder: true },
+        { href: "/settings/payroll", label: "Зарплата" },
+        { href: "#", label: "Рабочие дни", placeholder: true },
+        { href: "/users/timesheet", label: "Табель" },
+        { href: "/settings/reasons/task-types", label: "Задачи" }
       ]
     }
   ]
@@ -177,13 +187,14 @@ export function dashboardUsersNavFlatItems(): NavItem[] {
 export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Клиенты",
   items: [
-    { href: "/clients", label: "Список клиентов" },
+    { href: "/clients", label: "Клиенты" },
     { href: "/clients/map", label: "Клиенты на карте" },
+    { href: "/clients/visit-planner", label: "Назначение визитов на карте" },
     { href: "/clients/qr", label: "QR коды клиентов" },
     { href: "/clients/merge", label: "Объединение клиентов" },
-    { href: "/clients/equipment", label: "Оборудование" },
+    { href: "/clients/equipment", label: "Оборудования" },
     { href: "/clients/retail-stock", label: "Остатки в торговых точках" },
-    { href: "#", label: "Отчёт по таре", disabled: true }
+    { href: "#", label: "Отчёт по таре", placeholder: true }
   ]
 };
 
@@ -196,7 +207,9 @@ export const dashboardSuppliersNav: { sectionTitle: string; items: NavItem[] } =
     { href: "/suppliers", label: "Поставщики" },
     { href: "/suppliers/payments", label: "Оплаты поставщикам" },
     { href: "/suppliers/balances", label: "Начальные балансы с поставщиком" },
-    { href: "/suppliers/reconciliation", label: "Акт сверки с поставщиком" }
+    { href: "/suppliers/reconciliation", label: "Акт сверки с поставщиком" },
+    { href: "#", label: "План", placeholder: true },
+    { href: "#", label: "Баланс за период", placeholder: true }
   ]
 };
 
@@ -225,7 +238,30 @@ export function dashboardReportsNavFlatItems(): NavItem[] {
   return dashboardReportsNav.items.filter((i) => !i.disabled && i.href !== "#");
 }
 
+/** Планы — alohida modul (Настройка утверждающих va keyingi reja sahifalari). */
+export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
+  sectionTitle: "Планы",
+  items: [
+    {
+      href: "/plans/setup",
+      label: "Установка планов",
+      showIfAnyPermission: ["plans.ustanovka_planov.view"]
+    },
+    {
+      href: "/plans/approvers",
+      label: "Настройка утверждающих",
+      showIfAnyPermission: ["plans.nastroyka_utverzhdayushchih.view"]
+    }
+  ]
+};
+
+export function dashboardPlansNavFlatItems(): NavItem[] {
+  return dashboardPlansNav.items.filter((i) => !i.disabled && i.href !== "#");
+}
+
 /** Chap panel tartibi — referens UI (yashil sidebar) */
+export type PlaceholderIconKey = "plans" | "pivot" | "audit";
+
 export type SidebarLayoutEntry =
   | { kind: "link"; item: NavItem }
   | { kind: "dashboard" }
@@ -236,19 +272,32 @@ export type SidebarLayoutEntry =
   | { kind: "suppliers" }
   | { kind: "reports" }
   | { kind: "kassa" }
-  | { kind: "users" };
+  | { kind: "users" }
+  | { kind: "plans" }
+  /** Loyihada hali yo‘q bo‘lim — sariq, bosib bo‘lmaydigan sarlavha (keyin qo‘shamiz). */
+  | { kind: "placeholder"; label: string; icon: PlaceholderIconKey };
 
+/**
+ * Referens UI tartibi:
+ * Дашборды → Заявки → Клиенты → Накладные → Касса → Склад → Поставщики →
+ * Планы → Отчёт → Pivot отчёты → Пользователи → Аудит → Доступ → Настройки.
+ * «placeholder» bo‘limlar loyihada hali yo‘q — sariq label sifatida ko‘rinadi.
+ */
 export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
   { kind: "dashboard" },
   { kind: "orders" },
-  { kind: "invoices" },
   { kind: "clients" },
+  { kind: "invoices" },
+  { kind: "kassa" },
   { kind: "stock" },
   { kind: "suppliers" },
+  { kind: "plans" },
   { kind: "reports" },
-  { kind: "kassa" },
+  { kind: "placeholder", label: "Pivot отчёты", icon: "pivot" },
   { kind: "users" },
-  { kind: "link", item: { href: "/access", label: "Доступ", roles: ["admin"], showIfAnyPermission: ["access.manage"] } },
+  { kind: "placeholder", label: "Аудит", icon: "audit" },
+  { kind: "link", item: { href: "/activity", label: "Активность и история", roles: ["admin"] } },
+  { kind: "link", item: { href: "/access", label: "Доступ", roles: ["admin"], showIfAnyPermission: ["access.upravlenie.view"] } },
   { kind: "link", item: { href: "/settings", label: "Настройки" } }
 ];
 
@@ -274,6 +323,8 @@ export function flattenMobileNavItems(): NavItem[] {
       out.push(...dashboardSuppliersNavFlatItems());
     } else if (e.kind === "reports") {
       out.push(...dashboardReportsNavFlatItems());
+    } else if (e.kind === "plans") {
+      out.push(...dashboardPlansNavFlatItems());
     } else if (e.kind === "kassa") {
       out.push(...dashboardKassaNavFlatItems());
     } else if (e.kind === "users") {
@@ -281,6 +332,53 @@ export function flattenMobileNavItems(): NavItem[] {
     }
   }
   return out;
+}
+
+/** Tepa header uchun: joriy yo'lga mos «bo'lim → sahifa» nomi. */
+export type PageBreadcrumb = { section: string | null; label: string };
+
+const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: string }> = (() => {
+  const out: Array<{ path: string; section: string | null; label: string }> = [];
+  const pathOf = (href: string) => href.split("?")[0] ?? href;
+  const push = (section: string | null, items: NavItem[]) => {
+    for (const it of items) {
+      if (it.href === "#" || it.placeholder) continue;
+      const path = pathOf(it.href);
+      if (!path || path === "#") continue;
+      out.push({ path, section, label: it.label });
+    }
+  };
+  push(dashboardHomeNav.sectionTitle, dashboardHomeNav.items);
+  push(dashboardOrdersNav.sectionTitle, dashboardOrdersNavFlatItems());
+  push(dashboardClientsNav.sectionTitle, dashboardClientsNav.items);
+  push(dashboardInvoicesNav.sectionTitle, dashboardInvoicesNav.items);
+  push(dashboardKassaNav.sectionTitle, dashboardKassaNavFlatItems());
+  push(dashboardStockNav.sectionTitle, dashboardStockNav.items);
+  push(dashboardSuppliersNav.sectionTitle, dashboardSuppliersNav.items);
+  push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
+  push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
+  push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+  push(null, [
+    { href: "/access", label: "Доступ" },
+    { href: "/settings", label: "Настройки" }
+  ]);
+  return out;
+})();
+
+/**
+ * Joriy `pathname` uchun eng aniq (eng uzun prefiksli) menyu bandini topadi.
+ * Topilmasa `null` — tepa header chap qismi bo'sh qoladi.
+ */
+export function resolvePageBreadcrumb(pathname: string): PageBreadcrumb | null {
+  let best: { section: string | null; label: string; len: number } | null = null;
+  for (const e of BREADCRUMB_ENTRIES) {
+    if (pathname === e.path || pathname.startsWith(`${e.path}/`)) {
+      if (!best || e.path.length > best.len) {
+        best = { section: e.section, label: e.label, len: e.path.length };
+      }
+    }
+  }
+  return best ? { section: best.section, label: best.label } : null;
 }
 
 /** Orqalik: bo‘sh guruh (eski importlar buzilmasin) */

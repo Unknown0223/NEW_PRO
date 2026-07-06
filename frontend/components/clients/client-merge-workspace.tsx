@@ -1,13 +1,8 @@
-"use client";
+﻿"use client";
 
-import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
-import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
-import { filterPanelSelectClassName } from "@/components/ui/filter-select";
-import { FilterSelect } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -25,7 +20,7 @@ import { pickCityTerritoryHint } from "@/lib/city-territory-hint";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -34,10 +29,17 @@ import {
   Trash2
 } from "lucide-react";
 import Link from "next/link";
-import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CompareMergeOverlay, type MergeDuplicateGroup } from "./client-merge-compare-overlay";
+import { type ClientDedupePreview } from "./client-merge-compare-shared";
+import {
+  ClientMergeFilterBar,
+  MERGE_SEARCH_FIELD_OPTS,
+  buildDupQueryString,
+  defaultAppliedDupFilters,
+  type AppliedDupFilters
+} from "./client-merge-filters";
 
 type DuplicateGroup = MergeDuplicateGroup;
 
@@ -100,8 +102,6 @@ type ClientRefs = {
   client_type_options?: { value: string; label: string }[];
 };
 
-type FilterPopoverKind = null | "clientTypes" | "searchFields";
-
 /** API label bo‘sh yoki kod bilan bir xil bo‘lsa — AD_ASAKA → «Asaka» kabi */
 function cityDisplayLabel(value: string, apiLabel?: string | null): string {
   const api = (apiLabel ?? "").trim();
@@ -125,21 +125,11 @@ type StaffPick = { id: number; fio: string };
 
 type MainTab = "fields" | "geo" | "saved" | "merged";
 
-/** `globals.css` — zakazlar / ro‘yxatlar bilan bir xil filtr va jadval fonlari */
-const MERGE_FILTER_PANEL_CLASS = "orders-hub-section--toolbar px-3 py-3 sm:px-4";
-const MERGE_TABLE_SHELL_CLASS = "orders-hub-section--table";
-const MERGE_TOOLBAR_STRIP_CLASS =
-  "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background px-3 py-2 shadow-sm";
-
-const SEARCH_FIELD_OPTS = [
-  { id: "name", label: "Название" },
-  { id: "legal_name", label: "Название компании" },
-  { id: "phone", label: "Номер телефона" },
-  { id: "inn", label: "ИНН" },
-  { id: "pinfl", label: "Пинфл" },
-  { id: "contract", label: "Номер договора" },
-  { id: "address", label: "Адрес" }
-] as const;
+const MERGE_TABLE_CARD_CLASS = "overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-slate-200/70";
+const MERGE_TABLE_TOOLBAR_CLASS =
+  "flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3";
+const MERGE_TABLE_PAGINATION_CLASS =
+  "flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-[13px] text-slate-600";
 
 function formatRuShortDateTime(iso: string): string {
   const d = new Date(iso);
@@ -155,57 +145,6 @@ function formatPinflDisplay(v: string | null | undefined): string {
   const t = v.replace(/\D/g, "");
   if (t.length <= 6) return v;
   return `${t.slice(0, 6)}…${t.slice(-2)}`;
-}
-
-type AppliedDupFilters = {
-  agent_id: string;
-  region: string;
-  zone: string;
-  city: string;
-  client_format: string;
-  category: string;
-  client_type_codes: string[];
-  is_active: "all" | "yes" | "no";
-  search: string;
-  search_fields: string[];
-};
-
-function defaultApplied(): AppliedDupFilters {
-  return {
-    agent_id: "",
-    region: "",
-    zone: "",
-    city: "",
-    client_format: "",
-    category: "",
-    client_type_codes: [],
-    is_active: "all",
-    search: "",
-    search_fields: ["name", "legal_name"]
-  };
-}
-
-function buildDupQueryString(
-  tab: "fields" | "geo",
-  page: number,
-  limit: number,
-  applied: AppliedDupFilters
-): string {
-  const p = new URLSearchParams();
-  p.set("tab", tab);
-  p.set("page", String(page));
-  p.set("limit", String(limit));
-  if (applied.search.trim()) p.set("search", applied.search.trim());
-  if (applied.search_fields.length > 0) p.set("search_fields", applied.search_fields.join(","));
-  if (applied.agent_id) p.set("agent_id", applied.agent_id);
-  if (applied.region) p.set("region", applied.region);
-  if (applied.zone) p.set("zone", applied.zone);
-  if (applied.city) p.set("city", applied.city);
-  if (applied.client_format) p.set("client_format", applied.client_format);
-  if (applied.category) p.set("category", applied.category);
-  if (applied.client_type_codes.length > 0) p.set("client_type_codes", applied.client_type_codes.join(","));
-  if (applied.is_active !== "all") p.set("is_active", applied.is_active);
-  return p.toString();
 }
 
 type MergeResult = {
@@ -245,10 +184,8 @@ export function ClientMergeWorkspace() {
   const [mergedTableSearch, setMergedTableSearch] = useState("");
   const [tableRowFilter, setTableRowFilter] = useState("");
 
-  const [draft, setDraft] = useState<AppliedDupFilters>(() => defaultApplied());
-  const [applied, setApplied] = useState<AppliedDupFilters>(() => defaultApplied());
-
-  const [filterPopover, setFilterPopover] = useState<FilterPopoverKind>(null);
+  const [draft, setDraft] = useState<AppliedDupFilters>(() => defaultAppliedDupFilters());
+  const [applied, setApplied] = useState<AppliedDupFilters>(() => defaultAppliedDupFilters());
 
   const [compareOpen, setCompareOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<DuplicateGroup | null>(null);
@@ -480,15 +417,13 @@ export function ClientMergeWorkspace() {
   const applyFilters = () => {
     setApplied({ ...draft });
     setDupPage(1);
-    setFilterPopover(null);
   };
 
   const resetFilters = () => {
-    const z = defaultApplied();
+    const z = defaultAppliedDupFilters();
     setDraft(z);
     setApplied(z);
     setDupPage(1);
-    setFilterPopover(null);
   };
 
   const openCompare = useCallback((g: DuplicateGroup) => {
@@ -539,7 +474,7 @@ export function ClientMergeWorkspace() {
   };
 
   const selectAllSearchFields = () => {
-    setDraft((prev) => ({ ...prev, search_fields: SEARCH_FIELD_OPTS.map((x) => x.id) }));
+    setDraft((prev) => ({ ...prev, search_fields: MERGE_SEARCH_FIELD_OPTS.map((x) => x.id) }));
   };
 
   const toggleClientType = (code: string, checked: boolean) => {
@@ -552,9 +487,9 @@ export function ClientMergeWorkspace() {
   };
 
   const searchFieldsSummary = useMemo(() => {
-    if (draft.search_fields.length >= SEARCH_FIELD_OPTS.length) return "Все поля";
-    const labels = SEARCH_FIELD_OPTS.filter((o) => draft.search_fields.includes(o.id)).map((o) => o.label);
-    return labels.length ? labels.join(", ") : "Название";
+    if (draft.search_fields.length >= MERGE_SEARCH_FIELD_OPTS.length) return "Все поля";
+    const labels = MERGE_SEARCH_FIELD_OPTS.filter((o) => draft.search_fields.includes(o.id)).map((o) => o.label);
+    return labels.length ? labels.join(", ") : "Название, Название компании";
   }, [draft.search_fields]);
 
   const filteredDupGroups = useMemo(() => {
@@ -572,9 +507,8 @@ export function ClientMergeWorkspace() {
 
   if (!hydrated || !tenantSlug) {
     return (
-      <PageShell>
-        <PageHeader title="Объединение клиентов" />
-        <div className="flex items-center gap-2 p-6 text-muted-foreground">
+      <PageShell className="bg-muted">
+        <div className="flex items-center gap-2 p-6 text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin" />
           Загрузка…
         </div>
@@ -583,28 +517,28 @@ export function ClientMergeWorkspace() {
   }
 
   const tabTriggers = (
-    <TabsList className="h-auto flex-wrap justify-end gap-1 rounded-lg border border-border/60 bg-muted/45 p-1">
+    <TabsList className="h-auto flex-wrap justify-end gap-1 rounded-xl bg-card p-1 shadow-sm ring-1 ring-slate-200/70">
       <TabsTrigger
         value="fields"
-        className="rounded-md px-3 py-1.5 text-sm font-medium data-[state=inactive]:text-muted-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-sm"
+        className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
       >
         По полям
       </TabsTrigger>
       <TabsTrigger
         value="geo"
-        className="rounded-md px-3 py-1.5 text-sm font-medium data-[state=inactive]:text-muted-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-sm"
+        className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
       >
         По местоположению
       </TabsTrigger>
       <TabsTrigger
         value="saved"
-        className="rounded-md px-3 py-1.5 text-sm font-medium data-[state=inactive]:text-muted-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-sm"
+        className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
       >
         Сохранённые
       </TabsTrigger>
       <TabsTrigger
         value="merged"
-        className="rounded-md px-3 py-1.5 text-sm font-medium data-[state=inactive]:text-muted-foreground data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-sm"
+        className="rounded-lg px-4 py-2 text-[13px] font-medium data-[state=inactive]:text-slate-500 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
       >
         Объединённые
       </TabsTrigger>
@@ -612,10 +546,13 @@ export function ClientMergeWorkspace() {
   );
 
   return (
-    <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="flex min-h-0 flex-1 flex-col">
-      <PageShell className="flex flex-col">
-        <div className="border-b border-border/70 px-4 pb-4 pt-2">
-          <PageHeader title="Объединение клиентов" actions={tabTriggers} />
+    <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="flex min-h-0 flex-1 flex-col bg-muted">
+      <PageShell className="flex flex-col space-y-0 bg-muted pb-8">
+        <div className="px-4 pb-4 pt-3 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="text-[20px] font-semibold text-slate-800">Объединение клиентов</h1>
+            {tabTriggers}
+          </div>
         </div>
 
         {banner ? (
@@ -631,8 +568,8 @@ export function ClientMergeWorkspace() {
           </div>
         ) : null}
 
-        <TabsContent value="fields" className="mt-0 flex flex-1 flex-col space-y-4 px-4 pb-8 pt-3">
-          <DupFilterBar
+        <TabsContent value="fields" className="mt-0 flex flex-1 flex-col space-y-4 px-4 sm:px-6">
+          <ClientMergeFilterBar
             draft={draft}
             setDraft={setDraft}
             agentOptions={agentOptions}
@@ -641,8 +578,6 @@ export function ClientMergeWorkspace() {
             cityOptions={filteredCityOptions}
             clientTypeOptions={clientTypeOptionsLabeled}
             refs={refsQ.data}
-            filterPopover={filterPopover}
-            setFilterPopover={setFilterPopover}
             searchFieldsSummary={searchFieldsSummary}
             toggleSearchField={toggleSearchField}
             selectAllSearchFields={selectAllSearchFields}
@@ -650,36 +585,31 @@ export function ClientMergeWorkspace() {
             onApply={applyFilters}
             onReset={resetFilters}
           />
-          <DupTableToolbar
-            dupLimit={dupLimit}
-            setDupLimit={setDupLimit}
-            tableRowFilter={tableRowFilter}
-            setTableRowFilter={setTableRowFilter}
-            onRefresh={() => void dupQuery.refetch()}
-            loading={dupQuery.isFetching}
-          />
           {dupQuery.data?.truncated ? (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900">
               Показаны не все группы — уточните фильтры (лимит выборки на сервере).
             </div>
           ) : null}
-          <DupCandidatesTable
+          <DupCandidatesSection
+            dupLimit={dupLimit}
+            setDupLimit={setDupLimit}
+            tableRowFilter={tableRowFilter}
+            setTableRowFilter={setTableRowFilter}
+            onRefresh={() => void dupQuery.refetch()}
+            loading={dupQuery.isFetching}
             groups={filteredDupGroups}
-            loading={dupQuery.isLoading}
-            error={dupQuery.isError}
+            tableLoading={dupQuery.isLoading}
+            tableError={dupQuery.isError}
             onOpenMerge={openCompare}
-          />
-          <DupPagination
             page={dupPage}
             totalPages={dupTotalPages}
             total={dupQuery.data?.total ?? 0}
-            limit={dupLimit}
             onPageChange={setDupPage}
           />
         </TabsContent>
 
-        <TabsContent value="geo" className="mt-0 flex flex-1 flex-col space-y-4 px-4 pb-8 pt-3">
-          <DupFilterBar
+        <TabsContent value="geo" className="mt-0 flex flex-1 flex-col space-y-4 px-4 sm:px-6">
+          <ClientMergeFilterBar
             draft={draft}
             setDraft={setDraft}
             agentOptions={agentOptions}
@@ -688,8 +618,7 @@ export function ClientMergeWorkspace() {
             cityOptions={filteredCityOptions}
             clientTypeOptions={clientTypeOptionsLabeled}
             refs={refsQ.data}
-            filterPopover={filterPopover}
-            setFilterPopover={setFilterPopover}
+            showGeoRadius
             searchFieldsSummary={searchFieldsSummary}
             toggleSearchField={toggleSearchField}
             selectAllSearchFields={selectAllSearchFields}
@@ -697,46 +626,42 @@ export function ClientMergeWorkspace() {
             onApply={applyFilters}
             onReset={resetFilters}
           />
-          <DupTableToolbar
+          <DupCandidatesSection
             dupLimit={dupLimit}
             setDupLimit={setDupLimit}
             tableRowFilter={tableRowFilter}
             setTableRowFilter={setTableRowFilter}
             onRefresh={() => void dupQuery.refetch()}
             loading={dupQuery.isFetching}
-          />
-          <DupCandidatesTable
             groups={filteredDupGroups}
-            loading={dupQuery.isLoading}
-            error={dupQuery.isError}
+            tableLoading={dupQuery.isLoading}
+            tableError={dupQuery.isError}
             onOpenMerge={openCompare}
-          />
-          <DupPagination
+            geoMode
             page={dupPage}
             totalPages={dupTotalPages}
             total={dupQuery.data?.total ?? 0}
-            limit={dupLimit}
             onPageChange={setDupPage}
           />
         </TabsContent>
 
-        <TabsContent value="saved" className="mt-0 space-y-4 px-4 pb-8 pt-3">
-          <div className={MERGE_TOOLBAR_STRIP_CLASS}>
-            <span className="text-xs text-muted-foreground">Сохранённые группы для последующего объединения</span>
-            <Button type="button" variant="outline" size="icon" onClick={() => void savedQuery.refetch()}>
-              <RefreshCw className={cn("h-4 w-4", savedQuery.isFetching && "animate-spin")} />
-            </Button>
-          </div>
-          <div className={MERGE_TABLE_SHELL_CLASS}>
-            <Table className="bg-card">
+        <TabsContent value="saved" className="mt-0 space-y-4 px-4 sm:px-6">
+          <div className={MERGE_TABLE_CARD_CLASS}>
+            <div className={MERGE_TABLE_TOOLBAR_CLASS}>
+              <span className="text-xs text-slate-500">Сохранённые группы для последующего объединения</span>
+              <Button type="button" variant="outline" size="icon" onClick={() => void savedQuery.refetch()}>
+                <RefreshCw className={cn("h-4 w-4", savedQuery.isFetching && "animate-spin")} />
+              </Button>
+            </div>
+            <Table>
               <TableHeader>
-                <TableRow className="border-0 hover:bg-transparent">
-                  <TableHead className="!font-bold">Дата сохранения</TableHead>
-                  <TableHead className="!font-bold">Основной клиент</TableHead>
-                  <TableHead className="!font-bold">Описания</TableHead>
-                  <TableHead className="!font-bold">Кто создал</TableHead>
-                  <TableHead className="!text-right !font-bold">Похожих</TableHead>
-                  <TableHead className="!text-right !font-bold">Не объединены</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Дата сохранения</TableHead>
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Основной клиент</TableHead>
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Описания</TableHead>
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Кто создал</TableHead>
+                  <TableHead className="text-right text-[12.5px] font-medium text-slate-500">Похожих</TableHead>
+                  <TableHead className="text-right text-[12.5px] font-medium text-slate-500">Не объединены</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
@@ -750,7 +675,7 @@ export function ClientMergeWorkspace() {
                   </TableRow>
                 ) : savedQuery.data?.length ? (
                   savedQuery.data.map((r) => (
-                    <TableRow key={r.id} className="even:bg-muted/20">
+                    <TableRow key={r.id} className="even:bg-emerald-50/40 hover:bg-emerald-50/70">
                       <TableCell className="whitespace-nowrap text-sm">{formatRuShortDateTime(r.created_at)}</TableCell>
                       <TableCell>
                         <Link href={`/clients/${r.master_client_id}`} className="text-primary hover:underline">
@@ -794,29 +719,29 @@ export function ClientMergeWorkspace() {
           </div>
         </TabsContent>
 
-        <TabsContent value="merged" className="mt-0 space-y-4 px-4 pb-8 pt-3">
-          <div className={MERGE_TOOLBAR_STRIP_CLASS}>
-            <Input
-              placeholder="Поиск по названию клиента…"
-              value={mergedTableSearch}
-              onChange={(e) => {
-                setMergedTableSearch(e.target.value);
-                setMergedPage(1);
-              }}
-              className="max-w-xs bg-background"
-            />
-            <Button type="button" variant="outline" size="icon" onClick={() => void mergedQuery.refetch()}>
-              <RefreshCw className={cn("h-4 w-4", mergedQuery.isFetching && "animate-spin")} />
-            </Button>
-          </div>
-          <div className={MERGE_TABLE_SHELL_CLASS}>
-            <Table className="bg-card">
+        <TabsContent value="merged" className="mt-0 space-y-4 px-4 sm:px-6">
+          <div className={MERGE_TABLE_CARD_CLASS}>
+            <div className={MERGE_TABLE_TOOLBAR_CLASS}>
+              <Input
+                placeholder="Поиск по названию клиента…"
+                value={mergedTableSearch}
+                onChange={(e) => {
+                  setMergedTableSearch(e.target.value);
+                  setMergedPage(1);
+                }}
+                className="h-10 max-w-xs rounded-full border-border bg-card"
+              />
+              <Button type="button" variant="outline" size="icon" onClick={() => void mergedQuery.refetch()}>
+                <RefreshCw className={cn("h-4 w-4", mergedQuery.isFetching && "animate-spin")} />
+              </Button>
+            </div>
+            <Table>
               <TableHeader>
-                <TableRow className="border-0 hover:bg-transparent">
-                  <TableHead className="!font-bold">Название клиента</TableHead>
-                  <TableHead className="!font-bold">Объединил(а)</TableHead>
-                  <TableHead className="!font-bold">Дата объединения</TableHead>
-                  <TableHead className="!text-right !font-bold">Кол-во объединённых</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Название клиента</TableHead>
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Объединил(а)</TableHead>
+                  <TableHead className="text-[12.5px] font-medium text-slate-500">Дата объединения</TableHead>
+                  <TableHead className="text-right text-[12.5px] font-medium text-slate-500">Кол-во объединённых</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -829,7 +754,7 @@ export function ClientMergeWorkspace() {
                   </TableRow>
                 ) : mergedQuery.data?.data.length ? (
                   mergedQuery.data.data.map((r, idx) => (
-                    <TableRow key={`${r.master_client_id}-${r.merged_at}-${idx}`} className="even:bg-muted/20">
+                    <TableRow key={`${r.master_client_id}-${r.merged_at}-${idx}`} className="even:bg-emerald-50/40 hover:bg-emerald-50/70">
                       <TableCell>
                         <Link href={`/clients/${r.master_client_id}`} className="text-primary hover:underline">
                           {r.master_name}
@@ -854,13 +779,13 @@ export function ClientMergeWorkspace() {
                 )}
               </TableBody>
             </Table>
+            <MergedPagination
+              page={mergedPage}
+              total={mergedQuery.data?.total ?? 0}
+              limit={mergedLimit}
+              onPageChange={setMergedPage}
+            />
           </div>
-          <MergedPagination
-            page={mergedPage}
-            total={mergedQuery.data?.total ?? 0}
-            limit={mergedLimit}
-            onPageChange={setMergedPage}
-          />
         </TabsContent>
       </PageShell>
 
@@ -885,388 +810,156 @@ export function ClientMergeWorkspace() {
   );
 }
 
-function DupFilterBar(props: {
-  draft: AppliedDupFilters;
-  setDraft: Dispatch<SetStateAction<AppliedDupFilters>>;
-  agentOptions: { value: string; label: string }[];
-  regionOptions: { value: string; label: string }[];
-  zoneOptions: { value: string; label: string }[];
-  cityOptions: { value: string; label: string }[];
-  clientTypeOptions: { value: string; label: string }[];
-  refs: ClientRefs | undefined;
-  filterPopover: FilterPopoverKind;
-  setFilterPopover: Dispatch<SetStateAction<FilterPopoverKind>>;
-  searchFieldsSummary: string;
-  toggleSearchField: (id: string, checked: boolean) => void;
-  selectAllSearchFields: () => void;
-  toggleClientType: (code: string, checked: boolean) => void;
-  onApply: () => void;
-  onReset: () => void;
-}) {
-  const {
-    draft,
-    setDraft,
-    agentOptions,
-    regionOptions,
-    zoneOptions,
-    cityOptions,
-    clientTypeOptions,
-    refs,
-    filterPopover,
-    setFilterPopover,
-    searchFieldsSummary,
-    toggleSearchField,
-    selectAllSearchFields,
-    toggleClientType,
-    onApply,
-    onReset
-  } = props;
 
-  const [selectCloseToken, setSelectCloseToken] = useState(0);
-  const bumpSelectClose = () => setSelectCloseToken((t) => t + 1);
-
-  const closeAuxAndSearch = () => {
-    bumpSelectClose();
-    setFilterPopover(null);
-  };
-
-  const handleApply = () => {
-    closeAuxAndSearch();
-    onApply();
-  };
-
-  const handleReset = () => {
-    closeAuxAndSearch();
-    onReset();
-  };
-
-  useEffect(() => {
-    if (!filterPopover) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFilterPopover(null);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [filterPopover, setFilterPopover]);
-
-  const fmtOpts = (refs?.client_formats ?? []).map((x) => ({ value: x, label: x }));
-  const catOpts =
-    (refs?.category_options ?? []).length > 0
-      ? (refs!.category_options ?? []).map((x) => ({ value: x.value, label: x.label }))
-      : (refs?.categories ?? []).map((x) => ({ value: x, label: x }));
-
-  const selectCloseProps = {
-    closeToken: selectCloseToken,
-    onOpenChange: (o: boolean) => {
-      if (o) setFilterPopover(null);
-    }
-  } as const;
-
-  return (
-    <div className={cn("flex flex-col gap-3", MERGE_FILTER_PANEL_CLASS)}>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Агент</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все агенты"
-            value={draft.agent_id}
-            onValueChange={(v) => setDraft((d) => ({ ...d, agent_id: v }))}
-            options={agentOptions}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Область</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все"
-            value={draft.region}
-            onValueChange={(v) => setDraft((d) => ({ ...d, region: v, zone: "", city: "" }))}
-            options={regionOptions}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Зона</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все"
-            value={draft.zone}
-            onValueChange={(v) => setDraft((d) => ({ ...d, zone: v, city: "" }))}
-            options={zoneOptions}
-            disabled={zoneOptions.length === 0}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Город</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все"
-            value={draft.city}
-            onValueChange={(v) => setDraft((d) => ({ ...d, city: v }))}
-            options={cityOptions}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Формат клиента</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все"
-            value={draft.client_format}
-            onValueChange={(v) => setDraft((d) => ({ ...d, client_format: v }))}
-            options={fmtOpts}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label min-w-[10rem] flex-1">
-          <Label>Категория клиента</Label>
-          <FilterSearchableSelect
-            emptyLabel="Все"
-            value={draft.category}
-            onValueChange={(v) => setDraft((d) => ({ ...d, category: v }))}
-            options={catOpts}
-            className={filterPanelSelectClassName}
-            {...selectCloseProps}
-          />
-        </div>
-        <div className="orders-filter-field-label relative min-w-[10rem] flex-1">
-          <Label>Тип клиента</Label>
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(filterPanelSelectClassName, "w-full justify-between bg-background font-normal")}
-            onClick={() => {
-              bumpSelectClose();
-              setFilterPopover((p) => (p === "clientTypes" ? null : "clientTypes"));
-            }}
-          >
-            <span className="truncate">
-              {draft.client_type_codes.length === 0
-                ? "Все типы"
-                : `${draft.client_type_codes.length} выбрано`}
-            </span>
-          </Button>
-          {filterPopover === "clientTypes" ? (
-            <div
-              data-merge-popover-root
-              className="absolute left-0 top-full z-[480] mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover p-2 shadow-md"
-            >
-              {clientTypeOptions.length === 0 ? (
-                <p className="p-2 text-xs text-muted-foreground">Нет справочника типов</p>
-              ) : (
-                clientTypeOptions.map((o) => (
-                  <label
-                    key={o.value}
-                    className="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-muted"
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border border-input"
-                      checked={draft.client_type_codes.includes(o.value)}
-                      onChange={(e) => toggleClientType(o.value, e.target.checked)}
-                    />
-                    <span className="truncate">{o.label}</span>
-                  </label>
-                ))
-              )}
-            </div>
-          ) : null}
-        </div>
-        <div className="orders-filter-field-label min-w-[8rem]">
-          <Label>Статус</Label>
-          <FilterSelect
-            emptyLabel="Все"
-            className={filterPanelSelectClassName}
-            value={draft.is_active === "all" ? "" : draft.is_active}
-            onMouseDown={() => {
-              bumpSelectClose();
-              setFilterPopover(null);
-            }}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDraft((d) => ({
-                ...d,
-                is_active: v === "" ? "all" : v === "yes" ? "yes" : "no"
-              }));
-            }}
-          >
-            <option value="yes">Активный</option>
-            <option value="no">Не активный</option>
-          </FilterSelect>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2 border-t border-border/50 pt-3">
-        <div className="orders-filter-field-label relative min-w-[12rem] flex-1">
-          <Label>Поиск по</Label>
-          <Button
-            type="button"
-            variant="outline"
-            className={cn(filterPanelSelectClassName, "w-full max-w-[24rem] justify-between bg-background font-normal")}
-            onClick={() => {
-              bumpSelectClose();
-              setFilterPopover((p) => (p === "searchFields" ? null : "searchFields"));
-            }}
-          >
-            <span className="truncate text-left">{searchFieldsSummary}</span>
-          </Button>
-          {filterPopover === "searchFields" ? (
-            <div
-              data-merge-popover-root
-              className="absolute left-0 top-full z-[480] mt-1 w-full max-w-md rounded-md border bg-popover p-2 shadow-md"
-            >
-              <button
-                type="button"
-                className="mb-2 text-xs text-primary hover:underline"
-                onClick={() => selectAllSearchFields()}
-              >
-                Выбрать все
-              </button>
-              <div className="grid gap-1 sm:grid-cols-2">
-                {SEARCH_FIELD_OPTS.map((o) => (
-                  <label key={o.id} className="flex cursor-pointer items-center gap-2 px-1 py-0.5 text-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border border-input"
-                      checked={draft.search_fields.includes(o.id)}
-                      onChange={(e) => toggleSearchField(o.id, e.target.checked)}
-                    />
-                    {o.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="orders-filter-field-label min-w-[12rem] flex-[2]">
-          <Label>Строка поиска</Label>
-          <Input
-            placeholder="Название, ИНН, телефон…"
-            value={draft.search}
-            onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
-            className="h-10 bg-background"
-          />
-        </div>
-        <div className="flex gap-2 pb-0.5">
-          <Button type="button" variant="outline" size="icon" onClick={handleReset} title="Сброс">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button type="button" className="min-w-[7rem] shadow-sm" onClick={handleApply}>
-            Применить
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+function territoryDisplay(p: ClientDedupePreview): string {
+  const parts = [p.region, p.zone, p.city].map((x) => (x ?? "").trim()).filter(Boolean);
+  return parts.length ? parts.join(" / ") : "—";
 }
 
-function DupTableToolbar(props: {
+function agentFromTeam(p: ClientDedupePreview): string {
+  const raw = p.team_lines?.[0] ?? "";
+  const chunks = raw.split("|");
+  return chunks[1]?.trim() || "—";
+}
+
+function DupCandidatesSection(props: {
   dupLimit: number;
   setDupLimit: (n: number) => void;
   tableRowFilter: string;
   setTableRowFilter: (s: string) => void;
   onRefresh: () => void;
   loading: boolean;
-}) {
-  return (
-    <div className={MERGE_TOOLBAR_STRIP_CLASS}>
-      <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="icon" onClick={props.onRefresh}>
-          <RefreshCw className={cn("h-4 w-4", props.loading && "animate-spin")} />
-        </Button>
-        <FilterSelect
-          emptyLabel="Строк"
-          className={cn(filterPanelSelectClassName, "w-20 min-w-[4.5rem]")}
-          value={String(props.dupLimit)}
-          onChange={(e) => props.setDupLimit(Number.parseInt(e.target.value, 10) || 10)}
-        >
-          <option value="10">10</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-        </FilterSelect>
-      </div>
-      <Input
-        placeholder="Поиск в текущей странице…"
-        value={props.tableRowFilter}
-        onChange={(e) => props.setTableRowFilter(e.target.value)}
-        className="h-9 max-w-xs bg-background"
-      />
-    </div>
-  );
-}
-
-function DupCandidatesTable(props: {
   groups: DuplicateGroup[];
-  loading: boolean;
-  error: boolean;
+  tableLoading: boolean;
+  tableError: boolean;
   onOpenMerge: (g: DuplicateGroup) => void;
+  geoMode?: boolean;
+  page: number;
+  totalPages: number;
+  total: number;
+  onPageChange: (p: number) => void;
 }) {
+  const colSpan = props.geoMode ? 9 : 8;
+  const from = props.total === 0 ? 0 : (props.page - 1) * props.dupLimit + 1;
+  const to = Math.min(props.page * props.dupLimit, props.total);
+
   return (
-    <div className={MERGE_TABLE_SHELL_CLASS}>
-      <Table className="bg-card">
+    <div className={MERGE_TABLE_CARD_CLASS}>
+      <div className={MERGE_TABLE_TOOLBAR_CLASS}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={props.onRefresh}
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-slate-600 transition hover:bg-muted"
+          >
+            <RefreshCw className={cn("h-4 w-4", props.loading && "animate-spin")} />
+          </button>
+          <select
+            value={String(props.dupLimit)}
+            onChange={(e) => props.setDupLimit(Number.parseInt(e.target.value, 10) || 10)}
+            className="flex h-10 w-[72px] cursor-pointer appearance-none rounded-lg border border-border bg-card bg-[length:12px] bg-[right_0.65rem_center] bg-no-repeat px-3 pr-8 text-[13px] text-slate-700"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`
+            }}
+          >
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+        <div className="flex h-10 flex-1 max-w-[320px] items-center gap-2 rounded-full border border-border bg-card px-4 text-[13px] text-slate-500 shadow-sm">
+          <input
+            placeholder="Поиск в текущей странице…"
+            value={props.tableRowFilter}
+            onChange={(e) => props.setTableRowFilter(e.target.value)}
+            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-400"
+          />
+        </div>
+      </div>
+
+      <Table>
         <TableHeader>
-          <TableRow className="border-0 hover:bg-transparent">
-            <TableHead className="!font-bold">Название клиента</TableHead>
-            <TableHead className="!font-bold">Название фирмы</TableHead>
-            <TableHead className="!font-bold">ИНН</TableHead>
-            <TableHead className="!font-bold">ПИНФЛ</TableHead>
-            <TableHead className="!font-bold">Телефон</TableHead>
-            <TableHead className="!font-bold">Номер договора</TableHead>
-            <TableHead className="!font-bold">Адрес</TableHead>
-            <TableHead className="!text-right !font-bold">Кол-во похожих</TableHead>
+          <TableRow className="border-border hover:bg-transparent">
+            <TableHead className="text-[12.5px] font-medium text-slate-500">Название клиента</TableHead>
+            <TableHead className="text-[12.5px] font-medium text-slate-500">Название фирмы</TableHead>
+            <TableHead className="text-[12.5px] font-medium text-slate-500">ИНН</TableHead>
+            <TableHead className="text-[12.5px] font-medium text-slate-500">ПИНФЛ</TableHead>
+            <TableHead className="text-[12.5px] font-medium text-slate-500">Телефон</TableHead>
+            {props.geoMode ? (
+              <TableHead className="text-[12.5px] font-medium text-slate-500">Агент</TableHead>
+            ) : (
+              <TableHead className="text-[12.5px] font-medium text-slate-500">Номер договора</TableHead>
+            )}
+            <TableHead className="text-[12.5px] font-medium text-slate-500">
+              {props.geoMode ? "Территория" : "Адрес"}
+            </TableHead>
+            <TableHead className="text-right text-[12.5px] font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1">
+                Кол-во похожих
+                <ChevronDown className="h-3 w-3 text-emerald-600" />
+              </span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {props.loading ? (
+          {props.tableLoading ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-muted-foreground">
+              <TableCell colSpan={colSpan} className="py-8 text-center text-slate-500">
                 <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
                 Загрузка…
               </TableCell>
             </TableRow>
-          ) : props.error ? (
+          ) : props.tableError ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-destructive">
+              <TableCell colSpan={colSpan} className="py-8 text-center text-destructive">
                 Ошибка загрузки
               </TableCell>
             </TableRow>
           ) : !props.groups.length ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-muted-foreground">
+              <TableCell colSpan={colSpan} className="py-8 text-center text-slate-500">
                 Нет данных по текущим фильтрам.
               </TableCell>
             </TableRow>
           ) : (
-            props.groups.map((g) => {
+            props.groups.map((g, idx) => {
               const p = g.previews[0];
               if (!p) return null;
               return (
-                <TableRow key={`${g.reason}-${g.key}`} className="even:bg-muted/20">
-                  <TableCell className="max-w-[200px] font-medium">
-                    <Link href={`/clients/${p.id}`} className="text-primary hover:underline">
+                <TableRow
+                  key={`${g.reason}-${g.key}`}
+                  className={cn(
+                    "text-[13px] text-slate-700",
+                    idx % 2 === 0 ? "bg-emerald-50/40" : "bg-card",
+                    "hover:bg-emerald-50/70"
+                  )}
+                >
+                  <TableCell className="max-w-[200px] font-medium text-emerald-700">
+                    <Link href={`/clients/${p.id}`} className="hover:underline">
                       {p.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="max-w-[180px] truncate text-muted-foreground">{p.legal_name ?? "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{p.inn?.trim() || "—"}</TableCell>
+                  <TableCell className="max-w-[180px] truncate">{p.legal_name ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{p.inn?.trim() || "—"}</TableCell>
                   <TableCell className="whitespace-nowrap font-mono text-xs">{formatPinflDisplay(p.client_pinfl)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{p.phone ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{p.contract_number?.trim() || "—"}</TableCell>
-                  <TableCell className="max-w-[160px] truncate text-sm">{p.address?.trim() || "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{p.phone ?? "—"}</TableCell>
+                  {props.geoMode ? (
+                    <TableCell className="max-w-[160px] truncate">{agentFromTeam(p)}</TableCell>
+                  ) : (
+                    <TableCell>{p.contract_number?.trim() || "—"}</TableCell>
+                  )}
+                  <TableCell className="max-w-[160px] truncate">
+                    {props.geoMode ? territoryDisplay(p) : p.address?.trim() || "—"}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Button
+                    <button
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1 border-primary/40"
                       onClick={() => props.onOpenMerge(g)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[12px] font-medium text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100 hover:ring-emerald-200"
                     >
-                      <Store className="h-4 w-4" />
+                      <Store className="h-3.5 w-3.5" />
                       {g.count}
-                    </Button>
+                    </button>
                   </TableCell>
                 </TableRow>
               );
@@ -1274,48 +967,35 @@ function DupCandidatesTable(props: {
           )}
         </TableBody>
       </Table>
-    </div>
-  );
-}
 
-function DupPagination(props: {
-  page: number;
-  totalPages: number;
-  total: number;
-  limit: number;
-  onPageChange: (p: number) => void;
-}) {
-  const from = props.total === 0 ? 0 : (props.page - 1) * props.limit + 1;
-  const to = Math.min(props.page * props.limit, props.total);
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-      <span>
-        Показано {from} – {to} / {props.total}
-      </span>
-      <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          disabled={props.page <= 1}
-          onClick={() => props.onPageChange(props.page - 1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="px-2">
-          {props.page} / {props.totalPages}
+      <div className={MERGE_TABLE_PAGINATION_CLASS}>
+        <span>
+          Показано{" "}
+          <span className="font-medium text-emerald-700">
+            {from} - {to} / {props.total}
+          </span>
         </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
-          disabled={props.page >= props.totalPages}
-          onClick={() => props.onPageChange(props.page + 1)}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={props.page <= 1}
+            onClick={() => props.onPageChange(props.page - 1)}
+            className="flex h-8 w-8 items-center justify-center rounded text-slate-500 hover:bg-muted disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="px-2 tabular-nums">
+            {props.page} / {props.totalPages}
+          </span>
+          <button
+            type="button"
+            disabled={props.page >= props.totalPages}
+            onClick={() => props.onPageChange(props.page + 1)}
+            className="flex h-8 w-8 items-center justify-center rounded text-slate-500 hover:bg-muted disabled:opacity-40"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1331,34 +1011,33 @@ function MergedPagination(props: {
   const from = props.total === 0 ? 0 : (props.page - 1) * props.limit + 1;
   const to = Math.min(props.page * props.limit, props.total);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+    <div className={MERGE_TABLE_PAGINATION_CLASS}>
       <span>
-        Показано {from} – {to} / {props.total}
+        Показано{" "}
+        <span className="font-medium text-emerald-700">
+          {from} - {to} / {props.total}
+        </span>
       </span>
       <div className="flex items-center gap-1">
-        <Button
+        <button
           type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
           disabled={props.page <= 1}
           onClick={() => props.onPageChange(props.page - 1)}
+          className="flex h-8 w-8 items-center justify-center rounded text-slate-500 hover:bg-muted disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="px-2">
+        </button>
+        <span className="px-2 tabular-nums">
           {props.page} / {totalPages}
         </span>
-        <Button
+        <button
           type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8"
           disabled={props.page >= totalPages}
           onClick={() => props.onPageChange(props.page + 1)}
+          className="flex h-8 w-8 items-center justify-center rounded text-slate-500 hover:bg-muted disabled:opacity-40"
         >
           <ChevronRight className="h-4 w-4" />
-        </Button>
+        </button>
       </div>
     </div>
   );

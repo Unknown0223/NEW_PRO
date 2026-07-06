@@ -1,49 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PageShell } from "@/components/dashboard/page-shell";
-import { StaffCreateForm } from "@/components/staff/staff-create-form";
-import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 
-export default function NewSupervisorPage() {
+/** Eski `/supervisors/new` — to‘liq modal ro‘yxat sahifasida ochiladi. */
+export default function NewSupervisorRedirectPage() {
   const router = useRouter();
-  const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const hydrated = useAuthStoreHydrated();
-
-  if (!hydrated) {
-    return (
-      <PageShell>
-        <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
-      </PageShell>
-    );
-  }
-
-  if (!tenantSlug) {
-    return (
-      <PageShell>
-        <p className="text-sm text-destructive">
-          <Link href="/login" className="underline">
-            Войти снова
-          </Link>
-        </p>
-      </PageShell>
-    );
-  }
-
-  return (
-    <PageShell>
-      <div className="mb-4">
-        <Link href="/settings/spravochnik/supervisors" className="text-sm text-primary underline">
-          ← Supervizorlar ro‘yxati
-        </Link>
-      </div>
-      <StaffCreateForm
-        kind="supervisor"
-        tenantSlug={tenantSlug}
-        onSuccess={() => router.push("/settings/spravochnik/supervisors")}
-        onCancel={() => router.back()}
-      />
-    </PageShell>
-  );
+  useEffect(() => {
+    router.replace("/settings/spravochnik/supervisors?create=1");
+  }, [router]);
+  return <p className="text-sm text-muted-foreground">Форма открывается…</p>;
 }

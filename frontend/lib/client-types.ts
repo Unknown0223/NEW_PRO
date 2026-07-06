@@ -67,9 +67,15 @@ export type ClientRow = {
   latitude: string | null;
   longitude: string | null;
   zone: string | null;
+  warehouse_id: number | null;
+  warehouse_name: string | null;
+  cash_desk_id: number | null;
+  cash_desk_name: string | null;
   agent_id: number | null;
   agent_name: string | null;
   agent_assignments: ClientAgentAssignmentRow[];
   contact_persons: ContactPersonSlot[];
   created_at: string;
+  /** Faol inventar (xarita / ro‘yxat filtri) */
+  active_equipment_count?: number;
 };

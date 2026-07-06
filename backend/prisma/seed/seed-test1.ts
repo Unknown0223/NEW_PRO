@@ -9,16 +9,92 @@ import {
   prisma
 } from "./helpers";
 import { seedTest1ClientRefusals } from "./seed-test1-refusals";
+import { syncDefaultPermissionMetadata } from "../../src/modules/access/permission-catalog.service";
+import {
+  ensureRoleByKey,
+  ensureTenantRolesForRoleDefaults,
+  syncTenantUserRolesFromProfile
+} from "../../src/modules/access/rbac.roles";
+import { setRolePermissions } from "../../src/modules/access/rbac.permissions";
+
+const MOBILE_ROLE_PERMISSION_KEYS = [
+  "orders.view",
+  "orders.create",
+  "orders.zakaz.spisok_zakazov",
+  "orders.zakaz.prosmotr_zakaza",
+  "orders.zakaz.sozdanie_zakaza",
+  "clients.spisok_klientov",
+  "clients.prosmotr_profilya_klienta",
+  "staff.agent.konfiguratsii",
+  "staff.agent.prosmotr_agenta",
+  "warehouse.view",
+  "dashboard.view",
+  "dashboard.supervayzer",
+  "dashboard.prodazhi"
+] as const;
+
+/** Lokal dev: veb panelda qo‘yilgan majburiy yangilanish loginni bloklamasin. */
+async function resetDevMobileAppReleasePolicy(tenantId: number) {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  if (!row) return;
+  const st = (row.settings ?? {}) as Record<string, unknown>;
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      settings: {
+        ...st,
+        mobile_app_release: {
+          min_version: "3.0.0",
+          latest_version: "3.0.0",
+          force_update: false,
+          download_url: null,
+          store_url_android: null,
+          store_url_ios: null,
+          release_notes: null
+        }
+      } as Prisma.InputJsonValue
+    }
+  });
+}
+
+async function seedMobileRolePermissions(tenantId: number) {
+  await ensureTenantRolesForRoleDefaults(tenantId);
+  await syncTenantUserRolesFromProfile(tenantId);
+  await syncDefaultPermissionMetadata(tenantId);
+  const allKeys = (
+    await prisma.permission.findMany({
+      where: { tenant_id: tenantId },
+      select: { key: true }
+    })
+  ).map((p) => p.key);
+  const adminRole = await ensureRoleByKey(tenantId, "admin");
+  await setRolePermissions(tenantId, adminRole.id, allKeys);
+  const operatorRole = await ensureRoleByKey(tenantId, "operator");
+  await setRolePermissions(
+    tenantId,
+    operatorRole.id,
+    allKeys.filter((k) => k !== "access.manage")
+  );
+  for (const roleKey of ["agent", "supervisor", "expeditor"] as const) {
+    const role = await ensureRoleByKey(tenantId, roleKey);
+    await setRolePermissions(tenantId, role.id, [...MOBILE_ROLE_PERMISSION_KEYS]);
+  }
+}
 
 export async function seedTest1Tenant() {
   const password_hash = await bcrypt.hash("secret123", 10);
+  /** Mobil agent + veb «Агент» demo: login `agent`, parol `111111` */
+  const agent_password_hash = await bcrypt.hash("111111", 10);
 
   const test1 = await prisma.tenant.upsert({
     where: { slug: "test1" },
-    update: {},
+    update: { name: "Tizimdan foydalanish" },
     create: {
       slug: "test1",
-      name: "Test Tenant 1",
+      name: "Tizimdan foydalanish",
       plan: "basic",
       is_active: true
     }
@@ -37,6 +113,11 @@ export async function seedTest1Tenant() {
 
   await mergeDefaultReasonReferences(test1.id);
   await mergeDefaultReasonReferences(demo.id);
+
+  if (process.env.NODE_ENV !== "production") {
+    await resetDevMobileAppReleasePolicy(test1.id);
+    await resetDevMobileAppReleasePolicy(demo.id);
+  }
 
   for (const tenant of [test1, demo]) {
     await prisma.user.upsert({
@@ -85,12 +166,12 @@ export async function seedTest1Tenant() {
   /** Yangi zakazlar uchun majburiy agent (`ORDER_REQUIRES_AGENT`) — integratsiya testlari va demo */
   const seedAgent = await prisma.user.upsert({
     where: { tenant_id_login: { tenant_id: test1.id, login: "agent" } },
-    update: { password_hash, is_active: true, role: "agent" },
+    update: { password_hash: agent_password_hash, is_active: true, role: "agent" },
     create: {
       tenant_id: test1.id,
       name: "Agent (seed)",
       login: "agent",
-      password_hash,
+      password_hash: agent_password_hash,
       role: "agent",
       is_active: true
     }
@@ -116,6 +197,50 @@ export async function seedTest1Tenant() {
 
   const catDrinks = await ensureCategory(test1.id, "Ichimliklar");
   const catFood = await ensureCategory(test1.id, "Oziq-ovqat");
+
+  await prisma.user.update({
+    where: { id: seedAgent.id },
+    data: {
+      agent_entitlements: {
+        price_types: ["default"],
+        product_rules: [
+          { category_id: catDrinks.id, all: true },
+          { category_id: catFood.id, all: true }
+        ],
+        mobile_config: {
+          schema_version: 1,
+          client: {
+            can_create: true,
+            can_edit: true,
+            can_change_client_location: true,
+            show_balance: true,
+            show_photos: true,
+            phone_prefix: "+998",
+            fields_visible: {
+              name: true,
+              legal_name: true,
+              phone: true,
+              category: true,
+              territory: true,
+              address: true,
+              visit_day: true,
+              coordinates: true
+            }
+          },
+          gps: { tracking_enabled: true, tracking_interval_sec: 300 },
+          photo: {
+            required_for_order: true,
+            jpeg_quality: 92,
+            max_width_px: 4032,
+            max_height_px: 4032
+          },
+          misc: { visit_start_end_enabled: true },
+          product_list: { show_out_of_stock: true },
+          orders: { bonus_fill_mode: "auto_fill_remaining" }
+        }
+      }
+    }
+  });
 
   const productDefs = [
     { sku: "SKU-001", name: "Mahsulot 1", unit: "quti", categoryId: catDrinks.id },
@@ -263,11 +388,16 @@ export async function seedTest1Tenant() {
         type: "qty",
         buy_qty: 6,
         free_qty: 1,
+        in_blocks: true,
         priority: 10,
         is_active: true
       }
     });
   }
+  await prisma.bonusRule.updateMany({
+    where: { tenant_id: test1.id, name: "6+1 aksiya", type: "qty" },
+    data: { in_blocks: true, buy_qty: 6, free_qty: 1 }
+  });
 
   if (
     !(await prisma.bonusRule.findFirst({
@@ -348,7 +478,11 @@ export async function seedTest1Tenant() {
   if (p3ForSum) {
     await prisma.bonusRule.updateMany({
       where: { tenant_id: test1.id, name: "[seed] Min summa 500 000" },
-      data: { free_qty: 1, bonus_product_ids: [p3ForSum.id] }
+      data: {
+        discount_pct: new Prisma.Decimal("10"),
+        bonus_product_ids: [],
+        free_qty: null
+      }
     });
   }
 
@@ -373,6 +507,7 @@ export async function seedTest1Tenant() {
           number: "ORD-SEED-001",
           client_id: mainClient.id,
           warehouse_id: whMain.id,
+          agent_id: seedAgent.id,
           status: "new",
           total_sum: new Prisma.Decimal("550000.00"),
           bonus_sum: new Prisma.Decimal("0"),
@@ -400,4 +535,7 @@ export async function seedTest1Tenant() {
   }
 
   await seedTest1ClientRefusals(test1.id, seedAgent.id);
+
+  await seedMobileRolePermissions(test1.id);
+  await seedMobileRolePermissions(demo.id);
 }

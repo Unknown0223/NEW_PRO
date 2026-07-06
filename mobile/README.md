@@ -1,25 +1,103 @@
-# Mobile
+# SalesDoc Mobil Ilova
 
-Reserved for FAZA 9 implementation (Flutter agent and delivery apps).
+Flutter ilova — **agent**, **ekspeditor**, **supervayzer** rollari uchun.
 
-## Work slot (`work_slot_code`) — API tayyor
+**To'liq arxitektura:** [MOBILE_APP_TOLOQ_REJA_UZ.md](./MOBILE_APP_TOLOQ_REJA_UZ.md)
 
-Agent ilovasi quyidagi manbalardan ishchi o‘rni kodini oladi:
+## Dev muhit
 
-| Endpoint | Maydonlar |
-|----------|-----------|
-| `GET /auth/me` | `user.work_slot_id`, `user.work_slot_code` |
-| `GET /api/{tenant}/mobile/agent-config` | `work_slot_id`, `work_slot_code` |
+| Parametr | Qiymat |
+|----------|--------|
+| Tenant (test) | `test1` |
+| Agent login (seed) | `agent` / `111111` |
+| Agent login (import) | `demo_agent_sample` / `Parol123!` |
+| Backend | `http://127.0.0.1:18080` |
+| Veb panel | `http://127.0.0.1:3000` |
 
-Flutter UI da profil yoki bosh ekranda `work_slot_code` ni ko‘rsating (masalan stiker `T-12`).
+### Android emulator
 
-Veb panelda vaqtinchalik ko‘rsatkich: sidebar pastida `WorkSlotProfileBadge` (`/auth/me`).
+```bash
+adb reverse tcp:18080 tcp:18080
+```
 
-## 1C integratsiya (reja)
+Kirill yo‘l muammosi uchun build:
 
-Tashqi tizimlar bilan sinxronlashda **asosiy kalit** — `WorkSlot.slot_code` (tenant ichida unique).
+```powershell
+robocopy "d:\SALEC — копия\mobile\lib" C:\salesdoc_mobile\lib /MIR
+cd C:\salesdoc_mobile
+flutter run
+```
 
-- Eksport/import: `GET /api/{tenant}/work-slots/export.xlsx`, `POST /api/{tenant}/work-slots/import.xlsx`
-- 1C dan kelgan `slot_code` bo‘yicha upsert; `assign_login` ustuni orqali xodim biriktirish
+## Ishga tushirish
 
-Qoida Q-01: mavjud `slot_code` PATCH orqali o‘zgartirilmaydi — faqat label, filial, aktivlik.
+```bash
+cd mobile
+flutter pub get
+copy .env.example .env   # API_BASE_URL=http://127.0.0.1:18080
+
+# Monorepo root
+cd ..
+.\start-dev-quick.cmd
+
+cd mobile
+flutter test
+flutter run
+```
+
+## Verify (CI gate)
+
+```powershell
+# Monorepo root
+npm run bitta-ilova:verify
+
+# yoki alohida
+cd backend && npm run bitta-ilova:verify
+cd mobile && powershell -File tool/verify.ps1
+```
+
+## Backend tayyorgarlik
+
+```bash
+cd backend
+npm run rbac:ensure -- test1
+npm run agents:config -- test1
+powershell -File scripts/test-mobile-agent-flow.ps1
+```
+
+## Mobil API (asosiy)
+
+| Endpoint | Rol |
+|----------|-----|
+| `POST /api/auth/login` | Barcha |
+| `GET /api/:slug/mobile/agent-config` | Mobil rollar |
+| `POST /api/:slug/mobile/sync/full` | Mobil rollar |
+| `POST /api/:slug/mobile/sync/delta` | Mobil rollar |
+| `GET /api/:slug/mobile/agent-dashboard` | Agent KPI |
+| `PATCH /api/:slug/mobile/clients/:id` | Agent mijoz tahriri |
+| `GET /api/:slug/mobile/clients/debtors` | Agent qarzdorlar |
+| `GET/POST mobile/orders/*` | Agent buyurtma |
+| `GET mobile/expeditor/deliveries` | Ekspeditor |
+| `PATCH mobile/expeditor/orders/:id/status` | Ekspeditor |
+| `GET mobile/supervisor/summary\|visits\|products\|agent-locations` | Supervayzer |
+
+## E2E checklist (emulator, agent)
+
+1. Login → bootstrap → bosh sahifa KPI
+2. Sinxron → muvaffaqiyat ekrani
+3. Mijoz → tahrir → server
+4. Buyurtma to‘liq zanjir (onlayn)
+5. Internet o‘chir → oflayn navbat → sync
+6. Ombor qoldig‘i
+7. Vizit + GPS
+8. Hisobot / qarzdorlar
+9. Chiqish / qayta kirish
+
+## Holat (2026-05)
+
+| Faza | Holat |
+|------|-------|
+| Agent (asosiy oqim) | API + UI ulangan |
+| Oflayn navbat | `enqueue` + `sync-flush` + SQLite v4 |
+| Ekspeditor | Yetkazishlar serverdan, holat PATCH |
+| Supervayzer | Dashboard API, vizitlar, agent GPS |
+| Push (FCM prod) | Token ro‘yxat — Firebase kerak |

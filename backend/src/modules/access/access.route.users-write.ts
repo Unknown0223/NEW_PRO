@@ -14,9 +14,11 @@ import {
   listAccessHistoryActionTypes
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
+import { loadGrantDelegationOperationKeys, repairNestedGrantDelegationKeys } from "./access-grant-delegation";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
+  AccessModuleViewRequiredError,
   bulkMergeUserPermissionKeysForUsers,
   bulkRemoveUserPermissionsByKeysForUsers,
   ensurePermissionIdsForKeys,
@@ -80,8 +82,10 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       }
     });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
-    const [matrix, supervisees, branch_links, warehouse_links, cash_links, pm_links, territoryIds] = await Promise.all([
+    await repairNestedGrantDelegationKeys(tenantId, user.id);
+    const [matrix, grantDelegationOperationKeys, supervisees, branch_links, warehouse_links, cash_links, pm_links, td_links, territoryIds] = await Promise.all([
       getUserAccessMatrix(tenantId, user.id, user.role),
+      loadGrantDelegationOperationKeys(tenantId, user.id),
       prisma.user.findMany({
         where: { tenant_id: tenantId, supervisor_user_id: id },
         select: { id: true, login: true, name: true, code: true, role: true, is_active: true },
@@ -92,6 +96,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       prisma.warehouseUserLink.findMany({ where: { user_id: id }, select: { warehouse_id: true, link_role: true } }),
       prisma.cashDeskUserLink.findMany({ where: { user_id: id }, select: { cash_desk_id: true } }),
       prisma.userPaymentMethodLink.findMany({ where: { user_id: id, tenant_id: tenantId }, select: { payment_method: true } }),
+      prisma.userTradeDirectionLink.findMany({ where: { user_id: id, tenant_id: tenantId }, select: { trade_direction_id: true } }),
       prisma.territoryUserLink.findMany({
         where: { user_id: id, territory: { tenant_id: tenantId } },
         select: { territory_id: true }
@@ -110,6 +115,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           supervisor_user_id: user.supervisor_user_id
         },
         matrix,
+        grant_delegation_operation_keys: grantDelegationOperationKeys,
         supervisees,
         scope: {
           branches: branch_links.map((b) => b.branch_code),
@@ -117,7 +123,8 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           warehouse_delegate_ids: warehouse_links.filter((w) => w.link_role === "manager").map((w) => w.warehouse_id),
           cash_desks: cash_links.map((c) => c.cash_desk_id),
           payment_methods: pm_links.map((p) => p.payment_method),
-          territories: territoryIds.map((t) => t.territory_id)
+          territories: territoryIds.map((t) => t.territory_id),
+          trade_directions: td_links.map((d) => d.trade_direction_id)
         }
       }
     });
@@ -145,7 +152,8 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       body.warehouse_delegate !== undefined ||
       body.cash_desk_ids !== undefined ||
       body.payment_methods !== undefined ||
-      body.territory_ids !== undefined;
+      body.territory_ids !== undefined ||
+      body.trade_direction_ids !== undefined;
     const superviseeTouched = body.supervisee_user_ids !== undefined;
 
     try {
@@ -160,6 +168,15 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           "Чтобы выдавать этому пользователю другие операции или право выдавать склад другим, сначала включите «Доступ: управление» (access.manage)."
         );
       }
+      if (e instanceof AccessModuleViewRequiredError) {
+        return sendApiError(
+          reply,
+          request,
+          403,
+          e.code,
+          "Чтобы разрешить выдавать доступ другим, сначала включите доступ к разделу «Доступ» (access.upravlenie.view) для этого пользователя."
+        );
+      }
       if (e instanceof SuperviseePatchError) {
         return sendApiError(reply, request, 400, "SUPERVISEE_PATCH", e.message);
       }
@@ -168,7 +185,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
 
     const actionTypes: string[] = [];
     if (body.role?.trim() || body.is_active != null) actionTypes.push("user.profile.updated");
-    if (body.remove_permission_keys?.length || permDefined) actionTypes.push("permissions.updated");
+    if (body.remove_permission_keys?.length || permDefined || body.grant_delegation_allow?.length || body.grant_delegation_revoke?.length) actionTypes.push("permissions.updated");
     if (scopeTouched) actionTypes.push("scope.updated");
     if (superviseeTouched) actionTypes.push("supervisees.updated");
     const action_type = actionTypes.length ? actionTypes.join("+") : "access.updated";
@@ -244,7 +261,13 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
           where: { user_id: sourceId, territory: { tenant_id: tenantId } },
           select: { territory_id: true }
         })
-      ).map((x) => x.territory_id)
+      ).map((x) => x.territory_id),
+      trade_direction_ids: (
+        await prisma.userTradeDirectionLink.findMany({
+          where: { user_id: sourceId, tenant_id: tenantId },
+          select: { trade_direction_id: true }
+        })
+      ).map((x) => x.trade_direction_id)
     });
     const srcWhLinks = await prisma.warehouseUserLink.findMany({
       where: { user_id: sourceId },

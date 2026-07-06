@@ -4,7 +4,7 @@ import { orderStatusLabelRu } from "@/components/orders/order-create/utils";
 import { cn } from "@/lib/utils";
 
 const statusColors: Record<string, string> = {
-  new: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+  new: "bg-muted text-slate-700 dark:bg-slate-700 dark:text-slate-200",
   confirmed: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-200",
   picking: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
   delivering: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",

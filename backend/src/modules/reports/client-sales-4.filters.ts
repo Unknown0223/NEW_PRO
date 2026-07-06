@@ -1,15 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4.types";
 import { KNOWN_ORDER_TYPES } from "./client-sales-4.helpers";
 
 export async function getClientSales4FilterOptions(tenantId: number, actor?: ReportActor) {
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, is_active: true }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId, is_active: true }
-        : { tenant_id: tenantId, role: "agent", is_active: true };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const [agents, categories, brands, tradeDirections, territoryRows, orderTypes, clientCats] =
     await Promise.all([

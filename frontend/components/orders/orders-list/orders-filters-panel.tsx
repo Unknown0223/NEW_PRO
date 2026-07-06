@@ -25,17 +25,17 @@ function parseIsoDate(s: string): Date | null {
 function shiftDraftDateRange(
   from: string,
   to: string,
-  deltaMonths: number
+  deltaDays: number
 ): { date_from: string; date_to: string } {
   let a = parseIsoDate(from);
   let b = parseIsoDate(to);
   if (!a || !b) {
     const now = new Date();
-    a = new Date(now.getFullYear(), now.getMonth() + deltaMonths, 1);
-    b = new Date(now.getFullYear(), now.getMonth() + deltaMonths + 1, 0);
+    a = new Date(now.getFullYear(), now.getMonth(), now.getDate() + deltaDays);
+    b = new Date(a);
   } else {
-    a = new Date(a.getFullYear(), a.getMonth() + deltaMonths, a.getDate());
-    b = new Date(b.getFullYear(), b.getMonth() + deltaMonths, b.getDate());
+    a = new Date(a.getFullYear(), a.getMonth(), a.getDate() + deltaDays);
+    b = new Date(b.getFullYear(), b.getMonth(), b.getDate() + deltaDays);
   }
   return { date_from: localYmd(a), date_to: localYmd(b) };
 }
@@ -70,6 +70,7 @@ type OrdersFiltersPanelProps = Pick<
   | "setOrdersDateRangeOpen"
 > & {
   ordersTotal?: number;
+  ordersTotalLoading?: boolean;
   ordersDateRangeAnchorRef: RefObject<HTMLButtonElement | null>;
 };
 
@@ -98,8 +99,8 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
     expeditorsQ,
     applyFilterDraft,
     resetFilterDraft,
-    refetch,
     ordersTotal,
+    ordersTotalLoading,
     ordersDateRangeAnchorRef,
     ordersDateRangeOpen,
     setOrdersDateRangeOpen
@@ -129,9 +130,11 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 pb-3">
             <div className="flex min-w-0 shrink-0 items-baseline gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Заявки</h1>
-              {ordersTotal != null ? (
+              {ordersTotalLoading ? (
+                <span className="text-xs text-muted-foreground sm:text-sm">Найдено: …</span>
+              ) : ordersTotal != null ? (
                 <span className="text-xs text-muted-foreground sm:text-sm">
-                  Всего:{" "}
+                  Найдено:{" "}
                   <span className="font-medium tabular-nums text-foreground">
                     {formatNumberGrouped(ordersTotal)}
                   </span>
@@ -180,8 +183,10 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
                 <button
                   type="button"
                   className="grid h-9 w-8 place-items-center border-r border-input hover:bg-muted/50"
-                  aria-label="Предыдущий месяц"
-                  onClick={() => patchDraft(shiftDraftDateRange(filterDraft.date_from, filterDraft.date_to, -1))}
+                  aria-label="Предыдущий день"
+                  onClick={() =>
+                    patchDraft(shiftDraftDateRange(filterDraft.date_from, filterDraft.date_to, -1))
+                  }
                 >
                   <ChevronLeft className="size-4 text-muted-foreground" />
                 </button>
@@ -197,8 +202,10 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
                 <button
                   type="button"
                   className="grid h-9 w-8 place-items-center border-l border-input hover:bg-muted/50"
-                  aria-label="Следующий месяц"
-                  onClick={() => patchDraft(shiftDraftDateRange(filterDraft.date_from, filterDraft.date_to, 1))}
+                  aria-label="Следующий день"
+                  onClick={() =>
+                    patchDraft(shiftDraftDateRange(filterDraft.date_from, filterDraft.date_to, 1))
+                  }
                 >
                   <ChevronRight className="size-4 text-muted-foreground" />
                 </button>
@@ -223,10 +230,7 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
               <button
                 type="button"
                 className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:opacity-95"
-                onClick={() => {
-                  applyFilterDraft();
-                  void refetch();
-                }}
+                onClick={() => applyFilterDraft()}
               >
                 Применить
               </button>
@@ -272,6 +276,7 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
         anchorRef={ordersDateRangeAnchorRef}
         dateFrom={filterDraft.date_from}
         dateTo={filterDraft.date_to}
+        autoSave
         onApply={({ dateFrom, dateTo }) => {
           patchDraft({ date_from: dateFrom, date_to: dateTo });
         }}

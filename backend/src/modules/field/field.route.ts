@@ -14,7 +14,7 @@ import {
 } from "./field.service";
 import { createClientRefusal } from "../refusals/refusals.service";
 
-const locationPingPostRoles = ["agent", ...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
+const locationPingPostRoles = ["agent", "expeditor", ...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 
 function parseUserId(request: FastifyRequest) {
   const viewer = getAccessUser(request);
@@ -82,7 +82,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       .parse(request.body);
     const viewer = getAccessUser(request);
     let agentId: number;
-    if (viewer.role === "agent") {
+    // Agent va ekspeditor o'z visit check-in'ini o'zi yaratadi (agent_id = self).
+    if (viewer.role === "agent" || viewer.role === "expeditor") {
       const self = parseUserId(request);
       if (!self) return sendApiError(reply, request, 400, "BadUser");
       agentId = self;
@@ -134,7 +135,7 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       .parse(request.body);
     const viewer = getAccessUser(request);
     let agentId: number;
-    if (viewer.role === "agent") {
+    if (viewer.role === "agent" || viewer.role === "expeditor") {
       const self = parseUserId(request);
       if (!self) return sendApiError(reply, request, 400, "BadUser");
       agentId = self;

@@ -50,14 +50,14 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
   );
 
   return (
-    <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
         title="Продажа"
         subtitle="Агрегация по каналам оплаты"
       />
       <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {rows.length === 0 ? (
-          <div className="col-span-full rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 ring-1 ring-slate-100">
+          <div className="col-span-full rounded-xl bg-muted px-4 py-8 text-center text-sm text-slate-500 ring-1 ring-slate-100">
             Нет данных по способам оплаты за период
           </div>
         ) : (
@@ -70,13 +70,13 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
             return (
               <article
                 key={`${row.payment_type}-${index}`}
-                className="finance-motion-fade flex min-h-[168px] flex-col justify-between overflow-hidden rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100"
+                className="finance-motion-fade flex min-h-[168px] flex-col justify-between overflow-hidden rounded-xl bg-muted p-4 ring-1 ring-slate-100"
                 style={{ animationDelay: `${index * 55}ms` }}
               >
                 <div>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className={`h-1.5 w-16 rounded-full bg-gradient-to-r ${gradient}`} />
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700 ring-1 ring-slate-200">
+                    <span className="rounded-full bg-card px-2.5 py-1 text-xs font-black text-slate-700 ring-1 ring-slate-200">
                       {fmtFinancePercent(pct)}
                     </span>
                   </div>
@@ -92,7 +92,7 @@ export function FinanceKpiSection({ data }: { data: FinanceDashboardSnapshot }) 
                   </p>
                 </div>
                 <div className="mt-5">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`finance-motion-bar h-full rounded-full ${solid}`}
                       style={{ width: `${pct}%` }}

@@ -27,6 +27,10 @@ export type AgentMobileConfigDraft = {
     max_accuracy_m?: number | null;
   };
   outlet?: { show_plan_in_reports?: boolean; plan_version?: string };
+  route?: {
+    daily_visit_limit?: number | null;
+    readd_cooldown_days?: number | null;
+  };
   product_list?: { show_out_of_stock?: boolean; allow_submit_for_new_client?: boolean };
   photo?: {
     max_width_px?: number | null;
@@ -58,6 +62,7 @@ export type AgentMobileConfigDraft = {
     allow_return_from_shelf?: boolean;
     allow_partial_return_edit?: boolean;
     allow_reload_from_vehicle?: boolean;
+    return_reason_required?: boolean;
   };
   expeditor?: {
     accept_payment_for_order?: boolean;
@@ -68,6 +73,7 @@ export type AgentMobileConfigDraft = {
     allowed_trade_direction_ids?: number[];
     delivery_payment_method_strict?: boolean;
     fingerprint_required_for_shipment_confirm?: boolean;
+    require_photo_report_before_visit?: boolean;
   };
   supervision?: {
     check_receipt_faces?: boolean;
@@ -94,6 +100,7 @@ export const CLIENT_FIELD_META: { key: string; label: string }[] = [
   { key: "territory", label: "Территория клиента" },
   { key: "inn", label: "Клиент ИНН" },
   { key: "phone", label: "Клиентский телефон" },
+  { key: "address", label: "Адрес клиента" },
   { key: "visit_day", label: "День посещения клиента" },
   { key: "coordinates", label: "Клиентские координаты" },
   { key: "client_pc", label: "Клиент ПК" },
@@ -101,7 +108,8 @@ export const CLIENT_FIELD_META: { key: string; label: string }[] = [
   { key: "mfo", label: "Клиент МФО" },
   { key: "oked", label: "Клиент ОКЭД" },
   { key: "pinfl", label: "Клиент ПИНФЛ" },
-  { key: "agreement_number", label: "Клиентское соглашение номер" }
+  { key: "agreement_number", label: "Клиентское соглашение номер" },
+  { key: "notes", label: "Примечание / комментарий" }
 ];
 
 export function emptyMobileDraft(): AgentMobileConfigDraft {

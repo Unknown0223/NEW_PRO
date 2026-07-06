@@ -39,6 +39,7 @@ model Tenant {
   price_matrices                 PriceMatrix[]
   product_segments               ProductSegment[]
   products                       Product[]
+  product_packagings             ProductPackaging[]
   refresh_tokens                 RefreshToken[]
   sales_channel_refs             SalesChannelRef[]
   sales_returns                  SalesReturn[]
@@ -47,6 +48,7 @@ model Tenant {
   suppliers                      Supplier[]
   supplier_payments              SupplierPayment[]
   tenant_audit_events            TenantAuditEvent[]
+  activity_events                UserActivityEvent[]
   access_logs                    AccessLog[]
   tenant_tasks                   TenantTask[]
   trade_directions               TradeDirection[]
@@ -55,6 +57,7 @@ model Tenant {
   warehouse_blocks               WarehouseBlock[]
   expenses                       Expense[]
   payment_allocations            PaymentAllocation[]
+  payment_edit_grants            PaymentEditGrant[]
   territories                    Territory[]
   warehouse_corrections          WarehouseCorrection[]
   client_equipment               ClientEquipment[]
@@ -69,12 +72,21 @@ model Tenant {
   permissions                   Permission[]
   user_branch_links             UserBranchLink[]
   user_payment_method_links     UserPaymentMethodLink[]
+  user_trade_direction_links    UserTradeDirectionLink[]
   work_slots                    WorkSlot[]
   slot_user_links               SlotUserLink[]
   slot_audit_entries            SlotAuditEntry[]
   order_restriction_rules       OrderRestrictionRule[]
   order_auto_confirm_rules      OrderAutoConfirmRule[]
   order_auto_confirm_schedules  OrderAutoConfirmSchedule[]
+  device_tokens                 DeviceToken[]
+  plan_approver_configs         PlanApproverConfig[]
+  plan_approver_levels          PlanApproverLevel[]
+  plan_approver_leaders         PlanApproverLeader[]
+  sales_kpi_plans               SalesKpiPlan[]
+  sales_kpi_plan_targets        SalesKpiPlanTarget[]
+  job_logs                      JobLog[]
+  agent_consignment_month_status AgentConsignmentMonthStatus[]
 
   @@map("tenants")
 }
@@ -131,6 +143,10 @@ model User {
   /// `true` bo‘lsa limit iste’moli faqat hisobot oyi ichidagi konsignatsiya zakazlari qarzi
   consignment_ignore_previous_months_debt Boolean    @default(false)
   consignment_updated_at     DateTime?
+  /// Har oy konsignatsiya yopilish jadvali (agent bo‘yicha)
+  consignment_close_day      Int                     @default(25)
+  consignment_close_hour     Int                     @default(0)
+  consignment_close_minute   Int                     @default(0)
   apk_version                String?
   device_name                String?
   last_sync_at               DateTime?
@@ -151,7 +167,7 @@ model User {
   agent_price_types          Json                    @default("[]")
   /// { price_types?: string[], product_rules?: { category_id: number, all: boolean, product_ids?: number[] }[] }
   agent_entitlements         Json                    @default("{}")
-  max_sessions               Int                     @default(2)
+  max_sessions               Int                     @default(1)
   kpi_color                  String?                 @db.VarChar(16)
   /// Dastavchik: zakaz yaratilganda avtobog‘lash shartlari (bo‘sh = cheklov yo‘q)
   expeditor_assignment_rules Json                    @default("{}")
@@ -176,6 +192,8 @@ model User {
   payments_voided            Payment[]               @relation("PaymentVoidedBy")
   payments_as_expeditor      Payment[]               @relation("PaymentExpeditor")
   payments_ledger_agent      Payment[]               @relation("PaymentLedgerAgent")
+  payment_edit_grants_access PaymentEditGrant[]      @relation("PaymentEditGrantAccess")
+  payment_edit_grants_created PaymentEditGrant[]     @relation("PaymentEditGrantCreator")
   opening_balances_created   ClientOpeningBalanceEntry[] @relation("OpeningBalanceCreator")
   clients_as_agent           Client[]                @relation("UserAgents")
   goods_receipts_created     GoodsReceipt[]          @relation("GoodsReceiptCreator")
@@ -189,6 +207,7 @@ model User {
   sales_returns_created      SalesReturn[]           @relation("SalesReturnCreator")
   stock_takes_created        StockTake[]             @relation("StockTakeCreator")
   tenant_audit_events        TenantAuditEvent[]      @relation("TenantAuditEventActor")
+  activity_events            UserActivityEvent[]     @relation("UserActivityEventActor")
   tenant_tasks_assigned      TenantTask[]            @relation("TenantTaskAssignee")
   tenant_tasks_created       TenantTask[]            @relation("TenantTaskCreator")
   return_warehouse           Warehouse?              @relation("UserReturnWarehouse", fields: [return_warehouse_id], references: [id])
@@ -219,6 +238,7 @@ model User {
   user_permissions              UserPermission[]
   branch_links                  UserBranchLink[]
   payment_method_links          UserPaymentMethodLink[]
+  trade_direction_links         UserTradeDirectionLink[]
   slot_user_links               SlotUserLink[]          @relation("SlotUserLinks")
   assignment_locks_set          ClientAgentAssignment[] @relation("AssignmentLockSetter")
   slot_audit_entries_as_actor   SlotAuditEntry[]        @relation("SlotAuditActor")
@@ -226,6 +246,15 @@ model User {
   order_restriction_rules_updated OrderRestrictionRule[] @relation("OrderRestrictionRuleUpdatedBy")
   order_auto_confirm_rules_created OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleCreatedBy")
   order_auto_confirm_rules_updated OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleUpdatedBy")
+  device_tokens                 DeviceToken[]
+  plan_approver_configs_as_supervisor PlanApproverConfig[] @relation("PlanApproverSupervisor")
+  plan_approver_levels_as_approver    PlanApproverLevel[]  @relation("PlanApproverEmployee")
+  plan_approver_leaderships           PlanApproverLeader[] @relation("PlanApproverLeaderUser")
+  sales_kpi_plans_created             SalesKpiPlan[]       @relation("SalesKpiPlanCreator")
+  sales_kpi_plans_approved            SalesKpiPlan[]       @relation("SalesKpiPlanApprover")
+  sales_kpi_plan_targets              SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetUser")
+  sales_kpi_plan_targets_edited       SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetEditor")
+  consignment_month_status            AgentConsignmentMonthStatus[]
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])
@@ -234,6 +263,44 @@ model User {
   @@index([supervisor_user_id])
   @@index([tenant_id, is_active])
   @@map("users")
+}
+
+/// Konsignatsiya oyi: avtomatik yopilish va qarzdorlik to‘liq yopilgan sana (agent bo‘yicha).
+model AgentConsignmentMonthStatus {
+  id               Int       @id @default(autoincrement())
+  tenant_id        Int
+  agent_user_id    Int
+  year             Int
+  month            Int
+  /// Oyning `month_close_day`-kunida avtomatik yopilgan vaqt
+  period_closed_at DateTime?
+  /// Shu oy konsignatsiya qarzi to‘liq yopilganda (yopilish kunidan keyin)
+  debt_cleared_at  DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  tenant           Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  agent            User      @relation(fields: [agent_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, agent_user_id, year, month])
+  @@index([tenant_id, year, month])
+  @@map("agent_consignment_month_status")
+}
+
+/// Mobil push — FCM device tokenlari (FAZA 9.6).
+model DeviceToken {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  user_id     Int
+  fcm_token   String   @db.VarChar(512)
+  device_type String   @default("android") @db.VarChar(16)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, fcm_token])
+  @@index([tenant_id, user_id])
+  @@map("device_tokens")
 }
 
 /// «Конструктор отчетов» — foydalanuvchi saqlagan pivot/konfig (JSON).
@@ -265,12 +332,14 @@ model RefreshToken {
   revoked_at  DateTime?
   created_at  DateTime  @default(now())
   device_name String?
+  device_id   String?   @db.VarChar(64)
   ip_address  String?   @db.VarChar(64)
   user_agent  String?   @db.VarChar(512)
   tenant      Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, user_id])
+  @@index([tenant_id, user_id, device_id])
   @@map("refresh_tokens")
 }
 
@@ -332,6 +401,8 @@ model Product {
   is_blocked            Boolean                       @default(false)
   /// `true` — mahsulot «Оборудование» modulida tanlash uchun belgilangan
   is_equipment          Boolean                       @default(false)
+  /// Mahsulot rasmi (URL yoki data URL)
+  image_url             String?                       @db.Text
   goods_receipt_lines   GoodsReceiptLine[]
   interchangeable_links InterchangeableGroupProduct[]
   kpi_group_products    KpiGroupProduct[]
@@ -350,6 +421,9 @@ model Product {
   price_matrix          PriceMatrix[]
   warehouse_correction_lines WarehouseCorrectionLine[]
   retail_outlet_stocks      RetailOutletStock[]
+  packagings                ProductPackaging[]
+  segment_links             ProductSegmentLink[]
+  trade_direction_links     ProductTradeDirectionLink[]
 
   @@unique([tenant_id, sku])
   @@index([tenant_id, name])

@@ -28,7 +28,7 @@ export function ReturnOrderBalanceBlock({
     return (
       <div
         className={cn(
-          "rounded-lg border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/50",
+          "rounded-lg border border-border bg-muted/80 dark:border-slate-700 dark:bg-slate-900/50",
           dense ? "p-2" : "p-3",
           className
         )}
@@ -113,7 +113,7 @@ function QtyCell({
   accent: string;
 }) {
   return (
-    <div className="rounded-md bg-white/70 px-2 py-1.5 dark:bg-slate-950/40">
+    <div className="rounded-md bg-card/70 px-2 py-1.5 dark:bg-slate-950/40">
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className={cn("text-sm font-bold tabular-nums", accent)}>
         {formatCompositionQty(value)} <span className="text-xs font-normal">шт</span>

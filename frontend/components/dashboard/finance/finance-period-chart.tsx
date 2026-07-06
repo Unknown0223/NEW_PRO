@@ -53,7 +53,7 @@ function FinanceCashflowChart({ points }: { points: FinancePeriodRow[] }) {
     .join(" ");
 
   return (
-    <div className="min-w-0 overflow-x-auto rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+    <div className="min-w-0 overflow-x-auto rounded-xl bg-muted p-3 ring-1 ring-slate-100">
       <svg
         className="min-w-[760px]"
         viewBox={`0 0 ${width} ${height}`}
@@ -169,14 +169,14 @@ export function FinancePeriodChart({ data }: { data: FinanceDashboardSnapshot })
   ];
 
   return (
-    <section className="finance-motion-fade rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="finance-motion-fade rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
         title="Долги и оплаты по периодам"
         subtitle="Динамика оплат и задолженности за выбранный период"
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_330px] 2xl:grid-cols-[minmax(0,1fr)_380px]">
         {points.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-2 py-12 text-center text-sm text-slate-500 ring-1 ring-slate-100">
+          <p className="rounded-xl bg-muted px-2 py-12 text-center text-sm text-slate-500 ring-1 ring-slate-100">
             Нет данных за период
           </p>
         ) : (
@@ -188,7 +188,7 @@ export function FinancePeriodChart({ data }: { data: FinanceDashboardSnapshot })
             return (
               <div
                 key={item.label}
-                className={`rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100 ${
+                className={`rounded-xl bg-muted px-3 py-3 ring-1 ring-slate-100 ${
                   item.wide ? "sm:col-span-2 lg:col-span-1 2xl:col-span-2" : ""
                 }`}
               >

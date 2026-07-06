@@ -9,6 +9,7 @@ import {
 } from "../client-balances/client-balances.service";
 import { resolvePaymentMethodRefToLabel } from "../tenant-settings/finance-refs";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { sqlOrderMerchandiseNetReceivable } from "../orders/order-merchandise-net";
 import type { OrderDebtsListQuery } from "./order-debts.types";
 
 const PAYMENT_NOT_PENDING = Prisma.sql`COALESCE(p.workflow_status, 'confirmed') <> 'pending_confirmation'`;
@@ -99,7 +100,7 @@ export async function listOrderDebtsReport(
       SELECT
         o.id,
         o.client_id,
-        GREATEST(o.total_sum - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS remainder,
+        GREATEST(${sqlOrderMerchandiseNetReceivable("o")} - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS remainder,
         ship.shipped_at
       FROM orders o
       INNER JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}
@@ -158,11 +159,11 @@ export async function listOrderDebtsReport(
         o.warehouse_id,
         w.name AS warehouse_name,
         o.total_sum,
-        LEAST(COALESCE(a.sum_amt, 0), o.total_sum)::decimal(15,2) AS allocated_sum,
+        LEAST(COALESCE(a.sum_amt, 0), ${sqlOrderMerchandiseNetReceivable("o")})::decimal(15,2) AS allocated_sum,
         o.payment_method_ref,
         ship.shipped_at AS shipped_at,
         o.consignment_due_date,
-        GREATEST(o.total_sum - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS remainder,
+        GREATEST(${sqlOrderMerchandiseNetReceivable("o")} - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS remainder,
         COALESCE(cb.balance, 0)::decimal(15,2) AS client_balance
       FROM orders o
       INNER JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}

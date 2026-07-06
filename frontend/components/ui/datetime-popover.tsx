@@ -10,8 +10,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
-  type RefObject
+  useState
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -383,23 +382,6 @@ export function DateTimePickerField({
     [getCenterOffset, panelTime]
   );
 
-  const wheelAdjustPart = useCallback(
-    (part: "hour" | "minute", delta: number) => {
-      const [rawH, rawM] = panelTime.split(":");
-      let h = Number.parseInt(rawH ?? "0", 10);
-      let m = Number.parseInt(rawM ?? "0", 10);
-      if (!Number.isFinite(h)) h = 0;
-      if (!Number.isFinite(m)) m = 0;
-      if (part === "hour") {
-        h = (h + delta + 24) % 24;
-      } else {
-        m = (m + delta + 60) % 60;
-      }
-      setPanelTime(`${pad2(h)}:${pad2(m)}`);
-    },
-    [panelTime]
-  );
-
   useEffect(() => {
     if (!open || dateOnly || timePlacement !== "side") return;
     syncPickerScroll("hour", hourValue, "auto");
@@ -505,7 +487,7 @@ export function DateTimePickerField({
                           if (hourSnapTimerRef.current != null) window.clearTimeout(hourSnapTimerRef.current);
                           hourSnapTimerRef.current = window.setTimeout(() => snapAndPick("hour"), 100);
                         }}
-                        onWheel={(e) => {
+                        onWheel={() => {
                           if (!wheelTimeAdjust) return;
                           // Native wheel scroll gives smoother inertial movement.
                         }}
@@ -537,7 +519,7 @@ export function DateTimePickerField({
                           if (minuteSnapTimerRef.current != null) window.clearTimeout(minuteSnapTimerRef.current);
                           minuteSnapTimerRef.current = window.setTimeout(() => snapAndPick("minute"), 100);
                         }}
-                        onWheel={(e) => {
+                        onWheel={() => {
                           if (!wheelTimeAdjust) return;
                           // Native wheel scroll gives smoother inertial movement.
                         }}

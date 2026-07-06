@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { onAppAccessChanged } from "../auth/app-access.service";
 import { parseMobileConfigV1, type AgentMobileConfigV1 } from "./agent-mobile-config";
 import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
 import {
@@ -131,6 +132,10 @@ export async function patchExpeditor(
       where: { id: expeditorId },
       data
     });
+
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, expeditorId, input.app_access);
+    }
 
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };

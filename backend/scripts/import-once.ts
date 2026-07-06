@@ -2,8 +2,8 @@
  * BIR MARTA — barcha bo‘limlar ketma-ket, dublikatsiz (idempotent).
  *
  * Nima qiladi:
- *   [1/4]…[4/4] — zona/viloyat, savdo kanali, yo‘nalish, ombor, tenant.settings
- *   (ixtiyoriy) Xodimlar CSV
+ *   [1/4]…[4/4] — zona/viloyat, savdo kanali, yo‘nalish (5 ta), ombor, tenant.settings
+ *   (ixtiyoriy) Xodimlar CSV / Excel — **barcha qatorlar** import (har bir rol uchun 5 ta cheklovi yo‘q)
  *   (ixtiyoriy) Faol agentlar Excel «Активные агенты» (birinchida — SVR bog‘lanishi uchun)
  *   (ixtiyoriy) Faol eksportlar Excel «Активные экспедиторы»
  *   (ixtiyoriy) Supervayzerlar Excel «Супервайзеры» — «агент» ustunida agentlar **vergul** bilan; `;` `|` yangi qator avtomatik vergulga almashtiriladi

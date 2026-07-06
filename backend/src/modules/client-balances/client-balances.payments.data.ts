@@ -17,6 +17,7 @@ import {
 import { buildOrderCreatedLocalDateClause, parseIsoDateEndUtc } from "./client-balances.date";
 import { sprNormKeyForBuckets } from "./client-balances.payments.aggregate";
 import { normPayTypeKey, sqlIntIdToNumber } from "./client-balances.payments.util";
+import { DISCOUNT_SETTLEMENT_PAY_TYPE_KEY } from "./client-balances.constants";
 import type { ClientBalancePaymentTypeSummary } from "./client-balances.types";
 
 /**
@@ -41,10 +42,10 @@ export async function loadPaymentNetNormByClient(
       : Prisma.empty;
 
     const rows = await prisma.$queryRaw<
-      Array<{ client_id: number; payment_type: string; net: Prisma.Decimal }>
+      Array<{ client_id: number; payment_type: string; entry_kind: string; net: Prisma.Decimal }>
     >`
-      SELECT p.client_id, p.payment_type,
-        SUM(CASE WHEN p.entry_kind = 'payment' THEN p.amount
+      SELECT p.client_id, p.payment_type, p.entry_kind,
+        SUM(CASE WHEN p.entry_kind IN ('payment', 'discount_settlement') THEN p.amount
                  WHEN p.entry_kind = 'client_expense' THEN -p.amount
                  ELSE 0 END)::decimal(15,2) AS net
       FROM client_payments p
@@ -53,14 +54,17 @@ export async function loadPaymentNetNormByClient(
         AND p.deleted_at IS NULL
         ${PAYMENT_COUNTS_FOR_RECEIVABLE_NET}
         ${dateClause}
-      GROUP BY p.client_id, p.payment_type
+      GROUP BY p.client_id, p.payment_type, p.entry_kind
     `;
     for (const r of rows) {
       const cid = sqlIntIdToNumber(r.client_id);
       if (!Number.isFinite(cid)) continue;
-      const resolved =
-        resolvePaymentMethodRefToLabel(r.payment_type, entries) ?? (r.payment_type ?? "").trim();
-      const nk = normPayTypeKey(resolved);
+      const nk =
+        String(r.entry_kind ?? "") === "discount_settlement"
+          ? normPayTypeKey(DISCOUNT_SETTLEMENT_PAY_TYPE_KEY)
+          : normPayTypeKey(
+              resolvePaymentMethodRefToLabel(r.payment_type, entries) ?? (r.payment_type ?? "").trim()
+            );
       let inner = map.get(cid);
       if (!inner) {
         inner = new Map();

@@ -95,20 +95,6 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
     listActiveSalesChannelLabels(tenantId),
     listActiveTradeDirectionLabels(tenantId)
   ]);
-  const salesFromSettings = stringArrayFromUnknown(ref.sales_channels);
-  const tradeFromSettings = stringArrayFromUnknown(ref.trade_directions);
-  const mergeStrLists = (a: string[], b: string[]): string[] => {
-    const s = new Set<string>();
-    for (const x of a) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    for (const x of b) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    return [...s].sort((x, y) => x.localeCompare(y, "ru"));
-  };
 
   const profile: TenantProfileDto = {
     name: row.name,
@@ -133,8 +119,8 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
       client_format_entries: resolveClientRefEntries(ref, "client_format_entries", client_formats, "fmt"),
       client_type_entries: resolveClientRefEntries(ref, "client_type_entries", client_type_codes, "typ"),
       client_category_entries: resolveClientRefEntries(ref, "client_category_entries", client_categories, "cat"),
-      sales_channels: mergeStrLists(salesFromSettings, dbSalesLabels),
-      trade_directions: mergeStrLists(tradeFromSettings, dbTradeLabels),
+      sales_channels: dbSalesLabels,
+      trade_directions: dbTradeLabels,
       client_product_category_refs: stringArrayFromUnknown(ref.client_product_category_refs),
       client_districts: stringArrayFromUnknown(ref.client_districts),
       client_cities: stringArrayFromUnknown(ref.client_cities),

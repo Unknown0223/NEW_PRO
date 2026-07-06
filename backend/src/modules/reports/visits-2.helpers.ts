@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import type { Visits2Filters } from "./visits-2.types";
@@ -86,6 +87,20 @@ export function buildActorClientScopeSql(tenantId: number, actor?: ReportActor):
           AND su_a.supervisor_user_id = ${actor.userId}
       )
     )`;
+  }
+  if (
+    actor?.userId &&
+    (actor.role === "manager" || actor.role === "regional_manager")
+  ) {
+    const primary = buildScopedAgentExistsSql(tenantId, Prisma.sql`c.agent_id`, actor);
+    const assign = Prisma.sql`EXISTS (
+      SELECT 1 FROM client_agent_assignments caa_m
+      WHERE caa_m.client_id = c.id
+        AND caa_m.tenant_id = ${tenantId}
+        AND caa_m.agent_id IS NOT NULL
+        AND ${buildScopedAgentExistsSql(tenantId, Prisma.sql`caa_m.agent_id`, actor)}
+    )`;
+    return Prisma.sql`(${primary} OR ${assign})`;
   }
   return Prisma.sql`TRUE`;
 }

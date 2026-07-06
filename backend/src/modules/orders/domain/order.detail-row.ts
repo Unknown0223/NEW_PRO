@@ -9,6 +9,11 @@ import {
   sumBonusQty
 } from "./order.detail-bonus";
 import { loadOrdersFinanceEnrichment } from "./order.detail-finance";
+import { parseAppliedBonusRulesSnapshot } from "../../bonus-rules/bonus-rules.snapshot";
+import {
+  applyOrderLevelDiscountPctToItems,
+  orderHasAppliedDiscountRule
+} from "../order-merchandise-net";
 import { enrichItemsBonusDisplay } from "./order.detail-items-bonus";
 import type { OrderDetailLoaded, OrderDetailRow, OrderItemRow } from "./order.types";
 
@@ -30,6 +35,24 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     client_name: cl.name,
     client_code: cl.client_code?.trim() || null,
     client_legal_name: cl.legal_name?.trim() || null,
+    client_phone: cl.phone?.trim() || null,
+    client_inn: cl.inn?.trim() || null,
+    client_address: cl.address?.trim() || null,
+    order_location: cl.landmark?.trim() || null,
+    sales_channel: cl.sales_channel?.trim() || null,
+    volume_m3: o.items
+      .filter((i) => !i.is_bonus)
+      .reduce((acc, i) => {
+        const vol = i.product.volume_m3;
+        return vol != null ? acc.add(i.qty.mul(vol)) : acc;
+      }, new Prisma.Decimal(0))
+      .toString(),
+    cumulative_bonus: null,
+    source_order_numbers: [],
+    source_order_ids: [],
+    returned_at: null,
+    creation_channel: "web",
+    list_created_at: o.created_at.toISOString(),
     warehouse_id: o.warehouse_id,
     warehouse_name: o.warehouse?.name ?? null,
     agent_name: o.agent?.name ?? null,
@@ -61,10 +84,14 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     is_consignment: o.is_consignment ?? false,
     consignment_due_date: o.consignment_due_date ? o.consignment_due_date.toISOString() : null,
     apply_bonus: o.applied_auto_bonus_rule_ids.length > 0,
+    applied_bonus_rules_snapshot: parseAppliedBonusRulesSnapshot(o.applied_bonus_rules_snapshot),
     status: o.status,
+    approval_status: o.approval_status ?? null,
     total_sum: o.total_sum.toString(),
     bonus_qty: sumBonusQty(o.items),
     discount_sum: o.discount_sum.toString(),
+    discount_alert: o.discount_alert ?? null,
+    bonus_alert: o.bonus_alert ?? null,
     bonus_sum: o.bonus_sum.toString(),
     balance: null,
     debt: null,
@@ -191,12 +218,25 @@ export async function enrichOrderDetailRow(
       client_id: o.client_id,
       order_type: o.order_type ?? "order",
       status: o.status,
-      total_sum: o.total_sum
+      total_sum: o.total_sum,
+      discount_sum: o.discount_sum,
+      applied_auto_bonus_rule_ids: o.applied_auto_bonus_rule_ids ?? []
     }
   ]);
   const x = fin.get(o.id);
+  let items = base.items;
+  if (o.discount_sum.gt(0)) {
+    const hasDiscountRule = await orderHasAppliedDiscountRule(
+      tenantId,
+      o.applied_auto_bonus_rule_ids ?? []
+    );
+    if (!hasDiscountRule) {
+      items = applyOrderLevelDiscountPctToItems(items, o.discount_sum) as OrderItemRow[];
+    }
+  }
   return {
     ...base,
+    items,
     payment_method_label,
     bonus_gift_selections,
     bonus_gift_swap_options: swap,

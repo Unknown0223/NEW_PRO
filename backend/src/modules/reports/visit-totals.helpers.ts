@@ -10,6 +10,7 @@ import {
 import { ORDER_STATUSES } from "../orders/order-status";
 import type { DayMetricRow, VisitTotalsFilters, VisitTotalsRow } from "./visit-totals.types";
 import { EXPORT_CAP, MAX_RANGE_DAYS, VISIT_TOTALS_ORDER_STATUS_IDS } from "./visit-totals.types";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 
 export function intList(v?: string): number[] {
   return (v ?? "")
@@ -165,12 +166,7 @@ export async function listAgentsForGrid(
   vf: VisitTotalsFilters,
   actor?: ReportActor
 ): Promise<Array<{ id: number; name: string; code: string | null; is_active: boolean }>> {
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, role: "agent" }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId }
-        : { tenant_id: tenantId, role: "agent" };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const list = await prisma.user.findMany({
     where: whereAgent,

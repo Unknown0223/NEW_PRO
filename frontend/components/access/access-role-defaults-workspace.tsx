@@ -3,14 +3,14 @@
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ChevronsDownUp, Link2, Search } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { displayAccessDescriptionShort } from "@/lib/access-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TableSortButton, type TableSortDir } from "@/components/ui/table-sort-button";
+import { cn } from "@/lib/utils";
 
 type RoleDefaultRow = {
   id: number;
@@ -24,13 +24,39 @@ type CatalogRow = {
   key: string;
   module: string;
   section: string | null;
+  action: string | null;
   description: string | null;
   parent_path: string;
 };
 
-type MatrixSortKey = "description" | "parent" | "section" | "key";
-
 const matrixCollator = new Intl.Collator("ru", { sensitivity: "base", numeric: true });
+
+/** CRUD grid ustunlari — backend `permission-model` bilan bir xil tartib/yorliq. */
+const ACTION_COLUMNS: { action: string; labelRu: string; short: string }[] = [
+  { action: "view", labelRu: "Просмотр", short: "Просм." },
+  { action: "create", labelRu: "Создание", short: "Созд." },
+  { action: "update", labelRu: "Изменение", short: "Изм." },
+  { action: "delete", labelRu: "Удаление", short: "Удал." },
+  { action: "copy", labelRu: "Копирование/Выгрузка", short: "Копир." },
+  { action: "activate", labelRu: "Активация", short: "Актив." },
+  { action: "deactivate", labelRu: "Деактивация", short: "Деакт." },
+  { action: "import", labelRu: "Импорт", short: "Импорт" },
+  { action: "status", labelRu: "Изменение статуса", short: "Статус" },
+  { action: "assign", labelRu: "Прикрепление", short: "Прикр." },
+  { action: "approve", labelRu: "Утверждение", short: "Утв." },
+  { action: "transfer", labelRu: "Перемещение", short: "Перем." },
+  { action: "history", labelRu: "История", short: "Истор." }
+];
+const ACTION_INDEX: Record<string, number> = Object.fromEntries(ACTION_COLUMNS.map((c, i) => [c.action, i]));
+
+type GridSection = {
+  /** RU bo'lim yorlig'i (Раздел). */
+  sectionLabel: string;
+  /** «Родитель». */
+  parent: string;
+  /** action → permission key. */
+  keyByAction: Map<string, string>;
+};
 
 function shortenPathLabel(path: string, max = 40): string {
   const t = path.trim();
@@ -38,22 +64,6 @@ function shortenPathLabel(path: string, max = 40): string {
   const head = Math.max(8, Math.floor(max * 0.55));
   const tail = max - head - 1;
   return `${t.slice(0, head)}…${t.slice(-tail)}`;
-}
-
-function compareCatalogRows(a: CatalogRow, b: CatalogRow, key: MatrixSortKey, dir: TableSortDir): number {
-  const mult = dir === "asc" ? 1 : -1;
-  let c = 0;
-  if (key === "description") {
-    c = matrixCollator.compare(displayAccessDescriptionShort(a.description, a.key), displayAccessDescriptionShort(b.description, b.key)) * mult;
-  } else if (key === "parent") {
-    c = matrixCollator.compare(a.parent_path ?? "", b.parent_path ?? "") * mult;
-  } else if (key === "section") {
-    c = matrixCollator.compare(displayAccessDescriptionShort(a.section, "—"), displayAccessDescriptionShort(b.section, "—")) * mult;
-  } else {
-    c = matrixCollator.compare(a.key, b.key) * mult;
-  }
-  if (c !== 0) return c;
-  return matrixCollator.compare(a.key, b.key);
 }
 
 function RoleDefaultsInfoEmptyState() {
@@ -67,42 +77,32 @@ function RoleDefaultsInfoEmptyState() {
   );
 }
 
-export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string }) {
+export function AccessRoleDefaultsWorkspace({
+  tenantSlug,
+  className
+}: {
+  tenantSlug: string;
+  className?: string;
+}) {
   const qc = useQueryClient();
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [localPermissions, setLocalPermissions] = useState<Set<string>>(() => new Set());
   const [groupExpanded, setGroupExpanded] = useState<Set<string>>(() => new Set());
   const [tableSearch, setTableSearch] = useState("");
   const [filterParent, setFilterParent] = useState("");
-  const [matrixSort, setMatrixSort] = useState<null | { key: MatrixSortKey; dir: TableSortDir }>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const headScrollRef = useRef<HTMLDivElement>(null);
-  const bodyScrollRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRoleIdRef = useRef<number | null>(null);
-
-  const onHeadScroll = useCallback(() => {
-    const head = headScrollRef.current;
-    const body = bodyScrollRef.current;
-    if (!head || !body) return;
-    if (Math.abs(body.scrollLeft - head.scrollLeft) < 1) return;
-    body.scrollLeft = head.scrollLeft;
-  }, []);
-
-  const onBodyScroll = useCallback(() => {
-    const head = headScrollRef.current;
-    const body = bodyScrollRef.current;
-    if (!head || !body) return;
-    if (Math.abs(head.scrollLeft - body.scrollLeft) < 1) return;
-    head.scrollLeft = body.scrollLeft;
-  }, []);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollTopRef = useRef(0);
+  const skipScrollRestoreRef = useRef(false);
 
   const rolesQ = useQuery({
     queryKey: ["access-role-defaults", tenantSlug],
     enabled: Boolean(tenantSlug),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data } = await api.get<{ data: RoleDefaultRow[] }>(`/api/${tenantSlug}/access/role-defaults`);
       return data.data;
@@ -149,6 +149,8 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
 
   useEffect(() => {
     setGroupExpanded(new Set());
+    skipScrollRestoreRef.current = true;
+    tableScrollTopRef.current = 0;
   }, [selectedRoleId]);
 
   useEffect(() => {
@@ -179,8 +181,19 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
       }
       setSaveError(getUserFacingError(err, "Не удалось сохранить настройки роли."));
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["access-role-defaults", tenantSlug] });
+    onSuccess: (_data, variables) => {
+      qc.setQueryData<RoleDefaultRow[]>(["access-role-defaults", tenantSlug], (old) => {
+        if (!old) return old;
+        return old.map((r) =>
+          r.id === variables.roleId
+            ? {
+                ...r,
+                permissions: variables.permissions,
+                operations_count: variables.permissions.length
+              }
+            : r
+        );
+      });
     }
   });
 
@@ -226,43 +239,100 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
     });
   }, [catalogQ.data, tableSearch, filterParent]);
 
-  const sortedFlat = useMemo(() => {
-    if (!matrixSort) return filteredFlat;
-    return [...filteredFlat].sort((a, b) => compareCatalogRows(a, b, matrixSort.key, matrixSort.dir));
-  }, [filteredFlat, matrixSort]);
-
-  const matrixRowGroups = useMemo(() => {
-    const m = new Map<string, CatalogRow[]>();
-    for (const row of sortedFlat) {
-      const k = row.parent_path?.trim() || "—";
-      const arr = m.get(k) ?? [];
-      arr.push(row);
-      m.set(k, arr);
+  /** CRUD grid: «Родитель» bo'yicha guruh → har bir bo'lim qatori (Раздел) × amal ustunlari. */
+  const gridGroups = useMemo(() => {
+    type Acc = { parent: string; sections: Map<string, GridSection>; legacy: CatalogRow[] };
+    const byParent = new Map<string, Acc>();
+    for (const row of filteredFlat) {
+      const parent = row.parent_path?.trim() || "—";
+      let acc = byParent.get(parent);
+      if (!acc) {
+        acc = { parent, sections: new Map(), legacy: [] };
+        byParent.set(parent, acc);
+      }
+      if (row.action && ACTION_INDEX[row.action] != null) {
+        const label = (row.section && row.section.trim()) || parent;
+        let gs = acc.sections.get(label);
+        if (!gs) {
+          gs = { sectionLabel: label, parent, keyByAction: new Map() };
+          acc.sections.set(label, gs);
+        }
+        gs.keyByAction.set(row.action, row.key);
+      } else {
+        acc.legacy.push(row);
+      }
     }
-    const keys = [...m.keys()].sort((a, b) => matrixCollator.compare(a, b));
-    return keys.map((parent) => ({ parent, rows: m.get(parent)! }));
-  }, [sortedFlat]);
+    const parents = [...byParent.keys()].sort((a, b) => matrixCollator.compare(a, b));
+    return parents.map((parent) => {
+      const acc = byParent.get(parent)!;
+      const sections = [...acc.sections.values()].sort((a, b) =>
+        matrixCollator.compare(a.sectionLabel, b.sectionLabel)
+      );
+      return { parent, sections, legacy: acc.legacy };
+    });
+  }, [filteredFlat]);
 
-  const groupKeysSig = useMemo(() => JSON.stringify(matrixRowGroups.map((g) => g.parent)), [matrixRowGroups]);
+  /** Faqat joriy ko'rinishda ishlatilgan amal ustunlari (bo'sh ustunlarsiz). */
+  const activeActionColumns = useMemo(() => {
+    const used = new Set<string>();
+    for (const g of gridGroups) {
+      for (const s of g.sections) {
+        for (const a of s.keyByAction.keys()) used.add(a);
+      }
+    }
+    return ACTION_COLUMNS.filter((c) => used.has(c.action));
+  }, [gridGroups]);
+
+  const groupKeysSig = useMemo(() => JSON.stringify(gridGroups.map((g) => g.parent)), [gridGroups]);
 
   useEffect(() => {
     setGroupExpanded(new Set());
+    skipScrollRestoreRef.current = true;
+    tableScrollTopRef.current = 0;
   }, [groupKeysSig]);
 
+  useLayoutEffect(() => {
+    if (skipScrollRestoreRef.current) {
+      skipScrollRestoreRef.current = false;
+      return;
+    }
+    const el = tableScrollRef.current;
+    if (!el) return;
+    el.scrollTop = tableScrollTopRef.current;
+  }, [localPermissions, saveMut.isPending]);
+
+  /** Toggle fokusida brauzer scroll qilmasin. */
+  const preventToggleFocusScroll = (e: MouseEvent) => {
+    e.preventDefault();
+  };
+
+  const captureTableScroll = () => {
+    tableScrollTopRef.current = tableScrollRef.current?.scrollTop ?? 0;
+  };
+
   const groupsAllExpanded = useMemo(
-    () => matrixRowGroups.length > 0 && matrixRowGroups.every((g) => groupExpanded.has(g.parent)),
-    [matrixRowGroups, groupExpanded]
+    () => gridGroups.length > 0 && gridGroups.every((g) => groupExpanded.has(g.parent)),
+    [gridGroups, groupExpanded]
   );
 
-  const toggleSort = (key: MatrixSortKey) => {
-    setMatrixSort((prev) => {
-      if (!prev || prev.key !== key) return { key, dir: "asc" };
-      return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+  /** Bir bo'lim qatoridagi mavjud amallarni hammasini yoqish/o'chirish. */
+  const toggleSectionRow = (section: GridSection, checked: boolean) => {
+    if (!selectedRole) return;
+    captureTableScroll();
+    setLocalPermissions((prev) => {
+      const n = new Set(prev);
+      for (const key of section.keyByAction.values()) {
+        if (checked) n.add(key);
+        else n.delete(key);
+      }
+      schedulePersist(selectedRole.id, n);
+      return n;
     });
   };
 
   const togglePermission = (key: string, checked: boolean) => {
     if (!selectedRole) return;
+    captureTableScroll();
     setLocalPermissions((prev) => {
       const n = new Set(prev);
       if (checked) n.add(key);
@@ -273,9 +343,14 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
   };
 
   return (
-    <div className="access-surface grid min-h-0 gap-3 p-3 md:grid-cols-[minmax(260px,320px)_1fr] md:items-stretch md:gap-4">
-      <div className="access-left-panel flex min-h-[min(360px,calc(100vh-200px))] min-w-0 flex-col p-2">
-        <div className="access-split-scroll-panel">
+    <div
+      className={cn(
+        "access-surface grid min-h-0 flex-1 gap-3 p-3 md:grid-cols-[minmax(260px,320px)_1fr] md:items-stretch md:gap-4",
+        className
+      )}
+    >
+      <div className="access-left-panel flex min-h-0 min-w-0 flex-col p-2">
+        <div className="access-split-scroll-panel flex min-h-0 flex-1 flex-col">
           <div className="access-list-cap flex justify-between gap-2">
             <span>Роли по умолчанию</span>
             <span className="font-normal tabular-nums text-muted-foreground">{(rolesQ.data ?? []).length}</span>
@@ -323,7 +398,7 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
         </div>
       </div>
 
-      <div className="access-right-panel flex h-full min-h-0 min-w-0 flex-col gap-3 p-3 md:p-4">
+      <div className="access-right-panel flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden p-3 md:p-4">
         {!selectedRole ? (
           <RoleDefaultsInfoEmptyState />
         ) : catalogQ.isLoading ? (
@@ -353,11 +428,11 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
                   size="sm"
                   variant="outline"
                   className="h-8 shrink-0 gap-1 text-xs"
-                  disabled={matrixRowGroups.length === 0}
+                  disabled={gridGroups.length === 0}
                   onClick={() => {
-                    if (matrixRowGroups.length === 0) return;
+                    if (gridGroups.length === 0) return;
                     if (groupsAllExpanded) setGroupExpanded(new Set());
-                    else setGroupExpanded(new Set(matrixRowGroups.map((g) => g.parent)));
+                    else setGroupExpanded(new Set(gridGroups.map((g) => g.parent)));
                   }}
                 >
                   <ChevronsDownUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -397,79 +472,42 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
               </div>
             </div>
 
-            {matrixRowGroups.length === 0 ? (
+            {gridGroups.length === 0 ? (
               <RoleDefaultsInfoEmptyState />
             ) : (
-              <div className="access-split-scroll-panel min-h-[280px] flex-1">
-                <div ref={headScrollRef} className="access-split-scroll-head" onScroll={onHeadScroll}>
-                  <table className="access-matrix-table">
-                    <colgroup>
-                      <col className="min-w-[8rem]" />
-                      <col className="min-w-[6rem] w-[10rem]" />
-                      <col className="min-w-[8rem] w-[12rem]" />
-                      <col className="w-[10rem]" />
-                      <col className="w-[8.5rem]" />
-                    </colgroup>
-                    <thead className="app-table-thead">
+              <div
+                ref={tableScrollRef}
+                className="access-split-scroll-panel min-h-0 flex-1 overflow-auto overscroll-contain"
+                onScroll={() => {
+                  tableScrollTopRef.current = tableScrollRef.current?.scrollTop ?? 0;
+                }}
+              >
+                  <table className="access-matrix-table w-full">
+                    <thead className="app-table-thead sticky top-0 z-10 bg-card">
                       <tr>
                         <th scope="col" className="px-2 py-1 text-left align-middle text-[10px] font-semibold leading-tight">
-                          <TableSortButton
-                            label="Описание"
-                            active={matrixSort?.key === "description"}
-                            dir={matrixSort?.key === "description" ? matrixSort.dir : "asc"}
-                            onClick={() => toggleSort("description")}
-                          />
+                          Раздел
                         </th>
-                        <th scope="col" className="px-2 py-1 text-left align-middle text-[10px] font-semibold leading-tight">
-                          <TableSortButton
-                            label="Родитель"
-                            active={matrixSort?.key === "parent"}
-                            dir={matrixSort?.key === "parent" ? matrixSort.dir : "asc"}
-                            onClick={() => toggleSort("parent")}
-                          />
-                        </th>
-                        <th scope="col" className="px-2 py-1 text-left align-middle text-[10px] font-semibold leading-tight">
-                          <TableSortButton
-                            label="Раздел"
-                            active={matrixSort?.key === "section"}
-                            dir={matrixSort?.key === "section" ? matrixSort.dir : "asc"}
-                            onClick={() => toggleSort("section")}
-                          />
-                        </th>
-                        <th
-                          scope="col"
-                          className="w-[10rem] px-1.5 py-1 text-center align-middle text-[10px] font-semibold leading-tight"
-                        >
-                          <div className="flex flex-col items-center justify-center gap-0.5">
-                            <span className="max-w-full text-center text-[8px] font-semibold leading-none">
-                              В роли по умолчанию
-                            </span>
-                            <span className="text-[9px] font-normal text-muted-foreground">вкл / выкл</span>
-                          </div>
-                        </th>
-                        <th scope="col" className="w-[8.5rem] px-2 py-1 text-center text-[10px] font-semibold leading-tight">
-                          Ключ
-                        </th>
+                        {activeActionColumns.map((c) => (
+                          <th
+                            key={c.action}
+                            scope="col"
+                            className="w-[5.5rem] px-1 py-1 text-center align-middle text-[10px] font-semibold leading-tight"
+                            title={c.labelRu}
+                          >
+                            {c.short}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
-                  </table>
-                </div>
-                <div ref={bodyScrollRef} className="access-split-scroll-body" onScroll={onBodyScroll}>
-                  <table className="access-matrix-table">
-                    <colgroup>
-                      <col className="min-w-[8rem]" />
-                      <col className="min-w-[6rem] w-[10rem]" />
-                      <col className="min-w-[8rem] w-[12rem]" />
-                      <col className="w-[10rem]" />
-                      <col className="w-[8.5rem]" />
-                    </colgroup>
                     <tbody>
-                      {matrixRowGroups.map((grp) => {
+                      {gridGroups.map((grp) => {
                         const open = groupExpanded.has(grp.parent);
+                        const sectionCount = grp.sections.length + grp.legacy.length;
                         return (
                           <Fragment key={grp.parent}>
                             <tr className="border-t border-border/60 bg-muted/35">
-                              <td colSpan={5} className="px-2 py-1">
+                              <td colSpan={activeActionColumns.length + 1} className="px-2 py-1">
                                 <button
                                   type="button"
                                   className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-[11px] font-semibold text-foreground hover:bg-muted/40"
@@ -490,59 +528,106 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
                                   <span className="min-w-0 truncate" title={grp.parent}>
                                     {shortenPathLabel(grp.parent)}
                                   </span>
-                                  <span className="shrink-0 font-normal text-muted-foreground">({grp.rows.length})</span>
+                                  <span className="shrink-0 font-normal text-muted-foreground">({sectionCount})</span>
                                 </button>
                               </td>
                             </tr>
                             {open
-                              ? grp.rows.map((row) => {
-                                  const inRole = localPermissions.has(row.key);
+                              ? grp.sections.map((section) => {
+                                  const allOn =
+                                    section.keyByAction.size > 0 &&
+                                    [...section.keyByAction.values()].every((k) => localPermissions.has(k));
                                   return (
-                                    <tr key={row.key} className="border-t border-border/50 transition-colors hover:bg-muted/25">
+                                    <tr
+                                      key={`${grp.parent}::${section.sectionLabel}`}
+                                      className="border-t border-border/50 transition-colors hover:bg-muted/25"
+                                    >
                                       <td
                                         className="min-w-0 break-words px-2 py-2 align-middle leading-snug text-xs"
-                                        title={(row.description && row.description.trim()) || undefined}
+                                        title={section.sectionLabel}
+                                      >
+                                        <label
+                                          className="flex cursor-pointer items-center gap-2"
+                                          onMouseDown={preventToggleFocusScroll}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="h-3.5 w-3.5 accent-teal-600"
+                                            checked={allOn}
+                                            title="Все доступные операции этого раздела"
+                                            onChange={(e) => toggleSectionRow(section, e.target.checked)}
+                                          />
+                                          <span>{section.sectionLabel}</span>
+                                        </label>
+                                      </td>
+                                      {activeActionColumns.map((c) => {
+                                        const key = section.keyByAction.get(c.action);
+                                        if (!key) {
+                                          return (
+                                            <td key={c.action} className="px-1 py-2 text-center align-middle text-muted-foreground/40">
+                                              —
+                                            </td>
+                                          );
+                                        }
+                                        const inRole = localPermissions.has(key);
+                                        return (
+                                          <td key={c.action} className="px-1 py-2 text-center align-middle">
+                                            <label
+                                              className="relative mx-auto flex h-5 w-9 cursor-pointer items-center justify-center rounded-full"
+                                              onMouseDown={preventToggleFocusScroll}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                role="switch"
+                                                className="peer sr-only"
+                                                checked={inRole}
+                                                title={`${section.sectionLabel} · ${c.labelRu} (${key})`}
+                                                onChange={(e) => togglePermission(key, e.target.checked)}
+                                              />
+                                              <span
+                                                className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600"
+                                                aria-hidden
+                                              />
+                                              <span
+                                                className="pointer-events-none absolute left-0.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1rem]"
+                                                aria-hidden
+                                              />
+                                            </label>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })
+                              : null}
+                            {open && grp.legacy.length > 0
+                              ? grp.legacy.map((row) => {
+                                  const inRole = localPermissions.has(row.key);
+                                  return (
+                                    <tr key={row.key} className="border-t border-dashed border-border/40 hover:bg-muted/20">
+                                      <td
+                                        className="min-w-0 break-words px-2 py-1.5 align-middle text-[11px] text-muted-foreground"
+                                        title={(row.description && row.description.trim()) || row.key}
                                       >
                                         {displayAccessDescriptionShort(row.description, row.key)}
                                       </td>
-                                      <td
-                                        className="min-w-0 break-words px-2 py-2 align-middle text-xs text-muted-foreground"
-                                        title={row.parent_path?.trim() || undefined}
-                                      >
-                                        {row.parent_path?.trim() || "—"}
-                                      </td>
-                                      <td
-                                        className="min-w-0 break-words px-2 py-2 align-middle text-xs text-muted-foreground"
-                                        title={(row.section && row.section.trim()) || undefined}
-                                      >
-                                        {displayAccessDescriptionShort(row.section, "—")}
-                                      </td>
-                                      <td className="w-[10rem] px-2 py-2 text-center align-middle">
-                                        <label className="relative mx-auto flex h-6 w-11 cursor-pointer items-center justify-center rounded-full">
+                                      <td colSpan={Math.max(1, activeActionColumns.length)} className="px-1 py-1.5 text-left align-middle">
+                                        <label
+                                          className="inline-flex cursor-pointer items-center gap-2"
+                                          onMouseDown={preventToggleFocusScroll}
+                                        >
                                           <input
                                             type="checkbox"
                                             role="switch"
                                             className="peer sr-only"
                                             checked={inRole}
-                                            title={
-                                              inRole
-                                                ? "Операция входит в роль по умолчанию. Выключите — убрать из роли."
-                                                : "Операция не в роли. Включите — добавить в роль по умолчанию."
-                                            }
                                             onChange={(e) => togglePermission(row.key, e.target.checked)}
                                           />
-                                          <span
-                                            className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:opacity-50"
-                                            aria-hidden
-                                          />
-                                          <span
-                                            className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
-                                            aria-hidden
-                                          />
+                                          <span className="relative inline-flex h-5 w-9 items-center rounded-full bg-muted transition-colors peer-checked:bg-teal-600">
+                                            <span className="absolute left-0.5 h-3.5 w-3.5 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform peer-checked:translate-x-[1rem]" />
+                                          </span>
+                                          <span className="text-[10px] text-muted-foreground/70">прочая операция</span>
                                         </label>
-                                      </td>
-                                      <td className="w-[8.5rem] px-2 py-2 text-center align-middle font-mono text-[10px] text-muted-foreground">
-                                        {row.key}
                                       </td>
                                     </tr>
                                   );
@@ -553,7 +638,6 @@ export function AccessRoleDefaultsWorkspace({ tenantSlug }: { tenantSlug: string
                       })}
                     </tbody>
                   </table>
-                </div>
               </div>
             )}
           </div>

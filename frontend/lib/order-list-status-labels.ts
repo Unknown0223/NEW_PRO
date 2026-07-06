@@ -40,7 +40,8 @@ export function orderListStatusStyle(
       picking: { bg: "#e0e7ff", text: "#3730a3", border: "#c7d2fe" },
       delivering: { bg: "#fed7aa", text: "#9a3412", border: "#fdba74" },
       delivered: { bg: "#bbf7d0", text: "#166534", border: "#86efac" },
-      returned: { bg: "#f9a8d4", text: "#9d174d", border: "#f472b6" },
+      // «В процессе возврата» — «Отгружен» bilan bir xil rang (to'q sariq).
+      returned: { bg: "#fed7aa", text: "#9a3412", border: "#fdba74" },
       cancelled: { bg: "#e5e7eb", text: "#4b5563", border: "#d1d5db" }
     };
     return returnStyles[status] ?? returnStyles.new;

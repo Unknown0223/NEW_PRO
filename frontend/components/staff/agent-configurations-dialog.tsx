@@ -30,6 +30,25 @@ import {
   emptyMobileDraft,
   type AgentMobileConfigDraft
 } from "@/components/staff/agent-mobile-config-types";
+import { defaultAgentMobileDraft } from "@/components/staff/agent-mobile-config-defaults-draft";
+import {
+  countMobileConfigPatchSections,
+  diffMobileConfigDraft
+} from "@/components/staff/agent-mobile-config-diff";
+import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
+import {
+  AGENT_ROUTE_DEFAULTS,
+  ROUTE_COOLDOWN_OPTIONS,
+  effectiveDailyVisitLimit,
+  effectiveRouteCooldownDays
+} from "@/components/staff/agent-mobile-config-route-defaults";
+import {
+  AGENT_SYNC_WINDOW_DEFAULTS,
+  effectiveSyncWindowFrom,
+  effectiveSyncWindowTo,
+  formatSyncWindowSummary
+} from "@/components/staff/agent-mobile-config-sync-defaults";
+import { TimePickerField, normalizeHmInput } from "@/components/ui/time-picker-field";
 
 export type AgentConfigDialogRow = {
   id: number;
@@ -84,6 +103,7 @@ const CONFIG_TABS = [
   { id: "client", label: "Клиент" },
   { id: "gps", label: "Gps" },
   { id: "outlet", label: "Outlet (План)" },
+  { id: "route", label: "Маршрут" },
   { id: "product_list", label: "Настройки список продуктов" },
   { id: "photo", label: "Фото" },
   { id: "misc", label: "Прочие настройки" },
@@ -185,6 +205,9 @@ type Props = {
   paymentMethodEntries?: AgentConfigPaymentMethodEntry[];
   /** Супервайзер: только «Клиент», «Gps», «Прочие настройки» */
   variant?: AgentConfigurationsVariant;
+  /** Guruh: standart ko‘rinish, faqat o‘zgartirilgan maydonlar saqlanadi */
+  bulkMode?: boolean;
+  bulkSummary?: string;
 };
 
 export function AgentConfigurationsDialog({
@@ -194,11 +217,15 @@ export function AgentConfigurationsDialog({
   onSave,
   saving = false,
   paymentMethodEntries,
-  variant = "agent"
+  variant = "agent",
+  bulkMode = false,
+  bulkSummary
 }: Props) {
   const isSupervisorUi = variant === "supervisor";
   const [tab, setTab] = useState<TabId>("client");
   const [draft, setDraft] = useState<AgentMobileConfigDraft>(() => emptyMobileDraft());
+  const [baselineDraft, setBaselineDraft] = useState<AgentMobileConfigDraft>(() => emptyMobileDraft());
+  const [localSaveError, setLocalSaveError] = useState<string | null>(null);
   const [miscPaySearch, setMiscPaySearch] = useState("");
   const [vanPaySearch, setVanPaySearch] = useState("");
 
@@ -208,12 +235,21 @@ export function AgentConfigurationsDialog({
   );
 
   useEffect(() => {
-    if (!open || !agent) return;
-    setDraft(cloneMobileFromRow(agent.agent_entitlements));
+    if (!open) return;
+    if (bulkMode) {
+      const baseline = defaultAgentMobileDraft();
+      setBaselineDraft(baseline);
+      setDraft(baseline);
+    } else if (agent) {
+      const fromRow = cloneMobileFromRow(agent.agent_entitlements);
+      setBaselineDraft(fromRow);
+      setDraft(fromRow);
+    }
     setTab("client");
     setMiscPaySearch("");
     setVanPaySearch("");
-  }, [open, agent]);
+    setLocalSaveError(null);
+  }, [open, agent, bulkMode]);
 
   useEffect(() => {
     if (!open || variant !== "supervisor") return;
@@ -255,22 +291,50 @@ export function AgentConfigurationsDialog({
     [draft.van_selling?.payment_acceptance_method_ids]
   );
 
-  if (!agent) return null;
+  const patchPreview = useMemo(
+    () => (bulkMode ? diffMobileConfigDraft(baselineDraft, draft) : null),
+    [bulkMode, baselineDraft, draft]
+  );
+  const patchSectionCount = patchPreview ? countMobileConfigPatchSections(patchPreview) : 0;
 
-  const agentDisplayName = agent.fio?.trim() || "Без имени";
+  if (!open) return null;
+  if (!bulkMode && !agent) return null;
+
+  const agentDisplayName = bulkMode
+    ? "Групповая конфигурация"
+    : agent?.fio?.trim() || "Без имени";
 
   const handleReset = () => {
-    setDraft(cloneMobileFromRow(agent.agent_entitlements));
+    setDraft(bulkMode ? defaultAgentMobileDraft() : cloneMobileFromRow(agent!.agent_entitlements));
   };
 
   const handleSave = async () => {
-    const prev = agent.agent_entitlements ?? {};
-    await onSave({
-      ...prev,
-      mobile_config: draft
-    });
-    onClose();
+    setLocalSaveError(null);
+    try {
+      if (bulkMode) {
+        const patch = diffMobileConfigDraft(baselineDraft, draft);
+        if (!patch) {
+          setLocalSaveError("Нет изменений для сохранения. Отредактируйте хотя бы одно поле.");
+          return;
+        }
+        await onSave({ mobile_config: patch });
+        onClose();
+        return;
+      }
+      const prev = agent!.agent_entitlements ?? {};
+      await onSave({
+        ...prev,
+        mobile_config: draft
+      });
+      onClose();
+    } catch (err) {
+      setLocalSaveError(
+        bulkMode ? messageFromAgentsBulkError(err, "config") : messageFromAgentsBulkError(err)
+      );
+    }
   };
+
+  const displaySaveError = localSaveError;
 
   const panel = (() => {
     const hideAgentOnlyMisc = isSupervisorUi;
@@ -285,9 +349,10 @@ export function AgentConfigurationsDialog({
                   [
                     ["can_edit", "Редактировать клиента"],
                     ["can_create", "Создать клиента"],
+                    ["can_change_client_location", "Разрешить изменение координат клиента"],
                     ["require_new_client_approval", "Подтверждение нового клиента"],
                     ["show_balance", "Показать баланс клиента"],
-                    ["show_photos", "Показать фото клиента"]
+                    ["show_photos", "Показать фото клиента (мобильное приложение)"]
                   ] as const
                 ).map(([k, label]) => (
                   <ConfigCheckRow
@@ -452,6 +517,79 @@ export function AgentConfigurationsDialog({
             />
           </div>
         );
+      case "route":
+        {
+          const appliedCooldown = effectiveRouteCooldownDays(draft.route?.readd_cooldown_days);
+          const appliedLimit = effectiveDailyVisitLimit(draft.route?.daily_visit_limit);
+          return (
+          <div className="space-y-6 text-[13px]">
+            <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 px-4 py-3 text-[12px] leading-relaxed text-foreground/90">
+              <p className="font-medium text-teal-800 dark:text-teal-200">Qanday ishlaydi</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                <li>
+                  <strong>0</strong> — klient har kuni avtomatik marshrut xaritasida (pauza yo‘q).
+                </li>
+                <li>
+                  <strong>7</strong> (yoki boshqa) — klient faqat xaritadan yashiriladi; buyurtma «Все» ro‘yxatidan
+                  berish mumkin.
+                </li>
+                <li>
+                  Mobil ilovada sinxronizatsiya qiling — o‘zgarishlar keyin qo‘llanadi.
+                </li>
+              </ul>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Hozir telefonda: pauza <strong>{appliedCooldown}</strong> kun, limit{" "}
+                <strong>{appliedLimit === 0 ? "cheksiz" : appliedLimit}</strong> nuqta/kun.
+              </p>
+            </div>
+            <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+              <ConfigTextField
+                label="Макс. точек в маршруте за день"
+                hint={`Standart: ${AGENT_ROUTE_DEFAULTS.daily_visit_limit}. 0 — без лимита`}
+                type="number"
+                value={draft.route?.daily_visit_limit ?? ""}
+                placeholder={String(AGENT_ROUTE_DEFAULTS.daily_visit_limit)}
+                onChange={(e) =>
+                  setDraft((d) =>
+                    setDraftPath(d, "route", (r) => ({
+                      ...r,
+                      daily_visit_limit: e.target.value === "" ? null : Number(e.target.value)
+                    }))
+                  )
+                }
+              />
+              <div className="space-y-1.5">
+                <span className="text-[13px] font-medium text-foreground">Пауза перед повторным добавлением (дней)</span>
+                <Select
+                  value={String(appliedCooldown)}
+                  onValueChange={(v) =>
+                    setDraft((d) =>
+                      setDraftPath(d, "route", (r) => ({
+                        ...r,
+                        readd_cooldown_days: Number(v)
+                      }))
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-10 border-border/80 bg-background text-[13px]">
+                    <SelectValue placeholder="Tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROUTE_COOLDOWN_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={String(opt.value)}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Ro‘yxatdan tanlang va «Сохранить» bosing. Bo‘sh qoldirish — standart {AGENT_ROUTE_DEFAULTS.readd_cooldown_days} kun.
+                </p>
+              </div>
+            </div>
+          </div>
+          );
+        }
       case "product_list":
         return (
           <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40 text-[13px]">
@@ -476,9 +614,26 @@ export function AgentConfigurationsDialog({
       case "photo":
         return (
           <div className="space-y-5 text-[13px]">
+            <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
+              <ConfigCheckRow
+                checked={Boolean(draft.client?.show_photos)}
+                onChange={(v) =>
+                  setDraft((d) => setDraftPath(d, "client", (c) => ({ ...c, show_photos: v })))
+                }
+                label="Показать фото клиента в мобильном приложении"
+              />
+              <ConfigCheckRow
+                checked={Boolean(draft.photo?.required_for_order)}
+                onChange={(v) =>
+                  setDraft((d) => setDraftPath(d, "photo", (p) => ({ ...p, required_for_order: v })))
+                }
+                label="Обязательная фото-фиксация для добавления заказа"
+              />
+            </div>
             <div className="grid max-w-2xl gap-4 sm:grid-cols-3">
               <ConfigTextField
                 label="Макс. ширина (px)"
+                hint="4032 — полное разрешение камеры (до 10 MB)"
                 type="number"
                 value={draft.photo?.max_width_px ?? ""}
                 onChange={(e) =>
@@ -505,6 +660,7 @@ export function AgentConfigurationsDialog({
               />
               <ConfigTextField
                 label="Сжатие JPEG (1–100)"
+                hint="92–100, лимит файла 10 MB (Android/iOS)"
                 type="number"
                 value={draft.photo?.jpeg_quality ?? ""}
                 onChange={(e) =>
@@ -515,15 +671,6 @@ export function AgentConfigurationsDialog({
                     }))
                   )
                 }
-              />
-            </div>
-            <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
-              <ConfigCheckRow
-                checked={Boolean(draft.photo?.required_for_order)}
-                onChange={(v) =>
-                  setDraft((d) => setDraftPath(d, "photo", (p) => ({ ...p, required_for_order: v })))
-                }
-                label="Обязательная фото-фиксация для добавления заказа"
               />
             </div>
           </div>
@@ -654,7 +801,13 @@ export function AgentConfigurationsDialog({
             ) : null}
           </div>
         );
-      case "sync":
+      case "sync": {
+        const windowFrom = draft.sync?.allowed_window_from ?? "";
+        const windowTo = draft.sync?.allowed_window_to ?? "";
+        const summaryFrom = effectiveSyncWindowFrom(windowFrom);
+        const summaryTo = effectiveSyncWindowTo(windowTo);
+        const hasCustomWindow = Boolean(windowFrom.trim() || windowTo.trim());
+
         return (
           <div className="space-y-6 text-[13px]">
             <ConfigTextField
@@ -678,35 +831,64 @@ export function AgentConfigurationsDialog({
                 label="Не допускайте синхронизацию"
               />
             </div>
-            <div>
+            <div className="space-y-3">
               <ConfigSectionTitle>Окно синхронизации</ConfigSectionTitle>
-              <div className="flex flex-wrap items-end gap-4">
-                <ConfigTextField
-                  label="С"
-                  placeholder="08:00"
-                  className="w-32"
-                  value={draft.sync?.allowed_window_from ?? ""}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      setDraftPath(d, "sync", (s) => ({ ...s, allowed_window_from: e.target.value }))
-                    )
-                  }
-                />
-                <ConfigTextField
-                  label="По"
-                  placeholder="17:30"
-                  className="w-32"
-                  value={draft.sync?.allowed_window_to ?? ""}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      setDraftPath(d, "sync", (s) => ({ ...s, allowed_window_to: e.target.value }))
-                    )
-                  }
-                />
+              <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-teal-800/80 dark:text-teal-200/90">
+                  Текущее окно
+                </p>
+                <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-foreground">
+                  {formatSyncWindowSummary(windowFrom, windowTo)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {hasCustomWindow
+                    ? "Сохранённые значения применяются в мобильном приложении."
+                    : `По умолчанию ${AGENT_SYNC_WINDOW_DEFAULTS.allowed_window_from} — ${AGENT_SYNC_WINDOW_DEFAULTS.allowed_window_to} (пока не задано своё окно).`}
+                </p>
               </div>
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1.5">
+                  <span className="text-[13px] font-medium text-foreground">С</span>
+                  <TimePickerField
+                    aria-label="Время начала синхронизации"
+                    value={windowFrom}
+                    placeholder={summaryFrom}
+                    onChange={(next) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "sync", (s) => ({
+                          ...s,
+                          allowed_window_from: normalizeHmInput(next) ?? next
+                        }))
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[13px] font-medium text-foreground">По</span>
+                  <TimePickerField
+                    aria-label="Время окончания синхронизации"
+                    value={windowTo}
+                    placeholder={summaryTo}
+                    onChange={(next) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "sync", (s) => ({
+                          ...s,
+                          allowed_window_to: normalizeHmInput(next) ?? next
+                        }))
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Выбранное время: <span className="font-mono font-semibold text-foreground">{summaryFrom}</span>
+                {" — "}
+                <span className="font-mono font-semibold text-foreground">{summaryTo}</span>
+              </p>
             </div>
           </div>
         );
+      }
       case "orders": {
         const ruleRaw = (draft.orders?.consignment_payment_due_rule ?? "").trim();
         const bonusRaw = (draft.orders?.bonus_fill_mode ?? "").trim();
@@ -903,8 +1085,34 @@ export function AgentConfigurationsDialog({
       <DialogContent className="max-h-[92vh] max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <DialogHeader className="border-b border-border/70 bg-muted/10 px-6 py-3.5 pr-12 sm:px-8">
           <DialogTitle className="font-sans text-[15px] font-normal leading-snug tracking-tight text-foreground/85 sm:text-base">
-            {variant === "supervisor" ? `Конфигурации: ${agentDisplayName}` : agentDisplayName}
+            {bulkMode
+              ? agentDisplayName
+              : variant === "supervisor"
+                ? `Конфигурации: ${agentDisplayName}`
+                : agentDisplayName}
           </DialogTitle>
+          {bulkMode && bulkSummary ? (
+            <p className="mt-1 text-xs text-muted-foreground">{bulkSummary}</p>
+          ) : null}
+          {bulkMode ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Показаны стандартные настройки. При сохранении изменятся только отредактированные поля у
+              выбранных агентов.
+              {patchSectionCount > 0 ? (
+                <span className="mt-1 block font-medium text-teal-700 dark:text-teal-300">
+                  Изменено разделов: {patchSectionCount}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {displaySaveError ? (
+            <div
+              role="alert"
+              className="mt-2 rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800 dark:bg-red-950/40 dark:text-red-200"
+            >
+              {displaySaveError}
+            </div>
+          ) : null}
           <DialogDescription className="sr-only">
             {variant === "supervisor"
               ? "Настройки конфигурации мобильного приложения для супервайзера"
@@ -912,7 +1120,7 @@ export function AgentConfigurationsDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex min-h-0 max-h-[min(65vh,640px)] gap-0">
-          <nav className="w-[13.5rem] shrink-0 overflow-y-auto border-r border-border/70 bg-slate-100/90 p-2 dark:bg-muted/40">
+          <nav className="w-[13.5rem] shrink-0 overflow-y-auto border-r border-border/70 bg-muted/90 p-2 dark:bg-muted/40">
             {visibleTabs.map((t) => (
               <button
                 key={t.id}
@@ -922,7 +1130,7 @@ export function AgentConfigurationsDialog({
                   "mb-0.5 w-full rounded-md px-2.5 py-2 text-left text-[12px] font-medium leading-snug transition-colors",
                   tab === t.id
                     ? "bg-teal-600 text-white shadow-sm dark:bg-teal-600"
-                    : "text-foreground/90 hover:bg-white/70 dark:hover:bg-muted/60"
+                    : "text-foreground/90 hover:bg-card/70 dark:hover:bg-muted/60"
                 )}
               >
                 {t.label}
@@ -945,9 +1153,9 @@ export function AgentConfigurationsDialog({
             type="button"
             className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || (bulkMode && patchSectionCount === 0)}
           >
-            Сохранить
+            {bulkMode ? "Применить к выбранным" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

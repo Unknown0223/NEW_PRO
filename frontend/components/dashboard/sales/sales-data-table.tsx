@@ -66,18 +66,18 @@ export function SalesDataTable<T extends object>({
 
   return (
     <SalesSectionPanel title={title} className={className}>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-3">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex flex-wrap items-center gap-3 border-b border-border p-3">
           <button
             type="button"
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-border text-slate-600 transition hover:bg-muted"
             aria-label="Sort"
           >
             <SlidersHorizontal className="h-4 w-4" />
           </button>
           <button
             type="button"
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-border text-slate-600 transition hover:bg-muted"
             aria-label="Filter"
           >
             <Filter className="h-4 w-4" />
@@ -85,7 +85,7 @@ export function SalesDataTable<T extends object>({
           <button
             type="button"
             onClick={() => (onExportXlsx ? onExportXlsx() : downloadCsv(`${title}.csv`, data))}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-3 text-sm font-semibold text-slate-700 transition hover:bg-muted"
           >
             <Download className="h-4 w-4 text-emerald-600" />
             Excel
@@ -96,7 +96,7 @@ export function SalesDataTable<T extends object>({
               setPageSize(Number(event.target.value));
               setPageIndex(0);
             }}
-            className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none"
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-slate-700 outline-none"
           >
             {[5, 10, 20, 44].map((size) => (
               <option key={size} value={size}>
@@ -113,21 +113,21 @@ export function SalesDataTable<T extends object>({
                 setPageIndex(0);
               }}
               placeholder="Поиск"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
+              className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm font-medium text-slate-700 outline-none transition focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
             />
           </label>
           <button
             type="button"
             onClick={() => setGlobalFilter("")}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-teal-700 transition hover:bg-teal-50"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-border text-teal-700 transition hover:bg-teal-50"
             aria-label="Refresh search"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className={cn("min-w-full divide-y divide-slate-200 text-sm", compact && "text-xs")}>
-            <thead className="bg-slate-50">
+          <table className={cn("min-w-full divide-y divide-border text-sm", compact && "text-xs")}>
+            <thead className="bg-muted">
               <tr>
                 {columns.map((col) => (
                   <th key={col.id} className="px-3 py-3 text-left font-semibold text-slate-500">
@@ -136,7 +136,7 @@ export function SalesDataTable<T extends object>({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
+            <tbody className="divide-y divide-border bg-card">
               {pageRows.map((row, idx) => (
                 <tr key={rowKey(row, idx)} className="transition hover:bg-teal-50/55">
                   {columns.map((col) => (
@@ -148,7 +148,7 @@ export function SalesDataTable<T extends object>({
               ))}
             </tbody>
             {hasFooter ? (
-              <tfoot className="bg-slate-50 font-bold text-slate-800">
+              <tfoot className="bg-muted font-bold text-slate-800">
                 <tr>
                   {columns.map((col) => (
                     <td key={col.id} className="px-3 py-3">
@@ -160,7 +160,7 @@ export function SalesDataTable<T extends object>({
             ) : null}
           </table>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-3 text-sm text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3 text-sm text-slate-500">
           <span>
             Показано <strong className="text-teal-700">{start} - {end}</strong> / {filtered.length}
           </span>
@@ -169,7 +169,7 @@ export function SalesDataTable<T extends object>({
               type="button"
               onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
               disabled={safePage <= 0}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border text-slate-600 disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -179,7 +179,7 @@ export function SalesDataTable<T extends object>({
               type="button"
               onClick={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
               disabled={safePage >= pageCount - 1}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 disabled:opacity-40"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-border text-slate-600 disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

@@ -1,0 +1,20 @@
+/// BullMQ fon ishlar natijasi — audit va DR tekshiruvi uchun.
+model JobLog {
+  id           Int       @id @default(autoincrement())
+  tenant_id    Int?
+  queue_name   String    @db.VarChar(64)
+  job_id       String    @db.VarChar(128)
+  job_name     String    @db.VarChar(128)
+  status       String    @db.VarChar(32)
+  result       Json?
+  error        String?
+  started_at   DateTime  @default(now())
+  finished_at  DateTime?
+  duration_ms  Int?
+
+  tenant Tenant? @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, job_name])
+  @@index([queue_name, finished_at])
+  @@map("job_log")
+}

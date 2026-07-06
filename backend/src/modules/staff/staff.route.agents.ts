@@ -212,6 +212,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "SELF_SUPERVISOR") return sendApiError(reply, request, 400, "SelfSupervisor");
         if (msg === "BAD_SUPERVISOR") return sendApiError(reply, request, 400, "BadSupervisor");
+        if (msg === "AGENT_ALREADY_ASSIGNED") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AgentAlreadyAssigned",
+            "Агент уже привязан к другому супервайзеру"
+          );
+        }
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
@@ -256,6 +265,13 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "BadEntitlements");
         }
         if (msg === "BAD_BULK_ACTION") return sendApiError(reply, request, 400, "BadBulkAction");
+        if (msg === "BAD_MOBILE_CONFIG_PATCH") return sendApiError(reply, request, 400, "BadMobileConfigPatch");
+        if (msg === "BAD_MOBILE_CONFIG_SYNC_WINDOW") {
+          return sendApiError(reply, request, 400, "BadMobileConfigSyncWindow");
+        }
+        if (msg.startsWith("BAD_MOBILE_CONFIG")) {
+          return sendApiError(reply, request, 400, "BadMobileConfigPatch", msg);
+        }
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         throw e;
       }

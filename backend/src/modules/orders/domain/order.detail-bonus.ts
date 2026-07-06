@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
+import { moneyFrom, roundMoney, type Money } from "../../../domain/money";
+import { mapBonusRuleFull } from "../../bonus-rules/bonus-rules.mappers";
+import { bonusRuleInclude } from "../../bonus-rules/bonus-rules.types";
+import { resolveAllowedGiftProductIdsForRule } from "../bonus-gift-selection";
 import {
   getAllowedNextStatuses,
   isOperatorLateStageCancelForbidden,
@@ -7,11 +11,12 @@ import {
 } from "../order-status";
 import type {
   BonusGiftOverrideInput,
+  BonusGiftLineInput,
   BonusGiftSwapOptionRow
 } from "./order.types";
 
-export function roundOrderMoney(d: Prisma.Decimal): Prisma.Decimal {
-  return d.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+export function roundOrderMoney(d: Prisma.Decimal): Money {
+  return roundMoney(moneyFrom(d));
 }
 
 export function parseBonusGiftSelectionsJson(json: Prisma.JsonValue | null | undefined): Map<number, number> {
@@ -37,7 +42,7 @@ export async function validateBonusGiftOverrides(
 ): Promise<Map<number, number>> {
   const map = new Map<number, number>();
   for (const row of rows) {
-    const rule = await prisma.bonusRule.findFirst({
+    const ruleRaw = await prisma.bonusRule.findFirst({
       where: {
         id: row.bonus_rule_id,
         tenant_id: tenantId,
@@ -45,18 +50,69 @@ export async function validateBonusGiftOverrides(
         is_manual: false,
         is_active: true
       },
-      select: { id: true, bonus_product_ids: true }
+      include: bonusRuleInclude
     });
-    if (!rule) {
+    if (!ruleRaw) {
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }
-    const ids = rule.bonus_product_ids;
-    if (ids.length === 0 || !ids.includes(row.bonus_product_id)) {
+    const rule = mapBonusRuleFull(ruleRaw);
+    const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+    if (allowed.length === 0 || !allowed.includes(row.bonus_product_id)) {
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }
     map.set(row.bonus_rule_id, row.bonus_product_id);
   }
   return map;
+}
+
+/** Bir qoida uchun bir nechta sovg‘a mahsuloti/dona (mobil tanlov). */
+export async function validateBonusGiftLines(
+  tenantId: number,
+  rows: BonusGiftLineInput[]
+): Promise<Map<number, Map<number, number>>> {
+  const byRule = new Map<number, Map<number, number>>();
+  for (const row of rows) {
+    const qty = Number(row.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error("BAD_BONUS_GIFT_OVERRIDE");
+    }
+    let ruleMap = byRule.get(row.bonus_rule_id);
+    if (!ruleMap) {
+      ruleMap = new Map<number, number>();
+      byRule.set(row.bonus_rule_id, ruleMap);
+    }
+    const prev = ruleMap.get(row.product_id) ?? 0;
+    ruleMap.set(row.product_id, prev + qty);
+  }
+
+  for (const [ruleId, lines] of byRule) {
+    const ruleRaw = await prisma.bonusRule.findFirst({
+      where: {
+        id: ruleId,
+        tenant_id: tenantId,
+        type: "qty",
+        is_manual: false,
+        is_active: true
+      },
+      include: bonusRuleInclude
+    });
+    if (!ruleRaw) {
+      throw new Error("BAD_BONUS_GIFT_OVERRIDE");
+    }
+    const rule = mapBonusRuleFull(ruleRaw);
+    const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+    if (allowed.length === 0) {
+      throw new Error("BAD_BONUS_GIFT_OVERRIDE");
+    }
+    const allowedSet = new Set(allowed);
+    for (const [pid, q] of lines) {
+      if (!allowedSet.has(pid) || q <= 0) {
+        throw new Error("BAD_BONUS_GIFT_OVERRIDE");
+      }
+    }
+  }
+
+  return byRule;
 }
 
 export async function buildBonusGiftSwapOptions(

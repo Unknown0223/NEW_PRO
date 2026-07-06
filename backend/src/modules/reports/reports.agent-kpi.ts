@@ -3,6 +3,10 @@ import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 
 import { parseDateRange } from "./reports.shared";
+import {
+  executionPctFromPlanFact,
+  loadMonitoringPlanAggregates
+} from "../plans/plans.monitoring-aggregates";
 
 export async function getAgentKpi(
   tenantId: number,
@@ -17,6 +21,8 @@ export async function getAgentKpi(
     order_count: number;
     total_orders: string;
     avg_order_sum: string;
+    plan_sum: string;
+    execution_pct: number | null;
     returns_count: number;
     exchange_minus_qty: string;
     exchange_plus_qty: string;
@@ -26,6 +32,24 @@ export async function getAgentKpi(
   const range = parseDateRange(from, to);
   const start = range.gte ?? new Date(Date.now() - 30 * 86400000);
   const end = range.lte ?? new Date();
+  const month = end.getUTCMonth() + 1;
+  const year = end.getUTCFullYear();
+
+  const planAgg = await loadMonitoringPlanAggregates(
+    tenantId,
+    month,
+    year,
+    {
+      tenantId,
+      agent_ids: [],
+      supervisor_ids: [],
+      branch_codes: [],
+      territory_1_list: [],
+      territory_2_list: [],
+      territory_3_list: [],
+      territory_terms: []
+    }
+  );
 
   const agents = await prisma.user.findMany({
     where: { tenant_id: tenantId, role: "agent", is_active: true },
@@ -126,6 +150,8 @@ export async function getAgentKpi(
       const minusEx = ex?.minus ?? new Prisma.Decimal(0);
       const plusEx = ex?.plus ?? new Prisma.Decimal(0);
       const netEx = plusEx.sub(minusEx);
+      const planDec = planAgg.byAgent.get(agent.id) ?? new Prisma.Decimal(0);
+      const factNum = Number(o.sum.toString());
 
       return {
         user_id: agent.id,
@@ -135,6 +161,8 @@ export async function getAgentKpi(
         order_count: cnt,
         total_orders: o.sum.toString(),
         avg_order_sum: avg,
+        plan_sum: planDec.toString(),
+        execution_pct: executionPctFromPlanFact(planDec, factNum),
         returns_count: Number(rMap.get(agent.id) ?? 0n),
         exchange_minus_qty: minusEx.toString(),
         exchange_plus_qty: plusEx.toString(),

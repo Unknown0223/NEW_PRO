@@ -29,7 +29,7 @@ export function MonitoringDailyChannelsRow({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="mb-1 text-lg font-semibold text-slate-800">Дневная продажа</h2>
         <p className="mb-4 text-sm text-slate-500">{formatMonthYearRu(month, year)}</p>
         <div className="relative min-h-[256px]">
@@ -42,7 +42,7 @@ export function MonitoringDailyChannelsRow({
           )}
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+      <div className="rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
         <h2 className="mb-4 text-lg font-semibold text-slate-800">Продажи по каналам</h2>
         <MonitoringChannelsBar channels={data.sales_channels ?? []} height={256} />
       </div>

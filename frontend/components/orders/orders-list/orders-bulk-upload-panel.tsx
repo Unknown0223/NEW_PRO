@@ -51,7 +51,7 @@ export function OrdersBulkUploadPanel({
 
   return (
     <>
-      <div className="animate-expand w-full min-w-[min(100%,42rem)] max-w-[min(100vw-1rem,56rem)] rounded-xl border border-gray-200 bg-white p-3 shadow-2xl dark:border-border dark:bg-card">
+      <div className="animate-expand w-full min-w-[min(100%,42rem)] max-w-[min(100vw-1rem,56rem)] rounded-xl border border-border bg-card p-3 shadow-2xl dark:border-border dark:bg-card">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -78,23 +78,24 @@ export function OrdersBulkUploadPanel({
             Отделить по листам
           </label>
 
-          <button
-            type="button"
-            disabled={disabled || !canBulkCatalog}
-            className="shrink-0 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
-            onClick={onDownloadOneFile}
-          >
-            Загрузить одним файлом
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-muted"
-            title="Закрыть"
-          >
-            <X className="size-4" aria-hidden />
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={disabled || !canBulkCatalog}
+              className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-50"
+              onClick={onDownloadOneFile}
+            >
+              Загрузить одним файлом
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-muted dark:hover:bg-muted"
+              title="Закрыть"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">

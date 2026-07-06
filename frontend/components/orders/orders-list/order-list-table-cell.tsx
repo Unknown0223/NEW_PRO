@@ -1,11 +1,15 @@
 "use client";
 
+import { DiscountAlertIcon } from "@/components/orders/discount-alert-icon";
 import type { OrderListRow } from "@/components/orders/order-detail-view";
+import { bonusAlertLabel } from "@/lib/bonus-alert";
+import { discountAlertLabel } from "@/lib/discount-alert";
 import { OrderStatusDropdown } from "@/components/orders/orders-list/order-status-dropdown";
 import { formatOrderListDateTime } from "@/lib/format-order-list-datetime";
 import {
   formatOrderListDebtAsClientLiability,
-  orderListExportCell
+  orderListExportCell,
+  orderListTruncateCellClass
 } from "@/lib/orders-list-columns";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { orderTypeLabel } from "@/lib/order-types";
@@ -130,34 +134,21 @@ export function renderOrderListCell({
     }
     case "order_type": {
       const t = order.order_type ?? "order";
-      if (t === "return_by_order") {
-        const src = order.source_order_numbers?.[0];
-        return (
-          <div className="text-[#7c2d12] leading-tight dark:text-orange-200">
-            <div>Возврат с</div>
-            <div>полки по</div>
-            <div className="flex flex-wrap items-center gap-1">
-              <span>заказу</span>
-              {src ? (
-                <span className="text-teal-700 dark:text-teal-400">
-                  (
-                  <CopyableText text={src} title="Копировать заказ" />
-                  )
-                </span>
-              ) : null}
-            </div>
-          </div>
-        );
-      }
-      if (t === "return") {
-        return (
-          <div className="text-[#7c2d12] leading-tight dark:text-orange-200">
-            <div>Возврат с</div>
-            <div>полки</div>
-          </div>
-        );
-      }
-      return <span className="text-foreground">{orderTypeLabel(t)}</span>;
+      const isReturnType = t === "return" || t === "return_by_order";
+      const label = orderTypeLabel(t);
+      // «Исходный заказ» ustuni manba zakaz ID/raqamini ko'rsatadi — bu yerda
+      // qavs ichidagi takror kerak emas. Matn ko'pi bilan 2 qator (chiroyli).
+      return (
+        <span
+          className={cn(
+            "block max-w-[8rem] leading-tight line-clamp-2",
+            isReturnType ? "text-[#7c2d12] dark:text-orange-200" : "text-foreground"
+          )}
+          title={label}
+        >
+          {label}
+        </span>
+      );
     }
     case "created_at":
       return (
@@ -211,14 +202,20 @@ export function renderOrderListCell({
       return order.client_name?.trim() ? (
         <CopyableText
           text={order.client_name}
-          title="Копировать клиента"
-          className="font-medium"
+          title={order.client_name}
+          className={cn("font-medium", orderListTruncateCellClass(colId))}
         />
       ) : (
         "—"
       );
     case "client_legal_name":
-      return order.client_legal_name?.trim() ? order.client_legal_name : "—";
+      return order.client_legal_name?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.client_legal_name}>
+          {order.client_legal_name}
+        </span>
+      ) : (
+        "—"
+      );
     case "client_id":
       return (
         <div className="flex items-center gap-1">
@@ -256,12 +253,17 @@ export function renderOrderListCell({
       ) : (
         "—"
       );
-    case "bonus_sum":
+    case "bonus_sum": {
+      const alert = order.bonus_alert;
+      const alertLabel = bonusAlertLabel(alert);
       return (
-        <span className="tabular-nums text-emerald-800 dark:text-emerald-300">
-          {formatNumberGrouped(order.bonus_sum ?? "0", { maxFractionDigits: 2 })}
+        <span className="inline-flex items-center justify-end gap-1 tabular-nums text-emerald-800 dark:text-emerald-300">
+          <span>{formatNumberGrouped(order.bonus_sum ?? "0", { maxFractionDigits: 2 })}</span>
+          {alert ? <DiscountAlertIcon code={alert} size={15} /> : null}
+          {alertLabel ? <span className="sr-only">{alertLabel}</span> : null}
         </span>
       );
+    }
     case "cumulative_bonus":
       return order.cumulative_bonus ? (
         <span className="tabular-nums">
@@ -272,7 +274,7 @@ export function renderOrderListCell({
       );
     case "client_address":
       return order.client_address?.trim() ? (
-        <span className="max-w-[14rem] truncate" title={order.client_address}>
+        <span className={orderListTruncateCellClass(colId)} title={order.client_address}>
           {order.client_address}
         </span>
       ) : (
@@ -280,7 +282,7 @@ export function renderOrderListCell({
       );
     case "order_location":
       return order.order_location?.trim() ? (
-        <span className="max-w-[12rem] truncate" title={order.order_location}>
+        <span className={orderListTruncateCellClass(colId)} title={order.order_location}>
           {order.order_location}
         </span>
       ) : (
@@ -299,11 +301,29 @@ export function renderOrderListCell({
         <span className="text-muted-foreground">Нет</span>
       );
     case "sales_channel":
-      return order.sales_channel?.trim() ?? "—";
+      return order.sales_channel?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.sales_channel}>
+          {order.sales_channel}
+        </span>
+      ) : (
+        "—"
+      );
     case "agent_trade_direction":
-      return order.agent_trade_direction?.trim() ?? "—";
+      return order.agent_trade_direction?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.agent_trade_direction}>
+          {order.agent_trade_direction}
+        </span>
+      ) : (
+        "—"
+      );
     case "request_type_ref":
-      return order.request_type_ref?.trim() ?? "—";
+      return order.request_type_ref?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.request_type_ref}>
+          {order.request_type_ref}
+        </span>
+      ) : (
+        "—"
+      );
     case "qty":
       return (
         <span className="tabular-nums">
@@ -318,9 +338,13 @@ export function renderOrderListCell({
       );
     case "discount_sum": {
       const n = parseNumField(order.discount_sum ?? "0");
+      const alert = order.discount_alert;
+      const alertLabel = discountAlertLabel(alert);
       return (
-        <span className="tabular-nums text-amber-900 dark:text-amber-200">
-          {n > 0 ? formatNumberGrouped(n, { maxFractionDigits: 2 }) : "—"}
+        <span className="inline-flex items-center justify-end gap-1 tabular-nums text-amber-900 dark:text-amber-200">
+          <span>{n > 0 ? formatNumberGrouped(n, { maxFractionDigits: 2 }) : "—"}</span>
+          {alert ? <DiscountAlertIcon code={alert} size={15} /> : null}
+          {alertLabel ? <span className="sr-only">{alertLabel}</span> : null}
         </span>
       );
     }
@@ -342,27 +366,83 @@ export function renderOrderListCell({
       );
     }
     case "price_type":
-      return order.price_type ?? "—";
+      return order.price_type?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.price_type}>
+          {order.price_type}
+        </span>
+      ) : (
+        "—"
+      );
     case "warehouse_name":
-      return order.warehouse_name ?? "—";
+      return order.warehouse_name?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.warehouse_name}>
+          {order.warehouse_name}
+        </span>
+      ) : (
+        "—"
+      );
     case "agent_name":
-      return order.agent_name ?? "—";
+      return order.agent_name?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.agent_name}>
+          {order.agent_name}
+        </span>
+      ) : (
+        "—"
+      );
     case "agent_code":
       return order.agent_code ?? "—";
-    case "expeditors":
-      return order.expeditor_display ?? order.expeditors ?? "—";
+    case "expeditors": {
+      const exp = order.expeditor_display ?? order.expeditors;
+      return exp?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={exp}>
+          {exp}
+        </span>
+      ) : (
+        "—"
+      );
+    }
     case "region":
-      return order.region ?? "—";
+      return order.region?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.region}>
+          {order.region}
+        </span>
+      ) : (
+        "—"
+      );
     case "city":
-      return order.city ?? "—";
+      return order.city?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.city}>
+          {order.city}
+        </span>
+      ) : (
+        "—"
+      );
     case "zone":
-      return order.zone ?? "—";
+      return order.zone?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.zone}>
+          {order.zone}
+        </span>
+      ) : (
+        "—"
+      );
     case "day":
       return order.day ?? "—";
     case "created_by":
-      return order.created_by ?? "—";
+      return order.created_by?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.created_by}>
+          {order.created_by}
+        </span>
+      ) : (
+        "—"
+      );
     case "comment":
-      return order.comment ?? "—";
+      return order.comment?.trim() ? (
+        <span className={orderListTruncateCellClass(colId)} title={order.comment}>
+          {order.comment}
+        </span>
+      ) : (
+        "—"
+      );
     case "created_by_role":
       return order.created_by_role ?? "—";
     default:
@@ -374,13 +454,6 @@ export function useOrderListCellRenderer(args: Omit<RenderOrderListCellArgs, "co
   return useCallback(
     (colId: string, order: OrderListRow) =>
       renderOrderListCell({ colId, order, ...args }),
-    [
-      args.tenantSlug,
-      args.effectiveRole,
-      args.onChangeShipDate,
-      args.onStatusChange,
-      args.rowStatusPendingId,
-      args.statusRowError
-    ]
+    [args]
   );
 }

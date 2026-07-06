@@ -9,21 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
-import { api, apiBaseURL, resolveApiOrigin } from "@/lib/api";
-import { ORDER_TYPE_VALUES } from "@/lib/order-types";
+import { apiBaseURL, resolveApiOrigin } from "@/lib/api";
 import { getUserFacingError, isApiUnreachable } from "@/lib/error-utils";
-import { Fragment, useId } from "react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
-import {
-  orderAgentFilterOption,
-  orderExpeditorFilterOption
-} from "@/lib/order-picker-labels";
-import { activeRefSelectOptions, refEntryLabelByStored } from "@/lib/profile-ref-entries";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Check, ChevronDown, Gift, Search } from "lucide-react";
+import { CalendarDays, Check, Gift, Search } from "lucide-react";
 import { ExchangeOrderCreatePanel } from "@/components/orders/exchange-order-create-panel";
 import { OrderCreateAgentLockHint } from "@/components/orders/order-create-agent-lock-hint";
 import { fieldClass, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS, POLKI_PRICE_TYPE_LABEL_RU } from "../constants";
@@ -34,8 +28,6 @@ import {
   formatQtyState,
   orderStatusLabelRu,
   unitPriceForType,
-  isPolkiShelfSourceOrder,
-  isPolkiReturnByOrderPickable,
   polkiOrderRowHasBonus
 } from "../utils";
 import { CategoryIssueCountBadge } from "../category-issue-badge";
@@ -51,16 +43,10 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
 
   const {
     tenantSlug,
-    onCreated,
     onCancel,
-    orderType,
-    ORDER_CREATE_DEBUG,
     activeCatalogCategoryId,
-    agentCatalogReady,
     agentFilterOptions,
     agentId,
-    agentUserIdSet,
-    agentUsers,
     applyBonus,
     blockByProductId,
     canPickPricingAndExpeditor,
@@ -76,37 +62,25 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     categoriesWithWarehouseSellableStock,
     categoryFilterActive,
     categoryFilterSet,
-    categoryIdsWithPositiveStock,
     clientAssignmentsForLock,
     clientId,
     clientIdNum,
     clientSummaryQ,
-    clients,
     consignmentDueAnchorRef,
     consignmentDueDate,
     consignmentDueOpen,
     createCtxQ,
-    ctxProfile,
-    debugOrderCreate,
-    displayProductGroups,
     displayProducts,
-    eligibleClientById,
-    eligibleClientIdSet,
-    eligibleClients,
     estimatedSum,
     exMinusKey,
     exMinusQty,
     exPlusProductId,
     exPlusQty,
-    exchangeOrderIdsSortedKey,
-    exchangePairRows,
     exchangePayloadCheck,
     exchangeReturnsQ,
     exchangeSourceOrderIds,
     expeditorFilterOptions,
     expeditorUserId,
-    filteredExpeditors,
-    hasAgentSelected,
     hasClient,
     hasMissingPriceForSelected,
     hasPolkiBonusCashOverMax,
@@ -122,7 +96,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     localError,
     missingPriceProductNames,
     mutation,
-    normalizedType,
     orderClientPickerScopeIds,
     orderComment,
     orderIsConsignment,
@@ -137,15 +110,11 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     polkiDateFrom,
     polkiDateTo,
     polkiDebtHintSum,
-    polkiDisplayRows,
     polkiEstimatedSum,
     polkiHeaderDate,
-    polkiLineKeySet,
-    polkiOrderDateById,
     polkiOrderGroups,
     polkiOrderIdSet,
     polkiOrderIds,
-    polkiOrderIdsSortedKey,
     polkiOrderPickHalfLists,
     polkiOrdersForPick,
     polkiOrdersPickQ,
@@ -153,9 +122,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     polkiRangeAnchorRef,
     polkiRangeOpen,
     polkiRowsAll,
-    polkiRowsFiltered,
     polkiSelectedClientLabel,
-    polkiSelectedLinesCount,
     polkiSkidkaType,
     polkiSubmitBlockedReason,
     polkiTotalBonusCashSum,
@@ -165,9 +132,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     polkiVolumeM3,
     priceType,
     productSearch,
-    productSearchNorm,
-    products,
-    qc,
     qtyByProductId,
     refSelectKey,
     refusalReasonPolkiOptions,
@@ -175,19 +139,12 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     requestTypeOptions,
     requestTypeRef,
     requiresAgentAndPayment,
-    requiresAgentForProductCatalog,
     requiresPaymentMethodForSubmit,
     resetFlowAfterClientChange,
     selectedAgentIdNum,
     selectedCategoryIds,
-    selectedClientExpeditorIdSet,
-    selectedClientExpeditorIds,
-    selectedClientIdNum,
-    selectedClientRow,
-    selectedExpeditorIdNum,
     selectedItemsCount,
     selectedTotalQty,
-    selectedWarehouseIdNum,
     selectionNotice,
     setActiveCatalogCategoryId,
     setAgentId,
@@ -202,7 +159,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     setExPlusQty,
     setExchangeSourceOrderIds,
     setExpeditorUserId,
-    setLocalError,
     setOrderComment,
     setOrderIsConsignment,
     setOrderNotePreset,
@@ -220,7 +176,6 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     setPriceType,
     setProductSearch,
     setQtyByProductId,
-    setRefSelectKey,
     setRefusalReasonRefPolki,
     setRequestTypeRef,
     setSelectedCategoryIds,
@@ -228,20 +183,15 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
     setWarehouseId,
     showOrderPaymentMethodSelector,
     stockByProduct,
-    stockProductIdsKey,
     stockQ,
     stockReadyForLines,
     tableProductGroups,
-    tenantShowPaymentMethodSelector,
     selectPolkiOrder,
     totalVolumeM3,
-    uiPrefsQ,
     useSplitOrderCatalog,
-    userShowPaymentMethodSelector,
-    users,
     warehouseId,
-    warehouseIdSet,
     warehouses,
+  
   } = vm;
 
   return (
@@ -885,7 +835,7 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
                           "inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
                           priceType === t
                             ? "border-teal-600 bg-teal-600 text-white shadow-sm dark:border-teal-500 dark:bg-teal-600"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+                            : "border-border bg-card text-slate-700 hover:bg-muted dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
                         )}
                       >
                         <input

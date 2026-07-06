@@ -11,6 +11,8 @@ export type FilterSearchableOption = { value: string; label: string; /** Qidiruv
 export type FilterSearchableSelectProps = {
   id?: string;
   emptyLabel: string;
+  /** Bo‘sh qiymatda trigger matni (masalan «Касса»); ro‘yxatdagi bo‘sh qator — `emptyLabel` (masalan «Все»). */
+  placeholderLabel?: string;
   value: string;
   onValueChange: (value: string) => void;
   options: FilterSearchableOption[];
@@ -38,6 +40,7 @@ export type FilterSearchableSelectProps = {
 export function FilterSearchableSelect({
   id,
   emptyLabel,
+  placeholderLabel,
   value,
   onValueChange,
   options,
@@ -262,7 +265,7 @@ export function FilterSearchableSelect({
         }}
       >
         <span className={cn("min-w-0 flex-1 truncate", !selectedLabel && "text-muted-foreground")}>
-          {selectedLabel || emptyLabel}
+          {selectedLabel || placeholderLabel || emptyLabel}
         </span>
         <ChevronDown
           className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}

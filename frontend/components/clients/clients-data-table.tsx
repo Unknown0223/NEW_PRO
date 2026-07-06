@@ -11,7 +11,9 @@ import {
   displayLegalName,
   displayPinfl,
   displayVisitDateShort,
+  getAllVisitWeekdaysForClient,
   getClientSlotsWithDataInRows,
+  getExpeditorLabelsForClient,
   getVisitWeekdaysForSlot,
   parseGpsText
 } from "@/lib/client-column-display";
@@ -56,21 +58,16 @@ type Props = {
   onSortByColumn?: (columnId: ClientColumnId) => void;
 };
 
-/** Bo‘sh qiymat — faqat chiziq (—) */
-function Dash() {
-  return <span className="text-muted-foreground">—</span>;
-}
-
 function Txt(v: string | null | undefined): ReactNode {
   const t = v?.trim();
-  if (!t) return <Dash />;
-  return <span className="text-xs">{t}</span>;
+  if (!t) return null;
+  return <span className="text-[13px] leading-snug text-gray-900">{t}</span>;
 }
 
 function TxtMono(v: string | null | undefined): ReactNode {
   const t = v?.trim();
-  if (!t) return <Dash />;
-  return <span className="font-mono text-xs">{t}</span>;
+  if (!t) return null;
+  return <span className="font-mono text-[13px] leading-snug text-gray-900">{t}</span>;
 }
 
 function displayMapped(raw: string | null | undefined, map?: Record<string, string>): string | null {
@@ -97,31 +94,71 @@ function agentSlotFromColumnId(colId: string): number | null {
 
 const WD_SHORT = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
+/** Matn + «ещё N» bir qatorda; popup ochiq emas, faqat bosganda ochiladi */
+function InlineOverflowCell({
+  labels,
+  popoverTitle
+}: {
+  labels: string[];
+  popoverTitle: string;
+}) {
+  const anchorRef = useRef<HTMLDivElement>(null);
+  if (labels.length === 0) return null;
+  const first = labels[0]!;
+  const rest = labels.slice(1);
+
+  return (
+    <div
+      ref={anchorRef}
+      className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[13px] leading-snug text-gray-900"
+    >
+      <span className="min-w-0 truncate" title={first}>
+        {first}
+      </span>
+      {rest.length > 0 ? (
+        <ClientsListPopup
+          items={labels}
+          title={popoverTitle}
+          anchorRef={anchorRef}
+          trigger={
+            <button
+              type="button"
+              className="shrink-0 cursor-pointer text-emerald-600 underline-offset-2 hover:underline"
+            >
+              ещё {rest.length}
+            </button>
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function WeekdayTags({ days }: { days: number[] }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const labels = days.map((d) => WD_SHORT[d] ?? String(d));
-  const show = labels.slice(0, 2);
-  const rest = labels.slice(2);
+  if (labels.length === 0) return null;
+  const show = labels.slice(0, 3);
+  const rest = labels.slice(3);
 
   return (
-    <div ref={anchorRef} className="flex items-center gap-1 whitespace-nowrap">
-      {show.map((day, i) => (
-        <span
-          key={`${day}-${i}`}
-          className="rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600"
-        >
-          {day}
-        </span>
-      ))}
+    <div
+      ref={anchorRef}
+      className="flex min-w-0 items-center gap-1 whitespace-nowrap text-[13px] leading-snug text-gray-900"
+    >
+      <span className="min-w-0 truncate">{show.join(", ")}</span>
       {rest.length > 0 ? (
         <ClientsListPopup
           items={labels}
           title="Дни"
           anchorRef={anchorRef}
           trigger={
-            <span className="cursor-pointer rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-100">
+            <button
+              type="button"
+              className="shrink-0 cursor-pointer text-emerald-600 underline-offset-2 hover:underline"
+            >
               ещё {rest.length}
-            </span>
+            </button>
           }
         />
       ) : null}
@@ -130,47 +167,18 @@ function WeekdayTags({ days }: { days: number[] }) {
 }
 
 function AgentAssignCell({ labels }: { labels: string[] }) {
-  const anchorRef = useRef<HTMLDivElement>(null);
-  if (labels.length === 0) return <Dash />;
-  const first = labels[0]!;
-  const rest = labels.slice(1);
-
-  return (
-    <div ref={anchorRef} className="flex min-w-[220px] items-center gap-1">
-      <span className="block min-w-0 flex-1 truncate rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-[11px] leading-tight text-emerald-700">
-        {first}
-      </span>
-      {rest.length > 0 ? (
-        <ClientsListPopup
-          items={labels}
-          title="ВСЕ АГЕНТЫ"
-          anchorRef={anchorRef}
-          trigger={
-            <span className="shrink-0 cursor-pointer whitespace-nowrap rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 transition-colors hover:bg-emerald-100">
-              ещё {rest.length}
-            </span>
-          }
-        />
-      ) : null}
-    </div>
-  );
+  return <InlineOverflowCell labels={labels} popoverTitle="Все агенты" />;
 }
 
-function FormatBadge({ value }: { value: string }) {
-  return (
-    <span className="rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-600">
-      {value}
-    </span>
-  );
+function ExpeditorAssignCell({ labels }: { labels: string[] }) {
+  return <InlineOverflowCell labels={labels} popoverTitle="Экспедиторы" />;
 }
 
 function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisplayMaps): ReactNode {
-  const dash = <Dash />;
-
   switch (colId) {
     case "name": {
       const t = row.name?.trim();
-      return t ? <span className="font-medium">{t}</span> : dash;
+      return t ? <span className="text-[13px] font-semibold leading-snug text-gray-900">{t}</span> : null;
     }
     case "client_ref": {
       const ref = row.client_code?.trim();
@@ -188,40 +196,39 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
       return Txt(displayAddress(row));
     case "phone": {
       const p = row.phone?.trim();
-      if (!p) return dash;
-      const g = formatDigitsGroupedLoose(p);
-      return TxtMono(g);
+      if (!p) return null;
+      return TxtMono(formatDigitsGroupedLoose(p));
     }
     case "agent_assignments_badge": {
-      const sorted = [...row.agent_assignments].sort((a, b) => a.slot - b.slot);
+      const sorted = [...(row.agent_assignments ?? [])].sort((a, b) => a.slot - b.slot);
       const labels: string[] = [];
-      const wdRu = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
       for (const a of sorted) {
         const name = a.agent_name?.trim();
-        const code = a.agent_code?.trim();
-        if (!name && !code) continue;
-        const label = [code, name].filter(Boolean).join(" ");
-        const date = displayVisitDateShort(a.visit_date);
-        const wdays = getVisitWeekdaysForSlot(row, a.slot);
-        const wdPart =
-          wdays.length > 0
-            ? ` · ${wdays.map((d) => wdRu[d] ?? String(d)).join(" ")}`
-            : "";
-        const datePart = wdays.length === 0 && date ? ` · ${date}` : "";
-        labels.push(`${label}${wdPart}${datePart}`);
+        if (!name) continue;
+        labels.push(name);
       }
       if (labels.length === 0) {
         const legacy = row.agent_name?.trim();
-        if (legacy) {
-          const d = displayVisitDateShort(row.visit_date);
-          const wdays = getVisitWeekdaysForSlot(row, 1);
-          const wdPart =
-            wdays.length > 0 ? ` · ${wdays.map((k) => wdRu[k] ?? String(k)).join(" ")}` : "";
-          const datePart = d && wdays.length === 0 ? ` · ${d}` : "";
-          labels.push(`${legacy}${wdPart}${datePart}`);
-        }
+        if (legacy) labels.push(legacy);
       }
       return <AgentAssignCell labels={labels} />;
+    }
+    case "visit_weekdays_badge": {
+      const wdays = getAllVisitWeekdaysForClient(row);
+      if (wdays.length > 0) return <WeekdayTags days={wdays} />;
+      const list = row.agent_assignments ?? [];
+      if (list.length > 0) {
+        for (const a of [...list].sort((x, y) => x.slot - y.slot)) {
+          const date = displayVisitDateShort(a.visit_date);
+          if (date) return Txt(date);
+        }
+      }
+      const legacyDate = displayVisitDateShort(row.visit_date);
+      return legacyDate ? Txt(legacyDate) : null;
+    }
+    case "expeditor_assignments_badge": {
+      const labels = getExpeditorLabelsForClient(row);
+      return <ExpeditorAssignCell labels={labels} />;
     }
     case "contact_person":
       return Txt(row.responsible_person);
@@ -229,12 +236,12 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
       return Txt(row.landmark);
     case "inn": {
       const inn = row.inn?.trim();
-      if (!inn) return dash;
+      if (!inn) return null;
       return Txt(/^\d[\d\s-]*$/.test(inn) ? formatDigitsGroupedLoose(inn) : inn);
     }
     case "pinfl": {
       const pf = displayPinfl(row);
-      if (!pf) return dash;
+      if (!pf) return null;
       return Txt(formatDigitsGroupedLoose(pf));
     }
     case "trade_channel_code": {
@@ -242,22 +249,12 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
       if (sc) return Txt(maps?.salesChannel?.[sc] ?? sc);
       return Txt(row.logistics_service);
     }
-    case "client_category_code": {
-      const t = displayMapped(row.category, maps?.category);
-      if (!t) return dash;
-      return (
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-[10px] font-bold text-gray-500">
-          {t}
-        </span>
-      );
-    }
+    case "client_category_code":
+      return Txt(displayMapped(row.category, maps?.category));
     case "client_type_code":
       return Txt(displayMapped(row.client_type_code, maps?.clientType));
-    case "format_code": {
-      const t = displayMapped(row.client_format, maps?.clientFormat);
-      if (!t) return dash;
-      return <FormatBadge value={t} />;
-    }
+    case "format_code":
+      return Txt(displayMapped(row.client_format, maps?.clientFormat));
     case "client_region": {
       const fromDb = displayMapped(row.region, maps?.region);
       if (fromDb) return Txt(fromDb);
@@ -283,7 +280,7 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
         typeof row.latitude === "string" && row.latitude.trim() ? row.latitude.trim() : null;
       const parsed = parseGpsText(row.gps_text).lat;
       const v = explicit ?? parsed;
-      if (!v?.trim()) return dash;
+      if (!v?.trim()) return null;
       return Txt(formatNumberGrouped(v, { maxFractionDigits: 6 }));
     }
     case "longitude": {
@@ -291,7 +288,7 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
         typeof row.longitude === "string" && row.longitude.trim() ? row.longitude.trim() : null;
       const parsed = parseGpsText(row.gps_text).lng;
       const v = explicit ?? parsed;
-      if (!v?.trim()) return dash;
+      if (!v?.trim()) return null;
       return Txt(formatNumberGrouped(v, { maxFractionDigits: 6 }));
     }
     case "_actions":
@@ -309,10 +306,10 @@ function cellContent(row: ClientRow, colId: ClientColumnId, maps?: ClientRefDisp
       const e = /^expeditor_(\d+)$/.exec(colId);
       if (e) {
         const ex = displayExpeditorPhone(row, Number(e[1]));
-        if (!ex?.trim()) return dash;
+        if (!ex?.trim()) return null;
         return TxtMono(formatDigitsGroupedLoose(ex));
       }
-      return dash;
+      return null;
     }
   }
 }
@@ -374,12 +371,12 @@ export function ClientsDataTable({
   }, [someOnPage, allOnPage]);
 
   const colCount = cols.length + (bulkSelect ? 1 : 0);
+  /** Har bir `th` sticky — `overflow-x-auto` ichki wrapper sticky ni buzadi */
   const thCls =
-    "px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-50 border-b border-gray-200 whitespace-nowrap";
+    "sticky top-0 z-30 bg-muted px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-700 border-b border-border whitespace-nowrap shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]";
 
   return (
-    <div className="overflow-x-auto bg-white">
-      <table className="w-full min-w-[2200px] border-collapse text-left text-sm">
+    <table className="w-full min-w-[2200px] border-collapse bg-card text-left text-sm">
         <thead>
           <tr>
             {bulkSelect ? (
@@ -387,7 +384,7 @@ export function ClientsDataTable({
                 <input
                   ref={headerCbRef}
                   type="checkbox"
-                  className="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  className="h-4 w-4 cursor-pointer rounded border-border text-emerald-600 focus:ring-emerald-500"
                   checked={allOnPage}
                   onChange={(e) => onTogglePage?.(e.target.checked)}
                   aria-label="Sahifani tanlash"
@@ -403,8 +400,8 @@ export function ClientsDataTable({
                     <button
                       type="button"
                       className={cn(
-                        "inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase hover:bg-gray-100",
-                        sortField === sortKey ? "text-gray-700" : "text-gray-400"
+                        "inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold uppercase hover:bg-muted",
+                        sortField === sortKey ? "text-gray-900" : "text-gray-600"
                       )}
                       onClick={() => onSortByColumn!(c.id)}
                       title="Tartiblash"
@@ -431,7 +428,7 @@ export function ClientsDataTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={colCount} className="px-3 py-10 text-center text-sm text-gray-500">
+              <td colSpan={colCount} className="px-3 py-10 text-center text-sm text-gray-600">
                 Нет данных. Попробуйте изменить фильтры
               </td>
             </tr>
@@ -440,16 +437,16 @@ export function ClientsDataTable({
               <tr
                 key={row.id}
                 className={cn(
-                  "group border-b border-gray-100 transition-colors hover:bg-emerald-50/30",
+                  "group border-b border-border transition-colors hover:bg-emerald-50/30",
                   sel.has(row.id) && "bg-emerald-50/50",
-                  idx % 2 === 1 && !sel.has(row.id) && "bg-gray-50/40"
+                  idx % 2 === 1 && !sel.has(row.id) && "bg-muted/40"
                 )}
               >
                 {bulkSelect ? (
-                  <td className="px-3 py-3 text-center align-top">
+                  <td className="px-3 py-2.5 text-center align-middle">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      className="h-4 w-4 cursor-pointer rounded border-border text-emerald-600 focus:ring-emerald-500"
                       checked={sel.has(row.id)}
                       onChange={(e) => onToggleRow?.(row.id, e.target.checked)}
                       aria-label={`Клиент №${row.id}`}
@@ -460,8 +457,8 @@ export function ClientsDataTable({
                   <td
                     key={c.id}
                     className={cn(
-                      "px-3 py-3 align-top text-xs text-gray-600",
-                      c.id !== "_actions" && "min-w-0 max-w-[13rem] break-words [word-break:break-word]"
+                      "border-b border-border px-3 py-2.5 align-middle text-gray-900",
+                      c.id !== "_actions" && "min-w-0 max-w-[14rem]"
                     )}
                   >
                     {c.id === "_actions" ? (
@@ -498,7 +495,6 @@ export function ClientsDataTable({
             ))
           )}
         </tbody>
-      </table>
-    </div>
+    </table>
   );
 }

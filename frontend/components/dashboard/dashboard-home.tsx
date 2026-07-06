@@ -15,6 +15,11 @@ import {
   SupervisorEnterpriseTableWrap,
   SupervisorEnterpriseToolbar
 } from "@/components/dashboard/supervisor/supervisor-enterprise-ui";
+import {
+  formatPhotoReportCell,
+  SupervisorPhotoReportModal,
+  type SupervisorPhotoReportModalTarget
+} from "@/components/dashboard/supervisor/supervisor-photo-report-modal";
 import type { SupervisorPaymentSlot } from "@/components/dashboard/supervisor/supervisor-enterprise-payment-card";
 import { DatePickerPopover, formatRuDateButton } from "@/components/ui/date-picker-popover";
 import { filterSelectClassName } from "@/components/ui/filter-select";
@@ -52,6 +57,9 @@ type SupervisorDashboardData = {
     total_sales_sum: string;
     cash_sales_sum: string;
     sales_by_payment_method: Array<{ method: string; sum: string }>;
+    monthly_kpi_plan_sum?: string;
+    monthly_kpi_fact_mtd_sum?: string;
+    monthly_kpi_execution_pct?: number | null;
     planned_visits: number;
     visited_planned: number;
     visited_total: number;
@@ -498,6 +506,7 @@ function renderDailyVisitReportTable(rows: VisitRow[], totals: VisitTotals) {
 type EfficiencyRow = {
   id: number;
   name: string;
+  agent_code?: string | null;
   order_count: number;
   cancelled_count: number;
   planned_visits: number;
@@ -506,6 +515,8 @@ type EfficiencyRow = {
   unvisited: number;
   visit_pct: number;
   photo_reports: number;
+  photo_outlets: number;
+  photo_count: number;
   total_sales_sum: string;
 };
 
@@ -588,6 +599,8 @@ export function DashboardHome({
   const [effPage, setEffPage] = useState(1);
   const [effLimit, setEffLimit] = useState(20);
   const [effSearch, setEffSearch] = useState("");
+  const [photoReportTarget, setPhotoReportTarget] = useState<SupervisorPhotoReportModalTarget | null>(null);
+  const [photoReportOpen, setPhotoReportOpen] = useState(false);
   const datePickerAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const selfSupervisorId = useMemo(
@@ -1086,7 +1099,7 @@ export function DashboardHome({
   return (
     <PageShell className="max-w-none space-y-5">
       <PageHeader
-        className="border-b border-gray-200/60 pb-5 dark:border-border/80"
+        className="border-b border-border/60 pb-5 dark:border-border/80"
         title={<span className="text-2xl font-bold tracking-tight">{headerTitle}</span>}
         description={<span className="text-sm text-muted-foreground">{headerDescription}</span>}
         actions={
@@ -1242,7 +1255,15 @@ export function DashboardHome({
           {dataQ.data ? (
             <>
               {enterprisePaymentSlots.length > 0 ? (
-                <SupervisorEnterpriseKpiPanel paymentSlots={enterprisePaymentSlots} visitKpi={dataQ.data.kpi} />
+                <SupervisorEnterpriseKpiPanel
+                  paymentSlots={enterprisePaymentSlots}
+                  visitKpi={dataQ.data.kpi}
+                  salesPlanKpi={{
+                    planSum: dataQ.data.kpi.monthly_kpi_plan_sum ?? "0",
+                    factMtdSum: dataQ.data.kpi.monthly_kpi_fact_mtd_sum ?? "0",
+                    executionPct: dataQ.data.kpi.monthly_kpi_execution_pct ?? null
+                  }}
+                />
               ) : null}
 
               <SupervisorEnterpriseSection
@@ -1405,7 +1426,19 @@ export function DashboardHome({
                     onExcel={() => exportRowsToXlsx(effFiltered, "torgovye-agenty.xlsx")}
                     totalCount={effFiltered.length}
                   />
-                  {renderEfficiencyTable(effPaged.rows)}
+                  {renderEfficiencyTable(effPaged.rows, {
+                    agentsOnly: effTab === "agents",
+                    onPhotoReportClick: (row) => {
+                      setPhotoReportTarget({
+                        agentId: row.id,
+                        agentName: row.name,
+                        agentCode: row.agent_code,
+                        photoOutlets: row.photo_outlets,
+                        photoCount: row.photo_count
+                      });
+                      setPhotoReportOpen(true);
+                    }
+                  })}
                   <SupervisorEnterprisePager
                     page={effPaged.page}
                     totalPages={effPaged.totalPages}
@@ -1422,6 +1455,16 @@ export function DashboardHome({
           ) : null}
         </div>
       )}
+      <SupervisorPhotoReportModal
+        open={photoReportOpen}
+        onOpenChange={(next) => {
+          setPhotoReportOpen(next);
+          if (!next) setPhotoReportTarget(null);
+        }}
+        tenantSlug={tenantSlug ?? ""}
+        filters={applied}
+        target={photoReportTarget}
+      />
     </PageShell>
   );
 }
@@ -1500,7 +1543,7 @@ function renderProductMatrixBlock(
       <SupervisorEnterpriseTableWrap>
         <table className="w-full min-w-[900px] text-sm">
           <thead>
-            <tr className="bg-gray-50/80 dark:bg-muted/50">
+            <tr className="bg-muted/80 dark:bg-muted/50">
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {actorLabel}
               </th>
@@ -1514,7 +1557,7 @@ function renderProductMatrixBlock(
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-border">
+          <tbody className="divide-y divide-border dark:divide-border">
             {rows.map((r) => (
               <tr key={r.id} className="transition-colors hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
                 <td className="px-5 py-3.5 font-medium text-foreground">{r.name}</td>
@@ -1552,12 +1595,21 @@ function renderProductMatrixBlock(
   );
 }
 
-function renderEfficiencyTable(rows: EfficiencyRow[]) {
+function renderEfficiencyTable(
+  rows: EfficiencyRow[],
+  opts?: {
+    agentsOnly?: boolean;
+    onPhotoReportClick?: (row: EfficiencyRow) => void;
+  }
+) {
+  const agentsOnly = opts?.agentsOnly ?? false;
+  const onPhotoReportClick = opts?.onPhotoReportClick;
+
   return (
     <SupervisorEnterpriseTableWrap>
-      <table className="w-full min-w-[760px] text-sm">
+      <table className="w-full min-w-[860px] text-sm">
         <thead>
-          <tr className="bg-gray-50/80 dark:bg-muted/50">
+          <tr className="bg-muted/80 dark:bg-muted/50">
             <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Сотрудник
             </th>
@@ -1580,15 +1632,21 @@ function renderEfficiencyTable(rows: EfficiencyRow[]) {
               Посещения %
             </th>
             <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Фото
+              Фотоотчет
             </th>
             <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Сумма
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-border">
-          {rows.map((r) => (
+        <tbody className="divide-y divide-border dark:divide-border">
+          {rows.map((r) => {
+            const outlets = r.photo_outlets ?? r.photo_reports ?? 0;
+            const photoCount = r.photo_count ?? r.photo_reports ?? 0;
+            const photoLabel = formatPhotoReportCell(outlets, photoCount);
+            const photoClickable = agentsOnly && photoCount > 0 && onPhotoReportClick != null;
+
+            return (
             <tr key={r.id} className="transition-colors hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
               <td className="px-5 py-3.5 font-medium text-foreground">{r.name}</td>
               <td className="px-5 py-3.5 text-right tabular-nums">{r.order_count}</td>
@@ -1597,12 +1655,25 @@ function renderEfficiencyTable(rows: EfficiencyRow[]) {
               <td className="px-5 py-3.5 text-right tabular-nums">{r.rejected_visits}</td>
               <td className="px-5 py-3.5 text-right tabular-nums">{r.unvisited}</td>
               <td className="px-5 py-3.5 text-right tabular-nums">{r.visit_pct}%</td>
-              <td className="px-5 py-3.5 text-right tabular-nums">{r.photo_reports}</td>
+              <td className="px-5 py-3.5 text-right tabular-nums">
+                {photoClickable ? (
+                  <button
+                    type="button"
+                    onClick={() => onPhotoReportClick(r)}
+                    className="text-teal-600 hover:text-teal-500 hover:underline dark:text-teal-400"
+                  >
+                    {photoLabel}
+                  </button>
+                ) : (
+                  <span className="text-muted-foreground">{photoLabel}</span>
+                )}
+              </td>
               <td className="px-5 py-3.5 text-right font-semibold tabular-nums">
                 {formatNumberGrouped(r.total_sales_sum, { maxFractionDigits: 2 })}
               </td>
             </tr>
-          ))}
+            );
+          })}
           {rows.length === 0 ? (
             <tr>
               <td className="px-5 py-8 text-center text-muted-foreground" colSpan={9}>

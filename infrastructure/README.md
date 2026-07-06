@@ -2,8 +2,8 @@
 
 ## Servislar
 
-- **PostgreSQL 16** — `localhost:5432`, DB: `savdo_db`, foydalanuvchi: `postgres`, parol: **`0223`** (`docker-compose.yml` bilan mos).
-- **Redis 7** — `localhost:6379`.
+- **PostgreSQL 16** — host port **`15432`**, DB: `savdo_db`, foydalanuvchi: `postgres`, parol: **`.env.local` dagi `POSTGRES_PASSWORD`** (namuna: `.env.local.example`).
+- **Redis 7** — host port **`16479`** (`REDIS_URL=redis://127.0.0.1:16479`).
 
 ## Ishga tushirish
 
@@ -11,6 +11,8 @@ Docker Desktop **yoqilgan** bo‘lishi kerak (Windows: trey ikonka, “Engine ru
 
 ```powershell
 cd d:\SALESDOC\infrastructure
+copy .env.local.example .env.local
+# .env.local da POSTGRES_PASSWORD ni o'rnating
 docker compose up -d
 ```
 
@@ -45,15 +47,15 @@ docker compose down -v
 3. *Settings → Resources → WSL integration* — ishlatayotgan distro uchun yoqilgan bo‘lsin.
 4. Keyin yana `docker compose up -d`.
 
-Agar Docker ishlatmasangiz, PostgreSQL ni [postgresql.org](https://www.postgresql.org/download/windows/) dan o‘rnatib, `backend\.env` dagi `DATABASE_URL` ni shu serverga moslang (parolni o‘zingiz belgilaysiz; `0223` majburiy emas).
+Agar Docker ishlatmasangiz, PostgreSQL ni [postgresql.org](https://www.postgresql.org/download/windows/) dan o‘rnatib, `backend\.env` dagi `DATABASE_URL` ni shu serverga moslang (parolni o‘zingiz belgilaysiz).
 
 ---
 
 ## `.env` va ulanish manzili
 
-- Ilovadan (host mashinadan) ulanishda **`localhost:5432`** ishlating.
+- Ilovadan (host mashinadan) ulanishda **`localhost:15432`** (PostgreSQL) ishlating.
 - Konteyner **ichki** IP (`172.x.x.x`) konteyner qayta yaratilganda o‘zgarishi mumkin — `.env` ga yozmang.
-- `backend\.env` namunasi: `postgresql://postgres:0223@localhost:5432/savdo_db`
+- `backend\.env` namunasi: `postgresql://postgres:YOUR_PASSWORD@localhost:15432/savdo_db`
 
 ---
 
@@ -74,7 +76,7 @@ npm run dev
 |--------|--------|
 | Docker faqat dev uchun | Production da managed DB (RDS, Hetzner DB) + alohida backup rejasi. |
 | `localhost` + port | Barqaror ulanish; ichki Docker IP dan qoching. |
-| CI va lokal parollar farq qilishi mumkin | GitHub Actions da `postgres:postgres`; lokal compose `0223` — ikkalasi ham `.env` / workflow orqali boshqariladi. |
+| CI va lokal parollar farq qilishi mumkin | GitHub Actions da `postgres:postgres`; lokal compose `.env.local` orqali — ikkalasi ham `.env` / workflow orqali boshqariladi. |
 | Redis hozircha ixtiyoriy | Keyingi bosqichlarda navbat/kesh uchun ishlatiladi. |
 
 ---

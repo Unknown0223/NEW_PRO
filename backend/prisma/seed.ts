@@ -1,20 +1,34 @@
 import "dotenv/config";
-import { prisma } from "./seed/helpers";
+
+import { prisma as seedPrisma } from "./seed/helpers";
+import { prisma as appPrisma } from "../src/config/database";
+import { closeAppRedis } from "../src/lib/redis-cache";
 import { seedDemoTenant } from "./seed/seed-demo";
 import { seedTest1Tenant } from "./seed/seed-test1";
+
+async function shutdown() {
+  await Promise.allSettled([seedPrisma.$disconnect(), appPrisma.$disconnect()]);
+  await closeAppRedis();
+}
 
 async function main() {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_PROD_SEED !== "true") {
     throw new Error("SeedBlockedInProduction");
   }
+  console.log("[seed] test1 tenant…");
   await seedTest1Tenant();
+  console.log("[seed] demo tenant…");
   await seedDemoTenant();
+  console.log("[seed] tayyor");
 }
 
 main()
-  .then(() => prisma.$disconnect())
+  .then(async () => {
+    await shutdown();
+    process.exit(0);
+  })
   .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
+    console.error("[seed] xato:", e);
+    await shutdown();
     process.exit(1);
   });

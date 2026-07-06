@@ -14,11 +14,19 @@ import {
 } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, ChevronUp, ChevronsDownUp, Loader2, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, ChevronsDownUp, Loader2, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { AccessBulkBottomBar } from "@/components/access/access-bulk-bottom-bar";
+import {
+  normalizeAccessGrantPermissions,
+  buildGrantDelegationPatchBody,
+  chunkGrantDelegationPatchBodies,
+  parseGrantDelegationPatch,
+  grantDelegationKeysNeedingChange,
+  applyGrantDelegationDetailCache
+} from "@/components/access/access-workspace.shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +39,14 @@ import {
 import { displayAccessDescriptionShort } from "@/lib/access-display";
 import { TableSortButton, type TableSortDir } from "@/components/ui/table-sort-button";
 import { cn } from "@/lib/utils";
+import { formatPersonDisplayName } from "@/lib/person-display";
+import {
+  isGrantedMatrixRow,
+  isMatrixRowBulkSelectable,
+  matchesPermissionSourceFilter,
+  permissionSourceLabel,
+  type PermissionSourceFilter
+} from "@/lib/access-user-permission-matrix";
 
 type MatrixRow = {
   key: string;
@@ -41,9 +57,9 @@ type MatrixRow = {
   from_role: boolean;
   user_effect: "none" | "allow" | "deny";
   effective: boolean;
+  /** Shaxsiy: ushbu operatsiyani boshqalarga berish huquqi (rolga bog‘lanmaydi). */
+  can_grant_others: boolean;
 };
-
-const ACCESS_MANAGE_KEY = "access.manage";
 
 function userMessageAfterAccessPatchFailure(err: unknown, fallback: string): string {
   const ax = err as AxiosError<{ error?: string; message?: string }>;
@@ -92,12 +108,15 @@ type DetailResponse = {
     supervisor_user_id: number | null;
   };
   matrix: MatrixRow[];
+  /** Operatsiya kalitlari — foydalanuvchi boshqalarga berishi mumkin (mustaqil ro‘yxat). */
+  grant_delegation_operation_keys?: string[];
   supervisees: { id: number; login: string; name: string; code: string | null; role: string; is_active: boolean }[];
   scope: {
     branches: string[];
     warehouses: number[];
     cash_desks: number[];
     payment_methods: string[];
+    trade_directions?: number[];
     territories: number[];
   };
 };
@@ -157,14 +176,8 @@ function sortStaffRoleKeys(roles: string[]): string[] {
 }
 
 function formatStaffPickLine(u: SupervisorPickRow): string {
-  const name = (u.full_name || "").trim();
-  const code = u.code?.trim();
-  const branch = u.branch?.trim();
-  let s = `${u.id}`;
-  if (code) s += ` [${code}]`;
-  if (name) s += ` ${name}`;
-  if (branch) s += ` - [${branch}]`;
-  return s.trim();
+  const name = formatPersonDisplayName({ fio: u.full_name, name: u.full_name });
+  return name || `#${u.id}`;
 }
 
 /** Дерево из `tenant.settings.references.territory_nodes` (как на странице Territoriya). */
@@ -474,6 +487,7 @@ function patchTouchesUserDirectory(body: Record<string, unknown>): boolean {
     body.warehouse_delegate != null ||
     body.cash_desk_ids != null ||
     body.payment_methods != null ||
+    body.trade_direction_ids != null ||
     body.territory_ids != null ||
     body.supervisee_user_ids != null
   )
@@ -488,7 +502,8 @@ type InnerTab =
   | "cash_desks"
   | "warehouses"
   | "branches"
-  | "payment_methods";
+  | "payment_methods"
+  | "trade_directions";
 
 /** Длинные parent_path в option раздувают нативный select — короткая подпись, полный путь в title. */
 function shortenPathLabel(path: string, max = 40): string {
@@ -538,32 +553,6 @@ function buildBulkEffectivePatchBody(rows: MatrixRow[], wantEffective: boolean):
   return body;
 }
 
-function computePermissionPatch(matrix: MatrixRow[], selected: Set<string>) {
-  const remove_permission_keys: string[] = [];
-  const permissions: string[] = [];
-  const denied_permissions: string[] = [];
-  const byKey = new Map(matrix.map((r) => [r.key, r]));
-  const keys = new Set<string>([...matrix.map((r) => r.key), ...selected]);
-  for (const key of keys) {
-    const row = byKey.get(key);
-    const want = selected.has(key);
-    if (!row) {
-      if (want) permissions.push(key);
-      continue;
-    }
-    if (want === row.effective) continue;
-    if (want) {
-      if (row.user_effect === "deny") {
-        if (row.from_role) remove_permission_keys.push(row.key);
-        else permissions.push(row.key);
-      } else if (!row.from_role) permissions.push(row.key);
-    } else {
-      denied_permissions.push(row.key);
-    }
-  }
-  return { remove_permission_keys, permissions, denied_permissions };
-}
-
 export type AccessUserAccountControls = {
   isActive: boolean;
   onToggle: () => void;
@@ -588,12 +577,10 @@ export function AccessUserDetailPanel({
   const qc = useQueryClient();
   const [inner, setInner] = useState<InnerTab>("operations");
   const [filterParent, setFilterParent] = useState("");
-  const [filterGrant, setFilterGrant] = useState<"all" | "allowed" | "denied">("all");
-  /** «Предоставление доступа» filtri: qator uchun ustun-переключатель mavjudligi (`canUsePredostRow`). */
-  const [filterPredost, setFilterPredost] = useState<"all" | "can" | "cannot">("all");
+  /** Rol (boshlang‘ich) vs qo‘shimcha (shaxsiy allow). */
+  const [filterSource, setFilterSource] = useState<PermissionSourceFilter>("all");
   const [filterParentDraft, setFilterParentDraft] = useState("");
-  const [filterGrantDraft, setFilterGrantDraft] = useState<"all" | "allowed" | "denied">("all");
-  const [filterPredostDraft, setFilterPredostDraft] = useState<"all" | "can" | "cannot">("all");
+  const [filterSourceDraft, setFilterSourceDraft] = useState<PermissionSourceFilter>("all");
   const [tableSearch, setTableSearch] = useState("");
   const [matrixSort, setMatrixSort] = useState<null | { key: MatrixSortKey; dir: TableSortDir }>(null);
   const [bulkSel, setBulkSel] = useState<Set<string>>(() => new Set());
@@ -619,7 +606,7 @@ export function AccessUserDetailPanel({
     head.scrollLeft = body.scrollLeft;
   }, []);
 
-  const [modal, setModal] = useState<null | "operations" | "cash" | "warehouse" | "branch" | "payment" | "territory" | "staff">(null);
+  const [modal, setModal] = useState<null | "operations" | "cash" | "warehouse" | "branch" | "payment" | "direction" | "territory" | "staff">(null);
   const [modalSearch, setModalSearch] = useState("");
   const [modalSel, setModalSel] = useState<Set<string>>(() => new Set());
   const [showSelOnly, setShowSelOnly] = useState(false);
@@ -647,11 +634,9 @@ export function AccessUserDetailPanel({
   useEffect(() => {
     setMatrixSort(null);
     setFilterParent("");
-    setFilterGrant("all");
-    setFilterPredost("all");
+    setFilterSource("all");
     setFilterParentDraft("");
-    setFilterGrantDraft("all");
-    setFilterPredostDraft("all");
+    setFilterSourceDraft("all");
     setSuppressedMatrixKeys(new Set());
   }, [userId]);
 
@@ -713,7 +698,7 @@ export function AccessUserDetailPanel({
   });
 
   const territoryCatalog = territoriesQ.data;
-  const allTerritoryRows = territoryCatalog?.flat ?? [];
+  const allTerritoryRows = useMemo(() => territoryCatalog?.flat ?? [], [territoryCatalog?.flat]);
   const referenceTerritoryTree = territoryCatalog?.tree ?? [];
   const useReferenceTerritoryTree = referenceTerritoryTree.length > 0;
 
@@ -743,7 +728,7 @@ export function AccessUserDetailPanel({
 
   const dimQ = useQuery({
     queryKey: ["access-dimensions-modal", tenantSlug, modal],
-    enabled: Boolean(tenantSlug) && (modal === "cash" || modal === "warehouse" || modal === "branch" || modal === "payment"),
+    enabled: Boolean(tenantSlug) && (modal === "cash" || modal === "warehouse" || modal === "branch" || modal === "payment" || modal === "direction"),
     queryFn: async () => {
       const type =
         modal === "cash"
@@ -752,7 +737,9 @@ export function AccessUserDetailPanel({
             ? "warehouses"
             : modal === "branch"
               ? "branches"
-              : "payment_methods";
+              : modal === "direction"
+                ? "trade_directions"
+                : "payment_methods";
       const { data } = await api.get<{ data: DimRow[] }>(`/api/${tenantSlug}/access/dimensions?type=${type}`);
       return data.data;
     }
@@ -763,6 +750,13 @@ export function AccessUserDetailPanel({
       await api.patch(`/api/${tenantSlug}/access/users/${userId}`, body);
     },
     onSuccess: (_data, body) => {
+      const deleg = parseGrantDelegationPatch(body);
+      if (deleg) {
+        qc.setQueryData<DetailResponse>(["access-user-detail", tenantSlug, userId], (old) =>
+          applyGrantDelegationDetailCache(old, deleg.allowKeys, deleg.revokeKeys)
+        );
+        return;
+      }
       const rm = body.remove_permission_keys as string[] | undefined;
       if (Array.isArray(rm) && rm.length > 0) {
         setSuppressedMatrixKeys((prev) => {
@@ -789,47 +783,48 @@ export function AccessUserDetailPanel({
     }
   });
 
-  const matrix = detailQ.data?.matrix ?? [];
+  const grantDelegationSet = useMemo(() => {
+    const keys = detailQ.data?.grant_delegation_operation_keys;
+    return keys ? new Set(keys) : null;
+  }, [detailQ.data?.grant_delegation_operation_keys]);
+
+  const matrix = useMemo(
+    () =>
+      (detailQ.data?.matrix ?? []).map((row) => ({
+        ...row,
+        can_grant_others: grantDelegationSet ? grantDelegationSet.has(row.key) : Boolean(row.can_grant_others)
+      })),
+    [detailQ.data?.matrix, grantDelegationSet]
+  );
   const matrixByKey = useMemo(() => new Map(matrix.map((r) => [r.key, r] as const)), [matrix]);
   const user = detailQ.data?.user;
   const scope = detailQ.data?.scope;
 
-  /** «Доступ: управление» — boshqa операцияларни бириктириш / UI «Предоставление доступа». */
-  const targetHasAccessManage = useMemo(
-    () => matrix.some((r) => r.key === ACCESS_MANAGE_KEY && r.effective),
-    [matrix]
-  );
-
-  const canUsePredostRow = useCallback(
-    (row: MatrixRow) => row.key === ACCESS_MANAGE_KEY || targetHasAccessManage,
-    [targetHasAccessManage]
-  );
+  /** Faqat foydalanuvchi ishlata oladigan operatsiyalar (rol + qo‘shimcha allow). */
+  const grantedMatrix = useMemo(() => matrix.filter(isGrantedMatrixRow), [matrix]);
 
   const parentOptions = useMemo(() => {
     const s = new Set<string>();
-    for (const row of matrix) {
+    for (const row of grantedMatrix) {
       const v = row.parent_path?.trim();
       if (v) s.add(v);
     }
     return [...s].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [matrix]);
+  }, [grantedMatrix]);
 
   const filteredMatrix = useMemo(() => {
     const p = filterParent.trim();
     const q = tableSearch.trim().toLowerCase();
-    return matrix.filter((row) => {
+    return grantedMatrix.filter((row) => {
       if (p && row.parent_path !== p) return false;
-      if (filterGrant === "allowed" && !row.effective) return false;
-      if (filterGrant === "denied" && row.effective) return false;
-      if (filterPredost === "can" && !canUsePredostRow(row)) return false;
-      if (filterPredost === "cannot" && canUsePredostRow(row)) return false;
+      if (!matchesPermissionSourceFilter(row, filterSource)) return false;
       if (q) {
-        const hay = `${row.key} ${row.description ?? ""} ${row.parent_path} ${row.section ?? ""}`.toLowerCase();
+        const hay = `${row.key} ${row.description ?? ""} ${row.parent_path} ${row.section ?? ""} ${permissionSourceLabel(row)}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [matrix, filterParent, filterGrant, filterPredost, tableSearch, canUsePredostRow]);
+  }, [grantedMatrix, filterParent, filterSource, tableSearch]);
 
   const tableMatrix = useMemo(
     () => filteredMatrix.filter((row) => !suppressedMatrixKeys.has(row.key)),
@@ -956,11 +951,23 @@ export function AccessUserDetailPanel({
     staffPickByRole.length > 0 && staffPickByRole.every((g) => staffRoleExpanded.includes(g.role));
 
   const detachableKeys = useMemo(
-    () => tableMatrix.filter((r) => r.user_effect !== "none").map((r) => r.key),
+    () => tableMatrix.filter((r) => r.effective).map((r) => r.key),
     [tableMatrix]
   );
 
-  const filterResetSig = `${userId}|${filterParent}|${filterGrant}|${filterPredost}`;
+  const isRowBulkSelectable = useCallback((row: MatrixRow) => isMatrixRowBulkSelectable(row), []);
+
+  const bulkSelectableKeys = useMemo(
+    () => tableMatrix.filter(isRowBulkSelectable).map((r) => r.key),
+    [tableMatrix, isRowBulkSelectable]
+  );
+
+  const selectedDetachableCount = useMemo(
+    () => Array.from(bulkSel).filter((k) => detachableKeys.includes(k)).length,
+    [bulkSel, detachableKeys]
+  );
+
+  const filterResetSig = `${userId}|${filterParent}|${filterSource}`;
   const prevFilterResetSigRef = useRef(filterResetSig);
 
   /** Сброс выделения при смене пользователя/фильтров; иначе — убрать из выделения строки вне текущей таблицы (поиск и т.д.). */
@@ -972,7 +979,7 @@ export function AccessUserDetailPanel({
     }
     setBulkSel((prev) => {
       if (prev.size === 0) return prev;
-      const allowed = new Set(detachableKeys);
+      const allowed = new Set(bulkSelectableKeys);
       const next = new Set<string>();
       const prevArr = Array.from(prev);
       for (let i = 0; i < prevArr.length; i++) {
@@ -982,7 +989,7 @@ export function AccessUserDetailPanel({
       if (next.size === prev.size && prevArr.every((k) => next.has(k))) return prev;
       return next;
     });
-  }, [filterResetSig, tableSearch, detachableKeys]);
+  }, [filterResetSig, tableSearch, bulkSelectableKeys]);
 
   useEffect(() => {
     if (!bulkFeedback) return;
@@ -990,31 +997,69 @@ export function AccessUserDetailPanel({
     return () => window.clearTimeout(t);
   }, [bulkFeedback]);
 
-  const bulkHeaderAllSelected = detachableKeys.length > 0 && detachableKeys.every((k) => bulkSel.has(k));
+  const bulkHeaderAllSelected =
+    bulkSelectableKeys.length > 0 && bulkSelectableKeys.every((k) => bulkSel.has(k));
   const bulkHeaderSomeSelected =
-    detachableKeys.length > 0 && detachableKeys.some((k) => bulkSel.has(k)) && !bulkHeaderAllSelected;
+    bulkSelectableKeys.length > 0 && bulkSelectableKeys.some((k) => bulkSel.has(k)) && !bulkHeaderAllSelected;
 
   useEffect(() => {
     const el = bulkHeaderCheckboxRef.current;
     if (el) el.indeterminate = bulkHeaderSomeSelected;
   }, [bulkHeaderSomeSelected]);
 
-  const grantHeaderAllEffective =
-    tableMatrix.length > 0 && tableMatrix.every((r) => r.effective);
-  const grantHeaderSomeEffective = tableMatrix.some((r) => r.effective);
-  const grantHeaderIndeterminate =
-    tableMatrix.length > 0 && grantHeaderSomeEffective && !grantHeaderAllEffective;
+  const grantHeaderAllOn =
+    tableMatrix.length > 0 && tableMatrix.every((r) => r.can_grant_others);
+  const grantHeaderSomeOn =
+    tableMatrix.length > 0 && tableMatrix.some((r) => r.can_grant_others) && !grantHeaderAllOn;
 
   useEffect(() => {
     const el = grantHeaderSwitchRef.current;
-    if (el) el.indeterminate = grantHeaderIndeterminate;
-  }, [grantHeaderIndeterminate]);
+    if (el) el.indeterminate = grantHeaderSomeOn;
+  }, [grantHeaderSomeOn]);
+
+  const bulkApplyGrantDelegation = async (wantGrant: boolean) => {
+    const targetRows =
+      bulkSel.size > 0 ? tableMatrix.filter((r) => bulkSel.has(r.key)) : tableMatrix;
+    if (!targetRows.length) return;
+    const bodies = chunkGrantDelegationPatchBodies(targetRows, wantGrant);
+    if (!bodies.length) {
+      setBulkFeedback({ tone: "ok", text: "Изменений не требуется" });
+      return;
+    }
+    const changedCount = grantDelegationKeysNeedingChange(targetRows, wantGrant).length;
+    const changedKeys = grantDelegationKeysNeedingChange(targetRows, wantGrant);
+    qc.setQueryData<DetailResponse>(["access-user-detail", tenantSlug, userId], (old) =>
+      applyGrantDelegationDetailCache(
+        old,
+        wantGrant ? changedKeys : [],
+        wantGrant ? [] : changedKeys
+      )
+    );
+    try {
+      for (const body of bodies) {
+        await patchMut.mutateAsync(body);
+      }
+      await qc.refetchQueries({ queryKey: ["access-user-detail", tenantSlug, userId] });
+      setBulkFeedback({
+        tone: "ok",
+        text: wantGrant
+          ? bulkSel.size > 0
+            ? `Может выдавать другим — для выбранных (${changedCount})`
+            : `Может выдавать другим — для всех видимых (${changedCount})`
+          : bulkSel.size > 0
+            ? `Снято право выдачи — для выбранных (${changedCount})`
+            : `Снято право выдачи — для всех видимых (${changedCount})`
+      });
+    } catch (err) {
+      setBulkFeedback({
+        tone: "err",
+        text: userMessageAfterAccessPatchFailure(err, "Не удалось изменить право выдачи доступа")
+      });
+    }
+  };
 
   const bulkApplyFilteredEffective = async (wantEffective: boolean) => {
-    let targetRows = bulkSel.size > 0 ? tableMatrix.filter((r) => bulkSel.has(r.key)) : tableMatrix;
-    if (wantEffective) {
-      targetRows = targetRows.filter((r) => canUsePredostRow(r) || r.effective);
-    }
+    const targetRows = bulkSel.size > 0 ? tableMatrix.filter((r) => bulkSel.has(r.key)) : tableMatrix;
     if (!targetRows.length) return;
     const body = buildBulkEffectivePatchBody(targetRows, wantEffective);
     if (!body) {
@@ -1039,51 +1084,69 @@ export function AccessUserDetailPanel({
   };
 
   const bulkDetach = async () => {
-    const keys = Array.from(bulkSel).filter((k) => {
-      const r = matrix.find((x) => x.key === k);
-      return r && r.user_effect !== "none";
-    });
-    if (!keys.length) return;
+    const rows = Array.from(bulkSel)
+      .map((k) => matrix.find((x) => x.key === k))
+      .filter((r): r is MatrixRow => Boolean(r && r.effective));
+    if (!rows.length) return;
+
+    const remove_permission_keys: string[] = [];
+    const denied_permissions: string[] = [];
+    for (const row of rows) {
+      if (row.user_effect !== "none") remove_permission_keys.push(row.key);
+      else denied_permissions.push(row.key);
+    }
+
+    const body: Record<string, unknown> = {};
+    if (remove_permission_keys.length) body.remove_permission_keys = remove_permission_keys;
+    if (denied_permissions.length) {
+      body.merge_permissions = true;
+      body.denied_permissions = denied_permissions;
+    }
+    if (!body.remove_permission_keys && !body.merge_permissions) return;
+
     try {
-      await patchMut.mutateAsync({ remove_permission_keys: keys });
+      await patchMut.mutateAsync(body);
       setBulkSel(new Set());
-      setBulkFeedback({ tone: "ok", text: `Снято пользовательских настроек: ${keys.length}, одним запросом` });
+      setBulkFeedback({
+        tone: "ok",
+        text:
+          remove_permission_keys.length && denied_permissions.length
+            ? `Снято: ${remove_permission_keys.length} личных и ${denied_permissions.length} из роли (только для пользователя)`
+            : remove_permission_keys.length
+              ? `Снято личных настроек: ${remove_permission_keys.length}`
+              : `Запрещено для пользователя (из роли): ${denied_permissions.length}`
+      });
     } catch (err) {
       setBulkFeedback({ tone: "err", text: userMessageAfterAccessPatchFailure(err, "Не удалось открепить. Попробуйте ещё раз.") });
     }
   };
 
   const toggleBulkAll = (checked: boolean) => {
-    if (checked) setBulkSel(new Set(detachableKeys));
+    if (checked) setBulkSel(new Set(bulkSelectableKeys));
     else setBulkSel(new Set());
   };
 
-  const toggleBulkGroup = useCallback((grp: { parent: string; rows: MatrixRow[] }, checked: boolean) => {
-    const keys = grp.rows.filter((r) => r.user_effect !== "none").map((r) => r.key);
-    if (keys.length === 0) return;
-    setBulkSel((prev) => {
-      const n = new Set(prev);
-      if (checked) for (const k of keys) n.add(k);
-      else for (const k of keys) n.delete(k);
-      return n;
-    });
-  }, []);
+  const toggleBulkGroup = useCallback(
+    (grp: { parent: string; rows: MatrixRow[] }, checked: boolean) => {
+      const keys = grp.rows.filter(isRowBulkSelectable).map((r) => r.key);
+      if (keys.length === 0) return;
+      setBulkSel((prev) => {
+        const n = new Set(prev);
+        if (checked) for (const k of keys) n.add(k);
+        else for (const k of keys) n.delete(k);
+        return n;
+      });
+    },
+    [isRowBulkSelectable]
+  );
 
   const openModal = (kind: typeof modal) => {
     setModal(kind);
     setModalSearch("");
     setShowSelOnly(false);
     if (kind === "operations") {
-      if (detailQ.data) {
-        const sel = new Set<string>();
-        for (const r of detailQ.data.matrix) {
-          if (suppressedMatrixKeys.has(r.key)) continue;
-          if (r.effective) sel.add(r.key);
-        }
-        setModalSel(sel);
-      } else {
-        setModalSel(new Set());
-      }
+      /** Faqat qo‘shimcha operatsiyalar — hozirgi faol ro‘yxat emas. */
+      setModalSel(new Set());
     } else if (kind === "territory" && scope) {
       setModalSel(new Set(scope.territories.map(String)));
     } else if (kind === "cash" && scope) {
@@ -1094,6 +1157,8 @@ export function AccessUserDetailPanel({
       setModalSel(new Set(scope.branches));
     } else if (kind === "payment" && scope) {
       setModalSel(new Set(scope.payment_methods));
+    } else if (kind === "direction" && scope) {
+      setModalSel(new Set((scope.trade_directions ?? []).map(String)));
     } else if (kind === "staff") {
       staffModalSessionRef.current += 1;
       if (detailQ.data) {
@@ -1109,13 +1174,6 @@ export function AccessUserDetailPanel({
   };
 
   const modalItems = useMemo(() => {
-    if (modal === "operations") {
-      return (catalogQ.data?.flat ?? []).map((r) => ({
-        key: r.key,
-        label: displayAccessDescriptionShort(r.description, r.key),
-        sub: r.parent_path
-      }));
-    }
     if (modal === "territory") {
       return (territoriesQ.data?.flat ?? []).map((r: TerritoryApiRow) => ({
         key: r.key,
@@ -1124,42 +1182,37 @@ export function AccessUserDetailPanel({
       }));
     }
     return (dimQ.data ?? []).map((r) => ({ key: r.key, label: r.label, sub: String(r.attached_users_count) }));
-  }, [modal, catalogQ.data, territoriesQ.data, dimQ.data]);
+  }, [modal, territoriesQ.data, dimQ.data]);
+
+  /** Modalka «Добавить операции»: faqat hali berilmagan (effective=false) operatsiyalar. */
+  const attachModalBaseItems = useMemo((): ModalPickRow[] => {
+    if (modal !== "operations") return [];
+    return (catalogQ.data?.flat ?? [])
+      .filter((r) => !matrixByKey.get(r.key)?.effective)
+      .map((r) => ({
+        key: r.key,
+        label: displayAccessDescriptionShort(r.description, r.key),
+        sub: r.parent_path
+      }));
+  }, [modal, catalogQ.data, matrixByKey]);
+
+  const filteredAttachModalItems = useMemo((): ModalPickRow[] => {
+    const q = modalSearch.trim().toLowerCase();
+    let rows = attachModalBaseItems;
+    if (q) rows = rows.filter((x) => `${x.key} ${x.label} ${x.sub}`.toLowerCase().includes(q));
+    if (showSelOnly) rows = rows.filter((x) => modalSel.has(x.key));
+    return rows;
+  }, [attachModalBaseItems, modalSearch, showSelOnly, modalSel]);
 
   const filteredModalItems = useMemo((): ModalPickRow[] => {
     const q = modalSearch.trim().toLowerCase();
     let rows: ModalPickRow[] = modalItems;
-    if (modal === "operations") {
-      const p = filterParent.trim();
-      rows = modalItems.filter((x) => {
-        const row = matrixByKey.get(x.key);
-        const eff = row?.effective ?? false;
-        if (p && (x.sub ?? "").trim() !== p) return false;
-        if (filterGrant === "allowed" && !eff) return false;
-        if (filterGrant === "denied" && eff) return false;
-        const canPred = row ? canUsePredostRow(row) : false;
-        if (filterPredost === "can" && !canPred) return false;
-        if (filterPredost === "cannot" && canPred) return false;
-        return true;
-      });
-    }
     if (q) rows = rows.filter((x) => `${x.key} ${x.label} ${x.sub}`.toLowerCase().includes(q));
     if (showSelOnly) rows = rows.filter((x) => modalSel.has(x.key));
     return rows;
-  }, [
-    modalItems,
-    modalSearch,
-    showSelOnly,
-    modalSel,
-    modal,
-    filterParent,
-    filterGrant,
-    filterPredost,
-    matrixByKey,
-    canUsePredostRow
-  ]);
+  }, [modalItems, modalSearch, showSelOnly, modalSel]);
 
-  const dimPickModal = modal === "cash" || modal === "warehouse" || modal === "branch" || modal === "payment";
+  const dimPickModal = modal === "cash" || modal === "warehouse" || modal === "branch" || modal === "payment" || modal === "direction";
 
   const visibleDimPickKeys = useMemo(() => {
     if (!dimPickModal) return [] as string[];
@@ -1174,7 +1227,7 @@ export function AccessUserDetailPanel({
   const opAttachGroups = useMemo(() => {
     if (modal !== "operations") return [] as { parent: string; items: ModalPickRow[] }[];
     const m = new Map<string, ModalPickRow[]>();
-    for (const it of filteredModalItems) {
+    for (const it of filteredAttachModalItems) {
       const k = (it.sub ?? "").trim() || "—";
       const arr = m.get(k) ?? [];
       arr.push(it);
@@ -1182,7 +1235,7 @@ export function AccessUserDetailPanel({
     }
     const keys = [...m.keys()].sort((a, b) => matrixCollator.compare(a, b));
     return keys.map((parent) => ({ parent, items: m.get(parent)! }));
-  }, [modal, filteredModalItems]);
+  }, [modal, filteredAttachModalItems]);
 
   const opAttachGroupKeys = useMemo(() => opAttachGroups.map((g) => g.parent), [opAttachGroups]);
   const allOpAttachGroupsExpanded =
@@ -1193,28 +1246,35 @@ export function AccessUserDetailPanel({
     setOpAttachGroupExpanded(new Set());
   }, [modal, userId]);
 
+  const toggleOpAttachGroup = useCallback((items: ModalPickRow[], checked: boolean) => {
+    setModalSel((prev) => {
+      const next = new Set(prev);
+      for (const item of items) {
+        if (checked) next.add(item.key);
+        else next.delete(item.key);
+      }
+      return next;
+    });
+  }, []);
+
   const saveModal = async () => {
-    if (modal === "operations" && detailQ.data) {
-      const patch = computePermissionPatch(detailQ.data.matrix, modalSel);
-      if (!targetHasAccessManage) {
-        const newAllows = patch.permissions.filter((k) => k !== ACCESS_MANAGE_KEY);
-        const enablesAccessManageNow = patch.permissions.includes(ACCESS_MANAGE_KEY);
-        if (newAllows.length && !enablesAccessManageNow) {
-          setBulkFeedback({
-            tone: "err",
-            text: "Сначала включите «Доступ: управление» (access.manage), затем добавляйте другие операции. Либо включите access.manage в этом же сохранении."
-          });
-          return;
-        }
+    if (modal === "operations") {
+      const toAdd = normalizeAccessGrantPermissions([...modalSel].map((k) => k.trim()).filter(Boolean));
+      if (toAdd.length === 0) {
+        setModal(null);
+        return;
       }
-      const body: Record<string, unknown> = {};
-      if (patch.remove_permission_keys.length) body.remove_permission_keys = patch.remove_permission_keys;
-      if (patch.permissions.length || patch.denied_permissions.length) {
-        body.merge_permissions = true;
-        if (patch.permissions.length) body.permissions = patch.permissions;
-        if (patch.denied_permissions.length) body.denied_permissions = patch.denied_permissions;
+      try {
+        await patchMut.mutateAsync({ merge_permissions: true, permissions: toAdd });
+        setBulkFeedback({ tone: "ok", text: `Добавлено дополнительных операций: ${toAdd.length}` });
+        setModal(null);
+      } catch (err) {
+        setBulkFeedback({
+          tone: "err",
+          text: userMessageAfterAccessPatchFailure(err, "Не удалось добавить операции")
+        });
       }
-      if (Object.keys(body).length) await patchMut.mutateAsync(body);
+      return;
     } else if (modal === "territory") {
       await patchMut.mutateAsync({
         territory_ids: [...modalSel].map(Number).filter((n) => Number.isInteger(n) && n > 0)
@@ -1235,6 +1295,10 @@ export function AccessUserDetailPanel({
       await patchMut.mutateAsync({
         payment_methods: [...modalSel].map((x) => String(x).trim()).filter(Boolean)
       });
+    } else if (modal === "direction") {
+      await patchMut.mutateAsync({
+        trade_direction_ids: [...modalSel].map(Number).filter((n) => Number.isInteger(n) && n > 0)
+      });
     } else if (modal === "staff") {
       await patchMut.mutateAsync({
         supervisee_user_ids: [...modalSel].map(Number).filter((n) => Number.isInteger(n) && n > 0)
@@ -1243,17 +1307,21 @@ export function AccessUserDetailPanel({
     setModal(null);
   };
 
-  const toggleRow = useCallback(
+  const toggleRowGrantDelegation = useCallback(
     async (row: MatrixRow, next: boolean) => {
-      const body = buildBulkEffectivePatchBody([row], next);
+      const body = buildGrantDelegationPatchBody([row], next);
       if (!body) return;
       try {
         await patchMut.mutateAsync(body);
+        await qc.refetchQueries({ queryKey: ["access-user-detail", tenantSlug, userId] });
       } catch (err) {
-        setBulkFeedback({ tone: "err", text: userMessageAfterAccessPatchFailure(err, "Не удалось сохранить") });
+        setBulkFeedback({
+          tone: "err",
+          text: userMessageAfterAccessPatchFailure(err, "Не удалось изменить право выдачи доступа")
+        });
       }
     },
-    [patchMut]
+    [patchMut, qc, tenantSlug, userId]
   );
 
   if (detailQ.isError) {
@@ -1270,7 +1338,8 @@ export function AccessUserDetailPanel({
     { id: "cash_desks", label: "Кассы" },
     { id: "warehouses", label: "Склады" },
     { id: "branches", label: "Филиал" },
-    { id: "payment_methods", label: "Способ оплаты" }
+    { id: "payment_methods", label: "Способ оплаты" },
+    { id: "trade_directions", label: "Направления" }
   ];
 
   const modalUserLabel = user.code
@@ -1279,7 +1348,7 @@ export function AccessUserDetailPanel({
 
   const modalTitle =
     modal === "operations"
-      ? `Прикрепить операции: ${modalUserLabel}`
+      ? `Добавить операции: ${modalUserLabel}`
       : modal === "territory" || modal === "staff"
         ? ""
         : modal === "cash"
@@ -1290,7 +1359,9 @@ export function AccessUserDetailPanel({
               ? `Прикрепить филиал: ${modalUserLabel}`
               : modal === "payment"
                 ? `Прикрепить способ оплаты: ${modalUserLabel}`
-                : "";
+                : modal === "direction"
+                  ? `Прикрепить направление: ${modalUserLabel}`
+                  : "";
 
   /** Модалки выбора привязок (как «Территории»): оверлей поверх матрицы, единый шаблон шапки и списка. */
   const assignPickModal =
@@ -1299,7 +1370,8 @@ export function AccessUserDetailPanel({
     modal === "cash" ||
     modal === "warehouse" ||
     modal === "branch" ||
-    modal === "payment";
+    modal === "payment" ||
+    modal === "direction";
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -1331,21 +1403,23 @@ export function AccessUserDetailPanel({
               data-active={
                 (t.id === "territories" && modal === "territory") ||
                 (t.id === "staff" && modal === "staff") ||
-                (t.id === "operations" && modal === "operations") ||
+                (t.id === "operations" && inner === "operations") ||
                 (t.id === "cash_desks" && modal === "cash") ||
                 (t.id === "warehouses" && modal === "warehouse") ||
                 (t.id === "branches" && modal === "branch") ||
-                (t.id === "payment_methods" && modal === "payment")
+                (t.id === "payment_methods" && modal === "payment") ||
+                (t.id === "trade_directions" && modal === "direction")
               }
               className={cn(
                 "access-tab-chip text-xs",
                 (t.id === "territories" && modal === "territory") ||
                   (t.id === "staff" && modal === "staff") ||
-                  (t.id === "operations" && modal === "operations") ||
+                  (t.id === "operations" && inner === "operations") ||
                   (t.id === "cash_desks" && modal === "cash") ||
                   (t.id === "warehouses" && modal === "warehouse") ||
                   (t.id === "branches" && modal === "branch") ||
-                  (t.id === "payment_methods" && modal === "payment")
+                  (t.id === "payment_methods" && modal === "payment") ||
+                  (t.id === "trade_directions" && modal === "direction")
                   ? ""
                   : "text-muted-foreground hover:bg-muted/50"
               )}
@@ -1375,9 +1449,13 @@ export function AccessUserDetailPanel({
                   openModal("payment");
                   return;
                 }
+                if (t.id === "trade_directions") {
+                  openModal("direction");
+                  return;
+                }
                 if (t.id === "operations") {
                   setInner("operations");
-                  openModal("operations");
+                  setModal(null);
                   return;
                 }
               }}
@@ -1399,6 +1477,23 @@ export function AccessUserDetailPanel({
         {inner === "operations" ? (
           <div className="flex min-h-0 flex-1 flex-col gap-2">
             <div className="shrink-0 rounded-md border border-border/60 bg-card p-2 shadow-sm">
+              <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
+                <p className="max-w-2xl text-[11px] leading-snug text-muted-foreground">
+                  Показаны только операции, которые пользователь может выполнять. Базовые права — из роли;
+                  дополнительные назначаются через «Добавить операции». Колонка «Предоставление доступа» —
+                  может ли этот аккаунт выдавать каждую операцию другим (только для него, не через роль).
+                  Снять саму операцию — «Открепить» / «Снять».
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 shrink-0 gap-1 bg-teal-700 px-2.5 text-[11px] text-white hover:bg-teal-800"
+                  onClick={() => openModal("operations")}
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  Добавить операции
+                </Button>
+              </div>
               <p className="mb-1.5 text-xs font-semibold text-foreground">Фильтр</p>
               <div className="flex w-full flex-wrap items-end justify-between gap-x-3 gap-y-2">
                 <div className="flex min-w-0 flex-1 flex-wrap items-end gap-x-2 gap-y-2">
@@ -1453,51 +1548,27 @@ export function AccessUserDetailPanel({
                     </select>
                   </div>
                   <div className="shrink-0">
-                    <label htmlFor="access-page-filter-status" className="sr-only">
-                      Статус
+                    <label htmlFor="access-page-filter-source" className="sr-only">
+                      Источник
                     </label>
                     <select
-                      id="access-page-filter-status"
+                      id="access-page-filter-source"
                       className="access-filter-select access-filter-select--fixed w-full min-w-[11rem] sm:w-auto"
-                      value={filterGrantDraft}
-                      onChange={(e) => setFilterGrantDraft(e.target.value as "all" | "allowed" | "denied")}
+                      value={filterSourceDraft}
+                      onChange={(e) => setFilterSourceDraft(e.target.value as PermissionSourceFilter)}
                       title={
-                        filterGrantDraft === "all"
-                          ? "Статус — без фильтра"
-                          : filterGrantDraft === "allowed"
-                            ? "Только разрешённые"
-                            : "Только запрещённые"
+                        filterSourceDraft === "all"
+                          ? "Источник — все активные"
+                          : filterSourceDraft === "role"
+                            ? "Только из роли (базовые)"
+                            : "Только дополнительно назначенные"
                       }
                     >
-                      <option value="all" title="Без фильтра по статусу">
-                        Статус
+                      <option value="all" title="Все активные операции">
+                        Источник
                       </option>
-                      <option value="allowed">Разрешено</option>
-                      <option value="denied">Запрещено</option>
-                    </select>
-                  </div>
-                  <div className="shrink-0">
-                    <label htmlFor="access-page-filter-predost" className="sr-only">
-                      Предоставление доступа
-                    </label>
-                    <select
-                      id="access-page-filter-predost"
-                      className="access-filter-select w-full min-w-[13.5rem] max-w-[min(100%,18rem)] sm:w-auto"
-                      value={filterPredostDraft}
-                      onChange={(e) => setFilterPredostDraft(e.target.value as "all" | "can" | "cannot")}
-                      title={
-                        filterPredostDraft === "all"
-                          ? "Предоставление доступа — без фильтра"
-                          : filterPredostDraft === "can"
-                            ? "Переключатель доступен"
-                            : "Переключатель недоступен"
-                      }
-                    >
-                      <option value="all" title="Без фильтра">
-                        Предоставление доступа
-                      </option>
-                      <option value="can">Доступно</option>
-                      <option value="cannot">Недоступно</option>
+                      <option value="role">Из роли</option>
+                      <option value="extra">Дополнительно</option>
                     </select>
                   </div>
                 </div>
@@ -1508,8 +1579,7 @@ export function AccessUserDetailPanel({
                     className="h-7 bg-teal-700 px-3 text-[11px] text-white hover:bg-teal-800"
                     onClick={() => {
                       setFilterParent(filterParentDraft);
-                      setFilterGrant(filterGrantDraft);
-                      setFilterPredost(filterPredostDraft);
+                      setFilterSource(filterSourceDraft);
                     }}
                   >
                     Применить
@@ -1561,6 +1631,23 @@ export function AccessUserDetailPanel({
             ) : null}
             <div className="flex min-h-0 flex-1 flex-col gap-0">
             <div className="access-split-scroll-panel min-h-0 flex-1">
+              {matrixRowGroups.length === 0 ? (
+                <div className="flex min-h-[12rem] flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border/70 bg-muted/15 px-4 py-10 text-center">
+                  <p className="max-w-md text-sm text-muted-foreground">
+                    У пользователя пока нет активных операций — только базовые права роли или доступ ещё не назначен.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1 bg-teal-700 text-white hover:bg-teal-800"
+                    onClick={() => openModal("operations")}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                    Добавить операции
+                  </Button>
+                </div>
+              ) : (
+              <>
               <div ref={matrixHeadScrollRef} className="access-split-scroll-head" onScroll={onMatrixHeadScroll}>
                 <table className="access-matrix-table">
                   <colgroup>
@@ -1568,6 +1655,7 @@ export function AccessUserDetailPanel({
                     <col className="min-w-[8rem]" />
                     <col className="min-w-[6rem] w-[10rem]" />
                     <col className="min-w-[8rem] w-[12rem]" />
+                    <col className="w-[7rem]" />
                     <col className="w-[10rem]" />
                     <col className="w-[8.5rem]" />
                   </colgroup>
@@ -1578,19 +1666,19 @@ export function AccessUserDetailPanel({
                         <input
                           ref={bulkHeaderCheckboxRef}
                           type="checkbox"
-                          className={`h-3.5 w-3.5 ${detachableKeys.length > 0 ? "accent-teal-700" : "cursor-not-allowed opacity-40"}`}
-                          checked={detachableKeys.length > 0 ? bulkHeaderAllSelected : false}
-                          disabled={patchMut.isPending || detachableKeys.length === 0}
+                          className={`h-3.5 w-3.5 ${bulkSelectableKeys.length > 0 ? "accent-teal-700" : "cursor-not-allowed opacity-40"}`}
+                          checked={bulkSelectableKeys.length > 0 ? bulkHeaderAllSelected : false}
+                          disabled={patchMut.isPending || bulkSelectableKeys.length === 0}
                           onChange={(e) => toggleBulkAll(e.target.checked)}
                           title={
-                            detachableKeys.length > 0
-                              ? "Выбрать все видимые строки с пользовательской настройкой (для открепления)"
-                              : "Массовый выбор недоступен"
+                            bulkSelectableKeys.length > 0
+                              ? "Выбрать все видимые строки для массового включения/выключения или открепления"
+                              : "Нет строк для массового выбора — включите «Доступ: управление» или выберите пользователя с активными операциями"
                           }
                           aria-label={
-                            detachableKeys.length > 0
-                              ? "Выбрать все видимые строки с пользовательской настройкой"
-                              : "Нет строк с пользовательской настройкой для массового выбора"
+                            bulkSelectableKeys.length > 0
+                              ? "Выбрать все видимые строки для массовых действий"
+                              : "Нет строк для массового выбора"
                           }
                         />
                       </th>
@@ -1618,6 +1706,9 @@ export function AccessUserDetailPanel({
                           onClick={() => toggleMatrixSort("section")}
                         />
                       </th>
+                      <th scope="col" className="px-2 py-1 text-left align-middle text-[10px] font-semibold leading-tight">
+                        <span title="Роль — базовые права; Дополнительно — назначено вручную">Источник</span>
+                      </th>
                       <th
                         scope="col"
                         className="w-[10rem] px-1.5 py-1 text-center align-middle text-[10px] font-semibold leading-tight"
@@ -1625,7 +1716,7 @@ export function AccessUserDetailPanel({
                         <div className="flex flex-col items-center justify-center gap-1.5 py-0.5">
                           <span
                             className="w-full max-w-[10rem] px-0.5 text-center text-[9px] font-semibold leading-snug sm:text-[10px]"
-                            title="Выдача этой операции другим пользователям (в разделе «Доступ»). Доступно только при включённой операции «Доступ: управление»."
+                            title="Может выдавать эту операцию другим пользователям в «Доступ» (только для этого аккаунта)"
                           >
                             Предоставление доступа
                           </span>
@@ -1635,30 +1726,23 @@ export function AccessUserDetailPanel({
                                 ref={grantHeaderSwitchRef}
                                 type="checkbox"
                                 role="switch"
-                                aria-checked={grantHeaderAllEffective}
-                                aria-label={
-                                  bulkSel.size > 0
-                                    ? "Предоставление доступа: включить или выключить для выбранных строк"
-                                    : "Предоставление доступа: включить или выключить для всех видимых строк"
-                                }
+                                aria-checked={grantHeaderAllOn}
                                 className="peer sr-only"
-                                checked={grantHeaderAllEffective}
+                                checked={grantHeaderAllOn}
                                 disabled={patchMut.isPending}
                                 title={
-                                  !targetHasAccessManage
-                                    ? "Сначала включите «Доступ: управление» (access.manage), чтобы выдавать другие операции. Переключатель всё равно включает доступные строки (в т.ч. access.manage)."
-                                    : bulkSel.size > 0
-                                      ? "Предоставление доступа: разрешить или запретить для выбранных"
-                                      : "Предоставление доступа: разрешить или запретить для всех видимых"
+                                  bulkSel.size > 0
+                                    ? "Разрешить или запретить выдачу доступа другим — для выбранных операций"
+                                    : "Разрешить или запретить выдачу доступа другим — для всех видимых операций"
                                 }
-                                onChange={(e) => void bulkApplyFilteredEffective(e.target.checked)}
+                                onChange={(e) => void bulkApplyGrantDelegation(e.target.checked)}
                               />
                               <span
-                                className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:cursor-not-allowed peer-disabled:opacity-50"
+                                className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:opacity-50"
                                 aria-hidden
                               />
                               <span
-                                className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
+                                className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
                                 aria-hidden
                               />
                             </label>
@@ -1679,6 +1763,7 @@ export function AccessUserDetailPanel({
                     <col className="min-w-[8rem]" />
                     <col className="min-w-[6rem] w-[10rem]" />
                     <col className="min-w-[8rem] w-[12rem]" />
+                    <col className="w-[7rem]" />
                     <col className="w-[10rem]" />
                     <col className="w-[8.5rem]" />
                   </colgroup>
@@ -1686,12 +1771,12 @@ export function AccessUserDetailPanel({
                     {matrixRowGroups.map((grp) => {
                       const groupKey = grp.parent.trim() || "—";
                       const open = matrixGroupExpanded.has(groupKey);
-                      const groupDetachableKeys = grp.rows.filter((r) => r.user_effect !== "none").map((r) => r.key);
+                      const groupSelectableKeys = grp.rows.filter(isRowBulkSelectable).map((r) => r.key);
                       const groupAllSelected =
-                        groupDetachableKeys.length > 0 && groupDetachableKeys.every((k) => bulkSel.has(k));
+                        groupSelectableKeys.length > 0 && groupSelectableKeys.every((k) => bulkSel.has(k));
                       const groupSomeSelected =
-                        groupDetachableKeys.length > 0 &&
-                        groupDetachableKeys.some((k) => bulkSel.has(k)) &&
+                        groupSelectableKeys.length > 0 &&
+                        groupSelectableKeys.some((k) => bulkSel.has(k)) &&
                         !groupAllSelected;
                       return (
                         <Fragment key={grp.parent}>
@@ -1701,14 +1786,14 @@ export function AccessUserDetailPanel({
                                 <IndeterminateCheckbox
                                   checked={groupAllSelected}
                                   indeterminate={groupSomeSelected}
-                                  disabled={patchMut.isPending || groupDetachableKeys.length === 0}
+                                  disabled={patchMut.isPending || groupSelectableKeys.length === 0}
                                   className="h-3.5 w-3.5"
                                   title={
-                                    groupDetachableKeys.length === 0
-                                      ? "В группе нет строк с пользовательской настройкой (только из роли)"
+                                    groupSelectableKeys.length === 0
+                                      ? "В группе нет строк для массового выбора"
                                       : groupAllSelected
                                         ? "Снять выбор со всех строк группы"
-                                        : "Выбрать все строки группы с пользовательской настройкой"
+                                        : "Выбрать все доступные строки группы"
                                   }
                                   onChange={(e) => {
                                     e.stopPropagation();
@@ -1719,7 +1804,7 @@ export function AccessUserDetailPanel({
                               </div>
                             </td>
                             <td
-                              colSpan={5}
+                              colSpan={6}
                               className="cursor-pointer px-2 py-1"
                               onClick={() =>
                                 setMatrixGroupExpanded((prev) => {
@@ -1744,22 +1829,24 @@ export function AccessUserDetailPanel({
                             </td>
                           </tr>
                           {open
-                            ? grp.rows.map((row) => (
+                            ? grp.rows.map((row) => {
+                                const rowSelectable = isRowBulkSelectable(row);
+                                return (
                                 <tr key={row.key} className="border-t border-border/50 transition-colors hover:bg-muted/25">
                                   <td className="access-matrix-col-select py-2">
                                     <input
                                       type="checkbox"
-                                      className={`h-4 w-4 ${row.user_effect !== "none" ? "accent-teal-700" : "cursor-not-allowed opacity-45"}`}
-                                      checked={row.user_effect !== "none" ? bulkSel.has(row.key) : false}
-                                      disabled={patchMut.isPending || row.user_effect === "none"}
-                                      title={row.user_effect !== "none" ? undefined : "Только из роли — открепление через таблицу недоступно"}
+                                      className={`h-4 w-4 ${rowSelectable ? "accent-teal-700" : "cursor-not-allowed opacity-45"}`}
+                                      checked={rowSelectable ? bulkSel.has(row.key) : false}
+                                      disabled={patchMut.isPending || !rowSelectable}
+                                      title="Выбрать для массового запрета или открепления личной настройки"
                                       aria-label={
-                                        row.user_effect !== "none"
+                                        rowSelectable
                                           ? `Выбрать строку: ${displayAccessDescriptionShort(row.description, row.key)}`
-                                          : `Только из роли, массовое выделение недоступно: ${displayAccessDescriptionShort(row.description, row.key)}`
+                                          : `Массовый выбор недоступен: ${displayAccessDescriptionShort(row.description, row.key)}`
                                       }
                                       onChange={(e) => {
-                                        if (row.user_effect === "none") return;
+                                        if (!rowSelectable) return;
                                         const n = new Set(bulkSel);
                                         if (e.target.checked) n.add(row.key);
                                         else n.delete(row.key);
@@ -1785,53 +1872,82 @@ export function AccessUserDetailPanel({
                                   >
                                     {displayAccessDescriptionShort(row.section, "—")}
                                   </td>
+                                  <td className="px-2 py-2 align-middle text-[11px]">
+                                    <span
+                                      className={cn(
+                                        "inline-flex rounded px-1.5 py-0.5 font-medium",
+                                        row.user_effect === "allow"
+                                          ? "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+                                          : "bg-muted/80 text-muted-foreground"
+                                      )}
+                                      title={
+                                        row.user_effect === "allow"
+                                          ? "Назначено дополнительно (не только роль)"
+                                          : "Базовое право из роли пользователя"
+                                      }
+                                    >
+                                      {permissionSourceLabel(row)}
+                                    </span>
+                                  </td>
                                   <td className="w-[10rem] px-2 py-2 text-center align-middle">
                                     <label className="relative mx-auto flex h-6 w-11 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                                       <input
                                         type="checkbox"
                                         role="switch"
-                                        aria-checked={row.effective}
-                                        aria-label={`${row.effective ? "Разрешено" : "Запрещено"}: ${displayAccessDescriptionShort(row.description, row.key)}`}
+                                        aria-checked={row.can_grant_others}
+                                        aria-label={`${row.can_grant_others ? "Может выдавать другим" : "Не может выдавать другим"}: ${displayAccessDescriptionShort(row.description, row.key)}`}
                                         className="peer sr-only"
-                                        checked={row.effective}
-                                        disabled={
-                                          patchMut.isPending ||
-                                          (!canUsePredostRow(row) && !row.effective)
-                                        }
+                                        checked={row.can_grant_others}
+                                        disabled={patchMut.isPending}
                                         title={
-                                          !canUsePredostRow(row) && !row.effective
-                                            ? "Включите «Доступ: управление» (access.manage), чтобы выдавать эту операцию."
-                                            : "Выдача операции пользователю (и далее — другим через «Доступ» при наличии access.manage)"
+                                          row.can_grant_others
+                                            ? "Может выдавать эту операцию другим. Выключить — только право выдачи (сама операция остаётся)"
+                                            : "Разрешить этому аккаунту выдавать эту операцию другим пользователям"
                                         }
-                                        onChange={(e) => void toggleRow(row, e.target.checked)}
+                                        onChange={(e) => void toggleRowGrantDelegation(row, e.target.checked)}
                                       />
                                       <span
                                         className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:opacity-50"
                                         aria-hidden
                                       />
                                       <span
-                                        className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
+                                        className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
                                         aria-hidden
                                       />
                                     </label>
                                   </td>
                                   <td className="w-[8.5rem] px-2 py-2 text-center align-middle">
-                                    {row.user_effect !== "none" ? (
+                                    {row.effective ? (
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         className="h-7 min-w-[6.5rem] border-teal-600/45 px-2 text-[11px] text-teal-950 hover:bg-teal-500/10 dark:text-emerald-100"
                                         disabled={patchMut.isPending}
-                                        onClick={() => void patchMut.mutateAsync({ remove_permission_keys: [row.key] })}
+                                        title={
+                                          row.user_effect !== "none"
+                                            ? "Снять личную настройку (дополнительно назначенное)"
+                                            : "Запретить для этого пользователя (роль не меняется)"
+                                        }
+                                        onClick={() => {
+                                          if (row.user_effect !== "none") {
+                                            void patchMut.mutateAsync({ remove_permission_keys: [row.key] });
+                                            return;
+                                          }
+                                          void patchMut.mutateAsync({
+                                            merge_permissions: true,
+                                            denied_permissions: [row.key]
+                                          });
+                                        }}
                                       >
-                                        Открепить
+                                        {row.user_effect !== "none" ? "Открепить" : "Снять"}
                                       </Button>
                                     ) : (
                                       <span className="text-muted-foreground">—</span>
                                     )}
                                   </td>
                                 </tr>
-                              ))
+                              );
+                              })
                             : null}
                         </Fragment>
                       );
@@ -1839,17 +1955,25 @@ export function AccessUserDetailPanel({
                   </tbody>
                 </table>
               </div>
+              </>
+              )}
             </div>
             {bulkSel.size > 0 ? (
               <AccessBulkBottomBar
                 variant="operations"
                 selectedCount={bulkSel.size}
-                totalVisibleCount={detachableKeys.length}
+                totalVisibleCount={bulkSelectableKeys.length}
                 onClear={() => setBulkSel(new Set())}
                 busy={patchMut.isPending}
                 denyTitle="Запретить выбранные операции (снять эффект)"
                 onDeny={() => void bulkApplyFilteredEffective(false)}
                 onDetach={() => void bulkDetach()}
+                detachDisabled={selectedDetachableCount === 0}
+                detachTitle={
+                  selectedDetachableCount === 0
+                    ? "Выберите активные операции для снятия доступа у этого пользователя"
+                    : "Снять доступ у выбранных (личные — открепить, из роли — запретить только этому аккаунту)"
+                }
                 detachWithLinkIcon
               />
             ) : null}
@@ -2279,6 +2403,10 @@ export function AccessUserDetailPanel({
             </div>
           ) : modal === "operations" ? (
             <div className="flex flex-col gap-2 overflow-hidden">
+              <p className="text-[11px] text-muted-foreground">
+                Доступно для добавления: {attachModalBaseItems.length}. Выберите операции сверх базовых прав роли — они
+                будут назначены только этому пользователю.
+              </p>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -2312,56 +2440,67 @@ export function AccessUserDetailPanel({
                 {catalogQ.isLoading ? (
                   <p className="py-8 text-center text-xs text-muted-foreground">Загрузка каталога…</p>
                 ) : opAttachGroups.length === 0 ? (
-                  <p className="py-8 text-center text-xs text-muted-foreground">Ничего не найдено</p>
+                  <p className="py-8 text-center text-xs text-muted-foreground">
+                    {attachModalBaseItems.length === 0
+                      ? "Все операции из каталога уже доступны пользователю или добавление ограничено."
+                      : "Ничего не найдено по фильтру"}
+                  </p>
                 ) : (
                   opAttachGroups.map((grp) => {
                   const expanded = opAttachGroupExpanded.has(grp.parent);
+                  const groupKeys = grp.items.map((item) => item.key);
+                  const groupAllSelected =
+                    groupKeys.length > 0 && groupKeys.every((k) => modalSel.has(k));
+                  const groupSomeSelected =
+                    groupKeys.length > 0 && groupKeys.some((k) => modalSel.has(k)) && !groupAllSelected;
                   return (
                     <div key={grp.parent} className="border-b border-border/40 py-1 last:border-b-0">
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-xs font-semibold hover:bg-muted/50"
-                        onClick={() =>
-                          setOpAttachGroupExpanded((prev) => {
-                            const n = new Set(prev);
-                            if (n.has(grp.parent)) n.delete(grp.parent);
-                            else n.add(grp.parent);
-                            return n;
-                          })
-                        }
-                      >
-                        {expanded ? (
-                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        ) : (
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        )}
-                        <span className="min-w-0 truncate" title={grp.parent}>
-                          {shortenPathLabel(grp.parent)}
-                        </span>
-                        <span className="shrink-0 font-normal text-muted-foreground">({grp.items.length})</span>
-                      </button>
+                      <div className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-semibold"
+                          onClick={() =>
+                            setOpAttachGroupExpanded((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(grp.parent)) n.delete(grp.parent);
+                              else n.add(grp.parent);
+                              return n;
+                            })
+                          }
+                        >
+                          {expanded ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                          )}
+                          <span className="min-w-0 truncate" title={grp.parent}>
+                            {shortenPathLabel(grp.parent)}
+                          </span>
+                          <span className="shrink-0 font-normal text-muted-foreground">({grp.items.length})</span>
+                        </button>
+                        <IndeterminateCheckbox
+                          checked={groupAllSelected}
+                          indeterminate={groupSomeSelected}
+                          disabled={patchMut.isPending || groupKeys.length === 0}
+                          className="h-4 w-4 shrink-0 accent-teal-700"
+                          title={`Выбрать все операции категории «${shortenPathLabel(grp.parent)}»`}
+                          aria-label={`Выбрать все операции категории: ${shortenPathLabel(grp.parent)}`}
+                          onChange={(e) => toggleOpAttachGroup(grp.items, e.target.checked)}
+                        />
+                      </div>
                       {expanded ? (
                         <div className="mt-0.5 space-y-0 border-l border-border/45 pl-2">
-                          {grp.items.map((item) => {
-                            const rowM = matrixByKey.get(item.key);
-                            const rowEff = rowM?.effective ?? false;
-                            const lockAddOps =
-                              !targetHasAccessManage && item.key !== ACCESS_MANAGE_KEY && !rowEff;
-                            return (
+                          {grp.items.map((item) => (
                               <label
                                 key={item.key}
-                                className={`flex cursor-pointer items-start gap-2 border-b border-border/30 py-1.5 last:border-b-0 ${lockAddOps && !modalSel.has(item.key) ? "cursor-not-allowed opacity-60" : ""}`}
+                                className="flex cursor-pointer items-start gap-2 border-b border-border/30 py-1.5 last:border-b-0"
                               >
                                 <input
                                   type="checkbox"
                                   className="mt-0.5 h-4 w-4 accent-teal-700"
-                                  disabled={patchMut.isPending || (lockAddOps && !modalSel.has(item.key))}
+                                  disabled={patchMut.isPending}
                                   checked={modalSel.has(item.key)}
-                                  title={
-                                    lockAddOps && !modalSel.has(item.key)
-                                      ? "Сначала включите «Доступ: управление» (access.manage)."
-                                      : undefined
-                                  }
+                                  title="Дополнительная операция только для этого пользователя"
                                   onChange={(e) => {
                                     const n = new Set(modalSel);
                                     if (e.target.checked) n.add(item.key);
@@ -2378,8 +2517,7 @@ export function AccessUserDetailPanel({
                                   ) : null}
                                 </span>
                               </label>
-                            );
-                          })}
+                            ))}
                         </div>
                       ) : null}
                     </div>
@@ -2503,6 +2641,7 @@ export function AccessUserDetailPanel({
                 type="button"
                 disabled={
                   patchMut.isPending ||
+                  (modal === "operations" && catalogQ.isLoading) ||
                   (modal === "territory" && territoriesQ.isLoading) ||
                   (modal === "staff" && staffPickBootstrapping) ||
                   (dimPickModal && dimQ.isLoading)

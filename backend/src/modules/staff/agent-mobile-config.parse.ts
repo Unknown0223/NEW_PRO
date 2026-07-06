@@ -10,6 +10,7 @@ import {
   type AgentMobileOutletConfig,
   type AgentMobilePhotoConfig,
   type AgentMobileProductListConfig,
+  type AgentMobileRouteConfig,
   type AgentMobileSupervisionConfig,
   type AgentMobileSyncConfig,
   type AgentMobileVanSellingConfig,
@@ -130,6 +131,17 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
     if (!Object.values(outlet).some((v) => v !== undefined)) outlet = undefined;
   }
 
+  let route: AgentMobileRouteConfig | undefined;
+  const routeRaw = o.route;
+  if (routeRaw && typeof routeRaw === "object" && !Array.isArray(routeRaw)) {
+    const r = routeRaw as Record<string, unknown>;
+    route = {
+      daily_visit_limit: asNum(r.daily_visit_limit) ?? undefined,
+      readd_cooldown_days: asNum(r.readd_cooldown_days) ?? undefined
+    };
+    if (!Object.values(route).some((v) => v !== undefined)) route = undefined;
+  }
+
   let product_list: AgentMobileProductListConfig | undefined;
   const plRaw = o.product_list;
   if (plRaw && typeof plRaw === "object" && !Array.isArray(plRaw)) {
@@ -198,7 +210,8 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       bonus_fill_mode: asStr(r.bonus_fill_mode, 120),
       allow_return_from_shelf: asBool(r.allow_return_from_shelf),
       allow_partial_return_edit: asBool(r.allow_partial_return_edit),
-      allow_reload_from_vehicle: asBool(r.allow_reload_from_vehicle)
+      allow_reload_from_vehicle: asBool(r.allow_reload_from_vehicle),
+      return_reason_required: asBool(r.return_reason_required)
     };
     if (!Object.values(orders).some((v) => v !== undefined)) orders = undefined;
   }
@@ -243,7 +256,8 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       allowed_payment_method_ids: parseStringArray(e.allowed_payment_method_ids),
       allowed_trade_direction_ids: parsePositiveIntArray(e.allowed_trade_direction_ids),
       delivery_payment_method_strict: asBool(e.delivery_payment_method_strict),
-      fingerprint_required_for_shipment_confirm: asBool(e.fingerprint_required_for_shipment_confirm)
+      fingerprint_required_for_shipment_confirm: asBool(e.fingerprint_required_for_shipment_confirm),
+      require_photo_report_before_visit: asBool(e.require_photo_report_before_visit)
     };
     if (!Object.values(expeditor).some((x) => x !== undefined)) expeditor = undefined;
   }
@@ -253,6 +267,7 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
     ...(client ? { client } : {}),
     ...(gps ? { gps } : {}),
     ...(outlet ? { outlet } : {}),
+    ...(route ? { route } : {}),
     ...(product_list ? { product_list } : {}),
     ...(photo ? { photo } : {}),
     ...(misc ? { misc } : {}),
@@ -267,6 +282,7 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
     client ||
     gps ||
     outlet ||
+    route ||
     product_list ||
     photo ||
     misc ||

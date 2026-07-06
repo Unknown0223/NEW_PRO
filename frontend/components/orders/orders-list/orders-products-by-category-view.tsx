@@ -11,7 +11,13 @@ import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 
 /** Zakaz qatori tagidagi mahsulot bloki — kategoriya tablari + jadval. */
-export function OrdersProductsByCategoryView({ items }: { items: OrderItemRow[] }) {
+export function OrdersProductsByCategoryView({
+  items,
+  discount_sum
+}: {
+  items: OrderItemRow[];
+  discount_sum?: string | null;
+}) {
   const groups = useMemo(() => groupItemsByCategory(items), [items]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
@@ -62,7 +68,9 @@ export function OrdersProductsByCategoryView({ items }: { items: OrderItemRow[] 
           {groups[0]?.name ?? "Товары"}
         </div>
       )}
-      {activeGroup ? <OrderLineProductsTable items={activeGroup.items} /> : null}
+      {activeGroup ? (
+        <OrderLineProductsTable items={activeGroup.items} discount_sum={discount_sum} />
+      ) : null}
       {groups.length > 1 ? (
         <p className="mt-3 text-xs text-muted-foreground">
           Общий итог по всем категориям:{" "}

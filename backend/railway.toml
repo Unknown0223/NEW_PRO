@@ -1,5 +1,7 @@
 # Railway: servis «Root Directory» = backend
 # https://docs.railway.com/reference/config-as-code
+#
+# Dockerfile CMD: migrate + API + BullMQ worker (importlar uchun worker majburiy).
 
 [build]
 builder = "DOCKERFILE"

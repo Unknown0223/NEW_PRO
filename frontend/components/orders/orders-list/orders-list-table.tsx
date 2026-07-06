@@ -7,9 +7,9 @@ import { OrdersListTableRow } from "@/components/orders/orders-list/orders-list-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getUserFacingError } from "@/lib/error-utils";
-import { formatGroupedInteger, formatNumberGrouped } from "@/lib/format-numbers";
+import { formatGroupedInteger } from "@/lib/format-numbers";
 import { OrdersExcelExportDialog } from "@/components/orders/orders-list/orders-excel-export-dialog";
-import { ORDER_LIST_COLUMNS } from "@/lib/orders-list-columns";
+import { ORDER_LIST_COLUMNS, orderListColumnThClass } from "@/lib/orders-list-columns";
 import {
   orderMilestoneDatetimeDialogTitle,
   orderStatusDatetimeDialogTitle
@@ -20,14 +20,18 @@ import { ChevronLeft, ChevronRight, ListOrdered, Package, RefreshCw, Search } fr
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UseOrdersListPageResult } from "./use-orders-list-page";
 
+/**
+ * CURSOR / AI AGENT — DO NOT CHANGE expand/scroll layout without explicit user request.
+ * Zakaz ochilganda gorizontal scroll siljishi: orders-list-expand-layout.ts va
+ * OrdersListExpandedRow. Jadval min-w-[3200px] saqlanadi; panel alohida sticky qatlam.
+ */
 const ORDERS_TABLE_MIN_CLASS = "w-full min-w-[3200px] border-collapse text-xs";
-/** Sahifada ko‘rsatiladigan qatorlar (API limit bilan bir xil) */
-const ORDERS_LIST_PAGE_ROWS = 15;
 /** Ustun nomlari qatori (sticky) */
 const ORDERS_TABLE_HEADER_REM = 2.75;
 /** Bir qator balandligi (py-2.5 + kontent) */
 const ORDERS_TABLE_ROW_REM = 3.125;
-const ORDERS_TABLE_SCROLL_CLASS = "orders-list-table-scroll overflow-x-auto overflow-y-auto";
+const ORDERS_TABLE_SCROLL_CLASS =
+  "orders-list-table-scroll scrollbar-none overflow-x-auto overflow-y-auto";
 const ORDERS_TABLE_HEAD_CELL = "orders-list-table-th-sticky";
 
 /** Scroll oynasi: har doim sahifa limiti (15) qator sig‘imi, ma’lumot kam bo‘lsa ham */
@@ -48,6 +52,7 @@ type OrdersListTableProps = Pick<
   | "refetch"
   | "rows"
   | "orderListTotalPages"
+  | "ordersFiltersApplied"
   | "tablePrefs"
   | "replaceOrdersQuery"
   | "columnDialogOpen"
@@ -79,6 +84,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
     refetch,
     rows,
     orderListTotalPages,
+    ordersFiltersApplied,
     tablePrefs,
     replaceOrdersQuery,
     columnDialogOpen,
@@ -104,6 +110,18 @@ export function OrdersListTable(props: OrdersListTableProps) {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [excelExportOpen, setExcelExportOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState(filters.search);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [expandPanelWidth, setExpandPanelWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const sync = () => setExpandPanelWidth(el.clientWidth);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rows.length, ordersFiltersApplied, isLoading]);
 
   useEffect(() => {
     setSearchDraft(filters.search);
@@ -118,25 +136,19 @@ export function OrdersListTable(props: OrdersListTableProps) {
     [tablePrefs.pageSize]
   );
 
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const [tableViewportWidth, setTableViewportWidth] = useState(0);
-
-  useEffect(() => {
-    const el = tableScrollRef.current;
-    if (!el) return;
-    const sync = () => setTableViewportWidth(el.clientWidth);
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isLoading, rows.length]);
-
   const toggleExpand = useCallback(
     (id: number) => {
+      const scrollEl = scrollContainerRef.current;
+      const savedScrollLeft = scrollEl?.scrollLeft ?? 0;
       setExpandedOrderId((prev) => {
         const next = prev === id ? null : id;
         if (next != null) prefetchOrderDetail(next);
         return next;
+      });
+      queueMicrotask(() => {
+        requestAnimationFrame(() => {
+          if (scrollEl) scrollEl.scrollLeft = savedScrollLeft;
+        });
       });
     },
     [prefetchOrderDetail]
@@ -309,7 +321,15 @@ export function OrdersListTable(props: OrdersListTableProps) {
               ) : null}
             </div>
 
-            {isLoading ? (
+            {!ordersFiltersApplied ? (
+              <div className="py-16 text-center text-muted-foreground">
+                <Package className="mx-auto mb-3 size-12 text-muted-foreground/40" aria-hidden />
+                <p className="text-lg font-medium text-foreground">Выберите фильтры</p>
+                <p className="mt-1 text-sm">
+                  Укажите период и условия, затем нажмите «Применить» — список заказов загрузится.
+                </p>
+              </div>
+            ) : isLoading ? (
               <p className="px-3 py-6 text-sm text-muted-foreground sm:px-4">Загрузка…</p>
             ) : isError ? (
               <div className="p-4 sm:p-5">
@@ -324,14 +344,14 @@ export function OrdersListTable(props: OrdersListTableProps) {
                 <p className="text-lg font-medium text-foreground">Заказы не найдены</p>
                 <p className="mt-1 text-sm">
                   {data?.total === 0
-                    ? "Измените фильтры или создайте новый заказ"
-                    : "На этой странице нет строк"}
+                    ? "По выбранным фильтрам и периоду заказов нет. Измените условия или создайте новый заказ."
+                    : "На этой странице нет строк — перейдите на другую страницу."}
                 </p>
               </div>
             ) : (
               <>
                 <div
-                  ref={tableScrollRef}
+                  ref={scrollContainerRef}
                   className={ORDERS_TABLE_SCROLL_CLASS}
                   style={{ maxHeight: tableScrollMaxHeight }}
                 >
@@ -366,6 +386,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                               className={cn(
                                 "px-3 py-2",
                                 ORDERS_TABLE_HEAD_CELL,
+                                orderListColumnThClass(colId),
                                 right && "text-right"
                               )}
                             >
@@ -401,7 +422,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                           onStatusChange={onStatusChange}
                           onChangeShipDate={onChangeShipDate}
                           onPrefetchDetail={prefetchOrderDetail}
-                          tableViewportWidth={tableViewportWidth}
+                          expandPanelWidth={expandPanelWidth}
                         />
                       ))}
                     </tbody>

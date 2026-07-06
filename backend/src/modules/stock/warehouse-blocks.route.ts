@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify } from "../auth/auth.prehandlers";
 import {
@@ -142,6 +144,14 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
       }
       try {
         const row = await createWarehouseBlock(request.tenant!.id, parsed.data);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "warehouse_block",
+          entityId: (row as { id?: number })?.id ?? "—",
+          action: "warehouse_block.create",
+          payload: { warehouse_id: parsed.data.warehouse_id, name: parsed.data.name, code: parsed.data.code ?? null }
+        });
         return reply.status(201).send(row);
       } catch (e) {
         return mapBlockError(reply, request, e);
@@ -162,6 +172,14 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
       }
       try {
         await updateWarehouseBlock(request.tenant!.id, id, parsed.data);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "warehouse_block",
+          entityId: id,
+          action: "warehouse_block.update",
+          payload: { warehouse_id: parsed.data.warehouse_id, name: parsed.data.name }
+        });
         return reply.send({ ok: true });
       } catch (e) {
         return mapBlockError(reply, request, e);
@@ -178,6 +196,14 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
       try {
         await deleteWarehouseBlock(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "warehouse_block",
+          entityId: id,
+          action: "warehouse_block.delete",
+          payload: { id }
+        });
         return reply.send({ ok: true });
       } catch (e) {
         return mapBlockError(reply, request, e);
@@ -194,6 +220,14 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
       try {
         await confirmWarehouseBlockEmpty(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "warehouse_block",
+          entityId: id,
+          action: "warehouse_block.confirm_empty",
+          payload: { id }
+        });
         return reply.send({ ok: true });
       } catch (e) {
         return mapBlockError(reply, request, e);

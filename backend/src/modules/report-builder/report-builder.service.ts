@@ -10,6 +10,8 @@ import type { ReportActor } from "../reports/client-sales-4-report.service";
 import { ORDER_STATUSES, ORDER_TYPE_LABELS, ORDER_TYPES } from "../orders/order-status";
 import { listDistinctPriceTypesForTenant } from "../reference/reference.service";
 import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-settings.service";
+import { activeBranchNamesFromReferences } from "../tenant-settings/tenant-settings.refs";
+import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { getReportBuilderMetadata } from "./report-builder.metadata";
 import { runReportBuilderDataset } from "./report-builder.dataset";
 import { buildMatrixView, runReportBuilderPreview } from "./report-builder.query";
@@ -89,7 +91,6 @@ export async function getReportBuilderFilterOptions(
     kpi_groups,
     clients,
     catalogPriceTypes,
-    branchRows,
     paymentRows,
     clientCategoryRows,
     tenantRow,
@@ -156,17 +157,6 @@ export async function getReportBuilderFilterOptions(
       take: 2500
     }),
     listDistinctPriceTypesForTenant(tenantId, "sale"),
-    prisma.user.findMany({
-      where: {
-        tenant_id: tenantId,
-        role: "agent",
-        is_active: true,
-        branch: { not: null }
-      },
-      select: { branch: true },
-      distinct: ["branch"],
-      take: 80
-    }),
     prisma.$queryRaw<Array<{ ref: string }>>`
       SELECT DISTINCT btrim(o.payment_method_ref) AS ref
       FROM orders o
@@ -205,10 +195,8 @@ export async function getReportBuilderFilterOptions(
 
   const payment_methods = paymentRows.map((r) => ({ id: r.ref, label: r.ref }));
   const price_types = catalogPriceTypes.map((id) => ({ id, label: id }));
-  const branches = branchRows
-    .map((r) => r.branch?.trim())
-    .filter((x): x is string => Boolean(x))
-    .map((id) => ({ id, label: id }));
+  const branchNames = activeBranchNamesFromReferences(asRecord(asRecord(tenantRow?.settings).references));
+  const branches = branchNames.map((id) => ({ id, label: id }));
 
   const client_categories = clientCategoryRows
     .map((r) => r.category?.trim())

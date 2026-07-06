@@ -1,0 +1,37 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check /health
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL || 'https://api.example.com/health' }}
+        run: |
+          echo "Checking $HEALTH_URL"
+          code=$(curl -s -o /tmp/health.json -w "%{http_code}" "$HEALTH_URL" --max-time 30)
+          cat /tmp/health.json
+          if [ "$code" != "200" ]; then
+            echo "Health check failed with HTTP $code"
+            exit 1
+          fi
+          echo "OK"
+
+      - name: Check /ready (optional token)
+        if: vars.PRODUCTION_READY_URL != ''
+        env:
+          READY_URL: ${{ vars.PRODUCTION_READY_URL }}
+          INTERNAL_HEALTH_TOKEN: ${{ secrets.INTERNAL_HEALTH_TOKEN }}
+        run: |
+          headers=()
+          if [ -n "$INTERNAL_HEALTH_TOKEN" ]; then
+            headers+=(-H "x-internal-token: $INTERNAL_HEALTH_TOKEN")
+          fi
+          code=$(curl -s "${headers[@]}" -o /tmp/ready.json -w "%{http_code}" "$READY_URL" --max-time 30)
+          cat /tmp/ready.json
+          test "$code" = "200"

@@ -17,7 +17,6 @@ export function ReturnParamsGrid({ vm }: { vm: OrderCreateVm }) {
     isPolkiFree,
     polkiReturnCategories,
     polkiContextQ,
-    categoryFilterActive,
     selectedCategoryIds,
     setSelectedCategoryIds,
     setActiveCatalogCategoryId
@@ -72,9 +71,7 @@ export function ReturnParamsGrid({ vm }: { vm: OrderCreateVm }) {
             canShowPolkiGrid={canShowPolkiGrid}
             categories={polkiReturnCategories}
             contextLoading={polkiContextQ.isLoading}
-            contextSuccess={polkiContextQ.isSuccess}
             contextEmpty={polkiContextQ.isSuccess && (polkiReturnCategories?.length ?? 0) === 0}
-            categoryFilterActive={categoryFilterActive}
             selectedCategoryIds={selectedCategoryIds}
             disabled={mutation.isPending}
             onSelectAll={onSelectAll}

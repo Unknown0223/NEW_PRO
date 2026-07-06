@@ -134,3 +134,59 @@ export async function downloadStyledXlsxSheet(
   const buffer = await wb.xlsx.writeBuffer();
   triggerBrowserDownload(buffer as ArrayBuffer, filename);
 }
+
+/** ZIP yoki boshqa joyda ishlatish — brauzerda yuklamasdan buffer qaytaradi. */
+export async function buildStyledXlsxBuffer(
+  sheetName: string,
+  headers: string[],
+  rows: (string | number | boolean | null | undefined)[][],
+  options?: DownloadStyledXlsxOptions
+): Promise<ArrayBuffer> {
+  const ExcelJSMod = (await import("exceljs")) as { default: ExcelJS };
+  const ExcelJS = ExcelJSMod.default;
+
+  const safeName = sheetName.replace(/[:\\/?*[\]]/g, "_").slice(0, 31) || "Sheet1";
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(safeName, {
+    views: [{ state: "frozen", ySplit: 1, topLeftCell: "A2" }],
+    properties: { defaultRowHeight: 15.75 }
+  });
+
+  const headerRow = ws.getRow(1);
+  headerRow.height = 25.5;
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = normalizeCell(h);
+    cell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" }, name: "Calibri" };
+    cell.fill = FILL_HEADER;
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+
+  const normalizedRows = rows.map((line) => line.map((cell) => normalizeCell(cell)));
+
+  normalizedRows.forEach((line, idx) => {
+    const row = ws.getRow(idx + 2);
+    const meta = options?.rowMeta?.[idx];
+    const isAlt = idx % 2 === 1;
+    const fill = meta?.isBonusRow ? FILL_BONUS_ROW : isAlt ? FILL_ROW_ALT : undefined;
+
+    line.forEach((val, ci) => {
+      const cell = row.getCell(ci + 1);
+      const empty = val === "";
+      cell.value = empty ? null : val;
+      cell.font = { size: 12, name: "Calibri" };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      if (fill) cell.fill = fill;
+    });
+  });
+
+  const widths = options?.colWidths?.length
+    ? options.colWidths.map((wch) => Math.min(Math.max(wch, 6), 60))
+    : estimateColWidth(headers, normalizedRows);
+
+  widths.forEach((wch, i) => {
+    ws.getColumn(i + 1).width = wch;
+  });
+
+  return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+}

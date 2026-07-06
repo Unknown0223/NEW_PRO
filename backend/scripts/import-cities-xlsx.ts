@@ -1,4 +1,6 @@
 /**
+ * @deprecated Yangi format (zona + oblast + gorod + kod) uchun: `npm run import:gorod-xlsx`
+ *
  * Excel «Данные Город» (.xlsx): shaharlar → territory_nodes
  *
  *   npm run import:cities-xlsx

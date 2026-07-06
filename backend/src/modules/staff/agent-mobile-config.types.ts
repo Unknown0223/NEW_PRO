@@ -15,6 +15,7 @@ export const CLIENT_FIELD_KEYS = [
   "territory",
   "inn",
   "phone",
+  "address",
   "visit_day",
   "coordinates",
   "client_pc",
@@ -22,7 +23,8 @@ export const CLIENT_FIELD_KEYS = [
   "mfo",
   "oked",
   "pinfl",
-  "agreement_number"
+  "agreement_number",
+  "notes"
 ] as const;
 
 export type ClientFieldKey = (typeof CLIENT_FIELD_KEYS)[number];
@@ -55,6 +57,14 @@ export type AgentMobileGpsConfig = {
 export type AgentMobileOutletConfig = {
   show_plan_in_reports?: boolean;
   plan_version?: string;
+};
+
+/** Kunlik marshrut: limit va qayta qo‘shish oralig‘i (kun). */
+export type AgentMobileRouteConfig = {
+  /** Kuniga avtomatik marshrutdagi do‘konlar soni (0/null = cheksiz). */
+  daily_visit_limit?: number | null;
+  /** Tashrif/qayta buyurtmadan keyin marshrutga avtomatik qo‘shilmaslik (kun). */
+  readd_cooldown_days?: number | null;
 };
 
 export type AgentMobileProductListConfig = {
@@ -105,6 +115,8 @@ export type AgentMobileOrdersConfig = {
   allow_partial_return_edit?: boolean;
   /** Экспедитор: догруз с автомобиля */
   allow_reload_from_vehicle?: boolean;
+  /** Экспедитор: обязателен ли выбор причины при возврате заказа. */
+  return_reason_required?: boolean;
 };
 
 /**
@@ -127,6 +139,8 @@ export type AgentMobileExpeditorConfig = {
   delivery_payment_method_strict?: boolean;
   /** Отгрузочная накладная: отпечаток при подтверждении */
   fingerprint_required_for_shipment_confirm?: boolean;
+  /** Обязательный фотоотчёт перед началом визита */
+  require_photo_report_before_visit?: boolean;
 };
 
 /** Mobile supervision checklist (not tenant audit journal). */
@@ -151,6 +165,7 @@ export type AgentMobileConfigV1 = {
   client?: AgentMobileClientConfig;
   gps?: AgentMobileGpsConfig;
   outlet?: AgentMobileOutletConfig;
+  route?: AgentMobileRouteConfig;
   product_list?: AgentMobileProductListConfig;
   photo?: AgentMobilePhotoConfig;
   misc?: AgentMobileMiscConfig;

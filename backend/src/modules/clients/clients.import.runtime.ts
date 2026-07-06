@@ -167,7 +167,7 @@ export type ClientXlsxImportOptions = {
   importMode?: "create" | "update";
   /**
    * Yangi klient: dublikat qaysi maydonlar bo‘yicha (`client_code`, `city`, `phone`, …).
-   * Bo‘sh yoki berilmasa — default: kod + shahar.
+   * Bo‘sh massiv yoki berilmasa — dublikat tekshiruvi o‘tkazilmaydi.
    */
   duplicateKeyFields?: string[];
   /**

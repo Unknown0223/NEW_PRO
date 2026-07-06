@@ -17,6 +17,7 @@ import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.sche
 import { getErrorCode } from "../../lib/app-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { attachmentContentDisposition } from "../../lib/content-disposition";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -51,7 +52,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerOrderBulkRoutes(app: FastifyInstance) {
   app.post(
     "/api/:slug/orders/bulk/status",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderStatusBodySchema.safeParse(request.body);
@@ -75,7 +76,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/expeditor",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderExpeditorBodySchema.safeParse(request.body);
@@ -98,7 +99,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/consignment",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderConsignmentBodySchema.safeParse(request.body);
@@ -121,7 +122,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/nakladnoy",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderNakladnoyBodySchema.safeParse(request.body);
@@ -181,7 +182,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/nakladnoy/preview",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderNakladnoyPreviewBodySchema.safeParse(request.body);
@@ -238,7 +239,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/nakladnoy/expeditor-loading",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderExpeditorLoadingBodySchema.safeParse(request.body);
@@ -285,7 +286,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders/bulk/nakladnoy/loading-520",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = bulkOrderLoading520BodySchema.safeParse(request.body);

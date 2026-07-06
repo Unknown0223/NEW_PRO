@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ClientSales4Filters, ReportActor } from "./client-sales-4.types";
+import { buildScopedAgentExistsSql } from "../access/access-agent-scope";
 
 export function parseDate(v?: string): Date | null {
   if (!v) return null;
@@ -162,16 +163,9 @@ export function buildOrderWhereSql4(tenantId: number, f: ClientSales4Filters, ac
     );
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
+  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
     parts.push(
-      Prisma.sql`EXISTS (
-        SELECT 1 FROM users su
-        WHERE su.id = COALESCE(o.agent_id, c.agent_id)
-          AND su.tenant_id = ${tenantId}
-          AND su.supervisor_user_id = ${actor.userId}
-      )`
+      buildScopedAgentExistsSql(tenantId, Prisma.sql`COALESCE(o.agent_id, c.agent_id)`, actor)
     );
   }
 

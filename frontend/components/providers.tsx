@@ -2,6 +2,7 @@
 
 import { AppThemeProvider } from "@/components/app-theme-provider";
 import { LoaderPrefsProvider } from "@/components/loader-prefs-provider";
+import { ShiftWheelHorizontalScroll } from "@/components/shift-wheel-horizontal-scroll";
 import { isApiUnreachable } from "@/lib/error-utils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
@@ -45,9 +46,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       persister,
       maxAge: 10 * 60 * 1000, // 10 min
       /** O‘zgartirilganda eski localStorage keshi bekor — infinite query shakli bilan to‘qnashmasin */
-      buster: "v2",
+      buster: "v3",
       dehydrateOptions: {
-        shouldDehydrateQuery: (q) => q.state.status === "success"
+        shouldDehydrateQuery: (q) => {
+          if (q.state.status !== "success") return false;
+          const key = q.queryKey;
+          if (Array.isArray(key) && key[0] === "settings" && key[1] === "profile") return false;
+          return true;
+        }
       }
     });
   }, [queryClient]);
@@ -55,7 +61,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AppThemeProvider>
-        <LoaderPrefsProvider>{children}</LoaderPrefsProvider>
+        <LoaderPrefsProvider>
+          <ShiftWheelHorizontalScroll />
+          {children}
+        </LoaderPrefsProvider>
       </AppThemeProvider>
     </QueryClientProvider>
   );

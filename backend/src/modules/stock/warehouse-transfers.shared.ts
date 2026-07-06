@@ -66,8 +66,10 @@ export async function assertSourceStockForLines(
         AND product_id = ${line.product_id}
     `;
 
+    const reservedRaw = stock[0]?.reserved_qty ?? new Prisma.Decimal(0);
+    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
     const available = stock[0]
-      ? stock[0].qty.minus(stock[0].reserved_qty)
+      ? stock[0].qty.minus(reserved)
       : new Prisma.Decimal(0);
 
     if (available.lt(delta)) {

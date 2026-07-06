@@ -2,9 +2,12 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { emitOrderUpdated } from "../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../lib/redis-cache";
+import { invalidateDashboard } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { assertReturnProductsInterchangeableStrict } from "../products/product-catalog.service";
+import {
+  assertExchangeInterchangeableProducts,
+  assertReturnProductsInterchangeableStrict
+} from "../products/product-catalog.service";
 import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-status";
 
 import type { CreatePeriodReturnInput, PeriodReturnResult } from "./returns-enhanced.types";
@@ -26,8 +29,7 @@ import {
   validateExplicitReturnQtyAgainstItems,
   validateReturnQty
 } from "./returns-enhanced.compute";
-import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
-import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
+import { resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
 import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
 import { assertOrdersInReturnFilter } from "./returns-filter.service";
 
@@ -59,6 +61,35 @@ export async function createPeriodReturn(
     productIds,
     effectiveReturnPriceType(input.price_type)
   );
+
+  // ─── Peresort (almashtirish): manba → fizik qaytariladigan boshqa mahsulot ──
+  // Hisob-kitob va validatsiya AYNI manba (`product_id`, zakazdagi mahsulot)
+  // bo'yicha o'tadi; yakuniy return/ombor qatoriga esa agent tanlagan boshqa
+  // (bir interchangeable guruhdagi) mahsulot yoziladi. Shu sabab guruhda mavjud,
+  // ammo zakazda bo'lmagan istalgan mahsulotni ham qaytarish mumkin bo'ladi.
+  const peresortMap = new Map<number, number>();
+  for (const l of input.lines) {
+    const tgt = l.return_as_product_id;
+    if (tgt != null && tgt > 0 && tgt !== l.product_id) {
+      peresortMap.set(l.product_id, tgt);
+    }
+  }
+  if (peresortMap.size > 0) {
+    const retPt = effectiveReturnPriceType(input.price_type);
+    for (const [src, tgt] of peresortMap) {
+      // Manzil manba bilan bitta faol interchangeable guruhda (va narx turi mos) bo'lishi shart.
+      await assertExchangeInterchangeableProducts(tenantId, [src], [tgt], retPt);
+    }
+    const tgtIds = [...new Set([...peresortMap.values()].filter((id) => !pMap.has(id)))];
+    if (tgtIds.length > 0) {
+      const tgtProducts = await prisma.product.findMany({
+        where: { tenant_id: tenantId, id: { in: tgtIds }, is_active: true },
+        select: { id: true, sku: true, name: true }
+      });
+      if (tgtProducts.length !== tgtIds.length) throw new Error("BAD_PRODUCT");
+      for (const p of tgtProducts) pMap.set(p.id, p);
+    }
+  }
 
   const warehouseId = input.warehouse_id ?? await findReturnWarehouse(tenantId);
 
@@ -100,7 +131,8 @@ export async function createPeriodReturn(
   const returnWhere: Prisma.SalesReturnWhereInput = {
     tenant_id: tenantId,
     client_id: input.client_id,
-    status: "posted",
+    // pending ham hisobga olinadi — qabul kutilayotgan vazvrat takror qaytarishni bloklaydi.
+    status: { in: ["pending", "posted"] },
     order_id: { in: eligibleOrderIds.length > 0 ? eligibleOrderIds : [-1] }
   };
 
@@ -151,7 +183,7 @@ export async function createPeriodReturn(
 
   if (useExplicit) {
     const reconciled =
-      orderScoped
+      orderScoped && !input.skip_order_scoped_reconcile
         ? await reconcileOrderScopedExplicitLinesWithPreview(tenantId, {
             client_id: input.client_id,
             order_id: input.order_id!,
@@ -259,6 +291,15 @@ export async function createPeriodReturn(
     };
   }
 
+  // Peresort: hisob manba bo'yicha tugadi — endi fizik qaytarilgan mahsulotga
+  // (manzilga) qatorlarni qayta nomlaymiz (ombor/hujjat shu mahsulotni oladi).
+  if (peresortMap.size > 0) {
+    retLines = retLines.map((rl) => {
+      const tgt = peresortMap.get(rl.product_id);
+      return tgt != null ? { ...rl, product_id: tgt } : rl;
+    });
+  }
+
   const bonusDebtAmount = await resolvePolkiBonusDebtAmount(tenantId, input);
 
   const number = `VR-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
@@ -274,8 +315,10 @@ export async function createPeriodReturn(
         client_id: input.client_id,
         order_id: input.order_id ?? null,
         warehouse_id: warehouseId,
-        status: "posted",
+        // Zavsklad qabulini kutadi — side-effect'lar qabulda qo'llanadi.
+        status: "pending",
         refund_amount: recalc.refund_amount,
+        bonus_debt_amount: bonusDebtAmount.gt(0) ? bonusDebtAmount : null,
         return_type: "partial",
         date_from:
           orderScoped ? null : input.date_from ? new Date(input.date_from) : null,
@@ -316,56 +359,22 @@ export async function createPeriodReturn(
       refundAmount: recalc.refund_amount,
       note: input.note?.trim() || null,
       refusalReasonRef: input.refusal_reason_ref ?? null,
-      sourceOrderNumber
+      sourceOrderNumber,
+      actorUserId: uid
     });
 
-    // Stock: add to return warehouse
-    for (const rl of retLines) {
-      if (!(rl.qty > 0)) continue;
-      const delta = new Prisma.Decimal(rl.qty);
-      await tx.stock.upsert({
-        where: {
-          tenant_id_warehouse_id_product_id: {
-            tenant_id: tenantId, warehouse_id: warehouseId, product_id: rl.product_id
-          }
-        },
-        create: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: rl.product_id, qty: delta },
-        update: { qty: { increment: delta } }
-      });
-    }
-
-    // Client balance
-    if (recalc.refund_amount.gt(0)) {
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
-        create: { tenant_id: tenantId, client_id: input.client_id, balance: recalc.refund_amount },
-        update: { balance: { increment: recalc.refund_amount } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: { client_balance_id: bal.id, delta: recalc.refund_amount, note: `Vazvrat: ${number}`, user_id: uid }
-      });
-    }
-
-    if (bonusDebtAmount.gt(0)) {
-      await applyClientBonusDebt(tx, tenantId, input.client_id, bonusDebtAmount, uid, {
-        returnNumber: number
-      });
-    }
+    // Side-effect'lar (ostatka / balans / bonus / auto-mark) qabulda qo'llanadi —
+    // bu yerda faqat ko'zgu «заявка» ni hujjatga bog'laymiz.
+    await tx.salesReturn.update({
+      where: { id: ret.id },
+      data: { mirror_order_id: mirrorOrderId }
+    });
 
     return { ret, mirrorOrderId };
   });
 
   emitOrderUpdated(tenantId, mirrorOrderId);
   void invalidateDashboard(tenantId);
-  void invalidateStock(tenantId, warehouseId);
-
-  await autoMarkReturnedOrders(
-    tenantId,
-    input.client_id,
-    orderScoped ? undefined : input.date_from,
-    orderScoped ? undefined : input.date_to,
-    uid
-  );
 
   await appendTenantAuditEvent({
     tenantId,

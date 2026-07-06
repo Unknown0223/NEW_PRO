@@ -24,19 +24,5 @@ export default function SkladchikSpravochnikPage() {
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Складчик</h1>
-        <Link href="/settings/spravochnik" className="text-sm text-primary underline">
-          ← Spravochnik
-        </Link>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Ombor xodimlari — tizim roli <code className="text-foreground">skladchik</code>, ombor biriktirish va sessiya
-        limitlari.
-      </p>
-      <SkladchikWorkspace tenantSlug={tenantSlug} />
-    </div>
-  );
+  return <SkladchikWorkspace tenantSlug={tenantSlug} />;
 }

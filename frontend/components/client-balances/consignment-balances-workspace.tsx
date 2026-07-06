@@ -6,9 +6,11 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { DatePickerPopover, formatRuDateButton, localYmd } from "@/components/ui/date-picker-popover";
 import { FilterSelect, filterPanelSelectClassName } from "@/components/ui/filter-select";
-import { Input } from "@/components/ui/input";
+import { TableSearchField } from "@/components/ui/table-search-field";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { Label } from "@/components/ui/label";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
+import { formatClientDisplayId } from "@shared/client-display-id";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import type {
@@ -24,9 +26,10 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { cn } from "@/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { AlertCircle, CalendarDays, FileSpreadsheet, Filter, RefreshCw, Search, Table2 } from "lucide-react";
+import { AlertCircle, CalendarDays, FileSpreadsheet, Filter, RefreshCw, Table2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -200,8 +203,7 @@ function formatDateOnly(iso: string | null | undefined): string {
 }
 
 function clientDisplayId(r: ConsignmentBalanceRow): string {
-  const c = r.client_code?.trim();
-  return c ? c : String(r.client_id);
+  return formatClientDisplayId(r.client_id, r.client_code);
 }
 
 function normPayColumnLabel(s: string): string {
@@ -292,7 +294,7 @@ function SummaryKpiCard({ title, value }: { title: string; value: string }) {
         >
           {title}
         </p>
-        <div className="w-full min-w-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:thin]">
+        <div className="scrollbar-none w-full min-w-0 overflow-x-auto">
           <MoneyCell
             value={value}
             align="center"
@@ -401,21 +403,15 @@ export function ConsignmentBalancesWorkspace() {
   const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [excelBusy, setExcelBusy] = useState(false);
   const [branchSearch, setBranchSearch] = useState("");
   const [filterDateOpen, setFilterDateOpen] = useState(false);
   const filterDateRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
-    return () => window.clearTimeout(t);
-  }, [searchInput]);
-
   const queryString = useMemo(
-    () => buildQuery(applied, page, limit, debouncedSearch),
-    [applied, page, limit, debouncedSearch]
+    () => buildQuery(applied, page, limit, search),
+    [applied, page, limit, search]
   );
 
   const listQ = useQuery({
@@ -507,18 +503,6 @@ export function ConsignmentBalancesWorkspace() {
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/supervisors?is_active=true`);
-      return data.data;
-    }
-  });
-
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "consignment-balances"],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
-      );
       return data.data;
     }
   });
@@ -625,8 +609,8 @@ export function ConsignmentBalancesWorkspace() {
     return Array.from(new Set([...fromOptions, ...fromList])).sort((a, b) => a.localeCompare(b, "ru"));
   }, [clientRefsQ.data]);
 
-  const agentsSrc = agentsQ.data ?? [];
-  const expeditorsSrc = expeditorsQ.data ?? [];
+  const agentsSrc = useMemo(() => agentsQ.data ?? [], [agentsQ.data]);
+  const expeditorsSrc = useMemo(() => expeditorsQ.data ?? [], [expeditorsQ.data]);
 
   const consignmentCascade = useMemo(() => {
     const d = draft;
@@ -689,7 +673,7 @@ export function ConsignmentBalancesWorkspace() {
       }
       return { ...d, branch_ids: next };
     });
-  }, [branchAllowed.key]);
+  }, [branchAllowed.key, branchAllowed.set]);
 
   const branchItems = useMemo(() => {
     const rows = Array.from(branchAllowed.set)
@@ -698,7 +682,10 @@ export function ConsignmentBalancesWorkspace() {
     const q = branchSearch.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) => r.title.toLowerCase().includes(q));
-  }, [branchAllowed.key, branchSearch]);
+  }, [branchAllowed.set, branchSearch]);
+
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "consignment-balances");
+  const catalogTradeDirectionLabels = tradeDirectionsCatalog.labels;
 
   const tradeDirectionSelectValues = useMemo(() => {
     const fromCascade = new Set<string>();
@@ -708,21 +695,8 @@ export function ConsignmentBalancesWorkspace() {
     }
     const dirs = Array.from(fromCascade).sort((a, b) => a.localeCompare(b, "ru"));
     if (dirs.length > 0) return dirs;
-    const s = new Set<string>();
-    for (const x of filterOptQ.data?.trade_directions ?? []) {
-      const t = normTrim(x);
-      if (t) s.add(t);
-    }
-    for (const x of profileQ.data?.trade_directions ?? []) {
-      const t = normTrim(x);
-      if (t) s.add(t);
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [
-    consignmentCascade.forTradeDirectionSelect,
-    filterOptQ.data?.trade_directions,
-    profileQ.data?.trade_directions
-  ]);
+    return catalogTradeDirectionLabels;
+  }, [consignmentCascade.forTradeDirectionSelect, catalogTradeDirectionLabels]);
 
   const filteredExpeditors = useMemo(() => {
     const bid = draft.branch_ids;
@@ -790,7 +764,7 @@ export function ConsignmentBalancesWorkspace() {
     if (!tenantSlug) return;
     setExcelBusy(true);
     try {
-      const qs = buildQuery(applied, 1, 5000, debouncedSearch, true);
+      const qs = buildQuery(applied, 1, 5000, search, true);
       const { data } = await api.get<ConsignmentBalanceListResponse>(
         `/api/${tenantSlug}/client-balances/consignment?${qs}`
       );
@@ -799,7 +773,7 @@ export function ConsignmentBalancesWorkspace() {
     } finally {
       setExcelBusy(false);
     }
-  }, [tenantSlug, applied, debouncedSearch]);
+  }, [tenantSlug, applied, search]);
 
   const rows = listQ.data?.data ?? [];
   const summary = listQ.data?.summary;
@@ -1176,23 +1150,20 @@ export function ConsignmentBalancesWorkspace() {
                       setPage(1);
                     }}
                   >
-                    <option value="10">10</option>
-                    <option value="30">30</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
+                    {DEFAULT_TABLE_PAGE_SIZES.map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n}
+                      </option>
+                    ))}
                   </select>
-                  <div className="relative min-w-[10rem] max-w-md flex-1">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      className="h-9 w-full bg-background pl-9"
-                      placeholder="Поиск"
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") applyFilters();
-                      }}
-                    />
-                  </div>
+                  <TableSearchField
+                    className="min-w-[10rem] max-w-md flex-1"
+                    placeholder="ur_29411, ID, имя…"
+                    onSearch={(q) => {
+                      setSearch(q);
+                      setPage(1);
+                    }}
+                  />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button

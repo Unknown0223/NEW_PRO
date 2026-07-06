@@ -55,7 +55,7 @@ export function SupervisorProductAnalyticsTable({
       <SupervisorEnterpriseTableWrap>
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50/80 dark:bg-muted/50">
+            <tr className="bg-muted/80 dark:bg-muted/50">
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {dimensionLabel}
               </th>
@@ -73,7 +73,7 @@ export function SupervisorProductAnalyticsTable({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-border">
+          <tbody className="divide-y divide-border dark:divide-border">
             {filtered.map((row, i) => (
               <tr
                 key={`${row.dimension}-${i}`}

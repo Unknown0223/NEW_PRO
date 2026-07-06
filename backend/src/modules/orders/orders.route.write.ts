@@ -14,6 +14,7 @@ import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.sche
 import { getErrorCode } from "../../lib/app-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
@@ -43,7 +44,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerOrderWriteRoutes(app: FastifyInstance) {
   app.patch(
     "/api/:slug/orders/:id/status",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
@@ -90,6 +91,12 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
             to: ex.to
           });
         }
+        if (msg === "APPROVAL_PENDING") {
+          return sendApiError(reply, request, 409, "ApprovalPending");
+        }
+        if (msg === "APPROVAL_REJECTED") {
+          return sendApiError(reply, request, 409, "ApprovalRejected");
+        }
         throw e;
       }
     }
@@ -134,7 +141,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/orders",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createOrderBodySchema.safeParse(request.body);

@@ -21,7 +21,7 @@ export default function ClientDetailsOfficePage() {
   const invalid = !Number.isFinite(clientId) || clientId < 1;
 
   return (
-    <PageShell className="pb-12">
+    <PageShell className="space-y-4 pb-10">
       <div className="flex flex-wrap gap-2">
         <Link
           href={invalid ? "/clients" : `/clients/${clientId}/balances`}

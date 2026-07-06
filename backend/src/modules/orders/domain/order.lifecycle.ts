@@ -54,6 +54,7 @@ import {
 import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
 import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
 import { prepareExchangeOrderLines } from "../exchange-order-create";
+import { startOrderApprovalIfNeeded } from "../order-approval.service";
 
 import { updateOrderMeta } from "./order.meta";
 import {
@@ -73,6 +74,20 @@ function parseOccurredAt(raw: string | undefined): Date | undefined {
   }
   return d;
 }
+
+/**
+ * Bosqich (milestone) zanjir tartibi — "Дата отгрузки/доставки" kabi sanalar
+ * `orderStatusLog` dan shu status bo'yicha birinchi yozuvdan olinadi.
+ * Orqaga qaytarishda undan keyingi bosqich loglarini o'chirish uchun ishlatiladi.
+ */
+const MILESTONE_RANK: Record<string, number> = {
+  new: 0,
+  confirmed: 1,
+  picking: 2,
+  delivering: 3,
+  delivered: 4,
+  returned: 5
+};
 
 export async function updateOrderStatus(
   tenantId: number,
@@ -117,6 +132,21 @@ export async function updateOrderStatus(
   }
 
   const fromStatus = o.status;
+
+  if (fromStatus === "new" && trimmed === "confirmed") {
+    const approvalStatus = (o as { approval_status?: string | null }).approval_status ?? null;
+    if (approvalStatus === "rejected") {
+      throw new Error("APPROVAL_REJECTED");
+    }
+    if (approvalStatus === "pending") {
+      throw new Error("APPROVAL_PENDING");
+    }
+    const approval = await startOrderApprovalIfNeeded(tenantId, orderId, o.agent_id);
+    if (approval.started) {
+      throw new Error("APPROVAL_PENDING");
+    }
+  }
+
   const occurredAt = parseOccurredAt(occurredAtRaw);
   const updated = await prisma.$transaction(async (tx) => {
     await tx.order.update({
@@ -133,6 +163,23 @@ export async function updateOrderStatus(
         created_at: occurredAt ?? new Date()
       }
     });
+
+    // Orqaga qaytarishda — yangi statusdan KEYINGI bosqich loglarini o'chiramiz.
+    // Aks holda "Дата отгрузки/доставки" kabi eski sanalar qolib ketadi, va zakaz
+    // qayta oldinga surilganda enrichment eng erta logni olib eski sanani ko'rsatadi.
+    if (isBackwardTransition(fromStatus, trimmed, orderType)) {
+      const targetRank = MILESTONE_RANK[trimmed];
+      if (targetRank != null) {
+        const aheadStatuses = Object.entries(MILESTONE_RANK)
+          .filter(([, rank]) => rank > targetRank)
+          .map(([s]) => s);
+        if (aheadStatuses.length > 0) {
+          await tx.orderStatusLog.deleteMany({
+            where: { order_id: o.id, to_status: { in: aheadStatuses } }
+          });
+        }
+      }
+    }
 
     // ✅ Rezervatsiya mantig'i
     const whId = o.warehouse_id;
@@ -172,7 +219,15 @@ export async function updateOrderStatus(
           });
         }
       } else if (trimmed === "cancelled") {
-        // Rezervni bekor qilish (faqat plus); minus uchun inbound qaytarish
+        // Bekor qilish faza'ga bog'liq (aks holda reserved manfiyga tushib,
+        // "Доступно для продаж" noto'g'ri oshib ketadi):
+        //  - "new" dan: qoldiq hali BAND (reserved) — faqat reservni bo'shatamiz.
+        //  - confirmed/picking/delivering/delivered dan: tovar allaqachon fizik
+        //    chiqarilgan (qty kamaytirilgan, reserved 0) — fizik qty'ni QAYTA TIKLAYMIZ,
+        //    reservga tegmaymiz.
+        const stockWasConsumed = ["confirmed", "picking", "delivering", "delivered"].includes(
+          fromStatus
+        );
         for (const item of nonBonusItems) {
           await tx.stock.upsert({
             where: {
@@ -189,9 +244,9 @@ export async function updateOrderStatus(
               qty: new Prisma.Decimal(0),
               reserved_qty: new Prisma.Decimal(0)
             },
-            update: {
-              reserved_qty: { decrement: item.qty }
-            }
+            update: stockWasConsumed
+              ? { qty: { increment: item.qty } }
+              : { reserved_qty: { decrement: item.qty } }
           });
         }
         const minusItems = items.filter((i) => !i.is_bonus && i.exchange_line_kind === "minus");
@@ -357,9 +412,24 @@ export async function bulkUpdateOrderStatus(
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderStatusResult["failed"] = [];
+  const trimmed = nextStatus.trim();
   for (const id of ids) {
     try {
-      await updateOrderStatus(tenantId, id, nextStatus, actorUserId, actorRole, occurredAtRaw);
+      // Agar zakaz allaqachon shu statusda bo'lsa, status o'zgarmaydi (early-return).
+      // Bunday holda foydalanuvchi sana/vaqt bergan bo'lsa — o'sha bosqich (milestone)
+      // sanasini tahrirlaymiz, masalan "Отгружен" zakazlar uchun "Дата отгрузки" ni guruh bilan.
+      const existing = await prisma.order.findFirst({
+        where: { id, tenant_id: tenantId },
+        select: { status: true }
+      });
+      if (!existing) {
+        throw new Error("NOT_FOUND");
+      }
+      if (existing.status === trimmed && occurredAtRaw) {
+        await updateOrderMilestoneAt(tenantId, id, trimmed, occurredAtRaw, actorRole);
+      } else {
+        await updateOrderStatus(tenantId, id, trimmed, actorUserId, actorRole, occurredAtRaw);
+      }
       updated.push(id);
     } catch (e) {
       const code = getErrorCode(e) ?? "UNKNOWN";

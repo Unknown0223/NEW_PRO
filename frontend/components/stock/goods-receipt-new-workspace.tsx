@@ -124,7 +124,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
     staleTime: STALE.reference
   });
 
-  const flatCats = categoriesQ.data ?? [];
+  const flatCats = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data]);
 
   const warehousesQ = useQuery({
     queryKey: ["warehouses", tenantSlug, "receipt-new"],
@@ -199,11 +199,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
 
   const catIds = useMemo(() => Array.from(selectedCats), [selectedCats]);
 
-  const catIdsKey = useMemo(
-    () => [...catIds].sort((a, b) => a - b).join(","),
-    [catIds]
-  );
-
   const productQueries = useQueries({
     queries: catIds.map((cid) => ({
       queryKey: ["products-receipt-cat", tenantSlug, cid],
@@ -211,10 +206,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
       enabled: Boolean(tenantSlug) && catIds.length > 0
     }))
   });
-
-  const queriesDataFingerprint = productQueries
-    .map((q) => `${q.dataUpdatedAt}:${q.fetchStatus}:${q.data?.length ?? 0}`)
-    .join("|");
 
   const mergedProducts = useMemo(() => {
     const m = new Map<number, ProductRow>();
@@ -224,7 +215,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
       }
     }
     return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [catIdsKey, queriesDataFingerprint]);
+  }, [productQueries]);
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -445,7 +436,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
       });
     }
     return payloadLines;
-  }, [mergedProducts, lines, selectedProducts]);
+  }, [mergedProducts, lines]);
 
   const grandTotals = useMemo(() => {
     let totalQty = 0;

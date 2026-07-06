@@ -30,10 +30,42 @@ CI: `npm run foundation:verify:fast` — JSON sintaksis tekshiriladi.
 
 ## Alert (tavsiya)
 
-- `slow_request` rate > N / 5m (stagingda kalibrlash).
-- `statusCode=503` on `/ready` (readiness).
-- p95 > 500 ms 15 daqiqa davomida (asosiy CRUD path lar uchun).
+| Alert | Shart | Severity | Harakat |
+|-------|-------|----------|---------|
+| Slow request spike | `slow_request` rate > 10/min 5 daqiqa | warning | Path bo‘yicha profiling |
+| Readiness down | `/ready` statusCode=503 | critical | DB/Redis tekshiruv |
+| High p95 | p95 > 500 ms 15 daqiqa | warning | Indeks / N+1 audit |
+| 5xx burst | 5xx > 1% 5 daqiqa | critical | Sentry + rollback ko‘rib chiqish |
+| Business KPI drop | `orders_today` anomaly (custom) | info | Tenant-scoped `/metrics/business` |
+
+### Prometheus alert qoidalari (misol)
+
+`/metrics` endpointidan (token bilan):
+
+```yaml
+groups:
+  - name: salec-api
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx rate above 1%"
+      - alert: SlowRequests
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+```
+
+## Prometheus
+
+`/metrics` — `metrics.plugin.ts` (S4-04). Production: `x-internal-token` = `INTERNAL_HEALTH_TOKEN`.
+
+Dashboard JSON: `docs/grafana/dashboard-foundation-api.json` — Loki panellar bilan birga import qiling.
 
 ## Keyingi qadam
 
-Prometheus exporter yoki log shipping CI ga ulang; panel UID larni environment bo‘yicha alohida saqlang.
+Prometheus alertmanager yoki Grafana alerting ulang; panel UID larni environment bo‘yicha alohida saqlang.

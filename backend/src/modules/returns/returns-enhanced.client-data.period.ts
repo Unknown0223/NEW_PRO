@@ -81,7 +81,7 @@ export async function loadClientReturnsPeriodData(
             tenant_id: tenantId,
             client_id: clientId,
             order_id: { in: orderIds },
-            status: "posted"
+            status: { in: ["pending", "posted"] }
           },
           select: {
             order_id: true,

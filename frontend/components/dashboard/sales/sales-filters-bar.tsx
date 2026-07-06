@@ -47,7 +47,6 @@ export function SalesFiltersBar(props: {
     catalogManufacturers,
     catalogGroups,
     catalogBrands,
-    quickRange,
     setQuickRange,
     exportAction
   } = props;

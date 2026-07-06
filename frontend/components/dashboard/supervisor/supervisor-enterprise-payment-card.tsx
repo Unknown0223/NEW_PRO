@@ -108,7 +108,7 @@ export function SupervisorEnterprisePaymentCard({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-border dark:bg-card",
+        "overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm dark:border-border dark:bg-card",
         muted && "opacity-60"
       )}
     >

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -74,6 +76,14 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
         Number.isFinite(uid) && uid > 0 ? uid : undefined,
         body
       );
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: Number.isFinite(uid) && uid > 0 ? uid : null,
+        entityType: "stock_take",
+        entityId: (row as { id?: number })?.id ?? "—",
+        action: "stock_take.create",
+        payload: { warehouse_id: body.warehouse_id, title: body.title ?? null }
+      });
       return reply.status(201).send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -110,6 +120,14 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
     try {
       const row = await postStockTake(tenantId, id);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: actorUserIdOrNull(request),
+        entityType: "stock_take",
+        entityId: id,
+        action: "stock_take.post",
+        payload: { id }
+      });
       return reply.send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -129,6 +147,14 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
     try {
       const row = await cancelStockTake(tenantId, id);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: actorUserIdOrNull(request),
+        entityType: "stock_take",
+        entityId: id,
+        action: "stock_take.cancel",
+        payload: { id }
+      });
       return reply.send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";

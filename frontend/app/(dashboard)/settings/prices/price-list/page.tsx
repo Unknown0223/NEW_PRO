@@ -101,7 +101,7 @@ export default function PriceListPage() {
     }
   });
 
-  const rows = productsQ.data?.data ?? [];
+  const rows = useMemo(() => productsQ.data?.data ?? [], [productsQ.data?.data]);
   const total = productsQ.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

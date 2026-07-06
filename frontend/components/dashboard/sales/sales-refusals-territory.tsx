@@ -26,7 +26,7 @@ export function SalesRefusalsTerritorySection({
 
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-      <section className="flex min-h-0 flex-col rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="flex min-h-0 flex-col rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="Причина отказа"
           exportAction={
@@ -38,7 +38,7 @@ export function SalesRefusalsTerritorySection({
         <div className="overflow-x-auto p-4 pt-0">
           <table className="w-full min-w-[420px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-xs text-slate-500">
+              <tr className="border-b border-border text-xs text-slate-500">
                 <th className="px-2 py-2 text-left">Причина</th>
                 <th className="px-2 py-2 text-right">Кол-во</th>
                 <th className="px-2 py-2 text-right">Доля</th>
@@ -57,7 +57,7 @@ export function SalesRefusalsTerritorySection({
         </div>
       </section>
 
-      <section className="flex min-h-0 flex-col rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="flex min-h-0 flex-col rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="Аналитика по территориям"
           exportAction={
@@ -70,7 +70,7 @@ export function SalesRefusalsTerritorySection({
           <label className="flex items-center gap-2 text-xs text-slate-500">
             <span>Строк на странице</span>
             <select
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs"
+              className="h-8 rounded-lg border border-border bg-card px-2 text-xs"
               value={String(territoryPageSize)}
               onChange={(e) => {
                 setTerritoryPageSize(Number.parseInt(e.target.value, 10) || 10);
@@ -88,7 +88,7 @@ export function SalesRefusalsTerritorySection({
         <div className="overflow-x-auto px-4">
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-xs text-slate-500">
+              <tr className="border-b border-border text-xs text-slate-500">
                 <th className="px-2 py-2 text-left">Территория</th>
                 <th className="px-2 py-2 text-right">Сумма</th>
                 <th className="px-2 py-2 text-right">АКБ</th>

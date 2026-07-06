@@ -105,10 +105,22 @@ model Order {
   bonus_sum                   Decimal          @default(0) @db.Decimal(15, 2)
   /// Foizli chegirma summasi (bonus qo‘llashda `total_sum` dan oldingi yig‘indi − chegirmadan keyin)
   discount_sum                Decimal          @default(0) @db.Decimal(15, 2)
+  /// Skidka kutilgan, lekin qo‘llanmagan: not_applied | cash_desk_missing | bonus_required
+  discount_alert              String?          @db.VarChar(32)
+  /// Bonus yetarli emas: stock_shortage
+  bonus_alert                 String?          @db.VarChar(32)
+  /// Tasdiqlash zanjiri: null | pending | approved | rejected
+  approval_status             String?          @db.VarChar(20)
+  /// Joriy bosqich (0-based)
+  approval_step               Int              @default(0)
+  /// [{ user_id, name?, role? }] — plan approvers + leaders
+  approval_chain              Json             @default("[]")
   created_at                  DateTime         @default(now())
   updated_at                  DateTime         @updatedAt
   /// Faqat `once_per_client` bo‘lgan va shu zakazda avtomatik qo‘llangan qoidalar (takrorlanmasligi uchun)
   applied_auto_bonus_rule_ids Int[]            @default([])
+  /// Qo‘llangan avto-bonus qoidalari snapshot (tahrirlashdan keyin ham tarix)
+  applied_bonus_rules_snapshot Json            @default("[]")
   /// Qty bonus: `bonus_rule_id` (string kalit) → tanlangan `bonus_product_id` (JSON obyekt)
   bonus_gift_selections       Json             @default("{}")
   expeditor_user_id           Int?
@@ -242,7 +254,35 @@ model Payment {
   @@index([tenant_id, paid_at(sort: Desc)])
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
+  edit_grants          PaymentEditGrant[]
   @@map("client_payments")
+}
+
+/// Vaqtinchalik ruxsat: ekskpeditor to‘lovni tahrirlashi mumkin.
+model PaymentEditGrant {
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  payment_id         Int
+  access_user_id     Int
+  duration_minutes   Int
+  expires_at         DateTime
+  completed_at       DateTime?
+  /// active | completed | deleted | restored
+  status             String    @default("active") @db.VarChar(16)
+  cancel_reason_ref  String?   @db.VarChar(128)
+  comment            String?   @db.VarChar(2000)
+  created_by_user_id Int?
+  created_at         DateTime  @default(now())
+  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  payment            Payment   @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  access_user        User      @relation("PaymentEditGrantAccess", fields: [access_user_id], references: [id], onDelete: Restrict)
+  created_by         User?     @relation("PaymentEditGrantCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, payment_id])
+  @@index([tenant_id, status])
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, expires_at])
+  @@map("payment_edit_grants")
 }
 
 /// Mahsulot qaytarish — ombor qoldig’ini oshiradi, ixtiyoriy pul qaytarish balansga.
@@ -254,9 +294,16 @@ model SalesReturn {
   client_id          Int?
   order_id           Int?
   warehouse_id       Int
-  /// posted | cancelled
+  /// pending (zavsklad qabulini kutmoqda) | posted (qabul qilingan) | cancelled
   status             String            @default("posted") @db.VarChar(16)
   refund_amount      Decimal?          @db.Decimal(15, 2)
+  /// Qabuldan keyin qo'llaniladigan bonus qarzi (kechiktirilgan side-effect)
+  bonus_debt_amount  Decimal?          @db.Decimal(15, 2)
+  /// «Заявки» ro'yxatidagi ko'zgu zakaz id — qabulda holati delivered ga o'tadi
+  mirror_order_id    Int?
+  /// Zavsklad qabul qilgan vaqt va foydalanuvchi
+  accepted_at        DateTime?
+  accepted_by_user_id Int?
   note               String?
   /// «Причины отказа» spravochnikidan kod/nom
   refusal_reason_ref String?           @db.VarChar(128)
@@ -332,8 +379,12 @@ model TradeDirection {
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
   tenant                Tenant     @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  staff_users           User[]     @relation("UserTradeDirection")
+  staff_users           User[]                   @relation("UserTradeDirection")
+  user_links            UserTradeDirectionLink[]
   work_slots            WorkSlot[]
+  plan_approver_configs PlanApproverConfig[]
+  sales_kpi_plans       SalesKpiPlan[]
+  product_links         ProductTradeDirectionLink[]
 
   @@unique([tenant_id, code])
   @@index([tenant_id, is_active])
@@ -370,9 +421,10 @@ model KpiGroup {
   is_active  Boolean           @default(true)
   created_at DateTime          @default(now())
   updated_at DateTime          @updatedAt
-  agents     KpiGroupAgent[]
-  products   KpiGroupProduct[]
-  tenant     Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  agents          KpiGroupAgent[]
+  products        KpiGroupProduct[]
+  sales_kpi_plans SalesKpiPlan[]
+  tenant          Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id, is_active])
   @@map("kpi_groups")

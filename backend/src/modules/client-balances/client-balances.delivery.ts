@@ -12,6 +12,7 @@ import {
 import { LARGE_CLIENT_IDS_CHUNK } from "./client-balances.constants";
 import { buildOrderCreatedLocalDateClause } from "./client-balances.date";
 import { sqlIntIdToNumber } from "./client-balances.payments.util";
+import { sqlOrderMerchandiseNetReceivable } from "../orders/order-merchandise-net";
 export type DeliveryDebtInfo = { debt: Prisma.Decimal; lastDel: Date | null; firstDel: Date | null };
 
 /** Yetkazilgan savdo zakazlari bo‘yicha to‘lanmagan qoldiq (mijoz bo‘yicha). */
@@ -36,7 +37,7 @@ export async function loadDeliveryDebtByClient(
       }>
     >`
       WITH cand AS (
-        SELECT o.id, o.client_id, o.total_sum, o.updated_at
+        SELECT o.id, o.tenant_id, o.client_id, o.total_sum, o.discount_sum, o.applied_auto_bonus_rule_ids, o.updated_at
         FROM orders o
         WHERE o.tenant_id = ${tenantId}
           AND o.order_type = 'order'
@@ -61,7 +62,7 @@ export async function loadDeliveryDebtByClient(
       ord AS (
         SELECT
           c.client_id,
-          c.total_sum,
+          ${sqlOrderMerchandiseNetReceivable("c")} AS merchandise_net,
           COALESCE(d.delivered_at, c.updated_at) AS delivered_at,
           COALESCE(a.allocated, 0)::decimal(15,2) AS allocated
         FROM cand c
@@ -71,9 +72,9 @@ export async function loadDeliveryDebtByClient(
       agg AS (
         SELECT
           client_id,
-          SUM(GREATEST(total_sum - allocated, 0))::decimal(15,2) AS gross_unpaid,
-          MAX(delivered_at) FILTER (WHERE (total_sum - allocated) > 0) AS last_unpaid_delivery,
-          MIN(delivered_at) FILTER (WHERE (total_sum - allocated) > 0) AS first_unpaid_delivery
+          SUM(GREATEST(merchandise_net - allocated, 0))::decimal(15,2) AS gross_unpaid,
+          MAX(delivered_at) FILTER (WHERE (merchandise_net - allocated) > 0) AS last_unpaid_delivery,
+          MIN(delivered_at) FILTER (WHERE (merchandise_net - allocated) > 0) AS first_unpaid_delivery
         FROM ord
         GROUP BY client_id
       )
@@ -140,7 +141,7 @@ export async function loadUnpaidDeliveredOrderDebtRows(
       }>
     >`
       WITH cand AS (
-        SELECT o.id, o.number, o.client_id, o.total_sum, o.updated_at, o.payment_method_ref
+        SELECT o.id, o.tenant_id, o.number, o.client_id, o.total_sum, o.discount_sum, o.applied_auto_bonus_rule_ids, o.updated_at, o.payment_method_ref
         FROM orders o
         WHERE o.tenant_id = ${tenantId}
           AND o.order_type = 'order'
@@ -167,7 +168,7 @@ export async function loadUnpaidDeliveredOrderDebtRows(
         c.id AS order_id,
         c.number AS order_number,
         c.client_id,
-        GREATEST(c.total_sum - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS unpaid,
+        GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.sum_amt, 0), 0)::decimal(15,2) AS unpaid,
         COALESCE(d.delivered_at, c.updated_at) AS delivered_at,
         c.payment_method_ref
       FROM cand c

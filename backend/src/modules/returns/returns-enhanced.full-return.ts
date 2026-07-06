@@ -1,11 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { emitOrderUpdated } from "../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { assertReturnProductsInterchangeableStrict } from "../products/product-catalog.service";
-import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-status";
 
 import type { FullReturnInput, PeriodReturnResult } from "./returns-enhanced.types";
 // FullReturnInput in types; PeriodReturnResult for return shape
@@ -33,7 +30,7 @@ export async function createFullReturnFromOrder(
     where: {
       tenant_id: tenantId,
       order_id: order.id,
-      status: "posted",
+      status: { in: ["pending", "posted"] },
       return_type: "order_full"
     },
     select: { id: true }
@@ -41,7 +38,7 @@ export async function createFullReturnFromOrder(
   if (existingFull) throw new Error("ORDER_ALREADY_FULLY_RETURNED");
 
   const priorPosted = await prisma.salesReturn.findMany({
-    where: { tenant_id: tenantId, order_id: order.id, status: "posted" },
+    where: { tenant_id: tenantId, order_id: order.id, status: { in: ["pending", "posted"] } },
     select: { lines: { select: { product_id: true, qty: true } } }
   });
   const returnedByProduct = new Map<number, number>();
@@ -87,14 +84,13 @@ export async function createFullReturnFromOrder(
     .filter((i) => !i.is_bonus)
     .reduce((a, i) => a + Number(i.qty), 0);
   const totalQty = order.items.reduce((a, i) => a + Number(i.qty), 0);
-  const orderType = normalizeOrderType(order.order_type);
 
   const created = await prisma.$transaction(async (tx) => {
     const ret = await tx.salesReturn.create({
       data: {
         tenant_id: tenantId, number,
         client_id: order.client_id, order_id: order.id,
-        warehouse_id: warehouseId, status: "posted",
+        warehouse_id: warehouseId, status: "pending",
         refund_amount: refund,
         return_type: "order_full",
         note: input.note?.trim() || null,
@@ -113,40 +109,10 @@ export async function createFullReturnFromOrder(
       }
     });
 
-    for (const it of order.items) {
-      await tx.stock.upsert({
-        where: {
-          tenant_id_warehouse_id_product_id: {
-            tenant_id: tenantId, warehouse_id: warehouseId, product_id: it.product_id
-          }
-        },
-        create: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: it.product_id, qty: it.qty },
-        update: { qty: { increment: it.qty } }
-      });
-    }
-
-    if (canTransitionOrderStatus(order.status, "returned", orderType)) {
-      await tx.order.update({ where: { id: order.id }, data: { status: "returned" } });
-      await tx.orderStatusLog.create({
-        data: { order_id: order.id, from_status: order.status, to_status: "returned", user_id: uid }
-      });
-    }
-
-    if (refund.gt(0)) {
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: order.client_id } },
-        create: { tenant_id: tenantId, client_id: order.client_id, balance: refund },
-        update: { balance: { increment: refund } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: { client_balance_id: bal.id, delta: refund, note: `Vazvrat: ${number}`, user_id: uid }
-      });
-    }
-
+    // Side-effect'lar (ostatka / manba zakaz `returned` / balans) zavsklad
+    // qabulida qo'llanadi — bu yerda faqat `pending` hujjat yaratiladi.
     return ret;
   });
-
-  void invalidateStock(tenantId, warehouseId);
 
   await appendTenantAuditEvent({
     tenantId, actorUserId, entityType: AuditEntityType.stock,

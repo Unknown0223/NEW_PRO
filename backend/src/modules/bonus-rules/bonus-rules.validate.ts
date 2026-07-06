@@ -136,10 +136,21 @@ export function validateAutoBonusProductScope(
   type: string,
   isManual: boolean,
   productIds: readonly number[],
-  categoryIds: readonly number[]
+  categoryIds: readonly number[],
+  scopeRestrictAssortment?: boolean,
+  scopeRestrictCategory?: boolean
 ): void {
   if (isManual) return;
   if (type !== "qty" && type !== "sum" && type !== "discount") return;
+  if (scopeRestrictAssortment || scopeRestrictCategory) {
+    if (scopeRestrictAssortment && productIds.length === 0) {
+      throw new Error("PRODUCT_SCOPE_REQUIRED");
+    }
+    if (scopeRestrictCategory && categoryIds.length === 0 && productIds.length === 0) {
+      throw new Error("PRODUCT_SCOPE_REQUIRED");
+    }
+    return;
+  }
   if (productIds.length > 0 || categoryIds.length > 0) return;
   throw new Error("PRODUCT_SCOPE_REQUIRED");
 }
@@ -201,8 +212,14 @@ export function ruleScalarsFromInput(
     sales_channel: input.sales_channel?.trim() || null,
     price_type: input.price_type?.trim() || null,
     product_ids: input.product_ids ?? [],
-    bonus_product_ids: input.bonus_product_ids ?? [],
+    bonus_product_ids:
+      input.type === "discount" ||
+      (input.type === "sum" && input.discount_pct != null && Number(input.discount_pct) > 0)
+        ? []
+        : (input.bonus_product_ids ?? []),
     product_category_ids: input.product_category_ids ?? [],
+    scope_restrict_assortment: input.scope_restrict_assortment ?? false,
+    scope_restrict_category: input.scope_restrict_category ?? false,
     target_all_clients: allClients,
     selected_client_ids: allClients ? [] : (input.selected_client_ids ?? []),
     is_manual: input.is_manual ?? false,

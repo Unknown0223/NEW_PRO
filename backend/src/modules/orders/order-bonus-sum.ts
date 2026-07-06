@@ -24,6 +24,7 @@ import {
   ruleMatchesClient,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
+  ruleRelatesToOrderSelection,
   ruleNeedsOrderContext,
   ruleTreeSatisfiedForOrder,
   roundMoney,
@@ -96,12 +97,14 @@ export async function findWinningSumPeek(
 
   for (const rule of filtered) {
     if (rule.min_sum == null) continue;
+    if (rule.discount_pct != null && Number(rule.discount_pct) > 0) continue;
     const minSum = new PrismaClient.Decimal(rule.min_sum);
     const effective = effectiveSubtotalForSumMinRule(rule, baseSubtotalBeforeDiscount, monthExcl);
     if (effective.lt(minSum)) continue;
     if (!ruleMatchesClient(rule, client)) continue;
     if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
     if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
 
     const giftPid = resolveSumRuleGiftProductId(rule, orderedProductIds, productById, qtyByProduct);
     if (giftPid == null || giftPid <= 0) continue;

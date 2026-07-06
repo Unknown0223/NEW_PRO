@@ -26,6 +26,7 @@ import { getRedisForApp, tenantSettingsCacheKey } from "../../lib/redis-cache";
 import { getTenantProfile } from "./tenant-settings.profile.read";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
 import type { ReturnFilterSettings } from "../returns/returns-filter.types";
+import { mergeProfilePatchIntoSettings } from "./tenant-settings.merge-patch";
 
 type ClientRefEntryPatch = {
   id: string;
@@ -137,6 +138,10 @@ export async function patchTenantProfile(
     data.logo_url = patch.logo_url?.trim() || null;
   }
 
+  if (patch.references?.branches != null) {
+    await assertBranchCashDeskAssignments(tenantId, patch.references.branches);
+  }
+
   if (patch.feature_flags != null || patch.references != null || patch.return_filter != null) {
     const nextSettings = { ...asRecord(row.settings) };
     if (patch.return_filter != null) {
@@ -205,7 +210,6 @@ export async function patchTenantProfile(
         merged.unit_measures = patch.references.unit_measures;
       }
       if (patch.references.branches != null) {
-        await assertBranchCashDeskAssignments(tenantId, patch.references.branches);
         merged.branches = patch.references.branches;
       }
       if (patch.references.client_format_entries != null) {
@@ -305,10 +309,34 @@ export async function patchTenantProfile(
   }
 
   if (Object.keys(data).length > 0) {
-    await prisma.tenant.update({
-      where: { id: tenantId },
-      data
-    });
+    if (data.settings !== undefined) {
+      const settingsOnlyPatch = {
+        ...(patch.return_filter != null ? { return_filter: patch.return_filter } : {}),
+        ...(patch.feature_flags != null ? { feature_flags: patch.feature_flags } : {}),
+        ...(patch.references != null ? { references: patch.references } : {})
+      };
+      const scalarUpdate = { ...data };
+      delete (scalarUpdate as { settings?: unknown }).settings;
+      await prisma.$transaction(async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ settings: Prisma.JsonValue }>>`
+          SELECT settings FROM tenants WHERE id = ${tenantId} FOR UPDATE
+        `;
+        if (!rows[0]) throw new Error("NOT_FOUND");
+        const nextSettings = mergeProfilePatchIntoSettings(asRecord(rows[0].settings), settingsOnlyPatch);
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: {
+            ...scalarUpdate,
+            settings: nextSettings as Prisma.InputJsonValue
+          }
+        });
+      });
+    } else {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data
+      });
+    }
     const refPatch = patch.references;
     const referencesKeys =
       refPatch != null && typeof refPatch === "object"

@@ -33,7 +33,7 @@ export function MonitoringSkuTable({
 }) {
   return (
     <SalesSectionPanel
-      className="rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-200/70"
+      className="rounded-xl border border-border bg-card shadow-sm ring-1 ring-slate-200/70"
       title="Продажи по SKU (статусы)"
       subtitle="Кол-во и доли отмен/возвратов; маркер при высоких %"
       action={

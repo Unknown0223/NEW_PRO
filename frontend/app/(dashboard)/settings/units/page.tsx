@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { saveProfileReferenceArrayItem } from "@/lib/settings-profile-save";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -101,9 +102,15 @@ export default function UnitsSettingsPage() {
   const filtered = useMemo(() => units.filter((x) => (tab === "active" ? x.active !== false : x.active === false)), [units, tab]);
 
   const saveMut = useMutation({
-    mutationFn: async (next: UnitMeasure[]) => {
+    mutationFn: async (payload: { item: UnitMeasure; editId: string | null }) => {
       if (!tenantSlug) throw new Error("no tenant");
-      await api.patch(`/api/${tenantSlug}/settings/profile`, { references: { unit_measures: next } });
+      await saveProfileReferenceArrayItem(
+        tenantSlug,
+        "unit_measures",
+        payload.item,
+        payload.editId,
+        sortUnits
+      );
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
@@ -178,9 +185,7 @@ export default function UnitsSettingsPage() {
       comment: comment.trim() || null,
       active
     };
-    const existing = units;
-    const merged = editId ? existing.map((x) => (x.id === editId ? next : x)) : [...existing, next];
-    saveMut.mutate(sortUnits(merged));
+    saveMut.mutate({ item: next, editId });
   }
 
   if (!hydrated) return <PageShell><p className="text-sm text-muted-foreground">Sessiya...</p></PageShell>;

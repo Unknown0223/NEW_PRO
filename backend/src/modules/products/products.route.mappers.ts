@@ -1,5 +1,7 @@
 import type { FastifyRequest } from "fastify";
 import type { Prisma } from "@prisma/client";
+import { env } from "../../config/env";
+import { assertExcelImportSize } from "../../lib/multipart-limits";
 
 export type ProductListRow = {
   id: number;
@@ -39,7 +41,7 @@ export type ProductListRow = {
 export async function readProductImportBuffer(
   request: FastifyRequest
 ): Promise<{ ok: true; buf: Buffer } | { ok: false; error: "NoFile" | "EmptyFile" }> {
-  const file = await request.file();
+  const file = await request.file({ limits: { fileSize: env.MULTIPART_EXCEL_MAX_BYTES } });
   if (!file) {
     return { ok: false, error: "NoFile" };
   }
@@ -47,6 +49,7 @@ export async function readProductImportBuffer(
   if (buf.length === 0) {
     return { ok: false, error: "EmptyFile" };
   }
+  assertExcelImportSize(buf.length);
   return { ok: true, buf };
 }
 

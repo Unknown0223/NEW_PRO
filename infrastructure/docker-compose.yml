@@ -2,10 +2,13 @@ services:
   postgres:
     image: postgres:16
     container_name: savdo_postgres
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       POSTGRES_DB: savdo_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "0223"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — copy .env.local.example to .env.local}
     # Host port: 5433 ba'zi Windows qurilmalarida «forbidden by access permissions» beradi (Hyper-V excluded range).
     # DATABASE_URL dagi port bilan mos kelishi kerak, masalan: ...@localhost:15432/...
     ports:
@@ -22,6 +25,10 @@ services:
   redis:
     image: redis:7
     container_name: savdo_redis
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
     # Ba'zi Windows qurilmalarida 6379 Hyper-V excluded range ichida bo'lib,
     # `bind: An attempt was made to access a socket in a way forbidden...` beradi.
     # Host portni 16479 ga ko'chiring va `REDIS_URL` ni `redis://127.0.0.1:16479` qiling.
@@ -34,6 +41,25 @@ services:
       retries: 10
     volumes:
       - redis_data:/data
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.worker
+    container_name: savdo_worker
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   redis_data:

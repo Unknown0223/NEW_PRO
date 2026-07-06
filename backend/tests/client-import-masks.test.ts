@@ -7,9 +7,9 @@ import {
 } from "../src/modules/clients/client-import-masks";
 
 describe("client-import-masks", () => {
-  it("normalizeDuplicateKeyFields defaults when empty", () => {
-    expect(normalizeDuplicateKeyFields([])).toEqual(["client_code", "city"]);
-    expect(normalizeDuplicateKeyFields(undefined)).toEqual(["client_code", "city"]);
+  it("normalizeDuplicateKeyFields skips check when empty", () => {
+    expect(normalizeDuplicateKeyFields([])).toEqual([]);
+    expect(normalizeDuplicateKeyFields(undefined)).toEqual([]);
   });
 
   it("normalizeDuplicateKeyFields filters unknown keys", () => {

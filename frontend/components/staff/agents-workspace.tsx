@@ -1,53 +1,68 @@
-"use client";
+﻿"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AxiosError } from "axios";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
-import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import { STALE } from "@/lib/query-stale";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import {
-  ChevronDown,
-  ChevronRight,
-  Cog,
-  Eye,
-  ListOrdered,
-  MonitorSmartphone,
-  Pencil,
-  RefreshCw,
-  Settings2,
-  UserMinus
-} from "lucide-react";
-import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
-import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
+import { AgentFormModal } from "@/components/staff/agent-form-modal";
+import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
+import { AgentRestrictionsDialog } from "@/components/staff/agent-restrictions-dialog";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import { AgentsBulkEditDialog } from "@/components/staff/agents-bulk-edit-dialog";
+import { AgentsFiltersRow } from "@/components/staff/agents-filters-row";
+import { formatPersonDisplayName } from "@/lib/person-display";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
-import { FilterSelect } from "@/components/ui/filter-select";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
+import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { AgentConfigurationsDialog } from "@/components/staff/agent-configurations-dialog";
-import { SlotBadge } from "@/components/work-slots/slot-badge";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
+import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
+import {
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import {
+  StaffKomandaActiveSessionsCell,
+  StaffKomandaApkCell,
+  StaffKomandaAppAccessToggle,
+  StaffKomandaBranchCell,
+  StaffKomandaCodeCell,
+  StaffKomandaCreatedAtCell,
+  StaffKomandaDeviceCell,
+  StaffKomandaFioCell,
+  StaffKomandaLastSyncCell,
+  StaffKomandaLoginCell,
+  StaffKomandaMaxSessionsCell,
+  StaffKomandaPhoneCell,
+  StaffKomandaPinflCell,
+  StaffKomandaPositionCell,
+  StaffKomandaTagList,
+  StaffKomandaTerritoryCell,
+  StaffKomandaTradeDirectionCell,
+  StaffKomandaWarehouseCell,
+  StaffKomandaYesNoCell
+} from "@/components/staff/staff-komanda-table-cells";
 
 export type AgentRow = {
   id: number;
   fio: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
   product: string | null;
   agent_type: string | null;
   code: string | null;
   pinfl: string | null;
   consignment: boolean;
+  consignment_close_day?: number;
+  consignment_close_hour?: number;
+  consignment_close_minute?: number;
   consignment_limit_amount?: string | null;
   consignment_ignore_previous_months_debt?: boolean;
   consignment_updated_at?: string | null;
@@ -88,13 +103,6 @@ type ProductCategoryRow = {
   is_active: boolean;
 };
 
-type ProductListItem = {
-  id: number;
-  name: string;
-  sku: string;
-  category_id: number | null;
-};
-
 type TenantProfile = {
   references: {
     branches?: Array<{ id: string; name: string; active?: boolean }>;
@@ -110,46 +118,47 @@ type TenantProfile = {
 
 const COLS = [
   "Ф.И.О",
+  "Авторизоваться",
+  "Телефон",
+  "Код",
   "Продукт",
   "Тип агента",
-  "Код",
-  "ПИНФЛ",
-  "Консигнация",
+  "Склад",
   "Версия APK",
+  "ПИНФЛ",
+  "Территория",
   "Название устройства",
   "Последняя синхронизация",
-  "Телефон",
-  "Авторизоваться",
   "Тип цены",
-  "Склад",
   "Направление торговли",
   "Филиал",
   "Должность",
+  "Консигнация",
   "Дата создания",
   "Доступ к приложение",
   "Количество активных сессий",
   "Максимальное количество сессий"
 ] as const;
 
-const AGENT_TABLE_ID = "staff.agents.v1";
-
+const AGENT_TABLE_ID = "staff.agents.v2";
 const AGENT_COLUMN_IDS = [
   "fio",
+  "login",
+  "phone",
+  "code",
   "product",
   "agent_type",
-  "code",
-  "pinfl",
-  "consignment",
+  "warehouse",
   "apk_version",
+  "pinfl",
+  "territory",
   "device_name",
   "last_sync",
-  "phone",
-  "login",
   "price_types",
-  "warehouse",
   "trade_direction",
   "branch",
   "position",
+  "consignment",
   "created_at",
   "app_access",
   "active_sessions",
@@ -165,7 +174,7 @@ const AGENT_COLUMN_LABEL_BY_ID = new Map<string, string>(AGENT_COLUMNS.map((c) =
 function agentExportCellString(r: AgentRow, colId: string): string {
   switch (colId) {
     case "fio":
-      return r.fio;
+      return formatPersonDisplayName(r);
     case "product":
       return r.product ?? "";
     case "agent_type":
@@ -174,6 +183,8 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.code ?? "";
     case "pinfl":
       return r.pinfl ?? "";
+    case "territory":
+      return r.territory ?? "";
     case "consignment":
       return r.consignment ? "Да" : "Нет";
     case "apk_version":
@@ -209,14 +220,25 @@ function agentExportCellString(r: AgentRow, colId: string): string {
   }
 }
 
-function randomPassword(len = 10) {
-  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
-  let s = "";
-  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
-
 type Props = { tenantSlug: string };
+
+function buildAgentSearchHaystack(r: AgentRow): string {
+  return [
+    r.fio,
+    r.login,
+    r.phone ?? "",
+    r.code ?? "",
+    r.pinfl ?? "",
+    r.device_name ?? "",
+    r.apk_version ?? "",
+    r.branch ?? "",
+    r.warehouse ?? "",
+    r.agent_type ?? "",
+    ...(r.price_types ?? [])
+  ]
+    .join(" ")
+    .toLowerCase();
+}
 
 export function AgentsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
@@ -229,37 +251,29 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const [appliedPos, setAppliedPos] = useState("");
   const [search, setSearch] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: AGENT_TABLE_ID,
     defaultColumnOrder: [...AGENT_COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100, 500, 1000]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
 
   const [addOpen, setAddOpen] = useState(false);
-  const [infoRow, setInfoRow] = useState<AgentRow | null>(null);
   const [editRow, setEditRow] = useState<AgentRow | null>(null);
   const [sessionAgent, setSessionAgent] = useState<AgentRow | null>(null);
   const [restrictAgent, setRestrictAgent] = useState<AgentRow | null>(null);
   const [configAgent, setConfigAgent] = useState<AgentRow | null>(null);
   const [deactivateAgent, setDeactivateAgent] = useState<AgentRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
-  const headerCbRef = useRef<HTMLInputElement>(null);
-  const bulkMenuRef = useRef<HTMLDivElement>(null);
-  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
-  const [groupDialog, setGroupDialog] = useState<
-    | null
-    | "restrict"
-    | "products"
-    | "trade"
-    | "consignment"
-    | "sessions"
-    | "limits"
-    | "app_access"
-  >(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "clear-sessions" | null>(
+    null
+  );
+  const [groupDialog, setGroupDialog] = useState<null | "restrict">(null);
 
   const filterOptQ = useQuery({
     queryKey: ["agents-filter-options", tenantSlug],
@@ -289,14 +303,27 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const branchOptions = useMemo(() => {
-    const fromAgents = filterOptQ.data?.branches ?? [];
-    const fromProfile = (profileQ.data?.references.branches ?? [])
-      .filter((b) => b.active !== false)
-      .map((b) => b.name.trim())
-      .filter(Boolean);
-    return Array.from(new Set([...fromProfile, ...fromAgents])).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data, profileQ.data]);
+  const branchOptions = useMemo(
+    () => activeBranchNamesFromProfile(profileQ.data?.references.branches),
+    [profileQ.data]
+  );
+
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "agents-workspace");
+  const tradeDirectionFilterOptions = tradeDirectionsCatalog.labels;
+  const tradeDirectionRows = tradeDirectionsCatalog.rows;
+
+  const tradeDirectionsWithIdQ = useQuery({
+    queryKey: ["trade-directions", tenantSlug, "agents-ws"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        data: Array<{ id: number; name: string; code: string | null; is_active: boolean }>;
+      }>(`/api/${tenantSlug}/trade-directions?is_active=true`);
+      return data.data;
+    }
+  });
+  const tradeDirectionsWithId = tradeDirectionsWithIdQ.data ?? [];
 
   const listQ = useQuery({
     queryKey: ["agent", tenantSlug, tab, appliedBranch, appliedTd, appliedPos],
@@ -337,25 +364,9 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const tradeDirectionsQ = useQuery({
-    queryKey: ["trade-directions", tenantSlug, "agents-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: Array<{ id: number; name: string; code: string | null; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/trade-directions?is_active=true`);
-      return data.data;
-    }
-  });
-
-  const tradeDirectionRows = useMemo(() => tradeDirectionsQ.data ?? [], [tradeDirectionsQ.data]);
-
   const categoriesQ = useQuery({
     queryKey: ["product-categories", tenantSlug, "agents-ws"],
-    enabled:
-      Boolean(tenantSlug) &&
-      (Boolean(restrictAgent) || groupDialog === "restrict" || groupDialog === "products"),
+    enabled: Boolean(tenantSlug) && (Boolean(restrictAgent) || groupDialog === "restrict"),
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: ProductCategoryRow[] }>(
@@ -388,16 +399,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const deactivateMut = useMutation({
-    mutationFn: async (id: number) => {
-      await api.patch(`/api/${tenantSlug}/agents/${id}`, { is_active: false });
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
-      setDeactivateAgent(null);
-    }
-  });
-
   const bulkMut = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
       const { data } = await api.post<{ data: { updated: number } }>(`/api/${tenantSlug}/agents/bulk`, body);
@@ -407,71 +408,93 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
       setGroupDialog(null);
-      setBulkMenuOpen(false);
       setSelectedIds(new Set());
     },
     onError: (e: unknown) => {
-      const ax = e as AxiosError<{ error?: string; message?: string }>;
-      const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
-      if (flat) {
-        const hint = firstValidationUserHint(flat);
-        window.alert(withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", e));
-        return;
-      }
-      window.alert(getUserFacingError(e, "Ошибка"));
+      window.alert(messageFromAgentsBulkError(e));
     }
   });
 
-  useEffect(() => {
-    if (!bulkMenuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const el = bulkMenuRef.current;
-      if (el && !el.contains(e.target as Node)) setBulkMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [bulkMenuOpen]);
+  const bulkEditMut = useMutation({
+    mutationFn: async (fields: Record<string, unknown>) => {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await api.patch(`/api/${tenantSlug}/agents/${id}`, fields);
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
+      setBulkEditOpen(false);
+      setSelectedIds(new Set());
+    },
+    onError: (e: unknown) => {
+      window.alert(e instanceof Error ? e.message : "Ошибка сохранения");
+    }
+  });
+
+  const bulkActiveMut = useMutation({
+    mutationFn: async (is_active: boolean) => {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        await api.patch(`/api/${tenantSlug}/agents/${id}`, { is_active });
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
+      setConfirmBulk(null);
+      setSelectedIds(new Set());
+    }
+  });
+
+  const deactivateMut = useMutation({
+    mutationFn: async (id: number) => {
+      await api.patch(`/api/${tenantSlug}/agents/${id}`, { is_active: false });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
+      setDeactivateAgent(null);
+    }
+  });
 
   const filteredRows = useMemo(() => {
     const src = listQ.data ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return src;
-    return src.filter((r) =>
-      [
-        r.fio,
-        r.login,
-        r.phone ?? "",
-        r.code ?? "",
-        r.branch ?? "",
-        r.warehouse ?? "",
-        ...(r.price_types ?? [])
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
+    return src.filter((r) => buildAgentSearchHaystack(r).includes(q));
   }, [listQ.data, search]);
 
+  const total = filteredRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
   const pageRows = useMemo(() => {
-    return filteredRows.slice(0, pageSize);
-  }, [filteredRows, pageSize]);
+    const start = (safePage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, safePage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, appliedBranch, appliedTd, appliedPos, search, pageSize]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [tab, appliedBranch, appliedTd, appliedPos, safePage, pageSize]);
 
   const selectedRows = useMemo(
     () => filteredRows.filter((r) => selectedIds.has(r.id)),
     [filteredRows, selectedIds]
   );
 
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [tab]);
+  const allAccessOn = useMemo(() => {
+    if (selectedRows.length === 0) return false;
+    return selectedRows.every((a) => a.app_access);
+  }, [selectedRows]);
 
-  const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
-  const someOnPageSelected = pageRows.some((r) => selectedIds.has(r.id));
-  useEffect(() => {
-    const el = headerCbRef.current;
-    if (!el) return;
-    el.indeterminate = someOnPageSelected && !allOnPageSelected;
-  }, [someOnPageSelected, allOnPageSelected]);
+  const bulkBusy = bulkMut.isPending || bulkEditMut.isPending || bulkActiveMut.isPending;
+
+  const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
 
   const toggleAgentSelection = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -500,150 +523,145 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     setAppliedPos(draftPos);
   };
 
+  const resetFilters = () => {
+    setDraftBranch("");
+    setDraftTd("");
+    setDraftPos("");
+    setAppliedBranch("");
+    setAppliedTd("");
+    setAppliedPos("");
+    setPage(1);
+  };
+
+  function formatProductCell(product: string | null): string {
+    if (!product?.trim()) return "—";
+    const t = product.trim();
+    if (/^\d+$/.test(t)) return `${t} шт.`;
+    if (t.includes("шт")) return t;
+    return t;
+  }
+
   function renderAgentDataCell(colId: string, r: AgentRow) {
+    const priceList = r.price_types?.length ? r.price_types : r.price_type ? [r.price_type] : [];
     switch (colId) {
       case "fio":
-        return r.fio;
-      case "product":
-        return r.product ?? "—";
-      case "agent_type":
-        return r.agent_type ?? "—";
-      case "code":
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className="font-mono">{r.code ?? "—"}</span>
-            {r.work_slot_code ? <SlotBadge code={r.work_slot_code} /> : null}
-          </div>
+          <StaffKomandaFioCell
+            first_name={r.first_name}
+            last_name={r.last_name}
+            middle_name={r.middle_name}
+            fio={r.fio}
+            kpiColor={r.kpi_color}
+          />
         );
-      case "pinfl":
-        return <span className="font-mono">{r.pinfl ?? "—"}</span>;
-      case "consignment":
-        return r.consignment ? "Да" : "Нет";
-      case "apk_version":
-        return r.apk_version ?? "—";
-      case "device_name":
-        return r.device_name ?? "—";
-      case "last_sync":
-        return r.last_sync_at ? new Date(r.last_sync_at).toLocaleString("ru-RU") : "—";
-      case "phone":
-        return r.phone ?? "—";
       case "login":
-        return <span className="font-mono">{r.login}</span>;
-      case "price_types":
+        return <StaffKomandaLoginCell login={r.login} />;
+      case "phone":
+        return <StaffKomandaPhoneCell phone={r.phone} />;
+      case "code":
+        return <StaffKomandaCodeCell code={r.code} />;
+      case "product":
         return (
-          <div className="flex flex-wrap gap-1">
-            {(r.price_types?.length ? r.price_types : r.price_type ? [r.price_type] : []).map((p) => (
-              <span key={p} className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
-                {p}
-              </span>
-            ))}
-            {!r.price_types?.length && !r.price_type && "—"}
-          </div>
+          <span className="whitespace-nowrap text-slate-700">{formatProductCell(r.product)}</span>
         );
+      case "agent_type":
+        return <span className="text-slate-600">{r.agent_type ?? "—"}</span>;
       case "warehouse":
-        return r.warehouse ?? "—";
+        return <StaffKomandaWarehouseCell warehouse={r.warehouse} />;
+      case "apk_version":
+        return <StaffKomandaApkCell version={r.apk_version} />;
+      case "pinfl":
+        return <StaffKomandaPinflCell pinfl={r.pinfl} />;
+      case "territory":
+        return <StaffKomandaTerritoryCell territory={r.territory} />;
+      case "device_name":
+        return <StaffKomandaDeviceCell name={r.device_name} />;
+      case "last_sync":
+        return <StaffKomandaLastSyncCell at={r.last_sync_at} />;
+      case "price_types":
+        return <StaffKomandaTagList items={priceList} />;
       case "trade_direction":
-        return r.trade_direction ?? "—";
+        return <StaffKomandaTradeDirectionCell value={r.trade_direction} />;
       case "branch":
-        return r.branch ?? "—";
+        return <StaffKomandaBranchCell branch={r.branch} />;
       case "position":
-        return r.position ?? "—";
+        return <StaffKomandaPositionCell position={r.position} />;
+      case "consignment":
+        return <StaffKomandaYesNoCell value={r.consignment} />;
       case "created_at":
-        return new Date(r.created_at).toLocaleDateString("ru-RU");
+        return <StaffKomandaCreatedAtCell at={r.created_at} />;
       case "app_access":
         return (
-          <label className="inline-flex cursor-pointer items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Вкл / выкл</span>
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={r.app_access}
-              onChange={(e) => {
-                patchMut.mutate({ id: r.id, body: { app_access: e.target.checked } });
-              }}
-            />
-          </label>
+          <StaffKomandaAppAccessToggle
+            checked={r.app_access}
+            disabled={patchMut.isPending}
+            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
+          />
         );
       case "active_sessions":
         return (
-          <button
-            type="button"
-            className="font-medium text-primary underline-offset-2 hover:underline"
+          <StaffKomandaActiveSessionsCell
+            count={r.active_session_count}
+            max={r.max_sessions}
             onClick={() => setSessionAgent(r)}
-          >
-            {r.active_session_count}
-          </button>
+          />
         );
       case "max_sessions":
-        return r.max_sessions;
+        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
   }
 
   return (
-    <div className="space-y-0">
-      <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
-        <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Филиал</span>
-          <FilterSelect
-            aria-label="Филиал"
-            emptyLabel="Филиал"
-            value={draftBranch}
-            onChange={(e) => setDraftBranch(e.target.value)}
-          >
-            {branchOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Направление торговли</span>
-          <FilterSelect
-            aria-label="Направление торговли"
-            emptyLabel="Направление торговли"
-            value={draftTd}
-            onChange={(e) => setDraftTd(e.target.value)}
-          >
-            {(filterOptQ.data?.trade_directions ?? []).map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Должность</span>
-          <FilterSelect
-            aria-label="Должность"
-            emptyLabel="Должность"
-            value={draftPos}
-            onChange={(e) => setDraftPos(e.target.value)}
-          >
-            {(filterOptQ.data?.positions ?? []).map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <Button
-          type="button"
-          size="sm"
-          className="bg-teal-700 text-white hover:bg-teal-800"
-          onClick={applyFilters}
-        >
-          Применить
-        </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <StaffWorkspaceLayout>
+      <StaffWorkspaceHeader
+        title="Агент"
+        subtitle="Управление агентами, доступом к приложению и мобильной конфигурацией"
+        addLabel="Добавить агента"
+        onAdd={() => setAddOpen(true)}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
+
+      <StaffWorkspaceFilterPanel
+        filters={
+          <AgentsFiltersRow
+            draftBranch={draftBranch}
+            draftPos={draftPos}
+            draftTd={draftTd}
+            onDraftBranch={setDraftBranch}
+            onDraftPos={setDraftPos}
+            onDraftTd={setDraftTd}
+            branchOptions={branchOptions}
+            positionOptions={filterOptQ.data?.positions ?? []}
+            tradeDirectionOptions={tradeDirectionFilterOptions}
+          />
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => tablePrefs.setPageSize(n)}
+        allOnPageSelected={allPageSelected}
+        onToggleAllOnPage={toggleAllAgentsOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, коду, логину…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map((id) => AGENT_COLUMN_LABEL_BY_ID.get(id) ?? id);
+          const exportData = filteredRows.map((r) => order.map((colId) => agentExportCellString(r, colId)));
+          downloadXlsxSheet(
+            `agents_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Агенты",
+            headers,
+            exportData
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+      />
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
@@ -658,349 +676,135 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onReset={() => tablePrefs.resetColumnLayout()}
       />
 
-      <div className="orders-hub-section orders-hub-section--table mt-4">
-        <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-0">
-            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border bg-muted/25 px-3 py-0 sm:px-4">
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "active" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("active")}
-                >
-                  Активный
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "inactive" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("inactive")}
-                >
-                  Не активный
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 py-1">
-                <Button type="button" size="sm" className="h-9" onClick={() => setAddOpen(true)}>
-                  Добавить агента
-                </Button>
-              </div>
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={AGENT_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="агентов"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selectedIds}
+        onToggleSelection={toggleAgentSelection}
+        renderCell={(colId, row) =>
+          renderAgentDataCell(colId, pageRows.find((r) => r.id === row.id)!)
+        }
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Конфигурация" onClick={() => setConfigAgent(r)}>
+                <Settings2 className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Активные сессии" onClick={() => setSessionAgent(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton title="Деактивировать" onClick={() => setDeactivateAgent(r)}>
+                  <UserMinus className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : null}
             </div>
-
-            <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                value={pageSize}
-                onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
-              >
-                {[10, 20, 25, 50, 100, 500, 1000].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 px-2 text-xs"
-                title="Управление столбцами"
-                onClick={() => setColumnDialogOpen(true)}
-              >
-                <ListOrdered className="size-3.5" />
-                Столбцы
-              </Button>
-              <Input
-                placeholder="Поиск"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 max-w-xs bg-background text-xs text-foreground"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs"
-                onClick={() => {
-                  const order = tablePrefs.visibleColumnOrder;
-                  const headers = order.map((id) => AGENT_COLUMN_LABEL_BY_ID.get(id) ?? id);
-                  const exportData = filteredRows.map((r) =>
-                    order.map((colId) => agentExportCellString(r, colId))
-                  );
-                  downloadXlsxSheet(
-                    `agents_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-                    "Агенты",
-                    headers,
-                    exportData
-                  );
-                }}
-              >
-                Excel
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-9 w-9"
-                onClick={() => void listQ.refetch()}
-              >
-                <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
-              </Button>
-              <div className="relative ml-auto" ref={bulkMenuRef}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-1 text-xs"
-                  disabled={selectedIds.size === 0}
-                  onClick={() => setBulkMenuOpen((o) => !o)}
-                >
-                  Групповая обработка
-                  <ChevronDown className="size-3 opacity-70" aria-hidden />
-                </Button>
-                {bulkMenuOpen && selectedIds.size > 0 ? (
-                  <div
-                    className="absolute right-0 z-50 mt-1 max-h-[min(70vh,520px)] w-[min(100vw-2rem,22rem)] overflow-y-auto rounded-md border border-border bg-popover py-1 text-xs text-popover-foreground shadow-md"
-                    role="menu"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("restrict");
-                      }}
-                    >
-                      Ограничения (тип цены / продукты)
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("products");
-                      }}
-                    >
-                      Добавить / убрать товары и типы цен
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("trade");
-                      }}
-                    >
-                      Направление торговли
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("consignment");
-                      }}
-                    >
-                      Консигнация вкл / выкл
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("app_access");
-                      }}
-                    >
-                      Доступ к приложению
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("sessions");
-                      }}
-                    >
-                      Завершить сессии
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left hover:bg-muted"
-                      onClick={() => {
-                        setBulkMenuOpen(false);
-                        setGroupDialog("limits");
-                      }}
-                    >
-                      Лимит сессий (max)
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[2200px] text-xs">
-                <thead className="app-table-thead">
-                  <tr>
-                    <th className="w-10 whitespace-nowrap px-2 py-2 text-left">
-                      <input
-                        ref={headerCbRef}
-                        type="checkbox"
-                        className="size-4 rounded border-input accent-primary"
-                        checked={allOnPageSelected}
-                        onChange={(e) => toggleAllAgentsOnPage(e.target.checked)}
-                        aria-label="Выбрать всех на странице"
-                      />
-                    </th>
-                    {tablePrefs.visibleColumnOrder.map((colId) => {
-                      return (
-                        <th key={colId} className="whitespace-nowrap px-2 py-2 text-left">
-                          {AGENT_COLUMN_LABEL_BY_ID.get(colId) ?? colId}
-                        </th>
-                      );
-                    })}
-                    <th className="whitespace-nowrap px-2 py-2 text-left">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((r) => (
-                    <tr key={r.id} className="border-t even:bg-muted/20">
-                      <td className="px-2 py-2">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-input accent-primary"
-                          checked={selectedIds.has(r.id)}
-                          onChange={(e) => toggleAgentSelection(r.id, e.target.checked)}
-                          aria-label={`Выбрать ${r.fio}`}
-                        />
-                      </td>
-                      {tablePrefs.visibleColumnOrder.map((colId) => (
-                        <td
-                          key={colId}
-                          className={colId === "price_types" ? "max-w-[10rem] px-2 py-2" : "px-2 py-2"}
-                        >
-                          {renderAgentDataCell(colId, r)}
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-right">
-                        <TableRowActionGroup className="justify-end" ariaLabel="Agent">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Активные сессии"
-                            aria-label="Активные сессии"
-                            onClick={() => setSessionAgent(r)}
-                          >
-                            <MonitorSmartphone className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Конфигурации"
-                            aria-label="Конфигурации"
-                            onClick={() => setConfigAgent(r)}
-                          >
-                            <Cog className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Изменить ограничения"
-                            aria-label="Изменить ограничения"
-                            onClick={() => setRestrictAgent(r)}
-                          >
-                            <Settings2 className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Инфо"
-                            aria-label="Инфо"
-                            onClick={() => setInfoRow(r)}
-                          >
-                            <Eye className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Редактировать"
-                            aria-label="Редактировать"
-                            onClick={() => setEditRow(r)}
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </Button>
-                          {tab === "active" && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Деактивировать"
-                              aria-label="Деактивировать"
-                              onClick={() => setDeactivateAgent(r)}
-                            >
-                              <UserMinus className="size-3.5" aria-hidden />
-                            </Button>
-                          )}
-                        </TableRowActionGroup>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="table-content-footer border-t border-border/80 bg-muted/25 px-3 py-2 text-xs text-foreground/75 sm:px-4">
-              Показано {pageRows.length} / {filteredRows.length}
-              {listQ.data && listQ.data.length !== filteredRows.length
-                ? ` (вкладка: ${listQ.data.length})`
-                : ""}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <AgentAddDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        tenantSlug={tenantSlug}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionRows}
-        loading={createMut.isPending}
-        onSubmit={(body) => createMut.mutate(body)}
+          );
+        }}
       />
 
-      <AgentInfoDialog row={infoRow} onClose={() => setInfoRow(null)} />
+      <StaffBulkFloatingBar
+        count={selectedIds.size}
+        allAccessOn={allAccessOn}
+        isActiveTab={tab === "active"}
+        busy={bulkBusy}
+        onToggleAccess={() =>
+          void bulkMut.mutateAsync({
+            action: "set_app_access",
+            agent_ids: Array.from(selectedIds),
+            app_access: !allAccessOn
+          })
+        }
+        onRestrictions={() => setGroupDialog("restrict")}
+        onBulkEdit={() => setBulkEditOpen(true)}
+        onToggleActive={() => setConfirmBulk(tab === "active" ? "deactivate" : "activate")}
+        onClearSessions={() => setConfirmBulk("clear-sessions")}
+        onClearSelection={() => setSelectedIds(new Set())}
+      />
 
-      <AgentEditDialog
-        row={editRow}
-        onClose={() => setEditRow(null)}
-        tenantSlug={tenantSlug}
+      <AgentsBulkEditDialog
+        open={bulkEditOpen}
+        count={selectedIds.size}
+        loading={bulkEditMut.isPending}
         warehouses={warehousesQ.data ?? []}
         branchOptions={branchOptions}
         tradeDirections={tradeDirectionRows}
-        onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
+        positions={filterOptQ.data?.positions ?? []}
+        onClose={() => setBulkEditOpen(false)}
+        onSave={async (fields) => {
+          await bulkEditMut.mutateAsync(fields);
+        }}
+      />
+
+      <AgentTemplateConfirmDialog
+        open={confirmBulk != null}
+        message={
+          confirmBulk === "deactivate"
+            ? "Вы хотите деактивировать выбранных агентов?"
+            : confirmBulk === "activate"
+              ? "Вы хотите активировать выбранных агентов?"
+              : "Вы хотите сбросить все сессии у выбранных агентов?"
+        }
+        busy={bulkBusy}
+        onCancel={() => setConfirmBulk(null)}
+        onConfirm={() => {
+          if (confirmBulk === "clear-sessions") {
+            void bulkMut.mutateAsync({
+              action: "revoke_sessions",
+              agent_ids: Array.from(selectedIds)
+            });
+            setConfirmBulk(null);
+            return;
+          }
+          if (confirmBulk === "deactivate") {
+            void bulkActiveMut.mutateAsync(false);
+            return;
+          }
+          if (confirmBulk === "activate") {
+            void bulkActiveMut.mutateAsync(true);
+          }
+        }}
+      />
+
+      <AgentFormModal
+        mode="create"
+        open={addOpen}
+        row={null}
+        tenantSlug={tenantSlug}
+        warehouses={warehousesQ.data ?? []}
+        branchOptions={branchOptions}
+        tradeDirections={tradeDirectionsWithId}
+        priceTypes={priceTypesQ.data ?? []}
+        loading={createMut.isPending}
+        onClose={() => setAddOpen(false)}
+        onSubmitCreate={(body) => createMut.mutate(body)}
+        onSubmitEdit={async () => {}}
+      />
+
+      <AgentFormModal
+        mode="edit"
+        open={editRow != null}
+        row={editRow}
+        tenantSlug={tenantSlug}
+        warehouses={warehousesQ.data ?? []}
+        branchOptions={branchOptions}
+        tradeDirections={tradeDirectionsWithId}
+        priceTypes={priceTypesQ.data ?? []}
+        loading={patchMut.isPending}
+        onClose={() => setEditRow(null)}
+        onSubmitCreate={() => {}}
+        onSubmitEdit={(id, body) => patchMut.mutateAsync({ id, body })}
         onOpenRestrictions={(r) => {
           setEditRow(null);
           setRestrictAgent(r);
@@ -1015,7 +819,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="agent"
         userId={sessionAgent?.id ?? null}
-        maxSessions={sessionAgent?.max_sessions ?? 2}
+        maxSessions={sessionAgent?.max_sessions ?? 1}
         onPatched={() => {
           void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
         }}
@@ -1034,7 +838,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <RestrictionsDialog
+      <AgentRestrictionsDialog
         open={restrictAgent != null}
         agent={restrictAgent}
         onClose={() => setRestrictAgent(null)}
@@ -1058,11 +862,12 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <RestrictionsDialog
+      <AgentRestrictionsDialog
         open={groupDialog === "restrict"}
         agent={null}
         bulkMode
-        bulkSummary={`Выбрано агентов: ${selectedIds.size}`}
+        bulkCount={selectedIds.size}
+        bulkLabel={`Выбрано агентов: ${selectedIds.size}`}
         onClose={() => setGroupDialog(null)}
         tenantSlug={tenantSlug}
         categories={categoriesQ.data ?? []}
@@ -1077,1390 +882,15 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <GroupProductListDialog
-        open={groupDialog === "products"}
-        onClose={() => setGroupDialog(null)}
-        tenantSlug={tenantSlug}
-        categories={categoriesQ.data ?? []}
-        priceTypes={priceTypesQ.data ?? []}
-        selectedCount={selectedIds.size}
-        loading={bulkMut.isPending}
-        onApply={async (payload) => {
-          await bulkMut.mutateAsync({
-            action: "patch_product_list",
-            agent_ids: Array.from(selectedIds),
-            ...payload
-          });
-        }}
+      <AgentTemplateConfirmDialog
+        open={Boolean(deactivateAgent)}
+        message="Вы хотите деактивировать агента?"
+        cancelLabel="Нет"
+        confirmLabel="Да"
+        busy={deactivateMut.isPending}
+        onCancel={() => setDeactivateAgent(null)}
+        onConfirm={() => deactivateAgent && deactivateMut.mutate(deactivateAgent.id)}
       />
-
-      <GroupTradeDirectionDialog
-        open={groupDialog === "trade"}
-        onClose={() => setGroupDialog(null)}
-        rows={selectedRows}
-        tradeDirections={tradeDirectionRows}
-        loading={bulkMut.isPending}
-        onSave={async (updates) => {
-          await bulkMut.mutateAsync({
-            action: "set_trade_directions",
-            updates
-          });
-        }}
-      />
-
-      <Dialog open={groupDialog === "consignment"} onOpenChange={(o) => !o && setGroupDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Консигнация</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Агентов: {selectedIds.size}</p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              className="flex-1"
-              disabled={bulkMut.isPending}
-              onClick={() =>
-                void bulkMut.mutateAsync({
-                  action: "set_consignment",
-                  agent_ids: Array.from(selectedIds),
-                  consignment: true
-                })
-              }
-            >
-              Включить
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={bulkMut.isPending}
-              onClick={() =>
-                void bulkMut.mutateAsync({
-                  action: "set_consignment",
-                  agent_ids: Array.from(selectedIds),
-                  consignment: false
-                })
-              }
-            >
-              Выключить
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={groupDialog === "app_access"} onOpenChange={(o) => !o && setGroupDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Доступ к приложению</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Агентов: {selectedIds.size}</p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              className="flex-1"
-              disabled={bulkMut.isPending}
-              onClick={() =>
-                void bulkMut.mutateAsync({
-                  action: "set_app_access",
-                  agent_ids: Array.from(selectedIds),
-                  app_access: true
-                })
-              }
-            >
-              Вкл
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={bulkMut.isPending}
-              onClick={() =>
-                void bulkMut.mutateAsync({
-                  action: "set_app_access",
-                  agent_ids: Array.from(selectedIds),
-                  app_access: false
-                })
-              }
-            >
-              Выкл
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={groupDialog === "sessions"} onOpenChange={(o) => !o && setGroupDialog(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Завершить сессии</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Будут отозваны все активные refresh-токены для выбранных агентов ({selectedIds.size}).
-          </p>
-          <DialogFooter className="flex-row justify-end gap-2 border-0 bg-transparent p-0 sm:flex-row">
-            <Button type="button" variant="outline" onClick={() => setGroupDialog(null)}>
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={bulkMut.isPending}
-              onClick={() =>
-                void bulkMut.mutateAsync({
-                  action: "revoke_sessions",
-                  agent_ids: Array.from(selectedIds)
-                })
-              }
-            >
-              Завершить
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <GroupLimitsDialog
-        open={groupDialog === "limits"}
-        onClose={() => setGroupDialog(null)}
-        rows={selectedRows}
-        loading={bulkMut.isPending}
-        onAdjustDelta={(delta) =>
-          bulkMut.mutateAsync({
-            action: "adjust_max_sessions",
-            agent_ids: Array.from(selectedIds),
-            delta
-          })
-        }
-        onSetAbsolute={(max_sessions) =>
-          bulkMut.mutateAsync({
-            action: "set_max_sessions",
-            agent_ids: Array.from(selectedIds),
-            max_sessions
-          })
-        }
-      />
-
-      <Dialog open={Boolean(deactivateAgent)} onOpenChange={(o) => !o && setDeactivateAgent(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Деактивировать агента</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm">Вы хотите деактивировать агента?</p>
-          <DialogFooter className="flex-row justify-end gap-2 border-0 bg-transparent p-0">
-            <Button type="button" variant="outline" onClick={() => setDeactivateAgent(null)}>
-              Нет
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deactivateMut.isPending}
-              onClick={() => deactivateAgent && deactivateMut.mutate(deactivateAgent.id)}
-            >
-              Да
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function AgentInfoDialog({ row, onClose }: { row: AgentRow | null; onClose: () => void }) {
-  if (!row) return null;
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Агент</DialogTitle>
-        </DialogHeader>
-        <dl className="grid grid-cols-[8rem_1fr] gap-x-2 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Ф.И.О</dt>
-          <dd>{row.fio}</dd>
-          <dt className="text-muted-foreground">Логин</dt>
-          <dd className="font-mono">{row.login}</dd>
-          <dt className="text-muted-foreground">Телефон</dt>
-          <dd>{row.phone ?? "—"}</dd>
-          <dt className="text-muted-foreground">E-mail</dt>
-          <dd>{row.email ?? "—"}</dd>
-          <dt className="text-muted-foreground">Код</dt>
-          <dd>{row.code ?? "—"}</dd>
-          <dt className="text-muted-foreground">ПИНФЛ</dt>
-          <dd>{row.pinfl ?? "—"}</dd>
-          <dt className="text-muted-foreground">Склад</dt>
-          <dd>{row.warehouse ?? "—"}</dd>
-          <dt className="text-muted-foreground">Филиал</dt>
-          <dd>{row.branch ?? "—"}</dd>
-          <dt className="text-muted-foreground">Направление</dt>
-          <dd>{row.trade_direction ?? "—"}</dd>
-          <dt className="text-muted-foreground">Тип цены</dt>
-          <dd>{(row.price_types ?? []).join(", ") || row.price_type || "—"}</dd>
-          <dt className="text-muted-foreground">Сессии</dt>
-          <dd>
-            {row.active_session_count} / {row.max_sessions}
-          </dd>
-          <dt className="text-muted-foreground">APK</dt>
-          <dd>{row.apk_version ?? "—"}</dd>
-          <dt className="text-muted-foreground">Устройство</dt>
-          <dd>{row.device_name ?? "—"}</dd>
-        </dl>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AgentAddDialog({
-  open,
-  onOpenChange,
-  tenantSlug,
-  warehouses,
-  branchOptions,
-  tradeDirections,
-  loading,
-  onSubmit
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  tenantSlug: string;
-  warehouses: { id: number; name: string }[];
-  branchOptions: string[];
-  tradeDirections: Array<{ id: number; name: string; code: string | null }>;
-  loading: boolean;
-  onSubmit: (body: Record<string, unknown>) => void;
-}) {
-  const [first_name, setFirst] = useState("");
-  const [last_name, setLast] = useState("");
-  const [middle_name, setMid] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [warehouse_id, setWh] = useState("");
-  const [trade_direction_id, setTdId] = useState("");
-  const [agent_type, setAgentType] = useState("Торговый представитель");
-  const [branch, setBranch] = useState("");
-  const [position, setPos] = useState("");
-  const [code, setCode] = useState("");
-  const [pinfl, setPinfl] = useState("");
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const [consignment, setConsignment] = useState(false);
-  const [kpi_color, setKpi] = useState("#ef4444");
-  const [showPw, setShowPw] = useState(false);
-  const [work_slot_id, setWorkSlotId] = useState("");
-  const [slotOptions, setSlotOptions] = useState<
-    Array<{ id: number; slot_code: string; label: string | null; active_user_name: string | null }>
-  >([]);
-
-  useEffect(() => {
-    if (!open || !tenantSlug) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { data } = await api.get<{
-          data: Array<{
-            id: number;
-            slot_code: string;
-            label: string | null;
-            active_user_name: string | null;
-            is_active: boolean;
-          }>;
-        }>(`/api/${tenantSlug}/work-slots?slot_type=agent&limit=300&is_active=true`);
-        if (cancelled) return;
-        setSlotOptions(
-          (data.data ?? []).map((s) => ({
-            id: s.id,
-            slot_code: s.slot_code,
-            label: s.label,
-            active_user_name: s.active_user_name
-          }))
-        );
-      } catch {
-        if (!cancelled) setSlotOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, tenantSlug]);
-
-  useEffect(() => {
-    if (!open) return;
-    setFirst("");
-    setLast("");
-    setMid("");
-    setPhone("");
-    setEmail("");
-    setWh("");
-    setTdId("");
-    setAgentType("Торговый представитель");
-    setBranch("");
-    setPos("");
-    setCode("");
-    setPinfl("");
-    setLogin("");
-    setPassword(randomPassword());
-    setConsignment(false);
-    setWorkSlotId("");
-    setKpi("#ef4444");
-  }, [open]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Добавить агента</DialogTitle>
-        </DialogHeader>
-        <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1">
-          <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
-          <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
-          <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
-          <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Склад
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Склад"
-              aria-label="Склад"
-              value={warehouse_id}
-              onChange={(e) => setWh(e.target.value)}
-            >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Направление торговли (spravochnik)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Tanlanmagan"
-              aria-label="Направление торговли"
-              value={trade_direction_id}
-              onChange={(e) => setTdId(e.target.value)}
-            >
-              {tradeDirections.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Тип агента
-            <select
-              className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
-              value={agent_type}
-              onChange={(e) => setAgentType(e.target.value)}
-            >
-              <option value="Торговый представитель">Торговый представитель</option>
-              <option value="Мерчендайзер">Мерчендайзер</option>
-            </select>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Филиал
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Филиал"
-              aria-label="Филиал"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              {branchOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
-          <label className="text-xs text-muted-foreground">
-            Ishchi o‘rni (ixtiyoriy)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Tanlanmagan"
-              aria-label="Ishchi o‘rni"
-              value={work_slot_id}
-              onChange={(e) => setWorkSlotId(e.target.value)}
-            >
-              {slotOptions.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.slot_code}
-                  {s.label ? ` — ${s.label}` : ""}
-                  {s.active_user_name ? ` (hozir: ${s.active_user_name})` : " (bo‘sh)"}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
-          <div className="flex gap-2">
-            <Input
-              placeholder="Пароль *"
-              type={showPw ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <Button type="button" variant="outline" size="sm" onClick={() => setPassword(randomPassword())}>
-              ↻
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowPw((s) => !s)}>
-              👁
-            </Button>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={consignment} onChange={(e) => setConsignment(e.target.checked)} />
-            Консигнация
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            KPI цвет
-            <input type="color" value={kpi_color} onChange={(e) => setKpi(e.target.value)} className="h-8 w-12" />
-          </label>
-        </div>
-        <DialogFooter className="flex-col gap-2 border-0 bg-transparent p-0 sm:flex-col">
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              /* ограничения в отдельном модале после создания — упрощение */
-            }}
-            disabled
-          >
-            Ограничения (после сохранения)
-          </Button>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={loading || !first_name.trim() || !login.trim() || password.length < 6}
-            onClick={() =>
-              onSubmit({
-                first_name: first_name.trim(),
-                last_name: last_name.trim() || null,
-                middle_name: middle_name.trim() || null,
-                phone: phone.trim() || null,
-                email: email.trim() || null,
-                warehouse_id: warehouse_id ? Number.parseInt(warehouse_id, 10) : null,
-                trade_direction_id: trade_direction_id.trim()
-                  ? Number.parseInt(trade_direction_id.trim(), 10)
-                  : null,
-                agent_type: agent_type.trim() || null,
-                branch: branch.trim() || null,
-                position: position.trim() || null,
-                code: code.trim() || null,
-                pinfl: pinfl.trim() || null,
-                login: login.trim().toLowerCase(),
-                password,
-                consignment,
-                kpi_color: kpi_color || null,
-                max_sessions: 2,
-                app_access: true,
-                can_authorize: true,
-                work_slot_id: work_slot_id.trim()
-                  ? Number.parseInt(work_slot_id.trim(), 10)
-                  : null
-              })
-            }
-          >
-            Добавить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AgentEditDialog({
-  row,
-  onClose,
-  tenantSlug,
-  warehouses,
-  branchOptions,
-  tradeDirections,
-  onPatch,
-  onOpenRestrictions
-}: {
-  row: AgentRow | null;
-  onClose: () => void;
-  tenantSlug: string;
-  warehouses: { id: number; name: string }[];
-  branchOptions: string[];
-  tradeDirections: Array<{ id: number; name: string; code: string | null }>;
-  onPatch: (id: number, body: Record<string, unknown>) => Promise<unknown>;
-  onOpenRestrictions: (r: AgentRow) => void;
-}) {
-  const detailQ = useQuery({
-    queryKey: ["agent-detail", tenantSlug, row?.id],
-    enabled: Boolean(row),
-    staleTime: STALE.detail,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: AgentRow }>(`/api/${tenantSlug}/agents/${row!.id}`);
-      return data.data;
-    }
-  });
-
-  const r = detailQ.data ?? row;
-  const [first_name, setFirst] = useState("");
-  const [last_name, setLast] = useState("");
-  const [middle_name, setMid] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [warehouse_id, setWh] = useState("");
-  const [trade_direction_id, setTdId] = useState("");
-  const [agent_type, setAgentType] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPos] = useState("");
-  const [code, setCode] = useState("");
-  const [pinfl, setPinfl] = useState("");
-  const [login, setLogin] = useState("");
-  const [consignment, setConsignment] = useState(false);
-  const [kpi_color, setKpi] = useState("#ef4444");
-  const [pwMode, setPwMode] = useState(false);
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!r) return;
-    const parts = r.fio.split(/\s+/);
-    setFirst(parts[1] ?? parts[0] ?? "");
-    setLast(parts[0] ?? "");
-    setMid(parts[2] ?? "");
-    setPhone(r.phone ?? "");
-    setEmail(r.email ?? "");
-    const wh = warehouses.find((w) => w.name === r.warehouse);
-    setWh(wh ? String(wh.id) : "");
-    if (r.trade_direction_id != null && r.trade_direction_id > 0) {
-      setTdId(String(r.trade_direction_id));
-    } else {
-      const legacy = (r.trade_direction ?? "").trim();
-      const match = tradeDirections.find(
-        (d) =>
-          (d.code && d.code.trim() === legacy) ||
-          d.name.trim() === legacy ||
-          legacy === `${d.name} (${d.code})`.trim()
-      );
-      setTdId(match ? String(match.id) : "");
-    }
-    setAgentType(r.agent_type ?? "");
-    setBranch(r.branch ?? "");
-    setPos(r.position ?? "");
-    setCode(r.code ?? "");
-    setPinfl(r.pinfl ?? "");
-    setLogin(r.login);
-    setConsignment(r.consignment);
-    setKpi(r.kpi_color || "#ef4444");
-    setPwMode(false);
-    setPassword("");
-  }, [r, warehouses, tradeDirections]);
-
-  if (!row || !r) return null;
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const body: Record<string, unknown> = {
-        first_name: first_name.trim(),
-        last_name: last_name.trim() || null,
-        middle_name: middle_name.trim() || null,
-        phone: phone.trim() || null,
-        email: email.trim() || null,
-        warehouse_id: warehouse_id ? Number.parseInt(warehouse_id, 10) : null,
-        trade_direction_id: trade_direction_id.trim()
-          ? Number.parseInt(trade_direction_id.trim(), 10)
-          : null,
-        agent_type: agent_type.trim() || null,
-        branch: branch.trim() || null,
-        position: position.trim() || null,
-        code: code.trim() || null,
-        pinfl: pinfl.trim() || null,
-        consignment,
-        kpi_color: kpi_color || null
-      };
-      if (pwMode && password.length >= 6) body.password = password;
-      await onPatch(r.id, body);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-md overflow-hidden sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Редактировать</DialogTitle>
-        </DialogHeader>
-        <div className="grid max-h-[calc(92vh-8rem)] gap-3 overflow-y-auto pr-1">
-          <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
-          <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
-          <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
-          <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Склад
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Склад"
-              aria-label="Склад"
-              value={warehouse_id}
-              onChange={(e) => setWh(e.target.value)}
-            >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Направление торговли (spravochnik)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Tanlanmagan"
-              aria-label="Направление торговли"
-              value={trade_direction_id}
-              onChange={(e) => setTdId(e.target.value)}
-            >
-              {tradeDirections.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <Input placeholder="Тип агента" value={agent_type} onChange={(e) => setAgentType(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
-          <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Филиал
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Филиал"
-              aria-label="Филиал"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              {branchOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
-          <Input placeholder="Логин" value={login} onChange={(e) => setLogin(e.target.value)} disabled />
-          {!pwMode ? (
-            <Button type="button" variant="outline" className="w-full" onClick={() => setPwMode(true)}>
-              Изменить пароль
-            </Button>
-          ) : (
-            <Input
-              placeholder="Новый пароль (мин. 6)"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          )}
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={consignment} onChange={(e) => setConsignment(e.target.checked)} />
-            Консигнация
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            KPI цвет
-            <input type="color" value={kpi_color} onChange={(e) => setKpi(e.target.value)} className="h-8 w-12" />
-          </label>
-          <p className="text-xs text-muted-foreground">
-            Тип цены: {(r.price_types ?? []).length || "—"} шт. · Продукты: ограничения в модале
-          </p>
-        </div>
-        <DialogFooter className="flex-col gap-2 border-0 bg-transparent p-0 sm:flex-col">
-          <Button type="button" variant="secondary" className="w-full" onClick={() => onOpenRestrictions(r)}>
-            Ограничения
-          </Button>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={saving || !first_name.trim()}
-            onClick={() => void save()}
-          >
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function useCategoryProducts(tenantSlug: string, categoryId: number | null, enabled: boolean) {
-  return useQuery({
-    queryKey: ["products-by-cat", tenantSlug, categoryId],
-    enabled: Boolean(tenantSlug) && enabled && categoryId != null,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ProductListItem[] }>(
-        `/api/${tenantSlug}/products?category_id=${categoryId}&limit=100&is_active=true`
-      );
-      return data.data;
-    }
-  });
-}
-
-type EntitlementSavePayload = {
-  price_types: string[];
-  product_rules: Array<{ category_id: number; all: boolean; product_ids?: number[] }>;
-};
-
-function parseCategoryProductKey(key: string): { categoryId: number; productId: number } | null {
-  const [catRaw, prodRaw] = key.split(":");
-  const categoryId = Number.parseInt(catRaw ?? "", 10);
-  const productId = Number.parseInt(prodRaw ?? "", 10);
-  if (!Number.isFinite(categoryId) || categoryId <= 0) return null;
-  if (!Number.isFinite(productId) || productId <= 0) return null;
-  return { categoryId, productId };
-}
-
-function RestrictionsDialog({
-  open,
-  agent,
-  bulkMode = false,
-  bulkSummary,
-  onClose,
-  tenantSlug,
-  categories,
-  categoriesLoading = false,
-  priceTypes,
-  onSave
-}: {
-  open: boolean;
-  agent: AgentRow | null;
-  bulkMode?: boolean;
-  bulkSummary?: string;
-  onClose: () => void;
-  tenantSlug: string;
-  categories: ProductCategoryRow[];
-  categoriesLoading?: boolean;
-  priceTypes: string[];
-  onSave: (ent: EntitlementSavePayload) => Promise<unknown>;
-}) {
-  const [ptSel, setPtSel] = useState<Set<string>>(new Set());
-  const [ptSearch, setPtSearch] = useState("");
-  const [prSearch, setPrSearch] = useState("");
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [catChecked, setCatChecked] = useState<Record<number, boolean>>({});
-  const [prodChecked, setProdChecked] = useState<Record<string, boolean>>({});
-  const [showOnlySelected, setShowOnlySelected] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const resetRestrictionDraft = useCallback(() => {
-    setPtSel(new Set());
-    setCatChecked({});
-    setProdChecked({});
-    setExpanded(new Set());
-    setPtSearch("");
-    setPrSearch("");
-    setShowOnlySelected(false);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    if (bulkMode) {
-      resetRestrictionDraft();
-      return;
-    }
-    if (!agent) return;
-    const pts = new Set(agent.price_types?.length ? agent.price_types : agent.price_type ? [agent.price_type] : []);
-    const entPts = agent.agent_entitlements?.price_types ?? [];
-    entPts.forEach((p) => pts.add(p));
-    setPtSel(pts);
-    const rules = agent.agent_entitlements?.product_rules ?? [];
-    const cc: Record<number, boolean> = {};
-    const pc: Record<string, boolean> = {};
-    const exp = new Set<number>();
-    for (const rule of rules) {
-      cc[rule.category_id] = true;
-      if (rule.all) {
-        /* whole category */
-      } else if (rule.product_ids?.length) {
-        exp.add(rule.category_id);
-        for (const pid of rule.product_ids) {
-          pc[`${rule.category_id}:${pid}`] = true;
-        }
-      }
-    }
-    setCatChecked(cc);
-    setProdChecked(pc);
-    setExpanded(exp);
-    setPtSearch("");
-    setPrSearch("");
-    setShowOnlySelected(false);
-  }, [open, agent, bulkMode, resetRestrictionDraft]);
-
-  const selectedCategoryIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const c of categories) {
-      if (catChecked[c.id]) ids.add(c.id);
-    }
-    for (const [k, on] of Object.entries(prodChecked)) {
-      if (!on) continue;
-      const parsed = parseCategoryProductKey(k);
-      if (!parsed) continue;
-      ids.add(parsed.categoryId);
-    }
-    return ids;
-  }, [categories, catChecked, prodChecked]);
-  const selectedProductIdsByCategory = useMemo(() => {
-    const map = new Map<number, number[]>();
-    for (const [k, on] of Object.entries(prodChecked)) {
-      if (!on) continue;
-      const parsed = parseCategoryProductKey(k);
-      if (!parsed) continue;
-      const arr = map.get(parsed.categoryId) ?? [];
-      arr.push(parsed.productId);
-      map.set(parsed.categoryId, arr);
-    }
-    return map;
-  }, [prodChecked]);
-
-  if (!open) return null;
-  if (!bulkMode && !agent) return null;
-
-  const filteredPt = priceTypes.filter((p) => p.toLowerCase().includes(ptSearch.trim().toLowerCase()));
-  const visiblePt = showOnlySelected ? filteredPt.filter((p) => ptSel.has(p)) : filteredPt;
-  const filteredCat = categories.filter((c) => c.name.toLowerCase().includes(prSearch.trim().toLowerCase()));
-  const visibleCat = showOnlySelected
-    ? filteredCat.filter((c) => selectedCategoryIds.has(c.id))
-    : filteredCat;
-  const allCategoriesChecked = categories.length > 0 && categories.every((c) => Boolean(catChecked[c.id]));
-
-  const buildRules = (): Array<{ category_id: number; all: boolean; product_ids?: number[] }> => {
-    const out: Array<{ category_id: number; all: boolean; product_ids?: number[] }> = [];
-    for (const c of categories) {
-      if (!catChecked[c.id]) continue;
-      if (!expanded.has(c.id)) {
-        out.push({ category_id: c.id, all: true });
-        continue;
-      }
-      const ids = selectedProductIdsByCategory.get(c.id) ?? [];
-      if (ids.length === 0) {
-        out.push({ category_id: c.id, all: true });
-      } else {
-        out.push({ category_id: c.id, all: false, product_ids: ids });
-      }
-    }
-    return out;
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await onSave({
-        price_types: Array.from(ptSel),
-        product_rules: buildRules()
-      });
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-hidden sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Ограничения{bulkMode ? " (группа)" : ""}</DialogTitle>
-          {!bulkMode && agent && <p className="text-sm text-muted-foreground">Агент: {agent.fio}</p>}
-          {bulkMode && bulkSummary ? (
-            <p className="text-sm text-muted-foreground">{bulkSummary}</p>
-          ) : null}
-        </DialogHeader>
-        <div className="grid max-h-[65vh] min-h-[min(50vh,360px)] grid-cols-1 gap-4 md:grid-cols-2">
-          <SearchableMultiSelectPanel<string>
-            label="Тип цены"
-            searchPlaceholder="Поиск"
-            search={ptSearch}
-            onSearchChange={setPtSearch}
-            items={visiblePt.map((p) => ({ id: p, title: p }))}
-            selected={ptSel}
-            onSelectedChange={setPtSel}
-            emptyMessage="Нет вариантов"
-          />
-          <div className="flex min-h-0 flex-col rounded-md border md:min-h-[min(50vh,360px)]">
-            <div className="border-b p-2 text-sm font-medium">Продукт</div>
-            <label className="mx-2 mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                className="size-3.5 accent-primary"
-                checked={allCategoriesChecked}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    const next: Record<number, boolean> = {};
-                    for (const c of categories) next[c.id] = true;
-                    setCatChecked(next);
-                    setExpanded(new Set());
-                    setProdChecked({});
-                  } else {
-                    setCatChecked({});
-                    setExpanded(new Set());
-                    setProdChecked({});
-                  }
-                }}
-              />
-              Выбрать все категории/товары
-            </label>
-            <Input
-              placeholder="Поиск"
-              className="m-2"
-              value={prSearch}
-              onChange={(e) => setPrSearch(e.target.value)}
-            />
-            <div className="min-h-[200px] flex-1 overflow-y-auto overscroll-contain p-2">
-              {categoriesLoading ? (
-                <p className="text-xs text-muted-foreground">Загрузка категорий…</p>
-              ) : visibleCat.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {showOnlySelected
-                    ? "Нет выбранных категорий."
-                    : "Нет категорий. Создайте в Настройки → Категория продукта."}
-                </p>
-              ) : (
-                visibleCat.map((c) => (
-                  <CategoryRestrictRow
-                    key={c.id}
-                    tenantSlug={tenantSlug}
-                    cat={c}
-                    showOnlySelected={showOnlySelected}
-                    expanded={expanded.has(c.id)}
-                    onToggleExpand={() => {
-                      const n = new Set(expanded);
-                      if (n.has(c.id)) n.delete(c.id);
-                      else n.add(c.id);
-                      setExpanded(n);
-                    }}
-                    checked={Boolean(catChecked[c.id])}
-                    onToggleCat={(v) => setCatChecked((p) => ({ ...p, [c.id]: v }))}
-                    prodChecked={prodChecked}
-                    setProdChecked={setProdChecked}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="flex-row items-center justify-between gap-3 border-0 bg-transparent p-0">
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={showOnlySelected}
-              onChange={(e) => setShowOnlySelected(e.target.checked)}
-            />
-            Faqat belgilanganlarni ko‘rsatish
-          </label>
-          <Button type="button" onClick={() => void save()} disabled={saving}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GroupProductListDialog({
-  open,
-  onClose,
-  tenantSlug,
-  categories,
-  priceTypes,
-  selectedCount,
-  loading,
-  onApply
-}: {
-  open: boolean;
-  onClose: () => void;
-  tenantSlug: string;
-  categories: ProductCategoryRow[];
-  priceTypes: string[];
-  selectedCount: number;
-  loading: boolean;
-  onApply: (payload: {
-    mode: "add" | "remove";
-    category_id?: number;
-    product_ids?: number[];
-    price_types?: string[];
-  }) => Promise<void>;
-}) {
-  const [ptSel, setPtSel] = useState<Set<string>>(new Set());
-  const [ptSearch, setPtSearch] = useState("");
-  const [catId, setCatId] = useState("");
-  const [prodSel, setProdSel] = useState<Set<number>>(new Set());
-  const parsedCat = catId.trim() ? Number.parseInt(catId.trim(), 10) : NaN;
-  const categoryId = Number.isInteger(parsedCat) && parsedCat > 0 ? parsedCat : null;
-
-  const pq = useCategoryProducts(tenantSlug, categoryId, open && categoryId != null);
-
-  useEffect(() => {
-    if (!open) return;
-    setPtSel(new Set());
-    setCatId("");
-    setProdSel(new Set());
-    setPtSearch("");
-  }, [open]);
-
-  useEffect(() => {
-    setProdSel(new Set());
-  }, [catId]);
-
-  const filteredPt = priceTypes.filter((p) => p.toLowerCase().includes(ptSearch.trim().toLowerCase()));
-  const products = pq.data ?? [];
-
-  const run = async (mode: "add" | "remove") => {
-    const price_types = Array.from(ptSel).filter(Boolean);
-    const product_ids = Array.from(prodSel);
-    if (!price_types.length && !product_ids.length) {
-      window.alert("Выберите тип цены и/или товары.");
-      return;
-    }
-    if (product_ids.length && categoryId == null) {
-      window.alert("Выберите группу товаров для товаров.");
-      return;
-    }
-    await onApply({
-      mode,
-      ...(categoryId != null && product_ids.length ? { category_id: categoryId, product_ids } : {}),
-      ...(price_types.length ? { price_types } : {})
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-hidden sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Товары и типы цен (группа)</DialogTitle>
-          <p className="text-sm text-muted-foreground">Агентов: {selectedCount}</p>
-        </DialogHeader>
-        <div className="grid max-h-[60vh] grid-cols-1 gap-4 md:grid-cols-2">
-          <SearchableMultiSelectPanel<string>
-            label="Тип цены"
-            searchPlaceholder="Поиск"
-            search={ptSearch}
-            onSearchChange={setPtSearch}
-            items={filteredPt.map((p) => ({ id: p, title: p }))}
-            selected={ptSel}
-            onSelectedChange={setPtSel}
-            emptyMessage="Нет вариантов"
-          />
-          <div className="flex min-h-0 flex-col gap-2 rounded-md border p-2">
-            <label className="text-xs text-muted-foreground">
-              Группа товаров
-              <FilterSelect
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background p-2 text-sm"
-                emptyLabel="Категория"
-                aria-label="Категория"
-                value={catId}
-                onChange={(e) => setCatId(e.target.value)}
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </FilterSelect>
-            </label>
-            <div className="min-h-0 flex-1 overflow-y-auto text-xs">
-              {pq.isLoading && <p className="text-muted-foreground">Загрузка…</p>}
-              {products.map((p) => (
-                <label key={p.id} className="flex items-center gap-2 py-0.5">
-                  <input
-                    type="checkbox"
-                    className="size-3.5 accent-primary"
-                    checked={prodSel.has(p.id)}
-                    onChange={(e) => {
-                      setProdSel((prev) => {
-                        const n = new Set(prev);
-                        if (e.target.checked) n.add(p.id);
-                        else n.delete(p.id);
-                        return n;
-                      });
-                    }}
-                  />
-                  {p.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="flex-col gap-2 sm:flex-col">
-          <Button
-            type="button"
-            className="w-full bg-emerald-700 text-white hover:bg-emerald-800"
-            disabled={loading}
-            onClick={() => void run("add")}
-          >
-            Добавить к списку агентов
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="w-full"
-            disabled={loading}
-            onClick={() => void run("remove")}
-          >
-            Убрать из списка агентов
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GroupTradeDirectionDialog({
-  open,
-  onClose,
-  rows,
-  tradeDirections,
-  loading,
-  onSave
-}: {
-  open: boolean;
-  onClose: () => void;
-  rows: AgentRow[];
-  tradeDirections: Array<{ id: number; name: string; code: string | null }>;
-  loading: boolean;
-  onSave: (updates: { agent_id: number; trade_direction_id: number | null }[]) => Promise<void>;
-}) {
-  const [perTd, setPerTd] = useState<Record<number, string>>({});
-
-  useEffect(() => {
-    if (!open) return;
-    const m: Record<number, string> = {};
-    for (const r of rows) {
-      if (r.trade_direction_id != null && r.trade_direction_id > 0) m[r.id] = String(r.trade_direction_id);
-      else m[r.id] = "";
-    }
-    setPerTd(m);
-  }, [open, rows]);
-
-  const save = async () => {
-    const updates = rows.map((r) => ({
-      agent_id: r.id,
-      trade_direction_id: perTd[r.id]?.trim()
-        ? Number.parseInt(perTd[r.id]!.trim(), 10)
-        : null
-    }));
-    await onSave(updates);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Направление торговли</DialogTitle>
-          <p className="text-sm text-muted-foreground">Строк: {rows.length}</p>
-        </DialogHeader>
-        <div className="max-h-[58vh] overflow-x-auto overflow-y-auto rounded-md border">
-          <table className="w-full min-w-[480px] text-xs">
-            <thead className="sticky top-0 bg-muted/80">
-              <tr>
-                <th className="px-2 py-2 text-left">Ф.И.О.</th>
-                <th className="px-2 py-2 text-left">Код</th>
-                <th className="px-2 py-2 text-left">Направление</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-2 py-1.5">{r.fio}</td>
-                  <td className="px-2 py-1.5 font-mono">{r.code ?? "—"}</td>
-                  <td className="px-2 py-1.5">
-                    <FilterSelect
-                      className="h-8 w-full min-w-[10rem] rounded-md border border-input bg-background px-2 text-xs"
-                      emptyLabel="—"
-                      aria-label="Направление торговли"
-                      value={perTd[r.id] ?? ""}
-                      onChange={(e) => setPerTd((p) => ({ ...p, [r.id]: e.target.value }))}
-                    >
-                      {tradeDirections.map((t) => (
-                        <option key={t.id} value={String(t.id)}>
-                          {t.name}
-                          {t.code ? ` (${t.code})` : ""}
-                        </option>
-                      ))}
-                    </FilterSelect>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button type="button" disabled={loading || rows.length === 0} onClick={() => void save()}>
-            Сохранить
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function GroupLimitsDialog({
-  open,
-  onClose,
-  rows,
-  loading,
-  onAdjustDelta,
-  onSetAbsolute
-}: {
-  open: boolean;
-  onClose: () => void;
-  rows: AgentRow[];
-  loading: boolean;
-  onAdjustDelta: (d: number) => Promise<unknown>;
-  onSetAbsolute: (n: number) => Promise<unknown>;
-}) {
-  const [num, setNum] = useState("");
-
-  useEffect(() => {
-    if (open) setNum("");
-  }, [open]);
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Лимит сессий</DialogTitle>
-          <p className="text-sm text-muted-foreground">Агентов: {rows.length}</p>
-        </DialogHeader>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void onAdjustDelta(-1)}>
-            −1 к лимиту
-          </Button>
-          <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => void onAdjustDelta(1)}>
-            +1 к лимиту
-          </Button>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="1…99"
-            className="h-9"
-            value={num}
-            onChange={(e) => setNum(e.target.value)}
-          />
-          <Button
-            type="button"
-            size="sm"
-            className="h-9 shrink-0"
-            disabled={loading}
-            onClick={() => {
-              const n = Number.parseInt(num.trim(), 10);
-              if (!Number.isInteger(n) || n < 1 || n > 99) {
-                window.alert("Введите число от 1 до 99.");
-                return;
-              }
-              void onSetAbsolute(n);
-            }}
-          >
-            Применить
-          </Button>
-        </div>
-        <div className="max-h-40 overflow-y-auto rounded border p-2 text-xs text-muted-foreground">
-          {rows.slice(0, 50).map((r) => (
-            <div key={r.id}>
-              {r.fio} — {r.max_sessions}
-            </div>
-          ))}
-          {rows.length > 50 ? <div>… ещё {rows.length - 50}</div> : null}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CategoryRestrictRow({
-  tenantSlug,
-  cat,
-  showOnlySelected,
-  expanded,
-  onToggleExpand,
-  checked,
-  onToggleCat,
-  prodChecked,
-  setProdChecked
-}: {
-  tenantSlug: string;
-  cat: ProductCategoryRow;
-  showOnlySelected: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  checked: boolean;
-  onToggleCat: (v: boolean) => void;
-  prodChecked: Record<string, boolean>;
-  setProdChecked: import("react").Dispatch<import("react").SetStateAction<Record<string, boolean>>>;
-}) {
-  const q = useCategoryProducts(tenantSlug, cat.id, expanded);
-  const products = q.data ?? [];
-  const visibleProducts = showOnlySelected
-    ? products.filter((p) => Boolean(prodChecked[`${cat.id}:${p.id}`]))
-    : products;
-  const allVisibleSelected =
-    visibleProducts.length > 0 && visibleProducts.every((p) => Boolean(prodChecked[`${cat.id}:${p.id}`]));
-
-  return (
-    <div className="border-b border-border/60 py-1">
-      <div className="flex items-center gap-1">
-        <button type="button" className="p-0.5" onClick={onToggleExpand}>
-          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-        </button>
-        <label className="flex flex-1 items-center gap-2 text-sm">
-          <input type="checkbox" checked={checked} onChange={(e) => onToggleCat(e.target.checked)} />
-          {cat.name}
-        </label>
-      </div>
-      {expanded && checked && (
-        <div className="ml-6 mt-1 space-y-1 border-l pl-2">
-          <label className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-primary"
-              checked={allVisibleSelected}
-              disabled={visibleProducts.length === 0}
-              onChange={(e) =>
-                setProdChecked((prev) => {
-                  const next = { ...prev };
-                  for (const p of visibleProducts) {
-                    const key = `${cat.id}:${p.id}`;
-                    next[key] = e.target.checked;
-                  }
-                  return next;
-                })
-              }
-            />
-            Hamma mahsulotlarni belgilash
-          </label>
-          {q.isLoading && <p className="text-xs text-muted-foreground">Загрузка…</p>}
-          {!q.isLoading && visibleProducts.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Belgilangan mahsulot yo‘q.</p>
-          ) : null}
-          {visibleProducts.map((p) => {
-            const key = `${cat.id}:${p.id}`;
-            return (
-              <label key={p.id} className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={Boolean(prodChecked[key])}
-                  onChange={(e) =>
-                    setProdChecked((prev) => ({ ...prev, [key]: e.target.checked }))
-                  }
-                />
-                {p.name}
-              </label>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    </StaffWorkspaceLayout>
   );
 }

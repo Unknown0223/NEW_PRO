@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { clampTablePageSize, DEFAULT_TABLE_PAGE_SIZES, normalizeTablePageSizes } from "@/lib/table-page-sizes";
 
 export type UserTableUiState = {
   columnOrder?: string[];
@@ -22,7 +23,7 @@ export function useUserTablePrefs({
   tableId,
   defaultColumnOrder,
   defaultPageSize = 10,
-  allowedPageSizes = [10, 20, 25, 50, 100, 500, 1000],
+  allowedPageSizes = DEFAULT_TABLE_PAGE_SIZES,
   defaultHiddenColumnIds,
   defaultViewMode
 }: {
@@ -36,6 +37,11 @@ export function useUserTablePrefs({
   defaultViewMode?: "grid" | "list";
 }) {
   const qc = useQueryClient();
+
+  const normalizedAllowedPageSizes = useMemo(
+    () => normalizeTablePageSizes(allowedPageSizes),
+    [allowedPageSizes]
+  );
 
   const prefsQ = useQuery({
     queryKey: queryKey(tenantSlug ?? null),
@@ -92,9 +98,11 @@ export function useUserTablePrefs({
 
   const pageSize = useMemo(() => {
     const ps = saved?.pageSize;
-    if (ps != null && allowedPageSizes.includes(ps)) return ps;
-    return allowedPageSizes.includes(defaultPageSize) ? defaultPageSize : allowedPageSizes[0]!;
-  }, [saved?.pageSize, allowedPageSizes, defaultPageSize]);
+    if (ps != null) return clampTablePageSize(ps, normalizedAllowedPageSizes);
+    return normalizedAllowedPageSizes.includes(defaultPageSize)
+      ? defaultPageSize
+      : normalizedAllowedPageSizes[0]!;
+  }, [saved?.pageSize, normalizedAllowedPageSizes, defaultPageSize]);
 
   const viewMode = useMemo((): "grid" | "list" => {
     const v = saved?.viewMode;
@@ -123,8 +131,9 @@ export function useUserTablePrefs({
     pageSize,
     viewMode,
     setPageSize: (n: number) => {
-      if (!allowedPageSizes.includes(n)) return;
-      persistTable({ pageSize: n });
+      const next = clampTablePageSize(n, normalizedAllowedPageSizes);
+      if (!normalizedAllowedPageSizes.includes(next)) return;
+      persistTable({ pageSize: next });
     },
     setViewMode: (mode: "grid" | "list") => {
       persistTable({ viewMode: mode });

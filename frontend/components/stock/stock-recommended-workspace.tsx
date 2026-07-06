@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";

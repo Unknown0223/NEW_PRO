@@ -22,6 +22,7 @@ export async function assembleSalesMonitoringSnapshot(
     deliveredOrd,
     planSales,
     execution_pct,
+    plan_note,
     akb,
     okb,
     coverage_pct,
@@ -181,8 +182,7 @@ export async function assembleSalesMonitoringSnapshot(
       plan_sales: planSales,
       fact_sales: factSales,
       execution_pct,
-      plan_note:
-        "Месячный план из отдельной таблицы пока не подключён: plan_sales=0, выполнение не считается. Подключите источник плана (например monthly_sales_plan) для KPI план/факт."
+      plan_note
     },
     summary,
     akb_okb: { akb, okb, coverage_pct },

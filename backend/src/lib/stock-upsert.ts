@@ -9,7 +9,7 @@ export async function upsertStock(
 ): Promise<void> {
   await tx.stock.upsert({
     where: {
-      tenant_id_warehouse_id_product_id: { tenant_id, warehouse_id: warehouseId, product_id: productId }
+      tenant_id_warehouse_id_product_id: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: productId }
     },
     create: {
       tenant_id: tenantId,
@@ -31,7 +31,7 @@ export async function incrementStock(
 ): Promise<Prisma.Decimal> {
   const stock = await tx.stock.upsert({
     where: {
-      tenant_id_warehouse_id_product_id: { tenant_id, warehouse_id: warehouseId, product_id: productId }
+      tenant_id_warehouse_id_product_id: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: productId }
     },
     create: {
       tenant_id: tenantId,
@@ -54,7 +54,7 @@ export async function decrementStock(
 ): Promise<Prisma.Decimal> {
   const stock = await tx.stock.upsert({
     where: {
-      tenant_id_warehouse_id_product_id: { tenant_id, warehouse_id: warehouseId, product_id: productId }
+      tenant_id_warehouse_id_product_id: { tenant_id: tenantId, warehouse_id: warehouseId, product_id: productId }
     },
     create: {
       tenant_id: tenantId,

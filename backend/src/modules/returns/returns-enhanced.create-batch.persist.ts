@@ -1,12 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { emitOrderUpdated } from "../../lib/order-event-bus";
-import { invalidateDashboard, invalidateStock } from "../../lib/redis-cache";
+import { invalidateDashboard } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { R } from "./returns-enhanced.helpers";
 import { createPolkiMirrorZayavka } from "./returns-enhanced.polki";
-import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
-import { applyClientBonusDebt, resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
+import { resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
 import type { PeriodReturnBatchResult, PeriodReturnResult } from "./returns-enhanced.types";
 import type { PreparePeriodReturnBatchResult } from "./returns-enhanced.create-batch.prepare";
 
@@ -15,10 +14,22 @@ export async function persistPeriodReturnBatch(
 ): Promise<PeriodReturnBatchResult> {
   const { tenantId, input, actorUserId, prepared, warehouseId, uid, pMap } = prep;
 
+  // Bonus qarzi butun partiya bo'yicha yagona — uni birinchi vazvratga biriktiramiz,
+  // qabulda shu vazvrat tasdiqlanganda qo'llanadi.
+  const batchDebt = await resolvePolkiBonusDebtAmount(tenantId, {
+    client_id: input.client_id,
+    price_type: input.price_type,
+    lines: input.lines,
+    bonus_debt_amount: input.bonus_debt_amount
+  });
+
   const { rows: created, mirrorOrderIds } = await prisma.$transaction(async (tx) => {
     const rows: Awaited<ReturnType<typeof tx.salesReturn.create>>[] = [];
     const mirrorOrderIds: number[] = [];
+    let debtAttached = false;
     for (const p of prepared) {
+      const attachDebt = !debtAttached && batchDebt.gt(0);
+      if (attachDebt) debtAttached = true;
       const ret = await tx.salesReturn.create({
         data: {
           tenant_id: tenantId,
@@ -26,8 +37,9 @@ export async function persistPeriodReturnBatch(
           client_id: input.client_id,
           order_id: p.orderId,
           warehouse_id: warehouseId,
-          status: "posted",
+          status: "pending",
           refund_amount: p.recalc.refund_amount,
+          bonus_debt_amount: attachDebt ? batchDebt : null,
           return_type: "partial",
           date_from: null,
           date_to: null,
@@ -67,65 +79,18 @@ export async function persistPeriodReturnBatch(
         refundAmount: p.recalc.refund_amount,
         note: input.note?.trim() || null,
         refusalReasonRef: input.refusal_reason_ref ?? null,
-        sourceOrderNumber: p.sourceOrderNumber
+        sourceOrderNumber: p.sourceOrderNumber,
+        actorUserId: uid
       });
       mirrorOrderIds.push(mid);
 
-      for (const rl of p.retLines) {
-        if (!(rl.qty > 0)) continue;
-        const delta = new Prisma.Decimal(rl.qty);
-        await tx.stock.upsert({
-          where: {
-            tenant_id_warehouse_id_product_id: {
-              tenant_id: tenantId,
-              warehouse_id: warehouseId,
-              product_id: rl.product_id
-            }
-          },
-          create: {
-            tenant_id: tenantId,
-            warehouse_id: warehouseId,
-            product_id: rl.product_id,
-            qty: delta
-          },
-          update: { qty: { increment: delta } }
-        });
-      }
-
-      if (p.recalc.refund_amount.gt(0)) {
-        const bal = await tx.clientBalance.upsert({
-          where: { tenant_id_client_id: { tenant_id: tenantId, client_id: input.client_id } },
-          create: {
-            tenant_id: tenantId,
-            client_id: input.client_id,
-            balance: p.recalc.refund_amount
-          },
-          update: { balance: { increment: p.recalc.refund_amount } }
-        });
-        await tx.clientBalanceMovement.create({
-          data: {
-            client_balance_id: bal.id,
-            delta: p.recalc.refund_amount,
-            note: `Vazvrat: ${p.number}`,
-            user_id: uid
-          }
-        });
-      }
+      // Side-effect'lar (ostatka / balans / bonus / auto-mark) qabulda qo'llanadi.
+      await tx.salesReturn.update({
+        where: { id: ret.id },
+        data: { mirror_order_id: mid }
+      });
 
       rows.push(ret);
-    }
-
-    const batchDebt = await resolvePolkiBonusDebtAmount(tenantId, {
-      client_id: input.client_id,
-      price_type: input.price_type,
-      lines: input.lines,
-      bonus_debt_amount: input.bonus_debt_amount
-    });
-    if (batchDebt.gt(0)) {
-      const refNum = rows[0]?.number ?? null;
-      await applyClientBonusDebt(tx, tenantId, input.client_id, batchDebt, uid, {
-        returnNumber: refNum
-      });
     }
 
     return { rows, mirrorOrderIds };
@@ -135,9 +100,6 @@ export async function persistPeriodReturnBatch(
     emitOrderUpdated(tenantId, mid);
   }
   void invalidateDashboard(tenantId);
-  void invalidateStock(tenantId, warehouseId);
-
-  await autoMarkReturnedOrders(tenantId, input.client_id, undefined, undefined, uid);
 
   const returns: PeriodReturnResult[] = [];
   for (let i = 0; i < prepared.length; i++) {

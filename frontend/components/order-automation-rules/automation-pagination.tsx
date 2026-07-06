@@ -25,14 +25,14 @@ export function AutomationPagination({
     if (totalPages <= max) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: number[] = [];
     let start = Math.max(1, currentPage - 2);
-    let end = Math.min(totalPages, start + max - 1);
+    const end = Math.min(totalPages, start + max - 1);
     start = Math.max(1, end - max + 1);
     for (let p = start; p <= end; p++) pages.push(p);
     return pages;
   })();
 
   return (
-    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3">
+    <div className="flex items-center justify-between border-t border-border bg-card px-4 py-3">
       <div className="text-sm text-gray-500">
         Показано{" "}
         <span className="font-medium text-gray-700">
@@ -44,7 +44,7 @@ export function AutomationPagination({
         <select
           value={itemsPerPage}
           onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-          className="cursor-pointer rounded-lg border border-gray-200 px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="cursor-pointer rounded-lg border border-border px-2 py-1 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
         >
           <option value={10}>10</option>
           <option value={25}>25</option>
@@ -56,7 +56,7 @@ export function AutomationPagination({
             type="button"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronLeft size={16} />
           </button>
@@ -66,7 +66,7 @@ export function AutomationPagination({
               type="button"
               onClick={() => onPageChange(page)}
               className={`h-7 min-w-[28px] rounded-lg px-1.5 text-sm transition-colors ${
-                page === currentPage ? "bg-teal-600 text-white" : "text-gray-600 hover:bg-gray-100"
+                page === currentPage ? "bg-teal-600 text-white" : "text-gray-600 hover:bg-muted"
               }`}
             >
               {page}
@@ -76,7 +76,7 @@ export function AutomationPagination({
             type="button"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronRight size={16} />
           </button>

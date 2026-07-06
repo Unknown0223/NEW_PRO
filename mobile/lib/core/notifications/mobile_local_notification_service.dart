@@ -1,0 +1,187 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../l10n/app_strings_ru.dart';
+import '../theme/app_colors.dart';
+import '../ui/agent_ui.dart';
+import '../update/app_update_info.dart';
+
+/// Mahalliy bildirishnomalar: sinхron oynasi va ilova yangilanishi.
+class MobileLocalNotificationService {
+  MobileLocalNotificationService._();
+  static final MobileLocalNotificationService instance = MobileLocalNotificationService._();
+
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
+  String? _tenMinAlertKey;
+  void Function(String? payload)? onNotificationTap;
+
+  static const _syncChannelId = 'sync_window_urgent';
+  static const _syncNotificationId = 91001;
+  static const _appUpdateChannelId = 'app_update';
+  static const _appUpdateNotificationId = 91002;
+  static const _appUpdatePayloadPrefix = 'app_update';
+
+  Future<void> init() async {
+    if (_initialized) return;
+
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    await _plugin.initialize(
+      const InitializationSettings(android: android, iOS: ios),
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationResponse,
+    );
+
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _syncChannelId,
+        'Синхронизация',
+        description: 'Напоминание до окончания окна синхронизации',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _appUpdateChannelId,
+        'Обновление приложения',
+        description: 'Доступна новая версия SalesDoc',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+
+    _initialized = true;
+  }
+
+  static void _onNotificationResponse(NotificationResponse response) {
+    instance.onNotificationTap?.call(response.payload);
+  }
+
+  @pragma('vm:entry-point')
+  static void _onBackgroundNotificationResponse(NotificationResponse response) {
+    instance.onNotificationTap?.call(response.payload);
+  }
+
+  /// Bildirishnoma ruxsati.
+  Future<bool> ensureNotificationPermission({bool requestIfNeeded = true}) async {
+    await init();
+    var status = await Permission.notification.status;
+    if (status.isGranted) return true;
+    if (!requestIfNeeded) return false;
+    if (status.isPermanentlyDenied) return false;
+    status = await Permission.notification.request();
+    return status.isGranted;
+  }
+
+  bool get _inForeground =>
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  /// Sinхron oynasi tugashiga 10 daqiqa qolganda.
+  Future<void> onTenMinutesLeft({
+    BuildContext? context,
+    required String windowKey,
+  }) async {
+    final dayKey = '${DateTime.now().toIso8601String().substring(0, 10)}|$windowKey';
+    if (_tenMinAlertKey == dayKey) return;
+    _tenMinAlertKey = dayKey;
+
+    if (_inForeground && context != null && context.mounted) {
+      HapticFeedback.heavyImpact();
+      try {
+        await SystemSound.play(SystemSoundType.alert);
+      } catch (_) {}
+      showAgentToast(
+        context,
+        S.syncWindowTenMinAlert,
+        accentColor: AppColors.warning,
+      );
+      return;
+    }
+
+    final granted = await ensureNotificationPermission();
+    if (!granted) return;
+
+    await _plugin.show(
+      _syncNotificationId,
+      S.syncWindowAlertTitle,
+      S.syncWindowTenMinAlert,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _syncChannelId,
+          'Синхронизация',
+          channelDescription: 'Напоминание до окончания окна синхронизации',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          presentBadge: false,
+        ),
+      ),
+    );
+  }
+
+  /// Yangi versiya mavjud — ilova fonda yoki dialog ko‘rinmaganida.
+  Future<void> notifyAppUpdateAvailable({
+    required AppUpdateInfo info,
+    bool afterSync = false,
+  }) async {
+    await init();
+
+    final latest = info.latestVersion?.trim();
+    final title = info.required ? S.appUpdateTitleRequired : S.appUpdateTitle;
+    final body = afterSync
+        ? S.appUpdateNotificationAfterSync(latest ?? '')
+        : S.appUpdateNotificationBody(latest ?? '', info.currentVersion);
+
+    final granted = await ensureNotificationPermission(requestIfNeeded: false);
+    if (!granted) return;
+
+    final payload = '$_appUpdatePayloadPrefix|${latest ?? info.currentVersion}';
+    await _plugin.show(
+      _appUpdateNotificationId,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _appUpdateChannelId,
+          'Обновление приложения',
+          channelDescription: 'Доступна новая версия SalesDoc',
+          importance: info.required ? Importance.max : Importance.high,
+          priority: info.required ? Priority.max : Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          presentBadge: false,
+        ),
+      ),
+      payload: payload,
+    );
+  }
+
+  static bool isAppUpdatePayload(String? payload) =>
+      payload != null && payload.startsWith(_appUpdatePayloadPrefix);
+}
+
+/// Eski importlar uchun alias.
+typedef SyncWindowAlertService = MobileLocalNotificationService;

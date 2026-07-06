@@ -34,6 +34,7 @@ export async function resolveCreateOrderPaidBundle(
     orderedProductIds,
     orderAgentForBonus,
     validatedGiftOverrides,
+    validatedGiftSplits,
     isInboundShelfReturn,
     stackPolicy
   } = p;
@@ -64,9 +65,11 @@ export async function resolveCreateOrderPaidBundle(
       stackPolicy,
       usedRuleIds,
       validatedGiftOverrides,
+      validatedGiftSplits,
       input.warehouse_id,
       { referenceAt: new Date() },
-      orderAgentForBonus
+      orderAgentForBonus,
+      { applyDiscount: input.apply_discount !== false }
     );
     paidAfterDisc = resolved.lines;
     paidTotal = resolved.total;

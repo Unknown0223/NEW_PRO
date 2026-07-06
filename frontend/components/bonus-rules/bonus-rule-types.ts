@@ -22,6 +22,8 @@ export type BonusRuleRow = {
   is_active: boolean;
   valid_from: string | null;
   valid_to: string | null;
+  /** Server yangilangan vaqti — forma cache/refetch bilan qayta to‘ldirish uchun */
+  updated_at?: string;
   client_category: string | null;
   payment_type: string | null;
   client_type: string | null;
@@ -30,6 +32,10 @@ export type BonusRuleRow = {
   product_ids: number[];
   bonus_product_ids: number[];
   product_category_ids: number[];
+  scope_restrict_assortment?: boolean;
+  scope_restrict_category?: boolean;
+  /** Zakazda kamida bir marta qo‘llangan — faqat «Действует до» va aktivlik tahrirlanadi */
+  has_been_used?: boolean;
   target_all_clients: boolean;
   selected_client_ids: number[];
   is_manual: boolean;

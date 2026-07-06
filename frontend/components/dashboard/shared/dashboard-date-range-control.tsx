@@ -28,10 +28,10 @@ export function DashboardDateRangeControl({
 
   return (
     <>
-      <div className="relative flex h-12 min-w-0 shrink-0 overflow-visible rounded-xl border border-slate-200 bg-white xl:min-w-[300px]">
+      <div className="relative flex h-12 min-w-0 shrink-0 overflow-visible rounded-xl border border-border bg-card xl:min-w-[300px]">
         <button
           type="button"
-          className="w-11 shrink-0 border-r border-slate-200 text-xl font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-teal-700"
+          className="w-11 shrink-0 border-r border-border text-xl font-semibold text-slate-500 transition hover:bg-muted hover:text-teal-700"
           onClick={() => shift(-1)}
           aria-label="Предыдущий период"
         >
@@ -51,7 +51,7 @@ export function DashboardDateRangeControl({
         </button>
         <button
           type="button"
-          className="w-11 shrink-0 border-l border-slate-200 text-xl font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-teal-700"
+          className="w-11 shrink-0 border-l border-border text-xl font-semibold text-slate-500 transition hover:bg-muted hover:text-teal-700"
           onClick={() => shift(1)}
           aria-label="Следующий период"
         >

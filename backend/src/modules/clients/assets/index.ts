@@ -1,6 +1,4 @@
 /**
- * Clients assets module - Equipment and Photo Reports
+ * Clients assets module — canonical implementation in client-assets.service.
  */
-export * from "./client-equipment";
-export * from "./client-equipment-list";
-export * from "./client-photo-reports";
+export * from "../client-assets.service";

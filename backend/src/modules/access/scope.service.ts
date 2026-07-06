@@ -9,6 +9,7 @@ export type AccessScopePayload = {
   cash_desk_ids?: number[];
   payment_methods?: string[];
   territory_ids?: number[];
+  trade_direction_ids?: number[];
 };
 
 export type PatchUserScopesTxOpts = {
@@ -93,6 +94,24 @@ export async function patchUserScopesTx(
     }
   }
 
+  if (payload.trade_direction_ids !== undefined) {
+    const directionIds = [...new Set(payload.trade_direction_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    await tx.userTradeDirectionLink.deleteMany({ where: { tenant_id: tenantId, user_id: userId } });
+    if (directionIds.length > 0) {
+      const valid = await tx.tradeDirection.findMany({
+        where: { tenant_id: tenantId, id: { in: directionIds } },
+        select: { id: true }
+      });
+      const validIds = valid.map((d) => d.id);
+      if (validIds.length > 0) {
+        await tx.userTradeDirectionLink.createMany({
+          data: validIds.map((trade_direction_id) => ({ tenant_id: tenantId, user_id: userId, trade_direction_id })),
+          skipDuplicates: true
+        });
+      }
+    }
+  }
+
   if (payload.warehouse_delegate !== undefined) {
     const warehouse_id = Number(payload.warehouse_delegate.warehouse_id);
     if (!Number.isInteger(warehouse_id) || warehouse_id < 1) return;
@@ -144,6 +163,7 @@ export async function replaceUserScopes(tenantId: number, userId: number, payloa
     warehouse_ids: payload.warehouse_ids ?? [],
     cash_desk_ids: payload.cash_desk_ids ?? [],
     payment_methods: payload.payment_methods ?? [],
-    territory_ids: payload.territory_ids ?? []
+    territory_ids: payload.territory_ids ?? [],
+    trade_direction_ids: payload.trade_direction_ids ?? []
   });
 }

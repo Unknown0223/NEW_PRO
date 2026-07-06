@@ -109,6 +109,65 @@ export const ORDER_LIST_COLUMNS = ORDER_LIST_COLUMN_IDS.map((id) => ({
   label: LABELS[id]
 }));
 
+/** Uzun matn ustunlari — bitta qator, qator balandligi oshmasin. */
+export const ORDER_LIST_TRUNCATE_COLUMN_IDS = new Set<string>([
+  "client_name",
+  "client_legal_name",
+  "agent_name",
+  "warehouse_name",
+  "expeditors",
+  "region",
+  "city",
+  "zone",
+  "client_address",
+  "order_location",
+  "sales_channel",
+  "agent_trade_direction",
+  "created_by",
+  "comment",
+  "price_type",
+  "request_type_ref"
+]);
+
+const ORDER_LIST_COLUMN_TH_CLASS: Partial<Record<string, string>> = {
+  client_name: "min-w-[12rem] max-w-[12rem]",
+  client_legal_name: "min-w-[14rem] max-w-[14rem]",
+  client_address: "min-w-[14rem] max-w-[14rem]",
+  order_location: "min-w-[12rem] max-w-[12rem]",
+  comment: "min-w-[12rem] max-w-[12rem]",
+  warehouse_name: "min-w-[10rem] max-w-[10rem]",
+  agent_name: "min-w-[10rem] max-w-[10rem]",
+  expeditors: "min-w-[10rem] max-w-[10rem]"
+};
+
+const ORDER_LIST_COLUMN_TD_CLASS: Partial<Record<string, string>> = {
+  client_name: "max-w-[12rem] whitespace-nowrap overflow-hidden",
+  client_legal_name: "max-w-[14rem] whitespace-nowrap overflow-hidden",
+  client_address: "max-w-[14rem] whitespace-nowrap overflow-hidden",
+  order_location: "max-w-[12rem] whitespace-nowrap overflow-hidden",
+  comment: "max-w-[12rem] whitespace-nowrap overflow-hidden",
+  warehouse_name: "max-w-[10rem] whitespace-nowrap overflow-hidden",
+  agent_name: "max-w-[10rem] whitespace-nowrap overflow-hidden",
+  expeditors: "max-w-[10rem] whitespace-nowrap overflow-hidden"
+};
+
+const ORDER_LIST_COLUMN_TD_DEFAULT = "max-w-[9rem] whitespace-nowrap overflow-hidden";
+const ORDER_LIST_COLUMN_TH_DEFAULT = "min-w-[9rem] max-w-[9rem]";
+
+export function orderListColumnThClass(colId: string): string | undefined {
+  if (!ORDER_LIST_TRUNCATE_COLUMN_IDS.has(colId)) return undefined;
+  return ORDER_LIST_COLUMN_TH_CLASS[colId] ?? ORDER_LIST_COLUMN_TH_DEFAULT;
+}
+
+export function orderListColumnTdClass(colId: string): string | undefined {
+  if (!ORDER_LIST_TRUNCATE_COLUMN_IDS.has(colId)) return undefined;
+  return ORDER_LIST_COLUMN_TD_CLASS[colId] ?? ORDER_LIST_COLUMN_TD_DEFAULT;
+}
+
+export function orderListTruncateCellClass(colId: string): string {
+  return ORDER_LIST_TRUNCATE_COLUMN_IDS.has(colId) ? "block min-w-0 truncate" : "";
+}
+
 /** API: musbat qoldiq — UI/Excel: mijoz qarzi sifatida manfiy ko‘rsatiladi. */
 export function formatOrderListDebtAsClientLiability(debt: string | null | undefined): string {
   if (debt == null) return "";

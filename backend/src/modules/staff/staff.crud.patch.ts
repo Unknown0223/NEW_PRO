@@ -75,6 +75,12 @@ export async function patchAgentSupervisor(
     if (supervisorUserId === agentUserId) {
       throw new Error("SELF_SUPERVISOR");
     }
+    if (
+      agent.supervisor_user_id != null &&
+      agent.supervisor_user_id !== supervisorUserId
+    ) {
+      throw new Error("AGENT_ALREADY_ASSIGNED");
+    }
     const sup = await prisma.user.findFirst({
       where: { id: supervisorUserId, tenant_id: tenantId, is_active: true, role: "supervisor" }
     });
@@ -125,6 +131,9 @@ export type PatchAgentInput = {
   consignment?: boolean;
   consignment_limit_amount?: string | null;
   consignment_ignore_previous_months_debt?: boolean;
+  consignment_close_day?: number;
+  consignment_close_hour?: number;
+  consignment_close_minute?: number;
   apk_version?: string | null;
   device_name?: string | null;
   can_authorize?: boolean;

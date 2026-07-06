@@ -122,7 +122,7 @@ export default function TerritoriesPage() {
                     <TableCell>{t.code || "—"}</TableCell>
                     <TableCell>{t.user_count}</TableCell>
                     <TableCell>
-                      <Badge className={t.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
+                      <Badge className={t.is_active ? "bg-green-100 text-green-800" : "bg-muted text-gray-800"}>
                         {archiveOnly ? "Arxiv" : t.is_active ? "Faol" : "Nofaol"}
                       </Badge>
                     </TableCell>

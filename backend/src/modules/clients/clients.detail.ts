@@ -16,7 +16,7 @@ import {
   buildClientReconciliationPdfBufferFromLoaded,
   loadClientReconciliation
 } from "./client-reconciliation-data";
-import { getAppCache, setAppCache } from "../../lib/redis-cache";
+import { getAppCache, setAppCache, invalidateClientDetailCache, clientDetailCacheKey } from "../../lib/redis-cache";
 import { stableJsonStringify } from "../dashboard/dashboard.cache";
 import { appendClientAuditLog } from "./clients.audit";
 
@@ -44,7 +44,7 @@ function auditActorLabel(user: { name: string; login: string } | null | undefine
 }
 
 export async function getClientDetail(tenantId: number, id: number): Promise<ClientDetailRow> {
-  const cacheKey = `tenant:${tenantId}:client:detail:${id}`;
+  const cacheKey = clientDetailCacheKey(tenantId, id);
   const cached = await getAppCache<ClientDetailRow>(cacheKey);
   if (cached) return cached;
 
@@ -96,8 +96,12 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
         latitude: true,
         longitude: true,
         zone: true,
+        warehouse_id: true,
+        cash_desk_id: true,
         contact_persons: true,
         agent: { select: { name: true, code: true } },
+        warehouse: { select: { name: true } },
+        cash_desk: { select: { name: true } },
         agent_assignments: {
           orderBy: { slot: "asc" },
           select: agentAssignmentSelectFields
@@ -195,6 +199,10 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     latitude: c.latitude != null ? c.latitude.toString() : null,
     longitude: c.longitude != null ? c.longitude.toString() : null,
     zone: c.zone,
+    warehouse_id: c.warehouse_id,
+    warehouse_name: c.warehouse?.name ?? null,
+    cash_desk_id: c.cash_desk_id,
+    cash_desk_name: c.cash_desk?.name ?? null,
     agent_assignments,
     contact_persons: parseContactPersonsJson(c.contact_persons),
     open_orders_total,
@@ -321,6 +329,8 @@ export async function addClientBalanceMovement(
     delta,
     note: note?.trim() || null
   });
+
+  await invalidateClientDetailCache(tenantId, clientId);
 
   return getClientDetail(tenantId, clientId);
 }

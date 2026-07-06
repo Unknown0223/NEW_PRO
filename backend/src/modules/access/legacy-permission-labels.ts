@@ -7,5 +7,5 @@ export { LEGACY_PERMISSION_METADATA } from "./legacy-permissions.generated";
 
 /** Reserved / future operations from the same legacy doc — not seeded as Permission rows. */
 export const LEGACY_PLANNED_OPERATION_NOTES: string[] = [
-  "Granular API guards for individual legacy keys are not wired yet; attach keys in UI, then map endpoints to requirePermission in a follow-up."
+  "Route-level guards for major API prefixes are wired in route-permission-guard.ts (RBAC_ENFORCE_PERMISSIONS=1)."
 ];

@@ -55,15 +55,10 @@ export async function listClientsWithoutQr(
   return { data: rows, total, page: q.page, limit: q.limit };
 }
 
-export async function exportClientsWithoutQrCsv(
+function clientsWithoutQrWhere(
   tenantId: number,
-  q: {
-    search?: string;
-    zone?: string;
-    region?: string;
-    city?: string;
-  }
-): Promise<string> {
+  q: { search?: string; zone?: string; region?: string; city?: string }
+): Prisma.Sql {
   const where: Prisma.Sql[] = [
     Prisma.sql`c.tenant_id = ${tenantId}`,
     Prisma.sql`c.is_active = TRUE`,
@@ -83,12 +78,36 @@ export async function exportClientsWithoutQrCsv(
   if (q.zone?.trim()) where.push(Prisma.sql`COALESCE(c.zone,'') = ${q.zone.trim()}`);
   if (q.region?.trim()) where.push(Prisma.sql`COALESCE(c.region,'') = ${q.region.trim()}`);
   if (q.city?.trim()) where.push(Prisma.sql`COALESCE(c.city,'') = ${q.city.trim()}`);
-  const w = Prisma.join(where, " AND ");
-  const rows = await prisma.$queryRaw<ClientWithoutQrRow[]>(Prisma.sql`
+  return Prisma.join(where, " AND ");
+}
+
+export async function exportClientsWithoutQrRows(
+  tenantId: number,
+  q: {
+    search?: string;
+    zone?: string;
+    region?: string;
+    city?: string;
+  }
+): Promise<ClientWithoutQrRow[]> {
+  const w = clientsWithoutQrWhere(tenantId, q);
+  return prisma.$queryRaw<ClientWithoutQrRow[]>(Prisma.sql`
     SELECT c.id, c.name, c.zone, c.region, c.city, c.phone, c.agent_id
     FROM clients c
     WHERE ${w}
     ORDER BY c.name ASC
   `);
+}
+
+export async function exportClientsWithoutQrCsv(
+  tenantId: number,
+  q: {
+    search?: string;
+    zone?: string;
+    region?: string;
+    city?: string;
+  }
+): Promise<string> {
+  const rows = await exportClientsWithoutQrRows(tenantId, q);
   return toClientsWithoutQrCsv(rows);
 }

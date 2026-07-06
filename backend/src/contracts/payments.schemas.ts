@@ -98,7 +98,7 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
 
   const ekRaw = q.entry_kind?.trim();
   let entry_kind: PaymentListQuery["entry_kind"] | undefined;
-  if (ekRaw === "client_expense" || ekRaw === "payment") {
+  if (ekRaw === "client_expense" || ekRaw === "payment" || ekRaw === "discount_settlement") {
     entry_kind = ekRaw;
   }
 
@@ -165,7 +165,7 @@ export const createPaymentBodySchema = z.object({
   note: z.string().max(2000).optional().nullable(),
   cash_desk_id: z.number().int().positive().nullable().optional(),
   paid_at: z.string().max(40).optional().nullable(),
-  entry_kind: z.enum(["payment", "client_expense"]).optional(),
+  entry_kind: z.enum(["payment", "client_expense", "discount_settlement"]).optional(),
   expeditor_user_id: z.number().int().positive().nullable().optional(),
   ledger_agent_id: z.number().int().positive().nullable().optional(),
   allocation_mode: z.enum(["cash", "consignment", "none"]).optional(),
@@ -211,6 +211,19 @@ export const batchConfirmPaymentsBodySchema = z.object({
 /** DELETE `/api/:slug/payments/:id` query */
 export const deletePaymentQuerySchema = z.object({
   cancel_reason_ref: z.string().max(128).optional()
+});
+
+/** POST `/api/:slug/payments/:id/restore` */
+export const restorePaymentBodySchema = z.object({
+  comment: z.string().trim().min(1).max(2000)
+});
+
+/** POST `/api/:slug/payments/:id/edit-grants` */
+export const createPaymentEditGrantBodySchema = z.object({
+  duration_minutes: z.number().int().min(1).max(43200),
+  access_user_id: z.number().int().positive(),
+  cancel_reason_ref: z.string().max(128).nullable().optional(),
+  comment: z.string().max(2000).nullable().optional()
 });
 
 /** GET `/api/:slug/payments/order-cash-in/context` */

@@ -257,6 +257,13 @@ export function ExpeditorConfigurationsDialog({
                   }
                   label="Создать возврат с полки по номеру заказа"
                 />
+                <ConfigCheckRow
+                  checked={Boolean(draft.orders?.return_reason_required)}
+                  onChange={(v) =>
+                    setDraft((d) => setDraftPath(d, "orders", (o) => ({ ...o, return_reason_required: v })))
+                  }
+                  label="Причина возврата обязательна"
+                />
               </div>
             </div>
 
@@ -271,6 +278,24 @@ export function ExpeditorConfigurationsDialog({
                     )
                   }
                   label="Разрешение на изменение местоположения клиента"
+                />
+              </div>
+            </div>
+
+            <div>
+              <ConfigSectionTitle>Фотоотчёт</ConfigSectionTitle>
+              <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
+                <ConfigCheckRow
+                  checked={Boolean(draft.expeditor?.require_photo_report_before_visit)}
+                  onChange={(v) =>
+                    setDraft((d) =>
+                      setDraftPath(d, "expeditor", (x) => ({
+                        ...x,
+                        require_photo_report_before_visit: v
+                      }))
+                    )
+                  }
+                  label="Обязательный фотоотчёт перед началом визита"
                 />
               </div>
             </div>

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { expect, it } from "vitest";
 import { prisma } from "../src/config/database";
 import { describeOrdersIntegrationSuite, mainWarehouseId } from "./orders.integration.harness";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
   it("once_per_client: discount rule applies once per client, second order full price", async () => {
@@ -12,7 +13,11 @@ describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
 
     await prisma.tenant.update({
       where: { id: tenantId },
-      data: { settings: {} as object }
+      data: {
+        settings: {
+          bonus_stack: { mode: "all", max_units: null, forbid_apply_all_eligible: false }
+        } as object
+      }
     });
 
     const freshClient = await prisma.client.create({
@@ -24,13 +29,22 @@ describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
       }
     });
 
+    const sku2 = await prisma.product.findFirst({
+      where: { tenant_id: tenantId, sku: "SKU-002" }
+    });
+    expect(sku2).toBeTruthy();
+
     await prisma.bonusRule.updateMany({
       where: { tenant_id: tenantId, name: "[seed] Chegirma 10%" },
-      data: { once_per_client: true }
+      data: { once_per_client: true, product_ids: [sku2!.id] }
+    });
+    await prisma.bonusRule.updateMany({
+      where: { tenant_id: tenantId, name: "[seed] Min summa 500 000" },
+      data: { is_active: false }
     });
 
     try {
-      const loginResponse = await request(ctx.app.server).post("/api/auth/login").send({
+      const loginResponse = await loginForIntegrationTest(ctx.app, {
         slug: "test1",
         login: "admin",
         password: "secret123"
@@ -42,7 +56,7 @@ describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
         .get("/api/test1/products?page=1&limit=5&search=SKU-002")
         .set("Authorization", `Bearer ${token}`);
       const productId = productsRes.body.data[0].id as number;
-      const warehouseId = await mainWarehouseId(app, token);
+      const warehouseId = await mainWarehouseId(ctx.app, token);
 
       const first = await request(ctx.app.server)
         .post("/api/test1/orders")
@@ -72,7 +86,11 @@ describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
       await prisma.client.delete({ where: { id: freshClient.id } });
       await prisma.bonusRule.updateMany({
         where: { tenant_id: tenantId, name: "[seed] Chegirma 10%" },
-        data: { once_per_client: false }
+        data: { once_per_client: false, product_ids: [sku2!.id] }
+      });
+      await prisma.bonusRule.updateMany({
+        where: { tenant_id: tenantId, name: "[seed] Min summa 500 000" },
+        data: { is_active: true, discount_pct: null }
       });
     }
   });
@@ -104,7 +122,7 @@ describeOrdersIntegrationSuite("bonus rules and credit", (ctx) => {
         .get("/api/test1/products?page=1&limit=5&search=SKU-001")
         .set("Authorization", `Bearer ${token}`);
       const productId = productsRes.body.data[0].id as number;
-      const warehouseId = await mainWarehouseId(app, token);
+      const warehouseId = await mainWarehouseId(ctx.app, token);
 
       const first = await request(ctx.app.server)
         .post("/api/test1/orders")

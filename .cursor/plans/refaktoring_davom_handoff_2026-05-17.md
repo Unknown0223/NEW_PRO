@@ -1,5 +1,8 @@
 # SALEC refaktoring — handoff (2026-05-17)
 
+> **✅ YAKUNLANDI (2026-06-26)** — Sprint B asosiy (order-create arxitektura, auth/routes, audit gate): [docs/FRONTEND_REFACTORING_YAKUNLANDI.md](../../docs/FRONTEND_REFACTORING_YAKUNLANDI.md)  
+> Tekshiruv: `cd frontend && npm run refaktoring:verify`
+
 **Maqsad:** Boshqa kompyuterdan ishni **shu joydan** davom ettirish.  
 **Asosiy reja (o‘zgartirmang):** [refaktoring_solishtirish_1e3d116d.plan.md](./refaktoring_solishtirish_1e3d116d.plan.md)  
 **Oldingi backend reja:** [salec_refaktoring_reja_v1.plan.md](./salec_refaktoring_reja_v1.plan.md)
@@ -307,13 +310,9 @@ flowchart TD
 
 ## 8. Tezkor checklist (ertaga birinchi 15 daqiqa)
 
-- [ ] `git status` / `git pull`
-- [ ] `cd backend; npm run audit:max-loc; npm run typecheck`
-- [ ] `cd frontend; npm run typecheck; npm run audit:max-loc`
-- [ ] `order-create/` tuzilmasi borligini tekshirish (hook + view + shell)
-- [ ] `access-main/` yo‘qligini tekshirish (bo‘lmasa — ishlatmang)
-- [ ] Keyingi vazifa: **view/footer yoki catalog** ni alohida `.tsx` ga ajratish
+- [x] `npm run refaktoring:verify` (2026-06-26)
+- [ ] Keyingi inkrement (ixtiyoriy): access/wdr/dashboard katta workspace split
 
 ---
 
-*Oxirgi yangilanish: 2026-05-17 (agent sessiya handoff).*
+*Oxirgi yangilanish: 2026-06-26 (verify gate + yakun hujjat).*

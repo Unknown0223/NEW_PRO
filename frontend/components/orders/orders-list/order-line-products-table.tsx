@@ -6,16 +6,29 @@ import { cn } from "@/lib/utils";
 import {
   blockFromQty,
   computeItemTotals,
+  displayLineTotal,
   lineTypeLabel,
   parseOrderItemNum
 } from "./order-items-grouping";
 
-export function OrderLineProductsTable({ items }: { items: OrderItemRow[] }) {
+/** Ichki mahsulot jadvali — expand panel ichida max-w-full (orders-list-expand-layout.ts). */
+export function OrderLineProductsTable({
+  items,
+  discount_sum
+}: {
+  items: OrderItemRow[];
+  discount_sum?: string | null;
+}) {
   const totals = computeItemTotals(items);
+  const displaySum = items.reduce((acc, p) => acc + (p.is_bonus ? 0 : displayLineTotal(p)), 0);
+  const orderDiscount = parseOrderItemNum(discount_sum);
+  const footerDiscount =
+    orderDiscount > 0 ? orderDiscount : Math.max(0, totals.sum - displaySum);
+  const footerTotal = footerDiscount > 0 ? displaySum : totals.sum;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-      <table className="w-full min-w-full border-collapse text-xs">
+    <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+      <table className="w-full min-w-0 border-collapse text-xs">
         <thead>
           <tr className="border-b border-border bg-muted/40">
             <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">Ассортимент</th>
@@ -48,7 +61,7 @@ export function OrderLineProductsTable({ items }: { items: OrderItemRow[] }) {
             const price = parseOrderItemNum(p.price);
             const vol = parseOrderItemNum(p.line_volume_m3 ?? p.volume_m3);
             const disc = p.is_bonus ? "—" : p.discount_pct?.trim() ? `${p.discount_pct}%` : "0 %";
-            const lineTotal = p.is_bonus ? 0 : parseOrderItemNum(p.total);
+            const lineTotal = p.is_bonus ? 0 : displayLineTotal(p);
             return (
               <tr
                 key={`${p.product_id}-${p.is_bonus ? "b" : "p"}`}
@@ -105,9 +118,13 @@ export function OrderLineProductsTable({ items }: { items: OrderItemRow[] }) {
             <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
               {totals.volume > 0 ? formatNumberGrouped(totals.volume, { maxFractionDigits: 4 }) : "0"}
             </td>
-            <td className="px-2 py-2" />
+            <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
+              {footerDiscount > 0
+                ? formatNumberGrouped(footerDiscount, { maxFractionDigits: 2 })
+                : null}
+            </td>
             <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-teal-700 dark:text-teal-400">
-              {formatNumberGrouped(totals.sum, { maxFractionDigits: 2 })}
+              {formatNumberGrouped(footerTotal, { maxFractionDigits: 2 })}
             </td>
           </tr>
         </tbody>

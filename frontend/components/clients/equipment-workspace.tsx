@@ -78,42 +78,6 @@ function fmtDate(iso: string): string {
   }
 }
 
-function exportEquipmentCsv(rows: EquipmentRow[], fileBase: string): void {
-  const esc = (v: string) => `"${v.replaceAll('"', '""')}"`;
-  const head = [
-    "Тип инвентаря",
-    "Код / SKU",
-    "Имя клиента",
-    "Агент",
-    "Телефон",
-    "Локация",
-    "Территория",
-    "Дата прикрепления",
-    "Серийный номер",
-    "Комментарий"
-  ];
-  const body = rows.map((r) => [
-    r.inventory_type ?? "",
-    r.equipment_kind ?? "",
-    r.client_name ?? "",
-    r.agent_name ?? "",
-    r.client_phone ?? "",
-    r.client_address ?? "",
-    [r.region, r.zone, r.city].filter(Boolean).join(" / "),
-    fmtDate(r.assigned_at),
-    r.serial_number ?? "",
-    r.note ?? ""
-  ]);
-  const csv = [head, ...body].map((row) => row.map((x) => esc(String(x))).join(";")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${fileBase}_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export function EquipmentWorkspace({ view = "equipment" }: { view?: "equipment" | "history" }) {
   const isHistory = view === "history";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);

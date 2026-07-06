@@ -3,6 +3,8 @@
 import type { ClientRow, ContactPersonSlot } from "@/lib/client-types";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { ClientAuditHistoryWorkspace } from "@/components/clients/client-audit-history-workspace";
+import { ClientHistoryToolbar } from "@/components/clients/client-history-toolbar";
 import { DateRangePopover, formatDateRangeButton, localYmd } from "@/components/ui/date-range-popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,7 @@ import {
   formatGroupedInteger,
   formatNumberGrouped
 } from "@/lib/format-numbers";
+import { invalidateClientAuditQueries } from "@/lib/client-audit-history";
 import { STALE } from "@/lib/query-stale";
 import { useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
@@ -54,25 +57,6 @@ type BalanceMovementsResponse = {
   account_balance: string;
 };
 
-function auditActionLabel(action: string): string {
-  const m: Record<string, string> = {
-    "client.patch": "Реквизиты",
-    "client.balance_movement": "Баланс",
-    "client.merge": "Объединение",
-    "client.payment": "Оплата",
-    "client.sales_return": "Возврат"
-  };
-  return m[action] ?? action;
-}
-
-function auditDetailJson(d: unknown): string {
-  try {
-    return JSON.stringify(d);
-  } catch {
-    return String(d);
-  }
-}
-
 type Props = {
   tenantSlug: string;
   clientId: number;
@@ -88,19 +72,6 @@ type PaymentRow = {
   created_at: string;
   order_id: number | null;
   order_number: string | null;
-};
-
-type ClientAuditResponse = {
-  data: Array<{
-    id: number;
-    action: string;
-    detail: unknown;
-    user_login: string | null;
-    created_at: string;
-  }>;
-  total: number;
-  page: number;
-  limit: number;
 };
 
 type ClientReferencesResponse = {
@@ -251,7 +222,6 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
   const [noteInput, setNoteInput] = useState("");
   const [balanceFormError, setBalanceFormError] = useState<string | null>(null);
   const [balanceFieldErrors, setBalanceFieldErrors] = useState<Record<string, string>>({});
-  const [auditPage, setAuditPage] = useState(1);
   const [reconDateFrom, setReconDateFrom] = useState(() => {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
@@ -296,19 +266,6 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
     enabled: tab === "balance"
   });
 
-  const auditQuery = useQuery({
-    queryKey: ["client-audit", tenantSlug, clientId, auditPage],
-    staleTime: STALE.list,
-    queryFn: async () => {
-      const params = new URLSearchParams({ page: String(auditPage), limit: "30" });
-      const { data: body } = await api.get<ClientAuditResponse>(
-        `/api/${tenantSlug}/clients/${clientId}/audit?${params}`
-      );
-      return body;
-    },
-    enabled: tab === "audit"
-  });
-
   const paymentsTabQ = useQuery({
     queryKey: ["client-payments-tab", tenantSlug, clientId],
     staleTime: STALE.list,
@@ -340,7 +297,7 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
       setNoteInput("");
       await qc.invalidateQueries({ queryKey: ["client", tenantSlug, clientId] });
       await qc.invalidateQueries({ queryKey: ["client-balance-movements", tenantSlug, clientId] });
-      await qc.invalidateQueries({ queryKey: ["client-audit", tenantSlug, clientId] });
+      await invalidateClientAuditQueries(qc, tenantSlug, clientId);
     },
     onError: (e: unknown) => {
       const ax = e as { response?: { status?: number; data?: { error?: string } } };
@@ -484,6 +441,13 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
           >
             Заказы этого клиента
           </Link>
+          {tab !== "audit" ? (
+            <ClientHistoryToolbar
+              tenantSlug={tenantSlug}
+              clientId={clientId}
+              client={data}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -1046,71 +1010,13 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
       ) : null}
 
       {tab === "audit" ? (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Журнал PATCH, движений баланса и объединений (админ/оператор).
-          </p>
-          {auditQuery.isLoading ? (
-            <p className="text-xs text-muted-foreground">Загрузка…</p>
-          ) : auditQuery.isError ? (
-            <p className="text-xs text-destructive">Не удалось загрузить журнал.</p>
-          ) : (
-            <>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[560px] border-collapse text-xs">
-                  <thead className="app-table-thead">
-                    <tr className="border-b bg-muted/50 text-left text-muted-foreground">
-                      <th className="px-2 py-2 font-medium">Время</th>
-                      <th className="px-2 py-2 font-medium">Действие</th>
-                      <th className="px-2 py-2 font-medium">Кто</th>
-                      <th className="px-2 py-2 font-medium">Подробно</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(auditQuery.data?.data ?? []).map((a) => (
-                      <tr key={a.id} className="border-b last:border-0 align-top">
-                        <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">
-                          {new Date(a.created_at).toLocaleString()}
-                        </td>
-                        <td className="px-2 py-2 font-medium">{auditActionLabel(a.action)}</td>
-                        <td className="px-2 py-2 font-mono">{a.user_login ?? "—"}</td>
-                        <td className="px-2 py-2 font-mono text-[11px] break-all max-w-[280px]">
-                          {auditDetailJson(a.detail)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {auditQuery.data && auditQuery.data.total > auditQuery.data.limit ? (
-                <div className="flex items-center gap-2 text-xs">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={auditPage <= 1}
-                    onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
-                  >
-                    Назад
-                  </Button>
-                  <span className="text-muted-foreground">
-                    {formatGroupedInteger(auditPage)} /{" "}
-                    {formatGroupedInteger(Math.max(1, Math.ceil(auditQuery.data.total / auditQuery.data.limit)))}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={auditPage * auditQuery.data.limit >= auditQuery.data.total}
-                    onClick={() => setAuditPage((p) => p + 1)}
-                  >
-                    Вперёд
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
+        <ClientAuditHistoryWorkspace
+          tenantSlug={tenantSlug}
+          clientId={clientId}
+          client={data}
+          variant="shell"
+          embedded={false}
+        />
       ) : null}
 
       <DateRangePopover

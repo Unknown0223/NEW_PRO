@@ -1,8 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-
-const checkboxCls = "mt-0.5 h-4 w-4 shrink-0 rounded border border-input accent-primary";
+import { BonusRuleTemplateCheckbox } from "@/components/bonus-rules/bonus-rule-form-fields";
 
 type Props = {
   checked: boolean;
@@ -10,20 +8,15 @@ type Props = {
   disabled?: boolean;
 };
 
-/** «Kategoriya» rejimini yoqish/o‘chirish (alohida katalog ro‘yxati yo‘q — trigger mahsulotlar pastdagi kartada). */
+/** «Категория» rejimini yoqish/o‘chirish — shablon checkbox. */
 export function BonusRuleCategoryHoverField({ checked, onCheckedChange, disabled = false }: Props) {
   return (
-    <label
-      className={cn("flex cursor-pointer items-center gap-2 text-sm", disabled && "cursor-not-allowed opacity-70")}
-    >
-      <input
-        type="checkbox"
-        className={checkboxCls}
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onCheckedChange(e.target.checked)}
-      />
-      Категория
-    </label>
+    <BonusRuleTemplateCheckbox
+      checked={checked}
+      muted={!checked}
+      disabled={disabled}
+      onChange={onCheckedChange}
+      label="Категория"
+    />
   );
 }

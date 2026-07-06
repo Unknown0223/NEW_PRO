@@ -71,7 +71,7 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
   const [categoryId, setCategoryId] = useState("");
   const [productId, setProductId] = useState("");
   const [qtyMode, setQtyMode] = useState<"all" | "positive" | "zero">("all");
-  const [q, setQ] = useState("");
+  const [q] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [dateOpen, setDateOpen] = useState(false);
@@ -133,7 +133,7 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
     }
   });
 
-  const rows = listQ.data?.data ?? [];
+  const rows = useMemo(() => listQ.data?.data ?? [], [listQ.data?.data]);
   const total = listQ.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / limit));
   const sortedRows = useMemo(() => {
@@ -178,13 +178,6 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
       volume: sum("volume_m3")
     };
   }, [sortedRows]);
-  const categoryTotals = useMemo(() => {
-    const byCat: Record<string, ReturnType<typeof categoryAggInit>> = {};
-    for (const g of groupedRows) {
-      byCat[g.category] = g.items.reduce((acc, r) => categoryAggAdd(acc, r), categoryAggInit());
-    }
-    return byCat;
-  }, [groupedRows]);
 
   async function exportExcel(mode: "detailed" | "summary") {
     const p = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, qty_mode: qtyMode, mode });
@@ -391,7 +384,6 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
               <tbody>
                 {groupedRows.flatMap((g) => {
                   const isOpen = openCategory === g.category;
-                  const agg = categoryTotals[g.category];
                   const rowsOut = [
                     <tr key={`cat-${g.category}`} className="border-b bg-muted/25">
                       <td colSpan={18} className="px-2 py-1.5">
@@ -498,21 +490,4 @@ export function MaterialReportWorkspace({ tenantSlug }: { tenantSlug: string }) 
       />
     </PageShell>
   );
-}
-
-function categoryAggInit() {
-  return {
-    beginning: 0,
-    inRec: 0,
-    sale: 0,
-    ending: 0
-  };
-}
-
-function categoryAggAdd(acc: ReturnType<typeof categoryAggInit>, r: Row) {
-  acc.beginning += Number(r.beginning_stock) || 0;
-  acc.inRec += Number(r.incoming_receipt) || 0;
-  acc.sale += Number(r.sale_out) || 0;
-  acc.ending += Number(r.ending_stock) || 0;
-  return acc;
 }

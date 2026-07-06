@@ -20,10 +20,12 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { TableSearchField } from "@/components/ui/table-search-field";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import type { AxiosError } from "axios";
-import { ArrowDown, ArrowUp, ArrowUpDown, Info, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Info, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 const TABLE_ID = "warehouse-blocks.v1";
 
@@ -330,7 +332,6 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [columnOpen, setColumnOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<BlockRow | null>(null);
@@ -345,18 +346,13 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
     tableId: TABLE_ID,
     defaultColumnOrder: [...COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const limit = tablePrefs.pageSize;
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
     setPage(1);
-  }, [tab, debouncedSearch, limit, appliedWarehouseId, sort]);
+  }, [tab, search, limit, appliedWarehouseId, sort]);
 
   const listQ = useQuery({
     queryKey: [
@@ -365,7 +361,7 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
       tab,
       page,
       limit,
-      debouncedSearch,
+      search,
       appliedWarehouseId,
       sort
     ],
@@ -377,7 +373,7 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
       params.set("page", String(page));
       params.set("limit", String(limit));
       params.set("sort", sort);
-      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (search) params.set("q", search);
       if (appliedWarehouseId) params.set("warehouse_id", appliedWarehouseId);
       const { data } = await api.get<{
         data: BlockRow[];
@@ -436,7 +432,7 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
       const params = new URLSearchParams();
       params.set("is_active", tab === "active" ? "true" : "false");
       params.set("sort", sort);
-      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (search) params.set("q", search);
       if (appliedWarehouseId) params.set("warehouse_id", appliedWarehouseId);
       const res = await api.get<Blob>(`/api/${tenantSlug}/warehouse-blocks/export?${params.toString()}`, {
         responseType: "blob"
@@ -450,7 +446,7 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
     } catch (e) {
       setFeedback(blockMutationError(e));
     }
-  }, [tenantSlug, tab, sort, debouncedSearch, appliedWarehouseId]);
+  }, [tenantSlug, tab, sort, search, appliedWarehouseId]);
 
   const toggleNameSort = () => {
     setSort((s) => (s === "name_asc" ? "name_desc" : "name_asc"));
@@ -557,21 +553,19 @@ export function WarehouseBlocksWorkspace({ tenantSlug, canWrite }: Props) {
                 value={limit}
                 onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
               >
-                {[10, 20, 25, 50, 100].map((n) => (
+                {DEFAULT_TABLE_PAGE_SIZES.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
               </select>
-              <div className="relative flex-1 basis-[200px] sm:max-w-xs">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Поиск"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 pl-8 text-xs"
-                />
-              </div>
+              <TableSearchField
+                className="flex-1 basis-[200px] sm:max-w-xs"
+                onSearch={(q) => {
+                  setSearch(q);
+                  setPage(1);
+                }}
+              />
               <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => void exportExcel()}>
                 Excel
               </Button>

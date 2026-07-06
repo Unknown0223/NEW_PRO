@@ -114,7 +114,11 @@ export function OrdersPageContent({ page }: { page: UseOrdersListPageResult }) {
 
         refetch={page.refetch}
 
-        ordersTotal={data?.total}
+        ordersTotal={
+          page.ordersFiltersApplied && !page.isOrdersListTotalStale ? data?.total : undefined
+        }
+
+        ordersTotalLoading={page.ordersFiltersApplied && page.isOrdersListTotalStale}
 
         ordersDateRangeAnchorRef={page.ordersDateRangeAnchorRef}
 
@@ -147,6 +151,8 @@ export function OrdersPageContent({ page }: { page: UseOrdersListPageResult }) {
         rows={page.rows}
 
         orderListTotalPages={page.orderListTotalPages}
+
+        ordersFiltersApplied={page.ordersFiltersApplied}
 
         tablePrefs={page.tablePrefs}
 

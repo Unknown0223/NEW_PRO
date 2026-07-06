@@ -6,6 +6,7 @@ type RuleWithConditions = BonusRule & { conditions: BonusRuleCondition[] };
 
 import type { BonusConditionRow, BonusRuleRow } from "./bonus-rules.types";
 import { bonusRuleInclude } from "./bonus-rules.types";
+import { bonusRuleHasBeenUsed } from "./bonus-rules.usage";
 
 export function normalizeScopeBranchCodes(codes: readonly string[] | undefined): string[] {
   const out = new Set<string>();
@@ -92,6 +93,8 @@ export function mapBonusRuleFull(r: RuleWithConditions): BonusRuleRow {
     product_ids: [...r.product_ids],
     bonus_product_ids: [...r.bonus_product_ids],
     product_category_ids: [...r.product_category_ids],
+    scope_restrict_assortment: r.scope_restrict_assortment ?? false,
+    scope_restrict_category: r.scope_restrict_category ?? false,
     target_all_clients: r.target_all_clients,
     selected_client_ids: [...r.selected_client_ids],
     is_manual: r.is_manual,
@@ -102,7 +105,7 @@ export function mapBonusRuleFull(r: RuleWithConditions): BonusRuleRow {
     scope_branch_codes: normalizeScopeBranchCodes(r.scope_branch_codes ?? []),
     scope_agent_user_ids: normalizeScopePositiveIds(r.scope_agent_user_ids ?? []),
     scope_trade_direction_ids: normalizeScopePositiveIds(r.scope_trade_direction_ids ?? []),
-    conditions: r.conditions.map(mapCondition)
+    conditions: (r.conditions ?? []).map(mapCondition)
   };
 }
 
@@ -111,7 +114,10 @@ export async function fetchBonusRuleFull(tenantId: number, id: number): Promise<
     where: { id, tenant_id: tenantId },
     include: bonusRuleInclude
   });
-  return r ? mapBonusRuleFull(r) : null;
+  if (!r) return null;
+  const row = mapBonusRuleFull(r);
+  row.has_been_used = await bonusRuleHasBeenUsed(tenantId, id);
+  return row;
 }
 
 export function parseOptionalDate(value: string | null | undefined): Date | null {

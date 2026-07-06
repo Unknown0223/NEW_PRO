@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
+import { validateConsignmentCloseSchedule } from "../consignment/consignment-settings";
 import { prisma } from "../../config/database";
 import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { onAppAccessChanged } from "../auth/app-access.service";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
 import { listTenantAuditEvents } from "../audit-events/audit-events.service";
 import {
@@ -85,6 +87,12 @@ export async function applyAgentPatchInDb(
     const sid = input.supervisor_user_id;
     if (sid != null) {
       if (sid === agentId) throw new Error("SELF_SUPERVISOR");
+      if (
+        existing.supervisor_user_id != null &&
+        existing.supervisor_user_id !== sid
+      ) {
+        throw new Error("AGENT_ALREADY_ASSIGNED");
+      }
       const sup = await prisma.user.findFirst({
         where: { id: sid, tenant_id: tenantId, is_active: true, role: "supervisor" }
       });
@@ -120,6 +128,22 @@ export async function applyAgentPatchInDb(
   }
   if (input.consignment_ignore_previous_months_debt !== undefined) {
     data.consignment_ignore_previous_months_debt = input.consignment_ignore_previous_months_debt;
+    touchConsignmentSettings = true;
+  }
+  if (
+    input.consignment_close_day !== undefined ||
+    input.consignment_close_hour !== undefined ||
+    input.consignment_close_minute !== undefined
+  ) {
+    const schedule = validateConsignmentCloseSchedule({
+      day: input.consignment_close_day ?? (existing as { consignment_close_day?: number }).consignment_close_day ?? 25,
+      hour: input.consignment_close_hour ?? (existing as { consignment_close_hour?: number }).consignment_close_hour ?? 0,
+      minute:
+        input.consignment_close_minute ?? (existing as { consignment_close_minute?: number }).consignment_close_minute ?? 0
+    });
+    data.consignment_close_day = schedule.day;
+    data.consignment_close_hour = schedule.hour;
+    data.consignment_close_minute = schedule.minute;
     touchConsignmentSettings = true;
   }
   if (touchConsignmentSettings) {
@@ -166,6 +190,9 @@ export async function applyAgentPatchInDb(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.territory !== undefined) data.territory = input.territory?.trim() || null;
   if (input.is_active !== undefined) data.is_active = input.is_active;
+  if (input.is_active === false && input.supervisor_user_id === undefined) {
+    data.supervisor = { disconnect: true };
+  }
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
     if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
@@ -204,6 +231,10 @@ export async function applyAgentPatchInDb(
       where: { id: agentId },
       data
     });
+
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, agentId, input.app_access);
+    }
 
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };

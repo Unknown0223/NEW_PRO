@@ -1,5 +1,5 @@
 import type ExcelJS from "exceljs";
-import type { NakladnoyBuildOptions } from "../order-nakladnoy-xlsx.types";
+import type { NakladnoyBuildOptions } from "../../order-nakladnoy-xlsx.types";
 import type { WarehouseAggregateContext } from "../warehouse-template-shared";
 import { metaExpeditors } from "../warehouse-template-shared";
 import { primaryDataSheet } from "../warehouse-template-assets";

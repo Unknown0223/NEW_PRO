@@ -1,4 +1,3 @@
-import type { PaymentListApiRow } from "@/lib/payment-list-types";
 import type { ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 
 export const PAYMENTS_TABLE_ID = "finance.client_payments.v1";

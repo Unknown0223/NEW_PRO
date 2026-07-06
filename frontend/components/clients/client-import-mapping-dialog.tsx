@@ -80,6 +80,7 @@ export function ClientImportMappingDialog({
   const [headerRowOneBased, setHeaderRowOneBased] = useState(1);
   const [mappingSelect, setMappingSelect] = useState<Record<string, string>>({});
   const [localErr, setLocalErr] = useState<string | null>(null);
+  const [checkDuplicates, setCheckDuplicates] = useState(false);
   const [dupKeySet, setDupKeySet] = useState<Set<string>>(() => new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
   const [restrictUpdate, setRestrictUpdate] = useState(false);
   const [updateApplySet, setUpdateApplySet] = useState<Set<string>>(() => new Set());
@@ -92,6 +93,7 @@ export function ClientImportMappingDialog({
     setHeaderRowOneBased(1);
     setMappingSelect({});
     setLocalErr(null);
+    setCheckDuplicates(false);
     setDupKeySet(new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
     setRestrictUpdate(false);
     setUpdateApplySet(new Set(buildUpdateApplyFieldOptions().map((o) => o.key)));
@@ -207,15 +209,13 @@ export function ClientImportMappingDialog({
     } else if (merged.name === undefined) {
       setLocalErr("Укажите столбец «Наименование» — обязательно для новых клиентов.");
       return;
-    } else if (dupKeySet.size === 0) {
-      setLocalErr("Выберите хотя бы один критерий дубликата (код, город, телефон…).");
-      return;
     }
     onConfirm({
       columnMap: merged,
       sheetName,
       headerRowIndex: headerRowIdx,
-      duplicateKeyFields: importMode === "create" ? Array.from(dupKeySet) : undefined,
+      duplicateKeyFields:
+        importMode === "create" ? (checkDuplicates ? Array.from(dupKeySet) : []) : undefined,
       updateApplyFields:
         importMode === "update" && restrictUpdate ? Array.from(updateApplySet) : undefined
     });
@@ -261,32 +261,51 @@ export function ClientImportMappingDialog({
                 <div className="space-y-4">
                   {importMode === "create" ? (
                     <div className="bg-muted/40 space-y-2 rounded-md border border-border/80 p-3">
-                      <p className="text-sm font-medium">Дубликаты: по каким полям не создавать повтор</p>
-                      <p className="text-muted-foreground text-xs">
-                        По умолчанию — код и город (разные города = разные записи). Телефон / ИНН / ПИНФЛ
-                        отключены, пока не отметите.
-                      </p>
-                      <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        {CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS.map(({ key, label }) => (
-                          <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              className="border-input h-4 w-4 rounded"
-                              checked={dupKeySet.has(key)}
-                              disabled={isSubmitting}
-                              onChange={(e) => {
-                                setDupKeySet((prev) => {
-                                  const n = new Set(prev);
-                                  if (e.target.checked) n.add(key);
-                                  else n.delete(key);
-                                  return n;
-                                });
-                              }}
-                            />
-                            {label}
-                          </label>
-                        ))}
-                      </div>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                        <input
+                          type="checkbox"
+                          className="border-input h-4 w-4 rounded"
+                          checked={checkDuplicates}
+                          disabled={isSubmitting}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setCheckDuplicates(on);
+                            if (on && dupKeySet.size === 0) {
+                              setDupKeySet(new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
+                            }
+                          }}
+                        />
+                        Проверять дубликаты (необязательно — без галочки все строки импортируются)
+                      </label>
+                      {checkDuplicates ? (
+                        <>
+                          <p className="text-muted-foreground text-xs">
+                            Отметьте поля, по которым совпадение с уже существующим клиентом или с
+                            предыдущей строкой файла пропускает создание. По умолчанию — код и город.
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-2">
+                            {CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS.map(({ key, label }) => (
+                              <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="border-input h-4 w-4 rounded"
+                                  checked={dupKeySet.has(key)}
+                                  disabled={isSubmitting}
+                                  onChange={(e) => {
+                                    setDupKeySet((prev) => {
+                                      const n = new Set(prev);
+                                      if (e.target.checked) n.add(key);
+                                      else n.delete(key);
+                                      return n;
+                                    });
+                                  }}
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="bg-muted/40 space-y-2 rounded-md border border-border/80 p-3">

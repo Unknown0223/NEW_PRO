@@ -35,6 +35,10 @@ backend/.env
 **/.env
 **/.env.*
 !**/.env.example
+mobile/.env.local
+mobile/.env.*.local
+**/*.backup-*/
+backend/assets/nakladnoy/warehouse.backup-*/
 **/node_modules/
 **/dist/
 **/build/

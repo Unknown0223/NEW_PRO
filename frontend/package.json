@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 next dev -p 3000",
-    "dev:clean": "node clean-next.cjs && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 next dev -p 3000",
+    "dev": "cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev -p 3000",
+    "dev:clean": "node clean-next.cjs && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev -p 3000",
     "clean": "node clean-next.cjs",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
@@ -21,9 +21,16 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
     "test:supervisor-dashboard": "vitest run tests/dashboard-supervisor-query.test.ts",
+    "polki:verify": "vitest run tests/polki-bonus-balance.logic.test.ts",
+    "work-slots:verify": "vitest run tests/work-slots-utils.test.ts tests/order-create-agent-lock-hint.test.tsx",
+    "access:verify": "npm run typecheck && vitest run tests/access-workspace-split.test.ts && npm run audit:max-loc",
+    "refaktoring:verify": "npm run audit:max-loc && npm run test:quality",
+    "plans:verify": "vitest run tests/approver-state.test.ts",
     "test:supervisor-dashboard:e2e": "playwright test e2e/dashboard-supervisor-smoke.spec.ts",
     "audit:max-loc": "node scripts/audit-max-file-lines.mjs",
     "test:all": "npm run test:quality && npm run audit:max-loc && npm run test:e2e:smoke",
+    "analyze": "cross-env ANALYZE=true next build",
+    "size-limit": "node scripts/check-bundle-size.mjs",
     "report:expeditor-demo-print": "npx --yes tsx@4 scripts/print-expeditor-returns-demo-rows.ts"
   },
   "dependencies": {
@@ -44,6 +51,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
     "next": "14.2.35",
+    "polygon-clipping": "^0.15.7",
     "react": "^18",
     "react-dom": "^18",
     "react-leaflet": "^4.2.1",
@@ -55,6 +63,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^14.2.35",
+    "@next/swc-wasm-nodejs": "^14.2.33",
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",

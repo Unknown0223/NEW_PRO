@@ -32,8 +32,8 @@ export function WorkSlotsPendingBell({ tenantSlug }: { tenantSlug: string | null
     <Link
       href="/work-slots"
       className={cn(
-        "relative flex h-9 w-9 items-center justify-center rounded-md",
-        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        "relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background",
+        "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
       title={`${count} ta agent tanlash kutilmoqda`}
     >

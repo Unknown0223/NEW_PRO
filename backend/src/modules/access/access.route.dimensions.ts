@@ -64,6 +64,7 @@ import {
   sumBranchLinkCounts,
   sumPaymentLinkCounts
 } from "./access.route.shared";
+import { accessWebAssignableUserWhere } from "./access-web-users.filter";
 
 export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/dimensions", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -71,7 +72,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const schema = z.object({
-      type: z.enum(["operations", "cash_desks", "warehouses", "branches", "payment_methods"])
+      type: z.enum(["operations", "cash_desks", "warehouses", "branches", "payment_methods", "trade_directions"])
     });
     const parsed = schema.safeParse(request.query ?? {});
     if (!parsed.success)
@@ -79,42 +80,48 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     const { type } = parsed.data;
 
     if (type === "cash_desks") {
-      const rows = await prisma.cashDesk.findMany({
-        where: { tenant_id: tenantId },
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          _count: { select: { links: true } }
-        },
-        orderBy: { name: "asc" }
-      });
+      const [rows, linkGroups] = await Promise.all([
+        prisma.cashDesk.findMany({
+          where: { tenant_id: tenantId },
+          select: { id: true, name: true, is_active: true },
+          orderBy: { name: "asc" }
+        }),
+        prisma.cashDeskUserLink.groupBy({
+          by: ["cash_desk_id"],
+          where: { user: accessWebAssignableUserWhere(tenantId) },
+          _count: { _all: true }
+        })
+      ]);
+      const countBy = new Map(linkGroups.map((r) => [r.cash_desk_id, r._count._all]));
       return reply.send({
         data: rows.map((r) => ({
           key: String(r.id),
           label: r.name,
-          attached_users_count: r._count.links,
+          attached_users_count: countBy.get(r.id) ?? 0,
           is_active: r.is_active
         }))
       });
     }
 
     if (type === "warehouses") {
-      const rows = await prisma.warehouse.findMany({
-        where: { tenant_id: tenantId },
-        select: {
-          id: true,
-          name: true,
-          is_active: true,
-          _count: { select: { links: true } }
-        },
-        orderBy: { name: "asc" }
-      });
+      const [rows, linkGroups] = await Promise.all([
+        prisma.warehouse.findMany({
+          where: { tenant_id: tenantId },
+          select: { id: true, name: true, is_active: true },
+          orderBy: { name: "asc" }
+        }),
+        prisma.warehouseUserLink.groupBy({
+          by: ["warehouse_id"],
+          where: { user: accessWebAssignableUserWhere(tenantId) },
+          _count: { _all: true }
+        })
+      ]);
+      const countBy = new Map(linkGroups.map((r) => [r.warehouse_id, r._count._all]));
       return reply.send({
         data: rows.map((r) => ({
           key: String(r.id),
           label: r.name,
-          attached_users_count: r._count.links,
+          attached_users_count: countBy.get(r.id) ?? 0,
           is_active: r.is_active
         }))
       });
@@ -125,7 +132,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         loadTenantBranchesForAccess(tenantId),
         prisma.userBranchLink.groupBy({
           by: ["branch_code"],
-          where: { tenant_id: tenantId },
+          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
           _count: { _all: true },
           orderBy: { branch_code: "asc" }
         })
@@ -167,7 +174,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
         loadPaymentMethodEntriesForResolve(tenantId),
         prisma.userPaymentMethodLink.groupBy({
           by: ["payment_method"],
-          where: { tenant_id: tenantId },
+          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
           _count: { _all: true },
           orderBy: { payment_method: "asc" }
         })
@@ -208,6 +215,30 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
       }
       data.sort((a, b) => a.label.localeCompare(b.label, "ru"));
       return reply.send({ data });
+    }
+
+    if (type === "trade_directions") {
+      const [rows, linkGroups] = await Promise.all([
+        prisma.tradeDirection.findMany({
+          where: { tenant_id: tenantId },
+          select: { id: true, name: true, code: true, is_active: true },
+          orderBy: [{ sort_order: "asc" }, { name: "asc" }]
+        }),
+        prisma.userTradeDirectionLink.groupBy({
+          by: ["trade_direction_id"],
+          where: { tenant_id: tenantId, user: accessWebAssignableUserWhere(tenantId) },
+          _count: { _all: true }
+        })
+      ]);
+      const countBy = new Map(linkGroups.map((r) => [r.trade_direction_id, r._count._all]));
+      return reply.send({
+        data: rows.map((r) => ({
+          key: String(r.id),
+          label: r.code?.trim() ? `${r.name} (${r.code.trim()})` : r.name,
+          attached_users_count: countBy.get(r.id) ?? 0,
+          is_active: r.is_active
+        }))
+      });
     }
 
     const ops = await prisma.permission.findMany({

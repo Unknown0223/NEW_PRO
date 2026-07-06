@@ -23,7 +23,7 @@ export function ReturnFilterDebugPanel({
 
   return (
     <div
-      className={`rounded-lg border border-slate-200/90 bg-slate-50/80 text-[11px] text-slate-700 ${className}`}
+      className={`rounded-lg border border-border/90 bg-muted/80 text-[11px] text-slate-700 ${className}`}
     >
       <button
         type="button"
@@ -41,11 +41,11 @@ export function ReturnFilterDebugPanel({
       </button>
 
       {meta.explanation && open ? (
-        <p className="border-t border-slate-200/80 px-3 py-2 text-slate-700">{meta.explanation}</p>
+        <p className="border-t border-border/80 px-3 py-2 text-slate-700">{meta.explanation}</p>
       ) : null}
 
       {open ? (
-        <dl className="grid gap-1 border-t border-slate-200/80 px-3 py-2 sm:grid-cols-2">
+        <dl className="grid gap-1 border-t border-border/80 px-3 py-2 sm:grid-cols-2">
           {meta.client_balance != null ? (
             <>
               <dt className="text-slate-500">Ko‘rinadigan balans</dt>
@@ -92,7 +92,7 @@ export function ReturnFilterDebugPanel({
       ) : null}
 
       {open && meta.log && meta.log.length > 0 ? (
-        <ol className="list-decimal space-y-0.5 border-t border-slate-200/80 px-5 py-2 text-[10px] text-slate-600">
+        <ol className="list-decimal space-y-0.5 border-t border-border/80 px-5 py-2 text-[10px] text-slate-600">
           {meta.log.map((line) => (
             <li key={line}>{line}</li>
           ))}

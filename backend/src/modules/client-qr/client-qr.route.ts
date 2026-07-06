@@ -7,7 +7,9 @@ import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.preha
 import {
   bindQrCode,
   exportClientsWithoutQrCsv,
+  exportClientsWithoutQrRows,
   exportQrCodesCsv,
+  exportQrCodesRows,
   generateQrCodes,
   getClientQrStats,
   listClientsWithoutQr,
@@ -126,7 +128,7 @@ export async function registerClientQrRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/client-qr-codes/clients-without-qr/export",
-    { preHandler: [jwtAccessVerify, requireRoles(...manageRoles)] },
+    { preHandler: [jwtAccessVerify] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = parseClientsWithoutQrQuery(request.query as Record<string, string | undefined>);
@@ -140,7 +142,7 @@ export async function registerClientQrRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/client-qr-codes/export",
-    { preHandler: [jwtAccessVerify, requireRoles(...manageRoles)] },
+    { preHandler: [jwtAccessVerify] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = parseListQuery(request.query as Record<string, string | undefined>);
@@ -149,6 +151,28 @@ export async function registerClientQrRoutes(app: FastifyInstance) {
         .header("Content-Type", "text/csv; charset=utf-8")
         .header("Content-Disposition", 'attachment; filename="client-qr-codes.csv"')
         .send(csv);
+    }
+  );
+
+  app.get(
+    "/api/:slug/client-qr-codes/export-data",
+    { preHandler: [jwtAccessVerify] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = parseListQuery(request.query as Record<string, string | undefined>);
+      const data = await exportQrCodesRows(request.tenant!.id, q);
+      return reply.send({ data });
+    }
+  );
+
+  app.get(
+    "/api/:slug/client-qr-codes/clients-without-qr/export-data",
+    { preHandler: [jwtAccessVerify] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = parseClientsWithoutQrQuery(request.query as Record<string, string | undefined>);
+      const data = await exportClientsWithoutQrRows(request.tenant!.id, q);
+      return reply.send({ data });
     }
   );
 
@@ -195,6 +219,15 @@ export async function registerClientQrRoutes(app: FastifyInstance) {
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_ALREADY_HAS_QR") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "ClientAlreadyHasQr",
+            "У клиента уже есть привязанный QR-код. Сначала открепите существующий."
+          );
         }
         throw e;
       }

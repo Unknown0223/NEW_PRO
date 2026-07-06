@@ -129,10 +129,10 @@ export function AutomationRulesTable({
   };
 
   return (
-    <div className="overflow-x-auto bg-white">
+    <div className="overflow-x-auto bg-card">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-200">
+          <tr className="border-b border-border">
             {columns.map((col) => (
               <th
                 key={col.label || "actions"}
@@ -154,11 +154,11 @@ export function AutomationRulesTable({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-border">
           {sorted.map((row) => (
             <tr
               key={row.id}
-              className={`transition-colors hover:bg-gray-50 ${!row.is_active ? "bg-gray-50/50" : ""}`}
+              className={`transition-colors hover:bg-muted ${!row.is_active ? "bg-muted/50" : ""}`}
             >
               <td className={CELL}>
                 <ReadOnlyText>{row.name}</ReadOnlyText>
@@ -269,21 +269,21 @@ export function AutomationRulesTable({
                     <button
                       type="button"
                       onClick={() => setOpenMenuId(openMenuId === row.id ? null : row.id)}
-                      className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      className="rounded p-1 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
                     >
                       <MoreVertical size={14} />
                     </button>
                     {openMenuId === row.id ? (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                        <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-card py-1 shadow-lg">
                           <button
                             type="button"
                             onClick={() => {
                               onToggleActive(row.id, !row.is_active);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
                           >
                             <span
                               className={`h-2 w-2 rounded-full ${row.is_active ? "bg-red-400" : "bg-emerald-400"}`}
@@ -296,7 +296,7 @@ export function AutomationRulesTable({
                               onDuplicate(row.id);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
                           >
                             <Copy size={14} />
                             Дублировать

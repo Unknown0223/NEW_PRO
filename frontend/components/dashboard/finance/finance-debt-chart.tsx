@@ -5,7 +5,7 @@ import { fmtFinancePercent } from "@/components/dashboard/finance/format";
 
 function RatioLine({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-100">
+    <div className="rounded-xl bg-muted p-3 ring-1 ring-slate-100">
       <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700">
         <span className="flex items-center gap-2">
           <span className={`h-3 w-3 rounded-full ${color}`} />
@@ -13,7 +13,7 @@ function RatioLine({ label, value, color }: { label: string; value: number; colo
         </span>
         <span>{fmtFinancePercent(value)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div className={`finance-motion-bar h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
       </div>
     </div>
@@ -26,7 +26,7 @@ export function FinanceDebtChart({ debtRatioPct }: { debtRatioPct: number }) {
   const gradient = `conic-gradient(#04b735 0 ${paid}%, #ffffff ${paid}% ${paid + 2}%, #e91d24 ${paid + 2}% 100%)`;
 
   return (
-    <section className="finance-motion-slide h-full rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="finance-motion-slide h-full rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader
         title="По долгу"
         subtitle="Соотношение оплаченного и задолженности"
@@ -36,7 +36,7 @@ export function FinanceDebtChart({ debtRatioPct }: { debtRatioPct: number }) {
           className="mx-auto flex h-64 w-64 items-center justify-center rounded-full p-8 shadow-inner"
           style={{ background: gradient }}
         >
-          <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white text-center ring-1 ring-slate-100">
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-card text-center ring-1 ring-slate-100">
             <span className="text-sm font-semibold text-slate-500">Оплачено</span>
             <strong className="text-4xl font-black text-emerald-600">{fmtFinancePercent(paid)}</strong>
           </div>

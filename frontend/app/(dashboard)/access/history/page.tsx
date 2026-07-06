@@ -15,7 +15,7 @@ export default function AccessHistoryPage() {
   const gate = useAccessModuleGate(tenantSlug, role);
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
-  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или access.manage).</p>;
+  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или доступ к разделу «Доступ»).</p>;
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-col gap-4 px-3 pb-4 pt-4 sm:px-4 lg:px-6">

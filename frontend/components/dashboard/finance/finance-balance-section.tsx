@@ -17,7 +17,7 @@ export function FinanceBalanceSection({ data }: { data: FinanceDashboardSnapshot
   ];
 
   return (
-    <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="finance-motion-fade flex h-full flex-col rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <FinanceSectionHeader title="Общий баланс" subtitle="с учётом предоплаты" />
       <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {items.map((item) => {
@@ -26,7 +26,7 @@ export function FinanceBalanceSection({ data }: { data: FinanceDashboardSnapshot
             <div
               key={item.label}
               className={`flex min-h-[98px] items-center rounded-xl px-4 py-3 ring-1 ring-slate-100 ${
-                item.accent ? "bg-gradient-to-r from-slate-50 to-cyan-50" : "bg-slate-50"
+                item.accent ? "bg-gradient-to-r from-slate-50 to-cyan-50" : "bg-muted"
               }`}
             >
               <div className="flex w-full items-center gap-3">

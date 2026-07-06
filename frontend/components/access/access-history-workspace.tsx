@@ -377,7 +377,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-[#e5e7eb] bg-white p-3 shadow-sm dark:border-[#1e3a36] dark:bg-[#121212]">
+      <div className="rounded-xl border border-[#e5e7eb] bg-card p-3 shadow-sm dark:border-[#1e3a36] dark:bg-[#121212]">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="grid gap-2 sm:grid-cols-3">
@@ -502,7 +502,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
         }}
       />
 
-      <div className="mt-1 hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm sm:block dark:border-[#1e3a36] dark:bg-[#121212]">
+      <div className="mt-1 hidden rounded-xl border border-[#e5e7eb] bg-card shadow-sm sm:block dark:border-[#1e3a36] dark:bg-[#121212]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eef2f4] px-3 py-2.5 dark:border-[#1e3a36]">
           <div className="flex flex-wrap items-center gap-1.5">
             <div className="relative">
@@ -605,7 +605,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
             {visibleCols.target ? <col style={{ width: "200px" }} /> : null}
             {visibleCols.action ? <col style={{ width: "180px" }} /> : null}
           </colgroup>
-          <thead className="app-table-thead sticky top-0 z-10 border-b border-[#edf0f2] bg-[#f8fafc] dark:border-[#1e3a36] dark:bg-[#141414]">
+          <thead className="app-table-thead sticky top-0 z-10 border-b border-border bg-muted">
             <tr className="h-12">
               {visibleCols.date ? (
                 <th className={tplHeaderCell} aria-sort={sortDir === "desc" ? "descending" : "ascending"}>
@@ -643,7 +643,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 return (
                   <tr
                     key={row.id}
-                    className="h-14 border-b border-[#f0f2f5] transition-colors hover:bg-[#f7fbfb] dark:border-[#1e3a36] dark:hover:bg-[#15302d]"
+                    className="h-14 border-b border-border transition-colors hover:bg-muted dark:hover:bg-muted"
                   >
                     {visibleCols.date ? (
                       <td className={cn("h-14 whitespace-nowrap px-4 py-0", tplDateCell)}>
@@ -789,7 +789,7 @@ export function AccessHistoryWorkspace({ tenantSlug }: { tenantSlug: string }) {
         })}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-[#e5e7eb] bg-white px-2 py-2 text-xs sm:hidden sm:flex-row sm:items-center sm:justify-between sm:px-3 dark:border-[#1e3a36] dark:bg-[#141414]">
+      <div className="flex flex-col gap-2 rounded-lg border border-[#e5e7eb] bg-card px-2 py-2 text-xs sm:hidden sm:flex-row sm:items-center sm:justify-between sm:px-3 dark:border-[#1e3a36] dark:bg-[#141414]">
         <p className="text-zinc-300">
           Показано {rangeStart} - {rangeEnd} / <span className="tabular-nums">{q.data?.total ?? 0}</span>
           {q.isFetching && q.data ? (

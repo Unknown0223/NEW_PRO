@@ -18,7 +18,17 @@ import {
 } from "@/lib/shelf-return-by-order";
 import { getUserFacingError } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
-import { RotateCcw } from "lucide-react";
+import {
+  Ban,
+  Check,
+  CheckCircle2,
+  PackageSearch,
+  RotateCcw,
+  Sparkles,
+  Truck,
+  Undo2,
+  type LucideIcon
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -56,12 +66,19 @@ function buildStatusActions(
   return actions;
 }
 
-function statusArrow(status: string): string {
-  if (["delivered", "confirmed", "delivering", "picking", "returned"].includes(status)) {
-    return "▲";
-  }
-  if (["new", "cancelled"].includes(status)) return "▼";
-  return "▼";
+const STATUS_ICONS: Record<string, LucideIcon> = {
+  new: Sparkles,
+  confirmed: CheckCircle2,
+  picking: PackageSearch,
+  delivering: Truck,
+  delivered: Check,
+  returned: Undo2,
+  cancelled: Ban
+};
+
+function StatusIcon({ status }: { status: string }) {
+  const Icon = STATUS_ICONS[status] ?? Sparkles;
+  return <Icon className="size-3 shrink-0" aria-hidden />;
 }
 
 export type OrderStatusDropdownProps = {
@@ -203,8 +220,8 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
           className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium leading-tight"
           style={{ background: style.bg, color: style.text, borderColor: style.border }}
         >
-          <span className="text-[10px] font-bold">{statusArrow(order.status)}</span>
-          <span>{label}</span>
+          <StatusIcon status={order.status} />
+          <span className="whitespace-nowrap">{label}</span>
         </span>
         {statusError ? (
           <span className="max-w-[12rem] text-[10px] text-destructive">{statusError}</span>
@@ -236,7 +253,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
     <div
       ref={panelRef}
       role="menu"
-      className="fixed z-[200] min-w-[260px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-foreground shadow-xl dark:border-border dark:bg-popover dark:text-popover-foreground"
+      className="fixed z-[200] min-w-[260px] overflow-hidden rounded-lg border border-border bg-card py-1 text-foreground shadow-xl dark:border-border dark:bg-popover dark:text-popover-foreground"
       style={{ top: menuPos.top, left: menuPos.left }}
     >
       {actions.map((action, idx) =>
@@ -312,8 +329,8 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <span className="text-[10px] font-bold">{statusArrow(order.status)}</span>
-        <span className="whitespace-pre-line text-left">{label}</span>
+        <StatusIcon status={order.status} />
+        <span className="whitespace-nowrap text-left">{label}</span>
       </button>
       {typeof document !== "undefined" && menuPanel ? createPortal(menuPanel, document.body) : null}
       {statusError ? (

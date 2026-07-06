@@ -13,11 +13,14 @@ import {
   getZodFlattenFromApiErrorBody
 } from "@/lib/api-validation-details";
 import { isAxiosError } from "axios";
+import { invalidateClientAuditQueries } from "@/lib/client-audit-history";
 import { STALE } from "@/lib/query-stale";
+import { useFormIntentTracking } from "@/lib/activity-tracker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { pickCityTerritoryHint } from "@/lib/city-territory-hint";
 import { mergeRefOptions } from "@/lib/merge-ref-options";
 import { mergeRefSelectOptions } from "@/lib/ref-select-options";
@@ -46,6 +49,17 @@ function dateInputToIso(s: string): string | null {
   const d = new Date(t + "T12:00:00");
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+/** API: `0` yoki qisqa PINFL placeholder → `null`; 14 raqam → saqlanadi. */
+function pinflForApi(raw: string): string | null {
+  const pf = raw.replace(/\D/g, "");
+  if (!pf || /^0+$/.test(pf)) return null;
+  if (pf.length === 14) return pf;
+  if (pf.length > 0 && pf.length < 14) {
+    throw new Error("ПИНФЛ должен содержать 14 цифр или оставаться пустым");
+  }
+  return pf.slice(0, 20);
 }
 
 const VISIT_DAYS: { k: number; l: string }[] = [
@@ -171,7 +185,14 @@ function loadYandexMapsApi(): Promise<YMapsLike> {
   if (typeof window === "undefined") return Promise.reject(new Error("NoWindow"));
   if (window.ymaps) return Promise.resolve(window.ymaps);
   if (window.__ymapsLoaderPromise) return window.__ymapsLoaderPromise;
-  const key = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY?.trim();
+  const rawKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY?.trim();
+  const forceNoKey =
+    process.env.NEXT_PUBLIC_YANDEX_MAPS_NO_API_KEY === "1" ||
+    process.env.NEXT_PUBLIC_YANDEX_MAPS_NO_API_KEY === "true";
+  const key =
+    forceNoKey || !rawKey || rawKey === "undefined" || rawKey === "null" || rawKey.length < 10
+      ? ""
+      : rawKey;
   const src = key
     ? `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(key)}&lang=${YANDEX_LANG}`
     : `https://api-maps.yandex.ru/2.1/?lang=${YANDEX_LANG}`;
@@ -193,8 +214,9 @@ function loadYandexMapsApi(): Promise<YMapsLike> {
   return window.__ymapsLoaderPromise;
 }
 
-function normalizeCoord(raw: string): number | null {
-  const t = raw.trim().replace(",", ".");
+function normalizeCoord(raw: string | number | null | undefined): number | null {
+  if (raw == null) return null;
+  const t = String(raw).trim().replace(",", ".");
   if (!t) return null;
   const n = Number.parseFloat(t);
   return Number.isFinite(n) ? n : null;
@@ -307,8 +329,15 @@ function YandexCoordinatePicker({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<InstanceType<YMapsLike["Map"]> | null>(null);
   const markerRef = useRef<InstanceType<YMapsLike["Placemark"]> | null>(null);
+  const ymapsRef = useRef<YMapsLike | null>(null);
+  const latLonRef = useRef({ lat, lon });
   const disabledRef = useRef(disabled);
   const onPickRef = useRef(onPick);
+  const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    latLonRef.current = { lat, lon };
+  }, [lat, lon]);
 
   useEffect(() => {
     disabledRef.current = disabled;
@@ -317,6 +346,30 @@ function YandexCoordinatePicker({
   useEffect(() => {
     onPickRef.current = onPick;
   }, [onPick]);
+
+  const syncMarkerFromCoords = useCallback(() => {
+    const map = mapRef.current;
+    const ymaps = ymapsRef.current ?? window.ymaps;
+    if (!map || !ymaps) return;
+
+    const { lat: nextLat, lon: nextLon } = latLonRef.current;
+    if (nextLat == null || nextLon == null) {
+      if (markerRef.current) {
+        map.geoObjects.remove?.(markerRef.current);
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    if (!markerRef.current) {
+      const marker = new ymaps.Placemark([nextLat, nextLon], {}, { preset: "islands#redDotIcon" });
+      markerRef.current = marker;
+      map.geoObjects.add(marker);
+    } else {
+      markerRef.current.geometry?.setCoordinates([nextLat, nextLon]);
+    }
+    map.setCenter([nextLat, nextLon], 15);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -327,38 +380,40 @@ function YandexCoordinatePicker({
         if (cancelled || !host) return;
         ymaps.ready(() => {
           if (cancelled || !host) return;
-          const center: [number, number] =
-            lat != null && lon != null ? [lat, lon] : [MAP_DEFAULT_LAT, MAP_DEFAULT_LON];
+          ymapsRef.current = ymaps;
+          const { lat: initLat, lon: initLon } = latLonRef.current;
+          const hasCoords = initLat != null && initLon != null;
+          const center: [number, number] = hasCoords
+            ? [initLat, initLon]
+            : [MAP_DEFAULT_LAT, MAP_DEFAULT_LON];
           const map = new ymaps.Map(
             host,
             {
               center,
-              zoom: lat != null && lon != null ? 15 : 11,
+              zoom: hasCoords ? 15 : 11,
               controls: ["zoomControl", "typeSelector", "fullscreenControl"]
             },
             { suppressMapOpenBlock: true }
           );
           mapRef.current = map;
-          if (lat != null && lon != null) {
-            const marker = new ymaps.Placemark([lat, lon], {}, { preset: "islands#redDotIcon" });
-            markerRef.current = marker;
-            map.geoObjects.add(marker);
-          }
+          syncMarkerFromCoords();
+          setMapReady(true);
           map.events.add("click", (e) => {
             if (disabledRef.current) return;
             const coords = e.get("coords");
             if (!Array.isArray(coords) || coords.length < 2) return;
-            const nextLat = Number(coords[0]);
-            const nextLon = Number(coords[1]);
-            if (!Number.isFinite(nextLat) || !Number.isFinite(nextLon)) return;
+            const clickLat = Number(coords[0]);
+            const clickLon = Number(coords[1]);
+            if (!Number.isFinite(clickLat) || !Number.isFinite(clickLon)) return;
+            latLonRef.current = { lat: clickLat, lon: clickLon };
             if (!markerRef.current) {
-              const marker = new ymaps.Placemark([nextLat, nextLon], {}, { preset: "islands#redDotIcon" });
+              const marker = new ymaps.Placemark([clickLat, clickLon], {}, { preset: "islands#redDotIcon" });
               markerRef.current = marker;
               map.geoObjects.add(marker);
             } else {
-              markerRef.current.geometry?.setCoordinates([nextLat, nextLon]);
+              markerRef.current.geometry?.setCoordinates([clickLat, clickLon]);
             }
-            onPickRef.current(nextLat, nextLon);
+            onPickRef.current(clickLat, clickLon);
           });
         });
       })
@@ -367,32 +422,18 @@ function YandexCoordinatePicker({
       });
     return () => {
       cancelled = true;
+      setMapReady(false);
       if (mapRef.current) mapRef.current.destroy();
       mapRef.current = null;
       markerRef.current = null;
+      ymapsRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [syncMarkerFromCoords]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (lat == null || lon == null) {
-      if (markerRef.current) {
-        map.geoObjects.remove?.(markerRef.current);
-        markerRef.current = null;
-      }
-      return;
-    }
-    if (!markerRef.current && window.ymaps) {
-      const marker = new window.ymaps.Placemark([lat, lon], {}, { preset: "islands#redDotIcon" });
-      markerRef.current = marker;
-      map.geoObjects.add(marker);
-    } else {
-      markerRef.current?.geometry?.setCoordinates([lat, lon]);
-    }
-    map.setCenter([lat, lon], 15);
-  }, [lat, lon]);
+    if (!mapReady) return;
+    syncMarkerFromCoords();
+  }, [lat, lon, mapReady, syncMarkerFromCoords]);
 
   return (
     <div
@@ -415,6 +456,13 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
   const isCreateMode = mode === "create";
   const effectiveClientId = Number.isFinite(clientId) ? Number(clientId) : 0;
   const qc = useQueryClient();
+  const { markSaved } = useFormIntentTracking({
+    module: "clients",
+    section: "klient",
+    entityType: "client",
+    entityId: isCreateMode ? undefined : effectiveClientId,
+    label: isCreateMode ? "Создание клиента" : "Редактирование клиента"
+  });
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [tab, setTab] = useState<"main" | "extra">("main");
@@ -498,28 +546,37 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
     }
   });
 
+  const debouncedRegion = useDebouncedValue(region.trim(), 400);
+  const debouncedCity = useDebouncedValue(city.trim(), 400);
+  const debouncedZone = useDebouncedValue(zone.trim(), 400);
+  const debouncedLatitude = useDebouncedValue(latitude.trim(), 600);
+  const debouncedLongitude = useDebouncedValue(longitude.trim(), 600);
+
+  const territoryPickerInputsReady = Boolean(
+    debouncedRegion || debouncedCity || debouncedZone || (debouncedLatitude && debouncedLongitude)
+  );
+
   const territoryAgentPickerCtxQ = useQuery({
     queryKey: [
       "territory-agent-picker-context",
       tenantSlug,
-      region.trim(),
-      city.trim(),
-      zone.trim(),
-      latitude.trim(),
-      longitude.trim()
+      debouncedRegion,
+      debouncedCity,
+      debouncedZone,
+      debouncedLatitude,
+      debouncedLongitude
     ],
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug) && territoryPickerInputsReady,
     staleTime: STALE.reference,
+    retry: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const p = new URLSearchParams();
-      const r = region.trim();
-      const c = city.trim();
-      const z = zone.trim();
-      if (r) p.set("region", r);
-      if (c) p.set("city", c);
-      if (z) p.set("zone", z);
-      const latT = latitude.replace(/\s/g, "").replace(",", ".").trim();
-      const lngT = longitude.replace(/\s/g, "").replace(",", ".").trim();
+      if (debouncedRegion) p.set("region", debouncedRegion);
+      if (debouncedCity) p.set("city", debouncedCity);
+      if (debouncedZone) p.set("zone", debouncedZone);
+      const latT = debouncedLatitude.replace(/\s/g, "").replace(",", ".").trim();
+      const lngT = debouncedLongitude.replace(/\s/g, "").replace(",", ".").trim();
       if (latT) p.set("latitude", latT);
       if (lngT) p.set("longitude", lngT);
       const qs = p.toString();
@@ -650,18 +707,29 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
   }, [cityOpts, hintRows, refsQ.data?.city_territory_hints, region]);
 
   const cascadedZoneOpts = useMemo(() => {
-    if (!region && !city) return zoneOpts;
-    const allow = new Set(
-      hintRows
-        .filter((h) => (!region || h.region_stored === region) && (!city || pickCityTerritoryHint(refsQ.data?.city_territory_hints, city)?.zone_stored === h.zone_stored))
-        .map((h) => h.zone_stored)
-        .filter(Boolean)
-    );
-    const cityHint = city ? pickCityTerritoryHint(refsQ.data?.city_territory_hints, city) : null;
-    if (cityHint?.zone_stored) allow.add(cityHint.zone_stored);
-    const filtered = zoneOpts.filter((v) => allow.has(v));
-    return filtered.length > 0 ? filtered : zoneOpts;
-  }, [city, hintRows, refsQ.data?.city_territory_hints, region, zoneOpts]);
+    let base: string[];
+    if (!region && !city) {
+      base = zoneOpts;
+    } else {
+      const allow = new Set(
+        hintRows
+          .filter(
+            (h) =>
+              (!region || h.region_stored === region) &&
+              (!city || pickCityTerritoryHint(refsQ.data?.city_territory_hints, city)?.zone_stored === h.zone_stored)
+          )
+          .map((h) => h.zone_stored)
+          .filter(Boolean) as string[]
+      );
+      const cityHint = city ? pickCityTerritoryHint(refsQ.data?.city_territory_hints, city) : null;
+      if (cityHint?.zone_stored) allow.add(cityHint.zone_stored);
+      const filtered = zoneOpts.filter((v) => allow.has(v));
+      base = filtered.length > 0 ? filtered : zoneOpts;
+    }
+    const current = zone.trim();
+    if (current && !base.includes(current)) return [current, ...base];
+    return base;
+  }, [city, hintRows, refsQ.data?.city_territory_hints, region, zone, zoneOpts]);
 
   const onCitySelect = (next: string) => {
     setCity(next);
@@ -672,8 +740,14 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
   };
   const onRegionSelect = (next: string) => {
     setRegion(next);
-    setCity("");
-    setZone("");
+    if (next.trim() !== region.trim()) {
+      setCity("");
+      setZone("");
+    }
+  };
+
+  const onZoneSelect = (next: string) => {
+    setZone(next);
   };
 
   const agentsForTeamPicker = useMemo(() => {
@@ -751,8 +825,8 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
     setOked(client.oked ?? "");
     setContractNumber(client.contract_number ?? "");
     setVatRegCode(client.vat_reg_code ?? "");
-    setLatitude(client.latitude ?? "");
-    setLongitude(client.longitude ?? "");
+    setLatitude(client.latitude != null ? String(client.latitude) : "");
+    setLongitude(client.longitude != null ? String(client.longitude) : "");
     setZone(client.zone ?? "");
     setAgentSlots(buildAgentSlots(client));
   }, [clientQ.data]);
@@ -767,7 +841,7 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
     if (!h) return;
     if (h.region_stored) setRegion(h.region_stored);
     if (h.zone_stored) setZone(h.zone_stored);
-  }, [clientQ.data?.id, refsQ.data?.city_territory_hints]);
+  }, [clientQ.data, refsQ.data?.city_territory_hints]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -842,7 +916,7 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
         bank_name: bankName.trim() || null,
         bank_account: bankAccount.trim() || null,
         bank_mfo: bankMfo.trim() || null,
-        client_pinfl: clientPinfl.trim() || null,
+        client_pinfl: pinflForApi(clientPinfl),
         oked: oked.trim() || null,
         contract_number: contractNumber.trim() || null,
         vat_reg_code: vatRegCode.trim() || null,
@@ -894,12 +968,13 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
       return { id: effectiveClientId };
     },
     onSuccess: async (res) => {
+      markSaved();
       setFieldErrors({});
       const doneId = typeof res?.id === "number" && Number.isFinite(res.id) ? res.id : effectiveClientId;
       await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
       if (doneId > 0) {
         await qc.invalidateQueries({ queryKey: ["client", tenantSlug, doneId] });
-        await qc.invalidateQueries({ queryKey: ["client-audit", tenantSlug, doneId] });
+        await invalidateClientAuditQueries(qc, tenantSlug, doneId);
       }
       await qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
       onSuccess(doneId);
@@ -1346,7 +1421,7 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
                     emptyLabel="Зона"
                     aria-label="Зона"
                     value={zone}
-                    onChange={(e) => setZone(e.target.value)}
+                    onChange={(e) => onZoneSelect(e.target.value)}
                     disabled={mutation.isPending}
                   >
                     {cascadedZoneOpts.map((v) => (
@@ -1356,6 +1431,12 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
                     ))}
                   </FilterSelect>
                   <FieldHint name="zone" errors={fieldErrors} />
+                  {territoryAgentPickerCtxQ.isError ? (
+                    <p className="text-[11px] text-amber-700">
+                      Не удалось подобрать агентов по территории. Сохранение клиента доступно; обновите страницу при
+                      необходимости.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="grid gap-1.5 sm:col-span-2">
                   <Label htmlFor="ce-str">Улица</Label>

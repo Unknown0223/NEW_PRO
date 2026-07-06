@@ -17,6 +17,7 @@ import {
   resolveSumRuleGiftProductId,
   ruleBlockedByOncePerClient,
   ruleHasPurchaseScope,
+  sumMatchingOrderQtyForQtyRule,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleMatchesProduct,
@@ -79,26 +80,27 @@ function qtyRuleWouldProduceAnyPeek(rule: BonusRuleRow, env: OrderBonusPrereqEnv
     return resolveQtyGiftProductId(rule, QTY_AGGREGATE_PURCHASED_PID, env.giftOverrides, ctx) > 0;
   }
 
-  for (const [purchasedPid, purchasedQty] of env.qtyByProduct) {
-    if (purchasedQty <= 0) continue;
-    const product = env.productById.get(purchasedPid);
-    if (!product) continue;
-    if (!ruleMatchesProduct(rule, product)) continue;
-    const eff = effectivePurchasedQtyForQtyRule(rule, {
-      orderQty: purchasedQty,
-      productIdForMonthLookup: purchasedPid,
-      monthAggregateExclOrder: env.clientMonthPaidQtyAggregateExclOrder,
-      monthByProductExclOrder: env.clientMonthPaidQtyByProductExclOrder
-    });
-    const bonusUnits = computeQtyBonusForRuleRow(rule, eff);
-    if (bonusUnits <= 0) continue;
-    const giftPid = resolveQtyGiftProductId(rule, purchasedPid, env.giftOverrides, {
-      availableByProductId: env.availableByProductId,
-      minUnits: bonusUnits
-    });
-    if (giftPid > 0) return true;
-  }
-  return false;
+  const { totalQty: scopedQty, heroProductId } = sumMatchingOrderQtyForQtyRule(
+    rule,
+    env.qtyByProduct,
+    env.productById
+  );
+  if (scopedQty <= 0) return false;
+  const eff = effectivePurchasedQtyForQtyRule(rule, {
+    orderQty: scopedQty,
+    productIdForMonthLookup: null,
+    monthAggregateExclOrder: env.clientMonthPaidQtyAggregateExclOrder,
+    monthByProductExclOrder: env.clientMonthPaidQtyByProductExclOrder
+  });
+  const bonusUnits = computeQtyBonusForRuleRow(rule, eff);
+  if (bonusUnits <= 0) return false;
+  const purchasedPid =
+    rule.bonus_product_ids.length === 0 ? heroProductId : QTY_AGGREGATE_PURCHASED_PID;
+  const giftPid = resolveQtyGiftProductId(rule, purchasedPid, env.giftOverrides, {
+    availableByProductId: env.availableByProductId,
+    minUnits: bonusUnits
+  });
+  return giftPid > 0;
 }
 
 function ruleMatchesAsStandaloneAutoBonusForOrder(rule: BonusRuleRow, env: OrderBonusPrereqEnv, now: Date): boolean {
@@ -121,6 +123,7 @@ function ruleMatchesAsStandaloneAutoBonusForOrder(rule: BonusRuleRow, env: Order
       env.clientMonthMerchandiseSubtotalExclOrder
     );
     if (effective.lt(new PrismaClient.Decimal(rule.min_sum))) return false;
+    if (rule.discount_pct != null && Number(rule.discount_pct) > 0) return true;
     const giftPid = resolveSumRuleGiftProductId(rule, env.orderedProductIds, env.productById, env.qtyByProduct);
     return giftPid != null && giftPid > 0;
   }

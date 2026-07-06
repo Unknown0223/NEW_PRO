@@ -9,7 +9,8 @@ function scopeTouched(body: AccessPatchBodyInput): boolean {
     body.warehouse_delegate !== undefined ||
     body.cash_desk_ids !== undefined ||
     body.payment_methods !== undefined ||
-    body.territory_ids !== undefined
+    body.territory_ids !== undefined ||
+    body.trade_direction_ids !== undefined
   );
 }
 
@@ -20,7 +21,8 @@ function onlyWarehouseDelegatePatch(body: AccessPatchBodyInput): boolean {
     body.warehouse_ids !== undefined ||
     body.cash_desk_ids !== undefined ||
     body.payment_methods !== undefined ||
-    body.territory_ids !== undefined
+    body.territory_ids !== undefined ||
+    body.trade_direction_ids !== undefined
   )
     return false;
   if (

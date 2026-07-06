@@ -39,4 +39,6 @@ export type ClientSales2Filters = {
 export type ReportActor = {
   userId: number | null;
   role: string;
+  supervisor_user_id?: number | null;
+  trade_direction_ids?: number[];
 };

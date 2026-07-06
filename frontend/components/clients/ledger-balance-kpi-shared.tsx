@@ -3,6 +3,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import type { AgentBalanceCard } from "@/lib/client-balance-ledger-types";
 import { formatNumberGrouped } from "@/lib/format-numbers";
+import {
+  KPI_TRIPLE_LABELS,
+  normalizeKpiTriple,
+  parseLedgerKpiAmount
+} from "@/lib/ledger-kpi-payment-triple";
 import { cn } from "@/lib/utils";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -11,46 +16,10 @@ export const LEDGER_KPI_AMOUNT_FMT = { minFractionDigits: 0, maxFractionDigits: 
 
 export const LEDGER_KPI_LANE_CLASS = "flex w-[11.5rem] shrink-0 flex-col self-stretch sm:w-[12.5rem]";
 
-const KPI_TRIPLE_LABELS = ["Naqd", "Perechis", "Terminal"] as const;
-
 const kpiTitleClass =
   "line-clamp-2 min-w-0 break-words text-[9px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground";
 
-export function parseLedgerKpiAmount(s: string): number {
-  const t = String(s)
-    .trim()
-    .replace(/\u00a0/g, "")
-    .replace(/\s/g, "")
-    .replace(/\u2212/g, "-")
-    .replace(/−/g, "-")
-    .replace(/,/g, ".");
-  const n = Number.parseFloat(t);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function normalizeKpiTriple(rows: { label: string; amount: string }[]): { label: string; amount: string }[] {
-  const nrm = (l: string) => l.trim().toLowerCase().replace(/\s+/g, " ");
-  const sum = [0, 0, 0];
-  for (const r of rows) {
-    const t = nrm(r.label);
-    const v = parseLedgerKpiAmount(r.amount);
-    let idx: number | null = null;
-    if (t.includes("terminal") || t.includes("plastik") || t.includes("plastic") || t.includes("пласт") || t.includes("карт")) {
-      idx = 2;
-    } else if (
-      t.includes("perechis") ||
-      t.includes("перечис") ||
-      (t.includes("bank") && !t.includes("plast")) ||
-      t.includes("transfer")
-    ) {
-      idx = 1;
-    } else if (t.includes("naqd") || t.includes("налич") || t.includes("cash") || t.includes("нақд")) {
-      idx = 0;
-    }
-    if (idx != null) sum[idx] += v;
-  }
-  return KPI_TRIPLE_LABELS.map((label, i) => ({ label, amount: String(sum[i]) }));
-}
+export { parseLedgerKpiAmount, normalizeKpiTriple, KPI_TRIPLE_LABELS };
 
 function balanceRibbonBg(n: number): string {
   return n < 0 ? "bg-destructive" : "bg-primary";
@@ -302,7 +271,7 @@ export function BalanceKpiScrollRow({ children, layoutSignature }: { children: R
       <div
         ref={scrollRef}
         onScroll={updateScrollHints}
-        className="flex min-h-[7.5rem] min-w-0 flex-1 flex-nowrap items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5 [scrollbar-width:thin]"
+        className="scrollbar-none flex min-h-[7.5rem] min-w-0 flex-1 flex-nowrap items-stretch gap-1.5 overflow-x-auto overflow-y-hidden py-0.5"
       >
         {children}
       </div>

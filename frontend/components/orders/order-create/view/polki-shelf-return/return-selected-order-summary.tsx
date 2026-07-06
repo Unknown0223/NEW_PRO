@@ -38,7 +38,7 @@ export function ReturnSelectedOrderSummary({
     <div
       className={cn(
         polkiCard,
-        "sticky top-0 z-20 border-teal-700/25 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 dark:bg-slate-950/95",
+        "sticky top-0 z-20 border-teal-700/25 bg-card/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/90 dark:bg-slate-950/95",
         compact ? "p-3" : "p-4",
         className
       )}

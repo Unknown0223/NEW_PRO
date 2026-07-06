@@ -4,7 +4,7 @@ import { WorkSlotsMultiSelect } from "@/components/work-slots/work-slots-multi-s
 import { cn } from "@/lib/utils";
 
 const FORM_TRIGGER =
-  "h-10 w-full min-w-0 rounded-lg border border-gray-200 bg-white px-3 text-sm font-normal text-gray-700 shadow-sm hover:border-gray-300";
+  "h-10 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm font-normal text-gray-700 shadow-sm hover:border-border";
 
 type Props = {
   label: string;

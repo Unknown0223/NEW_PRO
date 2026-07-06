@@ -19,6 +19,7 @@ import {
   getZodFlattenFromApiErrorBody
 } from "@/lib/api-validation-details";
 import { useAuthStoreHydrated } from "@/lib/auth-store";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { isAxiosError } from "axios";
@@ -88,17 +89,8 @@ export function AddOpeningBalanceDialog({ open, onOpenChange, tenantSlug, onCrea
     }
   });
 
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "add-opening-balance"],
-    enabled: Boolean(tenantSlug) && hydrated && open,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
-      );
-      return data.data;
-    }
-  });
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "add-opening-balance");
+  const tradeDirectionOptions = tradeDirectionsCatalog.labels;
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "add-opening-balance-refs"],
@@ -357,7 +349,7 @@ export function AddOpeningBalanceDialog({ open, onOpenChange, tenantSlug, onCrea
                 onChange={(e) => setTradeDirection(e.target.value)}
               >
                 <option value="">—</option>
-                {(filterOptQ.data?.trade_directions ?? []).map((td) => (
+                {tradeDirectionOptions.map((td) => (
                   <option key={td} value={td}>
                     {td}
                   </option>

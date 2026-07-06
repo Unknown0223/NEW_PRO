@@ -2,6 +2,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import { statusContributesToDeliveredReceivableDebt } from "../order-status";
 import {
+  orderMerchandiseNetReceivable,
+  type OrderMerchandiseRuleHint
+} from "../order-merchandise-net";
+import {
   loadDeliveryDebtByClient,
   mergeLedgerWithUnpaidDelivered
 } from "../../client-balances/client-balances.service";
@@ -12,7 +16,28 @@ type OrderFinanceSlice = {
   order_type: string;
   status: string;
   total_sum: Prisma.Decimal;
+  discount_sum: Prisma.Decimal;
+  applied_auto_bonus_rule_ids: number[];
 };
+
+async function loadMerchandiseRulesById(
+  tenantId: number,
+  ruleIds: number[]
+): Promise<Map<number, OrderMerchandiseRuleHint>> {
+  const out = new Map<number, OrderMerchandiseRuleHint>();
+  if (ruleIds.length === 0) return out;
+  const rows = await prisma.bonusRule.findMany({
+    where: { tenant_id: tenantId, id: { in: ruleIds } },
+    select: { id: true, type: true, discount_pct: true }
+  });
+  for (const r of rows) {
+    out.set(r.id, {
+      type: r.type,
+      discount_pct: r.discount_pct != null ? Number(r.discount_pct) : null
+    });
+  }
+  return out;
+}
 
 /** Ro‘yxat va bitta zakaz tafsiloti: taqsimot, mijoz balansi, birinchi «отгружен/доставлен» vaqtlari. */
 export async function loadOrdersFinanceEnrichment(
@@ -42,8 +67,9 @@ export async function loadOrdersFinanceEnrichment(
 
   const ids = slices.map((s) => s.id);
   const clientIds = [...new Set(slices.map((s) => s.client_id))];
+  const ruleIds = [...new Set(slices.flatMap((s) => s.applied_auto_bonus_rule_ids))];
 
-  const [allocRows, statusRows, balRows, deliveryByClient] = await Promise.all([
+  const [allocRows, statusRows, balRows, deliveryByClient, rulesById] = await Promise.all([
     prisma.$queryRaw<Array<{ order_id: number; alloc: Prisma.Decimal }>>`
       SELECT order_id, COALESCE(SUM(amount), 0)::decimal(15,2) AS alloc
       FROM payment_allocations
@@ -62,7 +88,8 @@ export async function loadOrdersFinanceEnrichment(
       where: { tenant_id: tenantId, client_id: { in: clientIds } },
       select: { client_id: true, balance: true }
     }),
-    loadDeliveryDebtByClient(tenantId, clientIds)
+    loadDeliveryDebtByClient(tenantId, clientIds),
+    loadMerchandiseRulesById(tenantId, ruleIds)
   ]);
 
   const allocByOrder = new Map<number, Prisma.Decimal>();
@@ -87,7 +114,13 @@ export async function loadOrdersFinanceEnrichment(
     const allocated = allocByOrder.get(s.id) ?? new Prisma.Decimal(0);
     let debt: string | null = null;
     if (statusContributesToDeliveredReceivableDebt(s.status, s.order_type)) {
-      const unpaid = s.total_sum.sub(allocated);
+      const merchandiseNet = orderMerchandiseNetReceivable(
+        s.total_sum,
+        s.discount_sum,
+        s.applied_auto_bonus_rule_ids,
+        rulesById
+      );
+      const unpaid = merchandiseNet.sub(allocated);
       debt = (unpaid.gt(0) ? unpaid : new Prisma.Decimal(0)).toString();
     }
     const ledger = balByClient.get(s.client_id) ?? new Prisma.Decimal(0);

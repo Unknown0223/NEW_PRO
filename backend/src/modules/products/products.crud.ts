@@ -32,8 +32,24 @@ export async function createProduct(
     product_group_id: input.product_group_id ?? null,
     brand_id: input.brand_id ?? null,
     manufacturer_id: input.manufacturer_id ?? null,
-    segment_id: input.segment_id ?? null
+    segment_id: input.segment_id ?? null,
+    segment_ids: input.segment_ids,
+    trade_direction_ids: input.trade_direction_ids
   });
+
+  const segmentIds = [
+    ...new Set(
+      (input.segment_ids ?? []).filter((id) => Number.isFinite(id) && id > 0)
+    )
+  ];
+  const primarySegmentId =
+    segmentIds[0] ?? (input.segment_id != null && input.segment_id > 0 ? input.segment_id : null);
+  const tradeDirectionIds = [
+    ...new Set(
+      (input.trade_direction_ids ?? []).filter((id) => Number.isFinite(id) && id > 0)
+    )
+  ];
+  const packagings = (input.packagings ?? []).filter((p) => p.name.trim());
 
   const data: Prisma.ProductUncheckedCreateInput = {
     tenant_id: tenantId,
@@ -46,7 +62,7 @@ export async function createProduct(
     product_group_id: input.product_group_id ?? null,
     brand_id: input.brand_id ?? null,
     manufacturer_id: input.manufacturer_id ?? null,
-    segment_id: input.segment_id ?? null,
+    segment_id: primarySegmentId,
     weight_kg: decOpt(input.weight_kg) ?? null,
     volume_m3: decOpt(input.volume_m3) ?? null,
     qty_per_block: input.qty_per_block ?? null,
@@ -60,13 +76,55 @@ export async function createProduct(
     comment: input.comment?.trim() || null,
     sort_order: input.sort_order ?? null,
     is_blocked: input.is_blocked ?? false,
-    is_equipment: input.is_equipment ?? false
+    is_equipment: input.is_equipment ?? false,
+    image_url: input.image_url?.trim() || null
   };
 
-  await prisma.product.create({ data });
-  const row = await prisma.product.findFirstOrThrow({
-    where: { tenant_id: tenantId, sku },
-    include: productListInclude
+  const row = await prisma.$transaction(async (tx) => {
+    const product = await tx.product.create({ data });
+
+    if (segmentIds.length) {
+      await tx.productSegmentLink.createMany({
+        data: segmentIds.map((segment_id) => ({ product_id: product.id, segment_id })),
+        skipDuplicates: true
+      });
+    } else if (primarySegmentId != null) {
+      await tx.productSegmentLink.createMany({
+        data: [{ product_id: product.id, segment_id: primarySegmentId }],
+        skipDuplicates: true
+      });
+    }
+
+    if (tradeDirectionIds.length) {
+      await tx.productTradeDirectionLink.createMany({
+        data: tradeDirectionIds.map((trade_direction_id) => ({
+          product_id: product.id,
+          trade_direction_id
+        })),
+        skipDuplicates: true
+      });
+    }
+
+    if (packagings.length) {
+      await tx.productPackaging.createMany({
+        data: packagings.map((p, index) => ({
+          tenant_id: tenantId,
+          product_id: product.id,
+          name: p.name.trim(),
+          quantity: p.quantity ?? null,
+          width_cm: decOpt(p.width_cm) ?? null,
+          height_cm: decOpt(p.height_cm) ?? null,
+          length_cm: decOpt(p.length_cm) ?? null,
+          is_main: p.is_main ?? index === 0,
+          sort_order: p.sort_order ?? index
+        }))
+      });
+    }
+
+    return tx.product.findFirstOrThrow({
+      where: { id: product.id, tenant_id: tenantId },
+      include: productListInclude
+    });
   });
   await appendTenantAuditEvent({
     tenantId,

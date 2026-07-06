@@ -2,6 +2,17 @@ import { z } from "zod";
 
 const optionalIntNull = z.number().int().positive().nullable().optional();
 const optionalNumStrNull = z.union([z.number(), z.string()]).nullable().optional();
+const idList = z.array(z.number().int().positive()).max(50).optional();
+
+const productPackagingBodySchema = z.object({
+  name: z.string().min(1).max(120),
+  quantity: z.number().int().positive().nullable().optional(),
+  width_cm: optionalNumStrNull,
+  height_cm: optionalNumStrNull,
+  length_cm: optionalNumStrNull,
+  is_main: z.boolean().optional(),
+  sort_order: z.number().int().nullable().optional()
+});
 
 /** POST `/api/:slug/products` */
 export const createProductBodySchema = z.object({
@@ -15,6 +26,10 @@ export const createProductBodySchema = z.object({
   brand_id: optionalIntNull,
   manufacturer_id: optionalIntNull,
   segment_id: optionalIntNull,
+  segment_ids: idList,
+  trade_direction_ids: idList,
+  image_url: z.string().max(2_800_000).nullable().optional(),
+  packagings: z.array(productPackagingBodySchema).max(30).optional(),
   weight_kg: optionalNumStrNull,
   volume_m3: optionalNumStrNull,
   qty_per_block: z.number().int().nullable().optional(),
@@ -47,6 +62,15 @@ function parseFilterId(raw: string | undefined): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+function parseFilterIds(raw: string | undefined): number[] | undefined {
+  if (!raw?.trim()) return undefined;
+  const ids = raw
+    .split(",")
+    .map((x) => Number.parseInt(x.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return ids.length ? [...new Set(ids)] : undefined;
+}
+
 /** GET `/api/:slug/products` — ro‘yxat query (handler `where` quradi) */
 export type ProductsListQuery = {
   page: number;
@@ -60,6 +84,7 @@ export type ProductsListQuery = {
   brand_id?: number;
   manufacturer_id?: number;
   segment_id?: number;
+  ids?: number[];
   include_prices: boolean;
 };
 
@@ -91,6 +116,7 @@ export function parseProductsListQuery(q: Record<string, string | undefined>): P
     brand_id: parseFilterId(q.brand_id),
     manufacturer_id: parseFilterId(q.manufacturer_id),
     segment_id: parseFilterId(q.segment_id),
+    ids: parseFilterIds(q.ids),
     include_prices: q.include_prices === "1" || q.include_prices === "true"
   };
 }

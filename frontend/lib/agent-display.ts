@@ -1,17 +1,16 @@
 /**
  * `GET /api/:slug/agents` → `StaffRow[]` — ko‘rinadigan ism `fio` da (`name` yo‘q).
  */
-export type AgentListItem = {
+import { formatPersonDisplayName, type PersonNameParts } from "@/lib/person-display";
+
+export type AgentListItem = PersonNameParts & {
   id: number;
-  fio?: string | null;
-  /** Ba’zi eski mocklar */
-  name?: string | null;
   login?: string | null;
 };
 
 export function agentDisplayName(a: AgentListItem): string {
-  const fromFio = (a.fio ?? a.name ?? "").trim();
-  if (fromFio) return fromFio;
+  const fromParts = formatPersonDisplayName(a);
+  if (fromParts) return fromParts;
   const fromLogin = (a.login ?? "").trim();
   if (fromLogin) return fromLogin;
   return `#${a.id}`;

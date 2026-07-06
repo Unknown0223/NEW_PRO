@@ -9,8 +9,12 @@ import {
   ruleHasPurchaseScope,
   ruleMatchesClient,
   ruleMatchesOrderAgentScope,
-  ruleMatchesOrderProductScope
+  ruleMatchesOrderProductScope,
+  ruleRelatesToOrderSelection,
+  sumMatchingOrderQtyForQtyRule
 } from "../src/modules/orders/order-bonus-apply";
+import { mergeQtyPeeksByRule } from "../src/modules/orders/order-bonus-qty";
+import { computeQtyBonusForRuleRow } from "../src/modules/bonus-rules/bonus-rules.qty";
 
 function rule(over: Partial<BonusRuleRow>): BonusRuleRow {
   return {
@@ -188,6 +192,109 @@ describe("ruleHasPurchaseScope", () => {
   });
 });
 
+describe("ruleRelatesToOrderSelection", () => {
+  const map = new Map<number, { id: number; category_id: number | null }>([
+    [10, { id: 10, category_id: 5 }],
+    [30, { id: 30, category_id: 7 }]
+  ]);
+
+  it("sotib olish doirasi bo‘lsa — zakazda mos kategoriya yetarli", () => {
+    const r = rule({ product_ids: [], product_category_ids: [5] });
+    expect(ruleRelatesToOrderSelection(r, new Set([10]), map)).toBe(true);
+  });
+
+  it("faqat sovg‘a SKU (boshqa kategoriya) — zakazda o‘sha kategoriya yo‘q — false", () => {
+    const r = rule({
+      product_ids: [],
+      product_category_ids: [],
+      bonus_product_ids: [30]
+    });
+    expect(ruleRelatesToOrderSelection(r, new Set([10]), map)).toBe(false);
+  });
+
+  it("sovg‘a SKU kategoriyasi zakazda bor — true", () => {
+    const r = rule({
+      product_ids: [],
+      product_category_ids: [],
+      bonus_product_ids: [30]
+    });
+    expect(ruleRelatesToOrderSelection(r, new Set([30]), map)).toBe(true);
+  });
+
+  it("umumiy qoida (mahsulot bog‘i yo‘q) — true", () => {
+    const r = rule({ product_ids: [], product_category_ids: [], bonus_product_ids: [] });
+    expect(ruleRelatesToOrderSelection(r, new Set([10]), map)).toBe(true);
+  });
+});
+
+describe("computeQtyBonusForRuleRow 6+1 in_blocks", () => {
+  it("14 dona → 2 bonus", () => {
+    const r = rule({
+      type: "qty",
+      buy_qty: 6,
+      free_qty: 1,
+      in_blocks: true,
+      conditions: []
+    });
+    expect(computeQtyBonusForRuleRow(r, 14)).toBe(2);
+    expect(computeQtyBonusForRuleRow(r, 12)).toBe(2);
+    expect(computeQtyBonusForRuleRow(r, 5)).toBe(0);
+  });
+
+  it("in_blocks false — faqat 1 marta", () => {
+    const r = rule({
+      type: "qty",
+      buy_qty: 6,
+      free_qty: 1,
+      in_blocks: false,
+      conditions: []
+    });
+    expect(computeQtyBonusForRuleRow(r, 14)).toBe(1);
+  });
+});
+
+describe("sumMatchingOrderQtyForQtyRule", () => {
+  it("kategoriya bo‘yicha miqdor yig‘iladi", () => {
+    const r = rule({ product_category_ids: [10] });
+    const productById = new Map<number, { id: number; category_id: number | null }>([
+      [1, { id: 1, category_id: 10 }],
+      [2, { id: 2, category_id: 10 }],
+      [3, { id: 3, category_id: 99 }]
+    ]);
+    const qtyByProduct = new Map([
+      [1, 10],
+      [2, 4],
+      [3, 100]
+    ]);
+    const { totalQty, heroProductId } = sumMatchingOrderQtyForQtyRule(r, qtyByProduct, productById);
+    expect(totalQty).toBe(14);
+    expect(heroProductId).toBe(1);
+  });
+});
+
+describe("mergeQtyPeeksByRule", () => {
+  it("bir xil rule_id va giftPid — bitta peek, bonus_qty yig‘indisi", () => {
+    const r = rule({ id: 42, name: "6+1" });
+    const merged = mergeQtyPeeksByRule([
+      { rule: r, purchasedPid: 10, giftPid: 100, bonusQty: 1 },
+      { rule: r, purchasedPid: 20, giftPid: 100, bonusQty: 1 }
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]!.rule.id).toBe(42);
+    expect(merged[0]!.bonusQty).toBe(2);
+  });
+
+  it("bir xil rule_id, har xil giftPid (har SKU o‘z mahsuloti) — alohida peeklar", () => {
+    const r = rule({ id: 42, name: "6+1", bonus_product_ids: [] });
+    const merged = mergeQtyPeeksByRule([
+      { rule: r, purchasedPid: 10, giftPid: 10, bonusQty: 6 },
+      { rule: r, purchasedPid: 20, giftPid: 20, bonusQty: 3 }
+    ]);
+    expect(merged).toHaveLength(2);
+    expect(merged.map((p) => p.bonusQty).sort((a, b) => a - b)).toEqual([3, 6]);
+  });
+});
+
 describe("resolveQtyGiftProductId", () => {
   it("override ro‘yxatda — override", () => {
     const r = rule({ id: 7, bonus_product_ids: [10, 20] });
@@ -213,6 +320,19 @@ describe("resolveQtyGiftProductId", () => {
       [20, 5]
     ]);
     expect(resolveQtyGiftProductId(r, 10, new Map(), { availableByProductId: avail, minUnits: 2 })).toBe(20);
+  });
+  it("assortiment auto: ombor yetarli emas — baribir sotilgan SKU", () => {
+    const r = rule({
+      product_ids: [10, 20],
+      bonus_product_ids: [10, 20],
+      scope_restrict_assortment: true,
+      scope_restrict_category: false
+    });
+    const avail = new Map<number, number>([
+      [10, 0],
+      [20, 0]
+    ]);
+    expect(resolveQtyGiftProductId(r, 10, new Map(), { availableByProductId: avail, minUnits: 2 })).toBe(10);
   });
   it("barcha variantlarda yetarli emas — ro‘yxatdagi birinchi (fallback)", () => {
     const r = rule({ bonus_product_ids: [10, 20] });

@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { CLIENT_PHOTO_MAX_IMAGE_URL_LEN } from "../../lib/client-photo-limits";
+import { resolveClientPhotoImageUrl } from "../../lib/client-photo-storage";
 
 async function assertClient(tenantId: number, clientId: number): Promise<void> {
   const c = await prisma.client.findFirst({
@@ -283,31 +285,97 @@ export async function listTenantEquipmentPaged(
   };
 }
 
-export type ClientPhotoReportApi = {
+export type ClientPhotoReportSummary = {
   id: number;
-  image_url: string;
   caption: string | null;
   order_id: number | null;
   created_at: string;
 };
 
+export type ClientPhotoReportApi = ClientPhotoReportSummary & {
+  image_url: string;
+};
+
+/** Bugungi kun (server lokal vaqti) uchun [00:00:00.000 .. 23:59:59.999] oralig'i. */
+function localTodayRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
+
 export async function listClientPhotoReports(
   tenantId: number,
-  clientId: number
-): Promise<ClientPhotoReportApi[]> {
+  clientId: number,
+  opts?: { includeImages?: boolean; viewerRole?: string | null; todayOnly?: boolean }
+): Promise<Array<ClientPhotoReportSummary | ClientPhotoReportApi>> {
   await assertClient(tenantId, clientId);
+  const where: Prisma.ClientPhotoReportWhereInput = { tenant_id: tenantId, client_id: clientId };
+  // Agent va ekspeditor fotohisobotlari aralashmasligi kerak:
+  // ekspeditor faqat o'zi rolidagilarni, agent esa ekspeditornikidan boshqasini ko'radi.
+  if (opts?.viewerRole === "expeditor") {
+    where.created_by = { is: { role: "expeditor" } };
+  } else if (opts?.viewerRole === "agent") {
+    where.NOT = { created_by: { is: { role: "expeditor" } } };
+  }
+  // Fotohisobot faqat olingan kunida ko'rinadi (ertasiga eskisi ko'rinmaydi).
+  if (opts?.todayOnly) {
+    const { start, end } = localTodayRange();
+    where.created_at = { gte: start, lte: end };
+  }
   const rows = await prisma.clientPhotoReport.findMany({
-    where: { tenant_id: tenantId, client_id: clientId },
+    where,
     orderBy: { created_at: "desc" },
-    take: 200
+    take: 200,
+    select: opts?.includeImages
+      ? { id: true, caption: true, order_id: true, created_at: true, image_url: true }
+      : { id: true, caption: true, order_id: true, created_at: true }
   });
-  return rows.map((r) => ({
-    id: r.id,
-    image_url: r.image_url,
-    caption: r.caption,
-    order_id: r.order_id,
-    created_at: r.created_at.toISOString()
-  }));
+  return rows.map((r) => {
+    const base = {
+      id: r.id,
+      caption: r.caption,
+      order_id: r.order_id,
+      created_at: r.created_at.toISOString()
+    };
+    if (opts?.includeImages && "image_url" in r) {
+      return { ...base, image_url: r.image_url };
+    }
+    return base;
+  });
+}
+
+export async function getClientPhotoReportById(
+  tenantId: number,
+  clientId: number,
+  photoId: number,
+  opts?: { viewerRole?: string | null; todayOnly?: boolean }
+): Promise<ClientPhotoReportApi> {
+  await assertClient(tenantId, clientId);
+  const where: Prisma.ClientPhotoReportWhereInput = {
+    id: photoId,
+    tenant_id: tenantId,
+    client_id: clientId
+  };
+  const viewerRole = opts?.viewerRole;
+  if (viewerRole === "expeditor") {
+    where.created_by = { is: { role: "expeditor" } };
+  } else if (viewerRole === "agent") {
+    where.NOT = { created_by: { is: { role: "expeditor" } } };
+  }
+  if (opts?.todayOnly) {
+    const { start, end } = localTodayRange();
+    where.created_at = { gte: start, lte: end };
+  }
+  const row = await prisma.clientPhotoReport.findFirst({ where });
+  if (!row) throw new Error("NOT_FOUND");
+  return {
+    id: row.id,
+    image_url: row.image_url,
+    caption: row.caption,
+    order_id: row.order_id,
+    created_at: row.created_at.toISOString()
+  };
 }
 
 export async function createClientPhotoReportRow(
@@ -317,8 +385,8 @@ export async function createClientPhotoReportRow(
   input: { image_url: string; caption?: string | null; order_id?: number | null }
 ): Promise<ClientPhotoReportApi> {
   await assertClient(tenantId, clientId);
-  const url = input.image_url.trim();
-  if (!url || url.length > 4000) throw new Error("VALIDATION");
+  const url = (await resolveClientPhotoImageUrl(tenantId, clientId, input.image_url.trim())).trim();
+  if (!url || url.length > CLIENT_PHOTO_MAX_IMAGE_URL_LEN) throw new Error("VALIDATION");
   let orderId: number | null = null;
   if (input.order_id != null && Number.isFinite(input.order_id) && input.order_id > 0) {
     const o = await prisma.order.findFirst({

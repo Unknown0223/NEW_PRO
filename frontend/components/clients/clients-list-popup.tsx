@@ -103,16 +103,16 @@ function ClientsListPopover({
     <div
       ref={menuRef}
       style={style}
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-2xl"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-2xl"
       role="listbox"
       aria-label={title}
     >
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="flex items-center justify-between border-b border-border bg-muted px-3 py-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{title}</span>
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          className="rounded p-0.5 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
           aria-label="Закрыть"
         >
           <X className="size-3.5" />
@@ -123,6 +123,7 @@ function ClientsListPopover({
           <div
             key={`${item}-${i}`}
             role="option"
+            aria-selected={false}
             className={cn(
               "cursor-default px-3 py-2 text-xs text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700",
               i < items.length - 1 && "border-b border-gray-50"
@@ -148,7 +149,18 @@ export function ClientsListPopup({ items, title, anchorRef, trigger }: Props) {
 
   return (
     <>
-      <span role="button" tabIndex={0} className="inline-block" onClick={toggle}>
+      <span
+        role="button"
+        tabIndex={0}
+        className="inline-flex shrink-0 items-center"
+        onClick={toggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+      >
         {trigger}
       </span>
       <ClientsListPopover

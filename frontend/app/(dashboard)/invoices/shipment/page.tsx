@@ -72,7 +72,7 @@ export default function ShipmentInvoicesPage() {
       return data.data ?? [];
     }
   });
-  const rows = listQ.data ?? [];
+  const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
   const filteredRows = useMemo(() => {
     if (!search.trim()) return rows;
     const needle = search.toLowerCase();

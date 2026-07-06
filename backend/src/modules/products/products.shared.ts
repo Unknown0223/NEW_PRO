@@ -28,6 +28,8 @@ export async function assertProductCatalogFks(
     brand_id?: number | null;
     manufacturer_id?: number | null;
     segment_id?: number | null;
+    segment_ids?: number[];
+    trade_direction_ids?: number[];
   }
 ) {
   if (input.category_id != null) {
@@ -55,5 +57,19 @@ export async function assertProductCatalogFks(
   if (input.segment_id != null) {
     const x = await prisma.productSegment.findFirst({ where: { id: input.segment_id, tenant_id: tenantId } });
     if (!x) throw new Error("BAD_REF");
+  }
+  const segmentIds = [...new Set(input.segment_ids ?? [])];
+  if (segmentIds.length) {
+    const count = await prisma.productSegment.count({
+      where: { tenant_id: tenantId, id: { in: segmentIds } }
+    });
+    if (count !== segmentIds.length) throw new Error("BAD_REF");
+  }
+  const tradeIds = [...new Set(input.trade_direction_ids ?? [])];
+  if (tradeIds.length) {
+    const count = await prisma.tradeDirection.count({
+      where: { tenant_id: tenantId, id: { in: tradeIds } }
+    });
+    if (count !== tradeIds.length) throw new Error("BAD_REF");
   }
 }

@@ -9,8 +9,10 @@ import { formatGroupedInteger } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { TableSearchField } from "@/components/ui/table-search-field";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -118,6 +120,8 @@ type CashDeskRow = {
   longitude: string | null;
   is_active: boolean;
   is_closed: boolean;
+  accepts_client_payments?: boolean;
+  accepts_discount_payments?: boolean;
   created_at: string;
   user_total: number;
   breakdown: { role: string; count: number }[];
@@ -142,7 +146,6 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [columnOpen, setColumnOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CashDeskRow | null>(null);
@@ -152,21 +155,16 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
     tableId: CASH_DESK_TABLE_ID,
     defaultColumnOrder: [...COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const limit = tablePrefs.pageSize;
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
     setPage(1);
-  }, [tab, debouncedSearch, limit]);
+  }, [tab, search, limit]);
 
   const listQ = useQuery({
-    queryKey: ["cash-desks", tenantSlug, tab, page, limit, debouncedSearch],
+    queryKey: ["cash-desks", tenantSlug, tab, page, limit, search],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
@@ -174,7 +172,7 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
       params.set("is_active", tab === "active" ? "true" : "false");
       params.set("page", String(page));
       params.set("limit", String(limit));
-      if (debouncedSearch) params.set("q", debouncedSearch);
+      if (search) params.set("q", search);
       const { data } = await api.get<{
         data: CashDeskRow[];
         total: number;
@@ -204,7 +202,7 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
     }
   });
 
-  const rows = listQ.data?.data ?? [];
+  const rows = useMemo(() => listQ.data?.data ?? [], [listQ.data?.data]);
   const total = listQ.data?.total ?? 0;
   const from = total === 0 ? 0 : (page - 1) * limit + 1;
   const to = Math.min(page * limit, total);
@@ -307,17 +305,18 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
                 value={limit}
                 onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
               >
-                {[10, 20, 25, 50, 100].map((n) => (
+                {DEFAULT_TABLE_PAGE_SIZES.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
               </select>
-              <Input
-                placeholder="Поиск"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 max-w-xs text-xs"
+              <TableSearchField
+                className="max-w-xs"
+                onSearch={(q) => {
+                  setSearch(q);
+                  setPage(1);
+                }}
               />
               <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={exportRows}>
                 Excel
@@ -711,6 +710,9 @@ function CashDeskFormDialog({
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [active, setActive] = useState(true);
+  const [cashDeskPurpose, setCashDeskPurpose] = useState<"client_payment" | "discount_payment">(
+    "client_payment"
+  );
   const [mapOpen, setMapOpen] = useState(false);
   const [linkSets, setLinkSets] = useState(() => emptyCashLinkSets());
   const [usersSubOpen, setUsersSubOpen] = useState(false);
@@ -735,6 +737,11 @@ function CashDeskFormDialog({
       setLat(initial.latitude ?? "");
       setLng(initial.longitude ?? "");
       setActive(initial.is_active);
+      setCashDeskPurpose(
+        initial.accepts_discount_payments === true && initial.accepts_client_payments !== true
+          ? "discount_payment"
+          : "client_payment"
+      );
       setMapOpen(Boolean(initial.latitude && initial.longitude));
       setLinkSets(
         setsFromRoleLinks(
@@ -751,6 +758,7 @@ function CashDeskFormDialog({
       setLat("");
       setLng("");
       setActive(true);
+      setCashDeskPurpose("client_payment");
       setMapOpen(false);
       setLinkSets(emptyCashLinkSets());
     }
@@ -776,6 +784,8 @@ function CashDeskFormDialog({
         latitude: latN != null && Number.isFinite(latN) ? latN : null,
         longitude: lngN != null && Number.isFinite(lngN) ? lngN : null,
         is_active: active,
+        accepts_client_payments: cashDeskPurpose === "client_payment",
+        accepts_discount_payments: cashDeskPurpose === "discount_payment",
         links
       };
       if (initial) {
@@ -1019,6 +1029,33 @@ function CashDeskFormDialog({
                 onChange={(e) => setActive(e.target.checked)}
               />
             </label>
+            <div className="grid gap-3 rounded-lg border border-border bg-muted/15 p-4">
+              <p className="text-sm font-semibold text-foreground">Назначение кассы</p>
+              <p className="text-xs text-muted-foreground">
+                Касса используется либо для клиентских оплат, либо для оплаты скидки — не для обоих
+                сразу.
+              </p>
+              <label className="flex min-h-10 cursor-pointer items-center gap-3 text-sm">
+                <input
+                  type="radio"
+                  name="cash-desk-purpose"
+                  className="size-4 accent-teal-600"
+                  checked={cashDeskPurpose === "client_payment"}
+                  onChange={() => setCashDeskPurpose("client_payment")}
+                />
+                <span>Для оплаты (клиентские платежи)</span>
+              </label>
+              <label className="flex min-h-10 cursor-pointer items-center gap-3 text-sm">
+                <input
+                  type="radio"
+                  name="cash-desk-purpose"
+                  className="size-4 accent-teal-600"
+                  checked={cashDeskPurpose === "discount_payment"}
+                  onChange={() => setCashDeskPurpose("discount_payment")}
+                />
+                <span>Для скидки (оплата скидки)</span>
+              </label>
+            </div>
             </div>
           </div>
           <DialogFooter className="mx-0 mb-0 shrink-0 flex-row justify-end gap-3 rounded-b-xl border-t border-border bg-background px-5 py-4 pb-5">

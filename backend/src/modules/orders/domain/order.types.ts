@@ -1,11 +1,19 @@
 /** Orders domain — shared types and Prisma include. */
 import { Prisma } from "@prisma/client";
+import type { AppliedBonusRuleSnapshot } from "../../bonus-rules/bonus-rules.snapshot";
 
 export type OrderLineInput = { product_id: number; qty: number };
 
 export type BonusGiftOverrideInput = {
   bonus_rule_id: number;
   bonus_product_id: number;
+};
+
+/** Qty bonus: bir qoida bo‘yicha bir nechta sovg‘a mahsuloti va dona. */
+export type BonusGiftLineInput = {
+  bonus_rule_id: number;
+  product_id: number;
+  qty: number;
 };
 
 export type CreateOrderInput = {
@@ -22,8 +30,12 @@ export type CreateOrderInput = {
   /** Hujjat tipi: order | return | exchange | partial_return | return_by_order */
   order_type?: string | null;
   apply_bonus?: boolean;
+  /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
+  apply_discount?: boolean;
   /** Qty bonus: `bonus_product_ids` ro‘yxatidan tanlov (faqat qoida ro‘yxatida bor mahsulotlar) */
   bonus_gift_overrides?: BonusGiftOverrideInput[];
+  /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona (mobil assortiment tanlovi). */
+  bonus_gift_lines?: BonusGiftLineInput[];
   comment?: string | null;
   /** Sozlamalar → request_type_entries (kod yoki nom, max 128) */
   request_type_ref?: string | null;
@@ -118,6 +130,10 @@ export type OrderListRow = {
   bonus_qty: string;
   /** Foizli chegirma summasi */
   discount_sum: string;
+  /** Skidka kutilgan, lekin qo‘llanmagan */
+  discount_alert?: string | null;
+  /** Bonus yetarli emas */
+  bonus_alert?: string | null;
   /** Bonus mahsulotlarning narxlangan qiymati (ichki hisob) */
   bonus_sum: string;
   balance: string | null;
@@ -147,6 +163,8 @@ export type OrderListRow = {
   warehouse_block_name: string | null;
   /** Joriy foydalanuvchi roli uchun ruxsat etilgan keyingi holatlar (jadvalda tez o‘zgartirish). */
   allowed_next_statuses: string[];
+  /** Buyurtma tasdiqlash zanjiri holati (detail API). */
+  approval_status?: string | null;
 };
 
 export type OrderStatusLogRow = {
@@ -194,6 +212,8 @@ export type OrderDetailRow = OrderListRow & {
   bonus_gift_selections?: Record<string, number>;
   /** UI: bir nechta sovg‘a varianti bo‘lgan qo‘llangan qty qoidalar */
   bonus_gift_swap_options?: BonusGiftSwapOptionRow[];
+  /** Qo‘llangan qoidalar snapshot (zakaz yaratilganda / qatorlar yangilanganda) */
+  applied_bonus_rules_snapshot?: AppliedBonusRuleSnapshot[];
   /** Faqat yaratish javobida (ixtiyoriy) */
   client_finance?: {
     account_balance: string;
@@ -226,6 +246,12 @@ export const orderDetailInclude: Prisma.OrderInclude = {
     select: {
       name: true,
       legal_name: true,
+      client_code: true,
+      phone: true,
+      inn: true,
+      address: true,
+      landmark: true,
+      sales_channel: true,
       region: true,
       city: true,
       district: true,
@@ -289,10 +315,13 @@ export type OrderDetailLoaded = {
   agent_id: number | null;
   expeditor_user_id: number | null;
   status: string;
+  approval_status: string | null;
+  approval_step: number;
   total_sum: Prisma.Decimal;
   bonus_sum: Prisma.Decimal;
   discount_sum: Prisma.Decimal;
   applied_auto_bonus_rule_ids: number[];
+  applied_bonus_rules_snapshot?: Prisma.JsonValue | null;
   bonus_gift_selections?: Prisma.JsonValue | null;
   comment: string | null;
   request_type_ref: string | null;
@@ -301,10 +330,18 @@ export type OrderDetailLoaded = {
   consignment_due_date: Date | null;
   payment_method_ref: string | null;
   warehouse_block_id: number | null;
+  discount_alert: string | null;
+  bonus_alert: string | null;
   created_at: Date;
   client: {
     name: string;
     legal_name: string | null;
+    client_code: string | null;
+    phone: string | null;
+    inn: string | null;
+    address: string | null;
+    landmark: string | null;
+    sales_channel: string | null;
     region: string | null;
     city: string | null;
     district: string | null;
@@ -411,4 +448,10 @@ export type ListOrdersQuery = {
   visit_weekday?: number;
   /** Keyset pagination — `next_cursor` dan keyingi sahifa */
   cursor?: string;
+  /** Skidka muammosi: not_applied | cash_desk_missing | bonus_required | any */
+  discount_alert?: string;
+  /** Bonus muammosi: stock_shortage | any */
+  bonus_alert?: string;
+  /** Har qanday muammo (bonus yoki skidka) */
+  order_alert?: string;
 };

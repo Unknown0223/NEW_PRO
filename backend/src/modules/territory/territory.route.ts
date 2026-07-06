@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sendApiError } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { jwtAccessVerify, getAccessUser } from "../auth/auth.prehandlers";
@@ -61,6 +62,16 @@ export async function registerTerritoryRoutes(app: FastifyInstance) {
   app.post("/api/:slug/territories", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const data = await createTerritory(request.tenant!.id, request.body as any);
+    await appendTenantAuditEvent({
+      tenantId: request.tenant!.id,
+      actorUserId: actorUserIdOrNull(request),
+      entityType: "territory",
+      entityId: (data as { id?: number })?.id ?? "—",
+      action: "territory.create",
+      payload: {
+        name: (data as { name?: string })?.name ?? (request.body as { name?: string })?.name ?? null
+      }
+    });
     return reply.status(201).send(data);
   });
 
@@ -73,6 +84,14 @@ export async function registerTerritoryRoutes(app: FastifyInstance) {
         request.body as any
       );
       if (!data) return sendApiError(reply, request, 404, "NotFound");
+      await appendTenantAuditEvent({
+        tenantId: request.tenant!.id,
+        actorUserId: actorUserIdOrNull(request),
+        entityType: "territory",
+        entityId: parseInt((request.params as any).id),
+        action: "territory.update",
+        payload: { fields: Object.keys((request.body as Record<string, unknown>) ?? {}) }
+      });
       return reply.send(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -90,6 +109,14 @@ export async function registerTerritoryRoutes(app: FastifyInstance) {
     }
     try {
       await deleteTerritory(request.tenant!.id, id, actorUserIdOrNull(request));
+      await appendTenantAuditEvent({
+        tenantId: request.tenant!.id,
+        actorUserId: actorUserIdOrNull(request),
+        entityType: "territory",
+        entityId: id,
+        action: "territory.delete",
+        payload: { id }
+      });
       return reply.status(204).send();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -107,6 +134,14 @@ export async function registerTerritoryRoutes(app: FastifyInstance) {
     }
     try {
       await restoreTerritory(request.tenant!.id, id);
+      await appendTenantAuditEvent({
+        tenantId: request.tenant!.id,
+        actorUserId: actorUserIdOrNull(request),
+        entityType: "territory",
+        entityId: id,
+        action: "territory.restore",
+        payload: { id }
+      });
       return reply.status(204).send();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -120,19 +155,37 @@ export async function registerTerritoryRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const body = request.body as { userId: number };
     const jwtUser = getAccessUser(request);
+    const territoryId = parseInt((request.params as any).id);
     const data = await assignUser(
       request.tenant!.id,
-      parseInt((request.params as any).id),
+      territoryId,
       body.userId,
       Number(jwtUser.sub)
     );
+    await appendTenantAuditEvent({
+      tenantId: request.tenant!.id,
+      actorUserId: Number(jwtUser.sub),
+      entityType: "territory",
+      entityId: territoryId,
+      action: "territory.assign",
+      payload: { territory_id: territoryId, target_user_id: body.userId }
+    });
     return reply.send(data);
   });
 
   app.post("/api/:slug/territories/:id/unassign", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const body = request.body as { userId: number };
-    await unassignUser(request.tenant!.id, parseInt((request.params as any).id), body.userId);
+    const territoryId = parseInt((request.params as any).id);
+    await unassignUser(request.tenant!.id, territoryId, body.userId);
+    await appendTenantAuditEvent({
+      tenantId: request.tenant!.id,
+      actorUserId: actorUserIdOrNull(request),
+      entityType: "territory",
+      entityId: territoryId,
+      action: "territory.unassign",
+      payload: { territory_id: territoryId, target_user_id: body.userId }
+    });
     return reply.status(204).send();
   });
 

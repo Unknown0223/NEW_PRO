@@ -47,6 +47,8 @@ export type ClientQrStats = {
   status_attached: number;
   status_detached: number;
   clients_without_qr: number;
+  /** Faol QR ga bog‘langan klientlar — bog‘lash ro‘yxatini filtrlash uchun */
+  attached_client_ids: number[];
 };
 
 export type ClientWithoutQrRow = {

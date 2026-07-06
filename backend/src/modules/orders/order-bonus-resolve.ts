@@ -14,6 +14,7 @@ import {
   findWinningSumPeek,
   loadAvailableQtyByProductId,
   materializeQtyPeeks,
+  materializeGiftSplits,
   roundMoney,
   type BonusLineDraft,
   type OrderAgentBonusContext,
@@ -51,9 +52,11 @@ export async function resolveOrderBonusesForCreate(
   stackPolicy: BonusStackPolicy,
   clientUsedAutoBonusRuleIds: ReadonlySet<number> = new Set(),
   qtyBonusGiftOverrides: ReadonlyMap<number, number> = new Map(),
+  qtyBonusGiftSplits: ReadonlyMap<number, ReadonlyMap<number, number>> = new Map(),
   warehouseId?: number | null,
   calendarContext?: { referenceAt: Date; excludeOrderId?: number },
-  orderAgent: OrderAgentBonusContext | null = null
+  orderAgent: OrderAgentBonusContext | null = null,
+  opts?: { applyDiscount?: boolean }
 ): Promise<{
   lines: PaidLineDraft[];
   total: PrismaClient.Decimal;
@@ -74,7 +77,9 @@ export async function resolveOrderBonusesForCreate(
       orderBy: { priority: "desc" }
     })
   ]);
-  const sumRules = sumRaw.map((r) => mapBonusRuleFull(r));
+  const sumRules = sumRaw
+    .map((r) => mapBonusRuleFull(r))
+    .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0);
   const qtyRules = qtyRaw.map((r) => mapBonusRuleFull(r));
 
   const stockProductIds = new Set<number>();
@@ -135,15 +140,22 @@ export async function resolveOrderBonusesForCreate(
     clientMonthPaidQtyByProductExclOrder
   };
 
-  const discountRule = await findWinningDiscountRuleWithPrereqs(
-    discountRules,
-    client,
-    orderedProductIds,
-    productById,
-    clientUsedAutoBonusRuleIds,
-    prereqEnv,
-    now
-  );
+  const discountRule =
+    opts?.applyDiscount === false ?
+      null
+    : await findWinningDiscountRuleWithPrereqs(
+        discountRules,
+        client,
+        orderedProductIds,
+        productById,
+        clientUsedAutoBonusRuleIds,
+        prereqEnv,
+        now,
+        {
+          baseSubtotalBeforeDiscount,
+          monthMerchandiseSubtotalExclOrder: prereqEnv.clientMonthMerchandiseSubtotalExclOrder
+        }
+      );
 
   const sumPeek = await findWinningSumPeek(
     tx,
@@ -206,22 +218,28 @@ export async function resolveOrderBonusesForCreate(
 
   const chosenQty = chosen.filter((s): s is BonusSlot & { kind: "qty" } => s.kind === "qty");
   if (chosenQty.length > 0) {
-    bonusParts.push(...(await materializeQtyPeeks(tenantId, chosenQty.map((s) => s.peek))));
-  }
-
-  const appliedOnceRuleIds: number[] = [];
-  if (chosen.some((s) => s.kind === "discount") && discountRule?.once_per_client) {
-    appliedOnceRuleIds.push(discountRule.id);
-  }
-  if (chosen.some((s) => s.kind === "sum") && sumPeek?.rule.once_per_client) {
-    appliedOnceRuleIds.push(sumPeek.rule.id);
-  }
-  for (const s of chosenQty) {
-    if (s.peek.rule.once_per_client) {
-      appliedOnceRuleIds.push(s.peek.rule.id);
+    for (const s of chosenQty) {
+      const splits = qtyBonusGiftSplits.get(s.peek.rule.id);
+      if (splits && splits.size > 0) {
+        bonusParts.push(...(await materializeGiftSplits(tenantId, splits)));
+      } else {
+        bonusParts.push(...(await materializeQtyPeeks(tenantId, [s.peek])));
+      }
     }
   }
-  const uniqueApplied = [...new Set(appliedOnceRuleIds)];
+
+  /** Zakazda qo‘llangan barcha qoidalar (qulflash + snapshot); `once_per_client` filtri alohida. */
+  const appliedRuleIds: number[] = [];
+  if (chosen.some((s) => s.kind === "discount") && discountRule) {
+    appliedRuleIds.push(discountRule.id);
+  }
+  if (chosen.some((s) => s.kind === "sum") && sumPeek) {
+    appliedRuleIds.push(sumPeek.rule.id);
+  }
+  for (const s of chosenQty) {
+    appliedRuleIds.push(s.peek.rule.id);
+  }
+  const uniqueApplied = [...new Set(appliedRuleIds)];
 
   return {
     lines,
@@ -262,11 +280,22 @@ export async function loadDiscountRulesForOrder(
   tenantId: number
 ): Promise<BonusRuleRow[]> {
   const now = new Date();
-  const raw = await tx.bonusRule.findMany({
-    where: activeRuleWhere(tenantId, "discount", now),
-    include: bonusRuleInclude,
-    orderBy: { priority: "desc" }
-  });
-  return raw.map((r) => mapBonusRuleFull(r));
+  const [discountRaw, sumDiscountRaw] = await Promise.all([
+    tx.bonusRule.findMany({
+      where: activeRuleWhere(tenantId, "discount", now),
+      include: bonusRuleInclude,
+      orderBy: { priority: "desc" }
+    }),
+    tx.bonusRule.findMany({
+      where: {
+        ...activeRuleWhere(tenantId, "sum", now),
+        discount_pct: { gt: 0 }
+      },
+      include: bonusRuleInclude,
+      orderBy: { priority: "desc" }
+    })
+  ]);
+  const merged = [...discountRaw, ...sumDiscountRaw].sort((a, b) => b.priority - a.priority);
+  return merged.map((r) => mapBonusRuleFull(r));
 }
 

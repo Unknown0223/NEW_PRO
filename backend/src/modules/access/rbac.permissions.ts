@@ -1,12 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { TENANT_ADMIN_ROLE, TENANT_USER_ROLE_KEYS_FOR_DEFAULT_COMPOSITION } from "../../lib/tenant-user-roles";
-import {
-  ACCESS_MANAGE_PERMISSION_KEY,
-  AccessManageRequiredError,
-  getUsersHaveAccessManage
-} from "./rbac.access-manage";
 import { derivePermissionModule } from "./rbac.resolve";
+import { assertCanGrantAccessManage, withAutoAccessModuleViewForManage } from "./rbac.access-manage";
 
 export async function removeUserPermissionsByKeys(tx: Prisma.TransactionClient, tenantId: number, userId: number, keys: string[]) {
   const uniq = [...new Set(keys.map((k) => k.trim()).filter(Boolean))];
@@ -62,23 +58,14 @@ export async function bulkMergeUserPermissionKeysForUsers(
   permissionIdByKey: ReadonlyMap<string, number>
 ): Promise<void> {
   if (userIds.length === 0) return;
-  const allowU = [...new Set(allow.map((k) => k.trim()).filter(Boolean))];
-  const needsManageGate =
-    allowU.some((k) => k !== ACCESS_MANAGE_PERMISSION_KEY) && !allowU.includes(ACCESS_MANAGE_PERMISSION_KEY);
-  if (needsManageGate) {
-    const users = await prisma.user.findMany({
-      where: { tenant_id: tenantId, id: { in: userIds } },
-      select: { id: true, role: true }
-    });
-    const withManage = await getUsersHaveAccessManage(
-      tenantId,
-      users.map((u) => ({ id: u.id, role: u.role }))
-    );
-    for (const uid of userIds) {
-      if (!withManage.has(uid)) throw new AccessManageRequiredError();
+  const allowU = withAutoAccessModuleViewForManage(allow);
+  const denyU = [...new Set(deny.map((k) => k.trim()).filter(Boolean))];
+  if (allowU.includes("access.manage")) {
+    for (const userId of userIds) {
+      const row = await tx.user.findFirst({ where: { id: userId, tenant_id: tenantId }, select: { role: true } });
+      await assertCanGrantAccessManage(tenantId, userId, row?.role ?? null, allowU);
     }
   }
-  const denyU = [...new Set(deny.map((k) => k.trim()).filter(Boolean))];
   for (const key of allowU) {
     const pid = permissionIdByKey.get(key);
     if (pid == null) throw new Error(`bulkMerge: missing permission id for key ${key}`);
@@ -117,6 +104,7 @@ export async function bulkRemoveUserPermissionsByKeysForUsers(
   });
 }
 
+/** Foydalanuvchiga qo‘shimcha allow/deny — target `access.manage` talab qilinmaydi (admin «Доступ» orqali). */
 export async function mergeUserPermissionKeys(
   tx: Prisma.TransactionClient,
   tenantId: number,
@@ -126,51 +114,67 @@ export async function mergeUserPermissionKeys(
   permissionIdByKey?: ReadonlyMap<string, number>,
   rbacRoleHint?: string | null
 ) {
-  const allowU = [...new Set(allow.map((k) => k.trim()).filter(Boolean))];
+  const allowU = withAutoAccessModuleViewForManage(allow);
   const denyU = [...new Set(deny.map((k) => k.trim()).filter(Boolean))];
-  const needsManageGate =
-    allowU.some((k) => k !== ACCESS_MANAGE_PERMISSION_KEY) && !allowU.includes(ACCESS_MANAGE_PERMISSION_KEY);
-  if (needsManageGate) {
-    const role =
-      rbacRoleHint ??
-      (
-        await tx.user.findUnique({
-          where: { id: userId },
-          select: { role: true }
-        })
-      )?.role ??
-      null;
-    const withManage = await getUsersHaveAccessManage(tenantId, [{ id: userId, role }]);
-    if (!withManage.has(userId)) throw new AccessManageRequiredError();
+  if (allowU.includes("access.manage")) {
+    await assertCanGrantAccessManage(tenantId, userId, rbacRoleHint ?? null, allowU);
   }
-  const applyOne = async (key: string, effect: "allow" | "deny") => {
-    let pid = permissionIdByKey?.get(key);
-    if (pid == null) {
-      const p = await tx.permission.upsert({
-        where: { tenant_id_key: { tenant_id: tenantId, key } },
-        create: { tenant_id: tenantId, key, module: derivePermissionModule(key) },
-        update: {}
-      });
-      pid = p.id;
+
+  const allKeys = [...new Set([...allowU, ...denyU])];
+  if (allKeys.length === 0) return;
+
+  const idByKey = new Map<string, number>();
+  if (permissionIdByKey) {
+    for (const key of allKeys) {
+      const id = permissionIdByKey.get(key);
+      if (id != null) idByKey.set(key, id);
     }
-    await tx.userPermission.deleteMany({ where: { user_id: userId, permission_id: pid } });
-    await tx.userPermission.create({ data: { user_id: userId, permission_id: pid, effect } });
-  };
-  await Promise.all(allowU.map((key) => applyOne(key, "allow")));
-  await Promise.all(denyU.map((key) => applyOne(key, "deny")));
+  }
+  const missing = allKeys.filter((k) => !idByKey.has(k));
+  if (missing.length > 0) {
+    const ensured = await ensurePermissionIdsForKeys(tx, tenantId, missing);
+    for (const [k, id] of ensured) idByKey.set(k, id);
+  }
+
+  if (allowU.length > 0) {
+    const allowPids = allowU.map((k) => idByKey.get(k)).filter((id): id is number => id != null);
+    if (allowPids.length > 0) {
+      await tx.userPermission.deleteMany({ where: { user_id: userId, permission_id: { in: allowPids } } });
+      await tx.userPermission.createMany({
+        data: allowPids.map((permission_id) => ({ user_id: userId, permission_id, effect: "allow" as const })),
+        skipDuplicates: true
+      });
+    }
+  }
+  if (denyU.length > 0) {
+    const denyPids = denyU.map((k) => idByKey.get(k)).filter((id): id is number => id != null);
+    if (denyPids.length > 0) {
+      await tx.userPermission.deleteMany({ where: { user_id: userId, permission_id: { in: denyPids } } });
+      await tx.userPermission.createMany({
+        data: denyPids.map((permission_id) => ({ user_id: userId, permission_id, effect: "deny" as const })),
+        skipDuplicates: true
+      });
+    }
+  }
 }
 
 export async function setRolePermissions(tenantId: number, roleId: number, permissionKeys: string[]) {
   const keys = [...new Set(permissionKeys.map((k) => k.trim()).filter(Boolean))];
-  const permissions = await Promise.all(
-    keys.map((key) =>
-      prisma.permission.upsert({
-        where: { tenant_id_key: { tenant_id: tenantId, key } },
-        create: { tenant_id: tenantId, key, module: derivePermissionModule(key) },
-        update: {}
-      })
-    )
-  );
+  const permissions = [];
+  const chunkSize = 8;
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    const batch = await Promise.all(
+      chunk.map((key) =>
+        prisma.permission.upsert({
+          where: { tenant_id_key: { tenant_id: tenantId, key } },
+          create: { tenant_id: tenantId, key, module: derivePermissionModule(key) },
+          update: {}
+        })
+      )
+    );
+    permissions.push(...batch);
+  }
   await prisma.$transaction([
     prisma.rolePermission.deleteMany({ where: { role_id: roleId } }),
     prisma.rolePermission.createMany({

@@ -83,7 +83,10 @@ export async function registerOrderListRoutes(app: FastifyInstance) {
           request_type_ref: q.request_type_ref,
           list_price_type: q.list_price_type,
           visit_weekday: q.visit_weekday,
-          cursor: q.cursor
+          cursor: q.cursor,
+          discount_alert: q.discount_alert,
+          bonus_alert: q.bonus_alert,
+          order_alert: q.order_alert
         },
         viewer.role ?? "",
         Number.isFinite(viewerId) && viewerId > 0 ? viewerId : null

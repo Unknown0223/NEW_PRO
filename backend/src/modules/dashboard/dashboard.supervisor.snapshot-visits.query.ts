@@ -13,6 +13,8 @@ export type SupervisorVisitRawRow = {
   visited_total: bigint;
   gps_visits: bigint;
   photo_reports: bigint;
+  photo_outlets: bigint;
+  photo_count: bigint;
   visits_with_orders: bigint;
   sales_sum: Prisma.Decimal;
   sales_qty: Prisma.Decimal;
@@ -88,6 +90,8 @@ export async function fetchSupervisorVisitAndSalesRaw(
       visited_total: bigint;
       gps_visits: bigint;
       photo_reports: bigint;
+      photo_outlets: bigint;
+      photo_count: bigint;
       visits_with_orders: bigint;
       sales_sum: Prisma.Decimal;
       sales_qty: Prisma.Decimal;
@@ -300,6 +304,37 @@ export async function fetchSupervisorVisitAndSalesRaw(
       FROM unplanned_visited_pairs uv
       JOIN photos_pairs ph ON ph.agent_id = uv.agent_id AND ph.client_id = uv.client_id
       GROUP BY uv.agent_id
+    ),
+    photo_stats AS (
+      SELECT pr.created_by_user_id AS agent_id,
+        COUNT(DISTINCT pr.client_id)::bigint AS photo_outlets,
+        COUNT(*)::bigint AS photo_count
+      FROM client_photo_reports pr
+      JOIN users u ON u.id = pr.created_by_user_id
+      JOIN clients c ON c.id = pr.client_id
+      WHERE pr.tenant_id = ${tenantId}
+        AND pr.created_at >= ${dayStart}
+        AND pr.created_at < ${dayEnd}
+        AND pr.created_by_user_id IS NOT NULL
+        ${filters.agent_ids.length > 0 ? Prisma.sql`AND pr.created_by_user_id IN (${Prisma.join(filters.agent_ids)})` : Prisma.empty}
+        ${filters.supervisor_ids.length > 0 ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(filters.supervisor_ids)})` : Prisma.empty}
+        ${filters.trade_directions.length > 0 ? Prisma.sql`AND EXISTS (
+          SELECT 1
+          FROM trade_directions td
+          WHERE td.tenant_id = ${tenantId}
+            AND td.is_active = true
+            AND (td.code IN (${Prisma.join(filters.trade_directions.map((p) => Prisma.sql`${p}`))}) OR td.name IN (${Prisma.join(filters.trade_directions.map((p) => Prisma.sql`${p}`))}))
+            AND (
+              u.trade_direction_id = td.id
+              OR btrim(COALESCE(u.trade_direction, '')) = btrim(COALESCE(td.code, ''))
+              OR btrim(COALESCE(u.trade_direction, '')) = btrim(COALESCE(td.name, ''))
+            )
+        )` : Prisma.empty}
+        ${filters.client_categories.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.category, '')) IN (${Prisma.join(filters.client_categories.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
+        ${filters.territory_1_list.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.zone, '')) IN (${Prisma.join(filters.territory_1_list.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
+        ${filters.territory_2_list.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.region, '')) IN (${Prisma.join(filters.territory_2_list.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
+        ${filters.territory_3_list.length > 0 ? Prisma.sql`AND btrim(COALESCE(c.city, '')) IN (${Prisma.join(filters.territory_3_list.map((p) => Prisma.sql`${p}`))})` : Prisma.empty}
+      GROUP BY pr.created_by_user_id
     )
     SELECT
       k.agent_id,
@@ -312,6 +347,8 @@ export async function fetchSupervisorVisitAndSalesRaw(
       COALESCE(vc.visited_total, 0)::bigint AS visited_total,
       COALESCE(gc.gps_visits, 0)::bigint AS gps_visits,
       COALESCE(ph.photo_reports, 0)::bigint AS photo_reports,
+      COALESCE(pst.photo_outlets, 0)::bigint AS photo_outlets,
+      COALESCE(pst.photo_count, 0)::bigint AS photo_count,
       COALESCE(vwo.visits_with_orders, 0)::bigint AS visits_with_orders,
       COALESCE(sa.sales_sum, 0)::numeric(15,2) AS sales_sum,
       COALESCE(sa.sales_qty, 0)::numeric(15,3) AS sales_qty,
@@ -336,6 +373,7 @@ export async function fetchSupervisorVisitAndSalesRaw(
     LEFT JOIN gps_cnt gc ON gc.agent_id = k.agent_id
     LEFT JOIN visited_planned_cnt vpc ON vpc.agent_id = k.agent_id
     LEFT JOIN photo_cnt ph ON ph.agent_id = k.agent_id
+    LEFT JOIN photo_stats pst ON pst.agent_id = k.agent_id
     LEFT JOIN visits_with_orders_cnt vwo ON vwo.agent_id = k.agent_id
     LEFT JOIN sales_by_agent sa ON sa.agent_id = k.agent_id
     LEFT JOIN plan_vis_order_agg pvo ON pvo.agent_id = k.agent_id

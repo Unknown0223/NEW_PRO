@@ -124,7 +124,7 @@ export function ReturnOrdersListBlock({
                 variant === "strip" && "min-w-[220px] max-w-[280px] shrink-0",
                 isOpen
                   ? "border-teal-600/35 bg-teal-50/60 dark:bg-teal-950/25"
-                  : "border-slate-200/80 bg-white dark:border-slate-700"
+                  : "border-border/80 bg-card dark:border-slate-700"
               )}
             >
               <div className="flex items-stretch">
@@ -183,7 +183,7 @@ export function ReturnOrdersListBlock({
               </div>
 
               {isOpen && variant === "card" ? (
-                <div className="border-t border-teal-800/15 bg-white/70 px-3 py-2 text-[11px] dark:bg-teal-950/15">
+                <div className="border-t border-teal-800/15 bg-card/70 px-3 py-2 text-[11px] dark:bg-teal-950/15">
                   <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
                     <div>
                       <dt className="text-muted-foreground">Склад</dt>

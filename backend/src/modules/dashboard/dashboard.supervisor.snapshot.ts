@@ -47,6 +47,7 @@ import {
 } from "./dashboard.supervisor.scope";
 import { loadSupervisorProductAnalyticsBlocks } from "./dashboard.supervisor.snapshot-products";
 import { loadSupervisorVisitAndSalesBlocks } from "./dashboard.supervisor.snapshot-visits";
+import { loadSupervisorMonthlyKpiPlanBlock } from "../plans/plans.monitoring-aggregates";
 
 export async function getSupervisorDashboardSnapshot(
   tenantId: number,
@@ -80,6 +81,7 @@ export async function getSupervisorDashboardSnapshot(
   const byAgents: SupervisorEfficiencyRow[] = mappedVisitRows.map((r) => ({
     id: r.agent_id,
     name: r.agent_name,
+    agent_code: r.agent_code,
     order_count: r.visits_with_orders,
     cancelled_count: 0,
     planned_visits: r.planned_visits,
@@ -88,6 +90,8 @@ export async function getSupervisorDashboardSnapshot(
     unvisited: r.not_visited,
     visit_pct: clampPct(r.planned_visits > 0 ? (r.visited_planned / r.planned_visits) * 100 : 0),
     photo_reports: r.photo_reports,
+    photo_outlets: r.photo_outlets,
+    photo_count: r.photo_count,
     total_sales_sum: r.sales_sum
   }));
 
@@ -105,6 +109,8 @@ export async function getSupervisorDashboardSnapshot(
       unvisited: 0,
       visit_pct: 0,
       photo_reports: 0,
+      photo_outlets: 0,
+      photo_count: 0,
       total_sales_sum: "0"
     };
     prev.order_count += row.visits_with_orders;
@@ -113,6 +119,8 @@ export async function getSupervisorDashboardSnapshot(
     prev.rejected_visits += row.visits_without_orders;
     prev.unvisited += row.not_visited;
     prev.photo_reports += row.photo_reports;
+    prev.photo_outlets += row.photo_outlets;
+    prev.photo_count += row.photo_count;
     prev.total_sales_sum = new Prisma.Decimal(prev.total_sales_sum).plus(row.sales_sum).toFixed(2);
     supMap.set(row.supervisor_id, prev);
   }
@@ -128,10 +136,15 @@ export async function getSupervisorDashboardSnapshot(
     sum: decToString(row.s)
   }));
 
+  const monthlyPlan = await loadSupervisorMonthlyKpiPlanBlock(tenantId, filters);
+
   const kpi: SupervisorKpi = {
     total_sales_sum: decToString(salesAgg[0]?.s),
     cash_sales_sum: decToString(cashAgg[0]?.s),
     sales_by_payment_method: salesByPaymentMethod,
+    monthly_kpi_plan_sum: monthlyPlan.planSum,
+    monthly_kpi_fact_mtd_sum: monthlyPlan.factMtdSum,
+    monthly_kpi_execution_pct: monthlyPlan.executionPct,
     planned_visits: totals.planned_visits,
     visited_planned: totals.visited_planned,
     visited_total: totals.visited_total,

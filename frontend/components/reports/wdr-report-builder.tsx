@@ -498,7 +498,7 @@ function setNativeToolbarTemporaryVisibility(host: HTMLElement, visible: boolean
   }
 }
 
-function logWdrPopupDiagnostics(host: HTMLElement): void {
+function logWdrPopupDiagnostics(): void {
   const popupNodes = document.querySelectorAll<HTMLElement>(
     "[class*='wdr-popup'], [class*='wdrPopup'], [id*='wdr-popup'], [class*='wdr-dialog'], [class*='wdrDialog']"
   );
@@ -558,54 +558,6 @@ function hasVisibleWdrPopup(host: HTMLElement): boolean {
     return true;
   }
   return false;
-}
-
-function getVisibleWdrPopupText(host: HTMLElement): string {
-  const popupNodes = host.querySelectorAll<HTMLElement>(
-    "[class*='wdr-popup'], [class*='wdrPopup'], [id*='wdr-popup'], [class*='wdr-dialog'], [class*='wdrDialog']"
-  );
-  console.debug("[WDR][DIAG] visible popup text scan", { totalNodes: popupNodes.length });
-  for (let i = 0; i < popupNodes.length; i += 1) {
-    const el = popupNodes[i];
-    if (el.closest("#wdr-toolbar")) continue;
-    const cs = window.getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 80 || rect.height < 40) continue;
-    const txt = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-    if (txt) return txt.toLowerCase();
-  }
-  return "";
-}
-
-function popupMatchesTarget(host: HTMLElement, target: "cells" | "conditional"): boolean {
-  const txt = getVisibleWdrPopupText(host);
-  if (!txt) return hasVisibleWdrPopup(host);
-  if (target === "conditional") {
-    if (txt.includes("условное форматир") || txt.includes("conditional formatting")) return true;
-    // Some WDR builds show a compact/translated dialog title only; visible dialog is still a success signal.
-    return hasVisibleWdrPopup(host);
-  }
-  return (
-    txt.includes("формат ячеек") ||
-    txt.includes("format cells") ||
-    txt.includes("formatting") ||
-    txt.includes("форматирование") ||
-    hasVisibleWdrPopup(host)
-  );
-}
-
-function getTargetPopupOpenedLogLabel(target: "cells" | "conditional"): string {
-  return target === "cells" ? "FORMAT_CELLS_POPUP_OPENED" : "CONDITIONAL_FORMATTING_POPUP_OPENED";
-}
-
-function tryOpenWdrFormatTarget(host: HTMLElement, target: "cells" | "conditional"): boolean {
-  const labels =
-    target === "cells"
-      ? ["Формат ячеек", "Format cells", "Форматирование", "Formatting", "Formatting rules"]
-      : ["Условное форматирование", "Conditional formatting", "Formatting rules", "Правила форматирования"];
-  console.debug("[WDR][DIAG] tryOpenWdrFormatTarget", { target, labels });
-  return clickWdrMenuItemByLabels(host, labels);
 }
 
 function runWdrExpandCollapseAll(wdr: WdrPivotApi, mode: "expand" | "collapse"): boolean {
@@ -677,81 +629,6 @@ function applyConditionalFormattingToHost(host: HTMLElement, rules: ConditionalR
     cell.style.setProperty("font-weight", "600", "important");
     cell.dataset.salecCfApplied = "1";
   });
-}
-
-function clickWdrFormatShortcut(host: HTMLElement, target: "cells" | "conditional"): boolean {
-  const labels = target === "cells" ? ["Формат ячеек", "Format cells"] : ["Условное форматирование", "Conditional formatting"];
-  void host;
-  const nodes = document.querySelectorAll<HTMLElement>("a,button,li,span,div");
-  let matchedCandidates = 0;
-  for (let i = 0; i < nodes.length; i += 1) {
-    const n = nodes[i];
-    const txt = (n.textContent ?? "").replace(/\s+/g, " ").trim();
-    if (!txt || txt.length > 80) continue;
-    if (!labels.some((l) => txt.includes(l))) continue;
-    matchedCandidates += 1;
-    const cls = (n.className || "").toString().toLowerCase();
-    const inWdrTree = Boolean(n.closest("[class*='wdr']"));
-    // Target only WDR toolbar/menu-like action elements.
-    if (!inWdrTree && !cls.includes("wdr")) continue;
-    if (!cls.includes("tab") && !cls.includes("toolbar") && !cls.includes("menu") && !cls.includes("item")) continue;
-    const targetEl = (n.closest("a,button,li,[role='menuitem']") as HTMLElement | null) ?? n;
-    try {
-      triggerSyntheticClick(targetEl);
-      console.debug("[WDR][DIAG] clickWdrFormatShortcut clicked", {
-        target,
-        index: i,
-        text: txt,
-        matchedCandidates
-      });
-      return true;
-    } catch {
-      // noop
-    }
-  }
-  console.debug("[WDR][DIAG] clickWdrFormatShortcut no-click", {
-    target,
-    labels,
-    nodesCount: nodes.length,
-    matchedCandidates
-  });
-  return false;
-}
-
-function clickWdrFormatShortcutByCode(host: HTMLElement, target: "cells" | "conditional"): boolean {
-  const codePrefix = target === "cells" ? "s/1.0" : "123";
-  void host;
-  const nodes = document.querySelectorAll<HTMLElement>("a,button,li,span,div");
-  let matchedCandidates = 0;
-  for (let i = 0; i < nodes.length; i += 1) {
-    const n = nodes[i];
-    const txt = (n.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-    if (!txt) continue;
-    if (!txt.startsWith(codePrefix)) continue;
-    matchedCandidates += 1;
-    if (!n.closest("[class*='wdr']")) continue;
-    const targetEl = (n.closest("a,button,li,[role='menuitem']") as HTMLElement | null) ?? n;
-    try {
-      triggerSyntheticClick(targetEl);
-      console.debug("[WDR][DIAG] clickWdrFormatShortcutByCode clicked", {
-        target,
-        codePrefix,
-        index: i,
-        text: txt,
-        matchedCandidates
-      });
-      return true;
-    } catch {
-      // noop
-    }
-  }
-  console.debug("[WDR][DIAG] clickWdrFormatShortcutByCode no-click", {
-    target,
-    codePrefix,
-    nodesCount: nodes.length,
-    matchedCandidates
-  });
-  return false;
 }
 
 const WDR_RU_TEXT_MAP: Record<string, string> = {
@@ -901,7 +778,7 @@ export function WdrReportBuilder() {
   const [savedReportsDialogOpen, setSavedReportsDialogOpen] = useState(false);
   const [activeSavedReportId, setActiveSavedReportId] = useState<number | null>(null);
   const [cellFormatPattern, setCellFormatPattern] = useState("#,##0.00");
-  const [conditionalThreshold, setConditionalThreshold] = useState("0");
+  const [conditionalThreshold] = useState("0");
   const [formatValueScope, setFormatValueScope] = useState("selected");
   const [formatAlign, setFormatAlign] = useState("right");
   const [formatThousands, setFormatThousands] = useState("space");
@@ -1121,7 +998,7 @@ export function WdrReportBuilder() {
         if (host) closeOpenWdrPopups(host);
         wdr.showOptionsDialog();
         console.debug("[WDR] options opened via pivot api");
-        if (host) window.setTimeout(() => logWdrPopupDiagnostics(host), 40);
+        if (host) window.setTimeout(() => logWdrPopupDiagnostics(), 40);
         return true;
       } catch (e) {
         void e;
@@ -1166,7 +1043,7 @@ export function WdrReportBuilder() {
     if (kind === "options" && tb?.showOptionsDialog) {
       try {
         tb.showOptionsDialog();
-        if (host) window.setTimeout(() => logWdrPopupDiagnostics(host), 40);
+        if (host) window.setTimeout(() => logWdrPopupDiagnostics(), 40);
         return true;
       } catch (e) {
         void e;
@@ -1187,7 +1064,7 @@ export function WdrReportBuilder() {
     try {
       if (kind === "options" && tb?.showOptionsDialog) {
         tb.showOptionsDialog();
-        if (host) window.setTimeout(() => logWdrPopupDiagnostics(host), 40);
+        if (host) window.setTimeout(() => logWdrPopupDiagnostics(), 40);
         return true;
       }
       if (kind === "fields" && tb?.openFieldsList) {
@@ -1228,62 +1105,6 @@ export function WdrReportBuilder() {
     console.debug("[WDR] runToolbarAction:failed", { kind });
     return false;
   }, []);
-
-  const runFormatSubAction = useCallback((target: "cells" | "conditional") => {
-    const host = pivotWrapRef.current;
-    if (!host) return false;
-    console.debug("[WDR] runFormatSubAction:start", { target });
-    console.log("[WDR][CLICK]", {
-      event: target === "cells" ? "FORMAT_CELLS_BUTTON_CLICKED" : "CONDITIONAL_FORMATTING_BUTTON_CLICKED",
-      target
-    });
-
-    const labels =
-      target === "cells"
-        ? ["Формат ячеек", "Format cells", "Форматирование", "Formatting"]
-        : ["Условное форматирование", "Conditional formatting", "Formatting rules", "Правила форматирования"];
-
-    setNativeToolbarTemporaryVisibility(host, true);
-
-    let attempts = 0;
-    const maxAttempts = 18;
-    const timer = window.setInterval(() => {
-      try {
-        attempts += 1;
-        // Rebuild-from-scratch flow: always re-open format tab, then pick exact submenu label.
-        runToolbarAction("format");
-        clickWdrToolbarTabByKind(host, "format");
-        clickHiddenNativeToolbarAction(host, "format");
-        let picked = clickWdrMenuItemByLabels(host, labels);
-        if (!picked && target === "conditional") {
-          picked = clickWdrFormatShortcutByCode(host, "conditional");
-        }
-        if (!picked) {
-          clickWdrFormatShortcut(host, target);
-          clickWdrFormatShortcutByCode(host, target);
-        }
-
-        const popupText = getVisibleWdrPopupText(host);
-        const success = popupMatchesTarget(host, target);
-        console.debug("[WDR][DIAG] format action tick", { target, attempts, success, popupText: popupText.slice(0, 220) });
-        if (success || attempts >= maxAttempts) {
-          window.clearInterval(timer);
-          if (success) {
-            console.log("[WDR][OPEN]", { event: getTargetPopupOpenedLogLabel(target), target, via: "format_rebuild_v2", attempts });
-          } else {
-            console.warn("[WDR][OPEN_FAILED]", { target, via: "format_rebuild_v2", attempts, lastPopupText: popupText.slice(0, 220) });
-          }
-          if (!hasVisibleWdrPopup(host)) window.setTimeout(() => setNativeToolbarTemporaryVisibility(host, false), 100);
-          window.setTimeout(() => logWdrPopupDiagnostics(host), 40);
-        }
-      } catch (e) {
-        window.clearInterval(timer);
-        console.warn("[WDR][OPEN_FAILED]", { target, via: "runFormatSubAction_exception", error: String(e) });
-        if (!hasVisibleWdrPopup(host)) window.setTimeout(() => setNativeToolbarTemporaryVisibility(host, false), 100);
-      }
-    }, 140);
-    return true;
-  }, [runToolbarAction]);
 
   const beforeToolbarCreated = useMemo(
     () => createWdrToolbarConfigurer(toolbarActionsRef, toolbarRef),

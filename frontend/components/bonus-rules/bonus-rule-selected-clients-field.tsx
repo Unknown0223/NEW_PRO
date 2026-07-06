@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { BonusRuleTemplateButton, BonusRuleTemplateCheckbox } from "@/components/bonus-rules/bonus-rule-form-fields";
 import {
   Dialog,
   DialogContent,
@@ -84,13 +84,8 @@ export function BonusRuleSelectedClientsField({
   };
 
   return (
-    <div
-      className={cn(
-        "grid border-t border-border/60",
-        compact ? "mt-2 gap-1.5 pt-2" : "mt-3 gap-2 pt-3"
-      )}
-    >
-      <Label className={cn(compact ? "text-[10px]" : "text-xs")}>Клиенты</Label>
+    <div className={cn("grid gap-2", compact ? "gap-1.5" : "gap-2")}>
+      <Label className={cn(compact ? "text-xs font-medium" : "text-sm font-medium")}>Избранные клиенты</Label>
       {selectedIds.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {selectedIds.map((id) => (
@@ -119,7 +114,11 @@ export function BonusRuleSelectedClientsField({
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger
-          render={<Button type="button" variant="outline" size="sm" disabled={disabled} />}
+          render={
+            <BonusRuleTemplateButton variant="outline" disabled={disabled}>
+              Выбрать клиентов…
+            </BonusRuleTemplateButton>
+          }
         >
           Выбрать клиентов…
         </DialogTrigger>
@@ -146,20 +145,21 @@ export function BonusRuleSelectedClientsField({
               <ul className="divide-y divide-border/60">
                 {listQ.data!.map((row) => (
                   <li key={row.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
+                    <BonusRuleTemplateCheckbox
                       checked={selectedSet.has(row.id)}
-                      onChange={(e) => toggleRow(row, e.target.checked)}
-                      id={`br-client-${row.id}`}
+                      onChange={(checked) => toggleRow(row, checked)}
                     />
-                    <label htmlFor={`br-client-${row.id}`} className="min-w-0 flex-1 cursor-pointer text-sm">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left text-sm"
+                      onClick={() => toggleRow(row, !selectedSet.has(row.id))}
+                    >
                       <span className="font-medium">{row.name}</span>
                       <span className="ml-2 font-mono text-[11px] text-muted-foreground">#{row.id}</span>
                       {row.phone?.trim() ? (
                         <span className="mt-0.5 block text-[11px] text-muted-foreground">{row.phone}</span>
                       ) : null}
-                    </label>
+                    </button>
                   </li>
                 ))}
               </ul>

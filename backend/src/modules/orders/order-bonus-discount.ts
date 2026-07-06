@@ -14,14 +14,45 @@ import {
   type OrderBonusPrereqEnv,
   type PaidLineDraft,
   type ProductLite,
+  effectiveSubtotalForSumMinRule,
   ruleBlockedByOncePerClient,
   ruleMatchesClient,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleNeedsOrderContext,
+  ruleRelatesToOrderSelection,
   ruleTreeSatisfiedForOrder,
   roundMoney
 } from "./order-bonus-context";
+
+function discountPctRuleCandidates(
+  rules: BonusRuleRow[],
+  client: { id: number; category: string | null },
+  orderedProductIds: ReadonlySet<number>,
+  productById: ReadonlyMap<number, ProductLite>,
+  clientUsedAutoBonusRuleIds: ReadonlySet<number>,
+  orderAgent: OrderAgentBonusContext | null
+): BonusRuleRow[] {
+  return rules
+    .filter((r) => {
+      if (r.type === "discount") {
+        return !ruleNeedsOrderContext(r) && !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds);
+      }
+      if (r.type === "sum") {
+        return (
+          r.min_sum != null &&
+          r.discount_pct != null &&
+          Number(r.discount_pct) > 0 &&
+          !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds)
+        );
+      }
+      return false;
+    })
+    .filter((r) => ruleMatchesClient(r, client))
+    .filter((r) => ruleMatchesOrderAgentScope(r, orderAgent))
+    .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
+    .filter((r) => r.discount_pct != null && Number(r.discount_pct) > 0);
+}
 
 export async function findWinningDiscountRuleWithPrereqs(
   discountRulesSorted: BonusRuleRow[],
@@ -30,16 +61,34 @@ export async function findWinningDiscountRuleWithPrereqs(
   productById: ReadonlyMap<number, ProductLite>,
   clientUsedAutoBonusRuleIds: ReadonlySet<number>,
   prereqEnv: OrderBonusPrereqEnv,
-  now: Date
+  now: Date,
+  opts?: {
+    baseSubtotalBeforeDiscount?: PrismaClient.Decimal;
+    monthMerchandiseSubtotalExclOrder?: PrismaClient.Decimal;
+  }
 ): Promise<BonusRuleRow | null> {
-  const candidates = discountRulesSorted
-    .filter((r) => r.type === "discount" && !ruleNeedsOrderContext(r) && !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds))
-    .filter((r) => ruleMatchesClient(r, client))
-    .filter((r) => ruleMatchesOrderAgentScope(r, prereqEnv.orderAgent))
-    .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
-    .filter((r) => r.discount_pct != null && r.discount_pct > 0);
+  const orderAgent = prereqEnv.orderAgent;
+  const candidates = discountPctRuleCandidates(
+    discountRulesSorted,
+    client,
+    orderedProductIds,
+    productById,
+    clientUsedAutoBonusRuleIds,
+    orderAgent
+  ).sort((a, b) => b.priority - a.priority);
+
+  const baseSubtotal = opts?.baseSubtotalBeforeDiscount ?? new PrismaClient.Decimal(0);
+  const monthExcl = opts?.monthMerchandiseSubtotalExclOrder ?? prereqEnv.clientMonthMerchandiseSubtotalExclOrder;
+
   for (const r of candidates) {
     if (!(await ruleTreeSatisfiedForOrder(r, prereqEnv, now, new Set()))) continue;
+    if (r.type === "sum") {
+      if (r.min_sum == null) continue;
+      const minSum = new PrismaClient.Decimal(r.min_sum);
+      const effective = effectiveSubtotalForSumMinRule(r, baseSubtotal, monthExcl);
+      if (effective.lt(minSum)) continue;
+      if (!ruleRelatesToOrderSelection(r, orderedProductIds, productById)) continue;
+    }
     return r;
   }
   return null;

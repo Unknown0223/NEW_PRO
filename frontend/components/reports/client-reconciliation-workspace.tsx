@@ -302,19 +302,19 @@ export function ClientReconciliationWorkspace() {
   }
 
   const panelClass =
-    "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-border dark:bg-card dark:shadow-none";
+    "rounded-xl border border-border bg-card shadow-sm dark:border-border dark:bg-card dark:shadow-none";
   const payload = reportQ.data;
 
   return (
     <PageShell className="space-y-4">
       <PageHeader
-        className="border-b border-slate-200 pb-4 dark:border-border/70"
+        className="border-b border-border pb-4 dark:border-border/70"
         title={<span className="text-slate-900 dark:text-foreground">Акт сверки взаимных расчётов</span>}
         description="По клиенту за период: заказы, оплаты, движения лицевого счёта; PDF и Excel для передачи контрагенту."
       />
 
       <div className={cn(panelClass, "p-4 sm:p-5")}>
-        <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 dark:border-border/60 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border pb-4 dark:border-border/60 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Клиент</Label>
@@ -327,7 +327,7 @@ export function ClientReconciliationWorkspace() {
                 searchPlaceholder="Поиск по имени или коду"
                 className={cn(
                   filterPanelSelectClassName,
-                  "h-10 border-slate-200 bg-white dark:border-input dark:bg-background"
+                  "h-10 border-border bg-card dark:border-input dark:bg-background"
                 )}
                 minPopoverWidth={320}
               />
@@ -339,7 +339,7 @@ export function ClientReconciliationWorkspace() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-10 w-full min-w-[200px] justify-start gap-2 border-slate-200 bg-white font-normal text-slate-800 shadow-sm dark:border-input dark:bg-background sm:w-auto"
+                className="h-10 w-full min-w-[200px] justify-start gap-2 border-border bg-card font-normal text-slate-800 shadow-sm dark:border-input dark:bg-background sm:w-auto"
                 onClick={() => setDateRangeOpen((o) => !o)}
               >
                 <CalendarDays className="size-4 text-slate-500" />
@@ -363,7 +363,7 @@ export function ClientReconciliationWorkspace() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-10 border-slate-200 bg-white dark:border-input dark:bg-background"
+              className="h-10 border-border bg-card dark:border-input dark:bg-background"
               onClick={() => {
                 const r = calendarMonthRange();
                 setDateFromDraft(r.from);
@@ -460,7 +460,7 @@ export function ClientReconciliationWorkspace() {
               ].map(([label, val]) => (
                 <div
                   key={label}
-                  className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-border dark:bg-muted/25"
+                  className="rounded-lg border border-border bg-muted/60 px-3 py-2.5 dark:border-border dark:bg-muted/25"
                 >
                   <p className="text-[11px] font-medium text-slate-500 dark:text-muted-foreground">{label}</p>
                   <p className="text-base font-semibold tabular-nums text-slate-900 dark:text-foreground">
@@ -479,10 +479,10 @@ export function ClientReconciliationWorkspace() {
                 <TabsTrigger value="notes">Примечания</TabsTrigger>
               </TabsList>
               <TabsContent value="chrono" className="mt-3">
-                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-border">
+                <div className="overflow-x-auto rounded-lg border border-border dark:border-border">
                   <table className="w-full min-w-[720px] text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-100 text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/50">
+                      <tr className="border-b border-border bg-muted text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/50">
                         <th className="px-3 py-2">Тип</th>
                         <th className="px-3 py-2">Дата</th>
                         <th className="px-3 py-2">Документ</th>
@@ -500,7 +500,7 @@ export function ClientReconciliationWorkspace() {
                         </tr>
                       ) : (
                         payload.chronological.map((r, i) => (
-                          <tr key={`${r.at}-${i}`} className="border-b border-slate-100 dark:border-border">
+                          <tr key={`${r.at}-${i}`} className="border-b border-border dark:border-border">
                             <td className="px-3 py-2">{chronoLabel(r.line_type)}</td>
                             <td className="px-3 py-2 tabular-nums text-muted-foreground">{fmtDt(r.at)}</td>
                             <td className="px-3 py-2">{r.ref || "—"}</td>
@@ -564,10 +564,10 @@ export function ClientReconciliationWorkspace() {
 
 function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-border">
+    <div className="overflow-x-auto rounded-lg border border-border dark:border-border">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
-          <tr className="border-b border-slate-200 bg-slate-100 text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/50">
+          <tr className="border-b border-border bg-muted text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/50">
             {headers.map((h) => (
               <th key={h} className="px-3 py-2">
                 {h}
@@ -584,7 +584,7 @@ function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] })
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={i} className="border-b border-slate-100 dark:border-border">
+              <tr key={i} className="border-b border-border dark:border-border">
                 {r.map((c, j) => (
                   <td
                     key={j}

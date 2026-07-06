@@ -61,10 +61,10 @@ function bonusTypeLabel(type: string): string {
 }
 
 /** Скидки: `sum` и `discount`. */
-function skidkaTypeLabel(type: string): string {
+function skidkaTypeLabel(type: string, discountPct?: number | null): string {
   switch (type) {
     case "sum":
-      return "Мин. сумма · подарок";
+      return discountPct != null && discountPct > 0 ? "Мин. сумма · % скидка" : "Мин. сумма · подарок";
     case "discount":
       return "Процентная скидка (%)";
     default:
@@ -296,7 +296,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
     return [...list].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   }, [shartOptionsRows]);
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data?.data]);
 
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
 
@@ -360,7 +360,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
       const base = [
         `"${r.name.replace(/"/g, '""')}"`,
         ...(isDiscounts
-          ? [skidkaTypeLabel(r.type), skidkaValue]
+          ? [skidkaTypeLabel(r.type, r.discount_pct), skidkaValue]
           : [bonusTypeLabel(r.type)]),
         onlyByAssortment(r) ? "Да" : "Нет",
         r.once_per_client ? "Да" : "Нет",
@@ -694,7 +694,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                 <span className="font-medium">{row.name}</span>
                               ) : colId === "type" ? (
                                 <span className="text-muted-foreground">
-                                  {isDiscounts ? skidkaTypeLabel(row.type) : bonusTypeLabel(row.type)}
+                                  {isDiscounts ? skidkaTypeLabel(row.type, row.discount_pct) : bonusTypeLabel(row.type)}
                                 </span>
                               ) : colId === "linked" ? (
                                 tenantSlug ? (

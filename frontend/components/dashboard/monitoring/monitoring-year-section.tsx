@@ -32,7 +32,7 @@ function GrowthMetric({ label, value }: { label: string; value: number | null })
     <div className="col-span-3 min-w-0">
       <div className="mb-0.5 text-[10px] text-slate-400">{label}</div>
       <div className="flex items-center gap-1.5">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
           <div
             className={cn("h-full rounded-full transition-all", positive && has ? "bg-emerald-500" : "bg-slate-300")}
             style={{ width: `${width}%`, marginLeft: v < 0 ? "auto" : "0" }}
@@ -96,7 +96,7 @@ export function MonitoringYearSection({
   const curYear = yearComparison?.current.year ?? year;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h2 className="text-lg font-semibold text-slate-800">Сравнение по годам</h2>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -117,7 +117,7 @@ export function MonitoringYearSection({
           {rows.map((y) => (
             <div
               key={y.direction}
-              className="grid grid-cols-12 items-center gap-2 border-b border-slate-100 py-2.5 last:border-0"
+              className="grid grid-cols-12 items-center gap-2 border-b border-border py-2.5 last:border-0"
             >
               <div className="col-span-3 truncate text-sm font-medium text-slate-700" title={y.direction}>
                 {y.direction}

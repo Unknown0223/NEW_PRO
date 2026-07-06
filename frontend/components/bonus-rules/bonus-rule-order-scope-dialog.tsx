@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import type { ClientRow } from "@/lib/client-types";
+import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
+import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 type TradeDirRow = {
   id: number;
@@ -31,6 +33,34 @@ function sortStr(a: string, b: string) {
   return a.localeCompare(b, "ru");
 }
 
+const AgentScopeRow = memo(function AgentScopeRow({
+  id,
+  fio,
+  checked,
+  onToggle
+}: {
+  id: number;
+  fio: string;
+  checked: boolean;
+  onToggle: (id: number, checked: boolean) => void;
+}) {
+  return (
+    <li className="flex items-center gap-2 border-t border-border/40 px-3 py-1.5 pl-8">
+      <input
+        type="checkbox"
+        className="size-4 accent-primary"
+        checked={checked}
+        onChange={(e) => onToggle(id, e.target.checked)}
+        id={`ag-${id}`}
+      />
+      <label htmlFor={`ag-${id}`} className="min-w-0 flex-1 cursor-pointer text-sm">
+        <span className="font-medium">{fio}</span>
+        <span className="ml-2 font-mono text-[11px] text-muted-foreground">#{id}</span>
+      </label>
+    </li>
+  );
+});
+
 export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState("branches");
@@ -44,6 +74,7 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
 
   const [searchBranch, setSearchBranch] = useState("");
   const [searchAgent, setSearchAgent] = useState("");
+  const [debouncedAgentSearch, setDebouncedAgentSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [debouncedClientSearch, setDebouncedClientSearch] = useState("");
   const [searchTd, setSearchTd] = useState("");
@@ -54,6 +85,11 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
     const t = window.setTimeout(() => setDebouncedClientSearch(clientSearch.trim()), 300);
     return () => window.clearTimeout(t);
   }, [clientSearch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedAgentSearch(searchAgent.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [searchAgent]);
 
   useEffect(() => {
     if (!open || !rule) return;
@@ -72,15 +108,15 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
     setExpandedGroups(new Set());
   }, [open, rule]);
 
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "bonus-scope"],
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "bonus-scope-branches"],
     enabled: open && Boolean(tenantSlug),
-    staleTime: STALE.list,
+    staleTime: STALE.profile,
     queryFn: async () => {
-      const { data } = await api.get<{ data: { branches: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
+      const { data } = await api.get<{ references?: { branches?: Array<{ name: string; is_active?: boolean }> } }>(
+        `/api/${tenantSlug}/settings/profile`
       );
-      return data.data;
+      return data;
     }
   });
 
@@ -134,8 +170,8 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
         selected_client_ids: targetAllClients ? [] : [...clientIds].sort((a, b) => a - b),
         scope_trade_direction_ids: Array.from(tradeDirSel).sort((a, b) => a - b)
       };
-      const { data } = await api.put<BonusRuleRow>(
-        `/api/${tenantSlug}/bonus-rules/${rule.id}`,
+      const { data } = await api.patch<BonusRuleRow>(
+        `/api/${tenantSlug}/bonus-rules/${rule.id}/order-scope`,
         body
       );
       return data;
@@ -146,7 +182,10 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
     }
   });
 
-  const branchesFromApi = filterOptQ.data?.branches ?? [];
+  const branchesFromApi = useMemo(
+    () => activeBranchNamesFromProfile(profileQ.data?.references?.branches),
+    [profileQ.data]
+  );
   const branchRows = useMemo(() => {
     const q = searchBranch.trim().toLowerCase();
     const list = [...branchesFromApi].sort(sortStr);
@@ -156,7 +195,7 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
 
   const agentGroups = useMemo(() => {
     const agents = agentsQ.data ?? [];
-    const q = searchAgent.trim().toLowerCase();
+    const q = debouncedAgentSearch.toLowerCase();
     const filtered = q
       ? agents.filter(
           (a) =>
@@ -177,17 +216,20 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
       m.get(k)!.sort((a, b) => a.fio.localeCompare(b.fio, "ru"));
     }
     return { keys, map: m };
-  }, [agentsQ.data, searchAgent]);
+  }, [agentsQ.data, debouncedAgentSearch]);
 
   const expandAllGroups = useCallback(() => {
     setExpandedGroups(new Set(agentGroups.keys));
   }, [agentGroups.keys]);
 
-  useEffect(() => {
-    if (!open || tab !== "agents") return;
-    const keys = agentGroups.keys;
-    if (keys.length) setExpandedGroups(new Set(keys));
-  }, [open, tab, agentsQ.data]);
+  const toggleAgent = useCallback((id: number, checked: boolean) => {
+    setAgentSel((prev) => {
+      const n = new Set(prev);
+      if (checked) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+  }, []);
 
   const tradeDirRows = useMemo(() => {
     const q = searchTd.trim().toLowerCase();
@@ -205,15 +247,6 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
       const n = new Set(prev);
       if (checked) n.add(b);
       else n.delete(b);
-      return n;
-    });
-  };
-
-  const toggleAgent = (id: number, checked: boolean) => {
-    setAgentSel((prev) => {
-      const n = new Set(prev);
-      if (checked) n.add(id);
-      else n.delete(id);
       return n;
     });
   };
@@ -308,7 +341,7 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
                 </Button>
               </div>
               <div className="min-h-[220px] overflow-y-auto rounded-md border border-border/60">
-                {filterOptQ.isLoading ? (
+                {profileQ.isLoading ? (
                   <p className="p-3 text-xs text-muted-foreground">Загрузка…</p>
                 ) : branchRows.length === 0 ? (
                   <p className="p-3 text-xs text-muted-foreground">Нет филиалов в данных агентов.</p>
@@ -411,24 +444,13 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
                           {expandedGroups.has(group.key) ? (
                             <ul>
                               {group.rows.map((a) => (
-                                <li
+                                <AgentScopeRow
                                   key={a.id}
-                                  className="flex items-center gap-2 border-t border-border/40 px-3 py-1.5 pl-8"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="size-4 accent-primary"
-                                    checked={agentSel.has(a.id)}
-                                    onChange={(e) => toggleAgent(a.id, e.target.checked)}
-                                    id={`ag-${a.id}`}
-                                  />
-                                  <label htmlFor={`ag-${a.id}`} className="min-w-0 flex-1 cursor-pointer text-sm">
-                                    <span className="font-medium">{a.fio}</span>
-                                    <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-                                      #{a.id}
-                                    </span>
-                                  </label>
-                                </li>
+                                  id={a.id}
+                                  fio={a.fio}
+                                  checked={agentSel.has(a.id)}
+                                  onToggle={toggleAgent}
+                                />
                               ))}
                             </ul>
                           ) : null}
@@ -595,7 +617,9 @@ export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule
           </label>
 
           {saveMut.isError ? (
-            <p className="text-xs text-destructive">Не удалось сохранить. Проверьте права и сеть.</p>
+            <p className="text-xs text-destructive">
+              {getUserFacingError(saveMut.error, "Не удалось сохранить. Проверьте права и сеть.")}
+            </p>
           ) : null}
 
           <div className="flex justify-end gap-2 border-t border-border/60 pt-2">

@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { isValidPhoneNumber, normalizePhoneNumber } from "../../domain/phone-number";
+import { tenantIdFrom } from "../../domain/tenant-id";
 import {
   applyTerritoryAutoAssignAfterAddressChange,
   clientUpdateTouchesAddress
@@ -19,16 +21,25 @@ import type { CreateClientMinimalInput } from "./clients.write.types";
 import { parseOptionalLatitude, parseOptionalLongitude } from "./clients.write.helpers";
 
 export async function createClientMinimal(
-  tenantId: number,
+  tenantIdRaw: number,
   actorUserId: number | null,
   input: CreateClientMinimalInput
 ): Promise<{ id: number }> {
+  const tenantId = tenantIdFrom(tenantIdRaw);
   const name = input.name?.trim();
   if (!name) {
     throw new Error("VALIDATION");
   }
-  const phone = input.phone != null && String(input.phone).trim() !== "" ? String(input.phone).trim() : null;
-  const phoneNormalized = normalizePhoneDigits(phone);
+  let phone: string | null = null;
+  let phoneNormalized: string | null = null;
+  if (input.phone != null && String(input.phone).trim() !== "") {
+    const rawPhone = String(input.phone).trim();
+    if (!isValidPhoneNumber(rawPhone)) {
+      throw new Error("VALIDATION");
+    }
+    phone = rawPhone;
+    phoneNormalized = normalizePhoneNumber(rawPhone);
+  }
 
   const duplicateWhere: Prisma.ClientWhereInput[] = [
     {
@@ -49,7 +60,7 @@ export async function createClientMinimal(
     select: { id: true, name: true, phone: true }
   });
   if (duplicate) {
-    if (phoneNormalized && normalizePhoneDigits(duplicate.phone) === phoneNormalized) {
+    if (phoneNormalized && duplicate.phone && normalizePhoneNumber(duplicate.phone) === phoneNormalized) {
       throw new Error("DUPLICATE_PHONE");
     }
     throw new Error("DUPLICATE_NAME");

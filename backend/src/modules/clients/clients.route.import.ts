@@ -4,6 +4,7 @@ import { catalogRoles } from "./clients.route.shared";
 import { unlink } from "fs/promises";
 import { writeClientImportTempFile } from "../../jobs/import-temp-file";
 import { sendApiError } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { enqueueClientsImportJob } from "../jobs/jobs.service";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
@@ -53,7 +54,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/clients/import",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = await parseClientImportMultipart(request);
@@ -74,7 +75,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/clients/import/async",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const tenant = request.tenant!;

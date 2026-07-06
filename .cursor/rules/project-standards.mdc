@@ -1,0 +1,24 @@
+---
+description: SALEC backend/frontend kod standartlari (izoh tili, DB, RBAC)
+globs:
+  - backend/src/**/*.ts
+  - frontend/**/*.ts
+  - frontend/**/*.tsx
+---
+
+# SALEC — loyiha standartlari
+
+## Izohlar
+- **Backend domain** (`orders/domain`, `payments`, `clients`): biznes mantiq izohlari **ruscha** (mavjud uslub).
+- **Route / infra / script**: qisqa izohlar o‘zbekcha yoki inglizcha — fayl atrofidagi til bilan bir xil.
+
+## Database
+- Yangi domain kodida `prisma.$transaction` o‘rniga `withTransaction()` (`backend/src/lib/db-context.ts`) afzal.
+- Raw SQL: faqat `Prisma.sql` / `$queryRaw` tagged template; `queryRawUnsafe` taqiqlangan.
+
+## RBAC
+- Yangi marshrutlar: `route-permission-guard.ts` qoidalariga mos strukturali kalit (`module.section.action`).
+- Legacy kalit migratsiyasi: `npm run rbac:migrate-legacy` (non-destructive).
+
+## Fayl hajmi
+- `npm run audit:max-loc` — 400 satrdan oshmasin; legacy allowlist: `scripts/legacy-max-loc-backend.txt`.

@@ -7,6 +7,8 @@ import {
 } from "@/components/orders/orders-list/orders-list-filter-ui";
 import { ORDER_STATUS_FILTER_OPTIONS } from "@/lib/order-status";
 import { ORDER_TYPE_FILTER_OPTIONS } from "@/lib/order-types";
+import { BONUS_ALERT_FILTER_OPTIONS, ORDER_ALERT_FILTER_OPTIONS } from "@/lib/bonus-alert";
+import { DISCOUNT_ALERT_FILTER_OPTIONS } from "@/lib/discount-alert";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import { useMemo, type ReactNode } from "react";
@@ -155,6 +157,48 @@ export function OrdersFiltersGrid({
         />
       )}
       {cell(
+        "discountAlert",
+        <OrdersListSingleMultiFilter
+          placeholder="Проблемы со скидкой"
+          searchPlaceholder="Скидка"
+          triggerClassName={ordersFilterRowSelect}
+          items={DISCOUNT_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "").map((o) => ({
+            id: o.value,
+            title: o.label
+          }))}
+          value={filterDraft.discount_alert}
+          onChange={(v) => patchDraft({ discount_alert: v })}
+        />
+      )}
+      {cell(
+        "bonusAlert",
+        <OrdersListSingleMultiFilter
+          placeholder="Проблемы с бонусом"
+          searchPlaceholder="Бонус"
+          triggerClassName={ordersFilterRowSelect}
+          items={BONUS_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "").map((o) => ({
+            id: o.value,
+            title: o.label
+          }))}
+          value={filterDraft.bonus_alert}
+          onChange={(v) => patchDraft({ bonus_alert: v })}
+        />
+      )}
+      {cell(
+        "orderAlert",
+        <OrdersListSingleMultiFilter
+          placeholder="Проблемные заявки"
+          searchPlaceholder="Проблемы"
+          triggerClassName={ordersFilterRowSelect}
+          items={ORDER_ALERT_FILTER_OPTIONS.filter((o) => o.value !== "").map((o) => ({
+            id: o.value,
+            title: o.label
+          }))}
+          value={filterDraft.order_alert}
+          onChange={(v) => patchDraft({ order_alert: v })}
+        />
+      )}
+      {cell(
         "paymentMethod",
         <OrdersListSingleMultiFilter
           placeholder="Способ оплаты (заказ)"
@@ -199,7 +243,6 @@ export function OrdersFiltersGrid({
           items={VISIT_WEEKDAY_FILTER_OPTIONS.map((o) => ({ id: o.value, title: o.label }))}
           value={filterDraft.visit_weekday}
           onChange={(v) => patchDraft({ visit_weekday: v })}
-          searchable={false}
         />
       )}
       {cell(
@@ -294,7 +337,6 @@ export function OrdersFiltersGrid({
           onChange={(v) =>
             patchDraft({ is_consignment: (v === "true" || v === "false" ? v : "") as "" | "true" | "false" })
           }
-          searchable={false}
         />
       )}
       {cell(

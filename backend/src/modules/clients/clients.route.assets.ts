@@ -12,6 +12,7 @@ import {
   listTenantEquipmentPaged,
   listClientEquipmentSplit,
   listClientPhotoReports,
+  getClientPhotoReportById,
   markClientEquipmentRemoved
 } from "./client-assets.service";
 import {
@@ -135,8 +136,33 @@ export async function registerClientAssetsRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        const data = await listClientPhotoReports(request.tenant!.id, id);
+        const q = request.query as Record<string, string | undefined>;
+        const includeImages =
+          q.include_images === "1" || q.include_images === "true" || q.includeImages === "true";
+        const data = await listClientPhotoReports(request.tenant!.id, id, { includeImages });
         return reply.send({ data });
+      } catch (e) {
+        if (e instanceof Error && e.message === "NOT_FOUND") {
+          return sendApiError(reply, request, 404, "NotFound");
+        }
+        throw e;
+      }
+    }
+  );
+
+  app.get(
+    "/api/:slug/clients/:id/photo-reports/:photoId",
+    { preHandler: [jwtAccessVerify] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      const photoId = Number.parseInt((request.params as { photoId: string }).photoId, 10);
+      if (Number.isNaN(id) || Number.isNaN(photoId)) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      try {
+        const row = await getClientPhotoReportById(request.tenant!.id, id, photoId);
+        return reply.send(row);
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");

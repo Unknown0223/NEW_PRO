@@ -10,7 +10,7 @@ export async function exportIncomeReportXlsx(
 ) {
   const data = await getIncomeReport(tenantId, query, ctx);
   const wb = XLSX.utils.book_new();
-  const paymentColumns = [...new Set(data.period.map((r) => r.payment_type))].sort();
+  const paymentColumns = data.paymentTypeKeys ?? [...new Set(data.period.map((r) => r.payment_type))];
   const labelOf = (key: string) => data.paymentTypeLabels?.[key] ?? key;
   const mkAmount = (n: number) => Number.isFinite(n) ? n : 0;
   if (kind === "period") {

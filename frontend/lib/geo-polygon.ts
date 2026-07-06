@@ -1,0 +1,165 @@
+import type {
+  GeoBoundary,
+  GeoBoundaryKind,
+  GeoBoundaryOverlapConflict,
+  GeoBoundaryPoint
+} from "./geo-boundaries-types";
+import * as polygonClipping from "polygon-clipping";
+
+type Ring = polygonClipping.Ring;
+type MultiPolygon = polygonClipping.MultiPolygon;
+
+export function pointInPolygon(lat: number, lng: number, vertices: GeoBoundaryPoint[]): boolean {
+  let inside = false;
+  const n = vertices.length;
+  if (n < 3) return false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const vi = vertices[i]!;
+    const vj = vertices[j]!;
+    const intersects =
+      vi.lat > lat !== vj.lat > lat &&
+      lng < ((vj.lng - vi.lng) * (lat - vi.lat)) / (vj.lat - vi.lat) + vi.lng;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+export function clientInPolygon(
+  lat: string | null | undefined,
+  lon: string | null | undefined,
+  polygon: GeoBoundaryPoint[]
+): boolean {
+  if (polygon.length < 3) return false;
+  const la = lat != null && lat !== "" ? parseFloat(lat) : NaN;
+  const lo = lon != null && lon !== "" ? parseFloat(lon) : NaN;
+  if (!Number.isFinite(la) || !Number.isFinite(lo)) return false;
+  if (pointInPolygon(la, lo, polygon)) return true;
+  // Ba'zi yozuvlarda lat/lon almashtirilgan (O'zbekiston: lat 37–46, lng 55–73)
+  if (la > 50 && lo < 50 && pointInPolygon(lo, la, polygon)) return true;
+  return false;
+}
+
+function orient(a: GeoBoundaryPoint, b: GeoBoundaryPoint, c: GeoBoundaryPoint): number {
+  return (b.lng - a.lng) * (c.lat - a.lat) - (b.lat - a.lat) * (c.lng - a.lng);
+}
+
+function onSegment(a: GeoBoundaryPoint, b: GeoBoundaryPoint, c: GeoBoundaryPoint): boolean {
+  return (
+    Math.min(a.lat, b.lat) <= c.lat &&
+    c.lat <= Math.max(a.lat, b.lat) &&
+    Math.min(a.lng, b.lng) <= c.lng &&
+    c.lng <= Math.max(a.lng, b.lng)
+  );
+}
+
+function segmentsIntersect(
+  p1: GeoBoundaryPoint,
+  p2: GeoBoundaryPoint,
+  q1: GeoBoundaryPoint,
+  q2: GeoBoundaryPoint
+): boolean {
+  const o1 = orient(p1, p2, q1);
+  const o2 = orient(p1, p2, q2);
+  const o3 = orient(q1, q2, p1);
+  const o4 = orient(q1, q2, p2);
+  if (o1 === 0 && onSegment(p1, p2, q1)) return true;
+  if (o2 === 0 && onSegment(p1, p2, q2)) return true;
+  if (o3 === 0 && onSegment(q1, q2, p1)) return true;
+  if (o4 === 0 && onSegment(q1, q2, p2)) return true;
+  return o1 > 0 !== o2 > 0 && o3 > 0 !== o4 > 0;
+}
+
+/** Ikki polygon kesishadimi (nuqta ichida yoki chetlar kesishadi). */
+export function polygonsOverlap(a: GeoBoundaryPoint[], b: GeoBoundaryPoint[]): boolean {
+  if (a.length < 3 || b.length < 3) return false;
+  for (const v of a) {
+    if (pointInPolygon(v.lat, v.lng, b)) return true;
+  }
+  for (const v of b) {
+    if (pointInPolygon(v.lat, v.lng, a)) return true;
+  }
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i]!;
+    const a2 = a[(i + 1) % a.length]!;
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j]!;
+      const b2 = b[(j + 1) % b.length]!;
+      if (segmentsIntersect(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
+}
+
+function toRing(poly: GeoBoundaryPoint[]): Ring {
+  const ring: Ring = poly.map((p) => [p.lng, p.lat]);
+  if (ring.length < 3) return ring;
+  const first = ring[0]!;
+  const last = ring[ring.length - 1]!;
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    ring.push([first[0], first[1]]);
+  }
+  return ring;
+}
+
+function fromRing(ring: Ring): GeoBoundaryPoint[] {
+  if (ring.length < 3) return [];
+  const pts: GeoBoundaryPoint[] = ring.map(([lng, lat]) => ({ lat, lng }));
+  if (pts.length > 1) {
+    const first = pts[0]!;
+    const last = pts[pts.length - 1]!;
+    if (first.lat === last.lat && first.lng === last.lng) pts.pop();
+  }
+  return pts.length >= 3 ? pts : [];
+}
+
+function ringArea(ring: Ring): number {
+  let area = 0;
+  const n = ring.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += ring[i]![0] * ring[j]![1];
+    area -= ring[j]![0] * ring[i]![1];
+  }
+  return Math.abs(area / 2);
+}
+
+function largestPolygonFromMulti(mp: MultiPolygon): GeoBoundaryPoint[] {
+  let best: GeoBoundaryPoint[] = [];
+  let bestArea = 0;
+  for (const poly of mp) {
+    const outer = poly[0];
+    if (!outer || outer.length < 3) continue;
+    const area = ringArea(outer);
+    if (area > bestArea) {
+      bestArea = area;
+      best = fromRing(outer);
+    }
+  }
+  return best;
+}
+
+/** Umumiy chegara (touch) emas — faqat maydon kesishishi. */
+export function polygonsHaveAreaOverlap(
+  a: GeoBoundaryPoint[],
+  b: GeoBoundaryPoint[],
+  minArea = 1e-12
+): boolean {
+  if (a.length < 3 || b.length < 3) return false;
+  const inter = polygonClipping.intersection([[toRing(a)]], [[toRing(b)]]);
+  const piece = largestPolygonFromMulti(inter);
+  if (piece.length < 3) return false;
+  return ringArea(toRing(piece)) > minArea;
+}
+
+/** Saqlashdan oldin kesishuvchi mavjud chegaralarni topadi (filial, zona, territoriya — barchasi). */
+export function findGeoBoundaryOverlapConflicts(
+  polygon: GeoBoundaryPoint[],
+  boundaries: GeoBoundary[],
+  kind: GeoBoundaryKind,
+  refId: string
+): GeoBoundaryOverlapConflict[] {
+  return boundaries
+    .filter((b) => !(b.kind === kind && b.ref_id === refId) && b.polygon.length >= 3)
+    .filter((b) => polygonsHaveAreaOverlap(polygon, b.polygon))
+    .map((b) => ({ id: b.id, kind: b.kind, ref_id: b.ref_id, name: b.name }));
+}

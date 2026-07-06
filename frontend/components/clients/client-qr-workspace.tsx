@@ -1,30 +1,48 @@
 "use client";
 
+import { ClientQrFilterVisibilityDialog } from "@/components/clients/client-qr-filter-visibility-dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { api } from "@/lib/api";
 import type { AxiosError } from "axios";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import {
+  CLIENT_QR_PAGE_SIZE_OPTIONS,
+  loadClientQrFilterVisibility,
+  DEFAULT_CLIENT_QR_PAGE_VIEW,
+  loadClientQrPageView,
+  saveClientQrPageView,
+  type ClientQrFilterVisibility,
+  type ClientQrPageSize,
+  type ClientQrPageView
+} from "@/lib/client-qr-filter-visibility";
+import { downloadXlsxSheet } from "@/lib/download-xlsx";
+import { getUserFacingError } from "@/lib/error-utils";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { STALE } from "@/lib/query-stale";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { cn } from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
   Copy,
   FileSpreadsheet,
+  LayoutGrid,
   Link2,
   Link2Off,
   Printer,
   QrCode,
   RefreshCw,
-  RotateCcw
+  RotateCcw,
+  Settings
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -52,8 +70,6 @@ type QrListResponse = {
   limit: number;
 };
 
-type ClientRowLite = { id: number; name: string; zone: string | null; region: string | null; city: string | null };
-
 type ClientRefs = {
   zones?: string[];
   regions?: string[];
@@ -71,6 +87,7 @@ type ClientQrStats = {
   status_attached: number;
   status_detached: number;
   clients_without_qr: number;
+  attached_client_ids: number[];
 };
 
 const EMPTY_CLIENT_QR_STATS: ClientQrStats = {
@@ -81,7 +98,8 @@ const EMPTY_CLIENT_QR_STATS: ClientQrStats = {
   status_printed: 0,
   status_attached: 0,
   status_detached: 0,
-  clients_without_qr: 0
+  clients_without_qr: 0,
+  attached_client_ids: []
 };
 
 type ClientWithoutQrRow = {
@@ -132,6 +150,31 @@ const QR_SIZE_PRESETS = [
   { value: "20x15", label: "20 × 15", px: 260 },
   { value: "custom", label: "Другое", px: 180 }
 ];
+
+const CLIENT_QR_LIST_TABLE_ID = "client_qr.list.v1";
+const CLIENT_QR_NO_QR_TABLE_ID = "client_qr.no_qr_list.v1";
+
+const QR_TABLE_COLUMNS = [
+  { id: "created_at", label: "Дата создания" },
+  { id: "qr_code", label: "QR код" },
+  { id: "client_name", label: "Клиент" },
+  { id: "status", label: "Статус" },
+  { id: "territory", label: "Территория" },
+  { id: "city", label: "Город" },
+  { id: "created_by_name", label: "Кто создал" },
+  { id: "bound_by_name", label: "Кто привязал" },
+  { id: "bound_at", label: "Дата привязки" }
+] as const;
+
+const NO_QR_TABLE_COLUMNS = [
+  { id: "name", label: "Клиент" },
+  { id: "phone", label: "Телефон" },
+  { id: "territory", label: "Зона / область" },
+  { id: "city", label: "Город" }
+] as const;
+
+const QR_COLUMN_LABEL: Record<string, string> = Object.fromEntries(QR_TABLE_COLUMNS.map((c) => [c.id, c.label]));
+const NO_QR_COLUMN_LABEL: Record<string, string> = Object.fromEntries(NO_QR_TABLE_COLUMNS.map((c) => [c.id, c.label]));
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -195,17 +238,6 @@ function qrImgUrl(data: string, px: number): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&data=${safe}`;
 }
 
-function triggerDownloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 export function ClientQrWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
@@ -213,7 +245,6 @@ export function ClientQrWorkspace() {
   const [draft, setDraft] = useState<DraftFilters>(() => initialDraft());
   const [applied, setApplied] = useState<DraftFilters>(() => initialDraft());
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
   const [dateOpen, setDateOpen] = useState(false);
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -226,6 +257,62 @@ export function ClientQrWorkspace() {
   const [qrSizePreset, setQrSizePreset] = useState("10x10");
   const [customW, setCustomW] = useState("20");
   const [customH, setCustomH] = useState("15");
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [pageViewDialogOpen, setPageViewDialogOpen] = useState(false);
+  const [filterVis, setFilterVis] = useState<ClientQrFilterVisibility>(() => loadClientQrFilterVisibility());
+  const [pageView, setPageView] = useState<ClientQrPageView>(() => loadClientQrPageView());
+  const [bindError, setBindError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [optimisticAttachedIds, setOptimisticAttachedIds] = useState<Set<number>>(() => new Set());
+  const pageSizeBootstrapped = useRef(false);
+
+  const qrTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_QR_LIST_TABLE_ID,
+    defaultColumnOrder: QR_TABLE_COLUMNS.map((c) => c.id),
+    defaultPageSize: 10,
+    allowedPageSizes: [10, 20, 30, 50, 100],
+    defaultHiddenColumnIds: ["created_by_name", "bound_by_name"]
+  });
+
+  const noQrTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_QR_NO_QR_TABLE_ID,
+    defaultColumnOrder: NO_QR_TABLE_COLUMNS.map((c) => c.id),
+    defaultPageSize: 10,
+    allowedPageSizes: [10, 20, 30, 50, 100]
+  });
+
+  const tablePrefs = applied.list_mode === "qr" ? qrTablePrefs : noQrTablePrefs;
+  const limit = tablePrefs.pageSize;
+  const pageSizeOptions = CLIENT_QR_PAGE_SIZE_OPTIONS;
+
+  const applyPageSize = useCallback(
+    (size: number) => {
+      const n = pageSizeOptions.includes(size as ClientQrPageSize)
+        ? (size as ClientQrPageSize)
+        : DEFAULT_CLIENT_QR_PAGE_VIEW.pageSize;
+      qrTablePrefs.setPageSize(n);
+      noQrTablePrefs.setPageSize(n);
+      setPageView((pv) => {
+        const next = { ...pv, pageSize: n };
+        saveClientQrPageView(next);
+        return next;
+      });
+      setPage(1);
+      setNoQrPage(1);
+    },
+    [qrTablePrefs, noQrTablePrefs, pageSizeOptions]
+  );
+
+  useEffect(() => {
+    if (!tenantSlug || pageSizeBootstrapped.current) return;
+    pageSizeBootstrapped.current = true;
+    const pv = loadClientQrPageView();
+    setPageView(pv);
+    applyPageSize(pv.pageSize);
+  }, [tenantSlug, applyPageSize]);
 
   const presetPx = useMemo(() => {
     if (qrSizePreset === "custom") {
@@ -258,13 +345,16 @@ export function ClientQrWorkspace() {
     }
   });
 
-  const clientsQ = useQuery({
-    queryKey: ["client-qr", "clients-lite", tenantSlug],
+  /** Faqat QRsiz klientlar — bitta klientga bitta QR qoidasi */
+  const bindableClientsQ = useQuery({
+    queryKey: ["client-qr", "bindable-clients", tenantSlug],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const p = new URLSearchParams({ page: "1", limit: "4000", is_active: "true", sort: "name", order: "asc" });
-      const { data } = await api.get<{ data: ClientRowLite[] }>(`/api/${tenantSlug}/clients?${p.toString()}`);
+      const p = new URLSearchParams({ page: "1", limit: "4000" });
+      const { data } = await api.get<{ data: ClientWithoutQrRow[] }>(
+        `/api/${tenantSlug}/client-qr-codes/clients-without-qr?${p.toString()}`
+      );
       return data.data ?? [];
     }
   });
@@ -335,13 +425,13 @@ export function ClientQrWorkspace() {
     [refsQ.data?.cities, refsQ.data?.city_options, resolveTerritoryLabel]
   );
 
-  const clientOptions = useMemo(
+  const baseClientOptions = useMemo(
     () =>
-      (clientsQ.data ?? []).map((c) => ({
+      (bindableClientsQ.data ?? []).map((c) => ({
         value: String(c.id),
         label: `${c.name}${c.city ? ` · ${resolveTerritoryLabel(c.city)}` : ""}`
       })),
-    [clientsQ.data, resolveTerritoryLabel]
+    [bindableClientsQ.data, resolveTerritoryLabel]
   );
 
   const qs = useMemo(() => {
@@ -421,6 +511,50 @@ export function ClientQrWorkspace() {
     }
   });
 
+  const attachedClientIds = useMemo(() => {
+    const ids = new Set<number>(statsQ.data?.attached_client_ids ?? []);
+    for (const r of listQ.data?.data ?? []) {
+      if (r.client_id != null && r.client_id > 0) ids.add(r.client_id);
+    }
+    for (const id of optimisticAttachedIds) ids.add(id);
+    return ids;
+  }, [statsQ.data?.attached_client_ids, listQ.data?.data, optimisticAttachedIds]);
+
+  const bindClientOptionsForRow = useCallback(
+    (qrId: number) => {
+      const reserved = new Set(attachedClientIds);
+      for (const [otherQrId, raw] of Object.entries(bindClientIdByQr)) {
+        if (Number(otherQrId) === qrId || !raw) continue;
+        const cid = Number.parseInt(raw, 10);
+        if (Number.isFinite(cid) && cid > 0) reserved.add(cid);
+      }
+      return baseClientOptions.filter((o) => {
+        const cid = Number.parseInt(o.value, 10);
+        return Number.isFinite(cid) && cid > 0 && !reserved.has(cid);
+      });
+    },
+    [attachedClientIds, bindClientIdByQr, baseClientOptions]
+  );
+
+  useEffect(() => {
+    setBindClientIdByQr((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [qrIdRaw, raw] of Object.entries(prev)) {
+        const qrId = Number.parseInt(qrIdRaw, 10);
+        const cid = Number.parseInt(raw, 10);
+        if (!Number.isFinite(cid) || cid < 1) continue;
+        const row = listQ.data?.data.find((r) => r.id === qrId);
+        if (row?.client_id === cid) continue;
+        if (attachedClientIds.has(cid)) {
+          delete next[qrId];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [attachedClientIds, listQ.data?.data]);
+
   useEffect(() => {
     setPage(1);
   }, [debouncedTableSearch, applied]);
@@ -433,20 +567,56 @@ export function ClientQrWorkspace() {
     await qc.invalidateQueries({ queryKey: ["client-qr", "list", tenantSlug] });
     await qc.invalidateQueries({ queryKey: ["client-qr", "no-qr", tenantSlug] });
     await qc.invalidateQueries({ queryKey: ["client-qr", "stats", tenantSlug] });
+    await qc.invalidateQueries({ queryKey: ["client-qr", "bindable-clients", tenantSlug] });
   }, [qc, tenantSlug]);
 
   const bindMut = useMutation({
     mutationFn: async ({ qrId, clientId }: { qrId: number; clientId: number }) => {
       await api.post(`/api/${tenantSlug}/client-qr-codes/bind`, { qr_id: qrId, client_id: clientId });
     },
-    onSuccess: invalidateAll
+    onMutate: () => setBindError(null),
+    onSuccess: async (_, { qrId, clientId }) => {
+      setOptimisticAttachedIds((prev) => {
+        const next = new Set(prev);
+        next.add(clientId);
+        return next;
+      });
+      setBindClientIdByQr((p) => {
+        const next = { ...p };
+        delete next[qrId];
+        return next;
+      });
+      await invalidateAll();
+    },
+    onError: (e) => {
+      const err = e as AxiosError<{ error?: string; message?: string }>;
+      if (err.response?.data?.error === "ClientAlreadyHasQr") {
+        setBindError(
+          err.response.data.message ??
+            "У клиента уже есть привязанный QR-код. Сначала открепите существующий."
+        );
+        return;
+      }
+      setBindError(getUserFacingError(e, "Не удалось привязать QR-код."));
+    }
   });
 
   const unbindMut = useMutation({
     mutationFn: async (qrId: number) => {
+      const row = listQ.data?.data.find((r) => r.id === qrId);
       await api.post(`/api/${tenantSlug}/client-qr-codes/unbind`, { qr_id: qrId });
+      return row?.client_id ?? null;
     },
-    onSuccess: invalidateAll
+    onSuccess: async (clientId) => {
+      if (clientId != null && clientId > 0) {
+        setOptimisticAttachedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(clientId);
+          return next;
+        });
+      }
+      await invalidateAll();
+    }
   });
 
   const generateMut = useMutation({
@@ -499,20 +669,105 @@ export function ClientQrWorkspace() {
     }
   });
 
-  const exportCsv = async () => {
-    if (!tenantSlug) return;
-    const { data } = await api.get(`/api/${tenantSlug}/client-qr-codes/export?${exportQrQs}`, {
-      responseType: "blob"
-    });
-    triggerDownloadBlob(data, "client-qr-codes.csv");
-  };
+  const qrExportCell = useCallback(
+    (colId: string, r: QrRow): string => {
+      switch (colId) {
+        case "created_at":
+          return formatShortRu(r.created_at);
+        case "qr_code":
+          return r.qr_code;
+        case "client_name":
+          return r.client_name ?? "";
+        case "status":
+          return STATUS_LABEL_RU[r.status] ?? r.status;
+        case "territory": {
+          const t = [resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)]
+            .filter((x) => x && x !== "—")
+            .join(" · ");
+          return t || "—";
+        }
+        case "city":
+          return resolveTerritoryLabel(r.city);
+        case "created_by_name":
+          return r.created_by_name ?? "";
+        case "bound_by_name":
+          return r.bound_by_name ?? "";
+        case "bound_at":
+          return formatShortRu(r.bound_at);
+        default:
+          return "";
+      }
+    },
+    [resolveTerritoryLabel]
+  );
 
-  const exportNoQrCsv = async () => {
+  const noQrExportCell = useCallback(
+    (colId: string, r: ClientWithoutQrRow): string => {
+      switch (colId) {
+        case "name":
+          return r.name;
+        case "phone":
+          return r.phone ?? "";
+        case "territory": {
+          const t = [resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)].filter(Boolean).join(" · ");
+          return t || "—";
+        }
+        case "city":
+          return resolveTerritoryLabel(r.city);
+        default:
+          return "";
+      }
+    },
+    [resolveTerritoryLabel]
+  );
+
+  const exportExcel = async () => {
     if (!tenantSlug) return;
-    const { data } = await api.get(`/api/${tenantSlug}/client-qr-codes/clients-without-qr/export?${exportNoQrQs}`, {
-      responseType: "blob"
-    });
-    triggerDownloadBlob(data, "clients-without-qr.csv");
+    setExportError(null);
+    setExportBusy(true);
+    try {
+      if (applied.list_mode === "qr") {
+        const cols = qrTablePrefs.visibleColumnOrder;
+        if (cols.length === 0) {
+          setExportError("Выберите хотя бы один столбец в настройках таблицы.");
+          return;
+        }
+        const { data } = await api.get<{ data: QrRow[] }>(
+          `/api/${tenantSlug}/client-qr-codes/export-data?${exportQrQs}`
+        );
+        const headers = cols.map((id) => QR_COLUMN_LABEL[id] ?? id);
+        const rows = (data.data ?? []).map((r) => cols.map((id) => qrExportCell(id, r)));
+        await downloadXlsxSheet(
+          `client-qr-codes_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          "QR коды",
+          headers,
+          rows,
+          { colWidths: cols.map(() => 18) }
+        );
+      } else {
+        const cols = noQrTablePrefs.visibleColumnOrder;
+        if (cols.length === 0) {
+          setExportError("Выберите хотя бы один столбец в настройках таблицы.");
+          return;
+        }
+        const { data } = await api.get<{ data: ClientWithoutQrRow[] }>(
+          `/api/${tenantSlug}/client-qr-codes/clients-without-qr/export-data?${exportNoQrQs}`
+        );
+        const headers = cols.map((id) => NO_QR_COLUMN_LABEL[id] ?? id);
+        const rows = (data.data ?? []).map((r) => cols.map((id) => noQrExportCell(id, r)));
+        await downloadXlsxSheet(
+          `clients-without-qr_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          "Без QR",
+          headers,
+          rows,
+          { colWidths: cols.map(() => 20) }
+        );
+      }
+    } catch (e) {
+      setExportError(getUserFacingError(e, "Не удалось выгрузить Excel."));
+    } finally {
+      setExportBusy(false);
+    }
   };
 
   const copyText = async (t: string) => {
@@ -530,6 +785,54 @@ export function ClientQrWorkspace() {
   const fromIdxNoQr = (noQrQ.data?.total ?? 0) === 0 ? 0 : (noQrPage - 1) * limit + 1;
   const toIdxNoQr = Math.min((noQrQ.data?.total ?? 0), (noQrPage - 1) * limit + (noQrQ.data?.data.length ?? 0));
 
+  const tableToolbarCluster = (
+    <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-border/70 bg-background px-1 py-0.5 shadow-sm">
+      <select
+        className="h-8 max-w-[3.25rem] cursor-pointer rounded border-none bg-transparent pl-1.5 pr-5 text-xs font-medium tabular-nums focus:ring-0"
+        value={String(limit)}
+        onChange={(e) => applyPageSize(Number.parseInt(e.target.value, 10) || 10)}
+        aria-label="Строк на странице"
+        title="Строк на странице"
+      >
+        {pageSizeOptions.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-muted"
+        title="Управление столбцами"
+        onClick={() => setColumnDialogOpen(true)}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-8 w-8 items-center justify-center rounded hover:bg-muted"
+        title="Обновить"
+        onClick={() => void invalidateAll()}
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+
+  const compactSearchInput = (
+    <div className="relative w-[7.25rem] shrink-0">
+      <Input
+        className="h-8 pl-6 text-xs"
+        placeholder="Поиск"
+        value={tableSearch}
+        onChange={(e) => setTableSearch(e.target.value)}
+      />
+      <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground text-[11px]">
+        ⌕
+      </span>
+    </div>
+  );
+
   return (
     <PageShell>
       <PageHeader
@@ -537,6 +840,14 @@ export function ClientQrWorkspace() {
         description="Идентификация клиента, привязка к торговой точке, контроль печати и отчётность."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-md border border-input px-2.5 text-xs hover:bg-muted"
+              title="Видимость страницы и фильтров"
+              onClick={() => setPageViewDialogOpen(true)}
+            >
+              <Settings className="h-4 w-4" />
+            </button>
             <button
               type="button"
               className="inline-flex h-9 items-center rounded-md border border-input px-3 text-xs hover:bg-muted"
@@ -566,9 +877,12 @@ export function ClientQrWorkspace() {
         }
       />
 
+      {pageView.showFilterCard ? (
       <Card className="border-border/80">
         <CardContent className="space-y-4 p-4">
+          {(filterVis.date_type || filterVis.period) ? (
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            {filterVis.date_type ? (
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Дата применяется по</Label>
               <div className="flex flex-wrap gap-4 text-sm">
@@ -592,6 +906,8 @@ export function ClientQrWorkspace() {
                 </label>
               </div>
             </div>
+            ) : null}
+            {filterVis.period ? (
             <div className="flex flex-col gap-1">
               <Label className="text-xs text-muted-foreground">Период</Label>
               <button
@@ -604,9 +920,18 @@ export function ClientQrWorkspace() {
                 <CalendarDays className="h-3.5 w-3.5 shrink-0" />
               </button>
             </div>
+            ) : null}
           </div>
+          ) : null}
 
+          {(filterVis.list_mode ||
+            filterVis.status ||
+            filterVis.attached ||
+            filterVis.zone ||
+            filterVis.region ||
+            filterVis.city) ? (
           <div className="grid gap-3 border-t border-border/60 pt-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+            {filterVis.list_mode ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Список</Label>
               <select
@@ -620,6 +945,8 @@ export function ClientQrWorkspace() {
                 <option value="no_qr">Клиенты без QR</option>
               </select>
             </div>
+            ) : null}
+            {filterVis.status ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Статус</Label>
               <FilterSearchableSelect
@@ -631,6 +958,8 @@ export function ClientQrWorkspace() {
                 options={STATUS_FILTER_OPTIONS}
               />
             </div>
+            ) : null}
+            {filterVis.attached ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Клиент</Label>
               <FilterSearchableSelect
@@ -646,6 +975,8 @@ export function ClientQrWorkspace() {
                 ]}
               />
             </div>
+            ) : null}
+            {filterVis.zone ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Зона</Label>
               <FilterSearchableSelect
@@ -656,6 +987,8 @@ export function ClientQrWorkspace() {
                 options={zoneOptions}
               />
             </div>
+            ) : null}
+            {filterVis.region ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Область</Label>
               <FilterSearchableSelect
@@ -666,6 +999,8 @@ export function ClientQrWorkspace() {
                 options={regionOptions}
               />
             </div>
+            ) : null}
+            {filterVis.city ? (
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Город</Label>
               <FilterSearchableSelect
@@ -676,7 +1011,9 @@ export function ClientQrWorkspace() {
                 options={cityOptions}
               />
             </div>
+            ) : null}
           </div>
+          ) : null}
           {draft.list_mode === "no_qr" ? (
             <p className="text-[11px] text-muted-foreground">
               Для «Клиенты без QR» учитываются зона, область, город и поиск. Статус, клиент и даты — только для списка QR.
@@ -684,8 +1021,9 @@ export function ClientQrWorkspace() {
           ) : null}
         </CardContent>
       </Card>
+      ) : null}
 
-      {statsQ.data ? (
+      {pageView.showStats && statsQ.data ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {[
             { k: "Всего QR", v: statsQ.data.total_qr },
@@ -709,95 +1047,80 @@ export function ClientQrWorkspace() {
       <div className="mt-4">
         {applied.list_mode === "qr" ? (
           <Card className="border-border/80">
-            <CardContent className="flex flex-wrap items-end gap-2 border-b border-border/60 p-3">
-              <div className="relative min-w-[200px] flex-1 max-w-md">
-                <Input
-                  className="h-9 pl-8"
-                  placeholder="Поиск"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                />
-                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                  ⌕
-                </span>
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted"
-                onClick={() => exportCsv()}
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                Excel
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-md border border-input px-2 hover:bg-muted"
-                title="Обновить"
-                onClick={() => void invalidateAll()}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
-              <div className="flex flex-wrap items-center gap-2">
+            <CardContent className="border-b border-border/60 p-2 sm:p-2.5">
+              <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto">
+                {tableToolbarCluster}
+                {compactSearchInput}
+                <button
+                  type="button"
+                  className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-input bg-background px-2 text-xs hover:bg-muted disabled:opacity-50"
+                  disabled={exportBusy}
+                  onClick={() => void exportExcel()}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                  {exportBusy ? "…" : "Excel"}
+                </button>
                 <FilterSearchableSelect
                   emptyLabel="Размер"
                   value={qrSizePreset}
                   searchable={false}
-                  className={`${filterPanelSelectClassName} w-[9.5rem]`}
+                  className={cn(filterPanelSelectClassName, "h-8 w-[6.75rem] shrink-0 text-xs")}
                   onValueChange={setQrSizePreset}
                   options={QR_SIZE_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
                 />
                 {qrSizePreset === "custom" ? (
-                  <div className="flex items-center gap-1 text-xs">
-                    <Input className="h-9 w-14" value={customW} onChange={(e) => setCustomW(e.target.value)} placeholder="Ш" />
-                    <span>×</span>
-                    <Input className="h-9 w-14" value={customH} onChange={(e) => setCustomH(e.target.value)} placeholder="В" />
-                    <span className="text-muted-foreground">см</span>
+                  <div className="flex shrink-0 items-center gap-0.5 text-xs">
+                    <Input className="h-8 w-10 px-1.5" value={customW} onChange={(e) => setCustomW(e.target.value)} placeholder="Ш" />
+                    <span className="text-muted-foreground">×</span>
+                    <Input className="h-8 w-10 px-1.5" value={customH} onChange={(e) => setCustomH(e.target.value)} placeholder="В" />
                   </div>
                 ) : null}
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:opacity-50"
-                disabled={selected.size === 0 || printMut.isPending}
-                onClick={() => {
-                  const rows = (listQ.data?.data ?? []).filter((r) => selected.has(r.id));
-                  if (rows.length === 0) return;
-                  printMut.mutate(rows);
-                }}
-              >
-                <Printer className="h-3.5 w-3.5" />
-                Печать выбранных QR кодов
-              </button>
-              <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Label className="sr-only">Количество для генерации</Label>
-                  <select
-                    className={`${filterPanelSelectClassName} h-9 w-[7.25rem] min-w-0 shrink-0 tabular-nums`}
-                    value={GENERATE_COUNT_OPTIONS.some((n) => String(n) === generateCount) ? generateCount : "100"}
-                    onChange={(e) => setGenerateCount(e.target.value)}
-                    aria-label="Количество QR для генерации"
-                  >
-                    {GENERATE_COUNT_OPTIONS.map((n) => (
-                      <option key={n} value={String(n)}>
-                        {n.toLocaleString("ru-RU")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground"
+                  className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-input px-2 text-xs hover:bg-muted disabled:opacity-50"
+                  disabled={selected.size === 0 || printMut.isPending}
+                  onClick={() => {
+                    const rows = (listQ.data?.data ?? []).filter((r) => selected.has(r.id));
+                    if (rows.length === 0) return;
+                    printMut.mutate(rows);
+                  }}
+                  title="Печать выбранных QR кодов"
+                >
+                  <Printer className="h-3.5 w-3.5 shrink-0" />
+                  Печать
+                </button>
+                <select
+                  className={cn(
+                    filterPanelSelectClassName,
+                    "h-8 w-[4.75rem] min-w-0 shrink-0 tabular-nums text-xs"
+                  )}
+                  value={GENERATE_COUNT_OPTIONS.some((n) => String(n) === generateCount) ? generateCount : "100"}
+                  onChange={(e) => setGenerateCount(e.target.value)}
+                  aria-label="Количество QR для генерации"
+                >
+                  {GENERATE_COUNT_OPTIONS.map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n.toLocaleString("ru-RU")}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-primary px-2.5 text-xs font-semibold text-primary-foreground"
                   onClick={() => generateMut.mutate()}
                   disabled={generateMut.isPending}
                 >
-                  <QrCode className="h-3.5 w-3.5" />
-                  Сгенерировать QR коды
+                  <QrCode className="h-3.5 w-3.5 shrink-0" />
+                  Сгенерировать
                 </button>
               </div>
+              {bindError || exportError ? (
+                <p className="mt-1.5 text-xs text-destructive">{bindError ?? exportError}</p>
+              ) : null}
             </CardContent>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1280px] border-collapse text-sm">
+                <table className="w-full min-w-[960px] border-collapse text-sm">
                   <thead className="app-table-thead sticky top-0 z-[1]">
                     <tr>
                       <th className="px-2 py-2 text-left text-xs">
@@ -818,19 +1141,25 @@ export function ClientQrWorkspace() {
                           }}
                         />
                       </th>
-                      <th className="px-2 py-2 text-left text-xs">Дата создания</th>
-                      <th className="px-2 py-2 text-left text-xs">QR код</th>
-                      <th className="px-2 py-2 text-left text-xs">Клиент</th>
-                      <th className="px-2 py-2 text-left text-xs">Статус</th>
-                      <th className="px-2 py-2 text-left text-xs">Территория</th>
-                      <th className="px-2 py-2 text-left text-xs">Город</th>
-                      <th className="px-2 py-2 text-left text-xs">Кто создал</th>
-                      <th className="px-2 py-2 text-left text-xs">Кто привязал</th>
-                      <th className="px-2 py-2 text-left text-xs">Дата привязки</th>
+                      {qrTablePrefs.visibleColumnOrder.map((colId) => (
+                        <th key={colId} className="px-2 py-2 text-left text-xs">
+                          {QR_COLUMN_LABEL[colId] ?? colId}
+                        </th>
+                      ))}
                       <th className="px-2 py-2 text-left text-xs">Действия</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {qrTablePrefs.visibleColumnOrder.length === 0 ? (
+                      <tr>
+                        <td
+                          className="px-3 py-8 text-center text-muted-foreground"
+                          colSpan={2}
+                        >
+                          Нет видимых столбцов. Откройте «Управление столбцами».
+                        </td>
+                      </tr>
+                    ) : null}
                     {(listQ.data?.data ?? []).map((r) => (
                       <tr key={r.id} className="border-b border-border/60 hover:bg-muted/15">
                         <td className="px-2 py-1.5">
@@ -847,55 +1176,68 @@ export function ClientQrWorkspace() {
                             }
                           />
                         </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">{formatShortRu(r.created_at)}</td>
-                        <td className="px-2 py-1.5">
-                          <img
-                            src={qrImgUrl(r.qr_code, 40)}
-                            alt=""
-                            className="inline-block rounded border border-border/60"
-                            width={40}
-                            height={40}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <div className="flex items-center gap-1">
-                            <span className="max-w-[200px] truncate">{r.client_name || "—"}</span>
-                            {r.client_name ? (
-                              <button
-                                type="button"
-                                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-                                title="Копировать"
-                                onClick={() => void copyText(r.client_name ?? "")}
+                        {qrTablePrefs.visibleColumnOrder.map((colId) => (
+                          <td key={colId} className="px-2 py-1.5">
+                            {colId === "created_at" ? (
+                              <span className="whitespace-nowrap">{formatShortRu(r.created_at)}</span>
+                            ) : colId === "qr_code" ? (
+                              // External QR API URL — not suitable for next/image remote config
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={qrImgUrl(r.qr_code, 40)}
+                                alt=""
+                                className="inline-block rounded border border-border/60"
+                                width={40}
+                                height={40}
+                              />
+                            ) : colId === "client_name" ? (
+                              <div className="flex items-center gap-1">
+                                <span className="max-w-[200px] truncate">{r.client_name || "—"}</span>
+                                {r.client_name ? (
+                                  <button
+                                    type="button"
+                                    className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                    title="Копировать"
+                                    onClick={() => void copyText(r.client_name ?? "")}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : colId === "status" ? (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs",
+                                  r.status === "attached"
+                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                    : r.status === "printed"
+                                      ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+                                      : r.status === "detached"
+                                        ? "bg-muted text-muted-foreground"
+                                        : "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                                )}
                               >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <span
-                            className={
-                              r.status === "attached"
-                                ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400"
-                                : r.status === "printed"
-                                  ? "rounded-full bg-sky-500/15 px-2 py-0.5 text-xs text-sky-700 dark:text-sky-400"
-                                  : r.status === "detached"
-                                    ? "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                                    : "rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300"
-                            }
-                          >
-                            {STATUS_LABEL_RU[r.status] ?? r.status}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">
-                          {[resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)]
-                            .filter((x) => x && x !== "—")
-                            .join(" · ") || "—"}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">{resolveTerritoryLabel(r.city)}</td>
-                        <td className="px-2 py-1.5 text-xs">{r.created_by_name || "—"}</td>
-                        <td className="px-2 py-1.5 text-xs">{r.bound_by_name || "—"}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs">{formatShortRu(r.bound_at)}</td>
+                                {STATUS_LABEL_RU[r.status] ?? r.status}
+                              </span>
+                            ) : colId === "territory" ? (
+                              <span className="text-xs">
+                                {[resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)]
+                                  .filter((x) => x && x !== "—")
+                                  .join(" · ") || "—"}
+                              </span>
+                            ) : colId === "city" ? (
+                              <span className="text-xs">{resolveTerritoryLabel(r.city)}</span>
+                            ) : colId === "created_by_name" ? (
+                              <span className="text-xs">{r.created_by_name || "—"}</span>
+                            ) : colId === "bound_by_name" ? (
+                              <span className="text-xs">{r.bound_by_name || "—"}</span>
+                            ) : colId === "bound_at" ? (
+                              <span className="whitespace-nowrap text-xs">{formatShortRu(r.bound_at)}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        ))}
                         <td className="px-2 py-1.5">
                           {r.client_id ? (
                             <button
@@ -911,11 +1253,11 @@ export function ClientQrWorkspace() {
                             <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
                               <div className="min-w-[180px] max-w-[220px]">
                                 <FilterSearchableSelect
-                                  emptyLabel="Клиент"
+                                  emptyLabel="Клиент без QR"
                                   value={bindClientIdByQr[r.id] ?? ""}
                                   className="h-8 text-xs"
                                   onValueChange={(v) => setBindClientIdByQr((p) => ({ ...p, [r.id]: v }))}
-                                  options={clientOptions}
+                                  options={bindClientOptionsForRow(r.id)}
                                 />
                               </div>
                               <button
@@ -927,7 +1269,14 @@ export function ClientQrWorkspace() {
                                   if (!Number.isFinite(clientId) || clientId < 1) return;
                                   bindMut.mutate({ qrId: r.id, clientId });
                                 }}
-                                disabled={bindMut.isPending}
+                                disabled={
+                                  bindMut.isPending || bindClientOptionsForRow(r.id).length === 0
+                                }
+                                title={
+                                  bindClientOptionsForRow(r.id).length === 0
+                                    ? "Нет свободных клиентов для привязки"
+                                    : undefined
+                                }
                               >
                                 <Link2 className="h-3.5 w-3.5" />
                                 Привязать
@@ -937,9 +1286,12 @@ export function ClientQrWorkspace() {
                         </td>
                       </tr>
                     ))}
-                    {(listQ.data?.data ?? []).length === 0 ? (
+                    {(listQ.data?.data ?? []).length === 0 && qrTablePrefs.visibleColumnOrder.length > 0 ? (
                       <tr>
-                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={11}>
+                        <td
+                          className="px-3 py-8 text-center text-muted-foreground"
+                          colSpan={qrTablePrefs.visibleColumnOrder.length + 2}
+                        >
                           Данные не найдены
                         </td>
                       </tr>
@@ -952,20 +1304,6 @@ export function ClientQrWorkspace() {
                   Показано {fromIdx}–{toIdx} / {listQ.data?.total ?? 0}
                 </span>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="h-8 rounded border border-input bg-background px-2 text-xs"
-                    value={String(limit)}
-                    onChange={(e) => {
-                      setLimit(Number.parseInt(e.target.value, 10) || 10);
-                      setPage(1);
-                    }}
-                  >
-                    {[10, 20, 30, 50, 100].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
                   <button
                     type="button"
                     className="h-8 rounded border border-input px-2 disabled:opacity-50"
@@ -991,60 +1329,69 @@ export function ClientQrWorkspace() {
           </Card>
         ) : (
           <Card>
-            <CardContent className="flex flex-wrap items-end gap-2 border-b border-border/60 p-3">
-              <div className="relative min-w-[200px] flex-1 max-w-md">
-                <Input
-                  className="h-9 pl-8"
-                  placeholder="Поиск"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                />
-                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
-                  ⌕
-                </span>
-              </div>
+            <CardContent className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto border-b border-border/60 p-2 sm:p-2.5">
+              {tableToolbarCluster}
+              {compactSearchInput}
               <button
                 type="button"
-                className="inline-flex h-9 items-center gap-1 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted"
-                onClick={() => void exportNoQrCsv()}
+                className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-input bg-background px-2 text-xs hover:bg-muted disabled:opacity-50"
+                disabled={exportBusy}
+                onClick={() => void exportExcel()}
               >
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                Excel
+                <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                {exportBusy ? "…" : "Excel"}
               </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center rounded-md border border-input px-2 hover:bg-muted"
-                title="Обновить"
-                onClick={() => void invalidateAll()}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
+              {exportError ? <p className="w-full text-xs text-destructive">{exportError}</p> : null}
             </CardContent>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] border-collapse text-sm">
                   <thead className="app-table-thead">
                     <tr>
-                      <th className="px-2 py-2 text-left text-xs">Клиент</th>
-                      <th className="px-2 py-2 text-left text-xs">Телефон</th>
-                      <th className="px-2 py-2 text-left text-xs">Зона / область</th>
-                      <th className="px-2 py-2 text-left text-xs">Город</th>
+                      {noQrTablePrefs.visibleColumnOrder.map((colId) => (
+                        <th key={colId} className="px-2 py-2 text-left text-xs">
+                          {NO_QR_COLUMN_LABEL[colId] ?? colId}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
+                    {noQrTablePrefs.visibleColumnOrder.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-8 text-center text-muted-foreground">
+                          Нет видимых столбцов. Откройте «Управление столбцами».
+                        </td>
+                      </tr>
+                    ) : null}
                     {(noQrQ.data?.data ?? []).map((r) => (
                       <tr key={r.id} className="border-b border-border/60">
-                        <td className="px-2 py-1.5">{r.name}</td>
-                        <td className="px-2 py-1.5">{r.phone || "—"}</td>
-                        <td className="px-2 py-1.5 text-xs">
-                          {[resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)].filter(Boolean).join(" · ") || "—"}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">{resolveTerritoryLabel(r.city)}</td>
+                        {noQrTablePrefs.visibleColumnOrder.map((colId) => (
+                          <td key={colId} className="px-2 py-1.5">
+                            {colId === "name" ? (
+                              r.name
+                            ) : colId === "phone" ? (
+                              r.phone || "—"
+                            ) : colId === "territory" ? (
+                              <span className="text-xs">
+                                {[resolveTerritoryLabel(r.zone), resolveTerritoryLabel(r.region)]
+                                  .filter(Boolean)
+                                  .join(" · ") || "—"}
+                              </span>
+                            ) : colId === "city" ? (
+                              <span className="text-xs">{resolveTerritoryLabel(r.city)}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        ))}
                       </tr>
                     ))}
-                    {(noQrQ.data?.data ?? []).length === 0 ? (
+                    {(noQrQ.data?.data ?? []).length === 0 && noQrTablePrefs.visibleColumnOrder.length > 0 ? (
                       <tr>
-                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={4}>
+                        <td
+                          className="px-3 py-8 text-center text-muted-foreground"
+                          colSpan={noQrTablePrefs.visibleColumnOrder.length}
+                        >
                           Все клиенты имеют QR или список пуст
                         </td>
                       </tr>
@@ -1057,20 +1404,6 @@ export function ClientQrWorkspace() {
                   Показано {fromIdxNoQr}–{toIdxNoQr} / {noQrQ.data?.total ?? 0}
                 </span>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="h-8 rounded border border-input bg-background px-2 text-xs"
-                    value={String(limit)}
-                    onChange={(e) => {
-                      setLimit(Number.parseInt(e.target.value, 10) || 10);
-                      setNoQrPage(1);
-                    }}
-                  >
-                    {[10, 20, 30, 50, 100].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
                   <button
                     type="button"
                     className="h-8 rounded border border-input px-2 disabled:opacity-50"
@@ -1096,6 +1429,29 @@ export function ClientQrWorkspace() {
           </Card>
         )}
       </div>
+
+      <TableColumnSettingsDialog
+        open={columnDialogOpen}
+        onOpenChange={setColumnDialogOpen}
+        title="Управление столбцами"
+        description="Видимые столбцы и порядок. Сохраняется для вашей учётной записи (сервер)."
+        columns={[...(applied.list_mode === "qr" ? QR_TABLE_COLUMNS : NO_QR_TABLE_COLUMNS)]}
+        columnOrder={tablePrefs.columnOrder}
+        hiddenColumnIds={tablePrefs.hiddenColumnIds}
+        saving={tablePrefs.saving}
+        onSave={(next) => tablePrefs.saveColumnLayout(next)}
+        onReset={() => tablePrefs.resetColumnLayout()}
+      />
+
+      <ClientQrFilterVisibilityDialog
+        open={pageViewDialogOpen}
+        onOpenChange={setPageViewDialogOpen}
+        filterVisibility={filterVis}
+        onFilterVisibilityChange={setFilterVis}
+        pageView={pageView}
+        onPageViewChange={setPageView}
+        onApplyPageSize={applyPageSize}
+      />
 
       <DateRangePopover
         open={dateOpen}

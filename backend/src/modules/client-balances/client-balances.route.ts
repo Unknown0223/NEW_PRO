@@ -17,6 +17,24 @@ function parseOptPositiveInt(raw: string | undefined): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+function parseCommaList(raw: string | undefined): string[] | undefined {
+  if (raw == null || raw.trim() === "") return undefined;
+  const items = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return items.length > 0 ? [...new Set(items)] : undefined;
+}
+
+function parseIdCommaList(raw: string | undefined): number[] | undefined {
+  const items = parseCommaList(raw);
+  if (!items) return undefined;
+  const ids = items
+    .map((s) => Number.parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return ids.length > 0 ? [...new Set(ids)] : undefined;
+}
+
 function parseListQuery(q: Record<string, string | undefined>): ClientBalanceListQuery {
   const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
   const allowLarge = q.large_export === "1" || q.large_export === "true";
@@ -38,26 +56,43 @@ function parseListQuery(q: Record<string, string | undefined>): ClientBalanceLis
     allow_large_export: allowLarge,
     ...(q.search?.trim() ? { search: q.search.trim() } : {}),
     ...(parseOptPositiveInt(q.agent_id) !== undefined ? { agent_id: parseOptPositiveInt(q.agent_id) } : {}),
+    ...(parseIdCommaList(q.agent_ids) ? { agent_ids: parseIdCommaList(q.agent_ids) } : {}),
     ...(parseOptPositiveInt(q.expeditor_user_id) !== undefined
       ? { expeditor_user_id: parseOptPositiveInt(q.expeditor_user_id) }
+      : {}),
+    ...(parseIdCommaList(q.expeditor_user_ids)
+      ? { expeditor_user_ids: parseIdCommaList(q.expeditor_user_ids) }
       : {}),
     ...(parseOptPositiveInt(q.supervisor_user_id) !== undefined
       ? { supervisor_user_id: parseOptPositiveInt(q.supervisor_user_id) }
       : {}),
+    ...(parseIdCommaList(q.supervisor_user_ids)
+      ? { supervisor_user_ids: parseIdCommaList(q.supervisor_user_ids) }
+      : {}),
     ...(q.trade_direction?.trim() ? { trade_direction: q.trade_direction.trim() } : {}),
+    ...(parseCommaList(q.trade_directions) ? { trade_directions: parseCommaList(q.trade_directions) } : {}),
     ...(q.category?.trim() ? { category: q.category.trim() } : {}),
+    ...(parseCommaList(q.categories) ? { categories: parseCommaList(q.categories) } : {}),
     ...(q.status?.trim() ? { status: q.status.trim() } : {}),
+    ...(parseCommaList(q.statuses) ? { statuses: parseCommaList(q.statuses) } : {}),
     ...(q.balance_filter?.trim() ? { balance_filter: q.balance_filter.trim() } : {}),
+    ...(parseCommaList(q.balance_filters) ? { balance_filters: parseCommaList(q.balance_filters) } : {}),
     ...(q.agent_consignment?.trim() ? { agent_consignment: q.agent_consignment.trim() } : {}),
     ...(q.territory_region?.trim() ? { territory_region: q.territory_region.trim() } : {}),
+    ...(parseCommaList(q.territory_regions) ? { territory_regions: parseCommaList(q.territory_regions) } : {}),
     ...(q.territory_city?.trim() ? { territory_city: q.territory_city.trim() } : {}),
+    ...(parseCommaList(q.territory_cities) ? { territory_cities: parseCommaList(q.territory_cities) } : {}),
     ...(q.territory_district?.trim() ? { territory_district: q.territory_district.trim() } : {}),
     ...(q.territory_zone?.trim() ? { territory_zone: q.territory_zone.trim() } : {}),
+    ...(parseCommaList(q.territory_zones) ? { territory_zones: parseCommaList(q.territory_zones) } : {}),
     ...(q.balance_as_of?.trim() ? { balance_as_of: q.balance_as_of.trim() } : {}),
     ...(q.consignment_due_from?.trim() ? { consignment_due_from: q.consignment_due_from.trim() } : {}),
     ...(q.consignment_due_to?.trim() ? { consignment_due_to: q.consignment_due_to.trim() } : {}),
     ...(q.agent_branch?.trim() ? { agent_branch: q.agent_branch.trim() } : {}),
     ...(q.agent_payment_type?.trim() ? { agent_payment_type: q.agent_payment_type.trim() } : {}),
+    ...(parseCommaList(q.agent_payment_types)
+      ? { agent_payment_types: parseCommaList(q.agent_payment_types) }
+      : {}),
     ...(q.branch_ids?.trim()
       ? {
           agent_branches: q.branch_ids
@@ -110,8 +145,11 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
       const hasScope =
         Boolean(q.agent_branch?.trim()) ||
         Boolean(q.agent_id?.trim()) ||
+        Boolean(q.agent_ids?.trim()) ||
         Boolean(q.supervisor_user_id?.trim()) ||
+        Boolean(q.supervisor_user_ids?.trim()) ||
         Boolean(q.expeditor_user_id?.trim()) ||
+        Boolean(q.expeditor_user_ids?.trim()) ||
         Boolean(q.trade_direction?.trim()) ||
         Boolean(q.category?.trim()) ||
         Boolean(q.status?.trim()) ||

@@ -1,10 +1,9 @@
 import { buildFinanceQueryString } from "@/components/dashboard/finance/build-finance-query";
 import {
   categoryTableColumns,
-  clientLedgerCsvValue,
   territoryTableColumns
 } from "@/components/dashboard/finance/table-columns";
-import { fmtFinanceCount, fmtFinanceMoney, fmtFinancePercent } from "@/components/dashboard/finance/format";
+import { fmtFinanceCount, fmtFinanceMoney } from "@/components/dashboard/finance/format";
 import type { FinanceDashboardSnapshot, FinanceFilterDraft } from "@/components/dashboard/finance/types";
 
 function fileToken(value: string): string {

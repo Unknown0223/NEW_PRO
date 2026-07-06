@@ -17,6 +17,7 @@ import { getUserAccessMatrix } from "./access-matrix.service";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
+  AccessModuleViewRequiredError,
   bulkMergeUserPermissionKeysForUsers,
   bulkRemoveUserPermissionsByKeysForUsers,
   ensurePermissionIdsForKeys,
@@ -224,6 +225,15 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
           403,
           e.code,
           "Чтобы выдавать операции или право «склад другим», у пользователя должна быть включена операция «Доступ: управление» (access.manage)."
+        );
+      }
+      if (e instanceof AccessModuleViewRequiredError) {
+        return sendApiError(
+          reply,
+          request,
+          403,
+          e.code,
+          "Чтобы разрешить выдавать доступ другим, сначала включите доступ к разделу «Доступ» (access.upravlenie.view) для этого пользователя."
         );
       }
       if (e instanceof SuperviseePatchError) {

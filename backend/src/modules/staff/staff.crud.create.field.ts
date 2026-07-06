@@ -13,6 +13,10 @@ import {
 } from "./staff.shared";
 import { listStaff } from "./staff.crud.list";
 import { syncUserRoleLink } from "./staff.crud.create.shared";
+import {
+  DEFAULT_CONSIGNMENT_CLOSE,
+  validateConsignmentCloseSchedule
+} from "../consignment/consignment-settings";
 
 export async function createFieldStaff(
   tenantId: number,
@@ -50,6 +54,17 @@ export async function createFieldStaff(
 
   const tdRes = await tradeDirectionForCreate(tenantId, input);
 
+  const closeSchedule =
+    input.consignment_close_day != null ||
+    input.consignment_close_hour != null ||
+    input.consignment_close_minute != null
+      ? validateConsignmentCloseSchedule({
+          day: input.consignment_close_day ?? DEFAULT_CONSIGNMENT_CLOSE.day,
+          hour: input.consignment_close_hour ?? DEFAULT_CONSIGNMENT_CLOSE.hour,
+          minute: input.consignment_close_minute ?? DEFAULT_CONSIGNMENT_CLOSE.minute
+        })
+      : DEFAULT_CONSIGNMENT_CLOSE;
+
   const created = await prisma.user.create({
     data: {
       tenant_id: tenantId,
@@ -67,6 +82,9 @@ export async function createFieldStaff(
       code: input.code?.trim() || null,
       pinfl: input.pinfl?.trim() || null,
       consignment: input.consignment ?? false,
+      consignment_close_day: closeSchedule.day,
+      consignment_close_hour: closeSchedule.hour,
+      consignment_close_minute: closeSchedule.minute,
       consignment_limit_amount:
         input.consignment_limit_amount != null && String(input.consignment_limit_amount).trim() !== ""
           ? new Prisma.Decimal(input.consignment_limit_amount)
@@ -85,7 +103,7 @@ export async function createFieldStaff(
       price_type: legacyPrice,
       agent_price_types: agentPriceTypesStored,
       agent_entitlements: ent as Prisma.InputJsonValue,
-      max_sessions: input.max_sessions != null && input.max_sessions >= 1 ? input.max_sessions : 2,
+      max_sessions: input.max_sessions != null && input.max_sessions >= 1 ? input.max_sessions : 1,
       kpi_color: input.kpi_color?.trim().slice(0, 16) || null,
       warehouse_id: input.warehouse_id ?? null,
       return_warehouse_id: input.return_warehouse_id ?? null,

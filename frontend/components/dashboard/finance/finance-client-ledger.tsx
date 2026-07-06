@@ -106,7 +106,7 @@ export function FinanceClientLedger(props: {
 
   return (
     <section
-      className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"
+      className="rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200/70"
       data-dashboard-section="finance-client-ledger"
     >
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -120,7 +120,7 @@ export function FinanceClientLedger(props: {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 transition hover:border-teal-300 hover:text-teal-700"
             onClick={exportCsv}
           >
             <Download className="h-4 w-4 text-emerald-600" />
@@ -129,7 +129,7 @@ export function FinanceClientLedger(props: {
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-teal-500"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-slate-700 outline-none focus:border-teal-500"
           >
             {[10, 20, 30, 50, 100, 200].map((n) => (
               <option key={n} value={n}>
@@ -139,7 +139,7 @@ export function FinanceClientLedger(props: {
           </select>
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:border-teal-300"
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-border px-3 text-sm font-semibold text-slate-700 hover:border-teal-300"
             onClick={() => setColumnsOpen(true)}
           >
             <LayoutGrid className="h-4 w-4" />
@@ -152,23 +152,23 @@ export function FinanceClientLedger(props: {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Поиск клиента"
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+            className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
           />
         </label>
       </div>
-      <div className="overflow-hidden rounded-xl border border-slate-200">
+      <div className="overflow-hidden rounded-xl border border-border">
         <div
           ref={virtual.enabled ? virtual.scrollRef : undefined}
           className="overflow-auto"
           style={virtual.enabled ? { maxHeight: 520 } : { maxHeight: 560 }}
         >
           <table className="w-full min-w-[1190px] border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 bg-muted text-xs font-bold uppercase tracking-wide text-slate-500">
               <tr>
                 {visibleCols.map((col) => (
                   <th
                     key={col.id}
-                    className={`border-b border-slate-200 px-3 py-3 text-right ${col.id === "client" ? "text-left" : ""}`}
+                    className={`border-b border-border px-3 py-3 text-right ${col.id === "client" ? "text-left" : ""}`}
                   >
                     <button
                       type="button"
@@ -203,7 +203,7 @@ export function FinanceClientLedger(props: {
                 return (
                   <tr
                     key={`${row.client_id}-${idx}`}
-                    className="border-b border-slate-200/80 text-slate-700 transition hover:bg-teal-50/45"
+                    className="border-b border-border/80 text-slate-700 transition hover:bg-teal-50/45"
                   >
                     {visibleCols.map((col) => (
                       <td
@@ -234,7 +234,7 @@ export function FinanceClientLedger(props: {
       <div className="mt-2 flex gap-1">
         <button
           type="button"
-          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-muted disabled:opacity-50"
           disabled={safePage <= 1}
           onClick={() => onPageChange(Math.max(1, safePage - 1))}
         >
@@ -242,7 +242,7 @@ export function FinanceClientLedger(props: {
         </button>
         <button
           type="button"
-          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          className="rounded-lg px-3 py-2 text-slate-500 hover:bg-muted disabled:opacity-50"
           disabled={safePage >= totalPages}
           onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
         >

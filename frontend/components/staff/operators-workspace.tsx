@@ -9,7 +9,6 @@ import { formatGroupedInteger } from "@/lib/format-numbers";
 import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,7 +26,11 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { TableSearchField } from "@/components/ui/table-search-field";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { WEB_ACCESS_ROLE_LABELS } from "@/lib/distribution-roles";
+import { StaffFioCell } from "@/components/staff/staff-fio-cell";
+import { formatPersonDisplayName } from "@/lib/person-display";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
@@ -95,7 +98,7 @@ const OPERATOR_COLUMNS = OPERATOR_COLUMN_IDS.map((id) => ({
 function operatorExportCellString(r: WebStaffRow, colId: string): string {
   switch (colId) {
     case "fio":
-      return r.fio;
+      return formatPersonDisplayName(r);
     case "login":
       return r.login;
     case "code":
@@ -128,7 +131,14 @@ function operatorExportCellString(r: WebStaffRow, colId: string): string {
 function renderOperatorDataCell(colId: string, r: WebStaffRow) {
   switch (colId) {
     case "fio":
-      return r.fio;
+      return (
+        <StaffFioCell
+          first_name={r.first_name}
+          last_name={r.last_name}
+          middle_name={r.middle_name}
+          fio={r.fio}
+        />
+      );
     case "login":
       return <span className="font-mono text-xs">{r.login}</span>;
     case "code":
@@ -190,7 +200,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
     tableId: OPERATOR_TABLE_ID,
     defaultColumnOrder: [...OPERATOR_COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100, 500, 1000]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
 
@@ -479,7 +489,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
                   value={pageSize}
                   onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
                 >
-                  {[10, 20, 25, 50, 100, 500, 1000].map((n) => (
+                  {DEFAULT_TABLE_PAGE_SIZES.map((n) => (
                     <option key={n} value={n}>
                       {n}
                     </option>
@@ -497,11 +507,10 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
                 <ListOrdered className="size-3.5" />
                 Ustunlar
               </Button>
-              <Input
-                className="h-9 max-w-[220px] bg-background text-foreground"
+              <TableSearchField
+                className="max-w-[240px] flex-none"
                 placeholder="Qidiruv"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onSearch={setSearch}
               />
               <Button
                 type="button"
@@ -785,7 +794,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="operator"
         userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 4}
+        maxSessions={sessionRow?.max_sessions ?? 1}
         onPatched={() => {
           void qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
         }}
@@ -1029,7 +1038,7 @@ function WebStaffEditDialog({
   const [pinfl, setPinfl] = useState("");
   const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
-  const [max_sessions, setMaxS] = useState("4");
+  const [max_sessions, setMaxS] = useState("1");
   const [app_access, setAppAccess] = useState(false);
   const [can_authorize, setCanAuth] = useState(true);
 

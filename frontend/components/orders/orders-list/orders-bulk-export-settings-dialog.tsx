@@ -82,6 +82,18 @@ export function OrdersBulkExportSettingsDialog({
     if (!nextOn && expandedId === id) setExpandedId(null);
   };
 
+  const enabledCount = draft.order.filter((id) => draft.enabled[id] !== false).length;
+  const allEnabled = draft.order.length > 0 && enabledCount === draft.order.length;
+
+  const setAllEnabled = (on: boolean) => {
+    const enabled: Record<string, boolean> = { ...draft.enabled };
+    for (const id of draft.order) {
+      enabled[id] = on;
+    }
+    setDraft({ ...draft, enabled });
+    if (!on) setExpandedId(null);
+  };
+
   const updateTemplateSettings = (id: string, next: BulkExportTemplateSettings) => {
     setDraft({
       ...draft,
@@ -106,30 +118,46 @@ export function OrdersBulkExportSettingsDialog({
       }}
     >
       <div
-        className="flex max-h-[min(85vh,640px)] w-full max-w-md flex-col overflow-hidden rounded-xl bg-card shadow-2xl"
+        className="flex max-h-[min(92vh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="bulk-export-settings-title"
       >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 id="bulk-export-settings-title" className="text-lg font-semibold text-foreground">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
+          <h2
+            id="bulk-export-settings-title"
+            className="min-w-0 flex-1 text-lg font-semibold text-foreground"
+          >
             {category.title}
           </h2>
           <button
             type="button"
-            className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-input text-muted-foreground transition-colors hover:bg-muted"
             onClick={() => onOpenChange(false)}
             aria-label="Закрыть"
           >
-            <X className="size-5" aria-hidden />
+            <X className="size-4" aria-hidden />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Отметьте отчёты для списка загрузки.
-            . Нажмите ⚙ у шаблона, чтобы настроить поля экспорта (112, 410, 600 и др.).
-          </p>
+        <div className="border-b border-border px-5 py-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-input accent-teal-600"
+              checked={allEnabled}
+              ref={(el) => {
+                if (el) {
+                  el.indeterminate = enabledCount > 0 && !allEnabled;
+                }
+              }}
+              onChange={(e) => setAllEnabled(e.target.checked)}
+            />
+            {allEnabled ? "Снять все" : "Выбрать все"}
+          </label>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
           <ul className="space-y-2">
             {draft.order.map((id) => {
               const tpl = byId.get(id);
@@ -220,10 +248,10 @@ export function OrdersBulkExportSettingsDialog({
           </ul>
         </div>
 
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border bg-muted/20 px-6 py-4">
           <button
             type="button"
-            className="w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+            className="w-full rounded-lg bg-teal-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
             onClick={() => {
               onSave(categoryId, draft);
               onOpenChange(false);

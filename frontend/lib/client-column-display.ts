@@ -158,6 +158,47 @@ export function displayFormatCode(row: ClientRow): string | null {
   return nonEmpty(row.client_format);
 }
 
+/** Barcha slotlardagi hafta kunlari (1..7), tartiblangan */
+export function getAllVisitWeekdaysForClient(row: ClientRow): number[] {
+  const set = new Set<number>();
+  for (let slot = 1; slot <= 10; slot++) {
+    for (const d of getVisitWeekdaysForSlot(row, slot)) set.add(d);
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+/** Barcha slotlardan dastavchi (ekspeditor) nomlari / telefonlari */
+export function getExpeditorLabelsForClient(row: ClientRow): string[] {
+  const labels: string[] = [];
+  const seen = new Set<string>();
+  for (let slot = 1; slot <= 10; slot++) {
+    const label = displayExpeditorPhone(row, slot);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+  }
+  return labels;
+}
+
+/** «День» ustuni: avvalo hafta kunlari, keyin bir martalik `visit_date` */
+export function displayClientVisitDays(row: ClientRow): string | null {
+  const wd = getAllVisitWeekdaysForClient(row);
+  if (wd.length > 0) {
+    const shown = wd.slice(0, 4).map((k) => WD_LABEL[k] ?? String(k));
+    const more = wd.length > 4 ? ` +${wd.length - 4}` : "";
+    return `${shown.join(", ")}${more}`;
+  }
+  const list = row.agent_assignments;
+  if (Array.isArray(list)) {
+    for (const a of [...list].sort((x, y) => x.slot - y.slot)) {
+      if (a.visit_date) return displayVisitDateShort(a.visit_date);
+    }
+  }
+  return displayVisitDateShort(row.visit_date);
+}
+
 /** Slot bo‘yicha jadvalda «mazmun» bormi (agent / kun / eks.) — bo‘sh ustunlarni yashirish uchun */
 export function clientSlotHasAnyDisplayData(row: ClientRow, slot: number): boolean {
   if (slot < 1 || slot > 10) return false;

@@ -245,7 +245,7 @@ export function SuppliersReconciliationWorkspace() {
 
   const recColRender = useMemo(
     () => ({
-      supplier_name: (_row: RecLine) => (
+      supplier_name: () => (
         <span className="block max-w-[min(100%,14rem)] truncate sm:max-w-[18rem]" title={supplierTableLabel}>
           {supplierTableLabel}
         </span>

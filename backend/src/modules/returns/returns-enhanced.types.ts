@@ -72,6 +72,13 @@ export type CreatePeriodReturnLine = {
   bonus_cash?: number;
   /** Erkin polki: foydalanuvchi «всего к возврату» — server bonus-debt hisobi uchun */
   return_qty?: number;
+  /**
+   * Peresort (almashtirish): hisob-kitob va validatsiya AYNI shu `product_id`
+   * (manba — zakazdagi mahsulot) bo'yicha bo'ladi, lekin ombor/qaytarish hujjatiga
+   * fizik QAYTARILGAN mahsulot sifatida shu boshqa (interchangeable guruhdagi)
+   * mahsulot yoziladi. Faqat manba bilan bir guruhda va faol bo'lsa qabul qilinadi.
+   */
+  return_as_product_id?: number;
 };
 
 export type CreatePeriodReturnInput = {
@@ -87,6 +94,13 @@ export type CreatePeriodReturnInput = {
   refusal_reason_ref?: string | null;
   /** Kamchilik bo‘yicha «Долг бонус» — mijoz balansiga manfiy delta (ixtiyoriy). */
   bonus_debt_amount?: number;
+  /**
+   * Po-zakaz explicit qatorlar allaqachon hisoblangan (savdo/bonus + peresort)
+   * bo‘lsa — server tomonidagi qayta-bo‘lishni (reconcile) o‘tkazib yuborish.
+   * Mobil ekspeditor oqimi peresort (almashtirilgan mahsulot) qatorlarini
+   * aniq yuborganda ishlatiladi. Default: false (web oqimi o‘zgarmaydi).
+   */
+  skip_order_scoped_reconcile?: boolean;
 };
 
 /** Bir nechta zakazdan bir vaqtda polki qaytarish (har zakaz uchun alohida sales_return). */

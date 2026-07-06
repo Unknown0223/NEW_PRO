@@ -11,8 +11,7 @@ import {
 } from "@/lib/order-nakladnoy";
 import {
   applyOrderDetailToListCaches,
-  patchOrderInOrdersListCaches,
-  type OrdersListCacheBody
+  patchOrderInOrdersListCaches
 } from "@/lib/orders-list-cache";
 import {
   ORDER_LIST_COLUMN_IDS,
@@ -28,9 +27,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildOrdersSearchParams,
   DEFAULT_ORDERS_FILTER_VISIBILITY,
+  defaultOrdersDayRange,
   ORDERS_FILTER_VISIBILITY_STORAGE_KEY,
   parseNumField,
   parseOrdersUrl,
+  ordersListQueryReady,
+  withDefaultOrdersDateRange,
   type OrdersFilterVisibility,
   type OrdersResponse,
   type OrdersUrlFilters
@@ -41,6 +43,7 @@ export function useOrdersListPagePart1() {
   const pathname = usePathname();
   const router = useRouter();
   const filters = useMemo(() => parseOrdersUrl(searchParams), [searchParams]);
+  const ordersFiltersApplied = ordersListQueryReady(filters);
   const clientIdFromUrl = filters.client_id;
 
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -69,10 +72,12 @@ export function useOrdersListPagePart1() {
   const ordersDateRangeAnchorRef = useRef<HTMLButtonElement>(null);
   const [ordersDateRangeOpen, setOrdersDateRangeOpen] = useState(false);
   const [ordersViewMode, setOrdersViewMode] = useState<"list" | "expeditor-summary">("list");
-  const [filterDraft, setFilterDraft] = useState<OrdersUrlFilters>(filters);
+  const [filterDraft, setFilterDraft] = useState<OrdersUrlFilters>(() =>
+    withDefaultOrdersDateRange(parseOrdersUrl(searchParams))
+  );
 
   useEffect(() => {
-    setFilterDraft(filters);
+    setFilterDraft(withDefaultOrdersDateRange(filters));
   }, [filters]);
 
   useEffect(() => {
@@ -83,10 +88,9 @@ export function useOrdersListPagePart1() {
     try {
       const raw = window.localStorage.getItem(ORDERS_FILTER_VISIBILITY_STORAGE_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<OrdersFilterVisibility>;
-      const { clientId: _omitClientId, ...parsedRest } = parsed as OrdersFilterVisibility & {
-        clientId?: boolean;
-      };
+      const parsed = JSON.parse(raw) as Partial<OrdersFilterVisibility> & { clientId?: boolean };
+      const parsedRest = { ...parsed };
+      delete parsedRest.clientId;
       setFilterVisibility({
         ...DEFAULT_ORDERS_FILTER_VISIBILITY,
         ...parsedRest,
@@ -167,7 +171,11 @@ export function useOrdersListPagePart1() {
         request_type_ref:
           patch.request_type_ref !== undefined ? patch.request_type_ref : cur.request_type_ref,
         visit_weekday: patch.visit_weekday !== undefined ? patch.visit_weekday : cur.visit_weekday,
-        price_type: patch.price_type !== undefined ? patch.price_type : cur.price_type
+        price_type: patch.price_type !== undefined ? patch.price_type : cur.price_type,
+        discount_alert:
+          patch.discount_alert !== undefined ? patch.discount_alert : cur.discount_alert,
+        bonus_alert: patch.bonus_alert !== undefined ? patch.bonus_alert : cur.bonus_alert,
+        order_alert: patch.order_alert !== undefined ? patch.order_alert : cur.order_alert
       };
       const qs = buildOrdersSearchParams(next).toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
@@ -176,11 +184,14 @@ export function useOrdersListPagePart1() {
   );
 
   const applyFilterDraft = useCallback(() => {
-    const qs = buildOrdersSearchParams({ ...filterDraft, page: 1 }).toString();
+    const next = withDefaultOrdersDateRange({ ...filterDraft, page: 1 });
+    setFilterDraft(next);
+    const qs = buildOrdersSearchParams(next).toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [filterDraft, pathname, router]);
 
   const resetFilterDraft = useCallback(() => {
+    const { date_from, date_to } = defaultOrdersDayRange();
     const empty: OrdersUrlFilters = {
       status: "",
       order_type: "",
@@ -189,8 +200,8 @@ export function useOrdersListPagePart1() {
       warehouse_id: "",
       agent_id: "",
       expeditor_id: "",
-      date_from: "",
-      date_to: "",
+      date_from,
+      date_to,
       client_id: "",
       product_id: "",
       client_category: "",
@@ -205,13 +216,16 @@ export function useOrdersListPagePart1() {
       payment_method_ref: "",
       request_type_ref: "",
       visit_weekday: "",
-      price_type: ""
+      price_type: "",
+      discount_alert: "",
+      bonus_alert: "",
+      order_alert: ""
     };
     setFilterDraft(empty);
     replaceOrdersQuery(empty);
   }, [replaceOrdersQuery]);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch, isPlaceholderData } = useQuery({
     queryKey: [
       "orders",
       tenantSlug,
@@ -239,43 +253,56 @@ export function useOrdersListPagePart1() {
       filters.trade_direction,
       filters.visit_weekday,
       filters.price_type,
+      filters.discount_alert,
+      filters.bonus_alert,
+      filters.order_alert,
       tablePrefs.pageSize
     ],
-    enabled: Boolean(tenantSlug),
+    enabled: Boolean(tenantSlug) && ordersFiltersApplied,
     staleTime: STALE.list,
     placeholderData: keepPreviousData,
     queryFn: async () => {
+      const f = filters;
       const params = new URLSearchParams({
-        page: String(filters.page),
+        page: String(f.page),
         limit: String(tablePrefs.pageSize)
       });
-      if (filters.search.trim()) params.set("q", filters.search.trim());
-      if (filters.status.trim()) params.set("status", filters.status.trim());
-      if (filters.order_type) params.set("order_type", filters.order_type);
-      if (filters.client_id) params.set("client_id", filters.client_id);
-      if (filters.warehouse_id) params.set("warehouse_id", filters.warehouse_id);
-      if (filters.agent_id) params.set("agent_id", filters.agent_id);
-      if (filters.expeditor_id) params.set("expeditor_id", filters.expeditor_id);
-      if (filters.date_from) params.set("date_from", filters.date_from);
-      if (filters.date_to) params.set("date_to", filters.date_to);
-      if (filters.product_id) params.set("product_id", filters.product_id);
-      if (filters.client_category) params.set("client_category", filters.client_category);
-      if (filters.client_region) params.set("client_region", filters.client_region);
-      if (filters.client_city) params.set("client_city", filters.client_city);
-      if (filters.client_zone) params.set("client_zone", filters.client_zone);
-      if (filters.trade_direction) params.set("trade_direction", filters.trade_direction);
-      if (filters.visit_weekday) params.set("visit_weekday", filters.visit_weekday);
-      if (filters.price_type) params.set("price_type", filters.price_type);
-      if (filters.date_mode) params.set("date_mode", filters.date_mode);
-      if (filters.is_consignment === "true") params.set("is_consignment", "true");
-      if (filters.is_consignment === "false") params.set("is_consignment", "false");
-      if (filters.product_category_id) params.set("product_category_id", filters.product_category_id);
-      if (filters.payment_type.trim()) params.set("payment_type", filters.payment_type.trim());
-      if (filters.payment_method_ref.trim()) {
-        params.set("payment_method_ref", filters.payment_method_ref.trim());
+      if (f.search.trim()) params.set("q", f.search.trim());
+      if (f.status.trim()) params.set("status", f.status.trim());
+      if (f.order_type) params.set("order_type", f.order_type);
+      if (f.client_id) params.set("client_id", f.client_id);
+      if (f.warehouse_id) params.set("warehouse_id", f.warehouse_id);
+      if (f.agent_id) params.set("agent_id", f.agent_id);
+      if (f.expeditor_id) params.set("expeditor_id", f.expeditor_id);
+      if (f.date_from) params.set("date_from", f.date_from);
+      if (f.date_to) params.set("date_to", f.date_to);
+      if (f.product_id) params.set("product_id", f.product_id);
+      if (f.client_category) params.set("client_category", f.client_category);
+      if (f.client_region) params.set("client_region", f.client_region);
+      if (f.client_city) params.set("client_city", f.client_city);
+      if (f.client_zone) params.set("client_zone", f.client_zone);
+      if (f.trade_direction) params.set("trade_direction", f.trade_direction);
+      if (f.visit_weekday) params.set("visit_weekday", f.visit_weekday);
+      if (f.price_type) params.set("price_type", f.price_type);
+      if (f.date_mode) params.set("date_mode", f.date_mode);
+      if (f.is_consignment === "true") params.set("is_consignment", "true");
+      if (f.is_consignment === "false") params.set("is_consignment", "false");
+      if (f.product_category_id) params.set("product_category_id", f.product_category_id);
+      if (f.payment_type.trim()) params.set("payment_type", f.payment_type.trim());
+      if (f.payment_method_ref.trim()) {
+        params.set("payment_method_ref", f.payment_method_ref.trim());
       }
-      if (filters.request_type_ref.trim()) {
-        params.set("request_type_ref", filters.request_type_ref.trim());
+      if (f.request_type_ref.trim()) {
+        params.set("request_type_ref", f.request_type_ref.trim());
+      }
+      if (f.discount_alert.trim()) {
+        params.set("discount_alert", f.discount_alert.trim());
+      }
+      if (f.bonus_alert.trim()) {
+        params.set("bonus_alert", f.bonus_alert.trim());
+      }
+      if (f.order_alert.trim()) {
+        params.set("order_alert", f.order_alert.trim());
       }
       const { data: body } = await api.get<OrdersResponse>(
         `/api/${tenantSlug}/orders?${params.toString()}`
@@ -284,7 +311,7 @@ export function useOrdersListPagePart1() {
     }
   });
 
-  const rows = data?.data ?? [];
+  const rows = useMemo(() => data?.data ?? [], [data?.data]);
 
   const expeditorSummaryRows = useMemo(() => {
     const map = new Map<
@@ -388,8 +415,11 @@ export function useOrdersListPagePart1() {
     replaceOrdersQuery,
     applyFilterDraft,
     resetFilterDraft,
+    ordersFiltersApplied,
     data,
     isLoading,
+    isFetching,
+    isOrdersListTotalStale: isFetching && isPlaceholderData,
     isError,
     error,
     refetch,

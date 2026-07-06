@@ -58,7 +58,7 @@ export function FinanceFiltersBar(props: {
   });
 
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
+    <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Finance module</p>

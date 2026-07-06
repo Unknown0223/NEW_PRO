@@ -74,7 +74,7 @@ export function ClientImportLaunchDialog({
     >
       <div
         ref={panelRef}
-        className="mx-4 w-full max-w-[700px] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="mx-4 w-full max-w-[700px] overflow-hidden rounded-2xl bg-card shadow-2xl"
         role="dialog"
         aria-modal
         aria-labelledby="client-import-launch-title"
@@ -88,7 +88,7 @@ export function ClientImportLaunchDialog({
             <button
               type="button"
               disabled={busy}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-muted disabled:opacity-60"
               onClick={() => void onDownloadTemplate()}
             >
               <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
@@ -97,7 +97,7 @@ export function ClientImportLaunchDialog({
             <button
               type="button"
               onClick={close}
-              className="rounded-lg p-1 transition-colors hover:bg-gray-100"
+              className="rounded-lg p-1 transition-colors hover:bg-muted"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5 text-gray-500" />
@@ -110,7 +110,7 @@ export function ClientImportLaunchDialog({
             type="button"
             disabled={busy}
             onClick={() => hiddenInputRef.current?.click()}
-            className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white py-3 text-sm font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60"
+            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card py-3 text-sm font-medium text-gray-600 transition-colors hover:border-border hover:bg-muted disabled:opacity-60"
           >
             <Upload className="h-4 w-4 shrink-0 text-gray-500" />
             <span className="truncate">{file ? file.name : "Выберите Excel файл"}</span>

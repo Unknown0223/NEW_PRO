@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { CalendarDays, ChevronLeft, ChevronRight, Filter, RotateCcw, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
@@ -75,7 +74,7 @@ export default function AssemblyInvoicesPage() {
       return data.data ?? [];
     }
   });
-  const rows = listQ.data ?? [];
+  const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
   const filteredRows = useMemo(() => {
     if (!search.trim()) return rows;
     const needle = search.toLowerCase();

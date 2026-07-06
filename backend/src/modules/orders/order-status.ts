@@ -41,7 +41,8 @@ const forwardTransitionsByType: Record<OrderType, Record<string, Set<string>>> =
     new: new Set(["confirmed", "cancelled"]),
     confirmed: new Set(["picking", "cancelled"]),
     picking: new Set(["delivering", "cancelled"]),
-    delivering: new Set(["delivered", "cancelled"]),
+    // `returned` — mijoz yetkazish paytida butun zakazdan voz kechishi (oddiy vazvrat).
+    delivering: new Set(["delivered", "returned", "cancelled"]),
     delivered: new Set(["returned"]),
     returned: new Set(["cancelled"]),
     cancelled: new Set(["new"])
@@ -187,7 +188,7 @@ export function isOperatorLateStageCancelForbidden(from: string, to: string): bo
   return to === "cancelled" && ORDER_STATUSES_OPERATOR_CANNOT_CANCEL_FROM.has(from);
 }
 
-const ROLES_MAY_REVERT_ONE_STEP = new Set(["admin", "operator", "supervisor"]);
+const ROLES_MAY_REVERT_ONE_STEP = new Set(["admin", "operator", "supervisor", "expeditor"]);
 
 export function mayActorRevertOneStep(actorRole: string): boolean {
   return ROLES_MAY_REVERT_ONE_STEP.has(actorRole);

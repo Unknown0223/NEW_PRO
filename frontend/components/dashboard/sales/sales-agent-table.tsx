@@ -79,7 +79,7 @@ export function SalesAgentTable({
         onSave={(next) => tablePrefs.saveColumnLayout(next)}
         onReset={() => tablePrefs.resetColumnLayout()}
       />
-      <section className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="Аналитика по агентам"
           exportAction={
@@ -92,7 +92,7 @@ export function SalesAgentTable({
           <label className="flex items-center gap-2 text-xs text-slate-500">
             <span>Строк на странице</span>
             <select
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs"
+              className="h-8 rounded-lg border border-border bg-card px-2 text-xs"
               value={String(pageSize)}
               onChange={(e) => onPageSizeChange(Number.parseInt(e.target.value, 10) || 10)}
             >
@@ -105,7 +105,7 @@ export function SalesAgentTable({
           </label>
           <button
             type="button"
-            className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-2 text-xs hover:bg-slate-50"
+            className="inline-flex h-8 items-center rounded-lg border border-border px-2 text-xs hover:bg-muted"
             onClick={() => setColumnsOpen(true)}
           >
             <LayoutGrid className="mr-1.5 size-4" />
@@ -123,7 +123,7 @@ export function SalesAgentTable({
             ) : (
               <>
                 <thead>
-                  <tr className="border-b border-slate-100 text-xs text-slate-500">
+                  <tr className="border-b border-border text-xs text-slate-500">
                     {visibleCols.map((id) => (
                       <th
                         key={id}

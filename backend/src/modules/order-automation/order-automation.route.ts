@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { getErrorCode } from "../../lib/app-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -135,6 +136,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: (row as { id?: number })?.id ?? "—",
+          action: "automation_rule.create",
+          payload: { kind: "restriction", name: (row as { name?: string })?.name ?? null }
+        });
         return reply.status(201).send({ data: row });
       } catch (e) {
         if (getErrorCode(e) === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
@@ -161,6 +170,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: id,
+          action: "automation_rule.update",
+          payload: { kind: "restriction", fields: Object.keys(parsed.data) }
+        });
         return reply.send({ data: row });
       } catch (e) {
         const msg = getErrorCode(e) ?? "";
@@ -179,6 +196,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       try {
         await deleteRestrictionRule(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: id,
+          action: "automation_rule.delete",
+          payload: { kind: "restriction", id }
+        });
         return reply.status(204).send();
       } catch (e) {
         if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -199,6 +224,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           id,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: (row as { id?: number })?.id ?? "—",
+          action: "automation_rule.copy",
+          payload: { kind: "restriction", source_id: id }
+        });
         return reply.status(201).send({ data: row });
       } catch (e) {
         if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -292,6 +325,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: (row as { id?: number })?.id ?? "—",
+          action: "automation_rule.create",
+          payload: { kind: "auto_confirm", name: (row as { name?: string })?.name ?? null }
+        });
         return reply.status(201).send({ data: row });
       } catch (e) {
         if (getErrorCode(e) === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
@@ -317,6 +358,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           parsed.data,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: id,
+          action: "automation_rule.update",
+          payload: { kind: "auto_confirm", fields: Object.keys(parsed.data) }
+        });
         return reply.send({ data: row });
       } catch (e) {
         const msg = getErrorCode(e) ?? "";
@@ -335,6 +384,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       try {
         await deleteAutoConfirmRule(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: id,
+          action: "automation_rule.delete",
+          payload: { kind: "auto_confirm", id }
+        });
         return reply.status(204).send();
       } catch (e) {
         if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
@@ -355,6 +412,14 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
           id,
           actorUserIdOrNull(request)
         );
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "automation_rule",
+          entityId: (row as { id?: number })?.id ?? "—",
+          action: "automation_rule.copy",
+          payload: { kind: "auto_confirm", source_id: id }
+        });
         return reply.status(201).send({ data: row });
       } catch (e) {
         if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");

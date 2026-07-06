@@ -35,6 +35,31 @@ describe.skipIf(!dbReady)("access / RBAC API (database)", () => {
     expect(res.body.data).toMatchObject({ keys: expect.any(Array) });
   });
 
+  it("GET /api/:slug/access/users excludes mobile-only KOMANDA roles", async () => {
+    const token = await adminToken();
+    const res = await request(app.server).get("/api/test1/access/users").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const roles = (res.body.data as { role: string }[]).map((u) => u.role);
+    for (const mobileRole of ["agent", "expeditor", "collector", "auditor"]) {
+      expect(roles).not.toContain(mobileRole);
+    }
+  });
+
+  it("GET /api/:slug/access/users?mode=supervisor_pick includes all roles", async () => {
+    const token = await adminToken();
+    const res = await request(app.server)
+      .get("/api/test1/access/users?mode=supervisor_pick")
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    const roles = new Set((res.body.data as { role: string }[]).map((u) => u.role));
+    const all = await request(app.server).get("/api/test1/access/users").set("Authorization", `Bearer ${token}`);
+    expect(all.body.data.length).toBeLessThanOrEqual(res.body.data.length);
+    if (roles.has("agent")) {
+      expect(all.body.data.some((u: { role: string }) => u.role === "agent")).toBe(false);
+    }
+  });
+
   it("GET /api/:slug/access/users includes scope.territories", async () => {
     const token = await adminToken();
     const res = await request(app.server).get("/api/test1/access/users").set("Authorization", `Bearer ${token}`);
@@ -77,6 +102,10 @@ describe.skipIf(!dbReady)("access / RBAC API (database)", () => {
     expect(Array.isArray(res.body.data.flat)).toBe(true);
     // DEFAULT_PERMISSION_METADATA + LEGACY_PERMISSION_METADATA (see permission-catalog.service sync)
     expect(res.body.data.flat.length).toBeGreaterThanOrEqual(340);
+    const withAction = (res.body.data.flat as { key: string; action: string | null }[]).filter(
+      (r) => r.action && ["view", "create", "update", "delete"].includes(r.action)
+    );
+    expect(withAction.length).toBeGreaterThan(50);
   });
 
   it("PATCH /api/:slug/access/users/:id accepts remove_permission_keys", async () => {

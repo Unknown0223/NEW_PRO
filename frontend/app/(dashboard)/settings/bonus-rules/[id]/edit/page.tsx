@@ -2,10 +2,8 @@
 
 import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
 import { BonusRuleForm } from "@/components/bonus-rules/bonus-rule-form";
-import { PageHeader } from "@/components/dashboard/page-header";
+import { BonusRuleFormPageHeader } from "@/components/bonus-rules/bonus-rule-form-page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -30,6 +28,7 @@ export default function EditBonusRulePage() {
     queryKey: ["bonus-rule", tenantSlug, ruleId],
     enabled: Boolean(tenantSlug) && !invalid,
     staleTime: STALE.detail,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data: body } = await api.get<BonusRuleRow>(`/api/${tenantSlug}/bonus-rules/${ruleId}`);
       return body;
@@ -45,12 +44,11 @@ export default function EditBonusRulePage() {
 
   return (
     <PageShell>
-      <Link
-        href="/settings/bonus-rules/active"
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 w-fit -ml-2 text-muted-foreground")}
-      >
-        ← Список правил бонусов
-      </Link>
+      {data && data.type !== "sum" && data.type !== "discount" ? (
+        <BonusRuleFormPageHeader variant="bonus" mode="edit" ruleName={data.name} />
+      ) : (
+        <BonusRuleFormPageHeader variant="bonus" mode="edit" />
+      )}
 
       {!authHydrated ? (
         <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
@@ -71,18 +69,11 @@ export default function EditBonusRulePage() {
       ) : data && (data.type === "sum" || data.type === "discount") ? (
         <p className="text-sm text-muted-foreground">Переход в раздел скидок…</p>
       ) : data ? (
-        <>
-          <PageHeader
-            title="Редактирование правила бонуса"
-            description={`${data.name} · #${data.id}`}
-            actions={
-              <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/dashboard">
-                Панель управления
-              </Link>
-            }
-          />
-          <BonusRuleForm tenantSlug={tenantSlug} initialRule={data} />
-        </>
+        <BonusRuleForm
+          key={`${data.id}:${data.updated_at ?? ""}`}
+          tenantSlug={tenantSlug}
+          initialRule={data}
+        />
       ) : (
         <p className="text-sm text-destructive">Нет данных.</p>
       )}

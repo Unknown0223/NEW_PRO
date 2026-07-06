@@ -16,14 +16,22 @@ import { api } from "@/lib/api";
 import { useAuthStoreHydrated } from "@/lib/auth-store";
 import type { ClientBalanceRow } from "@/lib/client-balances-types";
 import { getUserFacingError } from "@/lib/error-utils";
+import { isDiscountSettlementPaymentLabel } from "@/lib/discount-settlement";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
+import { commonBulkBooleanColumn, commonBulkColumnValue } from "@/lib/bulk-table-column";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type CashDeskRow = { id: number; name: string; is_active: boolean };
+type CashDeskRow = {
+  id: number;
+  name: string;
+  is_active: boolean;
+  accepts_client_payments?: boolean;
+  accepts_discount_payments?: boolean;
+};
 
 type RowDraft = {
   client_id: number;
@@ -95,6 +103,9 @@ export function ClientBalancesBulkPaymentDialog({
   const [paidAtLocal, setPaidAtLocal] = useState(() => localValueToDatetimeInput(new Date()));
   const [rowDrafts, setRowDrafts] = useState<RowDraft[]>([]);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [bulkAmountDrafts, setBulkAmountDrafts] = useState<Record<string, string>>({});
+  const [bulkNoteDraft, setBulkNoteDraft] = useState("");
+  const consignmentHeaderRef = useRef<HTMLInputElement>(null);
 
   const cashDesksQ = useQuery({
     queryKey: ["cash-desks", tenantSlug, "bulk-pay-balances"],
@@ -122,6 +133,8 @@ export function ClientBalancesBulkPaymentDialog({
     setPaidAtLocal(localValueToDatetimeInput(new Date()));
     setCashDeskId("");
     setFormErr(null);
+    setBulkAmountDrafts({});
+    setBulkNoteDraft("");
   }, [open, clients, paymentColumnLabels]);
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.client_id, c])), [clients]);
@@ -138,6 +151,41 @@ export function ClientBalancesBulkPaymentDialog({
         r.client_id === clientId ? { ...r, amounts: { ...r.amounts, [label]: value } } : r
       )
     );
+  }, []);
+
+  const headerTradeDirection = useMemo(
+    () => commonBulkColumnValue(rowDrafts, (d) => d.trade_direction, ""),
+    [rowDrafts]
+  );
+
+  const headerConsignment = useMemo(
+    () => commonBulkBooleanColumn(rowDrafts, (d) => d.consignment),
+    [rowDrafts]
+  );
+
+  useEffect(() => {
+    const el = consignmentHeaderRef.current;
+    if (!el) return;
+    el.indeterminate = headerConsignment === "mixed";
+    el.checked = headerConsignment === true;
+  }, [headerConsignment]);
+
+  const applyAllTradeDirection = useCallback((value: string) => {
+    setRowDrafts((prev) => prev.map((r) => ({ ...r, trade_direction: value })));
+  }, []);
+
+  const applyAllConsignment = useCallback((checked: boolean) => {
+    setRowDrafts((prev) => prev.map((r) => ({ ...r, consignment: checked })));
+  }, []);
+
+  const applyAllAmount = useCallback((label: string, value: string) => {
+    setRowDrafts((prev) =>
+      prev.map((r) => ({ ...r, amounts: { ...r.amounts, [label]: value } }))
+    );
+  }, []);
+
+  const applyAllNote = useCallback((value: string) => {
+    setRowDrafts((prev) => prev.map((r) => ({ ...r, note: value })));
   }, []);
 
   const columnTotals = useMemo(() => {
@@ -161,8 +209,51 @@ export function ClientBalancesBulkPaymentDialog({
     return [...s];
   }, [tradeDirections, rowDrafts]);
 
+  const hasDiscountAmounts = useMemo(
+    () =>
+      rowDrafts.some((d) =>
+        paymentColumnLabels.some(
+          (lab) => isDiscountSettlementPaymentLabel(lab) && parseLineAmount(d.amounts[lab] ?? "") > 0
+        )
+      ),
+    [rowDrafts, paymentColumnLabels]
+  );
+
+  const hasClientPaymentAmounts = useMemo(
+    () =>
+      rowDrafts.some((d) =>
+        paymentColumnLabels.some(
+          (lab) =>
+            !isDiscountSettlementPaymentLabel(lab) && parseLineAmount(d.amounts[lab] ?? "") > 0
+        )
+      ),
+    [rowDrafts, paymentColumnLabels]
+  );
+
+  const filteredCashDesks = useMemo(() => {
+    const all = cashDesksQ.data ?? [];
+    if (hasDiscountAmounts && hasClientPaymentAmounts) return all;
+    if (hasDiscountAmounts) {
+      return all.filter((d) => d.accepts_discount_payments === true);
+    }
+    if (hasClientPaymentAmounts) {
+      return all.filter((d) => d.accepts_client_payments !== false);
+    }
+    return all;
+  }, [cashDesksQ.data, hasDiscountAmounts, hasClientPaymentAmounts]);
+
+  useEffect(() => {
+    if (!cashDeskId.trim()) return;
+    const ok = filteredCashDesks.some((d) => String(d.id) === cashDeskId);
+    if (!ok) setCashDeskId("");
+  }, [filteredCashDesks, cashDeskId]);
+
   const submitMut = useMutation({
     mutationFn: async () => {
+      if (hasDiscountAmounts && hasClientPaymentAmounts) {
+        throw new Error("MIXED_PAYMENT_PURPOSE");
+      }
+
       const deskRaw = cashDeskId.trim();
       const deskParsed = deskRaw ? Number.parseInt(deskRaw, 10) : NaN;
       const cash_desk_id =
@@ -178,6 +269,7 @@ export function ClientBalancesBulkPaymentDialog({
         cash_desk_id: number | null;
         paid_at: string | undefined;
         ledger_agent_id?: number;
+        entry_kind?: "payment" | "discount_settlement";
       };
 
       const bodies: Body[] = [];
@@ -187,7 +279,10 @@ export function ClientBalancesBulkPaymentDialog({
         for (const lab of paymentColumnLabels) {
           const amt = parseLineAmount(d.amounts[lab] ?? "");
           if (amt <= 0) continue;
-          const note = buildNote(d.trade_direction, d.consignment, d.note.trim() || null);
+          const isDiscount = isDiscountSettlementPaymentLabel(lab);
+          const note = isDiscount
+            ? buildNote(d.trade_direction, d.consignment, null)
+            : buildNote(d.trade_direction, d.consignment, d.note.trim() || null);
           const body: Body = {
             client_id: d.client_id,
             order_id: null,
@@ -195,7 +290,8 @@ export function ClientBalancesBulkPaymentDialog({
             payment_type: lab.trim(),
             note,
             cash_desk_id,
-            paid_at
+            paid_at,
+            ...(isDiscount ? { entry_kind: "discount_settlement" as const } : {})
           };
           if (row.agent_id != null && row.agent_id > 0) {
             body.ledger_agent_id = row.agent_id;
@@ -223,10 +319,20 @@ export function ClientBalancesBulkPaymentDialog({
         setFormErr("Укажите хотя бы одну сумму больше нуля.");
         return;
       }
+      if (e instanceof Error && e.message === "MIXED_PAYMENT_PURPOSE") {
+        setFormErr(
+          "Оплата скидки и обычные платежи нельзя проводить одной операцией — используйте разные кассы и сохраняйте отдельно."
+        );
+        return;
+      }
       if (axios.isAxiosError(e)) {
         const code = (e.response?.data as { error?: string } | undefined)?.error;
-        if (code === "BadCashDesk") {
+        if (code === "BadCashDesk" || code === "BAD_CASH_DESK") {
           setFormErr("Указана несуществующая или неактивная касса.");
+          return;
+        }
+        if (code === "CASH_DESK_NO_CLIENT_PAYMENTS" || code === "CASH_DESK_NO_DISCOUNT_PAYMENTS") {
+          setFormErr("Выбранная касса не подходит для этого типа оплаты.");
           return;
         }
         if (code === "BadLedgerAgent") {
@@ -279,12 +385,17 @@ export function ClientBalancesBulkPaymentDialog({
                 }}
                 disabled={submitMut.isPending}
               >
-                {(cashDesksQ.data ?? []).map((d) => (
+                {(filteredCashDesks).map((d) => (
                   <option key={d.id} value={String(d.id)}>
                     {d.name}
                   </option>
                 ))}
               </FilterSelect>
+              {hasDiscountAmounts && hasClientPaymentAmounts ? (
+                <p className="text-xs text-destructive">
+                  Уберите суммы в одном из типов: скидка и обычная оплата требуют разных касс.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="bulk-pay-datetime">Дата оплаты</Label>
@@ -309,18 +420,78 @@ export function ClientBalancesBulkPaymentDialog({
                     Клиент
                   </th>
                   <th className="whitespace-nowrap px-2 py-2">Агент</th>
-                  <th className="min-w-[8rem] px-2 py-2">Направление торговли</th>
-                  <th className="w-10 px-1 py-2 text-center">Консиг.</th>
+                  <th className="min-w-[8rem] px-2 py-2">
+                    <FilterSelect
+                      className="flex h-9 w-full min-w-0 rounded-md border border-input bg-background px-1.5 text-xs font-medium"
+                      emptyLabel="Направление"
+                      aria-label="Направление для всех"
+                      value={headerTradeDirection}
+                      onChange={(e) => applyAllTradeDirection(e.target.value)}
+                      disabled={submitMut.isPending}
+                    >
+                      {tradeDirectionOptions.map((td) => (
+                        <option key={td} value={td}>
+                          {td}
+                        </option>
+                      ))}
+                    </FilterSelect>
+                  </th>
+                  <th className="w-10 px-1 py-2 text-center">
+                    <input
+                      ref={consignmentHeaderRef}
+                      type="checkbox"
+                      className="rounded border-input"
+                      disabled={submitMut.isPending}
+                      aria-label="Консигнация для всех"
+                      title="Консигнация для всех"
+                      onChange={(e) => applyAllConsignment(e.target.checked)}
+                    />
+                  </th>
                   {paymentColumnLabels.map((lab) => (
                     <th
                       key={lab}
                       className="min-w-[6.5rem] whitespace-normal px-2 py-2 text-right text-xs leading-tight"
                       title={lab}
                     >
-                      {lab}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-left font-medium leading-tight">{lab}</span>
+                        <Input
+                          className="h-8 text-xs tabular-nums"
+                          inputMode="decimal"
+                          placeholder="Для всех"
+                          value={bulkAmountDrafts[lab] ?? ""}
+                          onChange={(e) =>
+                            setBulkAmountDrafts((p) => ({ ...p, [lab]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              applyAllAmount(lab, bulkAmountDrafts[lab] ?? "");
+                            }
+                          }}
+                          onBlur={() => {
+                            const v = bulkAmountDrafts[lab] ?? "";
+                            if (v.trim()) applyAllAmount(lab, v);
+                          }}
+                          disabled={submitMut.isPending}
+                        />
+                      </div>
                     </th>
                   ))}
-                  <th className="min-w-[8rem] px-2 py-2">Комментарий</th>
+                  <th className="min-w-[8rem] px-2 py-2">
+                    <Input
+                      className="h-9 text-xs"
+                      placeholder="Комментарий для всех"
+                      value={bulkNoteDraft}
+                      onChange={(e) => setBulkNoteDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") applyAllNote(bulkNoteDraft);
+                      }}
+                      onBlur={() => {
+                        if (bulkNoteDraft.trim()) applyAllNote(bulkNoteDraft);
+                      }}
+                      disabled={submitMut.isPending}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>

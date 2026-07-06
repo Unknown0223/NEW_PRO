@@ -101,8 +101,9 @@ export function usePriceMatrixPage() {
     }
   });
 
-  const matrixRows = matrixQ.data?.data ?? [];
+  const matrixRows = useMemo(() => matrixQ.data?.data ?? [], [matrixQ.data?.data]);
   const currency = matrixQ.data?.currency ?? "UZS";
+  const categoryIdsKey = categoryIdsArr.join(",");
 
   const selectedCategoryLabels = useMemo(() => {
     const labelById = new Map(flatCats.map((c) => [c.id, c.label]));
@@ -143,7 +144,7 @@ export function usePriceMatrixPage() {
 
   useEffect(() => {
     syncDraftFromRows(matrixQ.data?.data ?? []);
-  }, [matrixQ.data?.data, categoryIdsArr.join(","), priceType, syncDraftFromRows]);
+  }, [matrixQ.data?.data, categoryIdsKey, priceType, syncDraftFromRows]);
 
   useEffect(() => {
     setPriceType("");

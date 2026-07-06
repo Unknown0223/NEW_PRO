@@ -11,6 +11,12 @@ function pathOnly(url: string): string {
   return q === -1 ? url : url.slice(0, q);
 }
 
+function shouldSampleVerboseLog(): boolean {
+  if (env.LOG_SAMPLE_RATE >= 1) return true;
+  if (env.LOG_SAMPLE_RATE <= 0) return false;
+  return Math.random() < env.LOG_SAMPLE_RATE;
+}
+
 function extractActorUserId(request: FastifyRequest): number | undefined {
   const u = request.user as AccessJwtUser | undefined;
   if (!u?.sub) return undefined;
@@ -42,10 +48,12 @@ export const requestObservabilityPlugin = fp(async (app) => {
     };
     if (ms >= SLOW_REQUEST_MS) {
       app.log.warn(base, "slow_request");
-    } else if (env.NODE_ENV !== "production") {
-      app.log.debug(base, "request_complete");
-    } else {
-      app.log.info(base, "request_complete");
+    } else if (shouldSampleVerboseLog()) {
+      if (env.NODE_ENV !== "production") {
+        app.log.debug(base, "request_complete");
+      } else {
+        app.log.info(base, "request_complete");
+      }
     }
     done();
   });

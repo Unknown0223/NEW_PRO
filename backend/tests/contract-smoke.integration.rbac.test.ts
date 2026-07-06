@@ -5,6 +5,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
 import { contractSmokeDbReady, expectErrorContract, expectRequestIdHeader } from "./contract-smoke.harness";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 describe.skipIf(!contractSmokeDbReady)("contract smoke (RBAC)", () => {
   const app = buildApp();
@@ -118,10 +119,10 @@ describe.skipIf(!contractSmokeDbReady)("contract smoke (RBAC)", () => {
     });
 
     it("agent POST /mobile/orders/enqueue — yaroqsiz body — 400 yoki 403 (ruxsat)", async () => {
-      const login = await request(app.server).post("/api/auth/login").send({
+      const login = await loginForIntegrationTest(app, {
         slug: "test1",
         login: "agent",
-        password: "secret123"
+        password: "111111"
       });
       expect(login.status).toBe(200);
       const token = login.body.accessToken as string;
@@ -139,10 +140,10 @@ describe.skipIf(!contractSmokeDbReady)("contract smoke (RBAC)", () => {
     });
 
     it("agent GET /orders/exchange-source-availability — rol cheklovi — 403 ForbiddenRole", async () => {
-      const login = await request(app.server).post("/api/auth/login").send({
+      const login = await loginForIntegrationTest(app, {
         slug: "test1",
         login: "agent",
-        password: "secret123"
+        password: "111111"
       });
       expect(login.status).toBe(200);
       const token = login.body.accessToken as string;
@@ -155,10 +156,10 @@ describe.skipIf(!contractSmokeDbReady)("contract smoke (RBAC)", () => {
     });
 
     it("agent GET /access/users — access.manage yo‘q — 403 ForbiddenPermission", async () => {
-      const login = await request(app.server).post("/api/auth/login").send({
+      const login = await loginForIntegrationTest(app, {
         slug: "test1",
         login: "agent",
-        password: "secret123"
+        password: "111111"
       });
       expect(login.status).toBe(200);
       const token = login.body.accessToken as string;

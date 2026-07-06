@@ -29,7 +29,7 @@ export const CompositionSummaryStrip = memo(function CompositionSummaryStrip({
   const visible = polkiDisplayRows.length;
 
   return (
-    <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
       <p>
         Доступно позиций:{" "}
         <span className="font-semibold text-slate-800">{available}</span>

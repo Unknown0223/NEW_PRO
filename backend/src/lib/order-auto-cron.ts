@@ -9,7 +9,6 @@ import { canTransitionOrderStatus } from "../modules/orders/order-status";
 import { emitOrderUpdated } from "./order-event-bus";
 
 // ── Config (env with defaults) ──────────────────────────────────────
-const AUTO_CLOSE_DAYS = parseInt(process.env.AUTO_CLOSE_DAYS ?? "7", 10);
 const AUTO_PICKING_HOURS = parseInt(process.env.AUTO_PICKING_HOURS ?? "24", 10);
 const AUTO_DELIVER_HOURS = parseInt(process.env.AUTO_DELIVER_HOURS ?? "48", 10);
 const CHECK_INTERVAL_MS = parseInt(process.env.CHECK_INTERVAL_MS ?? "3600000", 10);
@@ -75,20 +74,18 @@ export async function runAutoClose(): Promise<{
   skipped: { id: number; reason: string }[];
 }> {
   const now = new Date();
-  const closeCutoff = new Date(now.getTime() - AUTO_CLOSE_DAYS * 24 * 3600 * 1000);
   const pickingCutoff = new Date(now.getTime() - AUTO_PICKING_HOURS * 3600 * 1000);
   const deliverCutoff = new Date(now.getTime() - AUTO_DELIVER_HOURS * 3600 * 1000);
 
-  // Build rules. Note: delivered -> cancelled is NOT a valid transition
-  // (only delivered -> returned is).  We target *returned* for stale
-  // delivered orders instead.
+  // NOTE: There is intentionally NO auto-transition out of `delivered`.
+  // `delivered` is the successful terminal state of a sales order. A return
+  // (`returned`) reverses the sale/receivable and must only happen through an
+  // explicit return document or manual action — never as a time-based job.
+  // The previous `delivered -> returned` rule used the order's `created_at`,
+  // so any order created long ago would be flipped back to `returned`
+  // immediately after being (re)delivered, silently turning deliveries into
+  // returns ("Возврат"). That rule has been removed.
   const rules: TransitionRule[] = [
-    {
-      fromStatus: "delivered",
-      toStatus: "returned",
-      label: "auto-return-stale-delivered",
-      cutoffDate: closeCutoff,
-    },
     {
       fromStatus: "confirmed",
       toStatus: "picking",

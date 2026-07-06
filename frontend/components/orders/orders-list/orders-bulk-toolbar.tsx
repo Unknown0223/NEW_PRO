@@ -5,12 +5,17 @@ import { OrdersBulkConsignmentDialog } from "@/components/orders/orders-list/ord
 import { OrdersBulkExpeditorDialog } from "@/components/orders/orders-list/orders-bulk-expeditor-dialog";
 import { OrdersBulkStatusDialog } from "@/components/orders/orders-list/orders-bulk-status-dialog";
 import { OrdersNakladnoyPreviewModal } from "@/components/orders/orders-list/orders-nakladnoy-preview-modal";
+import { OrdersBulkDownloadModal } from "@/components/orders/orders-list/orders-bulk-download-modal";
 import { OrdersBulkUploadPanel } from "@/components/orders/orders-list/orders-bulk-upload-panel";
+import { downloadBulkExportSelection } from "@/lib/bulk-export-download";
 import type { BulkExportTemplateDef } from "@/lib/bulk-export-templates";
 import {
+  bulkExportTemplateKey,
+  getAllVisibleTemplates,
   loadBulkExportPrefsStore,
   resolveNakladnoyPrefsForDownload,
-  resolveWarehouseExportApiBody
+  resolveWarehouseExportApiBody,
+  type BulkExportPrefsStore
 } from "@/lib/bulk-export-template-prefs";
 import { downloadExpeditorLoadingLayoutXlsx } from "@/lib/expeditor-loading-download";
 import type { NakladnoyPreviewResponse } from "@/lib/nakladnoy-preview";
@@ -68,7 +73,7 @@ type OrdersBulkToolbarProps = Pick<
 >;
 
 const toolbarBtn =
-  "flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-input dark:bg-background dark:text-foreground dark:hover:bg-muted/50";
+  "flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-muted disabled:opacity-50 dark:border-input dark:bg-background dark:text-foreground dark:hover:bg-muted/50";
 
 /** Pastki panel — shablon dropdown (API status kodlari) */
 const BULK_STATUS_QUICK = [
@@ -126,6 +131,12 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   >(undefined);
   const [previewInitial, setPreviewInitial] = useState<NakladnoyPreviewResponse | null>(null);
   const [previewDownloading, setPreviewDownloading] = useState(false);
+  const [bulkDownloadOpen, setBulkDownloadOpen] = useState(false);
+  const [bulkDownloadPending, setBulkDownloadPending] = useState(false);
+  const [bulkDownloadError, setBulkDownloadError] = useState<string | null>(null);
+  const [bulkPrefsStore, setBulkPrefsStore] = useState<BulkExportPrefsStore>(() =>
+    loadBulkExportPrefsStore()
+  );
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   const consignmentEligibleIds = useMemo(
@@ -230,19 +241,68 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     openTemplatePreview(template);
   };
 
-  const downloadOneFile = () => {
-    if (!canBulkCatalog) {
-      setBulkFeedback("Недостаточно прав для загрузки.");
+  const openBulkDownloadModal = () => {
+    const store = loadBulkExportPrefsStore();
+    const visible = getAllVisibleTemplates(store);
+    if (visible.length === 0) {
+      setBulkFeedback("Нет выбранных шаблонов. Включите отчёты в настройках чипов.");
+      return;
+    }
+    if (!canBulkCatalog && visible.some((t) => t.downloadKind === "nakladnoy")) {
+      setBulkFeedback("Недостаточно прав для загрузки накладных.");
       return;
     }
     setNakladnoyFeedback(null);
-    setNakladnoyTemplate("nakladnoy_warehouse");
-    nakladnoyMut.mutate({
-      template: "nakladnoy_warehouse",
-      prefs: nakladnoyPrefs,
-      format: "xlsx"
-    });
-    setBulkFeedback("Загрузка одним файлом…");
+    setBulkPrefsStore(store);
+    setBulkDownloadError(null);
+    setBulkDownloadOpen(true);
+  };
+
+  const downloadBulkSelection = async (selectedKeys: Set<string>) => {
+    const store = bulkPrefsStore;
+    const items = getAllVisibleTemplates(store)
+      .filter((t) => selectedKeys.has(bulkExportTemplateKey(t)))
+      .map((template) => ({
+          template,
+          prefs: resolveNakladnoyPrefsForDownload(store, template, nakladnoyPrefs),
+        warehouseExportOptions: resolveWarehouseExportApiBody(store, template)
+      }));
+
+    const needsApi = items.some((i) => i.template.downloadKind === "nakladnoy");
+    if (needsApi && !tenantSlug) {
+      setBulkFeedback("Yuklab bo‘lmadi: tenant yo‘q.");
+      return;
+    }
+    if (needsApi && !canBulkCatalog) {
+      setBulkFeedback("Недостаточно прав для загрузки накладных.");
+      return;
+    }
+
+    const order = tablePrefs.visibleColumnOrder;
+    const headers = order.map((id) => ORDER_LIST_COLUMNS.find((c) => c.id === id)?.label ?? id);
+    const dataRows = selectedRows.map((o) => order.map((colId) => orderListExportCell(o, colId)));
+
+    setBulkDownloadPending(true);
+    setBulkDownloadError(null);
+    setNakladnoyFeedback(null);
+    setBulkFeedback(null);
+    try {
+      await downloadBulkExportSelection({
+        tenantSlug: tenantSlug ?? "",
+        orderIds: ids,
+        items,
+        registerSheet: { headers, rows: dataRows }
+      });
+      setBulkDownloadOpen(false);
+      setBulkFeedback(`Скачано: ${items.length} отчёт(ов).`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Yuklab bo‘lmadi.";
+      setBulkDownloadError(msg);
+      setNakladnoyFeedback(msg);
+      setBulkFeedback(msg);
+    } finally {
+      setBulkDownloadPending(false);
+    }
   };
 
   const handleClose = () => {
@@ -258,7 +318,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   };
 
   const barShell = (children: ReactNode) => (
-    <div className="animate-expand flex max-w-[min(100vw-1rem,72rem)] flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-2xl [overflow-y:visible] scrollbar-none dark:border-border dark:bg-card">
+    <div className="animate-expand flex max-w-[min(100vw-1rem,72rem)] flex-nowrap items-center gap-2 overflow-x-auto overflow-y-visible rounded-xl border border-border bg-card px-3 py-2 shadow-2xl [overflow-y:visible] scrollbar-none dark:border-border dark:bg-card">
       {children}
     </div>
   );
@@ -308,7 +368,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   const uploadView = (
     <>
       <OrdersBulkUploadPanel
-        disabled={nakladnoyMut.isPending || previewDownloading}
+        disabled={nakladnoyMut.isPending || previewDownloading || bulkDownloadPending}
         canBulkCatalog={canBulkCatalog}
         separateSheets={nakladnoyPrefs.separateSheets}
         onSeparateSheetsChange={(v) => {
@@ -316,11 +376,20 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           setNakladnoyPrefs(next);
           saveNakladnoyExportPrefs(next);
         }}
-        onDownloadOneFile={downloadOneFile}
+        onDownloadOneFile={openBulkDownloadModal}
         onDownloadTemplate={downloadTemplate}
         onBack={() => setViewMode("main")}
         onClose={handleClose}
       />
+      <OrdersBulkDownloadModal
+        open={bulkDownloadOpen}
+        onOpenChange={setBulkDownloadOpen}
+        prefsStore={bulkPrefsStore}
+        pending={bulkDownloadPending}
+        errorMessage={bulkDownloadError}
+        onDownload={downloadBulkSelection}
+      />
+
       {tenantSlug || previewTemplate?.downloadKind === "register" ? (
         <OrdersNakladnoyPreviewModal
           open={previewOpen}
@@ -343,7 +412,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
 
   const mainView = barShell(
     <>
-      <div className="shrink-0 border-r border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 dark:border-border dark:text-foreground">
+      <div className="shrink-0 border-r border-border px-3 py-1.5 text-sm font-medium text-gray-700 dark:border-border dark:text-foreground">
         Выбрано:{" "}
         <span className="text-base font-bold text-teal-700 tabular-nums dark:text-teal-400">
           {formatGroupedInteger(count)}
@@ -454,7 +523,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
 
       <button
         type="button"
-        className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-muted"
+        className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-muted hover:text-gray-700 dark:hover:bg-muted"
         title="Закрыть"
         onClick={handleClose}
       >
@@ -466,12 +535,12 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   const floatingBar = (
     <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] flex justify-center px-2 sm:px-3">
       <div className="pointer-events-auto flex w-full max-w-[min(100vw-1rem,90rem)] flex-col items-center gap-2">
-        {feedback ? (
+        {feedback && (!bulkDownloadOpen || bulkDownloadError) ? (
           <p className="max-w-lg rounded-lg border border-border bg-card px-3 py-1.5 text-center text-xs text-muted-foreground shadow-lg">
             {feedback}
           </p>
         ) : null}
-        {paymentPrefill.note ? (
+        {paymentPrefill.note && !bulkDownloadOpen ? (
           <p className="max-w-lg rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
             {paymentPrefill.note}
           </p>

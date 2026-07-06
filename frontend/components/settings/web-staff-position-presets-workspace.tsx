@@ -134,7 +134,7 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const rows = listQ.data ?? [];
+  const rows = useMemo(() => listQ.data ?? [], [listQ.data]);
   const activeRows = useMemo(() => rows.filter((r) => r.is_active), [rows]);
   const inactiveRows = useMemo(() => rows.filter((r) => !r.is_active), [rows]);
   const subset = presetTab === "active" ? activeRows : inactiveRows;

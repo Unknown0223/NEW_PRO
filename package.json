@@ -40,7 +40,18 @@
     "test:supervisor-dashboard": "npm run test:supervisor-dashboard --prefix backend && npm run test:supervisor-dashboard --prefix frontend && npm run test:supervisor-dashboard:e2e --prefix frontend",
     "audit:max-loc": "node scripts/audit-max-file-lines.mjs",
     "audit:max-loc:backend": "npm run audit:max-loc --prefix backend",
-    "audit:max-loc:frontend": "npm run audit:max-loc --prefix frontend"
+    "audit:max-loc:frontend": "npm run audit:max-loc --prefix frontend",
+    "env:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/env/switch-local.ps1",
+    "env:mobile:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/env/switch-production-mobile.ps1",
+    "deploy:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/railway/deploy.ps1 -SkipBootstrap",
+    "deploy:mobile:prod": "deploy-mobile-prod.cmd",
+    "deploy:mobile:apk": "mobile\\build-apk-railway.cmd",
+    "deploy:mobile:upload": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/railway/upload-mobile-apk-prod.ps1",
+    "deploy:mobile:apk:local": "mobile\\build-apk-local.cmd",
+    "test:mobile-update": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-mobile-app-update.ps1",
+    "bitta-ilova:verify": "npm run bitta-ilova:verify --prefix backend && powershell -NoProfile -ExecutionPolicy Bypass -File mobile/tool/verify.ps1",
+    "plans:verify": "npm run plans:verify --prefix backend && npm run plans:verify --prefix frontend",
+    "prod:verify": "npm run prod:verify --prefix backend && npm run refaktoring:verify --prefix frontend && npm run work-slots:verify --prefix frontend && npm run bitta-ilova:verify"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

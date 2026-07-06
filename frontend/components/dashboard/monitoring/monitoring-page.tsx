@@ -84,7 +84,7 @@ export function DashboardSalesMonitoring() {
   }, [selfSupervisorIdStr]);
 
   const { agents, supervisors, profileRefs } = useDashboardMeta(tenantSlug, hydrated);
-  const territoryNodes = profileRefs?.territory_nodes ?? [];
+  const territoryNodes = useMemo(() => profileRefs?.territory_nodes ?? [], [profileRefs?.territory_nodes]);
 
   const visibleSectionIds = useMemo(
     () => visibleMonitoringSections(sectionPrefs.hiddenColumnIds),

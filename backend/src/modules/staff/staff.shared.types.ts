@@ -76,6 +76,9 @@ export type StaffRow = {
   consignment_limit_amount: string | null;
   consignment_ignore_previous_months_debt: boolean;
   consignment_updated_at: string | null;
+  consignment_close_day: number;
+  consignment_close_hour: number;
+  consignment_close_minute: number;
   apk_version: string | null;
   device_name: string | null;
   last_sync_at: string | null;
@@ -107,7 +110,7 @@ export type StaffRow = {
   /** `role: supervisor` bo‘lgan foydalanuvchining ostidagi agentlar soni */
   supervisee_count: number;
   /** Supervisor ostidagi agentlar (faqat `kind === "supervisor"` da to‘ldiriladi) */
-  supervisees: Array<{ id: number; fio: string; code: string | null }>;
+  supervisees: Array<{ id: number; fio: string; code: string | null; is_active: boolean }>;
   /** Jadval tahriri (F.I.Sh alohida maydonlar) */
   first_name?: string | null;
   last_name?: string | null;
@@ -147,6 +150,9 @@ export type CreateStaffInput = {
   consignment?: boolean;
   consignment_limit_amount?: string | null;
   consignment_ignore_previous_months_debt?: boolean;
+  consignment_close_day?: number;
+  consignment_close_hour?: number;
+  consignment_close_minute?: number;
   apk_version?: string | null;
   device_name?: string | null;
   can_authorize?: boolean;

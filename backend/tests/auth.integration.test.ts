@@ -37,17 +37,52 @@ const { state, mockPrisma } = vi.hoisted(() => {
     state,
     mockPrisma: {
       tenant: {
-        findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => {
-          return state.tenants.find((t) => t.slug === where.slug) ?? null;
+        findUnique: vi.fn(async ({ where }: { where: { slug?: string; id?: number } }) => {
+          if (where.slug != null) {
+            return state.tenants.find((t) => t.slug === where.slug) ?? null;
+          }
+          if (where.id != null) {
+            return state.tenants.find((t) => t.id === where.id) ?? null;
+          }
+          return null;
         })
       },
       user: {
-        findUnique: vi.fn(async ({ where }: { where: { tenant_id_login: { tenant_id: number; login: string } } }) => {
-          return (
-            state.users.find(
-              (u) => u.tenant_id === where.tenant_id_login.tenant_id && u.login === where.tenant_id_login.login
-            ) ?? null
-          );
+        findUnique: vi.fn(
+          async ({
+            where
+          }: {
+            where: { tenant_id_login?: { tenant_id: number; login: string }; id?: number };
+          }) => {
+            if (where.tenant_id_login) {
+              return (
+                state.users.find(
+                  (u) =>
+                    u.tenant_id === where.tenant_id_login!.tenant_id &&
+                    u.login === where.tenant_id_login!.login
+                ) ?? null
+              );
+            }
+            if (where.id != null) {
+              const row = state.users.find((u) => u.id === where.id);
+              if (!row) return null;
+              return {
+                ...row,
+                app_access: true,
+                code: null,
+                first_name: row.name,
+                last_name: null,
+                middle_name: null
+              };
+            }
+            return null;
+          }
+        ),
+        update: vi.fn(async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+          const row = state.users.find((u) => u.id === where.id);
+          if (!row) throw new Error("User not found");
+          Object.assign(row, data);
+          return row;
         })
       },
       refreshToken: {
@@ -116,6 +151,19 @@ vi.mock("bcryptjs", () => ({
   }
 }));
 
+vi.mock("../src/modules/auth/app-access.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/modules/auth/app-access.service")>();
+  return {
+    ...actual,
+    hasActiveSessionForDevice: vi.fn(async () => true)
+  };
+});
+
+vi.mock("../src/modules/work-slots/work-slots.query", () => ({
+  loadActiveWorkSlotsByUserIds: vi.fn(async () => new Map()),
+  getActiveSlotForUser: vi.fn(async () => null)
+}));
+
 import { buildApp } from "../src/app";
 
 const app = buildApp();
@@ -180,6 +228,7 @@ describe("auth + tenant integration", () => {
       login: "agent01",
       password: "secret123"
     });
+    expect(loginResponse.status).toBe(200);
 
     const response = await request(app.server)
       .get("/api/namangan/protected")

@@ -199,11 +199,6 @@ export function EditPaymentDialog({
       paymentMethodSelectOptionsWithCurrent(profileRefs, profileRefs?.payment_types, p?.payment_type),
     [profileRefs, p?.payment_type]
   );
-  const allocated = useMemo(() => {
-    const t = detailQ.data?.allocated_total ?? "0";
-    const n = Number.parseFloat(String(t).replace(/\s/g, "").replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-  }, [detailQ.data?.allocated_total]);
 
   const showExpeditor = Boolean(p && p.order_id == null);
   const filteredCashDesks = useMemo(() => {
@@ -285,15 +280,6 @@ export function EditPaymentDialog({
     onError: (e: Error) => {
       const ax = e as { response?: { data?: { error?: string } } };
       const code = ax.response?.data?.error;
-      if (code === "AmountBelowAllocated") {
-        setFieldErrs({});
-        setFormErr(
-          allocated > 0
-            ? `Summa taqsimlangan summadan kam bo‘lmasin (taqsimlangan: ${allocated}).`
-            : "Summa taqsimlashlar bilan mos kelmaydi."
-        );
-        return;
-      }
       if (code === "OrderLockedByAllocations") {
         setFieldErrs({});
         setFormErr("Taqsimlashlar bor — zakaz raqamini o‘zgartirib bo‘lmaydi.");
@@ -361,12 +347,6 @@ export function EditPaymentDialog({
               patchMut.mutate();
             }}
           >
-            {allocated > 0 ? (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
-                Taqsimlangan:{" "}
-                <span className="font-semibold tabular-nums">{allocated}</span>. Summa shundan kam bo‘lmasin.
-              </p>
-            ) : null}
             {selectionNotice ? (
               <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
                 {selectionNotice}
@@ -459,8 +439,7 @@ export function EditPaymentDialog({
                 placeholder="Masalan: 1204"
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value.replace(/\D/g, ""))}
-                disabled={patchMut.isPending || allocated > 0}
-                title={allocated > 0 ? "Taqsimlash bor — zakaz o‘zgarmaydi" : undefined}
+                disabled={patchMut.isPending}
               />
               {fieldErrs.order_id ? (
                 <p className="text-xs text-destructive" role="alert">

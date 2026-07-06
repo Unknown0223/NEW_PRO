@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ClientSales4Filters, ReportActor } from "./client-sales-4.types";
 import { cteBody } from "./client-sales-4.core";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 const ITEM_FILTER_LATERAL = (itemSql: Prisma.Sql, hasItemFilter: boolean) => Prisma.sql`
   LEFT JOIN LATERAL (
@@ -39,7 +40,8 @@ const FILTERED_ORDERS_CTE = (
 `;
 
 export async function getClientSales4Report(tenantId: number, f: ClientSales4Filters, actor?: ReportActor) {
-  const { whereSql, itemSql, hasItemFilter, clientHaving } = cteBody(f, tenantId, actor);
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const { whereSql, itemSql, hasItemFilter, clientHaving } = cteBody(f, tenantId, scopedActor);
   const offset = (f.page - 1) * f.limit;
 
   const listRows = await prisma.$queryRaw<

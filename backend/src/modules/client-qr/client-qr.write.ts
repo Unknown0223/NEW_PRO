@@ -9,6 +9,26 @@ import {
   uniqueQrCodes
 } from "./client-qr.helpers";
 
+type Db = Pick<typeof prisma, "$queryRaw">;
+
+async function assertClientHasNoOtherQr(
+  db: Db,
+  tenantId: number,
+  clientId: number,
+  excludeQrId: number
+): Promise<void> {
+  const rows = await db.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+    SELECT q.id
+    FROM client_qr_codes q
+    WHERE q.tenant_id = ${tenantId}
+      AND q.client_id = ${clientId}
+      AND q.is_active = TRUE
+      AND q.id <> ${excludeQrId}
+    LIMIT 1
+  `);
+  if (rows.length > 0) throw new Error("CLIENT_ALREADY_HAS_QR");
+}
+
 export async function generateQrCodes(input: {
   tenantId: number;
   actorUserId: number | null;
@@ -23,10 +43,18 @@ export async function generateQrCodes(input: {
   await prisma.$transaction(
     async (tx) => {
       if (uniqueClientIds.length > 0) {
-        const clients = await tx.client.findMany({
-          where: { tenant_id: input.tenantId, id: { in: uniqueClientIds } },
-          select: { id: true }
-        });
+        const clients = await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+          SELECT c.id
+          FROM clients c
+          WHERE c.tenant_id = ${input.tenantId}
+            AND c.id IN (${Prisma.join(uniqueClientIds)})
+            AND NOT EXISTS (
+              SELECT 1 FROM client_qr_codes q2
+              WHERE q2.tenant_id = c.tenant_id
+                AND q2.client_id = c.id
+                AND q2.is_active = TRUE
+            )
+        `);
         const codes = uniqueQrCodes(clients.length);
         for (let j = 0; j < clients.length; j += QR_GENERATE_CHUNK) {
           const part = clients.slice(j, j + QR_GENERATE_CHUNK);
@@ -72,12 +100,54 @@ export async function generateQrCodes(input: {
   return { created };
 }
 
+export async function lookupQrByCode(tenantId: number, qrCode: string) {
+  const code = qrCode.trim();
+  if (!code) return null;
+  return prisma.clientQrCode.findFirst({
+    where: { tenant_id: tenantId, qr_code: code, is_active: true },
+    select: { id: true, qr_code: true, client_id: true, status: true }
+  });
+}
+
+export async function bindQrByCode(input: {
+  tenantId: number;
+  actorUserId: number | null;
+  qrCode: string;
+  clientId: number;
+}) {
+  const row = await lookupQrByCode(input.tenantId, input.qrCode);
+  if (!row) throw new Error("NOT_FOUND");
+  await bindQrCode({
+    tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
+    qrId: row.id,
+    clientId: input.clientId
+  });
+  return row;
+}
+
+export async function unbindQrByCode(input: {
+  tenantId: number;
+  actorUserId: number | null;
+  qrCode: string;
+}) {
+  const row = await lookupQrByCode(input.tenantId, input.qrCode);
+  if (!row) throw new Error("NOT_FOUND");
+  await unbindQrCode({
+    tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
+    qrId: row.id
+  });
+  return row;
+}
+
 export async function bindQrCode(input: {
   tenantId: number;
   actorUserId: number | null;
   qrId: number;
   clientId: number;
 }) {
+  await assertClientHasNoOtherQr(prisma, input.tenantId, input.clientId, input.qrId);
   const now = new Date();
   const ok = await prisma.$executeRaw(Prisma.sql`
     UPDATE client_qr_codes q

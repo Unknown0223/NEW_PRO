@@ -60,22 +60,26 @@ async function ensureSalesChannels(prisma: PrismaClient, tenantId: number, dry: 
 
 async function ensureTradeDirections(prisma: PrismaClient, tenantId: number, dry: boolean) {
   console.log("\n── [2/5] Savdo yo‘nalishlari → `trade_directions` ──");
+  const keepCodes = TRADE_DIRECTIONS.map((row) => row.code);
   for (const row of TRADE_DIRECTIONS) {
     const existing = await prisma.tradeDirection.findFirst({
       where: { tenant_id: tenantId, code: row.code }
     });
     if (existing) {
-      if (
+      const needsUpdate =
         existing.use_in_order_proposal !== row.use_in_order_proposal ||
-        existing.name !== row.name
-      ) {
+        existing.name !== row.name ||
+        existing.sort_order !== row.sort_order ||
+        !existing.is_active;
+      if (needsUpdate) {
         if (!dry) {
           await prisma.tradeDirection.update({
             where: { id: existing.id },
             data: {
               name: row.name,
               use_in_order_proposal: row.use_in_order_proposal,
-              sort_order: row.sort_order
+              sort_order: row.sort_order,
+              is_active: true
             }
           });
           console.log(`~ ${row.code} (yangilandi)`);
@@ -101,6 +105,34 @@ async function ensureTradeDirections(prisma: PrismaClient, tenantId: number, dry
     });
     console.log(`+ ${row.code}`);
   }
+
+  const extras = await prisma.tradeDirection.findMany({
+    where: { tenant_id: tenantId, code: { notIn: keepCodes } },
+    select: { id: true, code: true, name: true }
+  });
+  if (extras.length === 0) return;
+
+  if (dry) {
+    console.log(
+      `[dry] katalogdan tashqari yo‘nalishlar o‘chiriladi: ${extras.map((x) => x.code ?? x.name).join(", ")}`
+    );
+    return;
+  }
+
+  const extraIds = extras.map((x) => x.id);
+  await prisma.user.updateMany({
+    where: { tenant_id: tenantId, trade_direction_id: { in: extraIds } },
+    data: { trade_direction_id: null }
+  });
+  await prisma.userTradeDirectionLink.deleteMany({
+    where: { tenant_id: tenantId, trade_direction_id: { in: extraIds } }
+  });
+  const deleted = await prisma.tradeDirection.deleteMany({
+    where: { tenant_id: tenantId, id: { in: extraIds } }
+  });
+  console.log(
+    `− katalogdan tashqari yo‘nalishlar o‘chirildi: ${deleted.count} ta (${extras.map((x) => x.code ?? x.name).join(", ")})`
+  );
 }
 
 async function ensureWarehouses(prisma: PrismaClient, tenantId: number, dry: boolean) {

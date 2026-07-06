@@ -13,7 +13,7 @@ function tenantSlugFromApiPath(path: string): string | undefined {
   const parts = path.split("/").filter(Boolean);
   if (parts.length < 2 || parts[0] !== "api") return undefined;
   const seg = parts[1];
-  if (!seg || seg === "auth") return undefined;
+  if (!seg || seg === "auth" || seg === "mobile") return undefined;
   try {
     return decodeURIComponent(seg);
   } catch {

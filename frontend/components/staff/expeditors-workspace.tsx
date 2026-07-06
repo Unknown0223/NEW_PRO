@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -14,17 +13,47 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
+import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
-import { Eye, Link2, ListOrdered, MonitorSmartphone, Pencil, RefreshCw, Settings2, UserMinus } from "lucide-react";
+import { Eye, Link2, MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { ExpeditorConfigurationsDialog } from "@/components/staff/expeditor-configurations-dialog";
+import { ExpeditorsFiltersRow } from "@/components/staff/expeditors-filters-row";
+import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
+import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import {
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
+import { activeBranchNamesFromProfile } from "@/lib/branch-options";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
+import { formatPersonDisplayName } from "@/lib/person-display";
+import {
+  StaffKomandaActiveSessionsCell,
+  StaffKomandaApkCell,
+  StaffKomandaAppAccessToggle,
+  StaffKomandaBranchCell,
+  StaffKomandaCodeCell,
+  StaffKomandaCreatedAtCell,
+  StaffKomandaDeviceCell,
+  StaffKomandaFioCell,
+  StaffKomandaLastSyncCell,
+  StaffKomandaLoginCell,
+  StaffKomandaMaxSessionsCell,
+  StaffKomandaPhoneCell,
+  StaffKomandaPinflCell,
+  StaffKomandaPositionCell,
+  StaffKomandaTerritoryCell,
+  StaffKomandaWarehouseCell
+} from "@/components/staff/staff-komanda-table-cells";
 
 export type ExpeditorAssignmentRules = {
   price_types?: string[];
@@ -38,6 +67,9 @@ export type ExpeditorAssignmentRules = {
 export type ExpeditorRow = {
   id: number;
   fio: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  middle_name?: string | null;
   product: string | null;
   agent_type: string | null;
   code: string | null;
@@ -127,6 +159,9 @@ const EXPEDITOR_COLUMNS = EXPEDITOR_COLUMN_IDS.map((id, i) => ({
   id,
   label: COLS[i] ?? id
 }));
+const EXPEDITOR_COLUMN_LABEL_BY_ID = new Map<string, string>(
+  EXPEDITOR_COLUMNS.map((c) => [c.id, c.label])
+);
 
 function randomPassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -148,13 +183,14 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   const [appliedPos, setAppliedPos] = useState("");
   const [search, setSearch] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: EXPEDITOR_TABLE_ID,
     defaultColumnOrder: [...EXPEDITOR_COLUMN_IDS],
     defaultPageSize: 10,
-    allowedPageSizes: [10, 20, 25, 50, 100]
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
 
@@ -172,7 +208,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   const [appliedOblast, setAppliedOblast] = useState("");
   const [appliedCity, setAppliedCity] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
-  const headerCbRef = useRef<HTMLInputElement>(null);
 
   const filterOptQ = useQuery({
     queryKey: ["expeditors-filter-options", tenantSlug],
@@ -202,14 +237,13 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const branchOptions = useMemo(() => {
-    const fromAgents = filterOptQ.data?.branches ?? [];
-    const fromProfile = (profileQ.data?.references.branches ?? [])
-      .filter((b) => b.active !== false)
-      .map((b) => b.name.trim())
-      .filter(Boolean);
-    return Array.from(new Set([...fromProfile, ...fromAgents])).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data, profileQ.data]);
+  const branchOptions = useMemo(
+    () => activeBranchNamesFromProfile(profileQ.data?.references.branches),
+    [profileQ.data]
+  );
+
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "expeditors-workspace");
+  const tradeDirectionFilterOptions = tradeDirectionsCatalog.labels;
 
   const listQ = useQuery({
     queryKey: [
@@ -346,21 +380,40 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     );
   }, [listQ.data, search]);
 
+  const total = filteredRows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
   const pageRows = useMemo(() => {
-    return filteredRows.slice(0, pageSize);
-  }, [filteredRows, pageSize]);
+    const start = (safePage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, safePage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, appliedBranch, appliedTd, appliedPos, appliedOblast, appliedCity, search, pageSize]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [tab]);
+  }, [tab, appliedBranch, appliedTd, appliedPos, appliedOblast, appliedCity, safePage, pageSize]);
 
-  const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
-  const someOnPageSelected = pageRows.some((r) => selectedIds.has(r.id));
-  useEffect(() => {
-    const el = headerCbRef.current;
-    if (!el) return;
-    el.indeterminate = someOnPageSelected && !allOnPageSelected;
-  }, [someOnPageSelected, allOnPageSelected]);
+  const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((r) => selectedIds.has(r.id)),
+    [filteredRows, selectedIds]
+  );
+
+  const bulk = useStaffKomandaBulk({
+    tenantSlug,
+    apiSegment: "expeditors",
+    invalidateQueryKeys: [
+      ["expeditors", tenantSlug],
+      ["expeditors-filter-options", tenantSlug]
+    ],
+    selectedIds,
+    setSelectedIds,
+    selectedRows
+  });
 
   const toggleExpeditorSelection = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -383,6 +436,11 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     });
   };
 
+  const territoryTokenOptions = useMemo(() => {
+    const t = filterOptQ.data?.territory_tokens ?? [];
+    return [...t].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [filterOptQ.data?.territory_tokens]);
+
   const territoryFilterOptions = useMemo(() => {
     const t = filterOptQ.data?.territory_tokens ?? [];
     const full = filterOptQ.data?.territories ?? [];
@@ -397,13 +455,12 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   }, [territoryFilterOptions, assignRow]);
 
   const assignmentTradeDirections = useMemo(() => {
-    const fromProfile = profileQ.data?.references.trade_directions ?? [];
-    const fromFilters = filterOptQ.data?.trade_directions ?? [];
+    const fromCatalog = tradeDirectionFilterOptions;
     const fromRules = assignRow?.expeditor_assignment_rules?.trade_directions ?? [];
-    return Array.from(new Set([...fromProfile, ...fromFilters, ...fromRules])).sort((a, b) =>
+    return Array.from(new Set([...fromCatalog, ...fromRules])).sort((a, b) =>
       a.localeCompare(b, "ru")
     );
-  }, [profileQ.data, filterOptQ.data, assignRow]);
+  }, [tradeDirectionFilterOptions, assignRow]);
 
   const applyFilters = () => {
     setAppliedBranch(draftBranch);
@@ -413,10 +470,24 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     setAppliedCity(draftCity);
   };
 
+  const resetFilters = () => {
+    setDraftBranch("");
+    setDraftTd("");
+    setDraftPos("");
+    setDraftOblast("");
+    setDraftCity("");
+    setAppliedBranch("");
+    setAppliedTd("");
+    setAppliedPos("");
+    setAppliedOblast("");
+    setAppliedCity("");
+    setPage(1);
+  };
+
   function expeditorExportCellString(r: ExpeditorRow, colId: string): string {
     switch (colId) {
       case "fio":
-        return r.fio;
+        return formatPersonDisplayName(r);
       case "login":
         return r.login;
       case "phone":
@@ -455,159 +526,119 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   function renderExpeditorDataCell(colId: string, r: ExpeditorRow) {
     switch (colId) {
       case "fio":
-        return r.fio;
+        return (
+          <StaffKomandaFioCell
+            first_name={r.first_name}
+            last_name={r.last_name}
+            middle_name={r.middle_name}
+            fio={r.fio}
+            kpiColor={r.kpi_color}
+          />
+        );
       case "login":
-        return <span className="font-mono">{r.login}</span>;
+        return <StaffKomandaLoginCell login={r.login} />;
       case "phone":
-        return r.phone ?? "—";
+        return <StaffKomandaPhoneCell phone={r.phone} />;
       case "code":
-        return <span className="font-mono">{r.code ?? "—"}</span>;
+        return <StaffKomandaCodeCell code={r.code} />;
       case "warehouse":
-        return r.warehouse ?? "—";
+        return <StaffKomandaWarehouseCell warehouse={r.warehouse} />;
       case "apk_version":
-        return r.apk_version ?? "—";
+        return <StaffKomandaApkCell version={r.apk_version} />;
       case "pinfl":
-        return <span className="font-mono">{r.pinfl ?? "—"}</span>;
+        return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "territory":
-        return <span className="max-w-[14rem]">{r.territory ?? "—"}</span>;
+        return <StaffKomandaTerritoryCell territory={r.territory} />;
       case "device_name":
-        return r.device_name ?? "—";
+        return <StaffKomandaDeviceCell name={r.device_name} />;
       case "last_sync":
-        return r.last_sync_at ? new Date(r.last_sync_at).toLocaleString("ru-RU") : "—";
+        return <StaffKomandaLastSyncCell at={r.last_sync_at} />;
       case "branch":
-        return r.branch ?? "—";
+        return <StaffKomandaBranchCell branch={r.branch} />;
       case "position":
-        return r.position ?? "—";
+        return <StaffKomandaPositionCell position={r.position} />;
       case "created_at":
-        return new Date(r.created_at).toLocaleDateString("ru-RU");
+        return <StaffKomandaCreatedAtCell at={r.created_at} />;
       case "app_access":
         return (
-          <label className="inline-flex cursor-pointer items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Вкл / выкл</span>
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={r.app_access}
-              onChange={(e) => {
-                patchMut.mutate({ id: r.id, body: { app_access: e.target.checked } });
-              }}
-            />
-          </label>
+          <StaffKomandaAppAccessToggle
+            checked={r.app_access}
+            disabled={patchMut.isPending}
+            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
+          />
         );
       case "active_sessions":
         return (
-          <button
-            type="button"
-            className="font-medium text-primary underline-offset-2 hover:underline"
+          <StaffKomandaActiveSessionsCell
+            count={r.active_session_count}
+            max={r.max_sessions}
             onClick={() => setSessionExpeditor(r)}
-          >
-            {r.active_session_count}
-          </button>
+          />
         );
       case "max_sessions":
-        return r.max_sessions;
+        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
   }
 
   return (
-    <div className="space-y-0">
-      <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
-        <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Филиал</span>
-          <FilterSelect
-            aria-label="Филиал"
-            emptyLabel="Филиал"
-            value={draftBranch}
-            onChange={(e) => setDraftBranch(e.target.value)}
-          >
-            {branchOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Должность</span>
-          <FilterSelect
-            aria-label="Должность"
-            emptyLabel="Должность"
-            value={draftPos}
-            onChange={(e) => setDraftPos(e.target.value)}
-          >
-            {(filterOptQ.data?.positions ?? []).map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Зона</span>
-          <FilterSelect
-            aria-label="Зона"
-            emptyLabel="Зона"
-            value={draftTd}
-            onChange={(e) => setDraftTd(e.target.value)}
-          >
-            {(filterOptQ.data?.trade_directions ?? []).map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Область</span>
-          <FilterSelect
-            aria-label="Область"
-            emptyLabel="Область"
-            value={draftOblast}
-            onChange={(e) => setDraftOblast(e.target.value)}
-          >
-            {territoryFilterOptions.map((b) => (
-              <option key={`o-${b}`} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-foreground/88">
-          <span className="sr-only">Город</span>
-          <FilterSelect
-            aria-label="Город"
-            emptyLabel="Город"
-            value={draftCity}
-            onChange={(e) => setDraftCity(e.target.value)}
-          >
-            {territoryFilterOptions.map((b) => (
-              <option key={`c-${b}`} value={b}>
-                {b}
-              </option>
-            ))}
-          </FilterSelect>
-        </label>
-        </div>
-        <div className="flex shrink-0 items-end">
-        <Button
-          type="button"
-          size="sm"
-          className="min-w-[7.5rem] bg-teal-700 text-white hover:bg-teal-800"
-          onClick={applyFilters}
-        >
-          Применить
-        </Button>
-        </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+    <StaffWorkspaceLayout>
+      <StaffWorkspaceHeader
+        title="Экспедиторы"
+        subtitle="Управление экспедиторами, привязками к заявкам и доступом к приложению"
+        addLabel="Добавить экспедитора"
+        onAdd={() => {
+          setCreateExpeditorError(null);
+          setAddOpen(true);
+        }}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
+
+      <StaffWorkspaceFilterPanel
+        filters={
+          <ExpeditorsFiltersRow
+            draftBranch={draftBranch}
+            draftPos={draftPos}
+            draftTd={draftTd}
+            draftOblast={draftOblast}
+            draftCity={draftCity}
+            onDraftBranch={setDraftBranch}
+            onDraftPos={setDraftPos}
+            onDraftTd={setDraftTd}
+            onDraftOblast={setDraftOblast}
+            onDraftCity={setDraftCity}
+            branchOptions={branchOptions}
+            positionOptions={filterOptQ.data?.positions ?? []}
+            tradeDirectionOptions={tradeDirectionFilterOptions}
+            territoryTokenOptions={territoryTokenOptions}
+          />
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => tablePrefs.setPageSize(n)}
+        allOnPageSelected={allPageSelected}
+        onToggleAllOnPage={toggleAllExpeditorsOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, коду, логину…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map((id) => EXPEDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+          const exportData = filteredRows.map((r) => order.map((colId) => expeditorExportCellString(r, colId)));
+          downloadXlsxSheet(
+            `expeditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Экспедиторы",
+            headers,
+            exportData
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+      />
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
@@ -622,242 +653,68 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         onReset={() => tablePrefs.resetColumnLayout()}
       />
 
-      <div className="orders-hub-section orders-hub-section--table mt-4">
-        <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-0">
-            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border bg-muted/25 px-3 py-0 sm:px-4">
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "active" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("active")}
-                >
-                  Активный
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                    tab === "inactive" ? "border-primary text-primary" : "border-transparent text-foreground/65"
-                  )}
-                  onClick={() => setTab("inactive")}
-                >
-                  Не активный
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 py-1">
-                <Button type="button" size="sm" className="h-9" onClick={() => setAddOpen(true)}>
-                  Добавить экспедитора
-                </Button>
-              </div>
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={EXPEDITOR_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="экспедиторов"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selectedIds}
+        onToggleSelection={toggleExpeditorSelection}
+        renderCell={(colId, row) =>
+          renderExpeditorDataCell(colId, pageRows.find((r) => r.id === row.id)!)
+        }
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+                <Settings2 className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Активные сессии" onClick={() => setSessionExpeditor(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Условия привязки к заявке" onClick={() => setAssignRow(r)}>
+                <Link2 className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Инфо" onClick={() => setInfoRow(r)}>
+                <Eye className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton title="Деактивировать" onClick={() => setDeactivateExpeditor(r)}>
+                  <UserMinus className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : null}
             </div>
+          );
+        }}
+      />
 
-            <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                value={pageSize}
-                onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
-              >
-                {[10, 20, 25, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 px-2 text-xs"
-                title="Управление столбцами"
-                onClick={() => setColumnDialogOpen(true)}
-              >
-                <ListOrdered className="size-3.5" />
-                Столбцы
-              </Button>
-              <Input
-                placeholder="Поиск"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 max-w-xs bg-background text-xs text-foreground"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs"
-                onClick={() => {
-                  const order = tablePrefs.visibleColumnOrder;
-                  const headers = order.map((id) => EXPEDITOR_COLUMNS.find((c) => c.id === id)?.label ?? id);
-                  const exportData = filteredRows.map((r) =>
-                    order.map((colId) => expeditorExportCellString(r, colId))
-                  );
-                  downloadXlsxSheet(
-                    `expeditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-                    "Экспедиторы",
-                    headers,
-                    exportData
-                  );
-                }}
-              >
-                Excel
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="h-9 w-9"
-                onClick={() => void listQ.refetch()}
-              >
-                <RefreshCw className={cn("size-4", listQ.isFetching && "animate-spin")} />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="ml-auto h-9 text-xs"
-                disabled={selectedIds.size === 0}
-                onClick={() =>
-                  window.alert(
-                    `Выбрано экспедиторов: ${selectedIds.size}. Массовые действия будут добавлены в следующем обновлении.`
-                  )
-                }
-              >
-                Групповая обработка
-              </Button>
-            </div>
+      <StaffBulkFloatingBar
+        count={selectedIds.size}
+        allAccessOn={bulk.allAccessOn}
+        isActiveTab={tab === "active"}
+        busy={bulk.bulkBusy}
+        onToggleAccess={bulk.onToggleAccess}
+        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
+        onClearSessions={bulk.onClearSessions}
+        onClearSelection={() => setSelectedIds(new Set())}
+      />
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1600px] text-xs">
-                <thead className="app-table-thead">
-                  <tr>
-                    <th className="w-10 whitespace-nowrap px-2 py-2 text-left">
-                      <input
-                        ref={headerCbRef}
-                        type="checkbox"
-                        className="size-4 rounded border-input accent-primary"
-                        checked={allOnPageSelected}
-                        onChange={(e) => toggleAllExpeditorsOnPage(e.target.checked)}
-                        aria-label="Выбрать всех на странице"
-                      />
-                    </th>
-                    {tablePrefs.visibleColumnOrder.map((colId) => {
-                      const meta = EXPEDITOR_COLUMNS.find((c) => c.id === colId);
-                      return (
-                        <th key={colId} className="whitespace-nowrap px-2 py-2 text-left">
-                          {meta?.label ?? colId}
-                        </th>
-                      );
-                    })}
-                    <th className="whitespace-nowrap px-2 py-2 text-left">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((r) => (
-                    <tr key={r.id} className="border-t even:bg-muted/20">
-                      <td className="px-2 py-2">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-input accent-primary"
-                          checked={selectedIds.has(r.id)}
-                          onChange={(e) => toggleExpeditorSelection(r.id, e.target.checked)}
-                          aria-label={`Выбрать ${r.fio}`}
-                        />
-                      </td>
-                      {tablePrefs.visibleColumnOrder.map((colId) => (
-                        <td key={colId} className="px-2 py-2">
-                          {renderExpeditorDataCell(colId, r)}
-                        </td>
-                      ))}
-                      <td className="px-2 py-2 text-right">
-                        <TableRowActionGroup className="justify-end" ariaLabel="Ekspeditor">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Конфигурации"
-                            aria-label="Конфигурации"
-                            onClick={() => setConfigRow(r)}
-                          >
-                            <Settings2 className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Активные сессии"
-                            aria-label="Активные сессии"
-                            onClick={() => setSessionExpeditor(r)}
-                          >
-                            <MonitorSmartphone className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-primary hover:bg-primary/10"
-                            title="Условия привязки к заявке"
-                            aria-label="Условия привязки к заявке"
-                            onClick={() => setAssignRow(r)}
-                          >
-                            <Link2 className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Инфо"
-                            aria-label="Инфо"
-                            onClick={() => setInfoRow(r)}
-                          >
-                            <Eye className="size-3.5" aria-hidden />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
-                            title="Редактировать"
-                            aria-label="Редактировать"
-                            onClick={() => setEditRow(r)}
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </Button>
-                          {tab === "active" && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Деактивировать"
-                              aria-label="Деактивировать"
-                              onClick={() => setDeactivateExpeditor(r)}
-                            >
-                              <UserMinus className="size-3.5" aria-hidden />
-                            </Button>
-                          )}
-                        </TableRowActionGroup>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="table-content-footer border-t border-border/80 bg-muted/25 px-3 py-2 text-xs text-foreground/75 sm:px-4">
-              Показано {pageRows.length} / {filteredRows.length}
-              {listQ.data && listQ.data.length !== filteredRows.length
-                ? ` (вкладка: ${listQ.data.length})`
-                : ""}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AgentTemplateConfirmDialog
+        open={bulk.confirmBulk != null}
+        message={bulk.confirmMessage}
+        busy={bulk.bulkBusy}
+        onCancel={() => bulk.setConfirmBulk(null)}
+        onConfirm={bulk.handleConfirmBulk}
+      />
 
       <AgentAddDialog
         open={addOpen}
@@ -917,7 +774,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         tenantSlug={tenantSlug}
         staffKind="expeditor"
         userId={sessionExpeditor?.id ?? null}
-        maxSessions={sessionExpeditor?.max_sessions ?? 2}
+        maxSessions={sessionExpeditor?.max_sessions ?? 1}
         onPatched={() => {
           void qc.invalidateQueries({ queryKey: ["expeditors", tenantSlug] });
         }}
@@ -955,7 +812,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaffWorkspaceLayout>
   );
 }
 
@@ -1223,7 +1080,7 @@ function AgentAddDialog({
                 password,
                 consignment,
                 kpi_color: kpi_color || null,
-                max_sessions: 2,
+                max_sessions: 1,
                 app_access: true,
                 can_authorize: true
               })

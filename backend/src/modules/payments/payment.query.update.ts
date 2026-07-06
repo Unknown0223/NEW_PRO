@@ -17,6 +17,7 @@ import {
 import type { PaymentDetailPayload, UpdatePaymentInput } from "./payment.query.types";
 import { getPaymentDetail, resolveLedgerAgentId } from "./payment.query.read";
 import { paymentListInclude } from "./payment.query.mappers";
+import { completeActivePaymentEditGrantsInTx } from "./payment-edit-grants.service";
 
 export async function updatePayment(
   tenantId: number,
@@ -46,12 +47,6 @@ export async function updatePayment(
     if (!existing) throw new Error("NOT_FOUND");
     if (existing.deleted_at != null) throw new Error("PAYMENT_VOIDED");
 
-    const allocAgg = await tx.paymentAllocation.aggregate({
-      where: { tenant_id: tenantId, payment_id: paymentId },
-      _sum: { amount: true }
-    });
-    const allocatedSum = allocAgg._sum.amount ?? new Prisma.Decimal(0);
-
     const ek = String(existing.entry_kind ?? "payment");
     const oldAmount = existing.amount;
 
@@ -59,7 +54,6 @@ export async function updatePayment(
     if (input.amount !== undefined) {
       if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("BAD_AMOUNT");
       nextAmount = new Prisma.Decimal(input.amount);
-      if (nextAmount.lt(allocatedSum)) throw new Error("AMOUNT_BELOW_ALLOCATED");
     }
 
     let nextOrderId = existing.order_id;
@@ -189,6 +183,8 @@ export async function updatePayment(
       where: { id: paymentId },
       data
     });
+
+    await completeActivePaymentEditGrantsInTx(tx, tenantId, paymentId);
   });
 
   void invalidateDashboard(tenantId);

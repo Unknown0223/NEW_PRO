@@ -2,7 +2,14 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { parseMobileConfigV1, type AgentMobileConfigV1 } from "./agent-mobile-config";
+import { onBulkAppAccessChanged } from "../auth/app-access.service";
+import { validateConsignmentCloseSchedule } from "../consignment/consignment-settings";
+import {
+  extractMobileConfigFromEntitlementsUnknown,
+  mergeMobileConfigPatch,
+  parseMobileConfigV1,
+  type AgentMobileConfigV1
+} from "./agent-mobile-config";
 import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
 import {
   applyTradeDirectionPatch,
@@ -168,10 +175,18 @@ export type BulkAgentsInput =
   | { action: "set_trade_direction"; agent_ids: number[]; trade_direction_id: number | null }
   | { action: "set_trade_directions"; updates: { agent_id: number; trade_direction_id: number | null }[] }
   | { action: "set_consignment"; agent_ids: number[]; consignment: boolean }
+  | {
+      action: "set_consignment_close";
+      agent_ids: number[];
+      close_day: number;
+      close_hour: number;
+      close_minute: number;
+    }
   | { action: "set_app_access"; agent_ids: number[]; app_access: boolean }
   | { action: "revoke_sessions"; agent_ids: number[] }
   | { action: "set_max_sessions"; agent_ids: number[]; max_sessions: number }
-  | { action: "adjust_max_sessions"; agent_ids: number[]; delta: number };
+  | { action: "adjust_max_sessions"; agent_ids: number[]; delta: number }
+  | { action: "patch_mobile_config"; agent_ids: number[]; mobile_config: AgentMobileConfigV1 };
 
 export async function bulkPatchAgents(
   tenantId: number,
@@ -271,12 +286,32 @@ export async function bulkPatchAgents(
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
+    case "set_consignment_close": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      const schedule = validateConsignmentCloseSchedule({
+        day: input.close_day,
+        hour: input.close_hour,
+        minute: input.close_minute
+      });
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: {
+          consignment_close_day: schedule.day,
+          consignment_close_hour: schedule.hour,
+          consignment_close_minute: schedule.minute,
+          consignment_updated_at: new Date()
+        }
+      });
+      await auditBulk(ids.length, { close: schedule });
+      return { updated: ids.length };
+    }
     case "set_app_access": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
       await prisma.user.updateMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { app_access: input.app_access }
       });
+      await onBulkAppAccessChanged(tenantId, ids, input.app_access);
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
@@ -317,6 +352,34 @@ export async function bulkPatchAgents(
       );
       await auditBulk(rows.length, { delta: d });
       return { updated: rows.length };
+    }
+    case "patch_mobile_config": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      const parsedPatch = parseMobileConfigV1(input.mobile_config);
+      if (!parsedPatch) throw new Error("BAD_MOBILE_CONFIG_PATCH");
+      await validateAgentEntitlements(tenantId, { mobile_config: parsedPatch });
+      const users = await prisma.user.findMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        select: { id: true, agent_entitlements: true, agent_price_types: true, price_type: true }
+      });
+      const patches = users.map((u) => {
+        const snap = entitlementsSnapshotFromAgentUser(u);
+        const stored = extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements);
+        const mergedMc = mergeMobileConfigPatch(stored, parsedPatch);
+        return normalizeAgentEntitlementsInput({
+          ...snapToAgentEntitlements(snap),
+          mobile_config: mergedMc
+        });
+      });
+      await prisma.$transaction(
+        users.map((u, i) =>
+          prisma.user.update({ where: { id: u.id }, data: { agent_entitlements: patches[i] } })
+        )
+      );
+      await auditBulk(users.length, {
+        mobile_config_section_keys: Object.keys(parsedPatch).filter((k) => k !== "schema_version")
+      });
+      return { updated: users.length };
     }
     default:
       throw new Error("BAD_BULK_ACTION");

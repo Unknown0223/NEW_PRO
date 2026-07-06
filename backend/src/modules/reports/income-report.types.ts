@@ -32,7 +32,11 @@ export type IncomeRow = {
   agent_name: string | null;
 };
 
-export const KNOWN_SUMMARY_KEYS = ["Naqd", "Pereches", "SET", "Terminal", "Эски карздан кирим"];
+export type IncomeSummaryPaymentType = {
+  key: string;
+  label: string;
+  amount: number;
+};
 
 export function parseDate(raw: string | undefined, fallback: string): Date {
   const d = new Date(raw?.trim() || fallback);

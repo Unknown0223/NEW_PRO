@@ -2,7 +2,7 @@
 
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { api } from "@/lib/api";
-import { downloadOrdersNakladnoyXlsx } from "@/lib/order-nakladnoy";
+import { downloadOrdersNakladnoyXlsx, type NakladnoyExportPrefs, type NakladnoyTemplateId } from "@/lib/order-nakladnoy";
 import type { OrdersListCacheBody } from "@/lib/orders-list-cache";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -32,8 +32,6 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkExpeditorChoice,
     statusRowError,
     setStatusRowError,
-    nakladnoyTemplate,
-    nakladnoyPrefs,
     patchOrderInOrdersListCaches,
     applyOrderDetailToListCaches
   } = p1;
@@ -111,8 +109,8 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
 
   const nakladnoyMut = useMutation({
     mutationFn: async (payload: {
-      template: typeof nakladnoyTemplate;
-      prefs: typeof nakladnoyPrefs;
+      template: NakladnoyTemplateId;
+      prefs: NakladnoyExportPrefs;
       format?: "xlsx" | "pdf";
       warehouseLayout?: import("@/lib/bulk-export-templates").WarehouseLayoutId;
       expeditorLoadingLayout?: import("@/lib/bulk-export-templates").ExpeditorLoadingLayoutId;
@@ -299,7 +297,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     p1.setNakladnoySettingsOpen(false);
     p1.setTotalsPanelOpen(false);
     setNakladnoyFeedback(null);
-  }, [p1, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
+  }, [p1, setBulkConsignmentFeedback, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
 
   return {
     selectedRows,

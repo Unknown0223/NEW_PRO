@@ -208,7 +208,7 @@ export async function preparePeriodReturnBatch(
     const returnWhere: Prisma.SalesReturnWhereInput = {
       tenant_id: tenantId,
       client_id: input.client_id,
-      status: "posted",
+      status: { in: ["pending", "posted"] },
       order_id: orderId
     };
 

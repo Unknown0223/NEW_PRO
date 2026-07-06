@@ -2,129 +2,54 @@ import multipart from "@fastify/multipart";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
-import fp from "fastify-plugin";
 import { ZodError } from "zod";
 import { getAccessUser, jwtAccessVerify } from "./modules/auth/auth.prehandlers";
-import { registerAuthRoutes } from "./modules/auth/auth.route";
-import { registerClientRoutes } from "./modules/clients/clients.route";
-import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
-import { registerOrderAutomationRoutes } from "./modules/order-automation/order-automation.route";
-import { registerOrderRoutes } from "./modules/orders/orders.route";
-import { registerOrderStreamRoutes } from "./modules/orders/order-stream.route";
-import { registerReferenceRoutes } from "./modules/reference/reference.route";
-import { registerTenantSettingsRoutes } from "./modules/tenant-settings/tenant-settings.route";
-import { registerGoodsReceiptRoutes } from "./modules/stock/goods-receipt.route";
-import { registerStockRoutes } from "./modules/stock/stock.route";
-import { registerRetailStockRoutes } from "./modules/stock/retail-stock.route";
-import { registerWarehouseBlockRoutes } from "./modules/stock/warehouse-blocks.route";
-import { registerSupplierRoutes } from "./modules/stock/suppliers.route";
-import { registerDashboardRoutes } from "./modules/dashboard/dashboard.route";
-import { registerPaymentRoutes } from "./modules/payments/payments.route";
-import { registerOpeningBalanceRoutes } from "./modules/opening-balances/opening-balances.route";
-import { registerClientBalanceRoutes } from "./modules/client-balances/client-balances.route";
-import { registerSalesReturnRoutes } from "./modules/returns/sales-returns.route";
-import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
-import { registerCurrencyExchangeRateRoutes } from "./modules/currency-rates/currency-exchange-rates.route";
-import { registerProductCatalogRoutes } from "./modules/products/product-catalog.route";
-import { registerProductPriceRoutes } from "./modules/products/product-prices.route";
-import { registerProductRoutes } from "./modules/products/products.route";
-import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
-import { registerUserUiRoutes } from "./modules/users/user-ui.route";
-import { registerStaffRoutes } from "./modules/staff/staff.route";
-import { registerConsignmentRoutes } from "./modules/consignment/consignment.route";
-import { registerSalesDirectionRoutes } from "./modules/sales-directions/sales-directions.route";
-import { registerReportRoutes } from "./modules/reports/reports.route";
-import { registerStockTakeRoutes } from "./modules/stock/stock-takes.route";
-import { registerWarehouseTransferRoutes } from "./modules/stock/warehouse-transfers.route";
-import { registerExpenseRoutes } from "./modules/expenses/expenses.route";
-import { registerFieldRoutes } from "./modules/field/field.route";
-import { registerRefusalRoutes } from "./modules/refusals/refusals.route";
-import { registerTerritoryRoutes } from "./modules/territory/territory.route";
-import { registerPriceMatrixRoutes } from "./modules/products/price-matrix.route";
-import { registerNotificationRoutes } from "./modules/notifications/notifications.route";
-import { registerMobileRoutes } from "./modules/mobile/mobile.route";
-import { registerJobRoutes } from "./modules/jobs/jobs.route";
-import { registerLinkageRoutes } from "./modules/linkage/linkage.route";
-import { registerClientQrRoutes } from "./modules/client-qr/client-qr.route";
-import { registerTimesheetRoutes } from "./modules/timesheet/timesheet.route";
-import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
-import { registerAccessRoutes } from "./modules/access/access.route";
+import { registerRoutePermissionGuard } from "./modules/access/route-permission-guard";
 import { env } from "./config/env";
-import { prisma } from "./config/database";
 import { loggerOptions } from "./config/logger";
 import { jwtPlugin } from "./plugins/jwt.plugin";
 import { tenantPlugin } from "./plugins/tenant.plugin";
 import { requestObservabilityPlugin } from "./plugins/request-observability.plugin";
-import { isOrderEventBusRedisEnabled } from "./lib/order-event-bus";
-import { pingAppRedis } from "./lib/redis-cache";
+import { metricsPlugin } from "./plugins/metrics.plugin";
+import { sentryPlugin } from "./plugins/sentry.plugin";
+import { telemetryPlugin } from "./plugins/telemetry.plugin";
+import { registerBusinessMetricsRoutes } from "./modules/health/business-metrics.route";
+import { ExcelImportTooLargeError } from "./lib/multipart-limits";
+import { checkReadiness } from "./modules/health/health.service";
 import { buildCorsOrigin } from "./lib/cors-options";
+import {
+  CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES
+} from "./lib/client-photo-limits";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
+import { registerAllRoutes } from "./route-registry";
 
 export function buildApp() {
   const app = Fastify({
     logger: loggerOptions,
     disableRequestLogging: true,
-    requestIdHeader: "x-request-id"
+    requestIdHeader: "x-request-id",
+    /** Mobil foto hisobot (base64, ≤10 MiB JPEG). */
+    bodyLimit: CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES
   });
 
-  app.register(cors, { origin: buildCorsOrigin() });
-  app.register(multipart, { limits: { fileSize: env.MULTIPART_MAX_FILE_BYTES } });
+  app.register(cors, { origin: buildCorsOrigin(), credentials: true });
+  app.register(multipart, {
+    limits: {
+      fileSize: Math.max(env.MULTIPART_MAX_FILE_BYTES, env.MULTIPART_APK_MAX_BYTES)
+    }
+  });
+  app.register(sentryPlugin);
+  app.register(telemetryPlugin);
   app.register(jwtPlugin);
   /** Faqat `config.rateLimit` berilgan marshrutlar (login) uchun — global: false */
   app.register(rateLimit, { global: false });
   app.register(tenantPlugin);
   app.register(requestObservabilityPlugin);
-  app.register(registerAuthRoutes);
-  app.register(registerAccessRoutes);
-  app.register(registerUserUiRoutes);
-  app.register(registerClientRoutes);
-  app.register(registerProductPriceRoutes);
-  app.register(registerProductCatalogRoutes);
-  app.register(registerProductRoutes);
-  app.register(registerStaffRoutes);
-  app.register(registerConsignmentRoutes);
-  app.register(registerSalesDirectionRoutes);
-  app.register(registerBonusRuleRoutes);
-  app.register(registerOrderAutomationRoutes);
-  app.register(registerOrderRoutes);
-  app.register(registerOrderStreamRoutes);
-  app.register(registerDashboardRoutes);
-  app.register(registerPaymentRoutes);
-  app.register(registerOpeningBalanceRoutes);
-  app.register(registerClientBalanceRoutes);
-  app.register(registerSalesReturnRoutes);
-  app.register(registerReferenceRoutes);
-  app.register(registerTenantSettingsRoutes);
-  app.register(registerAuditEventRoutes);
-  app.register(registerStockRoutes);
-  app.register(registerRetailStockRoutes);
-  app.register(registerWarehouseBlockRoutes);
-  app.register(registerSupplierRoutes);
-  app.register(registerGoodsReceiptRoutes);
-  app.register(registerCashDeskRoutes);
-  app.register(registerCurrencyExchangeRateRoutes);
-  app.register(
-    fp(
-      async (app) => {
-        await registerReportRoutes(app);
-      },
-      { name: "register-report-routes", fastify: "4.x" }
-    )
-  );
-  app.register(registerStockTakeRoutes);
-  app.register(registerWarehouseTransferRoutes);
-  app.register(registerExpenseRoutes);
-  app.register(registerTerritoryRoutes);
-  app.register(registerPriceMatrixRoutes);
-  app.register(registerFieldRoutes);
-  app.register(registerRefusalRoutes);
-  app.register(registerNotificationRoutes);
-  app.register(registerMobileRoutes);
-  app.register(registerLinkageRoutes);
-  app.register(registerClientQrRoutes);
-  app.register(registerJobRoutes);
-  app.register(registerTimesheetRoutes);
-  app.register(registerWorkSlotRoutes);
+  app.register(metricsPlugin);
+  void registerBusinessMetricsRoutes(app);
+  /** Strukturali ruxsat tekshiruvi (RBAC_ENFORCE_PERMISSIONS=1 bo‘lganda faol). */
+  registerRoutePermissionGuard(app);
+  registerAllRoutes(app);
 
   app.get("/health", async () => ({
     status: "ok",
@@ -132,26 +57,20 @@ export function buildApp() {
   }));
 
   app.get("/ready", async (request, reply) => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      const appCacheRedis = await pingAppRedis();
-      return reply.send({
-        status: "ready",
-        database: "ok",
-        redis: isOrderEventBusRedisEnabled() ? "ok" : "degraded",
-        app_cache_redis: appCacheRedis,
-        time: new Date().toISOString()
-      });
-    } catch {
-      const appCacheRedis = await pingAppRedis().catch(() => "down" as const);
-      return sendApiError(reply, request, 503, "NotReady", "Database or readiness check failed", {
-        status: "not_ready",
-        database: "down",
-        redis: isOrderEventBusRedisEnabled() ? "ok" : "degraded",
-        app_cache_redis: appCacheRedis,
-        time: new Date().toISOString()
-      });
+    const expectedToken = env.INTERNAL_HEALTH_TOKEN?.trim();
+    if (expectedToken) {
+      const provided = request.headers["x-internal-token"];
+      const token = Array.isArray(provided) ? provided[0] : provided;
+      if (token !== expectedToken) {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
     }
+
+    const report = await checkReadiness();
+    if (report.status === "ready") {
+      return reply.send(report);
+    }
+    return sendApiError(reply, request, 503, "NotReady", "Database or readiness check failed", report);
   });
 
   app.get("/api/:slug/protected", {
@@ -182,9 +101,14 @@ export function buildApp() {
         request,
         413,
         "PayloadTooLarge",
-        `Fayl juda katta. Maksimal hajm: ${Math.round(env.MULTIPART_MAX_FILE_BYTES / (1024 * 1024))} MB. Kichikroq .xlsx yoki .env da MULTIPART_MAX_FILE_BYTES ni oshiring.`,
+        `Fayl juda katta. Global multipart limit: ${Math.round(env.MULTIPART_MAX_FILE_BYTES / (1024 * 1024))} MB. Excel import uchun MULTIPART_EXCEL_MAX_BYTES, APK uchun MULTIPART_APK_MAX_BYTES ni tekshiring.`,
         { maxBytes: env.MULTIPART_MAX_FILE_BYTES }
       );
+    }
+    if (error instanceof ExcelImportTooLargeError) {
+      return sendApiError(reply, request, 413, "PayloadTooLarge", error.message, {
+        maxBytes: env.MULTIPART_EXCEL_MAX_BYTES
+      });
     }
     if (error instanceof ZodError) {
       return sendApiError(

@@ -12,7 +12,7 @@ export async function upsertClientBalance(
   initialBalance: Prisma.Decimal = new Prisma.Decimal(0)
 ): Promise<BalanceUpsertResult> {
   const bal = await tx.clientBalance.upsert({
-    where: { tenant_id_client_id: { tenant_id, client_id: clientId } },
+    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
     create: {
       tenant_id: tenantId,
       client_id: clientId,
@@ -30,8 +30,8 @@ export async function incrementClientBalance(
   delta: Prisma.Decimal
 ): Promise<BalanceUpsertResult> {
   const bal = await tx.clientBalance.upsert({
-    where: { tenant_id_client_id: { tenant_id, client_id: clientId } },
-    create: { tenant_id, client_id, balance: delta },
+    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
+    create: { tenant_id: tenantId, client_id: clientId, balance: delta },
     update: { balance: { increment: delta } }
   });
   return { id: bal.id, balance: bal.balance };
@@ -45,8 +45,8 @@ export async function decrementClientBalance(
 ): Promise<BalanceUpsertResult> {
   const negDelta = new Prisma.Decimal(0).sub(delta);
   const bal = await tx.clientBalance.upsert({
-    where: { tenant_id_client_id: { tenant_id, client_id: clientId } },
-    create: { tenant_id, client_id, balance: negDelta },
+    where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
+    create: { tenant_id: tenantId, client_id: clientId, balance: negDelta },
     update: { balance: { increment: delta.neg() } }
   });
   return { id: bal.id, balance: bal.balance };

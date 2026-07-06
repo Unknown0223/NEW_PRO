@@ -6,6 +6,7 @@ export const WEB_PANEL_ACCESS_ROLE_OPTIONS = [
   { value: "operator", label: "Operator" },
   { value: "director", label: "Direktor" },
   { value: "sales_director", label: "Savdo direktori" },
+  { value: "manager", label: "Menejer" },
   { value: "regional_manager", label: "Regional menejer" },
   { value: "accountant", label: "Buxgalter" },
   { value: "warehouse_manager", label: "Ombor menejeri" }

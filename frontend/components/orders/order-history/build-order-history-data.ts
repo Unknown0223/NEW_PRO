@@ -289,8 +289,8 @@ function buildNoBonusInfoEntry(data: OrderDetailRow, user: string): OrderHistory
   const bonusQty = parseDec(data.bonus_qty);
   const hasLines = data.items.some((i) => i.is_bonus);
 
-  let bonusName = "Автоматический бонус";
-  let action: OrderHistoryBonusAction = "Не начислен";
+  const bonusName = "Автоматический бонус";
+  const action: OrderHistoryBonusAction = "Не начислен";
   let product = "—";
 
   if (data.apply_bonus && !hasLines && bonusSum <= 0 && bonusQty <= 0) {

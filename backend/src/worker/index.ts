@@ -1,8 +1,9 @@
-import IORedis from "ioredis";
 import { Worker } from "bullmq";
+import IORedis from "ioredis";
 import { env } from "../config/env";
 import { BACKGROUND_QUEUE_NAME } from "../jobs/constants";
 import { processBackgroundJob } from "../jobs/process-background-job";
+import { logJobResult } from "../lib/job-log.service";
 
 const connection = new IORedis(env.REDIS_URL, {
   maxRetriesPerRequest: null
@@ -11,14 +12,27 @@ const connection = new IORedis(env.REDIS_URL, {
 /**
  * Fon ishlar: `ping`, `order_status_notify`, importlar (`import_clients_xlsx`, `import_stock_xlsx`, `import_products_*`), …
  */
-const worker = new Worker(BACKGROUND_QUEUE_NAME, (job) => processBackgroundJob(job), {
-  connection,
-  // Katta XLSX importlarida protsess bir necha daqiqa band bo'lishi mumkin.
-  // Default lockDuration (~30s) ba'zan ish tugamasdan oldin "stalled" false-positive beradi.
-  lockDuration: 10 * 60 * 1000,
-  stalledInterval: 30 * 1000,
-  maxStalledCount: 5
-});
+const worker = new Worker(
+  BACKGROUND_QUEUE_NAME,
+  async (job) => {
+    const startedAt = new Date();
+    try {
+      const result = await processBackgroundJob(job);
+      await logJobResult(job, "completed", startedAt, result);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logJobResult(job, "failed", startedAt, undefined, message);
+      throw err;
+    }
+  },
+  {
+    connection,
+    lockDuration: 10 * 60 * 1000,
+    stalledInterval: 30 * 1000,
+    maxStalledCount: 5
+  }
+);
 
 worker.on("completed", (job) => {
   process.stdout.write(`[worker] job ${job.id} (${job.name}) bajarildi\n`);

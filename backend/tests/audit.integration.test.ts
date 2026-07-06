@@ -3,6 +3,7 @@ import { join } from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 const marker = join(__dirname, ".db-integration-ready");
 const dbReady = existsSync(marker) && readFileSync(marker, "utf8").trim() === "1";
@@ -19,7 +20,7 @@ describe.skipIf(!dbReady)("audit-events API (database)", () => {
   });
 
   it("operator cannot list audit-events", async () => {
-    const loginResponse = await request(app.server).post("/api/auth/login").send({
+    const loginResponse = await loginForIntegrationTest(app, {
       slug: "test1",
       login: "operator",
       password: "secret123"
@@ -32,7 +33,7 @@ describe.skipIf(!dbReady)("audit-events API (database)", () => {
   });
 
   it("admin sees warehouse create in audit-events", async () => {
-    const loginResponse = await request(app.server).post("/api/auth/login").send({
+    const loginResponse = await loginForIntegrationTest(app, {
       slug: "test1",
       login: "admin",
       password: "secret123"

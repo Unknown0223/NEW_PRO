@@ -81,7 +81,7 @@ export default function SalesRechartsBundle(props: Props) {
           {props.items.map((item, index) => (
             <div
               key={item.name}
-              className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 text-sm"
             >
               <span className="flex min-w-0 items-center gap-2 font-medium text-slate-700">
                 <span
@@ -134,7 +134,7 @@ export default function SalesRechartsBundle(props: Props) {
                   </span>
                   <span className="font-bold text-slate-900">{share.toFixed(1)}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full"
                     style={{ width: `${share}%`, backgroundColor: item.color }}

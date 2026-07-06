@@ -18,7 +18,7 @@ export function SalesPaymentSection({
   const o = data.orders_refusals;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="По способам оплаты"
           exportAction={
@@ -30,7 +30,7 @@ export function SalesPaymentSection({
         <div className="overflow-x-auto p-4 pt-0">
           <table className="w-full min-w-[420px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
+              <tr className="border-b border-border text-left text-xs text-slate-500">
                 <th className="px-2 py-2">Способ оплаты</th>
                 <th className="px-2 py-2 text-right">Сумма</th>
                 <th className="px-2 py-2 text-right">Доля</th>
@@ -49,7 +49,7 @@ export function SalesPaymentSection({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="Заказы / отказы"
           exportAction={
@@ -65,7 +65,7 @@ export function SalesPaymentSection({
             { label: "В обработке", value: o.pending },
             { label: "Конверсия", value: `${o.conversion_pct.toFixed(1)}%` }
           ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-slate-100 p-3">
+            <div key={item.label} className="rounded-xl border border-border p-3">
               <p className="text-xs text-slate-500">{item.label}</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-slate-950">{item.value}</p>
             </div>

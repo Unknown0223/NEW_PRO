@@ -1,0 +1,4 @@
+ALTER TABLE "users"
+  ADD COLUMN IF NOT EXISTS "consignment_close_day" INTEGER NOT NULL DEFAULT 25,
+  ADD COLUMN IF NOT EXISTS "consignment_close_hour" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "consignment_close_minute" INTEGER NOT NULL DEFAULT 0;

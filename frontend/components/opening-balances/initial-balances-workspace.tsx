@@ -16,8 +16,9 @@ import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
 import { formatNumberGrouped } from "@/lib/format-numbers";
-import type { OpeningBalanceListResponse, OpeningBalanceListRow } from "@/lib/opening-balance-types";
+import type { OpeningBalanceListResponse } from "@/lib/opening-balance-types";
 import { STALE } from "@/lib/query-stale";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, RefreshCw, RotateCcw, Search, Trash2, Upload } from "lucide-react";
@@ -172,17 +173,8 @@ export function InitialBalancesWorkspace() {
     }
   });
 
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "initial-balances"],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: { trade_directions: string[]; payment_types?: string[] };
-      }>(`/api/${tenantSlug}/agents/filter-options`);
-      return data.data;
-    }
-  });
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "initial-balances");
+  const tradeDirectionOptions = tradeDirectionsCatalog.labels;
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "initial-balances-pay"],
@@ -370,7 +362,7 @@ export function InitialBalancesWorkspace() {
                     value={draft.trade_direction}
                     onChange={(e) => setDraft((d) => ({ ...d, trade_direction: e.target.value }))}
                   >
-                    {(filterOptQ.data?.trade_directions ?? []).map((td) => (
+                    {tradeDirectionOptions.map((td) => (
                       <option key={td} value={td}>
                         {td}
                       </option>

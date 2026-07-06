@@ -11,6 +11,7 @@ import {
 } from "../../contracts/payments.schemas";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -35,6 +36,7 @@ import {
   listOpenOrdersForAllocation
 } from "./payment-allocations.service";
 import { getOrderCashInContext } from "./payment.order-cash-in";
+import { listPaymentEditGrants } from "./payment-edit-grants.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 export async function registerPaymentReadRoutes(app: FastifyInstance) {
@@ -88,7 +90,7 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/payments",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createPaymentBodySchema.safeParse(request.body);
@@ -112,6 +114,12 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
         if (msg === "BAD_PAYMENT_TYPE") return sendApiError(reply, request, 400, "BadPaymentType");
         if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
+        if (msg === "CASH_DESK_NO_CLIENT_PAYMENTS") {
+          return sendApiError(reply, request, 400, "CashDeskNoClientPayments");
+        }
+        if (msg === "CASH_DESK_NO_DISCOUNT_PAYMENTS") {
+          return sendApiError(reply, request, 400, "CashDeskNoDiscountPayments");
+        }
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
         if (msg === "BAD_LEDGER_AGENT") return sendApiError(reply, request, 400, "BadLedgerAgent");
         if (msg === "BRANCH_SCOPE_VIOLATION") {
@@ -179,6 +187,40 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         throw e;
       }
+    }
+  );
+
+  app.get(
+    "/api/:slug/payments/edit-grants",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
+      const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "10", 10) || 10));
+      const accessUserId = parseOptPositiveInt(q.access_user_id);
+      const statusRaw = q.status?.trim();
+      let status: "completed" | "deleted" | "restored" | undefined;
+      if (statusRaw === "completed" || statusRaw === "deleted" || statusRaw === "restored") {
+        status = statusRaw;
+      } else if (statusRaw === "COMPLETED") {
+        status = "completed";
+      } else if (statusRaw === "DELETED") {
+        status = "deleted";
+      } else if (statusRaw === "RESTORED") {
+        status = "restored";
+      }
+      const payload = await listPaymentEditGrants(request.tenant!.id, {
+        page,
+        limit,
+        date_from: q.date_from?.trim() || undefined,
+        date_to: q.date_to?.trim() || undefined,
+        status,
+        access_user_id: accessUserId,
+        cancel_reason_ref: q.cancel_reason_ref?.trim() || undefined,
+        search: q.search?.trim() || undefined
+      });
+      return reply.send(payload);
     }
   );
 

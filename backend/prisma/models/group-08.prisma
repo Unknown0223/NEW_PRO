@@ -1,0 +1,110 @@
+/// Планы → Настройка утверждающих (tasdiqlash zanjiri).
+/// Bitta yo'nalish (TradeDirection) × bitta supervayzer = bitta zanjir egasi.
+model PlanApproverConfig {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  direction_id       Int
+  supervisor_user_id Int
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  tenant     Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  direction  TradeDirection @relation(fields: [direction_id], references: [id], onDelete: Cascade)
+  supervisor User           @relation("PlanApproverSupervisor", fields: [supervisor_user_id], references: [id], onDelete: Cascade)
+  levels     PlanApproverLevel[]
+
+  @@unique([tenant_id, direction_id, supervisor_user_id], map: "plan_approver_configs_unique")
+  @@index([tenant_id, direction_id])
+  @@map("plan_approver_configs")
+}
+
+/// Zanjirdagi bitta bosqich (Степень N). `approver_user_id` bo'sh bo'lishi mumkin (hali tanlanmagan).
+model PlanApproverLevel {
+  id               Int      @id @default(autoincrement())
+  tenant_id        Int
+  config_id        Int
+  position         Int
+  approver_user_id Int?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  tenant   Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  config   PlanApproverConfig @relation(fields: [config_id], references: [id], onDelete: Cascade)
+  approver User?              @relation("PlanApproverEmployee", fields: [approver_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, config_id])
+  @@index([config_id, position])
+  @@map("plan_approver_levels")
+}
+
+/// Tenant bo'yicha umumiy yakuniy rahbarlar (Главные утверждающие), tartibli.
+model PlanApproverLeader {
+  id             Int      @id @default(autoincrement())
+  tenant_id      Int
+  position       Int
+  leader_user_id Int
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  leader User   @relation("PlanApproverLeaderUser", fields: [leader_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, leader_user_id])
+  @@index([tenant_id, position])
+  @@map("plan_approver_leaders")
+}
+
+/// Планы → Установка планов (KPI reja markazi).
+/// Oy × yo'nalish × KPI guruhi = bitta reja.
+model SalesKpiPlan {
+  id                 Int      @id @default(autoincrement())
+  tenant_id          Int
+  month              Int
+  year               Int
+  trade_direction_id Int
+  kpi_group_id       Int
+  status             String   @default("draft") @db.VarChar(32)
+  created_by         Int?
+  approved_by        Int?
+  approved_at        DateTime?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  tenant          Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  trade_direction TradeDirection @relation(fields: [trade_direction_id], references: [id], onDelete: Cascade)
+  kpi_group       KpiGroup       @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
+  creator         User?          @relation("SalesKpiPlanCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  approver        User?          @relation("SalesKpiPlanApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  targets         SalesKpiPlanTarget[]
+
+  @@unique([tenant_id, month, year, trade_direction_id, kpi_group_id], map: "sales_kpi_plans_unique")
+  @@index([tenant_id, month, year, trade_direction_id])
+  @@map("sales_kpi_plans")
+}
+
+/// Xodim × reja bo'yicha KPI maqsadlari (summa, miqdor, hajm, AKB, buyurtmalar).
+model SalesKpiPlanTarget {
+  id          Int      @id @default(autoincrement())
+  tenant_id   Int
+  plan_id     Int
+  user_id     Int
+  cost        Decimal  @default(0) @db.Decimal(18, 2)
+  count       Decimal  @default(0) @db.Decimal(18, 2)
+  volume      Decimal  @default(0) @db.Decimal(18, 2)
+  acb         Decimal  @default(0) @db.Decimal(18, 2)
+  order_count Int      @default(0)
+  comment     String?
+  status      String   @default("draft") @db.VarChar(32)
+  updated_by  Int?
+  updated_at  DateTime @updatedAt
+
+  tenant  Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  plan    SalesKpiPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  user    User         @relation("SalesKpiPlanTargetUser", fields: [user_id], references: [id], onDelete: Cascade)
+  editor  User?        @relation("SalesKpiPlanTargetEditor", fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@unique([plan_id, user_id], map: "sales_kpi_plan_targets_unique")
+  @@index([tenant_id, plan_id])
+  @@index([tenant_id, user_id])
+  @@map("sales_kpi_plan_targets")
+}

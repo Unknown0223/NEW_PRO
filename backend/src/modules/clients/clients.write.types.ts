@@ -54,6 +54,8 @@ export type UpdateClientInput = {
   latitude?: string | number | null;
   longitude?: string | number | null;
   zone?: string | null;
+  warehouse_id?: number | null;
+  cash_desk_id?: number | null;
   agent_id?: number | null;
   agent_assignments?: AgentAssignmentPatch[];
   contact_persons?: ContactPersonSlot[];

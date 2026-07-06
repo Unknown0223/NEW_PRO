@@ -285,6 +285,11 @@ export function ProductForm({
       if (productId != null) {
         await qc.invalidateQueries({ queryKey: ["product-detail-form", tenantSlug, productId] });
       }
+      // Mahsulot nomi/holati o'zgarsa — uni nom bo'yicha ko'rsatadigan keshlar
+      // (almashtiriladigan guruhlar, picker, jonli nom) ham yangilansin.
+      await qc.invalidateQueries({ queryKey: ["catalog-interchangeable", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["products-pick", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["interchangeable-live-names", tenantSlug] });
       onSuccess();
     },
     onError: (e: unknown) => {

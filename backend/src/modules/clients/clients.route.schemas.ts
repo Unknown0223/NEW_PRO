@@ -5,7 +5,8 @@ export {
   mergeBodySchema,
   savedDupGroupBodySchema,
   balanceMovementBodySchema,
-  bulkActiveBodySchema
+  bulkActiveBodySchema,
+  bulkPatchBodySchema
 } from "./clients.route.schemas.forms";
 export {
   sendClientUpdateImportTemplateXlsx,

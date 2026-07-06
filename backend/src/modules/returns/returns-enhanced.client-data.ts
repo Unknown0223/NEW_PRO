@@ -64,7 +64,7 @@ async function getClientReturnsDataMultipleOrders(
       tenant_id: tenantId,
       client_id: clientId,
       order_id: { in: loadedOrderIds },
-      status: "posted"
+      status: { in: ["pending", "posted"] }
     },
     select: {
       order_id: true,
@@ -204,7 +204,7 @@ export async function getClientReturnsData(
         tenant_id: tenantId,
         client_id: clientId,
         order_id: singleOrderId,
-        status: "posted"
+        status: { in: ["pending", "posted"] }
       },
       select: {
         order_id: true,
@@ -347,7 +347,7 @@ export async function listClientOrderPickBalancesWithMeta(
       tenant_id: tenantId,
       client_id: clientId,
       order_id: { in: orderIds },
-      status: "posted"
+      status: { in: ["pending", "posted"] }
     },
     select: {
       order_id: true,

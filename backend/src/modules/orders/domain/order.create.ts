@@ -6,6 +6,7 @@
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getErrorCode } from "../../../lib/app-error";
+import { withTransaction } from "../../../lib/db-context";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import {
@@ -59,7 +60,8 @@ import {
   enrichOrderDetailRow,
   bonusGiftMapToJson,
   roundOrderMoney,
-  validateBonusGiftOverrides
+  validateBonusGiftOverrides,
+  validateBonusGiftLines
 } from "./order.detail-mappers";
 import { buildCreateOrderLineData } from "./order.create-lines";
 import {
@@ -200,6 +202,11 @@ export async function createOrder(
       await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
     : new Map<number, number>();
 
+  const validatedGiftSplits =
+    input.bonus_gift_lines?.length ?
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines)
+    : new Map<number, Map<number, number>>();
+
   const roleNorm = (viewerRole ?? "").toLowerCase();
   const creationChannel: "web" | "mobile" =
     roleNorm.includes("agent") || roleNorm.includes("expeditor") ? "mobile" : "web";
@@ -220,7 +227,7 @@ export async function createOrder(
     creation_channel: creationChannel
   });
 
-  const order = await prisma.$transaction((tx) =>
+  const order = await withTransaction((tx) =>
     runCreateOrderTransaction(tx, {
       tenantId,
       input,
@@ -235,6 +242,7 @@ export async function createOrder(
       exchangeMetaJson: exchangeMetaJson ?? null,
       orderAgentForBonus,
       validatedGiftOverrides,
+      validatedGiftSplits,
       tempOrderNumber,
       isInboundShelfReturn,
       stackPolicy

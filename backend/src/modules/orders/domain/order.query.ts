@@ -9,10 +9,12 @@ import { getErrorCode } from "../../../lib/app-error";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { cursorPagination, decodeCursor } from "../../../lib/pagination";
-import { getAppCache, invalidateDashboard, invalidateStock, setAppCache } from "../../../lib/redis-cache";
+import { getAppCache, invalidateDashboard, invalidateStock, ordersListCacheKey, setAppCache } from "../../../lib/redis-cache";
 import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { clientIdsWithVisitWeekday } from "../../clients/clients.list.where";
+import { isDiscountAlertCode } from "../order-discount-alert";
+import { isBonusAlertCode } from "../order-bonus-stock-cap";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import {
@@ -127,11 +129,14 @@ export async function listOrdersPaged(
   const cursorRawEarly = q.cursor?.trim();
   const useCursorEarly = Boolean(cursorRawEarly);
   if (!useCursorEarly) {
-    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
-      q,
-      viewerRole,
-      viewerUserId: viewerUserId ?? null
-    })}`;
+    const cacheKey = ordersListCacheKey(
+      tenantId,
+      stableJsonStringify({
+        q,
+        viewerRole,
+        viewerUserId: viewerUserId ?? null
+      })
+    );
     const cached = await getAppCache<{
       data: OrderListRow[];
       total: number;
@@ -187,6 +192,22 @@ export async function listOrdersPaged(
       return { data: [], total: 0, page: q.page, limit: q.limit };
     }
     andClauses.push({ client_id: { in: visitClientIds } });
+  }
+  const discountAlert = q.discount_alert?.trim();
+  if (discountAlert === "any") {
+    andClauses.push({ discount_alert: { not: null } });
+  } else if (discountAlert && isDiscountAlertCode(discountAlert)) {
+    andClauses.push({ discount_alert: discountAlert });
+  }
+  const bonusAlert = q.bonus_alert?.trim();
+  if (bonusAlert === "any") {
+    andClauses.push({ bonus_alert: { not: null } });
+  } else if (bonusAlert && isBonusAlertCode(bonusAlert)) {
+    andClauses.push({ bonus_alert: bonusAlert });
+  }
+  const orderAlert = q.order_alert?.trim();
+  if (orderAlert === "any") {
+    andClauses.push({ OR: [{ discount_alert: { not: null } }, { bonus_alert: { not: null } }] });
   }
   const cat = q.client_category?.trim();
   if (cat) {
@@ -269,9 +290,8 @@ export async function listOrdersPaged(
     const range: Prisma.DateTimeFilter = {};
     if (fromD) range.gte = fromD;
     if (toD) range.lte = toD;
-    const rawMode = (q.date_mode?.trim() || "created").toLowerCase();
-    const mode = rawMode === "order" ? "created" : rawMode;
-    if (mode === "ship") {
+    const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
+    if (rawMode === "ship") {
       andClauses.push({
         status_logs: {
           some: {
@@ -281,6 +301,7 @@ export async function listOrdersPaged(
         }
       });
     } else {
+      // «Дата заказа» / «Дата создания» — Order.created_at (UI: created_at / list_created_at)
       andClauses.push({ created_at: range });
     }
   }
@@ -319,6 +340,7 @@ export async function listOrdersPaged(
           select: {
             name: true,
             legal_name: true,
+            client_code: true,
             phone: true,
             inn: true,
             address: true,
@@ -390,7 +412,9 @@ export async function listOrdersPaged(
       client_id: o.client_id,
       order_type: o.order_type ?? "order",
       status: o.status,
-      total_sum: o.total_sum
+      total_sum: o.total_sum,
+      discount_sum: o.discount_sum,
+      applied_auto_bonus_rule_ids: o.applied_auto_bonus_rule_ids ?? []
     }))
   );
 
@@ -406,6 +430,7 @@ export async function listOrdersPaged(
       order_type: o.order_type ?? "order",
       client_id: o.client_id,
       client_name: o.client.name,
+      client_code: o.client.client_code?.trim() || null,
       client_legal_name: o.client.legal_name?.trim() || null,
       client_phone: o.client.phone?.trim() || null,
       client_inn: o.client.inn?.trim() || null,
@@ -456,6 +481,8 @@ export async function listOrdersPaged(
       total_sum: o.total_sum.toString(),
       bonus_qty: sumBonusQty(o.items),
       discount_sum: o.discount_sum.toString(),
+      discount_alert: (o as { discount_alert?: string | null }).discount_alert ?? null,
+      bonus_alert: (o as { bonus_alert?: string | null }).bonus_alert ?? null,
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
@@ -476,11 +503,14 @@ export async function listOrdersPaged(
   };
 
   if (!useCursor) {
-    const cacheKey = `tenant:${tenantId}:orders:list:${stableJsonStringify({
-      q,
-      viewerRole,
-      viewerUserId: viewerUserId ?? null
-    })}`;
+    const cacheKey = ordersListCacheKey(
+      tenantId,
+      stableJsonStringify({
+        q,
+        viewerRole,
+        viewerUserId: viewerUserId ?? null
+      })
+    );
     void setAppCache(cacheKey, result, ORDERS_LIST_CACHE_TTL_SECONDS);
   }
 

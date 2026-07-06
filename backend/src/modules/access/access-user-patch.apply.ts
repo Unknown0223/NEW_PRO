@@ -1,8 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
+  isGrantDelegationKey,
+  normalizeGrantDelegationOperationKey,
+  toGrantDelegationKey
+} from "./access-grant-delegation";
+import {
   AccessManageRequiredError,
-  ACCESS_MANAGE_PERMISSION_KEY,
   derivePermissionModule,
   ensureRoleByKey,
   getUsersHaveAccessManage,
@@ -26,7 +30,11 @@ export type AccessPatchBodyInput = {
   cash_desk_ids?: number[];
   payment_methods?: string[];
   territory_ids?: number[];
+  trade_direction_ids?: number[];
   supervisee_user_ids?: number[];
+  /** Operatsiya kaliti — boshqalarga berish huquqi (shaxsiy `access.grant.<key>`). */
+  grant_delegation_allow?: string[];
+  grant_delegation_revoke?: string[];
 };
 
 /** Некорректный список подчинённых (не тот тенант, сам себе и т.п.). */
@@ -60,15 +68,32 @@ export async function applyAccessUserPatchBodyTx(
     body.warehouse_delegate !== undefined ||
     body.cash_desk_ids !== undefined ||
     body.payment_methods !== undefined ||
-    body.territory_ids !== undefined;
+    body.territory_ids !== undefined ||
+    body.trade_direction_ids !== undefined;
 
   const superviseeTouched = body.supervisee_user_ids !== undefined;
+  const grantDelegationAllow = [
+    ...new Set(
+      (body.grant_delegation_allow ?? [])
+        .map((k) => normalizeGrantDelegationOperationKey(k))
+        .filter((k) => k.length > 0 && !isGrantDelegationKey(k))
+    )
+  ];
+  const grantDelegationRevoke = [
+    ...new Set(
+      (body.grant_delegation_revoke ?? [])
+        .map((k) => normalizeGrantDelegationOperationKey(k))
+        .filter((k) => k.length > 0 && !isGrantDelegationKey(k))
+    )
+  ];
+  const grantDelegationTouched = grantDelegationAllow.length > 0 || grantDelegationRevoke.length > 0;
 
   const hasPermTxWork =
     Boolean(body.role?.trim()) ||
     body.is_active != null ||
     Boolean(body.remove_permission_keys?.length) ||
-    permDefined;
+    permDefined ||
+    grantDelegationTouched;
 
   if (!hasPermTxWork && !scopeTouched && !superviseeTouched) return;
 
@@ -88,6 +113,26 @@ export async function applyAccessUserPatchBodyTx(
     await removeUserPermissionsByKeys(tx, tenantId, userId, body.remove_permission_keys);
   }
 
+  if (grantDelegationRevoke.length > 0) {
+    await removeUserPermissionsByKeys(
+      tx,
+      tenantId,
+      userId,
+      grantDelegationRevoke.map((k) => toGrantDelegationKey(k))
+    );
+  }
+  if (grantDelegationAllow.length > 0) {
+    await mergeUserPermissionKeys(
+      tx,
+      tenantId,
+      userId,
+      grantDelegationAllow.map((k) => toGrantDelegationKey(k)),
+      [],
+      txOpts?.permissionIdByKey,
+      rbacRole
+    );
+  }
+
   if (permDefined) {
     const allow = [...new Set((body.permissions ?? []).map((x) => x.trim()).filter(Boolean))];
     const deny = [...new Set((body.denied_permissions ?? []).map((x) => x.trim()).filter(Boolean))];
@@ -96,12 +141,6 @@ export async function applyAccessUserPatchBodyTx(
     } else {
       await tx.userPermission.deleteMany({ where: { user_id: userId } });
       const keys = [...new Set([...allow, ...deny])];
-      const needsManageGate =
-        allow.some((k) => k !== ACCESS_MANAGE_PERMISSION_KEY) && !allow.includes(ACCESS_MANAGE_PERMISSION_KEY);
-      if (needsManageGate) {
-        const withManage = await getUsersHaveAccessManage(tenantId, [{ id: userId, role: rbacRole }]);
-        if (!withManage.has(userId)) throw new AccessManageRequiredError();
-      }
       if (keys.length > 0) {
         const pref = txOpts?.permissionIdByKey;
         const permissionByKey = new Map<string, number>();
@@ -149,7 +188,8 @@ export async function applyAccessUserPatchBodyTx(
         warehouse_delegate: body.warehouse_delegate,
         cash_desk_ids: body.cash_desk_ids,
         payment_methods: body.payment_methods,
-        territory_ids: body.territory_ids
+        territory_ids: body.territory_ids,
+        trade_direction_ids: body.trade_direction_ids
       },
       txOpts?.scopeTx
     );
@@ -204,15 +244,19 @@ export async function applyAccessUserPatchBody(
     body.warehouse_delegate !== undefined ||
     body.cash_desk_ids !== undefined ||
     body.payment_methods !== undefined ||
-    body.territory_ids !== undefined;
+    body.territory_ids !== undefined ||
+    body.trade_direction_ids !== undefined;
 
   const superviseeTouched = body.supervisee_user_ids !== undefined;
+  const grantDelegationTouched =
+    Boolean(body.grant_delegation_allow?.length) || Boolean(body.grant_delegation_revoke?.length);
 
   const hasPermTxWork =
     Boolean(body.role?.trim()) ||
     body.is_active != null ||
     Boolean(body.remove_permission_keys?.length) ||
-    permDefined;
+    permDefined ||
+    grantDelegationTouched;
 
   if (!hasPermTxWork && !scopeTouched && !superviseeTouched) return;
 

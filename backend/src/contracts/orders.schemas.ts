@@ -10,6 +10,12 @@ const bonusGiftOverrideSchema = z.object({
   bonus_product_id: z.number().int().positive()
 });
 
+const bonusGiftLineSchema = z.object({
+  bonus_rule_id: z.number().int().positive(),
+  product_id: z.number().int().positive(),
+  qty: z.number().positive()
+});
+
 const exchangeLineSchema = z.object({
   order_id: z.number().int().positive(),
   product_id: z.number().int().positive(),
@@ -32,6 +38,7 @@ export const createOrderBodySchema = z
     order_type: z.enum(["order", "return", "exchange", "partial_return", "return_by_order"]).optional(),
     apply_bonus: z.boolean().optional(),
     bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
+    bonus_gift_lines: z.array(bonusGiftLineSchema).optional(),
     comment: z.string().max(4000).optional().nullable(),
     request_type_ref: z.string().trim().max(128).optional().nullable(),
     is_consignment: z.boolean().optional(),
@@ -142,7 +149,10 @@ export const ordersListQuerySchema = z
     price_type: z.string().optional(),
     visit_weekday: z.string().optional(),
     date_mode: z.string().optional(),
-    cursor: z.string().optional()
+    cursor: z.string().optional(),
+    discount_alert: z.string().optional(),
+    bonus_alert: z.string().optional(),
+    order_alert: z.string().optional()
   })
   .transform((q) => {
     const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
@@ -182,7 +192,10 @@ export const ordersListQuerySchema = z
         return Number.isFinite(n) && n >= 1 && n <= 7 ? n : undefined;
       })(),
       date_mode: q.date_mode?.trim() || undefined,
-      cursor: q.cursor?.trim() || undefined
+      cursor: q.cursor?.trim() || undefined,
+      discount_alert: q.discount_alert?.trim() || undefined,
+      bonus_alert: q.bonus_alert?.trim() || undefined,
+      order_alert: q.order_alert?.trim() || undefined
     };
   });
 
@@ -194,7 +207,9 @@ const orderIdsBulkSchema = z.array(z.number().int().positive()).min(1).max(500);
 export const patchOrderStatusBodySchema = z.object({
   status: z.string().min(1),
   /** Holat logidagi vaqt (ISO 8601). Bo‘lmasa — hozir. */
-  occurred_at: z.string().datetime({ offset: true }).optional()
+  occurred_at: z.string().datetime({ offset: true }).optional(),
+  /** Vazvrat (returned) sababi — ixtiyoriy yoki konfiguratsiyaga ko'ra majburiy. */
+  reason: z.string().max(500).optional()
 });
 
 /** POST `/api/:slug/orders/bulk/status` */

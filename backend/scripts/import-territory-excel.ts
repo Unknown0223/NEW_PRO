@@ -1,4 +1,6 @@
 /**
+ * @deprecated Bitta fayl yetarli: `npm run import:gorod-xlsx` (zona/oblast/gorod/kod bitta Excelda)
+ *
  * Bir martalik: «Данные Регион.xlsx» + «Данные Город.xlsx» → tenant.settings.references.territory_nodes
  *
  *   npm run import:territory-excel

@@ -2,13 +2,19 @@
 
 import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
 import { BonusRuleCategoryHoverField } from "@/components/bonus-rules/bonus-rule-category-hover-field";
+import {
+  BonusRuleFloatingInput,
+  BonusRuleFloatingSelect,
+  BonusRulePreviewQtyInput,
+  BonusRuleSection,
+  BonusRuleSectionTitle,
+  BonusRuleTemplateButton,
+  BonusRuleTemplateCheckbox,
+  BonusRuleTemplateRadioGroup
+} from "@/components/bonus-rules/bonus-rule-form-fields";
 import { BonusRulePrerequisitesField } from "@/components/bonus-rules/bonus-rule-prerequisites-field";
 import { BonusRuleSelectedClientsField } from "@/components/bonus-rules/bonus-rule-selected-clients-field";
 import { BonusRuleProductDualPanels } from "@/components/bonus-rules/bonus-rule-product-dual-panels";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -89,42 +95,22 @@ function SumThresholdScopeFields({
       ? "Календарный месяц (количество по клиенту + текущий заказ)"
       : "Календарный месяц (сумма заказов клиента + текущий)";
   return (
-    <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
-      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
-      <div className="flex flex-col gap-3">
-        <label className="flex cursor-pointer items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name={radioGroupName}
-            className="mt-0.5 h-4 w-4 accent-primary"
-            checked={sumThresholdScope === "order"}
-            onChange={() => onScopeChange("order")}
-            disabled={disabled}
-          />
-          <span>Только этот заказ</span>
-        </label>
-        <label className="flex cursor-pointer items-start gap-2 text-sm">
-          <input
-            type="radio"
-            name={radioGroupName}
-            className="mt-0.5 h-4 w-4 accent-primary"
-            checked={sumThresholdScope === "calendar_month"}
-            onChange={() => onScopeChange("calendar_month")}
-            disabled={disabled}
-          />
-          <span>{monthLabel}</span>
-        </label>
-      </div>
+    <div className="space-y-3 pt-1">
+      <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
+      <BonusRuleTemplateRadioGroup
+        title={title}
+        name={radioGroupName}
+        value={sumThresholdScope}
+        onChange={(v) => onScopeChange(v as SumThresholdScope)}
+        disabled={disabled}
+        options={[
+          { value: "order", label: "Только этот заказ" },
+          { value: "calendar_month", label: monthLabel }
+        ]}
+      />
     </div>
   );
 }
-
-const inputCls =
-  "flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring";
-/** `<select>` ga `flex` bermang — OS dropdown noto‘g‘ri chiziladi (Windows Chrome/Edge). */
-const selectCls =
-  "box-border h-10 w-full min-w-0 rounded-lg border border-input bg-background px-3 py-0 text-sm shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring";
 
 function parseCondRow(c: CondForm) {
   const min_qty = c.min_qty.trim() === "" ? null : Number.parseFloat(c.min_qty);
@@ -176,9 +162,10 @@ export function BonusRuleForm({
   const router = useRouter();
   const qc = useQueryClient();
   const isEdit = Boolean(initialRule && initialRule.id > 0);
+  const formLocked = Boolean(isEdit && initialRule?.has_been_used);
   const seedKey =
     initialRule && initialRule.id > 0
-      ? String(initialRule.id)
+      ? `${initialRule.id}:${initialRule.updated_at ?? ""}`
       : initialRule && prefillNonce
         ? prefillNonce
         : initialRule
@@ -262,6 +249,7 @@ export function BonusRuleForm({
   const [scopeTradeDirectionIds, setScopeTradeDirectionIds] = useState<number[]>([]);
   const [onlyByAssortment, setOnlyByAssortment] = useState(false);
   const [onlyByCategory, setOnlyByCategory] = useState(false);
+  const [previewPurchaseQty, setPreviewPurchaseQty] = useState("50");
   const [localError, setLocalError] = useState<string | null>(null);
   /** Qaysi blokka scroll, ramka va ichki bildirishnoma bog‘langan */
   const [errorTarget, setErrorTarget] = useState<ErrorTarget>(null);
@@ -358,7 +346,7 @@ export function BonusRuleForm({
       }
       setSumThresholdScope(rule.sum_threshold_scope === "calendar_month" ? "calendar_month" : "order");
       setIsManual(rule.is_manual ?? false);
-      setInBlocks(rule.in_blocks ?? false);
+      setInBlocks(rule.in_blocks ?? true);
       setOncePerClient(rule.once_per_client ?? false);
       setPrerequisiteRuleIds([...(rule.prerequisite_rule_ids ?? [])]);
       setScopeBranchCodes([...(rule.scope_branch_codes ?? [])]);
@@ -366,27 +354,18 @@ export function BonusRuleForm({
       setScopeTradeDirectionIds([...(rule.scope_trade_direction_ids ?? [])]);
       const pids = [...(rule.product_ids ?? [])];
       const cids = [...(rule.product_category_ids ?? [])];
-      if (cids.length > 0 && pids.length > 0) {
-        setOnlyByCategory(true);
-        setOnlyByAssortment(false);
-        setTriggerProductIds(pids);
-        setSelectedCategoryIds(cids);
-      } else if (pids.length > 0) {
-        setOnlyByAssortment(true);
-        setOnlyByCategory(false);
-        setTriggerProductIds(pids);
-        setSelectedCategoryIds([]);
-      } else if (cids.length > 0) {
-        setOnlyByAssortment(false);
-        setOnlyByCategory(true);
-        setTriggerProductIds([]);
-        setSelectedCategoryIds(cids);
+      const hasScopeFlags =
+        rule.scope_restrict_assortment === true || rule.scope_restrict_category === true;
+      if (hasScopeFlags) {
+        setOnlyByAssortment(rule.scope_restrict_assortment === true);
+        setOnlyByCategory(rule.scope_restrict_category === true);
       } else {
-        setOnlyByAssortment(false);
-        setOnlyByCategory(false);
-        setTriggerProductIds([]);
-        setSelectedCategoryIds([]);
+        const legacyCategory = cids.length > 0;
+        setOnlyByCategory(legacyCategory);
+        setOnlyByAssortment(!legacyCategory && pids.length > 0);
       }
+      setTriggerProductIds(pids);
+      setSelectedCategoryIds(cids);
     } else {
       setName("");
       setType(discountOnly ? "discount" : "qty");
@@ -465,12 +444,24 @@ export function BonusRuleForm({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (formLocked && initialRule && initialRule.id > 0) {
+        const payload: Record<string, unknown> = {
+          is_active: isActive,
+          valid_to: localDatetimeToIso(validTo)
+        };
+        const { data } = await api.put(`/api/${tenantSlug}/bonus-rules/${initialRule.id}`, payload);
+        return data;
+      }
+
       const p = Number.parseInt(priority, 10);
       const product_ids = onlyByAssortment || onlyByCategory ? triggerProductIds : [];
       const product_category_ids = onlyByCategory ? selectedCategoryIds : [];
       const assortmentOnlyNoBonusPicker = onlyByAssortment && !onlyByCategory;
-      const bonus_product_ids =
-        assortmentOnlyNoBonusPicker && (type === "qty" || type === "sum") ? [] : bonusProductIds;
+      const bonus_product_ids = discountOnly
+        ? []
+        : assortmentOnlyNoBonusPicker && (type === "qty" || type === "sum")
+          ? []
+          : bonusProductIds;
       const payload: Record<string, unknown> = {
         name: name.trim(),
         type,
@@ -486,6 +477,8 @@ export function BonusRuleForm({
         product_ids,
         bonus_product_ids,
         product_category_ids,
+        scope_restrict_assortment: onlyByAssortment,
+        scope_restrict_category: onlyByCategory,
         target_all_clients: targetAllClients,
         selected_client_ids: targetAllClients ? [] : selectedClientIds,
         is_manual: isManual,
@@ -511,7 +504,7 @@ export function BonusRuleForm({
         payload.sum_threshold_scope = sumThresholdScope;
         payload.buy_qty = null;
         payload.free_qty = null;
-        payload.discount_pct = null;
+        payload.discount_pct = discountOnly ? Number.parseFloat(discountPct) : null;
         payload.conditions = [];
       } else {
         payload.discount_pct = Number.parseFloat(discountPct);
@@ -528,7 +521,11 @@ export function BonusRuleForm({
       const { data } = await api.post(`/api/${tenantSlug}/bonus-rules`, payload);
       return data;
     },
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
+      const savedRule = saved as BonusRuleRow | undefined;
+      if (initialRule && initialRule.id > 0 && savedRule?.id === initialRule.id) {
+        qc.setQueryData(["bonus-rule", tenantSlug, initialRule.id], savedRule);
+      }
       await qc.invalidateQueries({ queryKey: ["bonus-rules", tenantSlug] });
       if (initialRule && initialRule.id > 0) {
         await qc.invalidateQueries({ queryKey: ["bonus-rule", tenantSlug, initialRule.id] });
@@ -560,6 +557,13 @@ export function BonusRuleForm({
         pulseErrorOn("restrictions");
         return;
       }
+      if (ax.response?.data?.error === "RuleLocked") {
+        setLocalError(
+          "Правило уже применялось в заказах — можно менять только дату окончания и активность."
+        );
+        setErrorTarget(null);
+        return;
+      }
       setLocalError(getUserFacingError(e, "Ошибка сохранения"));
       setErrorTarget(null);
     }
@@ -568,6 +572,11 @@ export function BonusRuleForm({
   const submit = () => {
     setLocalError(null);
     setErrorTarget(null);
+
+    if (formLocked) {
+      mutation.mutate();
+      return;
+    }
 
     if (!name.trim()) {
       setLocalError(NAME_REQUIRED_MSG);
@@ -606,10 +615,11 @@ export function BonusRuleForm({
     if (
       onlyByCategory &&
       (type === "qty" || type === "sum" || type === "discount") &&
+      selectedCategoryIds.length === 0 &&
       triggerProductIds.length === 0
     ) {
       setLocalError(
-        "В режиме «Категория» слева отметьте хотя бы один триггер-товар (условие по категории и выбранным SKU)."
+        "В режиме «Категория» отметьте хотя бы одну категорию (флажок у названия) или триггер-товар."
       );
       setErrorTarget("products");
       pulseErrorOn("products");
@@ -622,6 +632,15 @@ export function BonusRuleForm({
         setErrorTarget("conditions");
         pulseErrorOn("conditions");
         return;
+      }
+      if (discountOnly) {
+        const d = Number.parseFloat(discountPct);
+        if (discountPct.trim() === "" || Number.isNaN(d) || d < 0 || d > 100) {
+          setLocalError("Введите процент скидки от 0 до 100.");
+          setErrorTarget("discount");
+          pulseErrorOn("discount");
+          return;
+        }
       }
     }
     if (type === "discount") {
@@ -654,9 +673,29 @@ export function BonusRuleForm({
   };
 
   const showBonusColumn =
-    (type === "qty" || type === "sum") && !(onlyByAssortment && !onlyByCategory);
+    !discountOnly && (type === "qty" || type === "sum") && !(onlyByAssortment && !onlyByCategory);
   const showTriggerColumn =
-    type === "qty" || type === "sum" || (type === "discount" && (onlyByAssortment || onlyByCategory));
+    discountOnly
+      ? (onlyByAssortment || onlyByCategory) && (type === "sum" || type === "discount")
+      : type === "qty" || type === "sum" || (type === "discount" && (onlyByAssortment || onlyByCategory));
+
+  const previewBonusQty = useMemo(() => {
+    if (type !== "qty" || conditions.length === 0) return 0;
+    const row = conditions[0];
+    const purchaseQty = Number.parseFloat(previewPurchaseQty);
+    const minQty = row.min_qty.trim() === "" ? 0 : Number.parseFloat(row.min_qty);
+    const stepQty = Number.parseFloat(row.step_qty);
+    const bonusQty = Number.parseFloat(row.bonus_qty);
+    const maxBonusRaw = row.max_bonus_qty.trim();
+    const maxBonusQty =
+      maxBonusRaw === "" ? Number.POSITIVE_INFINITY : Number.parseFloat(maxBonusRaw);
+    if (!Number.isFinite(purchaseQty) || purchaseQty < 0) return 0;
+    if (Number.isFinite(minQty) && purchaseQty < minQty) return 0;
+    if (!Number.isFinite(stepQty) || stepQty <= 0 || !Number.isFinite(bonusQty) || bonusQty < 0) return 0;
+    const raw = Math.floor(purchaseQty / stepQty) * bonusQty;
+    if (!Number.isFinite(maxBonusQty) || maxBonusQty < 0) return raw;
+    return Math.min(raw, maxBonusQty);
+  }, [conditions, previewPurchaseQty, type]);
 
   const sectionAlert = (target: ErrorTarget) =>
     errorTarget === target && localError ? (
@@ -669,8 +708,21 @@ export function BonusRuleForm({
       </div>
     ) : null;
 
+  const fieldDisabled = mutation.isPending || formLocked;
+  /** Locked rules still allow save (is_active + valid_to only). */
+  const actionDisabled = mutation.isPending;
+
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-4">
+      {formLocked ? (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100"
+        >
+          Правило уже применялось в заказах. Редактирование заблокировано для сохранения истории — можно
+          изменить только дату окончания («Действует до») и включить или выключить правило.
+        </div>
+      ) : null}
       {localError && errorTarget === null ? (
         <div
           role="alert"
@@ -689,390 +741,289 @@ export function BonusRuleForm({
           errorTarget === "basics" && errorShake && "animate-bonus-rule-shake"
         )}
       >
-      <Card className="shadow-panel">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <CardTitle>{discountOnly ? "Скидка — основные настройки" : "Основные настройки"}</CardTitle>
-          <CardDescription>
-            {discountOnly
-              ? "Как у бонусов: название, тип (процент или подарок по сумме), срок и фильтры. Один ряд — оплата, способ, состояние, для кого, ограничения; под ним товары. Параметры скидки — в следующем блоке."
-              : "Название и тип бонуса (количество или сумма заказа), срок и фильтры профиля. Ниже один ряд: оплата, способ, состояние, аудитория и ограничения; под ним — выбор товаров."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-5 pt-6">
-          {sectionAlert("basics")}
-          {/* 1-bo‘lim: 2 qator — siqilishsiz, barcha ustunlarda bir xil label→maydon tartibi */}
-          <div className="flex flex-col gap-5">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,22rem)] md:items-start">
-              <div className="grid min-w-0 gap-1.5">
-                <Label htmlFor="br-name">Название</Label>
-                <Input
-                  id="br-name"
-                  className={inputCls}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={mutation.isPending}
-                  aria-invalid={errorTarget === "basics" && !name.trim()}
-                />
-              </div>
-              {discountOnly ? (
-                <div className="grid min-w-0 gap-1.5">
-                  <Label htmlFor="br-skidka-type">Тип скидки</Label>
-                  <select
-                    id="br-skidka-type"
-                    className={selectCls}
-                    title="Процентная скидка или подарок по минимальной сумме"
-                    value={type === "sum" || type === "discount" ? type : "discount"}
-                    onChange={(e) => setType(e.target.value as BonusType)}
-                    disabled={mutation.isPending}
-                  >
-                    <option value="discount">Процентная скидка (%)</option>
-                    <option value="sum">Минимальная сумма заказа (подарок)</option>
-                  </select>
-                </div>
-              ) : (
-                <div className="grid min-w-0 gap-1.5">
-                  <Label htmlFor="br-bonus-type">Тип бонуса</Label>
-                  <select
-                    id="br-bonus-type"
-                    className={selectCls}
-                    title="Бонус за количество или за сумму заказа"
-                    value={type === "sum" ? "sum" : "qty"}
-                    onChange={(e) => setType(e.target.value === "sum" ? "sum" : "qty")}
-                    disabled={mutation.isPending}
-                  >
-                    <option value="qty">Бонус за количество</option>
-                    <option value="sum">Бонус за сумму заказа</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(12.5rem,1.15fr)_minmax(12.5rem,1.15fr)_minmax(11rem,1fr)_minmax(11rem,1fr)_minmax(5.25rem,5.5rem)]">
-              <div className="grid min-w-0 gap-1.5">
-                <Label htmlFor="br-valid-from">Действует с</Label>
-                <Input
-                  id="br-valid-from"
-                  className={inputCls}
-                  type="datetime-local"
-                  value={validFrom}
-                  onChange={(e) => setValidFrom(e.target.value)}
-                  disabled={mutation.isPending}
-                />
-              </div>
-              <div className="grid min-w-0 gap-1.5">
-                <Label htmlFor="br-valid-to">Действует до</Label>
-                <Input
-                  id="br-valid-to"
-                  className={inputCls}
-                  type="datetime-local"
-                  value={validTo}
-                  onChange={(e) => setValidTo(e.target.value)}
-                  disabled={mutation.isPending}
-                />
-              </div>
-              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
-                <Label htmlFor="br-client-cat">Категория клиента</Label>
-                <select
-                  id="br-client-cat"
-                  className={selectCls}
-                  value={
-                    clientCategory &&
-                    !clientCategoryOptions.some((c) => c.name === clientCategory)
-                      ? `__custom:${clientCategory}`
-                      : clientCategory
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setClientCategory(v.startsWith("__custom:") ? v.slice(11) : v);
-                  }}
-                  disabled={mutation.isPending}
-                >
-                  <option value="">Все</option>
-                  {clientCategory &&
-                  !clientCategoryOptions.some((c) => c.name === clientCategory) ? (
-                    <option value={`__custom:${clientCategory}`}>{clientCategory} (текущее)</option>
-                  ) : null}
-                  {clientCategoryOptions.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
-                <Label htmlFor="br-price-type">Тип цены</Label>
-                <select
-                  id="br-price-type"
-                  className={selectCls}
-                  value={priceType}
-                  onChange={(e) => setPriceType(e.target.value)}
-                  disabled={mutation.isPending}
-                >
-                  <option value="">Все</option>
-                  {(priceTypesQ.data ?? []).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid min-w-0 gap-1.5 sm:col-span-2 lg:col-span-1 xl:col-span-1">
-                <Label htmlFor="br-priority" title="При нескольких правилах — какое применить раньше">
-                  Приоритет
-                </Label>
-                <Input
-                  id="br-priority"
-                  className={cn(inputCls, "max-w-full xl:max-w-[5.5rem]")}
-                  type="number"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  disabled={mutation.isPending}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div
-            ref={restrictionsRef}
-            id="bonus-rule-restrictions"
-            className={cn(
-              "space-y-4",
-              (errorTarget === "restrictions" || errorTarget === "products") &&
-                "rounded-xl ring-2 ring-destructive ring-offset-2 ring-offset-background",
-              (errorTarget === "restrictions" || errorTarget === "products") && errorShake && "animate-bonus-rule-shake"
-            )}
+      <BonusRuleSection>
+        <BonusRuleSectionTitle>
+          {discountOnly ? "Скидка — основные настройки" : "Основные настройки"}
+        </BonusRuleSectionTitle>
+        {sectionAlert("basics")}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <BonusRuleFloatingInput
+            id="br-name"
+            label="Название"
+            className="xl:col-span-2"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={fieldDisabled}
+            aria-invalid={errorTarget === "basics" && !name.trim()}
+          />
+          {discountOnly ? (
+            <BonusRuleFloatingSelect
+              id="br-skidka-type"
+              label="Тип скидки"
+              title="Процентная скидка или скидка по минимальной сумме заказа"
+              value={type === "sum" || type === "discount" ? type : "discount"}
+              onChange={(e) => setType(e.target.value as BonusType)}
+              disabled={fieldDisabled}
+            >
+              <option value="discount">Процентная скидка (%)</option>
+              <option value="sum">Минимальная сумма заказа (% скидка)</option>
+            </BonusRuleFloatingSelect>
+          ) : (
+            <BonusRuleFloatingSelect
+              id="br-bonus-type"
+              label="Тип бонуса"
+              title="Бонус за количество или за сумму заказа"
+              value={type === "sum" ? "sum" : "qty"}
+              onChange={(e) => setType(e.target.value === "sum" ? "sum" : "qty")}
+              disabled={fieldDisabled}
+            >
+              <option value="qty">Бонус за количество</option>
+              <option value="sum">Бонус за сумму заказа</option>
+            </BonusRuleFloatingSelect>
+          )}
+          <BonusRuleFloatingInput
+            id="br-valid-from"
+            label="Действует с"
+            type="datetime-local"
+            value={validFrom}
+            onChange={(e) => setValidFrom(e.target.value)}
+            disabled={mutation.isPending || formLocked}
+            readOnly={formLocked}
+          />
+          <BonusRuleFloatingInput
+            id="br-valid-to"
+            label="Действует до"
+            type="datetime-local"
+            value={validTo}
+            onChange={(e) => setValidTo(e.target.value)}
+            disabled={mutation.isPending}
+          />
+          <BonusRuleFloatingSelect
+            id="br-client-cat"
+            label="Категория клиента"
+            value={
+              clientCategory && !clientCategoryOptions.some((c) => c.name === clientCategory)
+                ? `__custom:${clientCategory}`
+                : clientCategory
+            }
+            onChange={(e) => {
+              const v = e.target.value;
+              setClientCategory(v.startsWith("__custom:") ? v.slice(11) : v);
+            }}
+            disabled={fieldDisabled}
           >
-            {sectionAlert("restrictions")}
-            {sectionAlert("products")}
-
-            {/* Один ряд (xl): оплата | способ | состояние | для кого | ограничения */}
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Способ оплаты
-                </p>
-                <select
-                  id="br-payment"
-                  className={selectCls}
-                  value={paymentType}
-                  onChange={(e) => setPaymentType(e.target.value)}
-                  disabled={mutation.isPending || profileRefsQ.isLoading}
-                  aria-label="Способ оплаты"
-                >
-                  <option value="">Все</option>
-                  {paymentOptions.map((p) => (
-                    <option key={p.key} value={p.name}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                {profileRefsQ.isSuccess && paymentOptions.length === 0 ? (
-                  <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
-                    Активные способы оплаты не найдены. Добавьте в{" "}
-                    <a className="underline underline-offset-2 hover:text-foreground" href="/settings/payment-methods">
-                      способах оплаты
-                    </a>
-                    .
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Способ</p>
-                <div className="flex flex-col gap-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="br-method"
-                      className="h-4 w-4 accent-primary"
-                      checked={!isManual}
-                      onChange={() => setIsManual(false)}
-                      disabled={mutation.isPending}
-                    />
-                    Автоматически
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="br-method"
-                      className="h-4 w-4 accent-primary"
-                      checked={isManual}
-                      onChange={() => setIsManual(true)}
-                      disabled={mutation.isPending}
-                    />
-                    Вручную
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Состояние</p>
-                <div className="flex flex-col gap-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={isActive}
-                      onChange={(e) => setIsActive(e.target.checked)}
-                      disabled={mutation.isPending}
-                    />
-                    Активен
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={inBlocks}
-                      onChange={(e) => setInBlocks(e.target.checked)}
-                      disabled={mutation.isPending}
-                    />
-                    По блокам
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3 sm:col-span-2 lg:col-span-1 xl:col-span-1">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Для кого</p>
-                <div className="flex flex-col gap-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="br-target-clients"
-                      className="h-4 w-4 accent-primary"
-                      checked={targetAllClients}
-                      onChange={() => setTargetAllClients(true)}
-                      disabled={mutation.isPending}
-                    />
-                    Все клиенты
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="radio"
-                      name="br-target-clients"
-                      className="h-4 w-4 accent-primary"
-                      checked={!targetAllClients}
-                      onChange={() => setTargetAllClients(false)}
-                      disabled={mutation.isPending}
-                    />
-                    {discountOnly ? "Выбранные клиенты" : "Избранные клиенты"}
-                  </label>
-                </div>
-                {!targetAllClients ? (
-                  <BonusRuleSelectedClientsField
-                    compact
-                    tenantSlug={tenantSlug}
-                    selectedIds={selectedClientIds}
-                    nameById={selectedClientNames}
-                    disabled={mutation.isPending}
-                    onChange={(ids, namePatch) => {
-                      setSelectedClientIds(ids);
-                      setSelectedClientNames((prev) => {
-                        const next = { ...prev };
-                        for (const [k, v] of Object.entries(namePatch)) {
-                          const id = Number(k);
-                          if (!v.trim()) delete next[id];
-                          else next[id] = v;
-                        }
-                        return next;
-                      });
-                    }}
-                  />
-                ) : null}
-              </div>
-
-              <div className="flex min-h-full min-w-0 flex-col rounded-lg border border-border/80 bg-muted/15 p-3 sm:col-span-2 lg:col-span-2 xl:col-span-1">
-                <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Ограничения
-                </p>
-                <div className="flex flex-col gap-2.5">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={onlyByAssortment}
-                      onChange={(e) => {
-                        const v = e.target.checked;
-                        setOnlyByAssortment(v);
-                        if (v) {
-                          setOnlyByCategory(false);
-                          setSelectedCategoryIds([]);
-                          setBonusProductIds([]);
-                        }
-                        if (!v) setTriggerProductIds([]);
-                      }}
-                      disabled={mutation.isPending}
-                    />
-                    Только ассортимент
-                  </label>
-                  <BonusRuleCategoryHoverField
-                    checked={onlyByCategory}
-                    onCheckedChange={(v) => {
-                      setOnlyByCategory(v);
-                      if (v) {
-                        setOnlyByAssortment(false);
-                      }
-                      if (!v) setSelectedCategoryIds([]);
-                    }}
-                    disabled={mutation.isPending}
-                  />
-                  <label className="flex cursor-pointer items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={oncePerClient}
-                      onChange={(e) => setOncePerClient(e.target.checked)}
-                      disabled={mutation.isPending}
-                    />
-                    Один раз на клиента
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {showTriggerColumn || showBonusColumn ? (
-              <div ref={productsRef} className="space-y-3 border-t border-border/60 pt-4">
-                <p className="text-sm font-medium text-foreground">Товары и триггеры</p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Сохранение — только с «Только ассортимент» или «Категория». Дерево категорий: слева триггер, справа
-                  бонус (если столбец есть).
-                </p>
-                <BonusRuleProductDualPanels
-                  tenantSlug={tenantSlug}
-                  triggerProductIds={triggerProductIds}
-                  bonusProductIds={bonusProductIds}
-                  onTriggerChange={setTriggerProductIds}
-                  onBonusChange={setBonusProductIds}
-                  onlyByAssortment={onlyByAssortment}
-                  onlyByCategory={onlyByCategory}
-                  showTriggerColumn={showTriggerColumn}
-                  showBonusColumn={showBonusColumn}
-                  disabled={mutation.isPending}
-                />
-              </div>
+            <option value="">Все</option>
+            {clientCategory && !clientCategoryOptions.some((c) => c.name === clientCategory) ? (
+              <option value={`__custom:${clientCategory}`}>{clientCategory} (текущее)</option>
             ) : null}
-          </div>
+            {clientCategoryOptions.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </BonusRuleFloatingSelect>
+          <BonusRuleFloatingSelect
+            id="br-price-type"
+            label="Тип цены"
+            value={priceType}
+            onChange={(e) => setPriceType(e.target.value)}
+            disabled={fieldDisabled}
+          >
+            <option value="">Все</option>
+            {(priceTypesQ.data ?? []).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </BonusRuleFloatingSelect>
+          <BonusRuleFloatingSelect
+            id="br-payment"
+            label="Способ оплаты"
+            value={paymentType}
+            onChange={(e) => setPaymentType(e.target.value)}
+            disabled={fieldDisabled || profileRefsQ.isLoading}
+          >
+            <option value="">Все</option>
+            {paymentOptions.map((p) => (
+              <option key={p.key} value={p.name}>
+                {p.name}
+              </option>
+            ))}
+          </BonusRuleFloatingSelect>
+          <BonusRuleFloatingInput
+            id="br-priority"
+            label="Приоритет"
+            type="number"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            disabled={fieldDisabled}
+            title="При нескольких правилах — какое применить раньше"
+            inputClassName="text-right"
+          />
+        </div>
+        {profileRefsQ.isSuccess && paymentOptions.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Активные способы оплаты не найдены. Добавьте в{" "}
+            <a className="underline underline-offset-2 hover:text-foreground" href="/settings/payment-methods">
+              способах оплаты
+            </a>
+            .
+          </p>
+        ) : null}
 
-          {!isManual ? (
-            <div className="rounded-lg border border-border/80 bg-muted/15 p-4">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Предварительные условия (связанные правила)
-              </p>
-              <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
-                Если в этом заказе выбранные правила не пройдут автоматическую проверку своего типа, текущее правило не
-                применится. В других заказах они работают независимо.
-              </p>
-              <BonusRulePrerequisitesField
-                tenantSlug={tenantSlug}
-                excludeRuleId={initialRule && initialRule.id > 0 ? initialRule.id : null}
-                value={prerequisiteRuleIds}
-                onChange={setPrerequisiteRuleIds}
-                disabled={mutation.isPending}
-              />
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+        <div
+          ref={restrictionsRef}
+          id="bonus-rule-restrictions"
+          className={cn(
+            "mt-4 flex flex-wrap items-center gap-4 text-sm",
+            errorTarget === "restrictions" &&
+              "rounded-xl ring-2 ring-destructive ring-offset-2 ring-offset-background p-2 -m-2",
+            errorTarget === "restrictions" && errorShake && "animate-bonus-rule-shake"
+          )}
+        >
+          {sectionAlert("restrictions")}
+          <BonusRuleTemplateRadioGroup
+            title="Для кого"
+            name="br-target-clients"
+            value={targetAllClients ? "all" : "selected"}
+            onChange={(v) => setTargetAllClients(v === "all")}
+            disabled={fieldDisabled}
+            options={[
+              { value: "all", label: "Все клиенты" },
+              {
+                value: "selected",
+                label: discountOnly ? "Выбранные клиенты" : "Избранные клиенты"
+              }
+            ]}
+          />
+          <BonusRuleTemplateRadioGroup
+            title="Способ"
+            name="br-method"
+            value={isManual ? "manual" : "auto"}
+            onChange={(v) => setIsManual(v === "manual")}
+            disabled={fieldDisabled}
+            options={[
+              { value: "auto", label: "Автоматически" },
+              { value: "manual", label: "Вручную" }
+            ]}
+          />
+          <BonusRuleTemplateCheckbox
+            checked={isActive}
+            onChange={setIsActive}
+            disabled={mutation.isPending}
+            label="Активен"
+          />
+          <BonusRuleTemplateCheckbox
+            checked={inBlocks}
+            muted={!inBlocks}
+            onChange={setInBlocks}
+            disabled={fieldDisabled}
+            label="По блокам"
+          />
+          <BonusRuleTemplateCheckbox
+            checked={onlyByAssortment}
+            muted={!onlyByAssortment}
+            onChange={(v) => {
+              setOnlyByAssortment(v);
+              if (v) {
+                setOnlyByCategory(false);
+                setSelectedCategoryIds([]);
+                setBonusProductIds([]);
+              }
+              if (!v) setTriggerProductIds([]);
+            }}
+            disabled={fieldDisabled}
+            label="Только ассортимент"
+          />
+          <BonusRuleCategoryHoverField
+            checked={onlyByCategory}
+            onCheckedChange={(v) => {
+              setOnlyByCategory(v);
+              if (v) setOnlyByAssortment(false);
+              if (!v) setSelectedCategoryIds([]);
+            }}
+            disabled={fieldDisabled}
+          />
+          <BonusRuleTemplateCheckbox
+            checked={oncePerClient}
+            muted={!oncePerClient}
+            onChange={setOncePerClient}
+            disabled={fieldDisabled}
+            label="Один раз на клиента"
+          />
+        </div>
+
+        {!targetAllClients ? (
+          <div className="mt-4 rounded-xl border border-border bg-muted/15 p-3">
+            <BonusRuleSelectedClientsField
+              tenantSlug={tenantSlug}
+              selectedIds={selectedClientIds}
+              nameById={selectedClientNames}
+              disabled={fieldDisabled}
+              onChange={(ids, namePatch) => {
+                setSelectedClientIds(ids);
+                setSelectedClientNames((prev) => {
+                  const next = { ...prev };
+                  for (const [k, v] of Object.entries(namePatch)) {
+                    const id = Number(k);
+                    if (!v.trim()) delete next[id];
+                    else next[id] = v;
+                  }
+                  return next;
+                });
+              }}
+            />
+          </div>
+        ) : null}
+
+        {!isManual ? (
+          <div className="mt-4 rounded-xl border border-border bg-muted/15 p-4">
+            <p className="mb-1 text-sm font-semibold text-foreground">Предварительные условия</p>
+            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+              Если в этом заказе выбранные правила не пройдут автоматическую проверку своего типа, текущее правило не
+              применится.
+            </p>
+            <BonusRulePrerequisitesField
+              tenantSlug={tenantSlug}
+              excludeRuleId={initialRule && initialRule.id > 0 ? initialRule.id : null}
+              value={prerequisiteRuleIds}
+              onChange={setPrerequisiteRuleIds}
+              disabled={fieldDisabled}
+            />
+          </div>
+        ) : null}
+      </BonusRuleSection>
       </div>
+
+      {showTriggerColumn || showBonusColumn ? (
+        <div
+          ref={productsRef}
+          className={cn(
+            "rounded-xl",
+            errorTarget === "products" && "ring-2 ring-destructive ring-offset-2 ring-offset-background",
+            errorTarget === "products" && errorShake && "animate-bonus-rule-shake"
+          )}
+        >
+          <div className="space-y-4">
+            {sectionAlert("products")}
+            <BonusRuleProductDualPanels
+              tenantSlug={tenantSlug}
+              triggerProductIds={triggerProductIds}
+              bonusProductIds={bonusProductIds}
+              onTriggerChange={setTriggerProductIds}
+              onBonusChange={setBonusProductIds}
+              onlyByAssortment={onlyByAssortment}
+              onlyByCategory={onlyByCategory}
+              selectedCategoryIds={selectedCategoryIds}
+              onSelectedCategoryIdsChange={setSelectedCategoryIds}
+              showTriggerColumn={showTriggerColumn}
+              showBonusColumn={showBonusColumn}
+              disabled={mutation.isPending}
+              lockedView={formLocked}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {discountOnly ? (
         <div
@@ -1086,61 +1037,64 @@ export function BonusRuleForm({
               "animate-bonus-rule-shake"
           )}
         >
-          <Card className="shadow-panel">
-            <CardHeader className="border-b border-border/60 pb-4">
-              <CardTitle>
-                {type === "discount" ? "Параметры скидки (%)" : "Условие по сумме заказа"}
-              </CardTitle>
-              <CardDescription>
-                {type === "discount"
-                  ? "Процент применяется к строкам заказа по выбранным вверху товарам. Остатки склада не меняются."
-                  : "Порог считается по сумме товаров до скидки. При достижении к заказу добавляется подарок (логика как у бонуса за сумму); ассортимент подарка — в блоке «Товары и триггеры» выше."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-6">
+          <BonusRuleSection>
+            <BonusRuleSectionTitle>
+              {type === "discount" ? "Параметры скидки (%)" : "Условие по сумме заказа"}
+            </BonusRuleSectionTitle>
               {sectionAlert("conditions")}
               {sectionAlert("discount")}
               {type === "discount" ? (
-                <div className="grid max-w-md gap-1.5">
-                  <Label htmlFor="br-discount-pct">Процент скидки (%)</Label>
-                  <Input
-                    id="br-discount-pct"
-                    className={inputCls}
+                <BonusRuleFloatingInput
+                  id="br-discount-pct"
+                  label="Процент скидки (%)"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={discountPct}
+                  onChange={(e) => setDiscountPct(e.target.value)}
+                  disabled={fieldDisabled}
+                  aria-invalid={errorTarget === "discount"}
+                  inputClassName="text-right"
+                  className="max-w-md"
+                />
+              ) : null}
+              {type === "sum" ? (
+                <div className="space-y-4">
+                  <BonusRuleFloatingInput
+                    label="Минимальная сумма"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={minSum}
+                    onChange={(e) => setMinSum(e.target.value)}
+                    disabled={fieldDisabled}
+                    inputClassName="text-right"
+                    className="max-w-md"
+                  />
+                  <BonusRuleFloatingInput
+                    id="br-discount-pct-sum"
+                    label="Процент скидки (%)"
                     type="number"
                     min={0}
                     max={100}
                     step="0.01"
                     value={discountPct}
                     onChange={(e) => setDiscountPct(e.target.value)}
-                    disabled={mutation.isPending}
+                    disabled={fieldDisabled}
                     aria-invalid={errorTarget === "discount"}
+                    inputClassName="text-right"
+                    className="max-w-md"
                   />
-                </div>
-              ) : null}
-              {type === "sum" ? (
-                <div className="space-y-4">
-                  <div className="grid max-w-md gap-1.5">
-                    <Label>Минимальная сумма</Label>
-                    <Input
-                      className={inputCls}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={minSum}
-                      onChange={(e) => setMinSum(e.target.value)}
-                      disabled={mutation.isPending}
-                    />
-                  </div>
                   <SumThresholdScopeFields
                     radioGroupName="br-sum-scope-skid"
                     sumThresholdScope={sumThresholdScope}
                     onScopeChange={setSumThresholdScope}
-                    disabled={mutation.isPending}
+                    disabled={fieldDisabled}
                   />
                 </div>
               ) : null}
-            </CardContent>
-          </Card>
+          </BonusRuleSection>
         </div>
       ) : type === "qty" || type === "sum" ? (
       <div
@@ -1152,146 +1106,127 @@ export function BonusRuleForm({
           errorTarget === "conditions" && errorShake && "animate-bonus-rule-shake"
         )}
       >
-      <Card className="shadow-panel">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <CardTitle>Условия</CardTitle>
-          <CardDescription>
-            {type === "qty"
-              ? "Каждая строка — отдельная «ступень»: диапазон мин/макс, шаг (напр. 6), бонус (напр. 1). Проданное в заказе количество попадает в один диапазон — применяется только эта строка. Ниже — учитывать только этот заказ или накопление за календарный месяц (как для бонуса по сумме)."
-              : "Минимальная сумма товаров до скидки; способ подсчёта порога — в блоке «Порог по сумме» ниже."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-6">
+      <BonusRuleSection>
+        <BonusRuleSectionTitle>Условия</BonusRuleSectionTitle>
           {sectionAlert("conditions")}
           {type === "qty" ? (
-            <>
+            <div className="space-y-4">
               {conditions.map((row, idx) => (
-                <div key={idx} className="rounded-xl border border-border/80 bg-muted/20 p-4">
-                  <p className="mb-3 text-xs font-medium text-muted-foreground">Условие №{idx + 1}</p>
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Мин. количество</Label>
-                      <Input
-                        className={inputCls}
-                        value={row.min_qty}
-                        onChange={(e) => {
-                          const next = [...conditions];
-                          next[idx] = { ...next[idx], min_qty: e.target.value };
-                          setConditions(next);
-                        }}
-                        disabled={mutation.isPending}
-                        placeholder="например 24"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Макс. количество (диапазон)</Label>
-                      <Input
-                        className={inputCls}
-                        value={row.max_qty}
-                        onChange={(e) => {
-                          const next = [...conditions];
-                          next[idx] = { ...next[idx], max_qty: e.target.value };
-                          setConditions(next);
-                        }}
-                        disabled={mutation.isPending}
-                        placeholder="например 100"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Шаг (каждые N)</Label>
-                      <Input
-                        className={inputCls}
-                        value={row.step_qty}
-                        onChange={(e) => {
-                          const next = [...conditions];
-                          next[idx] = { ...next[idx], step_qty: e.target.value };
-                          setConditions(next);
-                        }}
-                        disabled={mutation.isPending}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Бонус (кол-во)</Label>
-                      <Input
-                        className={inputCls}
-                        value={row.bonus_qty}
-                        onChange={(e) => {
-                          const next = [...conditions];
-                          next[idx] = { ...next[idx], bonus_qty: e.target.value };
-                          setConditions(next);
-                        }}
-                        disabled={mutation.isPending}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Макс. бонус (общий предел)</Label>
-                      <Input
-                        className={inputCls}
-                        value={row.max_bonus_qty}
-                        onChange={(e) => {
-                          const next = [...conditions];
-                          next[idx] = { ...next[idx], max_bonus_qty: e.target.value };
-                          setConditions(next);
-                        }}
-                        disabled={mutation.isPending}
-                      />
-                    </div>
+                <div key={idx} className={cn("space-y-4", idx > 0 && "border-t border-border/60 pt-5")}>
+                  {conditions.length > 1 ? (
+                    <p className="text-sm font-medium text-muted-foreground">Условие №{idx + 1}</p>
+                  ) : null}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <BonusRuleFloatingInput
+                      label="Минимальное количество"
+                      value={row.min_qty}
+                      onChange={(e) => {
+                        const next = [...conditions];
+                        next[idx] = { ...next[idx], min_qty: e.target.value };
+                        setConditions(next);
+                      }}
+                      disabled={fieldDisabled}
+                      placeholder="например 10"
+                      inputClassName="text-right"
+                    />
+                    <BonusRuleFloatingInput
+                      label="На какое количество"
+                      value={row.step_qty}
+                      onChange={(e) => {
+                        const next = [...conditions];
+                        next[idx] = { ...next[idx], step_qty: e.target.value };
+                        setConditions(next);
+                      }}
+                      disabled={fieldDisabled}
+                      inputClassName="text-right"
+                    />
+                    <BonusRuleFloatingInput
+                      label="Количество бонуса"
+                      value={row.bonus_qty}
+                      onChange={(e) => {
+                        const next = [...conditions];
+                        next[idx] = { ...next[idx], bonus_qty: e.target.value };
+                        setConditions(next);
+                      }}
+                      disabled={fieldDisabled}
+                      inputClassName="text-right"
+                    />
+                    <BonusRuleFloatingInput
+                      label="Максимальное количество бонуса"
+                      value={row.max_bonus_qty}
+                      onChange={(e) => {
+                        const next = [...conditions];
+                        next[idx] = { ...next[idx], max_bonus_qty: e.target.value };
+                        setConditions(next);
+                      }}
+                      disabled={fieldDisabled}
+                      inputClassName="text-right"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:max-w-[25%]">
+                    <BonusRuleFloatingInput
+                      label="Макс. количество (диапазон)"
+                      value={row.max_qty}
+                      onChange={(e) => {
+                        const next = [...conditions];
+                        next[idx] = { ...next[idx], max_qty: e.target.value };
+                        setConditions(next);
+                      }}
+                      disabled={fieldDisabled}
+                      placeholder="необязательно"
+                      inputClassName="text-right"
+                    />
                   </div>
                   {conditions.length > 1 ? (
-                    <Button
-                      type="button"
+                    <BonusRuleTemplateButton
                       variant="outline"
-                      size="sm"
-                      className="mt-3"
                       onClick={() => setConditions(conditions.filter((_, i) => i !== idx))}
+                      disabled={fieldDisabled}
                     >
-                      Удалить это условие
-                    </Button>
+                      Удалить условие
+                    </BonusRuleTemplateButton>
                   ) : null}
                 </div>
               ))}
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
+              <BonusRuleTemplateButton
+                variant="outline"
                 onClick={() => setConditions([...conditions, emptyCond()])}
-                disabled={mutation.isPending}
+                disabled={fieldDisabled}
               >
-                Добавить условие
-              </Button>
+                + Добавить условие
+              </BonusRuleTemplateButton>
               <SumThresholdScopeFields
                 variant="qty"
                 radioGroupName="br-qty-scope"
                 sumThresholdScope={sumThresholdScope}
                 onScopeChange={setSumThresholdScope}
-                disabled={mutation.isPending}
+                disabled={fieldDisabled}
               />
-            </>
+            </div>
           ) : null}
 
           {type === "sum" ? (
             <div className="space-y-4">
-              <div className="grid max-w-md gap-1.5">
-                <Label>Минимальная сумма</Label>
-                <Input
-                  className={inputCls}
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={minSum}
-                  onChange={(e) => setMinSum(e.target.value)}
-                  disabled={mutation.isPending}
-                />
-              </div>
+              <BonusRuleFloatingInput
+                label="Минимальная сумма"
+                type="number"
+                min={0}
+                step="0.01"
+                value={minSum}
+                onChange={(e) => setMinSum(e.target.value)}
+                disabled={fieldDisabled}
+                inputClassName="text-right"
+                className="max-w-md"
+              />
               <SumThresholdScopeFields
                 radioGroupName="br-sum-scope"
                 sumThresholdScope={sumThresholdScope}
                 onScopeChange={setSumThresholdScope}
-                disabled={mutation.isPending}
+                disabled={fieldDisabled}
               />
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+      </BonusRuleSection>
       </div>
       ) : null}
 
@@ -1305,49 +1240,65 @@ export function BonusRuleForm({
             errorTarget === "discount" && errorShake && "animate-bonus-rule-shake"
           )}
         >
-          <Card className="shadow-panel">
-            <CardHeader className="border-b border-border/60 pb-4">
-              <CardTitle>Скидка</CardTitle>
-              <CardDescription>
-                Процентная скидка применяется к строкам заказа по выбранным товарам. Товары — в блоке выше («Товары и
-                триггеры»).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-6">
+          <BonusRuleSection>
+            <BonusRuleSectionTitle>Скидка</BonusRuleSectionTitle>
               {sectionAlert("discount")}
-              <div className="grid max-w-md gap-1.5">
-                <Label htmlFor="br-discount-pct-legacy">Процент скидки (%)</Label>
-                <Input
-                  id="br-discount-pct-legacy"
-                  className={inputCls}
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={discountPct}
-                  onChange={(e) => setDiscountPct(e.target.value)}
-                  disabled={mutation.isPending}
-                  aria-invalid={errorTarget === "discount"}
-                />
-              </div>
-            </CardContent>
-          </Card>
+              <BonusRuleFloatingInput
+                id="br-discount-pct-legacy"
+                label="Процент скидки (%)"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={discountPct}
+                onChange={(e) => setDiscountPct(e.target.value)}
+                disabled={fieldDisabled}
+                aria-invalid={errorTarget === "discount"}
+                inputClassName="text-right"
+                className="max-w-md"
+              />
+          </BonusRuleSection>
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push(listHref)}
-          disabled={mutation.isPending}
-        >
-          Отмена
-        </Button>
-        <Button type="button" onClick={submit} disabled={mutation.isPending}>
-          {mutation.isPending ? "Сохранение…" : "Сохранить"}
-        </Button>
-      </div>
+      <BonusRuleSection className="flex flex-wrap items-center justify-between gap-4">
+        {!discountOnly && type === "qty" ? (
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-bold text-foreground">Предпросмотр правила</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Если клиент купит {previewPurchaseQty || "0"} шт., система автоматически добавит {previewBonusQty}{" "}
+              бонусных товаров.
+            </p>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-bold text-foreground">Сохранение правила</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Проверьте настройки и нажмите «Сохранить», чтобы применить изменения.
+            </p>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {!discountOnly && type === "qty" ? (
+            <>
+              <label htmlFor="br-preview-qty" className="text-sm text-muted-foreground">
+                Проверить количество
+              </label>
+              <BonusRulePreviewQtyInput
+                value={previewPurchaseQty}
+                onChange={setPreviewPurchaseQty}
+                disabled={fieldDisabled}
+              />
+            </>
+          ) : null}
+          <BonusRuleTemplateButton variant="outline" onClick={() => router.push(listHref)} disabled={actionDisabled}>
+            Отмена
+          </BonusRuleTemplateButton>
+          <BonusRuleTemplateButton onClick={submit} disabled={actionDisabled}>
+            {mutation.isPending ? "Сохранение…" : "Сохранить"}
+          </BonusRuleTemplateButton>
+        </div>
+      </BonusRuleSection>
     </div>
   );
 }

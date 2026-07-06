@@ -116,6 +116,9 @@ export function CatalogSimpleTab({
       setMsg(null);
       setOpen(false);
       await qc.invalidateQueries({ queryKey: ["catalog-simple", apiPath, tenantSlug] });
+      // Bu spravochnik (brend/kategoriya/guruh/...) nomi mahsulotlar ro'yxatida
+      // ham ko'rinadi — o'sha keshlar ham yangi nom bilan yangilansin.
+      await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     },
     onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."))
   });

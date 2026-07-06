@@ -1,0 +1,40 @@
+name: Load Test (k6)
+
+# Manual smoke load test — backend must be reachable at BASE_URL.
+# Default CI does not start the app; run against staging or a local tunnel.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Backend base URL (no trailing slash)"
+        required: true
+        default: "http://127.0.0.1:18080"
+      k6_vus:
+        description: "Virtual users"
+        required: false
+        default: "5"
+      k6_duration:
+        description: "Test duration (e.g. 30s, 1m)"
+        required: false
+        default: "30s"
+
+jobs:
+  k6-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo gpg --no-default-keypad --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17F747E341BA069B79710E879ACBA0F561B72
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Run orders-list smoke
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url }}
+          K6_VUS: ${{ github.event.inputs.k6_vus }}
+          K6_DURATION: ${{ github.event.inputs.k6_duration }}
+        run: k6 run backend/tests/load/orders-list.k6.js

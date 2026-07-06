@@ -43,6 +43,7 @@ export const CLIENT_TYPES: { name: string; code: string }[] = [
   { name: "SUV", code: "SUV" }
 ];
 
+/** import:once — faqat 5 ta savdo yo‘nalishi (qolganlari bazadan o‘chiriladi / deaktiv). */
 export const TRADE_DIRECTIONS: {
   name: string;
   code: string;
@@ -50,15 +51,10 @@ export const TRADE_DIRECTIONS: {
   use_in_order_proposal: boolean;
 }[] = [
   { name: "DIELUX", code: "DIELUX", sort_order: 0, use_in_order_proposal: false },
-  { name: "GIGA", code: "GIGA", sort_order: 0, use_in_order_proposal: false },
-  { name: "LALAKU", code: "LALAKU", sort_order: 0, use_in_order_proposal: false },
-  { name: "MAMA", code: "MAMA", sort_order: 0, use_in_order_proposal: false },
-  { name: "MARKET PLACE", code: "MARKETPLACE", sort_order: 0, use_in_order_proposal: false },
-  { name: "MIX_JENS", code: "MIX_JENS", sort_order: 0, use_in_order_proposal: false },
-  { name: "MONNO", code: "MONNO", sort_order: 0, use_in_order_proposal: false },
-  { name: "REVEREM", code: "REVEREM", sort_order: 0, use_in_order_proposal: true },
-  { name: "SOF", code: "SOF", sort_order: 0, use_in_order_proposal: false },
-  { name: "UMUMIY", code: "UMUMIY", sort_order: 0, use_in_order_proposal: false }
+  { name: "GIGA", code: "GIGA", sort_order: 1, use_in_order_proposal: false },
+  { name: "LALAKU", code: "LALAKU", sort_order: 2, use_in_order_proposal: false },
+  { name: "REVEREM", code: "REVEREM", sort_order: 3, use_in_order_proposal: true },
+  { name: "UMUMIY", code: "UMUMIY", sort_order: 4, use_in_order_proposal: false }
 ];
 
 /** Sozlamalar → Finans → «Цена» (sotish): to‘lov usuli + narx turi juftlari */

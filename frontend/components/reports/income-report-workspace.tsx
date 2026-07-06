@@ -8,6 +8,11 @@ import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { formatNumberGrouped } from "@/lib/format-numbers";
+import {
+  activePaymentMethodEntries,
+  paymentMethodDbValue,
+  type ProfilePaymentMethodEntry
+} from "@/lib/payment-method-options";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, ChevronRight, Download, Filter, RotateCcw } from "lucide-react";
@@ -19,6 +24,7 @@ type FilterOptions = {
   expeditors: Option[];
   cashDesks: Option[];
   categories: string[];
+  paymentMethods?: Array<{ value: string; label: string }>;
   paymentTypes: string[];
   tradeDirections: string[];
   territories1: string[];
@@ -30,7 +36,11 @@ type FilterOptions = {
   territory3By12?: Record<string, string[]>;
 };
 type ReportData = {
-  summary: { total: number; items: Array<{ key: string; amount: number }> };
+  summary: {
+    total: number;
+    by_payment_method?: Array<{ key: string; label: string; amount: number }>;
+    items: Array<{ key: string; amount: number }>;
+  };
   paymentTypeLabels?: Record<string, string>;
   paymentTypeKeys?: string[];
   period: Array<{ payment_type: string; amount: number }>;
@@ -54,16 +64,17 @@ type ReportFilters = {
   t3: string;
 };
 
-const SUM_KEYS = ["Naqd", "Pereches", "SET", "Terminal", "Эски карздан кирим"];
 const fmt = (n: number | string) => formatNumberGrouped(n, { minFractionDigits: 0, maxFractionDigits: 0 });
-const summaryCardTone: Record<string, string> = {
-  "Общий": "border-rose-300 bg-rose-50/40",
-  "Naqd": "border-emerald-300 bg-emerald-50/40",
-  "Pereches": "border-amber-300 bg-amber-50/40",
-  "SET": "border-slate-300 bg-slate-50/40",
-  "Terminal": "border-indigo-300 bg-indigo-50/40",
-  "Эски карздан кирим": "border-zinc-300 bg-zinc-50/40"
-};
+const SUMMARY_CARD_TONES = [
+  "border-rose-300 bg-rose-50/40",
+  "border-emerald-300 bg-emerald-50/40",
+  "border-amber-300 bg-amber-50/40",
+  "border-border bg-muted/40",
+  "border-indigo-300 bg-indigo-50/40",
+  "border-cyan-300 bg-cyan-50/40",
+  "border-violet-300 bg-violet-50/40",
+  "border-zinc-300 bg-zinc-50/40"
+] as const;
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -130,6 +141,18 @@ export function IncomeReportWorkspace() {
     }
   });
 
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "income-report-methods"],
+    enabled,
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references?: { payment_method_entries?: ProfilePaymentMethodEntry[]; payment_types?: string[] };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data.references ?? {};
+    }
+  });
+
   const query = useMemo(() => {
     const p = new URLSearchParams({
       from: appliedFilters.from,
@@ -190,16 +213,77 @@ export function IncomeReportWorkspace() {
   };
 
   const data = reportQ.data;
-  const paymentTypeLabels = data?.paymentTypeLabels ?? {};
-  const paymentTypeKeys = new Set((data?.paymentTypeKeys ?? []).map((x) => x.trim().toLowerCase()));
-  const sumMap = new Map((data?.summary.items ?? []).map((x) => [x.key, x.amount]));
-  const allPeriodTypes = Array.from(new Set((data?.period ?? []).map((r) => r.payment_type)));
-  const allowedPeriodTypes = allPeriodTypes.filter((x) =>
-    paymentTypeKeys.size > 0 ? paymentTypeKeys.has(x.trim().toLowerCase()) : true
-  );
-  const preferredTypes = SUM_KEYS.filter((x) => allowedPeriodTypes.includes(x));
-  const dynamicTypes = allowedPeriodTypes.filter((x) => !SUM_KEYS.includes(x));
-  const paymentColumns = [...preferredTypes, ...dynamicTypes];
+  const paymentTypeLabels = useMemo(() => data?.paymentTypeLabels ?? {}, [data?.paymentTypeLabels]);
+
+  const tenantPaymentCatalog = useMemo(() => {
+    const fromProfile = activePaymentMethodEntries(profileQ.data).map((e) => ({
+      key: paymentMethodDbValue(e),
+      label: e.name.trim()
+    }));
+    if (fromProfile.length > 0) return fromProfile;
+    const fromFilter = optionsQ.data?.paymentMethods ?? [];
+    if (fromFilter.length > 0) {
+      return fromFilter.map((m) => ({ key: m.value, label: m.label }));
+    }
+    return [];
+  }, [profileQ.data, optionsQ.data?.paymentMethods]);
+
+  const paymentMethodOptions = useMemo(() => {
+    if (tenantPaymentCatalog.length > 0) {
+      return tenantPaymentCatalog.map((c) => ({ value: c.key, label: c.label }));
+    }
+    return (optionsQ.data?.paymentTypes ?? []).map((value) => ({
+      value,
+      label: paymentTypeLabels[value] ?? value
+    }));
+  }, [tenantPaymentCatalog, optionsQ.data?.paymentTypes, paymentTypeLabels]);
+
+  const summaryPaymentMethods = useMemo(() => {
+    if (!data) return [];
+    if (data.summary.by_payment_method?.length) {
+      return data.summary.by_payment_method;
+    }
+    const amountByKey = new Map<string, number>();
+    for (const row of data.period ?? []) {
+      amountByKey.set(row.payment_type, row.amount);
+    }
+    if (tenantPaymentCatalog.length > 0) {
+      return tenantPaymentCatalog.map(({ key, label }) => ({
+        key,
+        label,
+        amount: amountByKey.get(key) ?? 0
+      }));
+    }
+    return (data.period ?? [])
+      .filter((r) => r.amount > 0)
+      .map((r) => ({
+        key: r.payment_type,
+        label: paymentTypeLabels[r.payment_type] ?? r.payment_type,
+        amount: r.amount
+      }));
+  }, [data, tenantPaymentCatalog, paymentTypeLabels]);
+
+  const paymentColumns = useMemo(() => {
+    if (!data) return [];
+    const catalogKeys = tenantPaymentCatalog.map((c) => c.key);
+    if (catalogKeys.length > 0) return catalogKeys;
+    if (data.paymentTypeKeys?.length) return data.paymentTypeKeys;
+    return Array.from(new Set((data.period ?? []).map((r) => r.payment_type)));
+  }, [data, tenantPaymentCatalog]);
+
+  const periodDisplayRows = useMemo(() => {
+    if (!data) return [];
+    const catalogKeys = new Set(tenantPaymentCatalog.map((c) => c.key));
+    return (data.period ?? [])
+      .filter((r) => r.amount > 0 && (catalogKeys.size === 0 || catalogKeys.has(r.payment_type)))
+      .map((r) => ({
+        ...r,
+        label:
+          paymentTypeLabels[r.payment_type] ??
+          tenantPaymentCatalog.find((c) => c.key === r.payment_type)?.label ??
+          r.payment_type
+      }));
+  }, [data, tenantPaymentCatalog, paymentTypeLabels]);
 
   const filteredData = useMemo(() => {
     if (!data) {
@@ -212,7 +296,7 @@ export function IncomeReportWorkspace() {
       agents: tableSearch.agents.trim().toLowerCase()
     };
     return {
-      period: data.period.filter((r) => !s.period || r.payment_type.toLowerCase().includes(s.period)),
+      period: periodDisplayRows.filter((r) => !s.period || r.label.toLowerCase().includes(s.period)),
       territory: data.territories.filter((r) => !s.territory || r.territory.toLowerCase().includes(s.territory)),
       clients: data.clients.filter((r) => {
         if (!s.clients) return true;
@@ -228,7 +312,7 @@ export function IncomeReportWorkspace() {
         return String(r.agent_id).includes(s.agents) || r.agent_name.toLowerCase().includes(s.agents);
       })
     };
-  }, [data, tableSearch]);
+  }, [data, tableSearch, periodDisplayRows]);
 
   const paginate = <T,>(rows: T[], key: "period" | "territory" | "clients" | "agents") => {
     const pageSize = tablePageSize[key];
@@ -300,7 +384,8 @@ export function IncomeReportWorkspace() {
             </div>
             <div className="w-full min-w-0">
               <FilterSearchableSelect
-                emptyLabel="Касса"
+                placeholderLabel="Касса"
+                emptyLabel="Все"
                 value={draft.cashDeskId}
                 onValueChange={(value) => setDraft((prev) => ({ ...prev, cashDeskId: value }))}
                 options={(optionsQ.data?.cashDesks ?? []).map((x) => ({ value: String(x.id), label: x.name }))}
@@ -323,7 +408,7 @@ export function IncomeReportWorkspace() {
                 emptyLabel="Способ оплаты"
                 value={draft.paymentType}
                 onValueChange={(value) => setDraft((prev) => ({ ...prev, paymentType: value }))}
-                options={(optionsQ.data?.paymentTypes ?? []).map((x) => ({ value: x, label: x }))}
+                options={paymentMethodOptions.map((x) => ({ value: x.value, label: x.label }))}
                 searchable
                 className="h-9 rounded-md px-2 text-sm"
               />
@@ -403,9 +488,19 @@ export function IncomeReportWorkspace() {
       />
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Card className={summaryCardTone["Общий"]}><CardHeader className="pb-2"><CardDescription>Общий</CardDescription><CardTitle>{fmt(data?.summary.total ?? 0)} UZS</CardTitle></CardHeader></Card>
-        {SUM_KEYS.map((k) => (
-          <Card key={k} className={summaryCardTone[k] ?? "border-muted bg-muted/20"}><CardHeader className="pb-2"><CardDescription>{k}</CardDescription><CardTitle>{fmt(sumMap.get(k) ?? 0)} UZS</CardTitle></CardHeader></Card>
+        <Card className={SUMMARY_CARD_TONES[0]}>
+          <CardHeader className="pb-2">
+            <CardDescription>Общий</CardDescription>
+            <CardTitle>{fmt(data?.summary.total ?? 0)} UZS</CardTitle>
+          </CardHeader>
+        </Card>
+        {summaryPaymentMethods.map((row, i) => (
+          <Card key={`${row.key}-${i}`} className={SUMMARY_CARD_TONES[(i + 1) % SUMMARY_CARD_TONES.length]}>
+            <CardHeader className="pb-2">
+              <CardDescription>{row.label}</CardDescription>
+              <CardTitle>{fmt(row.amount)} UZS</CardTitle>
+            </CardHeader>
+          </Card>
         ))}
       </div>
 
@@ -424,7 +519,7 @@ export function IncomeReportWorkspace() {
           ].map((section, idx) => {
             const isOpen = openSection === section.key;
             const sectionTone = [
-              "border-slate-300 bg-slate-50/40",
+              "border-border bg-muted/40",
               "border-cyan-300 bg-cyan-50/30",
               "border-violet-300 bg-violet-50/30",
               "border-emerald-300 bg-emerald-50/30"
@@ -503,7 +598,7 @@ export function IncomeReportWorkspace() {
                         <tbody>
                           {p.rows.map((r) => (
                             <tr key={r.payment_type} className="border-b">
-                              <td className="px-3 py-2">{paymentTypeLabels[r.payment_type] ?? r.payment_type}</td>
+                              <td className="px-3 py-2">{r.label}</td>
                               <td className="px-3 py-2 text-right">{fmt(r.amount)} UZS</td>
                             </tr>
                           ))}

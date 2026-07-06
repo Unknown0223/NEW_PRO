@@ -13,6 +13,7 @@ export const EXPEDITOR_PAYMENT_REQUEST_COLUMNS: ColumnDefItem[] = [
   { id: "order_id", label: "Заказ ID" },
   { id: "amount", label: "Сумма" },
   { id: "payment_type", label: "Способ оплаты" },
+  { id: "workflow_status", label: "Статус" },
   { id: "term", label: "Срок" },
   { id: "trade_direction", label: "Направление торговли" },
   { id: "note", label: "Комментарий" },

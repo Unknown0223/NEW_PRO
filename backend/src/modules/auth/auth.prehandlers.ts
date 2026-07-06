@@ -10,6 +10,8 @@ export type AccessJwtUser = {
   login: string;
   /** Issued since 2026-04 — URL tenant slug source of truth for `/api/:slug/...` */
   tenantSlug?: string;
+  /** Qurilma identifikatori (2026-06+). Aniq qurilma sessiyasi tirikligini tekshirish uchun. */
+  did?: string;
 };
 
 export function getAccessUser(request: FastifyRequest): AccessJwtUser {

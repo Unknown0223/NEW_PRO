@@ -1,5 +1,15 @@
 import { prisma } from "../../config/database";
+import {
+  resolveCurrencyEntries,
+  resolvePaymentMethodEntries,
+  resolvePaymentMethodRefToLabel
+} from "../tenant-settings/finance-refs";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
+import {
+  buildIncomeCatalogColumns,
+  INCOME_OTHER_PAYMENT_KEY,
+  resolveIncomePaymentBucketKey
+} from "./income-report.payment-keys";
 
 export async function getIncomeReportFilterOptions(tenantId: number) {
   const tenant = await prisma.tenant.findUnique({
@@ -10,6 +20,9 @@ export async function getIncomeReportFilterOptions(tenantId: number) {
     tenant?.settings && typeof tenant.settings === "object" && !Array.isArray(tenant.settings)
       ? ((tenant.settings as Record<string, unknown>).references as Record<string, unknown> | undefined) ?? {}
       : {};
+  const currencyEntries = resolveCurrencyEntries(refs);
+  const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
+  const catalogColumns = buildIncomeCatalogColumns(paymentEntries);
 
   const [agents, expeditors, cashDesks, categories, paymentTypes, tradeDirections, territoryRows] = await Promise.all([
     prisma.user.findMany({
@@ -45,13 +58,32 @@ export async function getIncomeReportFilterOptions(tenantId: number) {
       WHERE c.tenant_id = ${tenantId}
     `
   ]);
+
+  const paymentMethods: Array<{ value: string; label: string }> = catalogColumns.map((c) => ({
+    value: c.key,
+    label: c.label
+  }));
+  const seenValues = new Set(paymentMethods.map((m) => m.value));
+  const seenBuckets = new Set(paymentMethods.map((m) => m.value));
+
+  for (const raw of paymentTypes.map((x) => x.payment_type).filter(Boolean).sort()) {
+    if (seenValues.has(raw)) continue;
+    const bucket = resolveIncomePaymentBucketKey(raw, paymentEntries);
+    if (bucket !== INCOME_OTHER_PAYMENT_KEY && seenBuckets.has(bucket)) continue;
+    const label = resolvePaymentMethodRefToLabel(raw, paymentEntries) ?? raw;
+    paymentMethods.push({ value: raw, label });
+    seenValues.add(raw);
+    if (bucket !== INCOME_OTHER_PAYMENT_KEY) seenBuckets.add(bucket);
+  }
+
   const territoryOpts = mergeTerritoryFilterOptions(refs, territoryRows);
   return {
     agents,
     expeditors,
     cashDesks,
     categories: categories.map((x) => x.category).filter((x): x is string => Boolean(x)).sort(),
-    paymentTypes: paymentTypes.map((x) => x.payment_type).filter(Boolean).sort(),
+    paymentMethods,
+    paymentTypes: paymentMethods.map((m) => m.value),
     tradeDirections: tradeDirections.map((x) => x.trade_direction).filter((x): x is string => Boolean(x)).sort(),
     territories1: territoryOpts.territory_1,
     territories2: territoryOpts.territory_2,

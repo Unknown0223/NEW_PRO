@@ -7,6 +7,7 @@ import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
+import { buildAppliedBonusRulesSnapshotForOrder } from "../order-bonus-snapshot.persist";
 import {
   fetchClientUsedAutoBonusRuleIdsExcludingOrder,
   resolveOrderBonusesForCreate,
@@ -219,6 +220,7 @@ export async function updateOrderLines(
         stackPolicy,
         usedRuleIds,
         giftSelectionMap,
+        new Map<number, ReadonlyMap<number, number>>(),
         warehouseId,
         { referenceAt: existing.created_at, excludeOrderId: orderId },
         orderAgentForBonus
@@ -282,6 +284,11 @@ export async function updateOrderLines(
     const warehouseChangedForBlock =
       input.warehouse_id !== undefined && warehouseId !== existing.warehouse_id;
 
+    const bonusSnapshot =
+      appliedAutoBonusRuleIds.length > 0
+        ? await buildAppliedBonusRulesSnapshotForOrder(tx, tenantId, appliedAutoBonusRuleIds)
+        : [];
+
     await tx.order.update({
       where: { id: orderId },
       data: {
@@ -295,6 +302,7 @@ export async function updateOrderLines(
         bonus_sum: bonusSum,
         discount_sum: discountSum,
         applied_auto_bonus_rule_ids: appliedAutoBonusRuleIds,
+        applied_bonus_rules_snapshot: bonusSnapshot as Prisma.InputJsonValue,
         bonus_gift_selections: bonusGiftMapToJson(giftSelectionMap),
         items: {
           create: [

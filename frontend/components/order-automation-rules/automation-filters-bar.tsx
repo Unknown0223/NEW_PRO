@@ -86,7 +86,7 @@ export function RestrictionFiltersBar({
   );
 
   return (
-    <div className="border-b border-gray-200 bg-white px-4 py-3">
+    <div className="border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[140px] flex-1 max-w-[200px]">
           <OrdersListSingleMultiFilter
@@ -199,7 +199,7 @@ export function AutoConfirmFiltersBar({
   );
 
   return (
-    <div className="border-b border-gray-200 bg-white px-4 py-3">
+    <div className="border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[140px] flex-1 max-w-[200px]">
           <OrdersListSingleMultiFilter
@@ -278,7 +278,7 @@ function FilterActions({ onApply, onReset }: { onApply: () => void; onReset: () 
       <button
         type="button"
         onClick={onReset}
-        className="rounded-lg border border-gray-200 p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+        className="rounded-lg border border-border p-2 text-gray-400 transition-colors hover:bg-muted hover:text-gray-600"
         title="Сбросить"
       >
         <RotateCcw size={16} />

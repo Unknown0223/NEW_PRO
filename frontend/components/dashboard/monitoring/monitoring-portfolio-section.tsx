@@ -9,14 +9,14 @@ export function MonitoringPortfolioSection({ branches }: { branches: MonitoringS
   const hasRows = branches.length > 0;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm ring-1 ring-slate-200/70">
       <h2 className="mb-4 text-lg font-semibold text-slate-800">Акб по портфелям и по филиалам</h2>
       {!hasRows ? (
         <p className="py-8 text-center text-sm text-slate-500">Нет данных по филиалам за период</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-muted text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">Филиал</th>
                 <th className="px-4 py-3 text-right font-medium">АКБ</th>
@@ -27,7 +27,7 @@ export function MonitoringPortfolioSection({ branches }: { branches: MonitoringS
             </thead>
             <tbody>
               {branches.map((r) => (
-                <tr key={r.branch} className="border-b border-slate-100 hover:bg-teal-50/50">
+                <tr key={r.branch} className="border-b border-border hover:bg-teal-50/50">
                   <td className="px-4 py-3 font-medium text-slate-800">{r.branch}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtCount(r.akb)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtCount(r.okb ?? 0)}</td>

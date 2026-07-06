@@ -255,8 +255,8 @@ function ThemePreviewCard({
       >
         <div className="flex h-full flex-col justify-between rounded-lg border border-black/10 bg-black/5 p-2 backdrop-blur-[2px]">
           <div className="flex items-start justify-between gap-2">
-            <span className="h-2 w-16 max-w-[55%] rounded-full bg-white/90" />
-            <span className="h-2 w-6 rounded-full bg-white/50" />
+            <span className="h-2 w-16 max-w-[55%] rounded-full bg-card/90" />
+            <span className="h-2 w-6 rounded-full bg-card/50" />
           </div>
           <div className="flex gap-1.5">
             <span className="h-6 flex-1 rounded-md" style={{ backgroundColor: sw.primary }} />

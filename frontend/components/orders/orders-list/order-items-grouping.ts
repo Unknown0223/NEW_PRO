@@ -64,6 +64,20 @@ export function computeItemTotals(items: OrderItemRow[]) {
   );
 }
 
+/** Qator summasi ko‘rinishi — zakaz darajasidagi skidka to‘liq narxda qolgan qatorlarga qo‘llanadi. */
+export function displayLineTotal(p: OrderItemRow): number {
+  const qty = parseOrderItemNum(p.qty);
+  const price = parseOrderItemNum(p.price);
+  const total = parseOrderItemNum(p.total);
+  const pct = parseOrderItemNum(p.discount_pct);
+  if (p.is_bonus || pct <= 0) return total;
+  const gross = qty * price;
+  if (Math.abs(gross - total) < 0.02) {
+    return total * (1 - pct / 100);
+  }
+  return total;
+}
+
 function aggregateKey(item: OrderItemRow): string {
   return `${item.product_id}:${item.is_bonus ? "b" : "p"}`;
 }

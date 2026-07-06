@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { sendApiError } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify } from "../auth/auth.prehandlers";
 import {
@@ -74,6 +76,14 @@ export async function registerPriceMatrixRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "InvalidBody", "items array required");
     }
     const data = await bulkUpsertPrices(request.tenant!.id, body.items);
+    await appendTenantAuditEvent({
+      tenantId: request.tenant!.id,
+      actorUserId: actorUserIdOrNull(request),
+      entityType: "price_matrix",
+      entityId: "bulk",
+      action: "price_matrix.bulk_upsert",
+      payload: { count: body.items.length }
+    });
     return reply.send(data);
   });
 
@@ -98,6 +108,19 @@ export async function registerPriceMatrixRoutes(app: FastifyInstance) {
       body.sales_channel ?? null,
       prices
     );
+    await appendTenantAuditEvent({
+      tenantId: request.tenant!.id,
+      actorUserId: actorUserIdOrNull(request),
+      entityType: "price_matrix",
+      entityId: body.client_category,
+      action: "price_matrix.apply_category",
+      payload: {
+        client_category: body.client_category,
+        client_type: body.client_type ?? null,
+        sales_channel: body.sales_channel ?? null,
+        count: prices.size
+      }
+    });
     return reply.send(data);
   });
 }

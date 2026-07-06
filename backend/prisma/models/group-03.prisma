@@ -166,6 +166,35 @@ model TenantAuditEvent {
   @@map("tenant_audit_events")
 }
 
+/// Foydalanuvchi xatti-harakatlari: sahifa ko'rish, navigatsiya, qancha vaqt
+/// turgani va "tahrir/yaratish formasini ochdi lekin saqlamadi" kabi niyatlar.
+/// Mutatsiyalardan (TenantAuditEvent) alohida — hajmi katta, retention bilan.
+
+model UserActivityEvent {
+  id            Int      @id @default(autoincrement())
+  tenant_id     Int
+  actor_user_id Int?
+  /// page_view | navigation | view_intent | form_open | form_abandon
+  event_type    String   @db.VarChar(32)
+  module        String   @db.VarChar(64)
+  section       String?  @db.VarChar(64)
+  entity_type   String?  @db.VarChar(64)
+  entity_id     String?  @db.VarChar(64)
+  route         String?  @db.VarChar(255)
+  label         String?  @db.VarChar(255)
+  duration_ms   Int?
+  meta          Json     @default("{}")
+  created_at    DateTime @default(now())
+  actor         User?    @relation("UserActivityEventActor", fields: [actor_user_id], references: [id])
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, actor_user_id, created_at(sort: Desc)])
+  @@index([tenant_id, module, section])
+  @@index([tenant_id, entity_type, entity_id])
+  @@map("user_activity_events")
+}
+
 
 model Warehouse {
   id             Int                 @id @default(autoincrement())
@@ -194,6 +223,7 @@ model Warehouse {
   links          WarehouseUserLink[]
   blocks         WarehouseBlock[]
   tenant         Tenant              @relation(fields: [tenant_id], references: [id])
+  clients        Client[]            @relation("ClientWarehouse")
 
   @@index([tenant_id])
   @@map("warehouses")

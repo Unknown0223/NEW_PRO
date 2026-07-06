@@ -111,7 +111,7 @@ export async function allocatePaymentInTransaction(
       if (remaining.lte(0)) break;
 
       const alreadyAllocatedToOrder = allocatedByOrder.get(order.id) ?? new Prisma.Decimal(0);
-      const orderRemaining = order.total_sum.sub(alreadyAllocatedToOrder);
+      const orderRemaining = order.merchandise_net.sub(alreadyAllocatedToOrder);
 
       if (orderRemaining.lte(0)) continue; // Fully paid
 

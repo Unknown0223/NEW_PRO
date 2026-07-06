@@ -133,6 +133,15 @@ export async function registerStaffSupervisorRoutes(app: FastifyInstance) {
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
         if (msg === "BAD_MAX_SESSIONS") return sendApiError(reply, request, 400, "BadMaxSessions");
         if (msg === "BAD_SUPERVISEE_AGENT") return sendApiError(reply, request, 400, "BadSuperviseeAgent");
+        if (msg === "AGENT_ALREADY_ASSIGNED") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AgentAlreadyAssigned",
+            "Агент уже привязан к другому супервайзеру"
+          );
+        }
         if (msg === "BAD_ENTITLEMENT_CATEGORY" || msg === "BAD_ENTITLEMENT_PRODUCT") {
           return sendApiError(reply, request, 400, "BadEntitlements");
         }

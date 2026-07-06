@@ -10,11 +10,20 @@ import {
   disableProductPriceScheduleCron,
   enableProductPriceScheduleCron
 } from "./lib/product-price-schedule-cron";
+import {
+  disablePaymentReturnFinalizeCron,
+  enablePaymentReturnFinalizeCron
+} from "./lib/payment-return-finalize-cron";
+import {
+  disableConsignmentClosureCron,
+  enableConsignmentClosureCron
+} from "./lib/consignment-closure-cron";
+import { disableActivityRetentionCron, enableActivityRetentionCron } from "./lib/activity-retention-cron";
 
 async function main() {
   await prisma.$connect();
   const app = buildApp();
-  await initOrderEventBusRedis(env.REDIS_URL, app.log);
+  await initOrderEventBusRedis(app.log);
 
   /** Dev/test: `0.0.0.0` ba’zi Windows portlarida EACCES beradi; lokalda 127.0.0.1 yetarli. */
   const listenHost = env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1";
@@ -25,12 +34,21 @@ async function main() {
   app.log.info("Auto-status cron worker enabled.");
   enableProductPriceScheduleCron();
   app.log.info("Product price schedule cron enabled.");
+  enablePaymentReturnFinalizeCron();
+  app.log.info("Payment return finalize cron enabled.");
   enableDashboardCacheWarm();
+  enableActivityRetentionCron();
+  app.log.info("Activity retention cron enabled.");
+  enableConsignmentClosureCron();
+  app.log.info("Consignment month closure cron enabled.");
 
   const shutdown = async () => {
     disableAutoClose();
     disableProductPriceScheduleCron();
+    disablePaymentReturnFinalizeCron();
     disableDashboardCacheWarm();
+    disableActivityRetentionCron();
+    disableConsignmentClosureCron();
     await app.close();
     await closeOrderEventBusRedis();
     process.exit(0);

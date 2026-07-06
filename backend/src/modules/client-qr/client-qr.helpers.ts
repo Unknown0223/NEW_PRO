@@ -43,56 +43,74 @@ export function uniqueQrCodes(n: number): string[] {
 export const MAX_QR_GENERATE_PER_REQUEST = 20_000;
 export const QR_GENERATE_CHUNK = 500;
 
+const QR_STATUS_LABEL_RU: Record<string, string> = {
+  new: "Готово к печати",
+  printed: "Напечатано",
+  attached: "Прикреплено",
+  detached: "Откреплено"
+};
+
+function formatCsvDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function territoryLabel(zone: string | null, region: string | null): string {
+  return [zone, region].map((x) => String(x ?? "").trim()).filter(Boolean).join(" · ");
+}
+
+/** Jadval ustunlari bilan mos CSV (Excel uchun `;` ajratgich). */
 export function toCsv(rows: QrListRow[]): string {
   const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
   const head = [
-    "id",
-    "qr_code",
-    "status",
-    "client_id",
-    "client_name",
-    "zone",
-    "region",
-    "city",
-    "created_at",
-    "printed_at",
-    "bound_at",
-    "detached_at",
-    "created_by",
-    "bound_by"
+    "Дата создания",
+    "QR код",
+    "Клиент",
+    "Статус",
+    "Территория",
+    "Город",
+    "Дата привязки"
   ];
-  const out = [head.join(",")];
+  const out = [head.map(esc).join(";")];
   for (const r of rows) {
     out.push(
       [
-        r.id,
+        esc(formatCsvDateTime(r.created_at)),
         esc(r.qr_code),
-        esc(r.status),
-        r.client_id ?? "",
-        esc(r.client_name),
-        esc(r.zone),
-        esc(r.region),
-        esc(r.city),
-        esc(r.created_at),
-        esc(r.printed_at),
-        esc(r.bound_at),
-        esc(r.detached_at),
-        esc(r.created_by_name),
-        esc(r.bound_by_name)
-      ].join(",")
+        esc(r.client_name ?? ""),
+        esc(QR_STATUS_LABEL_RU[r.status] ?? r.status),
+        esc(territoryLabel(r.zone, r.region)),
+        esc(r.city ?? ""),
+        esc(formatCsvDateTime(r.bound_at))
+      ].join(";")
     );
   }
-  return `\uFEFF${out.join("\n")}`;
+  return `\uFEFF${out.join("\r\n")}`;
 }
 
 export function toClientsWithoutQrCsv(rows: ClientWithoutQrRow[]): string {
   const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
-  const head = ["id", "name", "phone", "zone", "region", "city", "agent_id"];
-  const out = [head.join(",")];
+  const head = ["Клиент", "Телефон", "Зона / область", "Город"];
+  const out = [head.map(esc).join(";")];
   for (const r of rows) {
-    out.push([r.id, esc(r.name), esc(r.phone), esc(r.zone), esc(r.region), esc(r.city), r.agent_id ?? ""].join(","));
+    out.push(
+      [
+        esc(r.name),
+        esc(r.phone ?? ""),
+        esc(territoryLabel(r.zone, r.region)),
+        esc(r.city ?? "")
+      ].join(";")
+    );
   }
-  return `\uFEFF${out.join("\n")}`;
+  return `\uFEFF${out.join("\r\n")}`;
 }
 
 export function buildWhere(tenantId: number, q: QrListQuery): Prisma.Sql {

@@ -73,7 +73,7 @@ const JOURNAL_COLS = [
 const JOURNAL_DEFAULT_ORDER = JOURNAL_COLS.map((c) => c.id);
 const JOURNAL_NUMERIC = new Set(["total_qty_delta", "total_volume_m3", "total_amount"]);
 
-function kindLabel(kind: string): string {
+function kindLabel(): string {
   return "Корректировка";
 }
 
@@ -131,7 +131,7 @@ function renderJournalCell(row: JournalRow, colId: string): ReactNode {
     case "created_by_name":
       return row.created_by_name ?? "—";
     case "kind":
-      return kindLabel(row.kind);
+      return kindLabel();
     case "warehouse_name":
       return row.warehouse_name;
     case "total_qty_delta":
@@ -580,7 +580,7 @@ export default function StockCorrectionPage() {
     const lines = rows.map((row) =>
       visibleJournalCols.map((colId) => {
         if (colId === "occurred_at") return formatDateTimeRu(row.occurred_at);
-        if (colId === "kind") return kindLabel(row.kind);
+        if (colId === "kind") return kindLabel();
         if (colId === "total_qty_delta") return row.total_qty_delta;
         if (colId === "total_volume_m3") return row.total_volume_m3;
         if (colId === "total_amount") return `${row.total_amount} ${row.currency}`;
@@ -619,7 +619,7 @@ export default function StockCorrectionPage() {
       const lines = rows.map((row) => [
         formatDateTimeRu(row.occurred_at),
         new Date(row.occurred_at).toISOString(),
-        kindLabel(row.kind),
+        kindLabel(),
         row.warehouse_name,
         row.total_qty_delta,
         row.total_volume_m3,

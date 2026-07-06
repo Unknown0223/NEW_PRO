@@ -13,6 +13,7 @@ import type { ReportActor } from "./client-sales-4-report.service";
 import { getRedisForApp } from "../../lib/redis-cache";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import { KNOWN_ORDER_TYPES, ORDER_STATUS_LABEL_RU, orderTypeLabelRu } from "./product-sales.helpers";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 
 export async function getProductSalesReportFilterOptions(tenantId: number, actor?: ReportActor) {
   const cacheKey = `tenant:${tenantId}:reports:product-sales:filter-options:v1:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
@@ -24,12 +25,7 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
     /* ignore */
   }
 
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, is_active: true }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId, is_active: true }
-        : { tenant_id: tenantId, role: "agent", is_active: true };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },

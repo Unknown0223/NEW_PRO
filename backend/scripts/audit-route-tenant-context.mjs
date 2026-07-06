@@ -45,6 +45,13 @@ function auditFile(file) {
   for (const match of s.matchAll(routeRe)) {
     count += 1;
     const path = match[2];
+    /** Pre-login mobil: tenant `slug` query orqali tekshiriladi (JWT yo‘q). */
+    if (
+      path === "/api/mobile/app-release" ||
+      path === "/api/mobile/apk-download"
+    ) {
+      continue;
+    }
     const start = match.index ?? 0;
     const head = s.slice(start, start + 500);
     const named = head.match(/,\s*([a-zA-Z]+Handler)\s*\)/);

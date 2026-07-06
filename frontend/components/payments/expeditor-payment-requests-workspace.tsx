@@ -1,8 +1,24 @@
 "use client";
 
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { PageHeader } from "@/components/dashboard/page-header";
-import { PageShell } from "@/components/dashboard/page-shell";
+import { TemplatePagination } from "@/components/payments/client-payments/template-pagination";
+import { EprBulkDeleteModal } from "@/components/payments/expeditor-payment-requests/epr-bulk-delete-modal";
+import { EprFiltersPanel } from "@/components/payments/expeditor-payment-requests/epr-filters-panel";
+import { EprFloatingActionBar } from "@/components/payments/expeditor-payment-requests/epr-floating-action-bar";
+import { EprPageLayout } from "@/components/payments/expeditor-payment-requests/epr-page-layout";
+import { EprRestoreActionBar } from "@/components/payments/expeditor-payment-requests/epr-restore-action-bar";
+import { EprTabBar } from "@/components/payments/expeditor-payment-requests/epr-tab-bar";
+import {
+  defaultEprFilters,
+  type EprFilterState,
+  type SourceTab
+} from "@/components/payments/expeditor-payment-requests/expeditor-payment-requests-types";
+import {
+  DEFAULT_EXPEDITOR_PAYMENT_REQUEST_COLUMN_ORDER,
+  DEFAULT_HIDDEN_EXPEDITOR_PAYMENT_REQUEST_COLUMNS,
+  EXPEDITOR_PAYMENT_REQUEST_COLUMNS,
+  EXPEDITOR_PAYMENT_REQUESTS_TABLE_ID
+} from "@/components/payments/expeditor-payment-requests-table-config";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,24 +27,21 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { filterPanelSelectClassName } from "@/components/ui/filter-select";
-import {
-  SearchableMultiSelectPanel,
-  type SearchableMultiSelectItem
-} from "@/components/ui/searchable-multi-select-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
+import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
 import type { PaymentListApiResponse, PaymentListApiRow } from "@/lib/payment-list-types";
 import { STALE } from "@/lib/query-stale";
-import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import {
   buildClientTerritoryFilterLevels,
   buildPaymentTerritorySelectOptions,
@@ -36,83 +49,28 @@ import {
 } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { cn } from "@/lib/utils";
-import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
-import {
-  DEFAULT_EXPEDITOR_PAYMENT_REQUEST_COLUMN_ORDER,
-  DEFAULT_HIDDEN_EXPEDITOR_PAYMENT_REQUEST_COLUMNS,
-  EXPEDITOR_PAYMENT_REQUEST_COLUMNS,
-  EXPEDITOR_PAYMENT_REQUESTS_TABLE_ID
-} from "@/components/payments/expeditor-payment-requests-table-config";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  CalendarDays,
+  Clock,
   Columns3,
   Download,
-  Filter,
+  ExternalLink,
   RefreshCw,
-  RotateCcw,
   Search,
-  Settings
+  Settings,
+  Smartphone,
+  Trash2
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useRef, useState } from "react";
-
-type SourceTab = "expeditor" | "collector" | "van" | "bank";
-type DealType = "regular" | "consignment" | "both";
-type StatusFilter = "pending_confirmation" | "confirmed" | "rejected" | "";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type StaffPick = { id: number; fio: string; code?: string | null };
 
-type FilterState = {
-  tab: SourceTab;
-  dealType: DealType;
-  dateFrom: string;
-  dateTo: string;
-  status: StatusFilter;
-  expeditorIds: number[];
-  agentIds: number[];
-  paymentType: string;
-  tradeDirection: string;
-  territoryZone: string;
-  territoryRegion: string;
-  territoryCity: string;
-  territoryDistrict: string;
-  search: string;
-};
-
-function monthUtc(): { from: string; to: string } {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  return { from: `${y}-${pad(m + 1)}-01`, to: `${y}-${pad(m + 1)}-${pad(last)}` };
-}
-
-function defaultFilters(): FilterState {
-  const { from, to } = monthUtc();
-  return {
-    tab: "expeditor",
-    dealType: "both",
-    dateFrom: from,
-    dateTo: to,
-    status: "pending_confirmation",
-    expeditorIds: [],
-    agentIds: [],
-    paymentType: "",
-    tradeDirection: "",
-    territoryZone: "",
-    territoryRegion: "",
-    territoryCity: "",
-    territoryDistrict: "",
-    search: ""
-  };
-}
-
-function readTerritoryFilter(f: FilterState, field: ClientTerritoryFilterField): string {
+function readTerritoryFilter(f: EprFilterState, field: ClientTerritoryFilterField): string {
   switch (field) {
     case "zone":
       return f.territoryZone;
@@ -124,21 +82,6 @@ function readTerritoryFilter(f: FilterState, field: ClientTerritoryFilterField):
       return f.territoryDistrict;
     default:
       return "";
-  }
-}
-
-function patchTerritoryFilter(f: FilterState, field: ClientTerritoryFilterField, value: string): FilterState {
-  switch (field) {
-    case "zone":
-      return { ...f, territoryZone: value, territoryRegion: "", territoryCity: "", territoryDistrict: "" };
-    case "region":
-      return { ...f, territoryRegion: value, territoryCity: "", territoryDistrict: "" };
-    case "city":
-      return { ...f, territoryCity: value, territoryDistrict: "" };
-    case "district":
-      return { ...f, territoryDistrict: value };
-    default:
-      return f;
   }
 }
 
@@ -194,8 +137,14 @@ function defaultSortDirForColumn(colId: string): "asc" | "desc" {
 }
 
 function buildListQuery(
-  f: FilterState,
-  args: { page: number; limit: number; sortBy: EprPaymentRequestSortKey; sortDir: "asc" | "desc" }
+  f: EprFilterState,
+  args: {
+    page: number;
+    limit: number;
+    sortBy: EprPaymentRequestSortKey;
+    sortDir: "asc" | "desc";
+    archive: boolean;
+  }
 ): string {
   const p = new URLSearchParams();
   p.set("page", String(args.page));
@@ -206,7 +155,8 @@ function buildListQuery(
   if (f.dateTo.trim()) p.set("date_to", f.dateTo.trim());
   if (f.dealType !== "both") p.set("deal_type", f.dealType);
   p.set("application_channel", f.tab);
-  if (f.status) p.set("payment_status", f.status);
+  if (args.archive) p.set("payment_status", "deleted");
+  else if (f.status) p.set("payment_status", f.status);
   if (f.expeditorIds.length > 0) p.set("expeditor_user_ids", f.expeditorIds.join(","));
   if (f.agentIds.length > 0) p.set("agent_ids", f.agentIds.join(","));
   if (f.paymentType.trim() && f.paymentType !== "__all__") p.set("payment_type", f.paymentType.trim());
@@ -221,19 +171,42 @@ function buildListQuery(
   return p.toString();
 }
 
-/** Alohida filtr / jadval kartalari — chegaralar bir-biriga qo‘shilmasin */
-const blockCardClass =
-  "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-border dark:bg-card dark:shadow-none";
+function workflowStatusLabel(status: string | null | undefined): string {
+  switch (status) {
+    case "pending_confirmation":
+      return "Ожидание подтверждения";
+    case "confirmed":
+      return "Подтверждено";
+    case "rejected":
+      return "Отклонено";
+    case "deleted":
+      return "Удалено";
+    default:
+      return status?.trim() || "—";
+  }
+}
 
-/** Тип заявки / дата — ikki qator (sarlavha + boshqaruv) */
-const filterFieldShellStacked =
-  "flex min-h-[3.25rem] flex-col justify-center rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-input dark:bg-background";
-/** Popover / trigger filtrlari uchun bir xil fon va chegarа */
-const eprFilterTriggerTint = "border-slate-200 bg-white dark:border-input dark:bg-background";
+function isEprRowSelectable(row: PaymentListApiRow, isAdmin: boolean, archiveView: boolean): boolean {
+  if (archiveView) {
+    // Arxivda faqat admin va faqat «удалённые» (deleted_at bor) qatorlar tiklanadi.
+    return isAdmin && (row.workflow_status === "deleted" || row.deleted_at != null);
+  }
+  if (row.workflow_status === "pending_confirmation") return true;
+  if (isAdmin && row.workflow_status === "confirmed") return true;
+  return false;
+}
 
-const filterFieldCaption = "text-[10px] font-medium uppercase tracking-wide text-muted-foreground";
+function fmtDateShort(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}.${month}.${year}`;
+}
 
 export function ExpeditorPaymentRequestsWorkspace() {
+  const router = useRouter();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
@@ -241,20 +214,26 @@ export function ExpeditorPaymentRequestsWorkspace() {
   const canAct = isAdminOrOperatorLikeRole(role);
   const isAdmin = role === "admin";
 
-  const [applied, setApplied] = useState<FilterState>(() => defaultFilters());
-  const [draft, setDraft] = useState<FilterState>(() => defaultFilters());
-  /** Ochiq portal-filtrlarni faqat «Применить» / сброс / tabda yopish. Ochilishda bump qilinmasin — aks holda barcha instanslar o‘zini yopadi. */
-  const [filterCloseTok, setFilterCloseTok] = useState(0);
-  const [exMultiSearch, setExMultiSearch] = useState("");
-  const [agMultiSearch, setAgMultiSearch] = useState("");
-  const [dateOpen, setDateOpen] = useState(false);
-  const dateRef = useRef<HTMLButtonElement>(null);
+  const [applied, setApplied] = useState<EprFilterState>(() => defaultEprFilters());
+  const [draft, setDraft] = useState<EprFilterState>(() => defaultEprFilters());
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<EprPaymentRequestSortKey>(EPR_SORT_DEFAULT.sortBy);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(EPR_SORT_DEFAULT.sortDir);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [archiveView, setArchiveView] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restoreComment, setRestoreComment] = useState("");
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const h = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(h);
+  }, []);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -288,18 +267,6 @@ export function ExpeditorPaymentRequestsWorkspace() {
     queryFn: async () => {
       const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
       return data.data ?? [];
-    }
-  });
-
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug, "expeditor-requests"],
-    enabled: Boolean(tenantSlug) && hydrated,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { trade_directions: string[] } }>(
-        `/api/${tenantSlug}/agents/filter-options`
-      );
-      return data.data;
     }
   });
 
@@ -360,65 +327,71 @@ export function ExpeditorPaymentRequestsWorkspace() {
     [profileQ.data]
   );
 
-  const tradeDirectionOptions = useMemo(() => {
-    const s = new Set<string>();
-    for (const x of filterOptQ.data?.trade_directions ?? []) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    for (const x of profileQ.data?.trade_directions ?? []) {
-      const t = x.trim();
-      if (t) s.add(t);
-    }
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data?.trade_directions, profileQ.data?.trade_directions]);
+  const paymentTypeLabelByValue = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of payFilterOpts) m.set(o.value, o.label);
+    return m;
+  }, [payFilterOpts]);
+
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "epr-workspace");
+  const tradeDirectionOptions = tradeDirectionsCatalog.labels;
 
   const tradeDirectionFilterOptions = useMemo(
     () => tradeDirectionOptions.map((td) => ({ value: td, label: td })),
     [tradeDirectionOptions]
   );
 
-  const expeditorMultiItems = useMemo((): SearchableMultiSelectItem<number>[] => {
-    const q = exMultiSearch.trim().toLowerCase();
-    const rows = (expeditorsQ.data ?? []).map((e) => {
-      const title = `${e.fio}${e.code ? ` (${e.code})` : ""}`;
-      return { id: e.id, title, subtitle: e.code ?? null };
-    });
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.title.toLowerCase().includes(q) ||
-        (r.subtitle && r.subtitle.toLowerCase().includes(q)) ||
-        String(r.id).includes(q)
-    );
-  }, [expeditorsQ.data, exMultiSearch]);
+  const expeditorFilterOptions = useMemo(
+    () =>
+      (expeditorsQ.data ?? []).map((e) => ({
+        value: String(e.id),
+        label: staffPickerDisplayName(e),
+        searchText: staffPickerSearchText(e)
+      })),
+    [expeditorsQ.data]
+  );
 
-  const agentMultiItems = useMemo((): SearchableMultiSelectItem<number>[] => {
-    const q = agMultiSearch.trim().toLowerCase();
-    const rows = (agentsQ.data ?? []).map((a) => ({
-      id: a.id,
-      title: `${a.fio}${a.code ? ` (${a.code})` : ""}`,
-      subtitle: a.code ?? null
-    }));
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
-        r.title.toLowerCase().includes(q) ||
-        (r.subtitle && r.subtitle.toLowerCase().includes(q)) ||
-        String(r.id).includes(q)
-    );
-  }, [agentsQ.data, agMultiSearch]);
+  const agentFilterOptions = useMemo(
+    () =>
+      (agentsQ.data ?? []).map((a) => ({
+        value: String(a.id),
+        label: staffPickerDisplayName(a),
+        searchText: staffPickerSearchText(a)
+      })),
+    [agentsQ.data]
+  );
 
   const listQ = useQuery({
-    queryKey: ["expeditor-payment-requests", tenantSlug, applied, page, tablePrefs.pageSize, sortBy, sortDir],
+    queryKey: [
+      "expeditor-payment-requests",
+      tenantSlug,
+      applied,
+      page,
+      tablePrefs.pageSize,
+      sortBy,
+      sortDir,
+      archiveView
+    ],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.list,
     queryFn: async () => {
-      const qs = buildListQuery(applied, { page, limit: tablePrefs.pageSize, sortBy, sortDir });
+      const qs = buildListQuery(applied, {
+        page,
+        limit: tablePrefs.pageSize,
+        sortBy,
+        sortDir,
+        archive: archiveView
+      });
       const { data } = await api.get<PaymentListApiResponse>(`/api/${tenantSlug}/payments?${qs}`);
       return data;
     }
   });
+
+  const switchArchiveView = useCallback((next: boolean) => {
+    setArchiveView(next);
+    setPage(1);
+    setSelected(new Set());
+  }, []);
 
   const handleSortColumnClick = useCallback((colId: string) => {
     if (!EPR_SORTABLE_COLUMN_IDS.has(colId)) return;
@@ -435,34 +408,21 @@ export function ExpeditorPaymentRequestsWorkspace() {
     });
   }, []);
 
-  const batchConfirmMut = useMutation({
-    mutationFn: async (ids: number[]) => {
-      const { data } = await api.post<{ ok: number[]; failed: { id: number; error: string }[] }>(
-        `/api/${tenantSlug}/payments/batch-confirm`,
-        { ids }
-      );
-      return data;
-    },
-    onSuccess: () => {
-      setSelected(new Set());
-      void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
-    }
-  });
-
   const [rejectBusy, setRejectBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnDurationMin, setReturnDurationMin] = useState(30);
 
   const applyFilters = useCallback(() => {
-    setFilterCloseTok((t) => t + 1);
     setApplied({ ...draft });
     setPage(1);
     setSelected(new Set());
   }, [draft]);
 
   const resetFilters = useCallback(() => {
-    setFilterCloseTok((t) => t + 1);
-    const d = defaultFilters();
+    const d = defaultEprFilters();
     setDraft(d);
     setApplied(d);
     setPage(1);
@@ -472,7 +432,6 @@ export function ExpeditorPaymentRequestsWorkspace() {
   }, []);
 
   const setTab = (tab: SourceTab) => {
-    setFilterCloseTok((t) => t + 1);
     setDraft((d) => ({ ...d, tab }));
     setApplied((a) => ({ ...a, tab }));
     setPage(1);
@@ -488,20 +447,22 @@ export function ExpeditorPaymentRequestsWorkspace() {
     });
   };
 
-  const rows = listQ.data?.data ?? [];
+  const rows = useMemo(() => listQ.data?.data ?? [], [listQ.data?.data]);
   const total = listQ.data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / tablePrefs.pageSize));
-  const pendingOnPage = rows.filter((r) => r.workflow_status === "pending_confirmation").map((r) => r.id);
-  const allPendingSelected =
-    pendingOnPage.length > 0 && pendingOnPage.every((id) => selected.has(id));
+  const selectableOnPage = useMemo(
+    () => rows.filter((r) => isEprRowSelectable(r, isAdmin, archiveView)).map((r) => r.id),
+    [rows, isAdmin, archiveView]
+  );
+  const allSelectableSelected =
+    selectableOnPage.length > 0 && selectableOnPage.every((id) => selected.has(id));
 
   const toggleAllPage = () => {
-    if (pendingOnPage.length === 0) return;
-    const allSel = pendingOnPage.every((id) => selected.has(id));
+    if (selectableOnPage.length === 0) return;
+    const allSel = selectableOnPage.every((id) => selected.has(id));
     setSelected((prev) => {
       const n = new Set(prev);
-      if (allSel) for (const id of pendingOnPage) n.delete(id);
-      else for (const id of pendingOnPage) n.add(id);
+      if (allSel) for (const id of selectableOnPage) n.delete(id);
+      else for (const id of selectableOnPage) n.add(id);
       return n;
     });
   };
@@ -521,6 +482,185 @@ export function ExpeditorPaymentRequestsWorkspace() {
     !deleteBusy &&
     (allSelectedPending || (isAdmin && allSelectedConfirmed));
 
+  const pageTotalAmount = useMemo(() => {
+    let sum = 0;
+    for (const r of rows) {
+      sum += Number.parseFloat(r.amount) || 0;
+    }
+    return sum;
+  }, [rows]);
+
+  const isPartialSelected =
+    selected.size > 0 && !allSelectableSelected && selectableOnPage.some((id) => selected.has(id));
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isPartialSelected;
+    }
+  }, [isPartialSelected]);
+
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(rows.map((r) => r.id));
+      let changed = false;
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [rows]);
+
+  const territoryFilterOptions = useMemo(
+    () =>
+      territoryFilterSpecs.map((spec) => {
+        const opts = buildPaymentTerritorySelectOptions(
+          spec.field,
+          clientRefsQ.data,
+          territoryOptsQ.data,
+          profileQ.data?.territory_nodes,
+          readTerritoryFilter(draft, spec.field)
+        );
+        return {
+          key:
+            spec.field === "zone"
+              ? "territoryZone"
+              : spec.field === "region"
+                ? "territoryRegion"
+                : spec.field === "city"
+                  ? "territoryCity"
+                  : "territoryDistrict",
+          label: spec.label,
+          options: opts.map((o) => ({ value: o.value, label: o.label })),
+          value: readTerritoryFilter(draft, spec.field)
+        };
+      }),
+    [territoryFilterSpecs, clientRefsQ.data, territoryOptsQ.data, profileQ.data?.territory_nodes, draft]
+  );
+
+  const handleBulkDelete = useCallback(() => {
+    if (allSelectedPending) {
+      const reason = window.prompt("Причина отклонения (необязательно):") ?? "";
+      void (async () => {
+        setRejectBusy(true);
+        try {
+          for (const id of Array.from(selected)) {
+            await api.post(`/api/${tenantSlug}/payments/${id}/reject`, {
+              reason: reason.trim() || undefined
+            });
+          }
+          setSelected(new Set());
+          void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
+          void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
+        } finally {
+          setRejectBusy(false);
+          setDeleteModalOpen(false);
+        }
+      })();
+      return;
+    }
+    if (isAdmin && allSelectedConfirmed) {
+      const reason = window.prompt("Причина удаления в архив (обязательно для аудита):") ?? "";
+      if (!reason.trim()) {
+        window.alert("Укажите причину.");
+        return;
+      }
+      void (async () => {
+        setDeleteBusy(true);
+        try {
+          for (const id of Array.from(selected)) {
+            const sp = new URLSearchParams();
+            sp.set("cancel_reason_ref", reason.trim().slice(0, 128));
+            await api.delete(`/api/${tenantSlug}/payments/${id}?${sp.toString()}`);
+          }
+          setSelected(new Set());
+          void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
+          void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
+        } finally {
+          setDeleteBusy(false);
+          setDeleteModalOpen(false);
+        }
+      })();
+    }
+  }, [
+    allSelectedConfirmed,
+    allSelectedPending,
+    isAdmin,
+    qc,
+    selected,
+    tenantSlug
+  ]);
+
+  // Xato to'lovni ekspeditorga qaytarish (pending → rad; tasdiqlangan → bekor + qarz qayta ochiladi).
+  const returnActionEnabled =
+    canAct &&
+    selected.size > 0 &&
+    !rejectBusy &&
+    !deleteBusy &&
+    !returnBusy &&
+    (allSelectedPending || (isAdmin && allSelectedConfirmed));
+
+  const handleReturnToExpeditor = useCallback(() => {
+    if (!returnActionEnabled) return;
+    setReturnReason("");
+    setReturnDurationMin(30);
+    setReturnModalOpen(true);
+  }, [returnActionEnabled]);
+
+  const confirmReturnToExpeditor = useCallback(() => {
+    if (!returnActionEnabled) return;
+    const reason = returnReason.trim();
+    const duration = Math.min(1440, Math.max(1, Math.round(returnDurationMin) || 30));
+    void (async () => {
+      setReturnBusy(true);
+      try {
+        for (const id of Array.from(selected)) {
+          await api.post(`/api/${tenantSlug}/payments/${id}/return-to-expeditor`, {
+            reason: reason || undefined,
+            duration_minutes: duration
+          });
+        }
+        setSelected(new Set());
+        setReturnModalOpen(false);
+        void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
+      } finally {
+        setReturnBusy(false);
+      }
+    })();
+  }, [returnActionEnabled, returnReason, returnDurationMin, selected, tenantSlug, qc]);
+
+  // Arxivdagi (удалённые) to'lovlarni tiklash — faqat admin.
+  const restoreActionEnabled =
+    isAdmin && archiveView && selected.size > 0 && !restoreBusy;
+
+  const handleRestore = useCallback(() => {
+    if (!restoreActionEnabled) return;
+    setRestoreComment("");
+    setRestoreModalOpen(true);
+  }, [restoreActionEnabled]);
+
+  const confirmRestore = useCallback(() => {
+    const comment = restoreComment.trim();
+    if (!comment) return;
+    void (async () => {
+      setRestoreBusy(true);
+      try {
+        for (const id of Array.from(selected)) {
+          await api.post(`/api/${tenantSlug}/payments/${id}/restore`, { comment });
+        }
+        setSelected(new Set());
+        setRestoreModalOpen(false);
+        void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
+      } finally {
+        setRestoreBusy(false);
+      }
+    })();
+  }, [restoreComment, selected, tenantSlug, qc]);
+
   const exportXlsx = useCallback(async () => {
     if (!rows.length) return;
     await downloadXlsxSheet(
@@ -537,12 +677,12 @@ export function ExpeditorPaymentRequestsWorkspace() {
         "Заказ ID",
         "Сумма",
         "Способ оплаты",
+        "Статус",
         "Срок",
         "Направление торговли",
         "Комментарий",
         "Дата последнего изменения",
-        "Кто изменил",
-        "Статус"
+        "Кто изменил"
       ],
       rows.map((r) => [
         r.id,
@@ -554,17 +694,17 @@ export function ExpeditorPaymentRequestsWorkspace() {
         r.consignment ? "да" : "нет",
         r.order_number ?? "",
         r.amount,
-        r.payment_type,
+        paymentTypeLabelByValue.get(r.payment_type) ?? r.payment_type,
+        workflowStatusLabel(r.workflow_status),
         "—",
         r.trade_direction ?? "",
         r.note ?? "",
         r.confirmed_at ?? r.created_at ?? "",
-        r.deleted_by_name ?? "—",
-        r.workflow_status
+        r.deleted_by_name ?? "—"
       ]),
-      { colWidths: [10, 12, 16, 22, 22, 14, 10, 12, 12, 14, 8, 16, 28, 18, 14, 18] }
+      { colWidths: [10, 12, 16, 22, 22, 14, 10, 12, 12, 14, 18, 8, 16, 28, 18, 14] }
     );
-  }, [applied.dateFrom, applied.dateTo, rows]);
+  }, [applied.dateFrom, applied.dateTo, paymentTypeLabelByValue, rows]);
 
   if (!hydrated) return <p className="text-sm text-muted-foreground">Загрузка сессии…</p>;
   if (!tenantSlug) {
@@ -583,28 +723,42 @@ export function ExpeditorPaymentRequestsWorkspace() {
     switch (colId) {
       case "payment_id":
         return (
-          <td key={colId} className="px-2 py-2 font-mono text-xs">
-            <Link href={`/payments/${r.id}`} className="text-teal-700 underline dark:text-teal-400">
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 font-medium text-slate-700">
+            <Link href={`/payments/${r.id}`} className="text-[#063b36] hover:underline">
               {r.id}
             </Link>
           </td>
         );
       case "paid_at":
         return (
-          <td key={colId} className="px-2 py-2 tabular-nums text-xs text-slate-700 dark:text-foreground/90">
-            {r.paid_at?.slice(0, 10) ?? "—"}
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 text-slate-600">
+            {fmtDateShort(r.paid_at)}
           </td>
         );
       case "expeditor":
         return (
-          <td key={colId} className="max-w-[120px] truncate px-2 py-2 text-xs">
-            {r.expeditor_name ?? "—"}
+          <td key={colId} className="max-w-[140px] px-2 py-2 text-xs">
+            <span className="flex items-center gap-1">
+              {r.created_via_mobile ? (
+                <Smartphone
+                  className="size-3.5 shrink-0 text-teal-600"
+                  aria-label="Создано в мобильном приложении"
+                />
+              ) : null}
+              <span className="truncate">{r.expeditor_name ?? "—"}</span>
+            </span>
           </td>
         );
       case "client_name":
         return (
-          <td key={colId} className="max-w-[140px] truncate px-2 py-2 font-medium">
-            {r.client_name}
+          <td key={colId} className="max-w-[140px] truncate whitespace-nowrap border-b border-border px-2 py-2">
+            <Link
+              href={`/clients/${r.client_id}`}
+              className="inline-flex items-center gap-1 text-[#063b36] hover:underline"
+            >
+              {r.client_name}
+              <ExternalLink className="size-3 text-slate-400" />
+            </Link>
           </td>
         );
       case "territory":
@@ -621,34 +775,87 @@ export function ExpeditorPaymentRequestsWorkspace() {
         );
       case "consignment":
         return (
-          <td key={colId} className="px-2 py-2 text-xs">
-            {r.consignment ? "да" : "нет"}
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 text-xs">
+            {r.consignment ? (
+              <span className="font-medium text-amber-600">Да</span>
+            ) : (
+              <span className="text-slate-500">Нет</span>
+            )}
           </td>
         );
       case "order_id":
         return (
-          <td key={colId} className="px-2 py-2 font-mono text-xs">
-            {r.order_number ?? "—"}
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 text-xs">
+            {r.order_number ? (
+              <Link
+                href={r.order_id ? `/orders/${r.order_id}` : "#"}
+                className="inline-flex items-center gap-1 text-[#063b36] hover:underline"
+              >
+                {r.order_number}
+                <ExternalLink className="size-3 text-slate-400" />
+              </Link>
+            ) : (
+              <span className="text-slate-300">—</span>
+            )}
           </td>
         );
       case "amount":
         return (
-          <td key={colId} className="px-2 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-foreground">
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 text-right tabular-nums font-semibold text-slate-800">
             {formatNumberGrouped(r.amount, { minFractionDigits: 0, maxFractionDigits: 0 })}
           </td>
         );
       case "payment_type":
         return (
-          <td key={colId} className="max-w-[100px] truncate px-2 py-2 text-xs">
-            {r.payment_type}
+          <td key={colId} className="max-w-[100px] truncate border-b border-border px-2 py-2 text-xs text-slate-600">
+            {paymentTypeLabelByValue.get(r.payment_type) ?? r.payment_type}
           </td>
         );
-      case "term":
+      case "workflow_status": {
+        const pending = r.workflow_status === "pending_confirmation";
+        const rejected = r.workflow_status === "rejected";
+        return (
+          <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 text-xs">
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 font-medium",
+                pending && "bg-amber-50 text-amber-700",
+                r.workflow_status === "confirmed" && "bg-emerald-50 text-emerald-700",
+                rejected && "bg-red-50 text-red-700",
+                !pending && r.workflow_status !== "confirmed" && !rejected && "bg-muted text-slate-600"
+              )}
+            >
+              {workflowStatusLabel(r.workflow_status)}
+            </span>
+          </td>
+        );
+      }
+      case "term": {
+        const expMs = r.return_expires_at ? new Date(r.return_expires_at).getTime() : null;
+        if (r.workflow_status === "rejected" && expMs != null) {
+          const remMin = Math.ceil((expMs - nowTick) / 60_000);
+          if (remMin > 0) {
+            return (
+              <td key={colId} className="whitespace-nowrap px-2 py-2 text-xs">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+                  <Clock className="size-3" />
+                  {remMin} мин
+                </span>
+              </td>
+            );
+          }
+          return (
+            <td key={colId} className="whitespace-nowrap px-2 py-2 text-xs text-slate-400">
+              истекает…
+            </td>
+          );
+        }
         return (
           <td key={colId} className="px-2 py-2 text-xs text-muted-foreground">
             —
           </td>
         );
+      }
       case "trade_direction":
         return (
           <td key={colId} className="max-w-[120px] truncate px-2 py-2 text-xs">
@@ -689,276 +896,78 @@ export function ExpeditorPaymentRequestsWorkspace() {
       colId === "note" && "min-w-[140px]"
     );
 
-  const tabBtn = (key: SourceTab, label: string) => (
-    <Button
-      key={key}
-      type="button"
-      size="sm"
-      variant={draft.tab === key ? "default" : "outline"}
-      className={cn(
-        "h-9 rounded-md px-4 text-sm font-medium shadow-sm",
-        draft.tab === key
-          ? "bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600"
-          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-input dark:bg-card dark:text-muted-foreground dark:hover:bg-muted/60"
-      )}
-      onClick={() => setTab(key)}
-    >
-      {label}
-    </Button>
-  );
+  const amountColIndex = visibleDataColumns.indexOf("amount");
 
   return (
-    <PageShell className="space-y-6">
-      <PageHeader
-        className="border-0 pb-1 dark:border-transparent"
-        title={
-          <span className="text-lg font-semibold tracking-tight text-slate-900 sm:text-xl dark:text-foreground">
-            Заявки на оплату экспедиторов
-          </span>
-        }
-        description="Подтверждение заявок в кассе; отклонение или архив (admin) — внизу страницы."
-        actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="flex flex-wrap justify-end gap-2">
-              {tabBtn("expeditor", "Экспедиторы")}
-              {tabBtn("collector", "Инкассатор")}
-              {tabBtn("van", "Van-selling")}
-              {tabBtn("bank", "Банковские оплаты")}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2 border-slate-200 shadow-sm dark:border-input"
-              onClick={() => setPageSettingsOpen(true)}
-            >
-              <Settings className="size-4" />
-              Настройки
-            </Button>
-          </div>
-        }
+    <EprPageLayout>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold text-slate-800">Заявки на оплату экспедиторов</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <EprTabBar active={draft.tab} onChange={setTab} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 border-border shadow-sm"
+            onClick={() => setPageSettingsOpen(true)}
+          >
+            <Settings className="size-4" />
+            Настройки
+          </Button>
+        </div>
+      </div>
+
+      <EprFiltersPanel
+        draft={draft}
+        expeditorOptions={expeditorFilterOptions}
+        agentOptions={agentFilterOptions}
+        paymentMethodOptions={payFilterOpts.map((o) => ({ value: o.value, label: o.label }))}
+        tradeDirectionOptions={tradeDirectionFilterOptions}
+        territoryOptions={territoryFilterOptions}
+        onDraftChange={(patch) => {
+          setDraft((d) => {
+            let next = { ...d, ...patch };
+            if ("territoryZone" in patch) {
+              next = { ...next, territoryRegion: "", territoryCity: "", territoryDistrict: "" };
+            } else if ("territoryRegion" in patch) {
+              next = { ...next, territoryCity: "", territoryDistrict: "" };
+            } else if ("territoryCity" in patch) {
+              next = { ...next, territoryDistrict: "" };
+            }
+            return next;
+          });
+        }}
+        onApply={applyFilters}
+        onReset={resetFilters}
       />
 
-      {/* Blok 1: faqat filtr — jadvaldan mustaqil chegarada */}
-      <section className={cn(blockCardClass, "overflow-hidden")} aria-labelledby="epr-filter-heading">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-start sm:justify-between dark:border-border">
-          <h2 id="epr-filter-heading" className="text-sm font-semibold text-slate-800 dark:text-foreground">
-            Фильтр
-          </h2>
-          <div className="flex flex-wrap items-end justify-start gap-2 sm:justify-end">
-            <div className={cn(filterFieldShellStacked, "min-w-0 sm:max-w-md")}>
-              <span className={filterFieldCaption}>Тип заявки</span>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="deal_type"
-                    className="size-4 accent-teal-600"
-                    checked={draft.dealType === "regular"}
-                    onChange={() => setDraft((d) => ({ ...d, dealType: "regular" }))}
-                  />
-                  Обычная
-                </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="deal_type"
-                    className="size-4 accent-teal-600"
-                    checked={draft.dealType === "consignment"}
-                    onChange={() => setDraft((d) => ({ ...d, dealType: "consignment" }))}
-                  />
-                  Для консигнации
-                </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="deal_type"
-                    className="size-4 accent-teal-600"
-                    checked={draft.dealType === "both"}
-                    onChange={() => setDraft((d) => ({ ...d, dealType: "both" }))}
-                  />
-                  Обе
-                </label>
-              </div>
-            </div>
-            <div className="flex h-10 w-full min-w-[12rem] items-center rounded-lg border border-slate-200 bg-white px-2 dark:border-input dark:bg-background sm:w-auto sm:min-w-[220px]">
-              <Button
-                ref={dateRef}
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 w-full justify-start gap-2 px-0 font-normal hover:bg-transparent"
-                onClick={() => setDateOpen((o) => !o)}
-                aria-label="Период дат"
-              >
-                <CalendarDays className="size-4 shrink-0 text-slate-500" />
-                <span className="truncate">{formatDateRangeButton(draft.dateFrom, draft.dateTo)}</span>
-              </Button>
-              <DateRangePopover
-                open={dateOpen}
-                onOpenChange={setDateOpen}
-                anchorRef={dateRef}
-                dateFrom={draft.dateFrom}
-                dateTo={draft.dateTo}
-                onApply={({ dateFrom: f, dateTo: t }) => setDraft((d) => ({ ...d, dateFrom: f, dateTo: t }))}
-              />
-            </div>
-            <details className="relative">
-              <summary
-                className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 dark:border-input dark:bg-background dark:text-muted-foreground [&::-webkit-details-marker]:hidden"
-                title="Подсказка"
-              >
-                <Filter className="size-4" />
-              </summary>
-              <div className="absolute right-0 z-20 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-2 text-xs shadow-lg dark:border-border dark:bg-popover">
-                Канал — вкладки в шапке. После изменения фильтров нажмите «Применить» внизу блока.
-              </div>
-            </details>
-          </div>
-        </div>
-
-        <div id="epr-filter-grid" className="space-y-4 p-4 sm:p-5">
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="min-w-0">
-                <SearchableMultiSelectPanel<number>
-                  hideOuterLabel
-                  label="Экспедитор"
-                  triggerPlaceholder="Экспедитор"
-                  triggerClassName={eprFilterTriggerTint}
-                  closeToken={filterCloseTok}
-                  loading={expeditorsQ.isLoading}
-                  items={expeditorMultiItems}
-                  selected={new Set(draft.expeditorIds)}
-                  onSelectedChange={(action) => {
-                    setDraft((d) => {
-                      const prev = new Set(d.expeditorIds);
-                      const next = typeof action === "function" ? action(prev) : action;
-                      return { ...d, expeditorIds: Array.from(next).sort((a, b) => a - b) };
-                    });
-                  }}
-                  search={exMultiSearch}
-                  onSearchChange={setExMultiSearch}
-                  emptyMessage="Нет экспедиторов"
-                />
-              </div>
-              <div className="min-w-0">
-                <FilterSearchableSelect
-                  emptyLabel="Направление торговли"
-                  value={draft.tradeDirection}
-                  onValueChange={(v) => setDraft((d) => ({ ...d, tradeDirection: v }))}
-                  options={tradeDirectionFilterOptions}
-                  closeToken={filterCloseTok}
-                  className={eprFilterTriggerTint}
-                />
-              </div>
-              <div className="min-w-0">
-                <FilterSearchableSelect
-                  emptyLabel="Способ оплаты"
-                  value={draft.paymentType}
-                  onValueChange={(v) => setDraft((d) => ({ ...d, paymentType: v }))}
-                  options={payFilterOpts.map((o) => ({ value: o.value, label: o.label }))}
-                  closeToken={filterCloseTok}
-                  className={eprFilterTriggerTint}
-                />
-              </div>
-              <div className="min-w-0">
-                <FilterSearchableSelect
-                  emptyLabel="Статус"
-                  searchable={false}
-                  value={draft.status}
-                  onValueChange={(v) => setDraft((d) => ({ ...d, status: v as StatusFilter }))}
-                  options={[
-                    { value: "pending_confirmation", label: "Ожидание подтверждения" },
-                    { value: "confirmed", label: "Подтверждена" },
-                    { value: "rejected", label: "Отклонена" }
-                  ]}
-                  closeToken={filterCloseTok}
-                  className={eprFilterTriggerTint}
-                />
-              </div>
-              <div className="min-w-0">
-                <SearchableMultiSelectPanel<number>
-                  hideOuterLabel
-                  label="Агент"
-                  triggerPlaceholder="Агент"
-                  triggerClassName={eprFilterTriggerTint}
-                  closeToken={filterCloseTok}
-                  loading={agentsQ.isLoading}
-                  items={agentMultiItems}
-                  selected={new Set(draft.agentIds)}
-                  onSelectedChange={(action) => {
-                    setDraft((d) => {
-                      const prev = new Set(d.agentIds);
-                      const next = typeof action === "function" ? action(prev) : action;
-                      return { ...d, agentIds: Array.from(next).sort((a, b) => a - b) };
-                    });
-                  }}
-                  search={agMultiSearch}
-                  onSearchChange={setAgMultiSearch}
-                  emptyMessage="Нет агентов"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 lg:flex-row lg:items-end lg:justify-between dark:border-border">
-              <div
-                className={cn(
-                  "grid min-w-0 flex-1 gap-2",
-                  territoryFilterSpecs.length <= 2 && "sm:grid-cols-2",
-                  territoryFilterSpecs.length === 3 && "sm:grid-cols-2 lg:grid-cols-3",
-                  territoryFilterSpecs.length >= 4 && "sm:grid-cols-2 lg:grid-cols-4"
-                )}
-              >
-                {territoryFilterSpecs.map((spec) => {
-                  const opts = buildPaymentTerritorySelectOptions(
-                    spec.field,
-                    clientRefsQ.data,
-                    territoryOptsQ.data,
-                    profileQ.data?.territory_nodes,
-                    readTerritoryFilter(draft, spec.field)
-                  );
-                  const territorySelectOptions = opts.map((o) => ({ value: o.value, label: o.label }));
-                  return (
-                    <div key={`${spec.field}-${spec.visIndex}`} className="min-w-0">
-                      <FilterSearchableSelect
-                        emptyLabel={spec.label}
-                        value={readTerritoryFilter(draft, spec.field)}
-                        onValueChange={(v) => setDraft((d) => patchTerritoryFilter(d, spec.field, v))}
-                        options={territorySelectOptions}
-                        closeToken={filterCloseTok}
-                        className={eprFilterTriggerTint}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 border-slate-200 shadow-sm dark:border-input"
-                  title="Сброс фильтров"
-                  onClick={resetFilters}
-                >
-                  <RotateCcw className="size-4" />
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-10 min-w-[10rem] bg-teal-600 px-6 font-medium text-white shadow-sm hover:bg-teal-700"
-                  onClick={applyFilters}
-                >
-                  Применить
-                </Button>
-              </div>
-            </div>
-        </div>
-      </section>
-
-      <section className={cn(blockCardClass, "overflow-hidden")} aria-label="Таблица заявок">
-          <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between dark:border-border dark:bg-card">
+      <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm" aria-label="Таблица заявок">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <div className="flex items-center rounded-lg border border-border bg-card p-0.5 text-xs shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => switchArchiveView(false)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 font-medium transition",
+                    !archiveView ? "bg-[#063b36] text-white shadow" : "text-slate-600 hover:bg-muted"
+                  )}
+                >
+                  Заявки
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchArchiveView(true)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-3 py-1.5 font-medium transition",
+                    archiveView ? "bg-[#063b36] text-white shadow" : "text-slate-600 hover:bg-muted"
+                  )}
+                  title="Удалённые оплаты (архив)"
+                >
+                  <Trash2 className="size-3.5" />
+                  Удалённые
+                </button>
+              </div>
               <Button
                 type="button"
                 variant="ghost"
@@ -972,7 +981,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
               <select
                 className={cn(
                   filterPanelSelectClassName,
-                  "h-9 w-[4.5rem] min-w-0 max-w-none shrink-0 bg-white text-sm dark:bg-background"
+                  "h-9 w-[4.5rem] min-w-0 max-w-none shrink-0 bg-card text-sm dark:bg-background"
                 )}
                 value={String(tablePrefs.pageSize)}
                 onChange={(e) => {
@@ -1024,16 +1033,18 @@ export function ExpeditorPaymentRequestsWorkspace() {
             </div>
           </div>
 
-          <div className="overflow-x-auto bg-white dark:bg-card">
-            <table className="w-full min-w-[1280px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground">
-                  <th className="w-10 px-2 py-2.5">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1280px] border-collapse text-xs">
+              <thead className="bg-muted text-slate-500">
+                <tr className="h-[74px]">
+                  <th className="sticky left-0 w-8 border-b border-border bg-muted px-2 py-2">
                     <input
+                      ref={headerCheckboxRef}
                       type="checkbox"
-                      checked={allPendingSelected}
+                      checked={allSelectableSelected}
                       onChange={toggleAllPage}
-                      disabled={!canAct || pendingOnPage.length === 0}
+                      disabled={!canAct || selectableOnPage.length === 0}
+                      className="accent-teal-600"
                       aria-label="Выбрать все на странице"
                     />
                   </th>
@@ -1042,14 +1053,20 @@ export function ExpeditorPaymentRequestsWorkspace() {
                     const sortable = EPR_SORTABLE_COLUMN_IDS.has(colId);
                     const active = sortable && sortBy === colId;
                     return (
-                      <th key={colId} className={cn(thClassForCol(colId), sortable && "p-0")}>
+                      <th
+                        key={colId}
+                        className={cn(
+                          "border-b border-border px-2 py-2 text-left font-medium whitespace-nowrap",
+                          thClassForCol(colId),
+                          sortable && "p-0"
+                        )}
+                      >
                         {sortable ? (
                           <button
                             type="button"
                             className={cn(
-                              "group flex w-full min-w-0 items-center gap-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wide",
-                              colId === "amount" ? "justify-end text-right" : "text-left",
-                              "text-slate-600 hover:bg-slate-200/90 dark:text-muted-foreground dark:hover:bg-muted/70"
+                              "group flex h-[74px] w-full min-w-0 items-center gap-1 px-2 py-2 text-left font-medium",
+                              colId === "amount" && "justify-end text-right"
                             )}
                             onClick={() => handleSortColumnClick(colId)}
                           >
@@ -1068,7 +1085,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
                             )}
                           </button>
                         ) : (
-                          <span className="block px-2 py-2.5">{def?.label ?? colId}</span>
+                          <span className="block px-2 py-2">{def?.label ?? colId}</span>
                         )}
                       </th>
                     );
@@ -1084,152 +1101,248 @@ export function ExpeditorPaymentRequestsWorkspace() {
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={dataColSpan} className="px-3 py-10 text-center text-muted-foreground">
-                      Пусто
+                    <td colSpan={dataColSpan} className="px-4 py-10 text-center text-slate-400">
+                      {archiveView
+                        ? "Удалённых оплат за выбранный период нет."
+                        : "Нет данных. Измените фильтр или создайте новую заявку."}
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-100 hover:bg-slate-50/60 dark:border-border dark:hover:bg-muted/20"
-                    >
-                      <td className="px-2 py-2">
-                        {r.workflow_status === "pending_confirmation" && canAct ? (
-                          <input
-                            type="checkbox"
-                            checked={selected.has(r.id)}
-                            onChange={() => toggleRow(r.id)}
-                            aria-label={`Выбрать ${r.id}`}
-                          />
-                        ) : (
-                          <span className="inline-block w-4" />
+                  rows.map((r) => {
+                    const isSelected = selected.has(r.id);
+                    const isSelectable = canAct && isEprRowSelectable(r, isAdmin, archiveView);
+                    return (
+                      <tr
+                        key={r.id}
+                        className={cn(
+                          "group h-[76px] hover:bg-muted",
+                          isSelected && isSelectable && "bg-cyan-50/70"
                         )}
-                      </td>
-                      {visibleDataColumns.map((colId) => renderPaymentRequestDataCell(r, colId))}
-                    </tr>
-                  ))
+                      >
+                        <td className="sticky left-0 bg-inherit border-b border-border px-2 py-2">
+                          {isSelectable ? (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRow(r.id)}
+                              className="accent-[#063b36]"
+                              aria-label={`Выбрать ${r.id}`}
+                            />
+                          ) : (
+                            <span className="inline-block w-4" />
+                          )}
+                        </td>
+                        {visibleDataColumns.map((colId) => renderPaymentRequestDataCell(r, colId))}
+                      </tr>
+                    );
+                  })
                 )}
+                {rows.length > 0 && amountColIndex >= 0 ? (
+                  <tr className="bg-muted font-semibold text-slate-700">
+                    <td colSpan={amountColIndex + 1} className="border-t border-border px-2 py-2 text-right">
+                      Итого
+                    </td>
+                    <td className="border-t border-border px-2 py-2 text-right tabular-nums">
+                      {formatNumberGrouped(pageTotalAmount, { minFractionDigits: 0, maxFractionDigits: 0 })} UZS
+                    </td>
+                    <td
+                      colSpan={Math.max(0, visibleDataColumns.length - amountColIndex - 1)}
+                      className="border-t border-border"
+                    />
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
 
-          {totalPages > 1 || total > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 text-xs text-muted-foreground dark:border-border">
-              <span>
-                Стр. {page} из {totalPages} · записей: {total}
-              </span>
-              <div className="flex gap-1">
-                <Button type="button" variant="outline" size="sm" className="h-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Назад
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Вперёд
-                </Button>
-              </div>
+          {!archiveView && applied.status === "pending_confirmation" && total === 0 && !listQ.isFetching ? (
+            <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-800">
+              Нет заявок в статусе «Ожидание подтверждения». Экспедитор создаёт их в мобильном приложении при
+              приёме оплаты; после подтверждения они переходят в «Подтверждено».
+            </div>
+          ) : null}
+
+          {total > 0 ? (
+            <div className="border-t border-border px-4 py-3">
+              <TemplatePagination
+                page={page}
+                pageSize={tablePrefs.pageSize}
+                total={total}
+                onPageChange={setPage}
+                onPageSizeChange={(n) => {
+                  tablePrefs.setPageSize(n);
+                  setPage(1);
+                }}
+                pageSizeOptions={[10, 20, 30, 50]}
+              />
             </div>
           ) : null}
       </section>
 
-      <div className="flex flex-wrap items-center gap-3 pt-1">
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canAct || !allSelectedPending || batchConfirmMut.isPending}
-              className={cn(
-                "h-10 min-w-[10rem] border-teal-600 bg-teal-50 font-medium text-teal-900 shadow-sm hover:bg-teal-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-100 dark:hover:bg-teal-950/60 dark:disabled:opacity-50"
-              )}
-              variant="outline"
-              onClick={() => {
-                if (!window.confirm(`Подтвердить ${selected.size} оплат? Баланс клиента будет увеличен.`)) return;
-                batchConfirmMut.mutate(Array.from(selected));
-              }}
-            >
-              {batchConfirmMut.isPending ? "…" : "Подтверждение"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!deleteActionEnabled}
-              title={
-                allSelectedPending
-                  ? "Отклонить выбранные заявки"
-                  : isAdmin && allSelectedConfirmed
-                    ? "В архив (сторно по балансу)"
-                    : "Выберите строки одного статуса: ожидание или подтверждена (admin)"
-              }
-              className="h-10 min-w-[8rem] border-rose-300 bg-rose-50/90 font-medium text-rose-900 hover:bg-rose-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-100 dark:hover:bg-rose-950/50 dark:disabled:opacity-50"
-              onClick={() => {
-                if (allSelectedPending) {
-                  const reason = window.prompt("Причина отклонения (необязательно):") ?? "";
-                  if (!window.confirm(`Отклонить ${selected.size} заявок?`)) return;
-                  void (async () => {
-                    setRejectBusy(true);
-                    try {
-                      for (const id of Array.from(selected)) {
-                        await api.post(`/api/${tenantSlug}/payments/${id}/reject`, {
-                          reason: reason.trim() || undefined
-                        });
-                      }
-                      setSelected(new Set());
-                      void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
-                      void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
-                    } finally {
-                      setRejectBusy(false);
-                    }
-                  })();
-                  return;
-                }
-                if (isAdmin && allSelectedConfirmed) {
-                  const reason = window.prompt("Причина удаления в архив (обязательно для аудита):") ?? "";
-                  if (!reason.trim()) {
-                    window.alert("Укажите причину.");
-                    return;
-                  }
-                  if (
-                    !window.confirm(
-                      `В архив (удаление) ${selected.size} подтверждённых оплат? Будет сторно по балансу клиента.`
-                    )
-                  )
-                    return;
-                  void (async () => {
-                    setDeleteBusy(true);
-                    try {
-                      for (const id of Array.from(selected)) {
-                        const sp = new URLSearchParams();
-                        sp.set("cancel_reason_ref", reason.trim().slice(0, 128));
-                        await api.delete(`/api/${tenantSlug}/payments/${id}?${sp.toString()}`);
-                      }
-                      setSelected(new Set());
-                      void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
-                      void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
-                    } finally {
-                      setDeleteBusy(false);
-                    }
-                  })();
-                }
-              }}
-            >
-              {rejectBusy || deleteBusy ? "…" : "Удалить"}
-            </Button>
-            <Link href="/payments" className="ml-auto text-xs text-teal-700 underline dark:text-teal-400">
-              Все оплаты
-            </Link>
-      </div>
+      {archiveView ? (
+        <EprRestoreActionBar
+          selectedCount={selected.size}
+          total={total}
+          restoreDisabled={!restoreActionEnabled}
+          restoreHint={!isAdmin ? "Восстановление доступно только администратору" : undefined}
+          onRestore={handleRestore}
+          onClear={() => setSelected(new Set())}
+        />
+      ) : (
+        <EprFloatingActionBar
+          selectedCount={selected.size}
+          total={total}
+          confirmDisabled={!canAct || !allSelectedPending || selected.size === 0}
+          deleteDisabled={!deleteActionEnabled}
+          returnDisabled={!returnActionEnabled}
+          confirmHint={
+            !allSelectedPending && selected.size > 0
+              ? "Подтверждение только для статуса «Ожидание подтверждения»"
+              : undefined
+          }
+          returnHint={
+            selected.size > 0 && !allSelectedPending && !(isAdmin && allSelectedConfirmed)
+              ? "Возврат доступен для «Ожидание подтверждения» (и подтверждённых — для админа)"
+              : undefined
+          }
+          onConfirm={() => {
+            if (!allSelectedPending || selected.size === 0) return;
+            router.push(`/expeditor-payment-requests/confirm?ids=${Array.from(selected).join(",")}`);
+          }}
+          onDelete={() => {
+            if (!deleteActionEnabled) return;
+            setDeleteModalOpen(true);
+          }}
+          onReturn={handleReturnToExpeditor}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
 
-      {batchConfirmMut.data?.failed?.length ? (
-        <p className="text-sm text-destructive">
-          Не подтверждены: {batchConfirmMut.data.failed.map((f) => `${f.id} (${f.error})`).join(", ")}
-        </p>
-      ) : null}
+      <EprBulkDeleteModal
+        open={deleteModalOpen}
+        count={selected.size}
+        busy={rejectBusy || deleteBusy}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleBulkDelete}
+      />
+
+      <Dialog open={returnModalOpen} onOpenChange={(o) => !returnBusy && setReturnModalOpen(o)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Вернуть экспедитору на исправление</DialogTitle>
+            <DialogDescription>
+              Оплата ({selected.size}) будет возвращена экспедитору. Долг по заказу снова откроется,
+              а у экспедитора появится таймер на исправление. Если он не исправит оплату за
+              отведённое время, возврат отменяется.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="epr-return-reason" className="text-xs text-muted-foreground">
+                Причина (необязательно)
+              </Label>
+              <textarea
+                id="epr-return-reason"
+                rows={3}
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                placeholder="Например: неверная сумма или способ оплаты"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="epr-return-duration" className="text-xs text-muted-foreground">
+                Время на исправление
+              </Label>
+              <select
+                id="epr-return-duration"
+                className={cn(filterPanelSelectClassName, "h-10 w-full max-w-none bg-background")}
+                value={String(returnDurationMin)}
+                onChange={(e) => setReturnDurationMin(Number(e.target.value) || 30)}
+              >
+                <option value="5">5 минут</option>
+                <option value="10">10 минут</option>
+                <option value="15">15 минут</option>
+                <option value="30">30 минут</option>
+                <option value="60">1 час</option>
+                <option value="120">2 часа</option>
+                <option value="240">4 часа</option>
+                <option value="480">8 часов</option>
+                <option value="1440">24 часа</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={returnBusy}
+              onClick={() => setReturnModalOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              className="bg-amber-500 text-white hover:bg-amber-600"
+              disabled={returnBusy || selected.size === 0}
+              onClick={confirmReturnToExpeditor}
+            >
+              {returnBusy ? "Возврат…" : "Вернуть экспедитору"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={restoreModalOpen} onOpenChange={(o) => !restoreBusy && setRestoreModalOpen(o)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Восстановить оплату</DialogTitle>
+            <DialogDescription>
+              Выбранные оплаты ({selected.size}) будут восстановлены из архива. Баланс клиента и
+              распределения будут пересчитаны. Укажите причину восстановления — она сохранится в истории.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="epr-restore-comment" className="text-xs text-muted-foreground">
+                Причина восстановления
+              </Label>
+              <textarea
+                id="epr-restore-comment"
+                rows={3}
+                value={restoreComment}
+                onChange={(e) => setRestoreComment(e.target.value)}
+                placeholder="Например: оплата удалена по ошибке"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={restoreBusy}
+              onClick={() => setRestoreModalOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              className="bg-teal-700 text-white hover:bg-teal-800"
+              disabled={restoreBusy || selected.size === 0 || !restoreComment.trim()}
+              onClick={confirmRestore}
+            >
+              {restoreBusy ? "Восстановление…" : "Восстановить"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="text-right">
+        <Link href="/payments" className="text-xs text-[#063b36] hover:underline">
+          Все оплаты
+        </Link>
+      </div>
 
       {draft.tab !== "expeditor" ? (
         <p className="text-xs text-muted-foreground">
@@ -1294,6 +1407,6 @@ export function ExpeditorPaymentRequestsWorkspace() {
         onSave={(next) => tablePrefs.saveColumnLayout(next)}
         onReset={() => tablePrefs.resetColumnLayout()}
       />
-    </PageShell>
+    </EprPageLayout>
   );
 }

@@ -15,7 +15,11 @@ import { appendClientAuditLog } from "./clients.audit";
 import type { ClientDetailRow } from "./clients.detail";
 import { getClientDetail } from "./clients.detail";
 import type { UpdateClientInput } from "./clients.write.types";
-import { parseOptionalLatitude, parseOptionalLongitude } from "./clients.write.helpers";
+import {
+  normalizeClientPinfl,
+  parseOptionalLatitude,
+  parseOptionalLongitude
+} from "./clients.write.helpers";
 
 export async function updateClientFields(
   tenantId: number,
@@ -129,11 +133,7 @@ export async function updateClientFields(
     data.bank_mfo = input.bank_mfo?.trim() || null;
   }
   if (input.client_pinfl !== undefined) {
-    const pf = input.client_pinfl?.replace(/\D/g, "") ?? "";
-    if (pf.length > 0 && pf.length < 14) {
-      throw new Error("VALIDATION");
-    }
-    data.client_pinfl = pf.length > 0 ? pf.slice(0, 20) : null;
+    data.client_pinfl = normalizeClientPinfl(input.client_pinfl);
   }
   if (input.oked !== undefined) {
     data.oked = input.oked?.trim() || null;
@@ -152,6 +152,28 @@ export async function updateClientFields(
   }
   if (input.zone !== undefined) {
     data.zone = input.zone?.trim() || null;
+  }
+  if (input.warehouse_id !== undefined) {
+    if (input.warehouse_id === null) {
+      data.warehouse_id = null;
+    } else {
+      const wh = await prisma.warehouse.findFirst({
+        where: { id: input.warehouse_id, tenant_id: tenantId, is_active: true }
+      });
+      if (!wh) throw new Error("VALIDATION");
+      data.warehouse_id = input.warehouse_id;
+    }
+  }
+  if (input.cash_desk_id !== undefined) {
+    if (input.cash_desk_id === null) {
+      data.cash_desk_id = null;
+    } else {
+      const cd = await prisma.cashDesk.findFirst({
+        where: { id: input.cash_desk_id, tenant_id: tenantId, is_active: true }
+      });
+      if (!cd) throw new Error("VALIDATION");
+      data.cash_desk_id = input.cash_desk_id;
+    }
   }
   if (input.license_until !== undefined) {
     if (input.license_until === null || input.license_until === "") {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { firstMessagePerField, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
+import { firstMessagePerField, firstValidationUserHint, getZodFlattenFromApiErrorBody, type ZodFlattenDetails } from "@/lib/api-validation-details";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,40 @@ const emptyForm = {
   app_access: true,
   consignment: false
 };
+
+type StaffCreateFormState = typeof emptyForm;
+
+function staffCreateFieldMessageUzbek(field: string): string | undefined {
+  if (field === "first_name") return "Ism majburiy.";
+  if (field === "login") return "Login majburiy.";
+  if (field === "password") return "Parol kamida 6 belgidan iborat bo‘lishi kerak.";
+  return undefined;
+}
+
+function staffCreateFieldErrorsFromApi(flat: ZodFlattenDetails): Record<string, string> {
+  const raw = firstMessagePerField(flat);
+  const out: Record<string, string> = {};
+  for (const [key, msg] of Object.entries(raw)) {
+    out[key] = staffCreateFieldMessageUzbek(key) ?? msg;
+  }
+  return out;
+}
+
+function staffCreateValidationBanner(flat: ZodFlattenDetails): string {
+  const per = staffCreateFieldErrorsFromApi(flat);
+  for (const key of ["first_name", "login", "password"]) {
+    if (per[key]) return per[key];
+  }
+  return firstValidationUserHint(flat) ?? "Ma’lumotlarni tekshiring.";
+}
+
+function validateStaffCreateForm(form: StaffCreateFormState): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!form.first_name.trim()) errors.first_name = staffCreateFieldMessageUzbek("first_name")!;
+  if (!form.login.trim()) errors.login = staffCreateFieldMessageUzbek("login")!;
+  if (form.password.length < 6) errors.password = staffCreateFieldMessageUzbek("password")!;
+  return errors;
+}
 
 export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props) {
   const qc = useQueryClient();
@@ -118,16 +152,16 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
                 ? "auditors"
               : "expeditors";
       await api.post(`/api/${tenantSlug}/${path}`, {
-        first_name: form.first_name,
-        last_name: form.last_name || null,
-        middle_name: form.middle_name || null,
-        phone: form.phone || null,
-        territory: kind === "supervisor" ? null : form.territory || null,
-        code: kind === "supervisor" ? null : form.code || null,
-        pinfl: kind === "supervisor" ? null : form.pinfl || null,
-        branch: kind === "supervisor" ? null : form.branch || null,
-        position: kind === "supervisor" ? null : form.position || null,
-        login: form.login,
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim() || null,
+        middle_name: form.middle_name.trim() || null,
+        phone: form.phone.trim() || null,
+        territory: kind === "supervisor" ? null : form.territory.trim() || null,
+        code: kind === "supervisor" ? null : form.code.trim() || null,
+        pinfl: kind === "supervisor" ? null : form.pinfl.trim() || null,
+        branch: kind === "supervisor" ? null : form.branch.trim() || null,
+        position: kind === "supervisor" ? null : form.position.trim() || null,
+        login: form.login.trim(),
         password: form.password,
         product: kind === "supervisor" ? null : form.product || null,
         agent_type: kind === "supervisor" ? null : form.agent_type || null,
@@ -165,15 +199,26 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
       const ax = e as AxiosError<{ error?: string; message?: string }>;
       const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
       if (flat) {
-        setFieldErrors(firstMessagePerField(flat));
-        const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
-        setLocalError(top ? withApiSupportLine(top, e) : null);
+        setFieldErrors(staffCreateFieldErrorsFromApi(flat));
+        setLocalError(withApiSupportLine(staffCreateValidationBanner(flat), e));
       } else {
         setFieldErrors({});
         setLocalError(messageFromStaffCreateError(e));
       }
     }
   });
+
+  const submitCreate = () => {
+    setLocalError(null);
+    setFieldErrors({});
+    const clientErrors = validateStaffCreateForm(form);
+    if (Object.keys(clientErrors).length > 0) {
+      setFieldErrors(clientErrors);
+      setLocalError(Object.values(clientErrors)[0] ?? "Majburiy maydonlarni to‘ldiring.");
+      return;
+    }
+    createMut.mutate();
+  };
 
   const title =
     kind === "agent"
@@ -201,11 +246,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
                 type="button"
                 size="sm"
                 disabled={createMut.isPending}
-                onClick={() => {
-                  setLocalError(null);
-                  setFieldErrors({});
-                  createMut.mutate();
-                }}
+                onClick={submitCreate}
               >
                 {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
               </Button>
@@ -281,11 +322,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             Bekor
           </Button>
           <Button
-            onClick={() => {
-              setLocalError(null);
-              setFieldErrors({});
-              createMut.mutate();
-            }}
+            onClick={submitCreate}
             disabled={createMut.isPending}
           >
             {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
@@ -309,11 +346,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               type="button"
               size="sm"
               disabled={createMut.isPending}
-              onClick={() => {
-                setLocalError(null);
-                setFieldErrors({});
-                createMut.mutate();
-              }}
+              onClick={submitCreate}
             >
               {createMut.isPending ? "Saqlanmoqda…" : "Qo‘shish"}
             </Button>
@@ -507,11 +540,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             Bekor
           </Button>
           <Button
-            onClick={() => {
-              setLocalError(null);
-              setFieldErrors({});
-              createMut.mutate();
-            }}
+            onClick={submitCreate}
             disabled={createMut.isPending}
           >
             {createMut.isPending ? "Сохранение..." : "Добавить"}

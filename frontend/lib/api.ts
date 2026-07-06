@@ -46,7 +46,8 @@ function authRefreshAbsoluteUrl(): string {
 
 export const api = axios.create({
   baseURL,
-  headers: { "Content-Type": "application/json" }
+  headers: { "Content-Type": "application/json" },
+  withCredentials: true
 });
 
 type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean; _transientRetry?: boolean };
@@ -73,11 +74,11 @@ export function getRequestIdFromApiError(error: unknown): string | undefined {
   return pickRequestIdFromAxiosError(ax);
 }
 
-/** Support/telegram uchun qisqa qator; `requestId` bo‘lmasa bo‘sh qator. */
+/** Qo‘llab-quvvatlash uchun qisqa qator (interfeys tilida); `requestId` bo‘lmasa bo‘sh. */
 export function formatApiSupportReference(requestId?: string): string {
   const id = requestId?.trim();
   if (!id) return "";
-  return `Support: requestId ${id}`;
+  return `Код для поддержки: ${id}`;
 }
 
 let refreshInFlight: Promise<string | null> | null = null;
@@ -109,7 +110,8 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
     try {
       const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
         authRefreshAbsoluteUrl(),
-        { refreshToken }
+        refreshToken ? { refreshToken } : {},
+        { withCredentials: true }
       );
       const prevSlug = store.tenantSlug ?? disk.tenantSlug;
       const slugFromJwt = decodeAccessTokenTenantSlug(data.accessToken);
@@ -119,8 +121,12 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
         tenantSlug: slugFromJwt ?? prevSlug ?? undefined
       });
       return data.accessToken;
-    } catch {
-      store.clearSession();
+    } catch (err) {
+      const refreshStatus = axios.isAxiosError(err) ? err.response?.status : undefined;
+      // Faqat aniq rad etilgan refresh — tarmoq xatosi uchun sessiyani saqlab qolamiz
+      if (refreshStatus === 401 || refreshStatus === 403) {
+        store.clearSession();
+      }
       return null;
     } finally {
       refreshInFlight = null;
@@ -129,13 +135,20 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
   return refreshInFlight;
 }
 
-function redirectToLoginIfBrowser() {
+function redirectToLoginIfBrowser(reason?: "session_ended") {
   if (typeof window === "undefined") return;
   const current = `${window.location.pathname}${window.location.search}`;
-  const next = `/login?from=${encodeURIComponent(current)}`;
+  const params = new URLSearchParams({ from: current });
+  if (reason) params.set("reason", reason);
+  const next = `/login?${params.toString()}`;
   if (!window.location.pathname.startsWith("/login")) {
     window.location.assign(next);
   }
+}
+
+/** Backend «boshqa qurilmada kirildi / admin tugatdi» signali. */
+function isSessionRevoked(status: number | undefined, body: ApiErrorResponseBody): boolean {
+  return status === 401 && body?.error === "SESSION_REVOKED";
 }
 
 api.interceptors.request.use(async (config) => {
@@ -188,6 +201,15 @@ api.interceptors.response.use(
       const store = useAuthStore.getState();
       store.clearSession();
       redirectToLoginIfBrowser();
+      return Promise.reject(error);
+    }
+
+    // Ajratilgan sessiya tugatildi (boshqa qurilmada kirildi / admin tugatdi):
+    // refresh urinmaymiz — to'g'ridan-to'g'ri chiqib, bildirishnoma bilan login.
+    if (isSessionRevoked(status, body)) {
+      const store = useAuthStore.getState();
+      store.clearSession();
+      redirectToLoginIfBrowser("session_ended");
       return Promise.reject(error);
     }
 

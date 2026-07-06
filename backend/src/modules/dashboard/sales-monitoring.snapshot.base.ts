@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { clampPct, decToString } from "./dashboard.helpers";
+import { loadActiveBranchNames } from "../tenant-settings/tenant-settings.refs";
 import type { SalesMonitoringFilters } from "./sales-monitoring.types";
 import {
   monthBoundsUtc,
@@ -9,6 +10,8 @@ import {
   monitoringSalesScope,
   resolveSalesTerritoryTerms
 } from "./sales-monitoring.scope";
+import { loadMonitoringPlanAggregatesForFilters, monitoringPlanNote } from "../plans/plans.monitoring-aggregates";
+import type { MonitoringPlanAggregates } from "../plans/plans.monitoring-aggregates";
 
 export type SalesMonitoringBuildBase = {
   tenantId: number;
@@ -39,6 +42,8 @@ export type SalesMonitoringBuildBase = {
   order_success_pct: number | null;
   branch_options: string[];
   agg0: { s: Prisma.Decimal; orders_count: bigint; delivered_orders: bigint } | undefined;
+  planAggregates: MonitoringPlanAggregates;
+  plan_note: string;
 };
 
 export async function buildSalesMonitoringBase(
@@ -59,20 +64,7 @@ export async function buildSalesMonitoringBase(
     territoryTerms
   );
 
-  const branchRows = await prisma.user.groupBy({
-    by: ["branch"],
-    where: {
-      tenant_id: tenantId,
-      role: "agent",
-      is_active: true,
-      branch: { not: null }
-    },
-    _count: true
-  });
-  const branch_options = branchRows
-    .map((r) => (r.branch ?? "").trim())
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, "ru"));
+  const branch_options = await loadActiveBranchNames(tenantId);
 
   const returnLossScope = monitoringSalesScope(tenantId, from, to, filters, territoryTerms, {
     returnedOrdersOnly: true
@@ -177,10 +169,11 @@ export async function buildSalesMonitoringBase(
       COALESCE((SELECT refs FROM payment_refs), ARRAY[]::text[]) AS payment_refs
   `;
   const agg0 = baseRows;
+  const planAggregates = await loadMonitoringPlanAggregatesForFilters(tenantId, filters, territoryTerms);
   const factSales = decToString(agg0?.s ?? 0);
   const curOrd = Number(agg0?.orders_count ?? 0n);
   const deliveredOrd = Number(agg0?.delivered_orders ?? 0n);
-  const planSales = "0";
+  const planSales = decToString(planAggregates.total);
   const planNum = Number(planSales);
   const factNum = Number(factSales);
   const execution_pct =
@@ -245,6 +238,8 @@ export async function buildSalesMonitoringBase(
     aov,
     order_success_pct,
     branch_options,
-    agg0
+    agg0,
+    planAggregates,
+    plan_note: monitoringPlanNote(planAggregates.hasApprovedPlans)
   };
 }

@@ -116,7 +116,8 @@ export function ClientsTemplateFiltersPanel({
     () =>
       agentOptions.map((a) => ({
         value: String(a.id),
-        label: `${a.name}${a.login ? ` (${a.login})` : ""}`
+        label: `${a.name}${a.login ? ` (${a.login})` : ""}`,
+        searchText: a.login
       })),
     [agentOptions]
   );
@@ -124,12 +125,18 @@ export function ClientsTemplateFiltersPanel({
     () =>
       expeditorOptions.map((a) => ({
         value: String(a.id),
-        label: `${a.name}${a.login ? ` (${a.login})` : ""}`
+        label: `${a.name}${a.login ? ` (${a.login})` : ""}`,
+        searchText: a.login
       })),
     [expeditorOptions]
   );
   const supervisorOpts = useMemo(
-    () => supervisorOptions.map((a) => ({ value: String(a.id), label: a.name })),
+    () =>
+      supervisorOptions.map((a) => ({
+        value: String(a.id),
+        label: a.name,
+        searchText: a.login
+      })),
     [supervisorOptions]
   );
 
@@ -334,15 +341,15 @@ export function ClientsTemplateFiltersPanel({
   );
 
   return (
-    <div className="border-b border-gray-100 bg-white px-6 pb-4 pt-4 shadow-sm">
+    <div className="w-full rounded-lg border border-border bg-card px-4 pb-3 pt-4 shadow-sm sm:px-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-gray-800">Клиенты</h2>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs">
-            <span className="mr-1 text-[10px] text-gray-400">📅 Дата</span>
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+            <span className="mr-1 text-xs font-medium text-gray-600">📅 Дата</span>
             <button
               type="button"
-              className="text-gray-400 hover:text-gray-700"
+              className="text-gray-600 hover:text-gray-900"
               onClick={() => {
                 if (!draft.createdFrom || !draft.createdTo) return;
                 onDateRangeApplied(shiftYmd(draft.createdFrom, -1), shiftYmd(draft.createdTo, -1));
@@ -361,7 +368,7 @@ export function ClientsTemplateFiltersPanel({
             </button>
             <button
               type="button"
-              className="text-gray-400 hover:text-gray-700"
+              className="text-gray-600 hover:text-gray-900"
               onClick={() => {
                 if (!draft.createdFrom || !draft.createdTo) return;
                 onDateRangeApplied(shiftYmd(draft.createdFrom, 1), shiftYmd(draft.createdTo, 1));
@@ -399,9 +406,9 @@ export function ClientsTemplateFiltersPanel({
             type="button"
             title="Сбросить"
             onClick={onReset}
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white transition-colors hover:bg-gray-50"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-muted"
           >
-            <RotateCcw className="h-4 w-4 text-gray-500" />
+            <RotateCcw className="h-4 w-4 text-gray-600" />
           </button>
           <button
             type="button"

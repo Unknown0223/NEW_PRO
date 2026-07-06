@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils";
 
 /** Быстрые ссылки по приоритету (см. SETTINGS_STRUCTURE_PLAN.md). */
 const PRIORITY_QUICK_LINKS: { label: string; href: string }[] = [
+  { label: "Boshlang‘ich sozlash", href: "/settings/initial-setup" },
+  { label: "Tizim migratsiyasi", href: "/settings/system-migration" },
   { label: "Должности", href: "/settings/web-staff-position-presets" },
   { label: "Валюты", href: "/settings/currencies" },
   { label: "Цена", href: "/settings/prices" },
   { label: "Направление торговли", href: "/settings/sales-directions/trade" },
   { label: "Причины заявок", href: "/settings/reasons/request-types" },
-  { label: "Типы задач", href: "/settings/reasons/task-types" },
   { label: "Тип инвентаря", href: "/settings/inventory/type" },
   { label: "Принтеры", href: "/settings/equipment/printers" }
 ];
@@ -23,7 +24,11 @@ export default function SettingsHubPage() {
   const priorityLinks =
     role === "admin"
       ? PRIORITY_QUICK_LINKS
-      : PRIORITY_QUICK_LINKS.filter((l) => l.href !== "/settings/web-staff-position-presets");
+      : PRIORITY_QUICK_LINKS.filter(
+          (l) =>
+            l.href !== "/settings/web-staff-position-presets" &&
+            l.href !== "/settings/system-migration"
+        );
 
   return (
     <div className="space-y-6">
@@ -33,15 +38,21 @@ export default function SettingsHubPage() {
           Разделы выберите в списке слева. Быстрый доступ:
         </p>
         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          Классический список (пользователи, справочники по клиентам):{" "}
-          <Link href="/settings/spravochnik" className="text-primary underline-offset-4 hover:underline">
-            Справочники
+          Пользователи и команда — в боковом меню раздел{" "}
+          <Link href="/settings/spravochnik/agents" className="text-primary underline-offset-4 hover:underline">
+            Пользователи
           </Link>
           .
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Link href="/settings/appearance" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
+        <Link
+          href="/settings/initial-setup"
+          className={cn(buttonVariants({ variant: "default", size: "sm" }))}
+        >
+          Boshlang‘ich sozlash
+        </Link>
+        <Link href="/settings/appearance" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Тема и цвета
         </Link>
         <Link
@@ -50,11 +61,11 @@ export default function SettingsHubPage() {
         >
           Территория
         </Link>
-        <Link href="/settings/cash-desks" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          Кассы
-        </Link>
         <Link href="/settings/branches" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Филиалы
+        </Link>
+        <Link href="/settings/geo-boundaries" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Xarita chegaralari
         </Link>
         <Link href="/settings/units" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Единицы измерения

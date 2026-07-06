@@ -12,6 +12,7 @@ import {
 } from "../tenant-settings/finance-refs";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import type { ClientSales2Filters, ReportActor } from "./client-sales-2.types";
+import { buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import { intList, numOr, parseDate, strList } from "./client-sales-2.helpers";
 
 export function productFilterSql(f: ClientSales2Filters): Prisma.Sql {
@@ -137,10 +138,8 @@ export function buildOrderWhereSql(tenantId: number, f: ClientSales2Filters, act
     );
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`o.agent_id = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
-    parts.push(Prisma.sql`EXISTS (SELECT 1 FROM users su WHERE su.id = o.agent_id AND su.supervisor_user_id = ${actor.userId})`);
+  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
+    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`o.agent_id`, actor));
   }
 
   return Prisma.join(parts, " AND ");
@@ -197,10 +196,8 @@ export function buildClientScopeSql(tenantId: number, f: ClientSales2Filters, ac
     );
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`c.agent_id = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
-    parts.push(Prisma.sql`EXISTS (SELECT 1 FROM users su WHERE su.id = c.agent_id AND su.supervisor_user_id = ${actor.userId})`);
+  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
+    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`c.agent_id`, actor));
   }
 
   return Prisma.join(parts, " AND ");

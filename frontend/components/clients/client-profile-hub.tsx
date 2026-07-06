@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientAuditHistoryWorkspace } from "@/components/clients/client-audit-history-workspace";
 import { ClientHubBalanceStrip } from "@/components/clients/client-hub-balance-strip";
 import { ClientBalanceLedgerView } from "@/components/clients/client-balance-ledger-view";
 import {
@@ -375,7 +376,7 @@ function ClientProfileRequisitesAside({
 
           <div className="flex flex-wrap gap-x-3 gap-y-0 border-t border-border/50 pt-1.5">
             <Link
-              href={`/clients/${clientId}/details`}
+              href={`/clients/${clientId}/history`}
               className="text-[10px] font-medium text-primary underline-offset-2 hover:underline"
             >
               Карточка / журнал
@@ -640,7 +641,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
     return <p className="text-sm text-destructive">Клиент не найден или нет доступа.</p>;
   }
 
-  const title = c.client_code?.trim() ? `${c.client_code.trim()} ${c.name}` : c.name;
+  const title = (c.name ?? "").trim() || `Клиент #${c.id}`;
   const sub = [territoryLine(c, refDisplayMaps), c.phone?.trim()].filter(Boolean).join(" · ") || undefined;
 
   const lastAuditPatch = clientAuditMetaQ.data?.data.find((r) => r.action === "client.patch");
@@ -704,22 +705,24 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               Баланс
             </Link>
             <Link
-              href={`/clients/${clientId}/details`}
+              href={`/clients/${clientId}/history`}
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
             >
-              PDF, админ…
+              Журнал изменений
             </Link>
           </div>
         }
       />
 
-        <div className="grid gap-5 lg:grid-cols-3">
-          <div className="space-y-4 lg:col-span-2">
-            <ClientHubBalanceStrip
-              tenantSlug={tenantSlug}
-              clientId={clientId}
-              onOpenDebtsTab={() => setHubTab("debts")}
-            />
+        <div className={cn("grid gap-5", hubTab === "service" ? "grid-cols-1" : "lg:grid-cols-3")}>
+          <div className={cn(hubTab === "service" ? "" : "space-y-4 lg:col-span-2")}>
+            {hubTab !== "service" ? (
+              <ClientHubBalanceStrip
+                tenantSlug={tenantSlug}
+                clientId={clientId}
+                onOpenDebtsTab={() => setHubTab("debts")}
+              />
+            ) : null}
 
             <Tabs
               value={hubTab}
@@ -729,7 +732,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               }}
               className="gap-3"
             >
-            <TabsList className="inline-flex h-auto min-h-9 w-full flex-wrap gap-0.5 rounded-lg border border-border bg-slate-100 p-1 dark:bg-zinc-900/60">
+            <TabsList className="inline-flex h-auto min-h-9 w-full flex-wrap gap-0.5 rounded-lg border border-border bg-muted p-1 dark:bg-zinc-900/60">
               <TabsTrigger value="orders" className={hubTabTriggerClass}>
                 Заявки
               </TabsTrigger>
@@ -1298,30 +1301,28 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
             </TabsContent>
 
             <TabsContent value="service" className="mt-3 outline-none">
-              <Card className="border border-border/90 p-6 shadow-panel">
-                <p className="text-sm text-muted-foreground">
-                  Акт-сверка PDF, ручные движения счёта, журнал изменений и полная таблица реквизитов.
-                </p>
-                <Link
-                  href={`/clients/${clientId}/details`}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
-                >
-                  Открыть служебную карточку
-                </Link>
-              </Card>
+              <ClientAuditHistoryWorkspace
+                tenantSlug={tenantSlug}
+                clientId={clientId}
+                client={c}
+                variant="shell"
+                embedded={false}
+              />
             </TabsContent>
           </Tabs>
         </div>
 
-        <ClientProfileRequisitesAside
-          client={c}
-          clientId={clientId}
-          territoryWithZone={territoryWithZone}
-          addressMerged={addressMerged}
-          refDisplayMaps={refDisplayMaps}
-          lastAuditPatch={lastAuditPatch}
-          auditLoading={clientAuditMetaQ.isLoading}
-        />
+        {hubTab !== "service" ? (
+          <ClientProfileRequisitesAside
+            client={c}
+            clientId={clientId}
+            territoryWithZone={territoryWithZone}
+            addressMerged={addressMerged}
+            refDisplayMaps={refDisplayMaps}
+            lastAuditPatch={lastAuditPatch}
+            auditLoading={clientAuditMetaQ.isLoading}
+          />
+        ) : null}
         </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
+import { formatBonusRuleSnapshotLine } from "@/components/orders/order-bonus-snapshot-types";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -117,6 +118,20 @@ export function OrderBonusSection({
           </div>
         ) : (
           <div className="space-y-3">
+            {(data.applied_bonus_rules_snapshot?.length ?? 0) > 0 ? (
+              <div className="mb-4 rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Применённые правила (на момент заказа)
+                </p>
+                <ul className="space-y-1.5 text-sm">
+                  {data.applied_bonus_rules_snapshot!.map((s) => (
+                    <li key={`${s.rule_id}-${s.captured_at}`} className="text-foreground">
+                      {formatBonusRuleSnapshotLine(s)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {canEditOrderLines && (data.bonus_gift_swap_options?.length ?? 0) > 0 && !editingLines ? (
               <div className="mb-4 space-y-3 rounded-lg border border-emerald-500/35 bg-emerald-500/[0.04] p-3">
                 <p className="text-sm font-semibold">Замена бонус-подарка</p>

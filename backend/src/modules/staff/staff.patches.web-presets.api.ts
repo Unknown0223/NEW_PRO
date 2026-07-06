@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { listTenantAuditEvents } from "../audit-events/audit-events.service";
-import { WEB_PANEL_STAFF_ROLES } from "../../lib/tenant-user-roles";
+import { activeBranchNamesFromReferences } from "../tenant-settings/tenant-settings.refs";
+import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import {
   WEB_STAFF_POSITION_PRESET_AUDIT_ENTITY,
   WEB_STAFF_PRESET_MAX,
@@ -21,33 +22,21 @@ export async function listWebPanelStaffFilterOptions(tenantId: number): Promise<
   /** Tenant bo‘yicha saqlangan lavozim nomlari (shablonlar) */
   position_presets: string[];
 }> {
-  const [rows, tenant] = await Promise.all([
-    prisma.user.findMany({
-      where: { tenant_id: tenantId, role: { in: [...WEB_PANEL_STAFF_ROLES] } },
-      select: { branch: true, position: true }
-    }),
-    prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, settings: true }
-    })
-  ]);
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, settings: true }
+  });
   const presetRows =
     tenant != null
       ? await resolveWebStaffPresetsFromSettings(tenant.id, tenant.settings)
       : [];
   const presetLabelActive = activePresetLabels(presetRows);
-  const branches = new Set<string>();
-  const positions = new Set<string>();
-  for (const p of presetLabelActive) positions.add(p);
-  for (const r of rows) {
-    if (r.branch?.trim()) branches.add(r.branch.trim());
-    if (r.position?.trim()) positions.add(r.position.trim());
-  }
+  const ref = asRecord(asRecord(tenant?.settings).references);
+  const branches = activeBranchNamesFromReferences(ref);
   const sort = (a: string, b: string) => a.localeCompare(b, "ru");
-  const positionsArr = [...positions].sort(sort);
   return {
-    branches: [...branches].sort(sort),
-    positions: positionsArr,
+    branches,
+    positions: [...presetLabelActive].sort(sort),
     /** Faqat faol shablonlar nomi (formalar / filtr datalist) */
     position_presets: presetLabelActive
   };

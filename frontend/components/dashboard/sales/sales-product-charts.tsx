@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
 const pieLoading = () => (
-  <div className="h-[240px] animate-pulse rounded-lg bg-slate-100" aria-hidden />
+  <div className="h-[240px] animate-pulse rounded-lg bg-muted" aria-hidden />
 );
 
 const ReportsStatusPie = dynamic(
@@ -44,7 +44,7 @@ export function SalesProductCharts({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <section className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="По категориям продуктов"
           exportAction={
@@ -57,7 +57,7 @@ export function SalesProductCharts({
           <ReportsStatusPie slices={categoryPie} />
         </div>
       </section>
-      <section className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
+      <section className="rounded-2xl bg-card shadow-sm ring-1 ring-slate-200/70">
         <SalesSectionHeader
           title="По группам товаров"
           exportAction={

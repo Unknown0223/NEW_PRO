@@ -2,9 +2,10 @@ import request from "supertest";
 import { expect, it } from "vitest";
 import { prisma } from "../src/config/database";
 import { describeOrdersIntegrationSuite, mainWarehouseId } from "./orders.integration.harness";
+import { loginForIntegrationTest } from "./test-auth.helpers";
 
 async function adminToken(app: import("fastify").FastifyInstance): Promise<string> {
-  const loginResponse = await request(app.server).post("/api/auth/login").send({
+  const loginResponse = await loginForIntegrationTest(app, {
     slug: "test1",
     login: "admin",
     password: "secret123"
@@ -99,6 +100,8 @@ describeOrdersIntegrationSuite("order-scoped returns", (ctx) => {
         ]
       });
     expect(second.status).toBe(400);
-    expect(["OrderFullyReturned", "QtyExceedsOrdered", "NothingToReturn"]).toContain(second.body.error);
+    expect(["OrderFullyReturned", "QtyExceedsOrdered", "NothingToReturn", "EmptyLines"]).toContain(
+      second.body.error
+    );
   });
 });

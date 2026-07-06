@@ -76,11 +76,16 @@ export type ClientListRow = {
   latitude: string | null;
   longitude: string | null;
   zone: string | null;
+  warehouse_id: number | null;
+  warehouse_name: string | null;
+  cash_desk_id: number | null;
+  cash_desk_name: string | null;
   agent_id: number | null;
   agent_name: string | null;
   agent_assignments: ClientAgentAssignmentApi[];
   contact_persons: ContactPersonSlot[];
   created_at: string;
+  active_equipment_count?: number;
 };
 
 export type ListClientsQuery = {

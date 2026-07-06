@@ -21,7 +21,7 @@ function MiniMetric({
       className={
         accent
           ? "rounded-2xl border border-emerald-200 bg-emerald-50 p-5"
-          : "rounded-2xl border border-slate-200 bg-white p-5"
+          : "rounded-2xl border border-border bg-card p-5"
       }
     >
       <p className="text-sm font-semibold text-slate-500">{title}</p>
@@ -55,13 +55,13 @@ export function SalesControlSection({ data }: { data: SalesDashboardSnapshot }) 
                 {fmtCount(data.total_sales_summary.orders_count)} заказов · ОКБ {coverage_pct.toFixed(1)}%
               </p>
             </div>
-            <div className="rounded-xl bg-white/12 p-2 ring-1 ring-white/18">
+            <div className="rounded-xl bg-card/12 p-2 ring-1 ring-white/18">
               <TrendingUp className="h-4 w-4" />
             </div>
           </div>
-          <div className="sales-progress-stripes mt-4 h-2 overflow-hidden rounded-full bg-white/15">
+          <div className="sales-progress-stripes mt-4 h-2 overflow-hidden rounded-full bg-card/15">
             <div
-              className="h-full rounded-full bg-white"
+              className="h-full rounded-full bg-card"
               style={{ width: `${Math.min(100, coverage_pct)}%` }}
             />
           </div>

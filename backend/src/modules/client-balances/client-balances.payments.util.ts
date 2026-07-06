@@ -9,18 +9,40 @@ import {
   type PaymentMethodEntryDto
 } from "../tenant-settings/finance-refs";
 
+import {
+  DISCOUNT_SETTLEMENT_PAYMENT_LABEL,
+  DISCOUNT_SETTLEMENT_PAY_TYPE_KEY
+} from "./client-balances.constants";
 import type { ClientBalanceListQuery, ClientBalancePaymentTypeSummary } from "./client-balances.types";
+
+export function extendSprLabelsWithDiscountSettlement(sprLabels: string[]): string[] {
+  const has = sprLabels.some(
+    (l) => normPayTypeKey(l) === normPayTypeKey(DISCOUNT_SETTLEMENT_PAYMENT_LABEL)
+  );
+  return has ? sprLabels : [...sprLabels, DISCOUNT_SETTLEMENT_PAYMENT_LABEL];
+}
+
+export function paymentLabelToNormKey(label: string): string {
+  if (normPayTypeKey(label) === normPayTypeKey(DISCOUNT_SETTLEMENT_PAYMENT_LABEL)) {
+    return normPayTypeKey(DISCOUNT_SETTLEMENT_PAY_TYPE_KEY);
+  }
+  return normPayTypeKey(label);
+}
 
 export function paymentAmountsNetMinusUnpaid(
   sprLabels: string[],
   netNorm: Map<string, Prisma.Decimal> | undefined,
   unpaidNorm: Map<string, Prisma.Decimal> | undefined
 ): ClientBalancePaymentTypeSummary[] {
-  void sprLabels;
-  void netNorm;
   void unpaidNorm;
-  // Yangi logika: qarzdorlik/payment-method kesimi bekor qilindi, faqat umumiy balans ishlatiladi.
-  return [];
+  const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
+  if (labels.length === 0) return [];
+  const m = netNorm ?? new Map<string, Prisma.Decimal>();
+  return labels.map((l) => {
+    const nk = paymentLabelToNormKey(l);
+    const amt = m.get(nk) ?? new Prisma.Decimal(0);
+    return { label: l.trim(), amount: amt.toString() };
+  });
 }
 
 export function buildSummaryNetMinusUnpaid(
@@ -28,10 +50,20 @@ export function buildSummaryNetMinusUnpaid(
   netByExactType: Map<string, Prisma.Decimal>,
   unpaidGlobalNorm: Map<string, Prisma.Decimal>
 ): ClientBalancePaymentTypeSummary[] {
-  void sprLabels;
-  void netByExactType;
   void unpaidGlobalNorm;
-  return [];
+  const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
+  if (labels.length === 0) return [];
+  const netNorm = new Map<string, Prisma.Decimal>();
+  for (const [k, v] of netByExactType) {
+    const nk = paymentLabelToNormKey(k);
+    const prev = netNorm.get(nk) ?? new Prisma.Decimal(0);
+    netNorm.set(nk, prev.add(v));
+  }
+  return labels.map((l) => {
+    const nk = paymentLabelToNormKey(l);
+    const amt = netNorm.get(nk) ?? new Prisma.Decimal(0);
+    return { label: l.trim(), amount: amt.toString() };
+  });
 }
 
 /** «По доставке»: bitta zakaz — qarzni faqat zakazning to‘lov usuli ustunida (manfiy). */
@@ -52,6 +84,19 @@ export function normPayTypeKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+export function mapPaymentTypeKeyForAggregation(
+  entryKind: string | null | undefined,
+  paymentType: string | null | undefined,
+  entries: PaymentMethodEntryDto[]
+): string {
+  if (String(entryKind ?? "") === "discount_settlement") {
+    return normPayTypeKey(DISCOUNT_SETTLEMENT_PAY_TYPE_KEY);
+  }
+  const resolved =
+    resolvePaymentMethodRefToLabel(paymentType ?? "", entries) ?? (paymentType ?? "").trim();
+  return normPayTypeKey(resolved);
+}
+
 export function readSortDir(q: ClientBalanceListQuery): 1 | -1 {
   return q.sort_dir === "desc" ? -1 : 1;
 }
@@ -64,7 +109,8 @@ export function moneySortValueFromPaymentAmounts(
   if (!sortBy.startsWith("pay:")) return 0;
   if (!amounts || amounts.length === 0) return 0;
   const wanted = normPayTypeKey(sortBy.slice(4));
-  const idxByLabel = sprLabels.findIndex((x) => normPayTypeKey(x) === wanted);
+  const labels = extendSprLabelsWithDiscountSettlement(sprLabels);
+  const idxByLabel = labels.findIndex((x) => normPayTypeKey(x) === wanted);
   if (idxByLabel >= 0 && idxByLabel < amounts.length) {
     const v = Number(amounts[idxByLabel]?.amount ?? "0");
     return Number.isFinite(v) ? v : 0;
@@ -92,4 +138,3 @@ export function sqlIntIdToNumber(raw: unknown): number {
   }
   return NaN;
 }
-

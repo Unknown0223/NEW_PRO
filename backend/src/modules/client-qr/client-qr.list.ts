@@ -52,9 +52,9 @@ export async function listQrCodesForTenant(tenantId: number, q: QrListQuery) {
   return { data: rows, total, page: q.page, limit: q.limit };
 }
 
-export async function exportQrCodesCsv(tenantId: number, q: QrListQuery): Promise<string> {
+export async function exportQrCodesRows(tenantId: number, q: QrListQuery): Promise<QrListRow[]> {
   const where = buildWhere(tenantId, q);
-  const rows = await prisma.$queryRaw<QrListRow[]>(Prisma.sql`
+  return prisma.$queryRaw<QrListRow[]>(Prisma.sql`
     SELECT
       q.id,
       q.qr_code,
@@ -80,5 +80,9 @@ export async function exportQrCodesCsv(tenantId: number, q: QrListQuery): Promis
     WHERE ${where}
     ORDER BY q.created_at DESC, q.id DESC
   `);
+}
+
+export async function exportQrCodesCsv(tenantId: number, q: QrListQuery): Promise<string> {
+  const rows = await exportQrCodesRows(tenantId, q);
   return toCsv(rows);
 }

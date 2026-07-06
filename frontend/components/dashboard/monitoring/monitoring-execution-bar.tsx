@@ -7,7 +7,7 @@ export function MonitoringExecutionBar({ completion }: { completion: number | nu
   const p = has ? Math.min(100, Math.max(0, completion!)) : 0;
   return (
     <div className="flex items-center justify-end gap-2">
-      <div className="h-1.5 w-[100px] overflow-hidden rounded-full bg-slate-100">
+      <div className="h-1.5 w-[100px] overflow-hidden rounded-full bg-muted">
         <div
           className={cn(
             "h-full rounded-full transition-all",

@@ -11,7 +11,7 @@ export function ReturnContextStrip({ vm }: { vm: OrderCreateVm }) {
   return (
     <div className="flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:gap-4">
       {clientSummaryQ.data ? (
-        <p className="rounded-lg border border-slate-200/80 bg-white px-3 py-2">
+        <p className="rounded-lg border border-border/80 bg-card px-3 py-2">
           <span className="font-medium text-slate-800">Финансы: </span>
           баланс{" "}
           <span className="font-mono tabular-nums text-slate-900">

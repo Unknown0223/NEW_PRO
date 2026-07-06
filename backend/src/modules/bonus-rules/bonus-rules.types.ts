@@ -33,6 +33,10 @@ export type BonusRuleRow = {
   product_ids: number[];
   bonus_product_ids: number[];
   product_category_ids: number[];
+  scope_restrict_assortment: boolean;
+  scope_restrict_category: boolean;
+  /** Kamida bitta zakazda qo‘llangan — tahrirdan keyin faqat `valid_to` va `is_active` */
+  has_been_used?: boolean;
   target_all_clients: boolean;
   selected_client_ids: number[];
   is_manual: boolean;
@@ -80,6 +84,8 @@ export type CreateBonusRuleInput = {
   product_ids?: number[];
   bonus_product_ids?: number[];
   product_category_ids?: number[];
+  scope_restrict_assortment?: boolean;
+  scope_restrict_category?: boolean;
   target_all_clients?: boolean;
   selected_client_ids?: number[];
   is_manual?: boolean;

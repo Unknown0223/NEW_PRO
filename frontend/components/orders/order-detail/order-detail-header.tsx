@@ -1,6 +1,7 @@
 "use client";
 
 import { buttonVariants } from "@/components/ui/button-variants";
+import { HistoryIconButton } from "@/components/history/history-icon-button";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Clock } from "lucide-react";
 import Link from "next/link";
@@ -40,6 +41,15 @@ export function OrderDetailHeader({
           <Clock className="size-5 text-muted-foreground" aria-hidden />
           <span className="text-sm font-medium">История заказа</span>
         </Link>
+        <HistoryIconButton
+          module="orders"
+          section="zakaz"
+          entityType="order"
+          entityId={orderId}
+          variant="outline"
+          size="icon"
+          title="История заказа (быстрый просмотр)"
+        />
         {actions}
       </div>
     </div>

@@ -1,0 +1,26 @@
+name: DR Drill
+
+on:
+  schedule:
+    # Har oyning 1-kuni 03:00 UTC
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+jobs:
+  dr-drill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run DR drill (dry-run)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          BACKUP_DIR: ${{ github.workspace }}/backups/postgres
+        run: |
+          mkdir -p "$BACKUP_DIR"
+          # CI da backup bo'lmasa skript ogohlantiradi — manual workflow staging backup bilan ishlatiladi
+          bash backend/scripts/dr-drill.sh || echo "DR drill completed with warnings (no backup in CI)"

@@ -173,7 +173,7 @@ export async function workbookBufferToNakladnoyPreview(
   meta: { label: string; filename: string }
 ): Promise<NakladnoyPreviewResponse> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
+  await wb.xlsx.load(buffer as never);
 
   const pages: NakladnoyPreviewPage[] = [];
 

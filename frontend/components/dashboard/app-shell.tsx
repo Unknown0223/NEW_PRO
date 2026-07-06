@@ -7,12 +7,14 @@ import {
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
   dashboardStockNav,
   dashboardSuppliersNav,
   dashboardUsersNav,
   flattenMobileNavItems,
+  resolvePageBreadcrumb,
   type NavItem
 } from "@/components/dashboard/nav-config";
 import { Button } from "@/components/ui/button";
@@ -24,12 +26,15 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
+import { isFullHeightWorkspaceRoute } from "@/lib/full-height-workspace-routes";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending-bell";
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
+import { UserMenu } from "@/components/dashboard/user-menu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  CalendarRange,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -40,7 +45,9 @@ import {
   Receipt,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingCart,
+  Table2,
   TrendingUp,
   Truck,
   Users,
@@ -108,6 +115,7 @@ function permissionKeysFromQueryData(data: unknown): Set<string> | null {
 }
 
 function navItemVisible(item: NavItem, role: string | null, permissionKeys: Set<string> | null): boolean {
+  if (role === "admin") return true;
   if (item.showIfAnyPermission?.length && permissionKeys && item.showIfAnyPermission.some((k) => permissionKeys.has(k))) {
     return true;
   }
@@ -160,6 +168,45 @@ function kassaNavChildActive(pathname: string): boolean {
 
 function reportsNavChildActive(pathname: string): boolean {
   return dashboardReportsNav.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href));
+}
+
+function plansNavChildActive(pathname: string): boolean {
+  return dashboardPlansNav.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href));
+}
+
+function placeholderIcon(icon: "plans" | "pivot" | "audit") {
+  if (icon === "plans") return CalendarRange;
+  if (icon === "pivot") return Table2;
+  return ShieldCheck;
+}
+
+/**
+ * Ichki menyu bandi (bosib bo‘lmaydigan):
+ * - `placeholder` → sariq «скоро» (loyihada hali yo‘q, keyin qo‘shamiz);
+ * - aks holda → kulrang (disabled).
+ */
+function MutedNavLeaf({ item, withDot = false }: { item: NavItem; withDot?: boolean }) {
+  const ph = Boolean(item.placeholder);
+  return (
+    <span
+      className={cn(
+        withDot
+          ? "flex w-full select-none items-start gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium"
+          : "block select-none rounded-lg px-3 py-2 text-[13px] font-medium",
+        ph ? "cursor-default text-amber-300/90" : "cursor-not-allowed text-sidebar-foreground/40"
+      )}
+      title={ph ? "Скоро" : undefined}
+      aria-disabled
+    >
+      {withDot ? (
+        <span
+          className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", ph ? "bg-amber-300/70" : "bg-sidebar-foreground/25")}
+          aria-hidden
+        />
+      ) : null}
+      {item.label}
+    </span>
+  );
 }
 
 function linkIcon(href: string) {
@@ -223,7 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
   const permissionKeySet = permissionKeysFromQueryData(mePermsQ.data);
   const [openSection, setOpenSection] = useState<
-    "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "kassa" | "users" | null
+    "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users" | null
   >(null);
   const [reportsSettingsOpen, setReportsSettingsOpen] = useState(false);
   const [reportsSearch, setReportsSearch] = useState("");
@@ -234,6 +281,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const stockOpen = openSection === "stock";
   const suppliersOpen = openSection === "suppliers";
   const reportsOpen = openSection === "reports";
+  const plansOpen = openSection === "plans";
   const kassaOpen = openSection === "kassa";
   const ordersOpen = openSection === "orders";
   const invoicesOpen = openSection === "invoices";
@@ -267,6 +315,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setOpenSection("reports");
       return;
     }
+    if (plansNavChildActive(pathname)) {
+      setOpenSection("plans");
+      return;
+    }
     if (kassaNavChildActive(pathname)) {
       setOpenSection("kassa");
       return;
@@ -279,18 +331,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   function toggleSection(
-    section: "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "kassa" | "users"
+    section: "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users"
   ) {
     setOpenSection((prev) => (prev === section ? null : section));
   }
 
-  function logout() {
+  async function logout() {
+    const rt = useAuthStore.getState().refreshToken;
+    if (rt) {
+      try {
+        await api.post("/auth/logout", { refreshToken: rt });
+      } catch {
+        /* sessiyani baribir lokal tozalaymiz */
+      }
+    }
     clearSession();
     router.replace("/login");
     router.refresh();
   }
 
-  const isSettingsRoute = pathname.startsWith("/settings");
+  /** Sticky jadval sahifalari — viewport to‘liq; qolganlari kontent bo‘yicha */
+  const isFullHeightWorkspace = isFullHeightWorkspaceRoute(pathname);
+
+  /** Tepa header chap qismi uchun: joriy sahifa nomi (bo'sh joyni to'ldiradi). */
+  const breadcrumb = useMemo(() => resolvePageBreadcrumb(pathname), [pathname]);
 
   const uiPrefsQ = useQuery({
     queryKey: ["me", "ui-preferences", tenantSlug],
@@ -431,6 +495,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             }
 
+            if (entry.kind === "placeholder") {
+              const Icon = placeholderIcon(entry.icon);
+              return (
+                <div
+                  key={`placeholder-${entry.label}-${idx}`}
+                  className="flex cursor-default select-none items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-amber-300/90"
+                  title="Скоро — раздел в разработке"
+                  aria-disabled
+                >
+                  <ClientLucideIcon icon={Icon} className="size-[18px] shrink-0 opacity-90" />
+                  <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+                  <span className="rounded bg-amber-300/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-300/90">
+                    скоро
+                  </span>
+                </div>
+              );
+            }
+
             if (entry.kind === "orders") {
               return (
                 <div key="orders" className="flex flex-col gap-0.5">
@@ -438,20 +520,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("orders")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       ordersNavModuleOpen(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={ordersOpen}
                   >
+                    <ClientLucideIcon icon={ShoppingCart} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardOrdersNav.sectionTitle}</span>
                     {ordersOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={ShoppingCart} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardOrdersNav.sectionTitle}</span>
                   </button>
                   {ordersOpen && (
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -464,6 +546,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             {group.items
                               .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
                               .map((item) => {
+                                if (item.placeholder || item.disabled || item.href === "#") {
+                                  return (
+                                    <li key={`${group.title}-${item.label}-${item.href}`}>
+                                      <MutedNavLeaf item={item} />
+                                    </li>
+                                  );
+                                }
                                 const active = orderNavItemActive(pathname, searchParams, item.href);
                                 return (
                                   <li key={`${group.title}-${item.label}-${item.href}`}>
@@ -497,16 +586,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("invoices")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       invoicesNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={invoicesOpen}
                   >
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-primary/25 text-inherit ring-1 ring-sidebar-border/50">
-                      <ClientLucideIcon icon={FileText} className="size-[16px] shrink-0 opacity-90" />
-                    </span>
+                    <ClientLucideIcon icon={FileText} className="size-[18px] shrink-0 opacity-90" />
                     <span className="min-w-0 flex-1">{dashboardInvoicesNav.sectionTitle}</span>
                     {invoicesOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
@@ -524,13 +611,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           return (
                             <li key={`${item.label}-${item.href}`}>
                               {muted ? (
-                                <span className="flex w-full cursor-not-allowed items-start gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground/40">
-                                  <span
-                                    className="mt-1.5 size-1.5 shrink-0 rounded-full bg-sidebar-foreground/25"
-                                    aria-hidden
-                                  />
-                                  {item.label}
-                                </span>
+                                <MutedNavLeaf item={item} withDot />
                               ) : (
                                 <Link
                                   href={item.href}
@@ -567,20 +648,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("clients")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       clientsNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={clientsOpen}
                   >
+                    <ClientLucideIcon icon={Users} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardClientsNav.sectionTitle}</span>
                     {clientsOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={Users} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardClientsNav.sectionTitle}</span>
                   </button>
                   {clientsOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -590,9 +671,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         return (
                           <li key={`${item.label}-${item.href}`}>
                             {muted ? (
-                              <span className="block cursor-not-allowed rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40">
-                                {item.label}
-                              </span>
+                              <MutedNavLeaf item={item} />
                             ) : (
                               item.href === "/reports/settings" ? (
                                 <button
@@ -639,20 +718,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("dashboard")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       dashboardNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={dashboardOpen}
                   >
+                    <ClientLucideIcon icon={LayoutDashboard} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardHomeNav.sectionTitle}</span>
                     {dashboardOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={LayoutDashboard} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardHomeNav.sectionTitle}</span>
                   </button>
                   {dashboardOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -662,9 +741,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         return (
                           <li key={`${item.label}-${item.href}`}>
                             {muted ? (
-                              <span className="block cursor-not-allowed rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40">
-                                {item.label}
-                              </span>
+                              <MutedNavLeaf item={item} />
                             ) : (
                               <Link
                                 href={item.href}
@@ -694,20 +771,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("stock")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       stockNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={stockOpen}
                   >
+                    <ClientLucideIcon icon={Package} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardStockNav.sectionTitle}</span>
                     {stockOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={Package} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardStockNav.sectionTitle}</span>
                   </button>
                   {stockOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -717,9 +794,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         return (
                           <li key={`${item.label}-${item.href}`}>
                             {muted ? (
-                              <span className="block cursor-not-allowed rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40">
-                                {item.label}
-                              </span>
+                              <MutedNavLeaf item={item} />
                             ) : (
                               <Link
                                 href={item.href}
@@ -749,20 +824,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("suppliers")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       suppliersNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={suppliersOpen}
                   >
+                    <ClientLucideIcon icon={Lightbulb} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardSuppliersNav.sectionTitle}</span>
                     {suppliersOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={Lightbulb} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardSuppliersNav.sectionTitle}</span>
                   </button>
                   {suppliersOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -772,9 +847,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         return (
                           <li key={`${item.label}-${item.href}`}>
                             {muted ? (
-                              <span className="block cursor-not-allowed rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40">
-                                {item.label}
-                              </span>
+                              <MutedNavLeaf item={item} />
                             ) : (
                               <Link
                                 href={item.href}
@@ -813,7 +886,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("kassa")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       kassaNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
@@ -847,13 +920,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                               return (
                                 <li key={`${group.title}-${item.label}`}>
                                   {muted ? (
-                                    <span className={rowClass(false, true)}>
-                                      <span
-                                        className="mt-1.5 size-1.5 shrink-0 rounded-full bg-sidebar-foreground/25"
-                                        aria-hidden
-                                      />
-                                      {item.label}
-                                    </span>
+                                    <MutedNavLeaf item={item} withDot />
                                   ) : (
                                     <Link href={item.href} className={rowClass(active, false)}>
                                       <span
@@ -885,20 +952,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("reports")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       reportsNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                     )}
                     aria-expanded={reportsOpen}
                   >
+                    <ClientLucideIcon icon={BarChart3} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardReportsNav.sectionTitle}</span>
                     {reportsOpen ? (
                       <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
                     ) : (
                       <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
                     )}
-                    <ClientLucideIcon icon={BarChart3} className="size-[18px] shrink-0 opacity-90" />
-                    <span>{dashboardReportsNav.sectionTitle}</span>
                   </button>
                   {reportsOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
@@ -908,9 +975,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         return (
                           <li key={`${item.label}-${item.href}`}>
                             {muted ? (
-                              <span className="block cursor-not-allowed rounded-lg px-3 py-2 text-[13px] font-medium text-sidebar-foreground/40">
-                                {item.label}
-                              </span>
+                              <MutedNavLeaf item={item} />
                             ) : item.href === "/reports/settings" ? (
                               <button
                                 type="button"
@@ -948,6 +1013,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             }
 
+            if (entry.kind === "plans") {
+              const plansItems = dashboardPlansNav.items.filter((item) =>
+                navItemVisible(item, effectiveRole, permissionKeySet)
+              );
+              if (plansItems.length === 0) return null;
+              return (
+                <div key="plans" className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection("plans")}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      plansNavChildActive(pathname)
+                        ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
+                    )}
+                    aria-expanded={plansOpen}
+                  >
+                    <ClientLucideIcon icon={CalendarRange} className="size-[18px] shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1">{dashboardPlansNav.sectionTitle}</span>
+                    {plansOpen ? (
+                      <ClientLucideIcon icon={ChevronDown} className="size-4 shrink-0 opacity-80" />
+                    ) : (
+                      <ClientLucideIcon icon={ChevronRight} className="size-4 shrink-0 opacity-80" />
+                    )}
+                  </button>
+                  {plansOpen && (
+                    <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
+                      {plansItems.map((item) => {
+                        const active = isNavActive(pathname, item.href);
+                        return (
+                          <li key={`${item.label}-${item.href}`}>
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                "block rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
+                                active
+                                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                              )}
+                            >
+                              {item.label}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            }
+
             if (entry.kind === "users") {
               const rowClass = (active: boolean, muted: boolean) =>
                 cn(
@@ -964,7 +1081,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     type="button"
                     onClick={() => toggleSection("users")}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
                       usersNavChildActive(pathname)
                         ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/90 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
@@ -998,13 +1115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 return (
                                   <li key={`${group.title}-${item.label}`}>
                                     {muted ? (
-                                      <span className={rowClass(false, true)}>
-                                        <span
-                                          className="mt-1.5 size-1.5 shrink-0 rounded-full bg-sidebar-foreground/25"
-                                          aria-hidden
-                                        />
-                                        {item.label}
-                                      </span>
+                                      <MutedNavLeaf item={item} withDot />
                                     ) : (
                                       <Link href={item.href} className={rowClass(active, false)}>
                                         <span
@@ -1032,27 +1143,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             return null;
           })}
         </nav>
-        <div className="border-t border-sidebar-border/80 p-2">
-          <div className="mb-2 flex flex-col items-center gap-1">
-            <WorkSlotProfileBadge />
-            <div className="flex justify-center gap-1">
-              <WorkSlotsPendingBell tenantSlug={tenantSlug} />
-              <NotificationBell tenantSlug={tenantSlug} />
-            </div>
-          </div>
-          <Button
-            className="w-full border-sidebar-border/80 bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={logout}
-          >
-            Выход
-          </Button>
-        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          isFullHeightWorkspace
+            ? "overflow-hidden"
+            : "overflow-y-auto overflow-x-hidden overscroll-contain bg-background"
+        )}
+      >
+        <header className="sticky top-0 z-20 hidden shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-card/95 px-4 py-2 shadow-sm backdrop-blur-md md:flex">
+          <div className="flex min-w-0 items-center gap-3">
+            {breadcrumb ? (
+              <div className="flex min-w-0 items-center gap-1.5">
+                {breadcrumb.section ? (
+                  <>
+                    <span className="hidden truncate text-xs font-medium text-muted-foreground lg:inline">
+                      {breadcrumb.section}
+                    </span>
+                    <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground/50 lg:block" aria-hidden />
+                  </>
+                ) : null}
+                <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
+              </div>
+            ) : null}
+            <WorkSlotProfileBadge />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <WorkSlotsPendingBell tenantSlug={tenantSlug} />
+            <NotificationBell tenantSlug={tenantSlug} />
+            <UserMenu />
+          </div>
+        </header>
+
         <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -1102,16 +1226,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div
           className={cn(
-            "app-main-canvas flex min-h-0 flex-1 flex-col overflow-hidden",
-            isSettingsRoute && "min-h-0"
+            "app-main-canvas flex flex-col",
+            isFullHeightWorkspace
+              ? "min-h-0 flex-1 overflow-hidden"
+              : "h-auto min-h-0 shrink-0 grow-0"
           )}
         >
           <div
             className={cn(
-              "min-h-0 flex-1 flex flex-col",
-              isSettingsRoute
-                ? "overflow-hidden"
-                : "overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 sm:px-3 sm:py-5 md:px-4 md:py-6"
+              "flex flex-col",
+              isFullHeightWorkspace
+                ? "min-h-0 flex-1 overflow-hidden"
+                : "px-2 py-3 sm:px-3 sm:py-5 md:px-4 md:py-6"
             )}
           >
             {children}

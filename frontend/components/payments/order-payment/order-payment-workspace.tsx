@@ -22,7 +22,6 @@ import {
   prefillDraftFromTotalAmount,
   recomputeRowTotals,
   sumDraft,
-  sumExisting,
   sumTotalPaid,
   toIsoFromLocal,
   type OrderCashInContext

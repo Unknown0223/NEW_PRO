@@ -15,6 +15,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { agentDisplayName, type AgentListItem } from "@/lib/agent-display";
+import { activeBranchNamesFromProfile } from "@/lib/branch-options";
+import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { cn } from "@/lib/utils";
 
 const AgentTrackLeafletMapDynamic = dynamic(
@@ -82,6 +84,28 @@ export default function AgentTrackPage() {
       return data.data;
     }
   });
+
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "agent-track"],
+    enabled: Boolean(tenantSlug) && hydrated && !isAgent,
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{ references?: { branches?: Array<{ name: string; is_active?: boolean }> } }>(
+        `/api/${tenantSlug}/settings/profile`
+      );
+      return data;
+    }
+  });
+
+  const branchFilterOptions = useMemo(
+    () => activeBranchNamesFromProfile(profileQ.data?.references?.branches),
+    [profileQ.data]
+  );
+  const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(
+    !isAgent ? tenantSlug : null,
+    "agent-track"
+  );
+  const tradeDirectionFilterOptions = tradeDirectionsCatalog.labels;
 
   const agentsQ = useQuery({
     queryKey: [
@@ -244,7 +268,7 @@ export default function AgentTrackPage() {
                       disabled={filterOptQ.isLoading}
                     >
                       <option value="">— barchasi —</option>
-                      {(filterOptQ.data?.branches ?? []).map((b) => (
+                      {(branchFilterOptions).map((b) => (
                         <option key={b} value={b}>
                           {b}
                         </option>
@@ -308,7 +332,7 @@ export default function AgentTrackPage() {
                       disabled={filterOptQ.isLoading}
                     >
                       <option value="">— barchasi —</option>
-                      {(filterOptQ.data?.trade_directions ?? []).map((t) => (
+                      {(tradeDirectionFilterOptions).map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>

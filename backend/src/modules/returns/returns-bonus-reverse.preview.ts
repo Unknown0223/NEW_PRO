@@ -110,7 +110,15 @@ export function computeReverseLineSplit(input: {
   bonus_reverseTheoretical: number;
 }): Omit<
   PolkiAutoBonusPreviewLine,
-  "product_id" | "sku" | "name" | "max_paid" | "max_bonus"
+  | "product_id"
+  | "sku"
+  | "name"
+  | "max_paid"
+  | "max_bonus"
+  | "bonus_warehouse_product_id"
+  | "bonus_warehouse_product_name"
+  | "allocation_mode"
+  | "peresort_debt_amount"
 > {
   const rq = Math.max(0, input.return_qty);
   const maxPaid = Math.max(0, input.max_paid);
@@ -233,8 +241,6 @@ export async function previewPolkiAutoBonusReverse(
 
     const lite: ProductLite = {
       id: p.id,
-      sku: p.sku,
-      name: p.name,
       category_id: p.category_id
     };
     const rule = findQtyRuleForProduct(qtyRules, lite);
@@ -279,8 +285,12 @@ export async function previewPolkiAutoBonusReverse(
     const { p, pool, returnQty, paidReturn, ruleMeta } = d;
     let bonusTheoretical = 0;
     if (orderScoped) {
+      // Po zakaz: bonus — qoldiq pullikka qarab qoidaviy haqdan kelib chiqadi va
+      // savdodan ALOHIDA hisoblanadi. `return_qty` faqat pullik (savdo) miqdorini
+      // bildiradi; qaytariladigan bonus uning USTIGA qo'shiladi, shuning uchun
+      // `return_qty` bilan cheklamaymiz (faqat mijozdagi bonus qoldig'i bilan).
       bonusTheoretical = orderBonusByProduct.get(d.ln.product_id) ?? 0;
-      bonusTheoretical = Math.min(bonusTheoretical, pool.max_bonus, returnQty);
+      bonusTheoretical = Math.min(bonusTheoretical, pool.max_bonus);
     } else {
       const ruleBonus =
         d.rule != null ? computeReturnQtyBonusForRuleRow(d.rule, returnQty) : null;
@@ -305,16 +315,15 @@ export async function previewPolkiAutoBonusReverse(
       bonus_reverseTheoretical: bonusTheoretical
     });
 
-    if (orderScoped && paidReturn !== split.paid_qty) {
+    if (orderScoped) {
+      // Savdo va bonusni ALOHIDA belgilaymiz:
+      //  - savdo = kiritilgan miqdor (pullik qoldiqdan oshmaydi);
+      //  - bonus = qoidaviy haq (mijozdagi bonus qoldig'idan oshmaydi), real qaytariladi.
+      // «Долг бонус» faqat mijozda bonus dona fizik yetmaganda yuzaga keladi
+      // (odatda 0 — chunki bonus qoldiq bilan cheklangan).
       split.paid_qty = paidReturn;
-      split.bonus_qty = Math.min(
-        bonusTheoretical,
-        pool.max_bonus,
-        Math.max(0, returnQty - paidReturn)
-      );
-      const unallocated = Math.max(0, returnQty - split.paid_qty - split.bonus_qty);
-      const bonusShortfall = Math.max(0, bonusTheoretical - split.bonus_qty);
-      split.bonus_debt_qty = bonusShortfall + unallocated;
+      split.bonus_qty = Math.min(bonusTheoretical, pool.max_bonus);
+      split.bonus_debt_qty = Math.max(0, bonusTheoretical - split.bonus_qty);
       const unitBonus = pool.unit_price_bonus > 0 ? pool.unit_price_bonus : pool.unit_price_paid;
       split.bonus_debt_amount = split.bonus_debt_qty * unitBonus;
     }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -40,6 +41,8 @@ const createBodySchema = z.object({
   longitude: z.number().finite().nullable().optional(),
   is_active: z.boolean().optional(),
   is_closed: z.boolean().optional(),
+  accepts_client_payments: z.boolean().optional(),
+  accepts_discount_payments: z.boolean().optional(),
   links: z.array(linkSchema).optional()
 });
 
@@ -119,6 +122,15 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
     const body = createBodySchema.parse(request.body);
     try {
       const row = await createCashDesk(tenantId, body);
+      const viewer = getAccessUser(request);
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: Number.parseInt(viewer.sub, 10),
+        entityType: "cash_desk",
+        entityId: row.id,
+        action: "cash_desk.create",
+        payload: { name: body.name, code: body.code ?? null, is_active: body.is_active ?? true }
+      });
       return reply.status(201).send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -129,6 +141,9 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
       }
       if (msg === "CASH_DESK_OCCUPIED") {
         return sendApiError(reply, request, 409, "CashDeskOccupied");
+      }
+      if (msg === "CASH_DESK_PURPOSE_CONFLICT") {
+        return sendApiError(reply, request, 400, "CashDeskPurposeConflict");
       }
       throw e;
     }
@@ -175,6 +190,14 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
     if (!Number.isFinite(uid) || uid < 1) return sendApiError(reply, request, 400, "BadUser");
     try {
       const row = await openShift(tenantId, id, uid, body);
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: uid,
+        entityType: "cash_desk",
+        entityId: id,
+        action: "cash_desk.shift_open",
+        payload: { cash_desk_id: id, shift_id: (row as { id?: number })?.id ?? null }
+      });
       return reply.status(201).send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -203,6 +226,14 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
     if (!Number.isFinite(uid) || uid < 1) return sendApiError(reply, request, 400, "BadUser");
     try {
       const row = await closeShift(tenantId, id, shiftId, uid, body);
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: uid,
+        entityType: "cash_desk",
+        entityId: id,
+        action: "cash_desk.shift_close",
+        payload: { cash_desk_id: id, shift_id: shiftId }
+      });
       return reply.send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -223,6 +254,15 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
     try {
       const row = await patchCashDesk(tenantId, id, body);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
+      const viewer = getAccessUser(request);
+      await appendTenantAuditEvent({
+        tenantId,
+        actorUserId: Number.parseInt(viewer.sub, 10),
+        entityType: "cash_desk",
+        entityId: id,
+        action: "cash_desk.update",
+        payload: { fields: Object.keys(body), ...body }
+      });
       return reply.send({ data: row });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -233,6 +273,9 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
       }
       if (msg === "CASH_DESK_OCCUPIED") {
         return sendApiError(reply, request, 409, "CashDeskOccupied");
+      }
+      if (msg === "CASH_DESK_PURPOSE_CONFLICT") {
+        return sendApiError(reply, request, 400, "CashDeskPurposeConflict");
       }
       throw e;
     }

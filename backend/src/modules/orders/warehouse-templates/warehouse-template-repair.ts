@@ -67,8 +67,8 @@ export function stripInvalidPageSetupDpi(ws: ExcelJS.Worksheet): void {
   const ps = ws.pageSetup;
   if (!ps) return;
   const m = ps as ExcelJS.PageSetup & { horizontalDpi?: number; verticalDpi?: number };
-  if (m.horizontalDpi === EXCELJS_BAD_DPI) delete m.horizontalDpi;
-  if (m.verticalDpi === EXCELJS_BAD_DPI) delete m.verticalDpi;
+  if (m.horizontalDpi === EXCELJS_BAD_DPI) Reflect.deleteProperty(m, "horizontalDpi");
+  if (m.verticalDpi === EXCELJS_BAD_DPI) Reflect.deleteProperty(m, "verticalDpi");
 }
 
 function worksheetHasVisibleData(ws: ExcelJS.Worksheet): boolean {

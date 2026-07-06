@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { clampPct, decToString } from "./dashboard.helpers";
+import { executionPctFromPlanFact } from "../plans/plans.monitoring-aggregates";
 import type { SalesMonitoringSnapshot } from "./sales-monitoring.types";
 import type { SalesMonitoringBuildBase } from "./sales-monitoring.snapshot.base";
 
@@ -102,18 +103,21 @@ export async function buildSalesMonitoringBreakdown(
     if (cmp !== 0) return cmp;
     return a.branch.localeCompare(b.branch, "ru");
   });
+  const planByBranch = base.planAggregates.byBranch;
   const branch_performance = branchSorted.map((r, idx) => {
     const akbN = Number(r.akb);
     const okbN = okbByBranch.get(r.branch) ?? 0;
     const cov = okbN > 0 ? clampPct((akbN / okbN) * 100) : 0;
+    const planDec = planByBranch.get(r.branch) ?? new Prisma.Decimal(0);
+    const factNum = Number(decToString(r.fact_sales));
     return {
       branch: r.branch,
       akb: akbN,
       okb: okbN,
       coverage_pct: cov,
-      plan_sales: "0",
+      plan_sales: decToString(planDec),
       fact_sales: decToString(r.fact_sales),
-      execution_pct: null as number | null,
+      execution_pct: executionPctFromPlanFact(planDec, factNum),
       rank: idx + 1
     };
   });
@@ -190,18 +194,20 @@ export async function buildSalesMonitoringBreakdown(
       ORDER BY sales_sum DESC
     `
   ]);
-  const planZero = new Prisma.Decimal(0);
+  const planBySupervisor = base.planAggregates.bySupervisor;
   const supervisor_performance = supRows.map((r, idx) => {
     const fact = new Prisma.Decimal(r.fact_sales.toString());
-    const gap = planZero.sub(fact);
+    const planDec = planBySupervisor.get(r.supervisor_id) ?? new Prisma.Decimal(0);
+    const factNum = Number(decToString(fact));
+    const gap = planDec.sub(fact);
     return {
       supervisor_id: r.supervisor_id,
       supervisor_name: (r.supervisor_name ?? "—").trim() || "—",
       akb: Number(r.akb),
       orders_count: Number(r.orders_count ?? 0n),
-      plan_sales: "0",
+      plan_sales: decToString(planDec),
       fact_sales: decToString(r.fact_sales),
-      execution_pct: null as number | null,
+      execution_pct: executionPctFromPlanFact(planDec, factNum),
       plan_fact_gap: decToString(gap),
       rank: idx + 1
     };

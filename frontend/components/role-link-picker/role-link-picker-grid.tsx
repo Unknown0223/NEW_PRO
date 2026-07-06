@@ -157,7 +157,7 @@ export function RoleLinkPickerGrid({
                         checked={allOn}
                         disabled={allIds.length === 0}
                         aria-label={`Выбрать всех в роли «${col.label}»`}
-                        className="size-3.5 shrink-0 rounded border-2 border-white/80 bg-white/20 accent-white sm:size-4"
+                        className="size-3.5 shrink-0 rounded border-2 border-white/80 bg-card/20 accent-white sm:size-4"
                         onChange={(e) => {
                           setLocal((prev) => {
                             let next = cloneRoleSets(roleOrder, prev);

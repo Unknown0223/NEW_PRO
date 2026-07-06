@@ -40,6 +40,8 @@ export async function createPolkiMirrorZayavka(
     refusalReasonRef: string | null;
     /** Po zakaz — manba zakaz raqami (izoh) */
     sourceOrderNumber?: string | null;
+    /** Hujjatni yaratgan foydalanuvchi — manba kanali (web/mobil) shu orqali aniqlanadi. */
+    actorUserId?: number | null;
   }
 ): Promise<number> {
   const creates: Prisma.OrderItemCreateWithoutOrderInput[] = [];
@@ -113,5 +115,21 @@ export async function createPolkiMirrorZayavka(
       ...(creates.length > 0 ? { items: { create: creates } } : {})
     }
   });
+
+  // Yaratuvchini qayd etamiz — ro'yxatda manba ikonkasi (web/mobil) shu jurnaldan
+  // aniqlanadi. Aks holda ekspeditor (mobil) yaratgan vazvrat ham «web» bo'lib ko'rinardi.
+  const actorUserId =
+    params.actorUserId != null && Number.isFinite(params.actorUserId) && params.actorUserId > 0
+      ? params.actorUserId
+      : null;
+  await tx.orderStatusLog.create({
+    data: {
+      order_id: created.id,
+      from_status: "new",
+      to_status: "returned",
+      user_id: actorUserId
+    }
+  });
+
   return created.id;
 }

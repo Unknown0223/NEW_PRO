@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import request from "supertest";
 import { Prisma } from "@prisma/client";
-import { afterAll, beforeAll, describe, expect } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
 import { prisma } from "../src/config/database";
@@ -40,6 +40,72 @@ export async function ensureOrdersIntegrationStock(): Promise<void> {
   });
   const plenty = new Prisma.Decimal("1000000");
   const zero = new Prisma.Decimal("0");
+  const sku2 = products.find((p) => p.sku === "SKU-002");
+  const sku3 = products.find((p) => p.sku === "SKU-003");
+  const sku1 = products.find((p) => p.sku === "SKU-001");
+  if (sku2) {
+    await prisma.bonusRule.updateMany({
+      where: { tenant_id: tenant.id, name: "[seed] Chegirma 10%" },
+      data: { once_per_client: false, product_ids: [sku2.id] }
+    });
+  }
+  if (sku3) {
+    await prisma.bonusRule.updateMany({
+      where: { tenant_id: tenant.id, name: "[seed] Min summa 500 000" },
+      data: {
+        discount_pct: null,
+        bonus_product_ids: [sku3.id],
+        free_qty: 1,
+        product_category_ids: sku1?.category_id ? [sku1.category_id] : []
+      }
+    });
+  }
+  await prisma.bonusRule.updateMany({
+    where: {
+      tenant_id: tenant.id,
+      name: "[seed] Oraliq 10–30 dona (qadam + cheklov)"
+    },
+    data: { is_active: false }
+  });
+  const group =
+    (await prisma.interchangeableProductGroup.findFirst({
+      where: { tenant_id: tenant.id, name: "Seed — qaytarish guruhi" }
+    })) ??
+    (await prisma.interchangeableProductGroup.create({
+      data: { tenant_id: tenant.id, name: "Seed — qaytarish guruhi", is_active: true }
+    }));
+  await prisma.interchangeableProductGroup.update({
+    where: { id: group.id },
+    data: { is_active: true }
+  });
+  for (const p of products) {
+    await prisma.interchangeableGroupProduct.upsert({
+      where: { group_id_product_id: { group_id: group.id, product_id: p.id } },
+      create: { group_id: group.id, product_id: p.id },
+      update: {}
+    });
+  }
+  const activeGroups = await prisma.interchangeableProductGroup.findMany({
+    where: { tenant_id: tenant.id, is_active: true },
+    select: { id: true }
+  });
+  for (const g of activeGroups) {
+    await prisma.interchangeableGroupPriceType.deleteMany({ where: { group_id: g.id } });
+  }
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: {
+      settings: {
+        return_filter: {
+          period_enabled: false,
+          period_unit: "day",
+          period_value: 30,
+          balance_zero_enabled: false
+        },
+        bonus_stack: { mode: "all", max_units: null, forbid_apply_all_eligible: false }
+      } as object
+    }
+  });
   for (const p of products) {
     await prisma.stock.upsert({
       where: {
@@ -84,6 +150,10 @@ export function describeOrdersIntegrationSuite(
         });
         expect(agent).toBeTruthy();
         seedAgentUserId = agent!.id;
+      });
+
+      beforeEach(async () => {
+        await ensureOrdersIntegrationStock();
       });
 
       afterAll(async () => {

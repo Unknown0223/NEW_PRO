@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { loadActiveBranchNames } from "../tenant-settings/tenant-settings.refs";
 import {
   paymentTypesFromMethodEntries,
   resolveCurrencyEntries,
@@ -25,7 +26,7 @@ export async function listClientBalanceTerritoryOptions(
     AND: [clientScopeWhere, field]
   });
 
-  const [regions, cities, districts, zones, neighborhoods, branches] = await Promise.all([
+  const [regions, cities, districts, zones, neighborhoods, branchNames] = await Promise.all([
     prisma.client.findMany({
       where: withField({ region: { not: null } }),
       select: { region: true },
@@ -56,18 +57,7 @@ export async function listClientBalanceTerritoryOptions(
       distinct: ["neighborhood"],
       orderBy: { neighborhood: "asc" }
     }),
-    prisma.user.findMany({
-      where: {
-        tenant_id: tenantId,
-        role: "agent",
-        is_active: true,
-        branch: { not: null },
-        clients_as_agent: { some: clientScopeWhere }
-      },
-      select: { branch: true },
-      distinct: ["branch"],
-      orderBy: { branch: "asc" }
-    })
+    loadActiveBranchNames(tenantId)
   ]);
 
   return {
@@ -76,6 +66,6 @@ export async function listClientBalanceTerritoryOptions(
     districts: districts.map((r) => r.district!).filter((x) => x.trim() !== ""),
     zones: zones.map((r) => r.zone!).filter((x) => x.trim() !== ""),
     neighborhoods: neighborhoods.map((r) => r.neighborhood!).filter((x) => x.trim() !== ""),
-    branches: branches.map((r) => r.branch!).filter((x) => x.trim() !== "")
+    branches: branchNames
   };
 }

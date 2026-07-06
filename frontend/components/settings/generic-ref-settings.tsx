@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { saveProfileReferenceArrayItem } from "@/lib/settings-profile-save";
 import { api } from "@/lib/api";
 import {
   firstMessagePerField,
@@ -163,11 +164,15 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
     2 + (showCode ? 1 : 0) + (showColor ? 1 : 0) + (showSortOrder ? 1 : 0) + (showComment ? 1 : 0) + 1;
 
   const saveMut = useMutation({
-    mutationFn: async (next: GenericRefEntry[]) => {
+    mutationFn: async (payload: { item: GenericRefEntry; editId: string | null }) => {
       if (!tenantSlug) throw new Error("no tenant");
-      await api.patch(`/api/${tenantSlug}/settings/profile`, {
-        references: { [profileRefKey]: next },
-      });
+      await saveProfileReferenceArrayItem(
+        tenantSlug,
+        profileRefKey,
+        payload.item,
+        payload.editId,
+        sortEntries
+      );
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
@@ -239,8 +244,7 @@ export function GenericRefSettingsPage({ config }: { config: GenericRefConfig })
       active,
       color: showColor ? (color.trim() || null) : null,
     };
-    const merged = editId ? rows.map((x) => (x.id === editId ? next : x)) : [...rows, next];
-    saveMut.mutate(sortEntries(merged));
+    saveMut.mutate({ item: next, editId });
   }
 
   if (!hydrated) {

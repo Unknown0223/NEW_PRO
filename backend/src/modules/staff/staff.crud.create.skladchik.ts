@@ -22,7 +22,7 @@ export async function createSkladchikStaff(
   const ms =
     input.max_sessions != null && Number.isInteger(input.max_sessions) && input.max_sessions >= 1
       ? input.max_sessions
-      : 4;
+      : 1;
   const whIds = normalizePositiveIntIds(input.warehouse_ids ?? []);
   await assertWarehousesBelongToTenant(tenantId, whIds);
   const displayName = [input.last_name, input.first_name, input.middle_name]

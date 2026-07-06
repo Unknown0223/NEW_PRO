@@ -114,8 +114,7 @@ export async function getSalesMonitoringSummary(
       plan_sales: base.planSales,
       fact_sales: base.factSales,
       execution_pct: base.execution_pct,
-      plan_note:
-        "Месячный план из отдельной таблицы пока не подключён: plan_sales=0, выполнение не считается. Подключите источник плана (например monthly_sales_plan) для KPI план/факт."
+      plan_note: base.plan_note
     },
     summary: {
       orders_count: curOrd,

@@ -19,7 +19,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 export { defaultMonitoringDraft } from "@/components/dashboard/monitoring/utils";
 
 const selectCls =
-  "flex h-9 min-w-0 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 shadow-none outline-none transition hover:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-500/30";
+  "flex h-9 min-w-0 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-[13px] font-medium text-slate-700 shadow-none outline-none transition hover:border-teal-300 focus-visible:ring-2 focus-visible:ring-teal-500/30";
 
 export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
   appliedDraft: MonitoringDraft;
@@ -79,8 +79,8 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
   }, []);
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-white p-0 shadow-sm ring-1 ring-slate-200/70">
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
+    <section className="overflow-hidden rounded-2xl bg-card p-0 shadow-sm ring-1 ring-slate-200/70">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <h2 className="shrink-0 text-[17px] font-semibold text-slate-900">Мониторинг продаж и планов</h2>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -92,10 +92,10 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
             />
           </div>
 
-          <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-border bg-card">
             <button
               type="button"
-              className="grid h-9 w-9 place-items-center border-r border-slate-200 hover:bg-slate-50"
+              className="grid h-9 w-9 place-items-center border-r border-border hover:bg-muted"
               onClick={() => shiftMonth(-1)}
               aria-label="Предыдущий месяц"
             >
@@ -104,7 +104,7 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
             <button
               ref={periodAnchorRef}
               type="button"
-              className="flex h-9 min-w-[8.75rem] items-center justify-center gap-1.5 px-3 text-[13px] font-medium text-slate-700 hover:bg-slate-50 sm:min-w-[10rem]"
+              className="flex h-9 min-w-[8.75rem] items-center justify-center gap-1.5 px-3 text-[13px] font-medium text-slate-700 hover:bg-muted sm:min-w-[10rem]"
               onClick={() => setPeriodPickerOpen((o) => !o)}
             >
               <Calendar className="h-3.5 w-3.5 shrink-0 text-teal-600" />
@@ -112,7 +112,7 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
             </button>
             <button
               type="button"
-              className="grid h-9 w-9 place-items-center border-l border-slate-200 hover:bg-slate-50"
+              className="grid h-9 w-9 place-items-center border-l border-border hover:bg-muted"
               onClick={() => shiftMonth(1)}
               aria-label="Следующий месяц"
             >
@@ -167,7 +167,7 @@ export const MonitoringFiltersBar = memo(function MonitoringFiltersBar(props: {
         </div>
       </div>
 
-      <div className="border-t border-slate-100 px-3 pb-3 sm:hidden">
+      <div className="border-t border-border px-3 pb-3 sm:hidden">
         <MonitoringSectionSettingsFilter
           visibleSectionIds={visibleSectionIds}
           onVisibleChange={onVisibleSectionsChange}

@@ -11,6 +11,39 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export type OrdersDateMode = "created" | "order" | "ship";
 const VALID_DATE_MODES = new Set<OrdersDateMode>(["created", "order", "ship"]);
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function localYmd(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * Joriy kun (bugun) — URLda sana bo‘lmasa, ro‘yxat va «Найдено» standart shu
+ * kun bo‘yicha ko‘rsatiladi. Boshqa kunlar/oralik faqat filtr tanlab «Применить»
+ * bosilganda ochiladi.
+ */
+export function defaultOrdersDayRange(): { date_from: string; date_to: string } {
+  const today = localYmd(new Date());
+  return { date_from: today, date_to: today };
+}
+
+/** URLda `date_from` + `date_to` bo‘lsa — ro‘yxat so‘rovi ruxsat etiladi */
+export function ordersListQueryReady(f: OrdersUrlFilters): boolean {
+  return Boolean(f.date_from?.trim() && f.date_to?.trim());
+}
+
+export function withDefaultOrdersDateRange(f: OrdersUrlFilters): OrdersUrlFilters {
+  if (f.date_from && f.date_to) return f;
+  const defaults = defaultOrdersDayRange();
+  return {
+    ...f,
+    date_from: f.date_from || defaults.date_from,
+    date_to: f.date_to || defaults.date_to
+  };
+}
+
 export type OrdersUrlFilters = {
   status: string;
   order_type: string;
@@ -40,6 +73,10 @@ export type OrdersUrlFilters = {
   visit_weekday: string;
   /** Jadval «Тип цены» → API `price_type` */
   price_type: string;
+  /** Skidka muammosi: not_applied | cash_desk_missing | bonus_required | any */
+  discount_alert: string;
+  bonus_alert: string;
+  order_alert: string;
 };
 
 export type OrdersFilterVisibility = {
@@ -61,6 +98,9 @@ export type OrdersFilterVisibility = {
   territory1: boolean;
   territory2: boolean;
   territory3: boolean;
+  discountAlert: boolean;
+  bonusAlert: boolean;
+  orderAlert: boolean;
 };
 
 export const ORDERS_FILTER_VISIBILITY_STORAGE_KEY = "salesdoc.orders.filter-visibility.v1";
@@ -83,7 +123,10 @@ export const DEFAULT_ORDERS_FILTER_VISIBILITY: OrdersFilterVisibility = {
   tradeDirection: true,
   territory1: true,
   territory2: true,
-  territory3: true
+  territory3: true,
+  discountAlert: true,
+  bonusAlert: true,
+  orderAlert: true
 };
 
 /** Modalda bo‘limlar bo‘yicha tartib */
@@ -101,7 +144,10 @@ export const FILTER_VISIBILITY_GROUPS: Array<{
       "paymentLinkedType",
       "priceType",
       "day",
-      "consignment"
+      "consignment",
+      "discountAlert",
+      "bonusAlert",
+      "orderAlert"
     ]
   },
   {
@@ -130,7 +176,10 @@ const FILTER_VISIBILITY_LABELS: Record<keyof OrdersFilterVisibility, string> = {
   tradeDirection: "Направление торговли",
   territory1: "Зона",
   territory2: "Область",
-  territory3: "Город"
+  territory3: "Город",
+  discountAlert: "Проблемы со скидкой",
+  bonusAlert: "Проблемы с бонусом",
+  orderAlert: "Проблемные заявки"
 };
 
 export const FILTER_VISIBILITY_ITEMS: Array<{ key: keyof OrdersFilterVisibility; label: string }> =
@@ -183,6 +232,9 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
   const rawWd = searchParams.get("visit_weekday")?.trim() ?? "";
   const visit_weekday = /^[1-7]$/.test(rawWd) ? rawWd : "";
   const price_type = (searchParams.get("price_type")?.trim() ?? "").slice(0, 64);
+  const discount_alert = (searchParams.get("discount_alert")?.trim() ?? "").slice(0, 32);
+  const bonus_alert = (searchParams.get("bonus_alert")?.trim() ?? "").slice(0, 32);
+  const order_alert = (searchParams.get("order_alert")?.trim() ?? "").slice(0, 32);
   return {
     status,
     order_type,
@@ -207,7 +259,10 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
     payment_method_ref,
     request_type_ref,
     visit_weekday,
-    price_type
+    price_type,
+    discount_alert,
+    bonus_alert,
+    order_alert
   };
 }
 
@@ -317,6 +372,8 @@ export function rowStatusPatchError(err: unknown): string {
   if (code === "ForbiddenRevert") return "Oldingi bosqichga qaytarish faqat admin uchun.";
   if (code === "ForbiddenReopenCancelled") return "Bekor qilingan zakazni qayta ochish faqat admin uchun.";
   if (code === "ForbiddenOperatorCancelLate") return "Bu bosqichda bekor qilish taqiqlangan.";
+  if (code === "ApprovalPending") return "Tasdiqlash zanjirini kuting — joriy tasdiqlovchi tasdiqlashi kerak.";
+  if (code === "ApprovalRejected") return "Tasdiqlash rad etilgan — qayta sozlash kerak.";
   if (code === "NotFound") return "Zakaz topilmadi.";
   const flat = getZodFlattenFromApiErrorBody(err.response?.data);
   const hint = flat ? firstValidationUserHint(flat) : undefined;
@@ -360,17 +417,23 @@ export function buildOrdersSearchParams(next: OrdersUrlFilters): URLSearchParams
   if (next.request_type_ref) p.set("request_type_ref", next.request_type_ref);
   if (next.visit_weekday) p.set("visit_weekday", next.visit_weekday);
   if (next.price_type) p.set("price_type", next.price_type);
+  if (next.discount_alert) p.set("discount_alert", next.discount_alert);
+  if (next.bonus_alert) p.set("bonus_alert", next.bonus_alert);
+  if (next.order_alert) p.set("order_alert", next.order_alert);
   return p;
 }
 
 export function isOrdersFiltersEmpty(f: OrdersUrlFilters): boolean {
+  const scoped = withDefaultOrdersDateRange(f);
+  const dayDefaults = defaultOrdersDayRange();
+  const hasDefaultDayOnly =
+    scoped.date_from === dayDefaults.date_from && scoped.date_to === dayDefaults.date_to;
   return (
     !f.search &&
     !f.warehouse_id &&
     !f.agent_id &&
     !f.expeditor_id &&
-    !f.date_from &&
-    !f.date_to &&
+    hasDefaultDayOnly &&
     !f.product_id &&
     !f.client_category &&
     !f.client_region &&
@@ -387,6 +450,9 @@ export function isOrdersFiltersEmpty(f: OrdersUrlFilters): boolean {
     !f.request_type_ref &&
     !f.visit_weekday &&
     !f.price_type &&
+    !f.discount_alert &&
+    !f.bonus_alert &&
+    !f.order_alert &&
     f.date_mode === "order"
   );
 }

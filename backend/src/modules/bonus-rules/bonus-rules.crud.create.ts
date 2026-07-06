@@ -40,7 +40,9 @@ export async function createBonusRule(
     scalars.type,
     scalars.is_manual,
     scalars.product_ids,
-    scalars.product_category_ids
+    scalars.product_category_ids,
+    scalars.scope_restrict_assortment,
+    scalars.scope_restrict_category
   );
 
   await validatePrerequisiteRuleIds(tenantId, null, scalars.prerequisite_rule_ids);

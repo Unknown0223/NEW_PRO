@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { invalidateStock } from "../../lib/redis-cache";
 import { appendClientAuditLog } from "../clients/clients.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { assertReturnProductsInterchangeableStrict } from "../products/product-catalog.service";
@@ -20,7 +19,65 @@ export type SalesReturnListRow = {
   note: string | null;
   refusal_reason_ref: string | null;
   created_at: string;
+  /** Kim yaratdi (ekspeditor/operator) */
+  created_by_name: string | null;
+  created_by_role: string | null;
+  /** web (operator) | mobile (ekspeditor) — manba kanali */
+  creation_channel: "web" | "mobile";
+  /** Zavsklad qabul qilgan vaqt (posted bo'lsa) */
+  accepted_at: string | null;
 };
+
+function returnCreationChannel(role: string | null | undefined): "web" | "mobile" {
+  const r = (role ?? "").toLowerCase();
+  if (r.includes("agent") || r.includes("expeditor")) return "mobile";
+  return "web";
+}
+
+const salesReturnRowInclude = {
+  client: { select: { name: true } },
+  order: { select: { number: true } },
+  warehouse: { select: { name: true } },
+  created_by: { select: { name: true, login: true, role: true } }
+} as const;
+
+function mapSalesReturnRow(r: {
+  id: number;
+  number: string;
+  client_id: number | null;
+  order_id: number | null;
+  warehouse_id: number;
+  status: string;
+  refund_amount: Prisma.Decimal | null;
+  note: string | null;
+  refusal_reason_ref: string | null;
+  created_at: Date;
+  accepted_at: Date | null;
+  client: { name: string } | null;
+  order: { number: string } | null;
+  warehouse: { name: string };
+  created_by: { name: string | null; login: string | null; role: string | null } | null;
+}): SalesReturnListRow {
+  return {
+    id: r.id,
+    number: r.number,
+    client_id: r.client_id,
+    client_name: r.client?.name ?? null,
+    order_id: r.order_id,
+    order_number: r.order?.number ?? null,
+    warehouse_id: r.warehouse_id,
+    warehouse_name: r.warehouse.name,
+    status: r.status,
+    refund_amount: r.refund_amount?.toString() ?? null,
+    note: r.note,
+    refusal_reason_ref: r.refusal_reason_ref ?? null,
+    created_at: r.created_at.toISOString(),
+    created_by_name: r.created_by?.name?.trim() || r.created_by?.login?.trim() || null,
+    created_by_role: r.created_by?.role ?? null,
+    creation_channel: returnCreationChannel(r.created_by?.role),
+    accepted_at: r.accepted_at?.toISOString() ?? null
+  };
+}
 
 export type SalesReturnDetailRow = SalesReturnListRow & {
   created_by_user_id: number | null;
@@ -61,11 +118,7 @@ export async function listSalesReturns(
       orderBy: { created_at: "desc" },
       skip: (q.page - 1) * q.limit,
       take: q.limit,
-      include: {
-        client: { select: { name: true } },
-        order: { select: { number: true } },
-        warehouse: { select: { name: true } }
-      }
+      include: salesReturnRowInclude
     })
   ]);
 
@@ -73,21 +126,7 @@ export async function listSalesReturns(
     total,
     page: q.page,
     limit: q.limit,
-    data: rows.map((r) => ({
-      id: r.id,
-      number: r.number,
-      client_id: r.client_id,
-      client_name: r.client?.name ?? null,
-      order_id: r.order_id,
-      order_number: r.order?.number ?? null,
-      warehouse_id: r.warehouse_id,
-      warehouse_name: r.warehouse.name,
-      status: r.status,
-      refund_amount: r.refund_amount?.toString() ?? null,
-      note: r.note,
-      refusal_reason_ref: r.refusal_reason_ref ?? null,
-      created_at: r.created_at.toISOString()
-    }))
+    data: rows.map(mapSalesReturnRow)
   };
 }
 
@@ -95,27 +134,9 @@ export async function listSalesReturnsForOrder(tenantId: number, orderId: number
   const rows = await prisma.salesReturn.findMany({
     where: { tenant_id: tenantId, order_id: orderId },
     orderBy: { created_at: "desc" },
-    include: {
-      client: { select: { name: true } },
-      order: { select: { number: true } },
-      warehouse: { select: { name: true } }
-    }
+    include: salesReturnRowInclude
   });
-  return rows.map((r) => ({
-    id: r.id,
-    number: r.number,
-    client_id: r.client_id,
-    client_name: r.client?.name ?? null,
-    order_id: r.order_id,
-    order_number: r.order?.number ?? null,
-    warehouse_id: r.warehouse_id,
-    warehouse_name: r.warehouse.name,
-    status: r.status,
-    refund_amount: r.refund_amount?.toString() ?? null,
-    note: r.note,
-    refusal_reason_ref: r.refusal_reason_ref ?? null,
-    created_at: r.created_at.toISOString()
-  }));
+  return rows.map(mapSalesReturnRow);
 }
 
 export async function getSalesReturnById(
@@ -125,9 +146,7 @@ export async function getSalesReturnById(
   const row = await prisma.salesReturn.findFirst({
     where: { tenant_id: tenantId, id },
     include: {
-      client: { select: { name: true } },
-      order: { select: { number: true } },
-      warehouse: { select: { name: true } },
+      ...salesReturnRowInclude,
       lines: {
         orderBy: [{ id: "asc" }],
         include: {
@@ -138,19 +157,7 @@ export async function getSalesReturnById(
   });
   if (!row) return null;
   return {
-    id: row.id,
-    number: row.number,
-    client_id: row.client_id,
-    client_name: row.client?.name ?? null,
-    order_id: row.order_id,
-    order_number: row.order?.number ?? null,
-    warehouse_id: row.warehouse_id,
-    warehouse_name: row.warehouse.name,
-    status: row.status,
-    refund_amount: row.refund_amount?.toString() ?? null,
-    note: row.note,
-    refusal_reason_ref: row.refusal_reason_ref ?? null,
-    created_at: row.created_at.toISOString(),
+    ...mapSalesReturnRow(row),
     created_by_user_id: row.created_by_user_id,
     lines: row.lines.map((ln) => ({
       id: ln.id,
@@ -223,6 +230,10 @@ export async function createSalesReturn(
     throw new Error("REFUND_NEEDS_CLIENT");
   }
 
+  for (const line of input.lines) {
+    if (!Number.isFinite(line.qty) || line.qty <= 0) throw new Error("BAD_QTY");
+  }
+
   const number = `R-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
   const uid =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
@@ -235,7 +246,8 @@ export async function createSalesReturn(
         client_id: clientId,
         order_id: orderId,
         warehouse_id: input.warehouse_id,
-        status: "posted",
+        // Zavsklad qabulini kutadi — ostatka/balans qabulda qo'llanadi.
+        status: "pending",
         refund_amount: refund,
         note: input.note?.trim() || null,
         refusal_reason_ref:
@@ -252,54 +264,11 @@ export async function createSalesReturn(
       }
     });
 
-    for (const line of input.lines) {
-      if (!Number.isFinite(line.qty) || line.qty <= 0) throw new Error("BAD_QTY");
-      const delta = new Prisma.Decimal(line.qty);
-      await tx.stock.upsert({
-        where: {
-          tenant_id_warehouse_id_product_id: {
-            tenant_id: tenantId,
-            warehouse_id: input.warehouse_id,
-            product_id: line.product_id
-          }
-        },
-        create: {
-          tenant_id: tenantId,
-          warehouse_id: input.warehouse_id,
-          product_id: line.product_id,
-          qty: delta
-        },
-        update: { qty: { increment: delta } }
-      });
-    }
-
-    if (refund != null && clientId != null) {
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: clientId } },
-        create: { tenant_id: tenantId, client_id: clientId, balance: refund },
-        update: { balance: { increment: refund } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: {
-          client_balance_id: bal.id,
-          delta: refund,
-          note: `Qaytarish ${number}`,
-          user_id: uid
-        }
-      });
-    }
-
     return tx.salesReturn.findFirstOrThrow({
       where: { id: ret.id },
-      include: {
-        client: { select: { name: true } },
-        order: { select: { number: true } },
-        warehouse: { select: { name: true } }
-      }
+      include: salesReturnRowInclude
     });
   });
-
-  void invalidateStock(tenantId, input.warehouse_id);
 
   await appendTenantAuditEvent({
     tenantId,
@@ -310,6 +279,24 @@ export async function createSalesReturn(
     payload: { return_id: row.id, number: row.number, line_count: input.lines.length }
   });
 
+  // Per-return tarix uchun aniq (entity = return id) audit yozuvi.
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "sales_return",
+    entityId: String(row.id),
+    action: "return.create",
+    payload: {
+      return_id: row.id,
+      number: row.number,
+      client_id: row.client_id,
+      order_id: row.order_id,
+      warehouse_id: input.warehouse_id,
+      line_count: input.lines.length,
+      refund: refund?.toString() ?? null
+    }
+  });
+
   if (clientId != null) {
     await appendClientAuditLog(tenantId, clientId, actorUserId, "client.sales_return", {
       return_id: row.id,
@@ -318,19 +305,5 @@ export async function createSalesReturn(
     });
   }
 
-  return {
-    id: row.id,
-    number: row.number,
-    client_id: row.client_id,
-    client_name: row.client?.name ?? null,
-    order_id: row.order_id,
-    order_number: row.order?.number ?? null,
-    warehouse_id: row.warehouse_id,
-    warehouse_name: row.warehouse.name,
-    status: row.status,
-    refund_amount: row.refund_amount?.toString() ?? null,
-    note: row.note,
-    refusal_reason_ref: row.refusal_reason_ref ?? null,
-    created_at: row.created_at.toISOString()
-  };
+  return mapSalesReturnRow(row);
 }

@@ -66,7 +66,7 @@ describe("getUserFacingError", () => {
     expect(getUserFacingError("x", "F")).toBe("F");
   });
 
-  it("appends support reference when x-request-id is present", () => {
+  it("does NOT append support reference for user errors (4xx)", () => {
     const e = new AxiosError("fail");
     e.response = {
       status: 400,
@@ -75,19 +75,36 @@ describe("getUserFacingError", () => {
       headers: { "x-request-id": "abc-xyz" },
       config: {} as never
     };
-    expect(getUserFacingError(e)).toBe("Bad input — Support: requestId abc-xyz");
+    expect(getUserFacingError(e)).toBe("Bad input");
   });
 
-  it("appends support reference from JSON requestId", () => {
+  it("appends support reference for server errors (5xx) from headers", () => {
     const e = new AxiosError("fail");
     e.response = {
-      status: 422,
+      status: 500,
+      data: { message: "Server boom" },
+      statusText: "Server Error",
+      headers: { "x-request-id": "abc-xyz" },
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toBe("Server boom — Код для поддержки: abc-xyz");
+  });
+
+  it("appends support reference for server errors from JSON requestId", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 500,
       data: { message: "Not valid", requestId: "json-rid-1" },
-      statusText: "Unprocessable",
+      statusText: "Server Error",
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toBe("Not valid — Support: requestId json-rid-1");
+    expect(getUserFacingError(e)).toBe("Not valid — Код для поддержки: json-rid-1");
+  });
+
+  it("friendly message when server is unreachable", () => {
+    const e = new AxiosError("Network Error", "ERR_NETWORK");
+    expect(getUserFacingError(e)).toContain("Нет связи с сервером");
   });
 });
 
@@ -101,7 +118,7 @@ describe("withApiSupportLine", () => {
       headers: { "x-request-id": "rid-99" },
       config: {} as never
     };
-    expect(withApiSupportLine("Custom", e)).toBe("Custom — Support: requestId rid-99");
+    expect(withApiSupportLine("Custom", e)).toBe("Custom — Код для поддержки: rid-99");
   });
 
   it("returns base unchanged when no requestId", () => {

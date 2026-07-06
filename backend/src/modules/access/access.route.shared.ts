@@ -6,7 +6,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
-import { getAccessUser, jwtAccessVerify, requirePermission } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
 import {
   buildAccessHistoryXlsxBuffer,
   formatAccessHistoryDateRu,
@@ -17,6 +17,7 @@ import { getUserAccessMatrix } from "./access-matrix.service";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
+  AccessModuleViewRequiredError,
   bulkMergeUserPermissionKeysForUsers,
   bulkRemoveUserPermissionsByKeysForUsers,
   ensurePermissionIdsForKeys,
@@ -58,10 +59,10 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 
-export const adminOrAccessManager = [jwtAccessVerify, requireAnyAccessManage()] as const;
+export const adminOrAccessManager = [jwtAccessVerify, requireAccessWorkspaceView()] as const;
 
-function requireAnyAccessManage() {
-  return requirePermission("access.manage", { allowAdminRole: true });
+function requireAccessWorkspaceView() {
+  return requireAnyPermission(["access.upravlenie.view", "access.manage"], { allowAdminRole: true });
 }
 
 function branchStorageKey(b: Pick<BranchDto, "id" | "code">): string {
@@ -156,8 +157,12 @@ export const patchAccessBodySchema = z.object({
   cash_desk_ids: z.array(z.number().int().positive()).optional(),
   payment_methods: z.array(z.string().trim().min(1)).optional(),
   territory_ids: z.array(z.number().int().positive()).optional(),
+  trade_direction_ids: z.array(z.number().int().positive()).optional(),
   /** Подчинённые супервайзера: `user.supervisor_user_id` = `:id`. Пустой массив — снять всех. */
-  supervisee_user_ids: z.array(z.number().int().positive()).max(5000).optional()
+  supervisee_user_ids: z.array(z.number().int().positive()).max(5000).optional(),
+  /** Operatsiya kaliti — foydalanuvchi boshqalarga berishi (`access.grant.<key>`, faqat shaxsiy). */
+  grant_delegation_allow: z.array(accessPermissionKeyZ).optional(),
+  grant_delegation_revoke: z.array(accessPermissionKeyZ).optional()
 });
 
 const bulkAccessPatchItemSchema = z

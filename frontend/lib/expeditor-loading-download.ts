@@ -47,16 +47,13 @@ async function parseBlobError(blob: Blob): Promise<string> {
   }
 }
 
-/**
- * «Загруз зав.склада» shablonlari (5.1.6, 5.2.0, …) — preview bilan bir xil server buffer.
- */
-export async function downloadExpeditorLoadingLayoutXlsx(args: {
+export async function fetchExpeditorLoadingLayoutXlsxBlob(args: {
   tenantSlug: string;
   orderIds: number[];
   layout: ExpeditorLoadingLayoutId;
   prefs: NakladnoyExportPrefs;
   fallbackFilename?: string;
-}): Promise<void> {
+}): Promise<{ blob: Blob; filename: string }> {
   const { tenantSlug, orderIds, layout, prefs, fallbackFilename } = args;
   if (orderIds.length === 0) {
     throw new Error("Zakaz tanlanmagan.");
@@ -76,15 +73,25 @@ export async function downloadExpeditorLoadingLayoutXlsx(args: {
       throw new Error(await parseBlobError(res.data as Blob));
     }
     const blob = res.data as Blob;
-    const name =
+    const filename =
       parseFilenameFromContentDisposition(res.headers["content-disposition"]) ??
       fallbackFilename ??
       `Загруз зав.склада.xlsx`;
-    triggerBlobDownload(blob, name);
+    return { blob, filename };
   } catch (e: unknown) {
     if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
       throw new Error(await parseBlobError(e.response.data));
     }
     throw new Error(getUserFacingError(e, "Excelni yuklab bo‘lmadi."));
   }
+}
+
+/**
+ * «Загруз зав.склада» shablonlari (5.1.6, 5.2.0, …) — preview bilan bir xil server buffer.
+ */
+export async function downloadExpeditorLoadingLayoutXlsx(
+  args: Parameters<typeof fetchExpeditorLoadingLayoutXlsxBlob>[0]
+): Promise<void> {
+  const { blob, filename } = await fetchExpeditorLoadingLayoutXlsxBlob(args);
+  triggerBlobDownload(blob, filename);
 }

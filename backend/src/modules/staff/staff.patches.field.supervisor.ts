@@ -58,6 +58,7 @@ import {
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 import { applyAgentPatchInDb } from "./staff.patches.field.agent";
+import { onAppAccessChanged } from "../auth/app-access.service";
 
 export type PatchSupervisorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
   /** Bu supervisor ostidagi agentlar ro‘yxati (to‘liq almashtirish). */
@@ -77,11 +78,17 @@ async function syncAgentsToSupervisor(
   });
   if (unique.length === 0) return;
   const agents = await tx.user.findMany({
-    where: { id: { in: unique }, tenant_id: tenantId, role: "agent" },
-    select: { id: true }
+    where: { id: { in: unique }, tenant_id: tenantId, role: "agent", is_active: true },
+    select: { id: true, supervisor_user_id: true }
   });
   if (agents.length !== unique.length) {
     throw new Error("BAD_SUPERVISEE_AGENT");
+  }
+  const takenElsewhere = agents.filter(
+    (a) => a.supervisor_user_id != null && a.supervisor_user_id !== supervisorId
+  );
+  if (takenElsewhere.length > 0) {
+    throw new Error("AGENT_ALREADY_ASSIGNED");
   }
   await tx.user.updateMany({
     where: { id: { in: unique }, tenant_id: tenantId, role: "agent" },
@@ -198,6 +205,10 @@ export async function patchSupervisor(
       await syncAgentsToSupervisor(tx, tenantId, supervisorId, input.supervisee_agent_ids);
     }
   });
+
+  if (input.app_access !== undefined) {
+    await onAppAccessChanged(tenantId, supervisorId, input.app_access);
+  }
 
   if (Object.keys(data).length > 0) {
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");

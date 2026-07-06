@@ -33,6 +33,7 @@ export type CreateOrderTxParams = {
   exchangeMetaJson: Prisma.InputJsonValue | null;
   orderAgentForBonus: OrderAgentBonusContext | null;
   validatedGiftOverrides: Map<number, number>;
+  validatedGiftSplits: Map<number, Map<number, number>>;
   tempOrderNumber: string;
   isInboundShelfReturn: boolean;
   stackPolicy: BonusStackPolicy;

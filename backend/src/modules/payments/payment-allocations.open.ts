@@ -2,6 +2,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import {
+  orderMerchandiseNetReceivable,
+  sqlOrderMerchandiseNetReceivable,
+  type OrderMerchandiseRuleHint
+} from "../orders/order-merchandise-net";
 
 import type { AllocationMode, OpenAllocationOrderRow } from "./payment-allocations.types";
 import {
@@ -14,6 +19,8 @@ export type AllocationCandidateOrder = {
   id: number;
   number: string;
   total_sum: Prisma.Decimal;
+  /** To'lanadigan mahsulot summasi (skidka hisobga olingan). */
+  merchandise_net: Prisma.Decimal;
   created_at: Date;
   consignment_due_date: Date | null;
   is_consignment: boolean;
@@ -79,10 +86,10 @@ export async function listOpenOrdersForAllocation(
       o.created_at,
       o.consignment_due_date,
       COALESCE(o.is_consignment, false) AS is_consignment,
-      GREATEST(o.total_sum - COALESCE(a.allocated, 0), 0)::decimal(15,2) AS outstanding
+      GREATEST(${sqlOrderMerchandiseNetReceivable("o")} - COALESCE(a.allocated, 0), 0)::decimal(15,2) AS outstanding
     FROM ord o
     LEFT JOIN alloc a ON a.order_id = o.id
-    WHERE GREATEST(o.total_sum - COALESCE(a.allocated, 0), 0) > 0
+    WHERE GREATEST(${sqlOrderMerchandiseNetReceivable("o")} - COALESCE(a.allocated, 0), 0) > 0
     ORDER BY COALESCE(o.consignment_due_date, o.created_at) ASC, o.created_at ASC, o.id ASC
   `;
 
@@ -128,18 +135,41 @@ export async function getCandidateOrdersForAllocation(
       id: true,
       number: true,
       total_sum: true,
+      discount_sum: true,
+      applied_auto_bonus_rule_ids: true,
       created_at: true,
       consignment_due_date: true,
       is_consignment: true
     }
   });
 
+  const ruleIds = [...new Set(rows.flatMap((r) => r.applied_auto_bonus_rule_ids))];
+  const ruleRows =
+    ruleIds.length > 0
+      ? await tx.bonusRule.findMany({
+          where: { tenant_id: tenantId, id: { in: ruleIds } },
+          select: { id: true, type: true, discount_pct: true }
+        })
+      : [];
+  const rulesById = new Map<number, OrderMerchandiseRuleHint>(
+    ruleRows.map((r) => [
+      r.id,
+      { type: r.type, discount_pct: r.discount_pct != null ? Number(r.discount_pct) : null }
+    ])
+  );
+
   const out: AllocationCandidateOrder[] = [];
   for (const row of rows) {
     const alreadyAllocatedToOrder = await getAllocatedForOrder(tx, tenantId, row.id);
-    const orderRemaining = row.total_sum.sub(alreadyAllocatedToOrder);
+    const merchandiseNet = orderMerchandiseNetReceivable(
+      row.total_sum,
+      row.discount_sum,
+      row.applied_auto_bonus_rule_ids,
+      rulesById
+    );
+    const orderRemaining = merchandiseNet.sub(alreadyAllocatedToOrder);
     if (orderRemaining.lte(0)) continue;
-    out.push(row);
+    out.push({ ...row, merchandise_net: merchandiseNet });
   }
 
   out.sort((a, b) => {

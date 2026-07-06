@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -117,6 +118,18 @@ export async function registerRefusalRoutes(app: FastifyInstance) {
           refusal_reason_ref: body.refusal_reason_ref,
           comment: body.comment ?? null,
           created_at: createdAt ?? null
+        });
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: parseUserId(request),
+          entityType: "refusal",
+          entityId: (data as { id?: number })?.id ?? "—",
+          action: "refusal.create",
+          payload: {
+            client_id: body.client_id,
+            agent_id: agentId,
+            refusal_reason_ref: body.refusal_reason_ref
+          }
         });
         return reply.status(201).send({ data });
       } catch (e) {

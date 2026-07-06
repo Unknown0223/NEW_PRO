@@ -27,6 +27,16 @@ export function validateAgentMobileConfig(
     }
   }
 
+  const route = mc.route;
+  if (route) {
+    if (route.daily_visit_limit != null && (route.daily_visit_limit < 0 || route.daily_visit_limit > 10_000)) {
+      throw new Error("BAD_MOBILE_CONFIG_ROUTE");
+    }
+    if (route.readd_cooldown_days != null && (route.readd_cooldown_days < 0 || route.readd_cooldown_days > 365)) {
+      throw new Error("BAD_MOBILE_CONFIG_ROUTE");
+    }
+  }
+
   const ph = mc.photo;
   if (ph) {
     if (ph.max_width_px != null && (ph.max_width_px < 64 || ph.max_width_px > 8192)) throw new Error("BAD_MOBILE_CONFIG_PHOTO");

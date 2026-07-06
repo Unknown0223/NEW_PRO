@@ -67,7 +67,12 @@ export function sumReturnedQtyFromReturns(
   for (const ret of returns) {
     if (ret.order_id !== orderId) continue;
     for (const ln of ret.lines) {
-      const split = splitReturnLinePaidBonus(ln);
+      const split = splitReturnLinePaidBonus({
+        product_id: ln.product_id,
+        qty: ln.qty as string | number,
+        paid_qty: ln.paid_qty as string | number | null | undefined,
+        bonus_qty: ln.bonus_qty as string | number | null | undefined
+      });
       paid += pieceQty(split.paid);
       bonus += pieceQty(split.bonus);
     }

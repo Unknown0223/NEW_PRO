@@ -349,7 +349,7 @@ export function CurrencyRatesWorkspace() {
         description="Журнал курсов по дням: 1 единица базовой валюты = курс в валюте котировки. Коды валют берутся из справочника (Настройки → Валюты)."
       />
 
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-border dark:bg-card sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm dark:border-border dark:bg-card sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Период</Label>
@@ -436,10 +436,10 @@ export function CurrencyRatesWorkspace() {
         </p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-border dark:bg-card">
+      <div className="overflow-x-auto rounded-lg border border-border bg-card dark:border-border dark:bg-card">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/40">
+            <tr className="border-b border-border bg-muted text-left text-xs font-semibold uppercase text-slate-600 dark:border-border dark:bg-muted/40">
               <th className="px-3 py-2.5">Дата</th>
               <th className="px-3 py-2.5">База</th>
               <th className="px-3 py-2.5">Котировка</th>
@@ -464,7 +464,7 @@ export function CurrencyRatesWorkspace() {
               </tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.id} className="border-b border-slate-100 dark:border-border">
+                <tr key={r.id} className="border-b border-border dark:border-border">
                   <td className="px-3 py-2 tabular-nums">{r.rate_date}</td>
                   <td className="px-3 py-2 font-medium">{r.base_currency}</td>
                   <td className="px-3 py-2 font-medium">{r.quote_currency}</td>

@@ -7,6 +7,8 @@ describe("mobile schemas (unit)", () => {
     expect(
       mobileEnqueueBodySchema.safeParse({
         client_id: 1,
+        warehouse_id: 1,
+        offline_created_at: "2026-06-25T10:00:00Z",
         items: [{ product_id: 1, qty: 1 }]
       }).success
     ).toBe(true);

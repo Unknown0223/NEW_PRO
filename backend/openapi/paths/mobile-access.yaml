@@ -192,6 +192,83 @@
               $ref: "../skeleton.yaml#/components/schemas/ApiError"
 
 
+/api/{slug}/mobile/orders/create-context:
+  get:
+    summary: Order create context (warehouses, products, prices)
+    operationId: mobileOrderCreateContext
+    tags: [Mobile]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+
+
+/api/{slug}/mobile/orders/stock:
+  get:
+    summary: Warehouse stock for selected products
+    operationId: mobileOrderStock
+    tags: [Mobile]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+
+
+/api/{slug}/mobile/orders/create:
+  post:
+    summary: Create order with server bonus/discount
+    operationId: mobileOrderCreate
+    tags: [Mobile]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    responses:
+      "201":
+        description: Created
+
+
+/api/{slug}/mobile/orders/sync-flush:
+  post:
+    summary: Flush pending offline orders for current agent
+    operationId: mobileOrdersSyncFlush
+    tags: [Mobile]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+
+
+/api/{slug}/mobile/agent-dashboard:
+  get:
+    summary: Agent daily KPI dashboard
+    operationId: mobileAgentDashboard
+    tags: [Mobile]
+    security:
+      - bearerAuth: []
+    parameters:
+      - $ref: "../skeleton.yaml#/components/parameters/TenantSlug"
+    responses:
+      "200":
+        description: OK
+
+
 /api/{slug}/access/users:
   get:
     summary: Access users list

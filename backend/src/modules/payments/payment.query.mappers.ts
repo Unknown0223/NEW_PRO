@@ -51,7 +51,13 @@ export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
     },
     cash_desk: { select: { name: true } },
     expeditor_user: { select: { id: true, name: true } },
-    deleted_by: { select: { id: true, name: true } }
+    deleted_by: { select: { id: true, name: true } },
+    edit_grants: {
+      where: { status: "active" },
+      orderBy: { expires_at: "desc" },
+      take: 1,
+      select: { expires_at: true }
+    }
   };
 }
 
@@ -111,6 +117,8 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
     consignment: ag?.consignment ?? false,
     expeditor_user_id: ex?.id ?? null,
     expeditor_name: ex?.name ?? null,
+    // To'lov yozuvining o'zida ekspeditor bor bo'lsa — mobil ilovada yaratilgan.
+    created_via_mobile: exDirect != null,
     cash_desk_name: desk?.name ?? null,
     payment_kind: ek === "client_expense" ? "Расход" : "Оплата",
     entry_kind: ek,
@@ -118,6 +126,8 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
     paid_at: r.paid_at ? (r.paid_at as Date).toISOString() : null,
     received_at: r.received_at ? (r.received_at as Date).toISOString() : null,
     confirmed_at: r.confirmed_at ? (r.confirmed_at as Date).toISOString() : null,
+    return_expires_at:
+      (r.edit_grants as { expires_at: Date }[] | undefined)?.[0]?.expires_at?.toISOString() ?? null,
     client_region: r.client.region?.trim() || null,
     client_city: r.client.city?.trim() || null,
     client_district: r.client.district?.trim() || null,
@@ -262,9 +272,10 @@ export function buildPaymentListWhere(tenantId: number, q: PaymentListQuery): Pr
 
   const ch = q.application_channel;
   if (ch === "expeditor") {
-    andParts.push({
-      OR: [{ expeditor_user_id: { not: null } }, { order: { expeditor_user_id: { not: null } } }]
-    });
+    // Faqat ekspeditor mobil ilovasida yaratilgan to'lovlar (to'lov yozuvining
+    // o'zida expeditor_user_id bor). Operator/kassir web orqali kiritgan
+    // to'lovlar (zakaz ekspeditorga biriktirilgan bo'lsa ham) bu yerga tushmaydi.
+    andParts.push({ expeditor_user_id: { not: null } });
   } else if (ch === "collector") {
     andParts.push({
       OR: [

@@ -7,7 +7,7 @@ import { Magnet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { OrderPaymentStatusBadge } from "./order-payment-status-badge";
-import { parseAmountInput, sumExisting } from "./order-payment-utils";
+import { parseAmountInput } from "./order-payment-utils";
 import type { OrderCashInPaymentMethod, PaymentOrderRow } from "./types";
 
 type Props = {

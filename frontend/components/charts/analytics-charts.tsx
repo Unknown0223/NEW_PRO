@@ -183,7 +183,10 @@ type DailyRev = { day: string; revenue: number };
 
 /** Одна линия: сумма продаж по дням месяца; cumulative — накопительный итог */
 export function MonitoringDailyRevenueLine({ rows, cumulative = false }: { rows: DailyRev[]; cumulative?: boolean }) {
-  const safeRows = rows.length > 0 ? rows : [{ day: "—", revenue: 0 }];
+  const safeRows = useMemo(
+    () => (rows.length > 0 ? rows : [{ day: "—", revenue: 0 }]),
+    [rows]
+  );
   const data = useMemo(() => {
     let run = 0;
     return safeRows.map((r) => {

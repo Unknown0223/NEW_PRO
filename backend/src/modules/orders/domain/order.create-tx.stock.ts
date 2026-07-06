@@ -35,7 +35,9 @@ export async function reserveOutboundStockForCreateOrder(
   for (const [productId, needQty] of needByProduct) {
     const row = stockMap.get(productId);
     const qty = row?.qty ?? new Prisma.Decimal(0);
-    const reserved = row?.reserved_qty ?? new Prisma.Decimal(0);
+    const reservedRaw = row?.reserved_qty ?? new Prisma.Decimal(0);
+    // Manfiy reserved (eski/buzuq ma'lumot) mavjudlikni sun'iy oshirmasin.
+    const reserved = reservedRaw.lt(0) ? new Prisma.Decimal(0) : reservedRaw;
     const available = qty.sub(reserved);
     if (available.lt(needQty)) {
       const err = new Error("INSUFFICIENT_STOCK") as Error & {

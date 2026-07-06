@@ -1,16 +1,11 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { VISIT_TOTALS_ORDER_STATUS_OPTIONS } from "./visit-totals.types";
 import { agentLabel } from "./visit-totals.helpers";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 
 export async function getVisitTotalsFilterOptions(tenantId: number, actor?: ReportActor) {
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, role: "agent" }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId }
-        : { tenant_id: tenantId, role: "agent" };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const agents = await prisma.user.findMany({
     where: whereAgent,

@@ -20,6 +20,8 @@ export type PaymentListApiRow = {
   consignment: boolean;
   expeditor_user_id: number | null;
   expeditor_name: string | null;
+  /** To‘lov mobil ekspeditor ilovasida yaratilgan (yozuvda expeditor_user_id bor) */
+  created_via_mobile?: boolean;
   cash_desk_name: string | null;
   payment_kind: string;
   /** payment | client_expense */
@@ -28,6 +30,8 @@ export type PaymentListApiRow = {
   paid_at: string | null;
   received_at: string | null;
   confirmed_at: string | null;
+  /** «Отклонено» holatida — ekspeditor uchun to'g'rilash taymeri tugash vaqti (ISO). */
+  return_expires_at?: string | null;
   /** Mijoz hududi (chek / guruhlash); eski javoblarda bo‘lmasligi mumkin */
   client_region?: string | null;
   client_city?: string | null;

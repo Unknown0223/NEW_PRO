@@ -19,13 +19,14 @@ import {
   resolveQtyGiftProductId,
   resolveSumRuleGiftProductId,
   ruleBlockedByOncePerClient,
-  ruleMatchesProduct,
   ruleHasPurchaseScope,
   ruleMatchesClient,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
+  ruleRelatesToOrderSelection,
   ruleNeedsOrderContext,
   ruleTreeSatisfiedForOrder,
+  qtyRuleMatchingProductIds,
   roundMoney,
   type BonusLineDraft,
   type OrderAgentBonusContext,
@@ -41,9 +42,39 @@ export type QtyBonusPeek = {
   bonusQty: number;
 };
 
+/** Bir xil qoida + bir xil sovg‘a SKU — bonus miqdorini yig‘adi (har xil sovg‘a SKU alohida qoladi). */
+export function mergeQtyPeeksByRule(peeks: QtyBonusPeek[]): QtyBonusPeek[] {
+  const key = (p: QtyBonusPeek) => `${p.rule.id}:${p.giftPid}`;
+  const byKey = new Map<string, QtyBonusPeek>();
+  for (const p of peeks) {
+    const k = key(p);
+    const prev = byKey.get(k);
+    if (!prev) {
+      byKey.set(k, { ...p });
+      continue;
+    }
+    const mergedBonusQty = prev.bonusQty + p.bonusQty;
+    const keep =
+      p.bonusQty > prev.bonusQty
+        ? p
+        : prev.bonusQty > p.bonusQty
+          ? prev
+          : p.purchasedPid === QTY_AGGREGATE_PURCHASED_PID
+            ? p
+            : prev;
+    byKey.set(k, {
+      rule: p.rule,
+      purchasedPid: keep.purchasedPid,
+      giftPid: keep.giftPid,
+      bonusQty: mergedBonusQty
+    });
+  }
+  return [...byKey.values()];
+}
+
 /**
- * Qty bonus: (1) asortiment/kategoriya **bo‘sh** — zakazdagi **barcha** pullik qatorlar miqdori yig‘indisi bo‘yicha
- * **bitta** eng yuqori priority mos qoida; (2) asortiment **bor** — har SKU bo‘yicha avvalgidek.
+ * Qty bonus: (1) doira **bo‘sh** — barcha pullik qatorlar yig‘indisi, eng yuqori priority qoida;
+ * (2) mahsulot/kategoriya doirasi — **har SKU alohida** (6+1: 36→6, 18→3; sovg‘a o‘sha mahsulotdan).
  */
 export async function findQtyBonusPeeks(
   tx: Prisma.TransactionClient,
@@ -132,6 +163,7 @@ export async function findQtyBonusPeeks(
     if (!ruleMatchesClient(rule, client)) continue;
     if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
     if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
 
     const effAgg = effectivePurchasedQtyForQtyRule(rule, {
       orderQty: totalPaidQty,
@@ -184,23 +216,26 @@ export async function findQtyBonusPeeks(
 
   const scopedRules = filtered.filter((r) => ruleHasPurchaseScope(r));
 
-  for (const [purchasedPid, purchasedQty] of qtyByProduct) {
-    if (purchasedQty <= 0) continue;
-    const product = productById.get(purchasedPid);
-    if (!product) continue;
+  for (const rule of scopedRules) {
+    if (!ruleMatchesClient(rule, client)) continue;
+    if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
+    if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
 
-    for (const rule of scopedRules) {
-      if (!ruleMatchesClient(rule, client)) continue;
-      if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
-      if (!ruleMatchesProduct(rule, product)) continue;
+    const matchingPids = qtyRuleMatchingProductIds(rule, qtyByProduct, productById);
+    if (matchingPids.length === 0) continue;
 
-      const effSku = effectivePurchasedQtyForQtyRule(rule, {
-        orderQty: purchasedQty,
+    for (const purchasedPid of matchingPids) {
+      const lineQty = qtyByProduct.get(purchasedPid) ?? 0;
+      if (lineQty <= 0) continue;
+
+      const effScoped = effectivePurchasedQtyForQtyRule(rule, {
+        orderQty: lineQty,
         productIdForMonthLookup: purchasedPid,
         monthAggregateExclOrder: monthAgg,
         monthByProductExclOrder: monthByProd
       });
-      const bonusUnits = computeQtyBonusForRuleRow(rule, effSku);
+      const bonusUnits = computeQtyBonusForRuleRow(rule, effScoped);
       if (bonusUnits <= 0) continue;
 
       const giftPid = resolveQtyGiftProductId(rule, purchasedPid, giftOverrides, {
@@ -212,11 +247,10 @@ export async function findQtyBonusPeeks(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       }
       peeks.push({ rule, purchasedPid, giftPid, bonusQty: bonusUnits });
-      break;
     }
   }
 
-  return peeks;
+  return mergeQtyPeeksByRule(peeks);
 }
 
 export async function materializeQtyPeeks(
@@ -246,6 +280,30 @@ export async function materializeQtyPeeks(
     });
   }
 
+  return out;
+}
+
+/** Agent tanlagan sovg‘a taqsimoti (qoida → mahsulot → dona). */
+export async function materializeGiftSplits(
+  tenantId: number,
+  splits: ReadonlyMap<number, number>
+): Promise<BonusLineDraft[]> {
+  const out: BonusLineDraft[] = [];
+  for (const [giftPid, units] of splits) {
+    if (units <= 0) continue;
+    const qty = new PrismaClient.Decimal(units);
+    const priceStr = await getProductPrice(tenantId, giftPid, "retail");
+    if (priceStr == null) continue;
+    const price = new PrismaClient.Decimal(priceStr);
+    const total = roundMoney(qty.mul(price));
+    out.push({
+      product_id: giftPid,
+      qty,
+      price,
+      total,
+      is_bonus: true
+    });
+  }
   return out;
 }
 

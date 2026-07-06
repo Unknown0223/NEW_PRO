@@ -78,7 +78,7 @@ export function NotificationBell({ tenantSlug }: { tenantSlug: string | null }) 
         type="button"
         variant="outline"
         size="icon-sm"
-        className="relative h-9 w-9 border-sidebar-border/80 bg-sidebar-accent/30 text-sidebar-foreground"
+        className="relative h-9 w-9 border-border bg-background text-muted-foreground hover:text-foreground"
         aria-label="Уведомления"
         onClick={(e) => {
           e.stopPropagation();
@@ -94,7 +94,7 @@ export function NotificationBell({ tenantSlug }: { tenantSlug: string | null }) 
       </Button>
       {open ? (
         <div
-          className="absolute bottom-full left-1/2 z-50 mb-2 w-[min(100vw-2rem,20rem)] -translate-x-1/2 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          className="absolute right-0 top-full z-50 mt-2 w-[min(100vw-2rem,22rem)] rounded-lg border border-border bg-popover p-2 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -112,7 +112,7 @@ export function NotificationBell({ tenantSlug }: { tenantSlug: string | null }) 
               </Button>
             ) : null}
           </div>
-          <div className="max-h-72 space-y-1 overflow-y-auto text-xs">
+          <div className="max-h-[24rem] space-y-1 overflow-y-auto text-xs">
             {q.isLoading ? (
               <p className="px-2 py-4 text-center text-muted-foreground">Загрузка…</p>
             ) : items.length === 0 ? (

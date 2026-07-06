@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { invalidateTenantSettingsCache } from "../../lib/redis-cache";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { normCode } from "./sales-directions.shared";
 
@@ -81,6 +82,7 @@ export async function createTradeDirection(
     action: "create",
     payload: { name: row.name, code: row.code }
   });
+  await invalidateTenantSettingsCache(tenantId);
   return {
     id: row.id,
     name: row.name,
@@ -140,6 +142,7 @@ export async function patchTradeDirection(
     action: "patch",
     payload: input
   });
+  await invalidateTenantSettingsCache(tenantId);
   return {
     id: row.id,
     name: row.name,

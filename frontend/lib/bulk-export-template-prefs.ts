@@ -220,3 +220,12 @@ export function getVisibleTemplates(
     .map((id) => byId.get(id))
     .filter((t): t is BulkExportTemplateDef => Boolean(t));
 }
+
+/** Barcha to‘rtta bo‘limdagi «галочка» qo‘yilgan shablonlar. */
+export function getAllVisibleTemplates(store: BulkExportPrefsStore): BulkExportTemplateDef[] {
+  return BULK_EXPORT_CATEGORIES.flatMap((c) => getVisibleTemplates(c.id, store));
+}
+
+export function bulkExportTemplateKey(template: BulkExportTemplateDef): string {
+  return `${template.category}:${template.id}`;
+}

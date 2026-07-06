@@ -298,6 +298,25 @@ export function branchesFromUnknown(v: unknown): BranchDto[] {
   return v.map(parseBranch).filter((x): x is BranchDto => x != null);
 }
 
+/** Faqat «Настройки → Филиалы» dagi faol filiallar (hodim qatoridagi erkin matn emas). */
+export function activeBranchNamesFromReferences(references: unknown): string[] {
+  const ref = asRecord(references);
+  return branchesFromUnknown(ref.branches)
+    .filter((b) => b.active !== false)
+    .map((b) => b.name.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "ru"));
+}
+
+export async function loadActiveBranchNames(tenantId: number): Promise<string[]> {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const ref = asRecord(asRecord(row?.settings).references);
+  return activeBranchNamesFromReferences(ref);
+}
+
 export async function assertBranchCashDeskAssignments(
   tenantId: number,
   branches: Pick<BranchDto, "cash_desk_id" | "cash_desk_ids">[]
