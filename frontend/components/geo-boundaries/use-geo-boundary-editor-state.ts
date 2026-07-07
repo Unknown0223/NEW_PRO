@@ -22,6 +22,7 @@ import {
   adminRegionPrimaryRing,
   boundsCenterForAdminTokens,
   buildAdminRegionMapPolygons,
+  buildAdminRegionReferencePolygons,
   loadUzAdminRegions,
   type UzAdminRegion
 } from "@/lib/uz-admin-regions";
@@ -41,6 +42,7 @@ export type GeoBoundaryMapPolygon = {
   kind: GeoBoundaryKind;
   active: boolean;
   pulse?: boolean;
+  subtle?: boolean;
 };
 
 type PendingSave = {
@@ -156,6 +158,19 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
 
   const mapPolygons: GeoBoundaryMapPolygon[] = useMemo(() => {
     const polys: GeoBoundaryMapPolygon[] = [];
+
+    if (adminRegions.length > 0) {
+      for (const ref of buildAdminRegionReferencePolygons(adminRegions)) {
+        polys.push({
+          id: ref.id,
+          coords: ref.coords,
+          color: ref.color,
+          kind: "territory",
+          active: false,
+          subtle: true
+        });
+      }
+    }
 
     for (const b of boundaries) {
       if (b.polygon.length < 3) continue;

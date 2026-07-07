@@ -201,7 +201,28 @@ export type VisitAdminMapPolygon = {
   coords: [number, number][];
   color: string;
   active: boolean;
+  /** Fon viloyat chegaralari — ingichka, deyarli ko‘rinmas chiziq. */
+  subtle?: boolean;
 };
+
+/** Barcha viloyatlar — xarita fonida sezilarli chegara (ADM1). */
+export function buildAdminRegionReferencePolygons(regions: UzAdminRegion[]): VisitAdminMapPolygon[] {
+  const stroke = "#94a3b8";
+  const out: VisitAdminMapPolygon[] = [];
+  for (const region of regions) {
+    region.rings.forEach((ring, ringIdx) => {
+      if (ring.length < 3) return;
+      out.push({
+        id: `${region.id}-ref-${ringIdx}`,
+        coords: ring.map((p) => [p.lat, p.lng] as [number, number]),
+        color: stroke,
+        active: false,
+        subtle: true
+      });
+    });
+  }
+  return out;
+}
 
 /** Xaritada viloyat chegaralarini turli ranglarda chizish. */
 export function buildAdminRegionMapPolygons(

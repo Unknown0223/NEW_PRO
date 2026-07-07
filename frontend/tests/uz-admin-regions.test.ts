@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   findAdminRegionForGps,
   findAdminRegionForToken,
+  buildAdminRegionReferencePolygons,
   type UzAdminRegion
 } from "@/lib/uz-admin-regions";
 
@@ -64,5 +65,12 @@ describe("uz-admin-regions", () => {
   it("GPS nuqtasi viloyat ichida aniqlanadi", () => {
     const fromGps = findAdminRegionForGps(41.3111, 69.2797, regions);
     expect(fromGps?.nameEn).toMatch(/city/i);
+  });
+
+  it("fon uchun sezilarli viloyat chegaralari", () => {
+    const refs = buildAdminRegionReferencePolygons(regions);
+    expect(refs.length).toBeGreaterThan(regions.length);
+    expect(refs.every((p) => p.subtle === true)).toBe(true);
+    expect(refs.every((p) => p.coords.length >= 3)).toBe(true);
   });
 });

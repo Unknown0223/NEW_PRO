@@ -29,6 +29,8 @@ export type VisitMapPolygon = {
   active?: boolean;
   /** Yopilgan chegara — sekin pulsatsiya (oxirgi chizilganini bildiradi). */
   pulse?: boolean;
+  /** Fon ADM1 chegarasi — ingichka, deyarli ko‘rinmas. */
+  subtle?: boolean;
 };
 
 type YEvent = { stopPropagation?: () => void };
@@ -518,16 +520,25 @@ export function VisitPlannerYandexMap({
     for (const poly of polygonsRef.current) {
       if (poly.coords.length < 3) continue;
       const ring = [...poly.coords, poly.coords[0]!];
+      const subtle = poly.subtle === true;
       const pg = new ymaps.Polygon(
         [ring],
         {},
-        {
-          fillColor: hexToRgba(poly.color, poly.active ? 0.38 : 0.22),
-          strokeColor: poly.color,
-          strokeWidth: poly.pulse ? 3 : poly.active ? 4 : 3,
-          strokeOpacity: 0.95,
-          interactivityModel: "default#transparent"
-        }
+        subtle
+          ? {
+              fillColor: hexToRgba(poly.color, 0.03),
+              strokeColor: poly.color,
+              strokeWidth: 1,
+              strokeOpacity: 0.38,
+              interactivityModel: "default#transparent"
+            }
+          : {
+              fillColor: hexToRgba(poly.color, poly.active ? 0.38 : 0.22),
+              strokeColor: poly.color,
+              strokeWidth: poly.pulse ? 3 : poly.active ? 4 : 3,
+              strokeOpacity: 0.95,
+              interactivityModel: "default#transparent"
+            }
       );
       map.geoObjects.add(pg);
       polygonObjectsRef.current.push(pg);
