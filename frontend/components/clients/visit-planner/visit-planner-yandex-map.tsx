@@ -526,10 +526,10 @@ export function VisitPlannerYandexMap({
         {},
         subtle
           ? {
-              fillColor: hexToRgba(poly.color, 0.03),
+              fillColor: hexToRgba(poly.color, 0),
               strokeColor: poly.color,
-              strokeWidth: 1,
-              strokeOpacity: 0.38,
+              strokeWidth: 2,
+              strokeOpacity: 0.58,
               interactivityModel: "default#transparent"
             }
           : {
@@ -649,7 +649,9 @@ export function VisitPlannerYandexMap({
 
   // Nuqtalar to'plami o'zgarsa — markerlarni qayta quramiz
   const pointsKey = points.map((p) => `${p.id}:${p.color}`).join("|");
-  const polygonsKey = polygons.map((p) => `${p.id}:${p.active}:${p.pulse}:${p.color}:${p.coords.length}`).join("|");
+  const polygonsKey = polygons
+    .map((p) => `${p.id}:${p.active}:${p.pulse}:${p.subtle ? 1 : 0}:${p.color}:${p.coords.length}`)
+    .join("|");
   const draftKey = `${draftPolygon?.map((c) => c.join(",")).join("|") ?? ""}:${draftColor}:${draftPulse}`;
 
   useEffect(() => {

@@ -78,6 +78,6 @@ export const config = {
    * (dashboard) sahifasi avtomatik himoyalanadi.
    */
   matcher: [
-    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff2?|ttf|ico|map)$).*)"
+    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff2?|ttf|ico|map|geojson)$).*)"
   ]
 };
