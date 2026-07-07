@@ -534,10 +534,19 @@ export function PlanningTable({
     [visibleGroups, columnConfigs, employees, kpiTargets, plans, localValues, getConfig]
   );
 
-  if (visibleGroups.length === 0 || !hasAnyPlan) {
+  if (visibleGroups.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-        KPI guruhlari topilmadi. Sozlamalar → Группа KPI bo‘limida guruh qo‘shing.
+        Группы KPI не найдены. Добавьте группу в Настройки → Группа KPI.
+      </div>
+    );
+  }
+
+  if (!hasAnyPlan) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+        Не удалось создать планы для выбранного периода. Нажмите «Обновить» или проверьте настройки
+        KPI-групп.
       </div>
     );
   }
@@ -659,10 +668,22 @@ export function PlanningTable({
           </tr>
         </thead>
         <tbody>
-          {primaryPlan &&
+          {allEmployeesFlat.length === 0 ? (
+            <tr>
+              <td
+                colSpan={2 + visibleGroups.reduce((n, g) => n + getConfig(g.id).metrics.length, 0) + 2}
+                className="px-4 py-8 text-center text-sm text-slate-500"
+              >
+                Сотрудники для выбранного направления не найдены. Проверьте привязку агентов к KPI-группе
+                и настройку утверждающих.
+              </td>
+            </tr>
+          ) : (
+            primaryPlan &&
             allEmployeesFlat.map(({ emp, depth }, index) =>
               renderEmployee(emp, primaryPlan.id, depth, index, allEmployeesFlat.length, metricColWidths)
-            )}
+            )
+          )}
         </tbody>
       </table>
     </div>

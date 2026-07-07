@@ -11,6 +11,7 @@ import {
 import { AUTO_CHAIN_ROLES_ABOVE_SUPERVISOR } from "./plans.setup.roles";
 import { userMatchesTradeDirection } from "./plans.setup.direction";
 import { ensurePlansAndTargets } from "./plans.setup.create";
+import { findKpiGroupAgentUserIds, findKpiGroupAgentsInDirection } from "./plans.setup.kpi-agents";
 import {
   dec,
   getDirection,
@@ -121,18 +122,22 @@ async function buildPlanningHierarchy(
   const approverCfg = await getApproverConfig(tenantId, directionId);
   const configSupervisorIds = approverCfg.rows.map((r) => r.supervisor_user_id);
 
-  const [directionAgents, configSupervisees, autoManagers, tenantBranches] = await Promise.all([
-    findAgentsInDirection(tenantId, direction),
-    loadSuperviseesOf(tenantId, configSupervisorIds),
-    findAutoManagersInDirection(tenantId, direction),
-    loadTenantBranchesForAccess(tenantId)
-  ]);
+  const [directionAgents, configSupervisees, autoManagers, tenantBranches, kpiGroupAgents] =
+    await Promise.all([
+      findAgentsInDirection(tenantId, direction),
+      loadSuperviseesOf(tenantId, configSupervisorIds),
+      findAutoManagersInDirection(tenantId, direction),
+      loadTenantBranchesForAccess(tenantId),
+      findKpiGroupAgentsInDirection(tenantId, directionId)
+    ]);
   const branchLookup = buildActiveBranchLookup(tenantBranches);
+  const kpiGroupAgentIds = new Set(kpiGroupAgents.map((a) => a.id));
 
   const agentMap = new Map<number, UserRow>();
-  for (const a of [...directionAgents, ...configSupervisees]) {
+  for (const a of [...directionAgents, ...configSupervisees, ...kpiGroupAgents]) {
     if (a.supervisor_user_id == null) continue;
-    if (!userMatchesTradeDirection(a, direction)) continue;
+    const fromKpiGroup = kpiGroupAgentIds.has(a.id);
+    if (!fromKpiGroup && !userMatchesTradeDirection(a, direction)) continue;
     agentMap.set(a.id, a);
   }
 
@@ -149,7 +154,8 @@ async function buildPlanningHierarchy(
     });
     agentMap.clear();
     for (const a of fresh) {
-      if (userMatchesTradeDirection(a, direction)) agentMap.set(a.id, a);
+      const fromKpiGroup = kpiGroupAgentIds.has(a.id);
+      if (fromKpiGroup || userMatchesTradeDirection(a, direction)) agentMap.set(a.id, a);
     }
   }
 
@@ -274,9 +280,19 @@ export async function getPlanningCenter(
     buildPlanningHierarchy(tenantId, query.direction_id, direction)
   ]);
 
-  const staffIds = employees.filter((e) => e.id > 0).map((e) => e.id);
   const kpiGroupsRaw = await listKpiGroupsForDirection(tenantId, query.direction_id);
   const kpiGroupIds = kpiGroupsRaw.map((g) => g.id);
+  const kpiGroupAgentUserIds = await findKpiGroupAgentUserIds(
+    tenantId,
+    query.direction_id,
+    kpiGroupIds
+  );
+  const staffIds = [
+    ...new Set([
+      ...employees.filter((e) => e.id > 0).map((e) => e.id),
+      ...kpiGroupAgentUserIds
+    ])
+  ];
 
   await ensurePlansAndTargets(tenantId, query, kpiGroupIds, staffIds, actorUserId);
 

@@ -15,7 +15,7 @@ export async function ensurePlansAndTargets(
   userIds: number[],
   actorUserId: number | null
 ): Promise<void> {
-  if (kpiGroupIds.length === 0 || userIds.length === 0) return;
+  if (kpiGroupIds.length === 0) return;
 
   for (const kpiGroupId of kpiGroupIds) {
     const plan = await prisma.salesKpiPlan.upsert({
@@ -38,6 +38,8 @@ export async function ensurePlansAndTargets(
       },
       update: {}
     });
+
+    if (userIds.length === 0) continue;
 
     const existing = await prisma.salesKpiPlanTarget.findMany({
       where: { plan_id: plan.id },
