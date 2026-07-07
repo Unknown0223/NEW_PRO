@@ -11,7 +11,7 @@ COPY prisma ./prisma
 
 ENV DATABASE_URL="postgresql://buildtime:buildtime@127.0.0.1:5432/buildtime?schema=public"
 
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY tsconfig.json prisma.config.ts ./
 COPY src ./src
@@ -32,11 +32,12 @@ COPY prisma ./prisma
 
 ENV DATABASE_URL="postgresql://buildtime:buildtime@127.0.0.1:5432/buildtime?schema=public"
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 COPY shared ./shared
 COPY scripts/docker-start.sh ./scripts/docker-start.sh
 RUN chmod +x scripts/docker-start.sh
