@@ -1,5 +1,4 @@
 import type { ApproverConfig } from "./plans.approvers.service";
-import { autoChainRoleRank } from "./plans.setup.roles";
 
 export type HierarchyUser = {
   id: number;
@@ -7,6 +6,7 @@ export type HierarchyUser = {
   login: string;
   role: string;
   code: string | null;
+  branch: string | null;
   supervisor_user_id: number | null;
 };
 
@@ -28,117 +28,153 @@ type BuildHierarchyInput = {
   autoManagers: HierarchyUser[];
   userById: Map<number, HierarchyUser>;
   personName: (u: { name: string; login: string }) => string;
+  branchLookup: ActiveBranchLookup;
 };
+
+const UNASSIGNED_BRANCH_KEY = "—";
+
+export type ActiveBranchLookup = {
+  /** Katalog kaliti (nom/kod, kichik harf) → ko‘rsatish nomi. */
+  canonicalByKey: Map<string, string>;
+};
+
+/** «Настройки → Филиалы» dagi faol filiallar — hodim qatoridagi erkin matn emas. */
+export function buildActiveBranchLookup(
+  branches: ReadonlyArray<{ name: string; code?: string | null; active?: boolean }>
+): ActiveBranchLookup {
+  const canonicalByKey = new Map<string, string>();
+  for (const branch of branches) {
+    if (branch.active === false) continue;
+    const name = branch.name.trim();
+    if (!name) continue;
+    const keys = [name.toLocaleLowerCase("ru")];
+    const code = branch.code?.trim();
+    if (code) keys.push(code.toLocaleLowerCase("en"));
+    for (const key of keys) {
+      if (!canonicalByKey.has(key)) canonicalByKey.set(key, name);
+    }
+  }
+  return { canonicalByKey };
+}
+
+function normalizeUserBranchToCatalog(
+  raw: string | null | undefined,
+  branchLookup: ActiveBranchLookup
+): string {
+  const trimmed = raw?.trim();
+  if (!trimmed) return UNASSIGNED_BRANCH_KEY;
+  if (branchLookup.canonicalByKey.size === 0) return UNASSIGNED_BRANCH_KEY;
+  return (
+    branchLookup.canonicalByKey.get(trimmed.toLocaleLowerCase("ru")) ??
+    branchLookup.canonicalByKey.get(trimmed.toLocaleLowerCase("en")) ??
+    UNASSIGNED_BRANCH_KEY
+  );
+}
+
+/** Supervayzer filiali: o‘zi → agentlari (eng ko‘p uchragan), faqat katalogdagi filiallar. */
+export function resolveSupervisorBranch(
+  supervisorId: number,
+  agents: ReadonlyArray<HierarchyUser>,
+  userById: Map<number, HierarchyUser>,
+  branchLookup: ActiveBranchLookup
+): string {
+  const own = normalizeUserBranchToCatalog(userById.get(supervisorId)?.branch, branchLookup);
+  if (own !== UNASSIGNED_BRANCH_KEY) return own;
+
+  const counts = new Map<string, number>();
+  for (const agent of agents) {
+    if (agent.supervisor_user_id !== supervisorId) continue;
+    const branch = normalizeUserBranchToCatalog(userById.get(agent.id)?.branch, branchLookup);
+    if (branch === UNASSIGNED_BRANCH_KEY) continue;
+    counts.set(branch, (counts.get(branch) ?? 0) + 1);
+  }
+  if (counts.size === 0) return UNASSIGNED_BRANCH_KEY;
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))[0]![0];
+}
+
+function branchDisplayName(branchKey: string): string {
+  return branchKey === UNASSIGNED_BRANCH_KEY ? "Без филиала" : branchKey;
+}
 
 /**
  * Ko‘rsatish daraxti (yuqoridan pastga):
- * Rahbarlar → Степень 1..N → Supervayzerlar (config tartibi) → Agentlar.
+ * Filial → Supervayzerlar (config tartibi) → Agentlar.
+ * Rahbarlar va «Степень» zanjirlari faqat tasdiqlash uchun; reja jadvalida ko‘rsatilmaydi.
  */
 export function buildPlanningEmployeeNodes(input: BuildHierarchyInput): PlanningEmployeeNode[] {
-  const { agents, approverCfg, autoManagers, userById, personName } = input;
-  const parentByUser = new Map<number, number | null>();
-  const userIds = new Set<number>();
-  const supervisorConfigIndex = new Map<number, number>();
-  const fieldAgentIds = new Set(agents.map((a) => a.id));
+  const { agents, approverCfg, userById, personName, branchLookup } = input;
+  const out: PlanningEmployeeNode[] = [];
+  const filialIdByBranch = new Map<string, number>();
+  let filialSeq = 0;
 
-  const leaders = approverCfg.leaders.filter((id) => id > 0);
-  const leaderSet = new Set(leaders);
-  for (let i = 0; i < leaders.length; i++) {
-    userIds.add(leaders[i]!);
-    parentByUser.set(leaders[i]!, i === 0 ? null : leaders[i - 1]!);
-  }
-  const bottomLeader = leaders.length > 0 ? leaders[leaders.length - 1]! : null;
+  const ensureFilialNode = (branchKey: string): number => {
+    const existing = filialIdByBranch.get(branchKey);
+    if (existing != null) return existing;
+    filialSeq += 1;
+    const id = -filialSeq;
+    filialIdByBranch.set(branchKey, id);
+    out.push({
+      id,
+      name: branchDisplayName(branchKey),
+      code: null,
+      role: "branch",
+      parent_id: null,
+      supervisor_config_index: null,
+      chain_level: null
+    });
+    return id;
+  };
 
   const configSupervisorIds = approverCfg.rows.map((r) => r.supervisor_user_id);
+  const supervisorConfigIndex = new Map<number, number>();
   configSupervisorIds.forEach((id, idx) => supervisorConfigIndex.set(id, idx));
 
+  const levelChainUserIds = new Set<number>();
   for (const row of approverCfg.rows) {
-    userIds.add(row.supervisor_user_id);
-    for (const lvl of row.levels) if (lvl != null && lvl > 0) userIds.add(lvl);
+    for (const lvl of row.levels) if (lvl != null && lvl > 0) levelChainUserIds.add(lvl);
   }
 
-  const levelChain = resolveCommonLevelChain(approverCfg, leaderSet);
-  const levelChainUserIds = new Set(levelChain);
-  const chainLevelByUser = new Map<number, number>();
-  levelChain.forEach((id, idx) => chainLevelByUser.set(id, idx + 1));
-  let attachParent = bottomLeader;
-  for (const lvlUser of levelChain) {
-    parentByUser.set(lvlUser, attachParent);
-    userIds.add(lvlUser);
-    attachParent = lvlUser;
-  }
-
-  const sortedAutoManagers = [...autoManagers].sort(
-    (a, b) => autoChainRoleRank(a.role) - autoChainRoleRank(b.role)
+  const supervisorIdsFromAgents = new Set(
+    agents.map((a) => a.supervisor_user_id).filter((id): id is number => id != null && id > 0)
   );
-  if (levelChain.length === 0 && sortedAutoManagers.length > 0) {
-    for (const m of sortedAutoManagers) {
-      parentByUser.set(m.id, attachParent);
-      userIds.add(m.id);
-      attachParent = m.id;
-    }
-  }
+  const supervisorIds = [...new Set([...configSupervisorIds, ...supervisorIdsFromAgents])];
 
-  const supervisorAttachParent = attachParent ?? bottomLeader;
+  const branchKeys = [
+    ...new Set(supervisorIds.map((supId) => resolveSupervisorBranch(supId, agents, userById, branchLookup)))
+  ].sort((a, b) => a.localeCompare(b, "ru"));
+  for (const branchKey of branchKeys) ensureFilialNode(branchKey);
 
-  for (const supId of configSupervisorIds) {
-    parentByUser.set(supId, supervisorAttachParent);
-    userIds.add(supId);
-  }
-
-  // «Степень» zanjiridagi agent maydon agenti sifatida qayta biriktirilmasin (SVR↔agent tsikl).
-  for (const a of agents) {
-    if (a.supervisor_user_id == null) continue;
-    if (levelChainUserIds.has(a.id)) continue;
-    userIds.add(a.id);
-    userIds.add(a.supervisor_user_id);
-    parentByUser.set(a.id, a.supervisor_user_id);
-    if (!parentByUser.has(a.supervisor_user_id)) {
-      parentByUser.set(a.supervisor_user_id, supervisorAttachParent);
-    }
-  }
-
-  repairMissingParents(parentByUser, userIds);
-
-  const out: PlanningEmployeeNode[] = [];
-  for (const id of userIds) {
-    const u = userById.get(id);
-    if (!u) continue;
-    let parentId = parentByUser.get(id) ?? null;
-    if (parentId != null && !userById.has(parentId)) parentId = null;
+  for (const supId of supervisorIds) {
+    const u = userById.get(supId);
+    if (!u || u.role !== "supervisor") continue;
+    const branchKey = resolveSupervisorBranch(supId, agents, userById, branchLookup);
     out.push({
       id: u.id,
       name: personName(u),
       code: u.code,
       role: u.role,
-      parent_id: parentId,
-      supervisor_config_index:
-        u.role === "supervisor" ? (supervisorConfigIndex.get(u.id) ?? null) : null,
-      chain_level: chainLevelByUser.get(u.id) ?? null
+      parent_id: ensureFilialNode(branchKey),
+      supervisor_config_index: supervisorConfigIndex.get(u.id) ?? null,
+      chain_level: null
+    });
+  }
+
+  for (const a of agents) {
+    if (a.supervisor_user_id == null) continue;
+    if (levelChainUserIds.has(a.id)) continue;
+    const u = userById.get(a.id);
+    if (!u) continue;
+    out.push({
+      id: u.id,
+      name: personName(u),
+      code: u.code,
+      role: u.role,
+      parent_id: a.supervisor_user_id,
+      supervisor_config_index: null,
+      chain_level: null
     });
   }
 
   return out;
-}
-
-/** Umumiy «Степень» zanjir — birinchi qator bo‘yicha, rahbarlar dublikatini o‘tkazib yuboradi. */
-function resolveCommonLevelChain(approverCfg: ApproverConfig, leaderSet: Set<number>): number[] {
-  if (approverCfg.rows.length === 0) return [];
-  const maxLen = Math.max(...approverCfg.rows.map((r) => r.levels.length));
-  const chain: number[] = [];
-  for (let i = 0; i < maxLen; i++) {
-    const id = approverCfg.rows[0]!.levels[i];
-    if (id == null || id <= 0) continue;
-    if (leaderSet.has(id)) continue;
-    if (chain.includes(id)) continue;
-    chain.push(id);
-  }
-  return chain;
-}
-
-function repairMissingParents(parentByUser: Map<number, number | null>, userIds: Set<number>): void {
-  for (const id of userIds) {
-    const pid = parentByUser.get(id);
-    if (pid != null) userIds.add(pid);
-  }
 }

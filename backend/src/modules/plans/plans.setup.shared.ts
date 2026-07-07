@@ -53,6 +53,7 @@ export type UserRow = {
   login: string;
   role: string;
   code: string | null;
+  branch: string | null;
   supervisor_user_id: number | null;
   trade_direction_id: number | null;
   trade_direction: string | null;
@@ -64,6 +65,7 @@ export const USER_SELECT = {
   login: true,
   role: true,
   code: true,
+  branch: true,
   supervisor_user_id: true,
   trade_direction_id: true,
   trade_direction: true

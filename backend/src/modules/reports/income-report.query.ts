@@ -7,6 +7,7 @@ export function parseIncomeReportQuery(q: Record<string, string | undefined>): I
   if (!fromRaw || !toRaw) throw new Error("BAD_RANGE");
   const from = parseDate(fromRaw, fromRaw);
   const to = parseDate(toRaw, toRaw);
+  from.setUTCHours(0, 0, 0, 0);
   to.setUTCHours(23, 59, 59, 999);
   if (to < from) throw new Error("BAD_RANGE");
   const intOr = (v?: string) => {

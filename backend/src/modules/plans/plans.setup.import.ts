@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { getApproverConfig } from "./plans.approvers.service";
 import type { PlanningCenterQuery } from "./plans.setup.schema";
-import { buildPlanningEmployeeNodes, type HierarchyUser } from "./plans.setup.hierarchy";
+import { buildPlanningEmployeeNodes, buildActiveBranchLookup, type HierarchyUser } from "./plans.setup.hierarchy";
 import {
   collectLevelUserIds,
   filterPlanningHierarchyNodes,
@@ -21,6 +21,7 @@ import {
   type PlanningEmployee,
   type UserRow
 } from "./plans.setup.shared";
+import { loadTenantBranchesForAccess } from "../tenant-settings/tenant-settings.profile.read";
 
 /** Yo'nalish bo'yicha agentlar (FK yoki matn bo'yicha). */
 async function findAgentsInDirection(
@@ -120,11 +121,13 @@ async function buildPlanningHierarchy(
   const approverCfg = await getApproverConfig(tenantId, directionId);
   const configSupervisorIds = approverCfg.rows.map((r) => r.supervisor_user_id);
 
-  const [directionAgents, configSupervisees, autoManagers] = await Promise.all([
+  const [directionAgents, configSupervisees, autoManagers, tenantBranches] = await Promise.all([
     findAgentsInDirection(tenantId, direction),
     loadSuperviseesOf(tenantId, configSupervisorIds),
-    findAutoManagersInDirection(tenantId, direction)
+    findAutoManagersInDirection(tenantId, direction),
+    loadTenantBranchesForAccess(tenantId)
   ]);
+  const branchLookup = buildActiveBranchLookup(tenantBranches);
 
   const agentMap = new Map<number, UserRow>();
   for (const a of [...directionAgents, ...configSupervisees]) {
@@ -193,7 +196,8 @@ async function buildPlanningHierarchy(
     approverCfg: scopedApproverCfg,
     autoManagers,
     userById: userById as Map<number, HierarchyUser>,
-    personName
+    personName,
+    branchLookup
   });
 
   const fieldAgentIds = new Set(agents.map((a) => a.id));
@@ -270,7 +274,7 @@ export async function getPlanningCenter(
     buildPlanningHierarchy(tenantId, query.direction_id, direction)
   ]);
 
-  const staffIds = employees.map((e) => e.id);
+  const staffIds = employees.filter((e) => e.id > 0).map((e) => e.id);
   const kpiGroupsRaw = await listKpiGroupsForDirection(tenantId, query.direction_id);
   const kpiGroupIds = kpiGroupsRaw.map((g) => g.id);
 

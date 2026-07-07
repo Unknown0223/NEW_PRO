@@ -29,10 +29,11 @@ export function collectLevelUserIds(rows: ApproverConfigRow[]): Set<number> {
 export type PlanningNodeLike = {
   id: number;
   role: string;
+  parent_id?: number | null;
   chain_level?: number | null;
 };
 
-/** Reja daraxti — faqat yo‘nalishga tegishli SVR/agent + rahbarlar/stepenlar. */
+/** Reja daraxti — filial, yo‘nalishga tegishli SVR va agentlar. */
 export function filterPlanningHierarchyNodes<T extends PlanningNodeLike>(input: {
   nodes: T[];
   leaderIds: readonly number[];
@@ -41,14 +42,14 @@ export function filterPlanningHierarchyNodes<T extends PlanningNodeLike>(input: 
   supervisorIdsWithAgents: ReadonlySet<number>;
   userMatchesDirection: (userId: number) => boolean;
 }): T[] {
-  const leaderSet = new Set(input.leaderIds);
-  const configLevelUserIds = collectLevelUserIds(input.scopedRows);
-
-  return input.nodes.filter((n) => {
-    if (leaderSet.has(n.id)) return true;
-    if (configLevelUserIds.has(n.id)) return true;
+  const filtered = input.nodes.filter((n) => {
+    if (n.role === "branch") return true;
     if (n.role === "agent") return input.fieldAgentIds.has(n.id);
     if (n.role === "supervisor") return input.supervisorIdsWithAgents.has(n.id);
-    return input.userMatchesDirection(n.id);
+    return false;
   });
+  const parentIds = new Set(
+    filtered.map((n) => n.parent_id).filter((id): id is number => id != null)
+  );
+  return filtered.filter((n) => n.role !== "branch" || parentIds.has(n.id));
 }

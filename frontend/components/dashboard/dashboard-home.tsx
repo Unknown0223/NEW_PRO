@@ -602,6 +602,7 @@ export function DashboardHome({
   const [photoReportTarget, setPhotoReportTarget] = useState<SupervisorPhotoReportModalTarget | null>(null);
   const [photoReportOpen, setPhotoReportOpen] = useState(false);
   const datePickerAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const hasAutoExpandedAnalytics = useRef(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const selfSupervisorId = useMemo(
     () => (role === "supervisor" ? decodeAccessTokenSub(accessToken) : null),
@@ -1091,7 +1092,8 @@ export function DashboardHome({
   }, [effTab]);
 
   useEffect(() => {
-    if (dataQ.data && activeSection === null) {
+    if (dataQ.data && activeSection === null && !hasAutoExpandedAnalytics.current) {
+      hasAutoExpandedAnalytics.current = true;
       setActiveSection("analytics");
     }
   }, [dataQ.data, activeSection]);

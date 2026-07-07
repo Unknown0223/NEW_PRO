@@ -1,8 +1,11 @@
 import type { PlanningEmployee } from "./planning-api";
 import { filterEmployeesWithAncestors, sortEmployeesByRole } from "./planning-utils";
 
-/** «Настройка утверждающих» tartibida sibling sort. */
+/** Filial va SVR config tartibida, qolganlari rol bo‘yicha. */
 export function sortTreeSiblings(a: PlanningEmployee, b: PlanningEmployee): number {
+  if (a.role === "branch" && b.role === "branch") {
+    return a.name.localeCompare(b.name, "ru");
+  }
   if (a.role === "supervisor" && b.role === "supervisor") {
     const ai = a.supervisor_config_index ?? 9999;
     const bi = b.supervisor_config_index ?? 9999;
@@ -19,7 +22,7 @@ export function getPlanningParentIds(employees: PlanningEmployee[]): Set<number>
   return set;
 }
 
-/** Rahbarlar, stepenlar va SVR ochiq — agentlar yopiq. */
+/** Filial va SVR ochiq — agentlar yopiq. */
 export function defaultExpandedPlanningNodes(employees: PlanningEmployee[]): Set<number> {
   const parentIds = getPlanningParentIds(employees);
   const expanded = new Set<number>();

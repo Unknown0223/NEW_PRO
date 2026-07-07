@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Search, FileSpreadsheet, SlidersHorizontal, ChevronDown } from "lucide-react";
 import type { PlanningEmployee, PlanningKpiGroup, PlanningPlan, PlanningTarget } from "./planning-api";
-import { formatNumber, getPlanningRoleLabel } from "./planning-utils";
+import { formatNumber, getPlanningRoleLabel, getRoleLabel } from "./planning-utils";
 import { flattenPlanningTree, getPlanningParentIds, defaultExpandedPlanningNodes } from "./planning-tree";
 
 interface TotalsSectionProps {

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { EnterprisePaymentKpiCard, type SupervisorPaymentSlot } from "./supervisor-enterprise-payment-card";
 
@@ -118,11 +119,15 @@ export function SupervisorEnterpriseKpiPanel({
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-muted/60 px-3 py-2">
               <p className="text-[10px] text-muted-foreground">План (одобрено)</p>
-              <p className="text-lg font-bold tabular-nums">{salesPlanKpi.planSum}</p>
+              <p className="text-lg font-bold tabular-nums">
+                {formatNumberGrouped(salesPlanKpi.planSum, { maxFractionDigits: 0 })}
+              </p>
             </div>
             <div className="rounded-lg bg-muted/60 px-3 py-2">
               <p className="text-[10px] text-muted-foreground">Факт MTD</p>
-              <p className="text-lg font-bold tabular-nums">{salesPlanKpi.factMtdSum}</p>
+              <p className="text-lg font-bold tabular-nums">
+                {formatNumberGrouped(salesPlanKpi.factMtdSum, { maxFractionDigits: 0 })}
+              </p>
             </div>
             <div className="rounded-lg bg-muted/60 px-3 py-2">
               <p className="text-[10px] text-muted-foreground">Выполнение</p>

@@ -18,6 +18,8 @@ export function getRoleLabel(role: string): string {
       return "Менеджер";
     case "regional_manager":
       return "Региональный менеджер";
+    case "branch":
+      return "Филиал";
     case "supervisor":
       return "Супервайзер";
     case "agent":
@@ -54,6 +56,7 @@ export const ROLE_SORT_PRIORITY: Record<string, number> = {
   regional_manager: 3,
   admin: 3,
   operator: 3,
+  branch: 3,
   supervisor: 4,
   agent: 5
 };
@@ -65,9 +68,10 @@ export function sortEmployeesByRole(a: PlanningEmployee, b: PlanningEmployee): n
   return a.name.localeCompare(b.name, "ru");
 }
 
-/** Reja kiritish — daraxtdagi barcha xodimlar (agentlar ham). */
+/** Reja kiritish — filial tuguni emas, qolgan daraxt xodimlari. */
 export function canRoleSetPlan(role: string): boolean {
   const r = role.trim();
+  if (r === "branch") return false;
   return (
     r === "supervisor" ||
     r === "manager" ||
@@ -90,8 +94,9 @@ export function getPlanningRoleLabel(emp: PlanningEmployee): string {
   return base;
 }
 
-/** Reja kiritish: zanjir bosqichlari (Степень) ham SVR kabi. */
+/** Reja kiritish: zanjir bosqichlari (Степень) ham SVR kabi; filial — faqat guruh. */
 export function canEmployeeSetPlan(emp: PlanningEmployee): boolean {
+  if (emp.role === "branch") return false;
   if (emp.chain_level != null && emp.chain_level > 0) return true;
   return canRoleSetPlan(emp.role);
 }

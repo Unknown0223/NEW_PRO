@@ -15,13 +15,14 @@ describe("plans.setup.scope", () => {
     expect(scoped.map((r) => r.supervisor_user_id)).toEqual([2085]);
   });
 
-  it("filters hierarchy nodes — only matching SVR, not all config SVRs", () => {
+  it("filters hierarchy nodes — filial, matching SVR, agents", () => {
     const nodes = [
-      { id: 1, role: "admin" },
-      { id: 2106, role: "regional_manager", chain_level: 1 },
-      { id: 2081, role: "supervisor" },
-      { id: 2085, role: "supervisor" },
-      { id: 2075, role: "agent" }
+      { id: -1, role: "branch", parent_id: null },
+      { id: 1, role: "admin", parent_id: null },
+      { id: 2106, role: "regional_manager", chain_level: 1, parent_id: null },
+      { id: 2081, role: "supervisor", parent_id: -1 },
+      { id: 2085, role: "supervisor", parent_id: -1 },
+      { id: 2075, role: "agent", parent_id: 2085 }
     ];
     const scopedRows = [{ supervisor_user_id: 2085, supervisor_name: "SVR 05", levels: [2106, 1] }];
     const filtered = filterPlanningHierarchyNodes({
@@ -32,6 +33,6 @@ describe("plans.setup.scope", () => {
       supervisorIdsWithAgents: new Set([2085]),
       userMatchesDirection: () => false
     });
-    expect(filtered.map((n) => n.id).sort((a, b) => a - b)).toEqual([1, 2075, 2085, 2106]);
+    expect(filtered.map((n) => n.id).sort((a, b) => a - b)).toEqual([-1, 2075, 2085]);
   });
 });

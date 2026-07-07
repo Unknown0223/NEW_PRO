@@ -100,6 +100,11 @@ function decodeJwtExpMs(token: string | null | undefined): number | null {
   }
 }
 
+function isAuthEndpointNoRefresh(url: string | undefined): boolean {
+  const u = String(url ?? "");
+  return u.includes("/auth/login") || u.includes("/auth/logout") || u.includes("/auth/refresh");
+}
+
 async function refreshAccessTokenSingleFlight(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
@@ -160,9 +165,10 @@ api.interceptors.request.use(async (config) => {
     const fromDisk = readPersistedAuth().accessToken;
     let accessToken = fromStore ?? fromDisk;
     const isRefreshCall = String(config.url ?? "").includes("/auth/refresh");
+    const skipProactiveRefresh = isRefreshCall || isAuthEndpointNoRefresh(config.url);
     const expMs = decodeJwtExpMs(accessToken);
     const almostExpired = expMs != null && expMs - Date.now() < 15_000;
-    if (!isRefreshCall && almostExpired) {
+    if (!skipProactiveRefresh && almostExpired) {
       const refreshed = await refreshAccessTokenSingleFlight();
       if (refreshed) accessToken = refreshed;
     }
@@ -213,7 +219,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (status === 401 && original && !original._retry) {
+    if (status === 401 && original && !original._retry && !isAuthEndpointNoRefresh(original.url)) {
       original._retry = true;
       const store = useAuthStore.getState();
       const refreshed = await refreshAccessTokenSingleFlight();

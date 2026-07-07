@@ -14,6 +14,7 @@ import {
   type ProfilePaymentMethodEntry
 } from "@/lib/payment-method-options";
 import { STALE } from "@/lib/query-stale";
+import { quickRangeToDates } from "@/components/dashboard/shared/date-ranges";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, ChevronRight, Download, Filter, RotateCcw } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -92,21 +93,26 @@ export function IncomeReportWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const enabled = Boolean(tenantSlug && hydrated);
-  const today = new Date().toISOString().slice(0, 10);
-  const defaultFilters: ReportFilters = useMemo(() => ({
-    from: today,
-    to: today,
-    requestType: "all",
-    expeditorId: "",
-    agentId: "",
-    cashDeskId: "",
-    category: "",
-    paymentType: "",
-    tradeDirection: "",
-    t1: "",
-    t2: "",
-    t3: ""
-  }), [today]);
+  const defaultFilters: ReportFilters = useMemo(() => {
+    const range = quickRangeToDates("last30") ?? {
+      from: new Date().toISOString().slice(0, 10),
+      to: new Date().toISOString().slice(0, 10)
+    };
+    return {
+      from: range.from,
+      to: range.to,
+      requestType: "all",
+      expeditorId: "",
+      agentId: "",
+      cashDeskId: "",
+      category: "",
+      paymentType: "",
+      tradeDirection: "",
+      t1: "",
+      t2: "",
+      t3: ""
+    };
+  }, []);
   const [draft, setDraft] = useState<ReportFilters>(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState<ReportFilters>(defaultFilters);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);

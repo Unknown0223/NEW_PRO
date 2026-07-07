@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
+
+ENV DATABASE_URL="postgresql://buildtime:buildtime@127.0.0.1:5432/buildtime?schema=public"
+
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
