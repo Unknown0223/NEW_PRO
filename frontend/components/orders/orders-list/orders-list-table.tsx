@@ -1,6 +1,7 @@
 "use client";
 
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageError } from "@/components/ui/page-error";
 import { OrderStatusDatetimeDialog } from "@/components/orders/orders-list/order-status-datetime-dialog";
 import { OrdersListTableRow } from "@/components/orders/orders-list/orders-list-table-row";

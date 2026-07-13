@@ -3,6 +3,7 @@
 import type { OrderDetailRow, OrderItemRow } from "@/components/orders/order-detail-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatDiscountPctLabel, orderDiscountPctFromSums } from "@/lib/format-discount-pct";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { Package } from "lucide-react";
@@ -208,7 +209,12 @@ export function OrderProductsTable({
               </thead>
               <tbody className="divide-y divide-border/60">
                 {data.items.map((i) => (
-                  <ProductRow key={i.id} item={i} blockName={data.warehouse_block_name} />
+                  <ProductRow
+                    key={i.id}
+                    item={i}
+                    blockName={data.warehouse_block_name}
+                    orderPct={orderDiscountPctFromSums(data.total_sum, data.discount_sum)}
+                  />
                 ))}
               </tbody>
               <tfoot>
@@ -225,9 +231,11 @@ export function OrderProductsTable({
                       : "—"}
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-medium tabular-nums">
-                    {itemAggregates.weightedDiscountPct != null
-                      ? `${itemAggregates.weightedDiscountPct}%`
-                      : "—"}
+                    {formatDiscountPctLabel(
+                      itemAggregates.weightedDiscountPct ??
+                        orderDiscountPctFromSums(data.total_sum, data.discount_sum),
+                      { empty: "—" }
+                    ) ?? "—"}
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-semibold tabular-nums">
                     {formatNumberGrouped(String(grandTotal), { maxFractionDigits: 2 })} So&apos;m
@@ -244,11 +252,17 @@ export function OrderProductsTable({
 
 function ProductRow({
   item,
-  blockName
+  blockName,
+  orderPct
 }: {
   item: OrderItemRow;
   blockName: string | null | undefined;
+  orderPct: number | null;
 }) {
+  const linePct = parseDec(item.discount_pct);
+  const discLabel = item.is_bonus
+    ? "—"
+    : formatDiscountPctLabel(linePct > 0 ? linePct : orderPct, { empty: "0%" });
   return (
     <tr
       className={cn(
@@ -278,9 +292,7 @@ function ProductRow({
           ? formatNumberGrouped(item.line_volume_m3, { maxFractionDigits: 4 })
           : "—"}
       </td>
-      <td className="px-6 py-4 text-right text-sm tabular-nums">
-        {item.discount_pct != null ? `${item.discount_pct}%` : "—"}
-      </td>
+      <td className="px-6 py-4 text-right text-sm tabular-nums">{discLabel}</td>
       <td className="px-6 py-4 text-right text-sm font-medium tabular-nums">
         {formatNumberGrouped(item.total, { maxFractionDigits: 2 })}
       </td>

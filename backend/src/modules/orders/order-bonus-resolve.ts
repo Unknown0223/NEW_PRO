@@ -25,6 +25,7 @@ import {
   type SumBonusPeek
 } from "./order-bonus-rules";
 import { collectRuleStockProductIds, ruleOrAnyClauseUsesCalendarMonth } from "./order-bonus-clauses";
+import { bonusRoomAfterPaidQty } from "./order-bonus-context.match-scope";
 
 type BonusSlot =
   | { kind: "discount"; priority: number; rule: BonusRuleRow }
@@ -85,7 +86,8 @@ export async function resolveOrderBonusesForCreate(
 
   const stockProductIds = collectRuleStockProductIds([...discountRules, ...sumRules, ...qtyRules]);
   for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
-  const availableByProductId = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds);
+  const warehouseAvail = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds);
+  const giftPickAvail = bonusRoomAfterPaidQty(warehouseAvail, qtyByProduct);
 
   const refAt = calendarContext?.referenceAt ?? new Date();
   const clientMonthMerchandiseSubtotalExclOrder = await fetchClientMonthMerchandiseSubtotalExclOrder(tx, {
@@ -129,7 +131,7 @@ export async function resolveOrderBonusesForCreate(
     clientUsedAutoBonusRuleIds,
     giftOverrides: qtyBonusGiftOverrides,
     warehouseId,
-    availableByProductId,
+    availableByProductId: giftPickAvail,
     ruleCache: new Map(),
     clientMonthMerchandiseSubtotalExclOrder,
     clientMonthPaidQtyAggregateExclOrder,
@@ -175,7 +177,7 @@ export async function resolveOrderBonusesForCreate(
     clientUsedAutoBonusRuleIds,
     qtyBonusGiftOverrides,
     warehouseId,
-    { rules: qtyRules, prereqEnv, availableByProductId }
+    { rules: qtyRules, prereqEnv, availableByProductId: warehouseAvail }
   );
 
   const slots: BonusSlot[] = [];

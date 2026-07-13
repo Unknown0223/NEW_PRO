@@ -339,6 +339,12 @@ model SalesReturn {
   refund_amount      Decimal?          @db.Decimal(15, 2)
   /// Qabuldan keyin qo'llaniladigan bonus qarzi (kechiktirilgan side-effect)
   bonus_debt_amount  Decimal?          @db.Decimal(15, 2)
+  /// Qabuldan keyin: skidka sharti kamayishi / to‘liq olib tashlanishi («Долг скидка»)
+  discount_debt_amount Decimal?        @db.Decimal(15, 2)
+  /// Ledger izohi: zakaz, qoida, foiz, min_sum, rejim
+  discount_debt_note String?           @db.VarChar(500)
+  /// Qabulda orders.discount_sum ga yoziladigan yangi qiymat
+  discount_sum_after Decimal?          @db.Decimal(15, 2)
   /// «Заявки» ro'yxatidagi ko'zgu zakaz id — qabulda holati delivered ga o'tadi
   mirror_order_id    Int?
   /// Zavsklad qabul qilgan vaqt va foydalanuvchi

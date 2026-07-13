@@ -1,13 +1,11 @@
 "use client";
 
-import { DiscountAlertIcon } from "@/components/orders/discount-alert-icon";
 import type { OrderListRow } from "@/components/orders/order-detail-view";
-import { bonusAlertLabel } from "@/lib/bonus-alert";
-import { discountAlertLabel } from "@/lib/discount-alert";
 import { OrderStatusDropdown } from "@/components/orders/orders-list/order-status-dropdown";
 import { formatOrderListDateTime } from "@/lib/format-order-list-datetime";
 import {
   formatOrderListDebtAsClientLiability,
+  orderListDisplayTotalSum,
   orderListExportCell,
   orderListTruncateCellClass
 } from "@/lib/orders-list-columns";
@@ -254,13 +252,9 @@ export function renderOrderListCell({
         "—"
       );
     case "bonus_sum": {
-      const alert = order.bonus_alert;
-      const alertLabel = bonusAlertLabel(alert);
       return (
         <span className="inline-flex items-center justify-end gap-1 tabular-nums text-emerald-800 dark:text-emerald-300">
           <span>{formatNumberGrouped(order.bonus_sum ?? "0", { maxFractionDigits: 2 })}</span>
-          {alert ? <DiscountAlertIcon code={alert} size={15} /> : null}
-          {alertLabel ? <span className="sr-only">{alertLabel}</span> : null}
         </span>
       );
     }
@@ -333,18 +327,31 @@ export function renderOrderListCell({
     case "total_sum":
       return (
         <span className="tabular-nums">
-          {formatNumberGrouped(order.total_sum, { maxFractionDigits: 2 })}
+          {formatNumberGrouped(orderListDisplayTotalSum(order), { maxFractionDigits: 2 })}
         </span>
       );
     case "discount_sum": {
       const n = parseNumField(order.discount_sum ?? "0");
-      const alert = order.discount_alert;
-      const alertLabel = discountAlertLabel(alert);
+      const ot = (order.order_type ?? "order").trim();
+      const isReturnDisc =
+        ot === "return" || ot === "return_by_order" || ot === "partial_return";
+      const gross = orderListDisplayTotalSum(order);
+      const pctRaw =
+        !isReturnDisc && n > 0 && gross > 0 ? (n / gross) * 100 : null;
+      const pctLabel = pctRaw != null ? `${Math.round(pctRaw)}%` : null;
       return (
-        <span className="inline-flex items-center justify-end gap-1 tabular-nums text-amber-900 dark:text-amber-200">
-          <span>{n > 0 ? formatNumberGrouped(n, { maxFractionDigits: 2 }) : "—"}</span>
-          {alert ? <DiscountAlertIcon code={alert} size={15} /> : null}
-          {alertLabel ? <span className="sr-only">{alertLabel}</span> : null}
+        <span className="inline-flex flex-col items-end gap-0.5 tabular-nums text-amber-900 dark:text-amber-200">
+          <span className="inline-flex items-center justify-end gap-1">
+            <span>
+              {n > 0 ? formatNumberGrouped(n, { maxFractionDigits: 2 }) : "—"}
+              {pctLabel ? <span className="ml-1 text-[11px] opacity-80">({pctLabel})</span> : null}
+            </span>
+          </span>
+          {isReturnDisc && n > 0 ? (
+            <span className="text-[10px] font-medium leading-tight text-amber-800/90 dark:text-amber-300/90">
+              Долг скидка
+            </span>
+          ) : null}
         </span>
       );
     }

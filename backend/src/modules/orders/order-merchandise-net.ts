@@ -6,41 +6,73 @@ export type OrderMerchandiseRuleHint = {
   discount_pct: number | null;
 };
 
+/** Qoida mahsulot narxini / total_sum ni net qiladimi (foizli skidka). */
+export function ruleAppliesMerchandiseDiscount(r: OrderMerchandiseRuleHint | undefined): boolean {
+  if (!r) return false;
+  if (r.type === "discount") return true;
+  if (r.type === "sum" && r.discount_pct != null && r.discount_pct > 0) return true;
+  return false;
+}
+
 /**
  * Zakaz bo'yicha to'lanadigan mahsulot summasi (bonus qatorlari alohida).
  *
- * Schema: `total_sum` — chegirmadan keyin; `discount_sum` — chegirma miqdori.
- * `type=discount` qoidasi qo'llanganda qator narxlari kamayadi va `total_sum` net.
+ * Schema kontrakti (create/update):
+ * - `total_sum` — chegirmadan keyin (net, to‘lanadigan)
+ * - `discount_sum` — chegirma miqdori (gross − net)
  *
- * `type=sum` + `discount_pct` ba'zi yozuvlarda faqat `discount_sum` ni to'ldiradi,
- * qatorlar esa to'liq narxda qoladi — bunda net = `total_sum - discount_sum`.
+ * `type=discount` va `type=sum`+`discount_pct` ikkalasi ham qatorlarni kamaytiradi
+ * va `paidTotal` ni `total_sum` ga yozadi. Shuning uchun qarz/to‘lovda
+ * `discount_sum` ni qayta ayirish mumkin emas (ikki marta skidka).
+ *
+ * `appliedRuleIds` / `rulesById` — imzo mosligi uchun saqlangan (chaqiruvchilar).
  */
 export function orderMerchandiseNetReceivable(
   totalSum: Prisma.Decimal,
-  discountSum: Prisma.Decimal,
-  appliedRuleIds: readonly number[],
-  rulesById: ReadonlyMap<number, OrderMerchandiseRuleHint>
+  _discountSum: Prisma.Decimal,
+  _appliedRuleIds: readonly number[] = [],
+  _rulesById: ReadonlyMap<number, OrderMerchandiseRuleHint> = new Map()
 ): Prisma.Decimal {
-  if (discountSum.lte(0)) return totalSum;
-
-  const hasAppliedDiscountRule = appliedRuleIds.some((id) => rulesById.get(id)?.type === "discount");
-  if (hasAppliedDiscountRule) return totalSum;
-
-  // Skidka `discount_sum` da, lekin `type=discount` qoidasi qo'llanmagan
-  // (masalan, sum-qoida + discount_pct yoki eski/noto'g'ri yozuvlar).
-  return Prisma.Decimal.max(totalSum.sub(discountSum), new Prisma.Decimal(0));
+  return totalSum;
 }
+
+export type ApplyOrderLevelDiscountPctOpts = {
+  /**
+   * `orders.total_sum` — chegirmadan keyin (net).
+   * Foiz = disc / (net + disc) when `linesAlreadyNet`.
+   */
+  totalSum?: Prisma.Decimal;
+  /** Qator narxlari allaqachon net (create path). */
+  linesAlreadyNet?: boolean;
+};
 
 /** Zakaz darajasidagi skidka: qatorlarda `discount_pct` ko‘rinishi (faqat display). */
 export function applyOrderLevelDiscountPctToItems(
   items: Array<{ is_bonus: boolean; total: string; discount_pct?: string | null }>,
-  discountSum: Prisma.Decimal
+  discountSum: Prisma.Decimal,
+  opts?: ApplyOrderLevelDiscountPctOpts
 ): Array<{ is_bonus: boolean; total: string; discount_pct?: string | null }> {
   if (discountSum.lte(0)) return items;
   const paid = items.filter((i) => !i.is_bonus);
-  const gross = paid.reduce((a, i) => a.add(new Prisma.Decimal(i.total)), new Prisma.Decimal(0));
+  const linesSum = paid.reduce((a, i) => a.add(new Prisma.Decimal(i.total)), new Prisma.Decimal(0));
+  if (linesSum.lte(0) && (opts?.totalSum == null || opts.totalSum.lte(0))) return items;
+
+  // totalSum berilgan bo‘lsa — schema bo‘yicha net; foiz = disc/(net+disc).
+  const linesAlreadyNet = opts?.linesAlreadyNet === true || opts?.totalSum != null;
+
+  const gross =
+    linesAlreadyNet && opts?.totalSum != null
+      ? opts.totalSum.add(discountSum)
+      : linesSum.gt(0)
+        ? linesSum
+        : (opts?.totalSum?.add(discountSum) ?? discountSum);
   if (gross.lte(0)) return items;
-  const pct = discountSum.div(gross).mul(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toString();
+
+  const pct = discountSum
+    .div(gross)
+    .mul(100)
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+    .toFixed(0);
   return items.map((i) => {
     if (i.is_bonus) return i;
     const existing = i.discount_pct?.trim();
@@ -49,6 +81,7 @@ export function applyOrderLevelDiscountPctToItems(
   });
 }
 
+/** Applied qoidalar ichida foizli skidka (discount yoki sum+discount_pct) bormi. */
 export async function orderHasAppliedDiscountRule(
   tenantId: number,
   appliedRuleIds: readonly number[]
@@ -56,7 +89,11 @@ export async function orderHasAppliedDiscountRule(
   const ids = appliedRuleIds.filter((id) => id > 0);
   if (ids.length === 0) return false;
   const hit = await prisma.bonusRule.findFirst({
-    where: { tenant_id: tenantId, id: { in: [...ids] }, type: "discount" },
+    where: {
+      tenant_id: tenantId,
+      id: { in: [...ids] },
+      OR: [{ type: "discount" }, { type: "sum", discount_pct: { gt: 0 } }]
+    },
     select: { id: true }
   });
   return hit != null;
@@ -74,22 +111,8 @@ export function orderUnpaidMerchandise(
   return unpaid.gt(0) ? unpaid : new Prisma.Decimal(0);
 }
 
-/** SQL: `orders` jadvali aliasi bo'yicha to'lanadigan mahsulot summasi. */
+/** SQL: `orders` jadvali aliasi bo'yicha to'lanadigan mahsulot summasi (= total_sum, net). */
 export function sqlOrderMerchandiseNetReceivable(orderAlias = "o"): Prisma.Sql {
   const o = Prisma.raw(orderAlias);
-  return Prisma.sql`
-    GREATEST(
-      CASE
-        WHEN ${o}.discount_sum > 0 AND NOT EXISTS (
-          SELECT 1
-          FROM bonus_rules br
-          WHERE br.tenant_id = ${o}.tenant_id
-            AND br.id = ANY(${o}.applied_auto_bonus_rule_ids)
-            AND br.type = 'discount'
-        ) THEN (${o}.total_sum - ${o}.discount_sum)
-        ELSE ${o}.total_sum
-      END,
-      0::decimal(15,2)
-    )::decimal(15,2)
-  `;
+  return Prisma.sql`${o}.total_sum::decimal(15,2)`;
 }

@@ -965,7 +965,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     for (final g in _assortmentGiftProducts(rule)) {
       final earned = _assortmentBonusForGift(rule, g, orderQty);
       if (earned <= 0) continue;
-      m[g.productId] = earned;
+      // Yetarli qoldiqdan beramiz; yetishmaganini kommentga qoldiramiz.
+      final given = capGiftQtyByStock(stockAvailable: g.stockAvailable, requested: earned);
+      if (given <= 0) continue;
+      m[g.productId] = given;
       _giftProductByRule[rule.ruleId] = g.productId;
       assigned = true;
     }
@@ -973,7 +976,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final earned = rule.bonusQty.round();
     if (earned <= 0 || rule.giftProducts.length != 1) return;
     final pid = rule.defaultGiftProductId ?? rule.giftProducts.first.productId;
-    m[pid] = earned;
+    final g = rule.giftProducts.first;
+    final given = capGiftQtyByStock(stockAvailable: g.stockAvailable, requested: earned);
+    if (given <= 0) return;
+    m[pid] = given;
     _giftProductByRule[rule.ruleId] = pid;
   }
 
@@ -1083,6 +1089,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   /// Ko‘p SKU: ombor qoldig‘i bo‘yicha bonuslarni avtomatik taqsimlash.
+  /// Yetmagan qism OOS SKU ga tashlanmaydi — faqat kommentda qoladi.
   void _distributeBonusByStock(OrderBonusPreviewRule rule, Map<int, int> m, int earned) {
     _manualGiftByRule.remove(rule.ruleId);
     for (final k in m.keys.toList()) {
@@ -1103,11 +1110,6 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       m[g.productId] = take;
       remaining -= take;
       _giftProductByRule[rule.ruleId] = g.productId;
-    }
-    if (remaining > 0) {
-      final fallback = sorted.first;
-      m[fallback.productId] = (m[fallback.productId] ?? 0) + remaining;
-      _giftProductByRule[rule.ruleId] = fallback.productId;
     }
   }
 
@@ -1214,18 +1216,34 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   int _giftQtyFor(OrderBonusPreviewRule rule, int productId) =>
       _qtyMapForRule(rule.ruleId)[productId] ?? 0;
 
-  int _giftStockShortage(OrderBonusPreviewRule rule, GiftProductPreview g) =>
-      bonusStockShortage(
-        stockAvailable: g.stockAvailable,
-        giftQty: _giftQtyFor(rule, g.productId),
-      );
+  int _giftStockShortage(OrderBonusPreviewRule rule, GiftProductPreview g) {
+    // Assortiment: huquq (earned) vs ombor; map da faqat beriladigan (capped) qty.
+    if (_hasPerSkuBonusPlan(rule)) {
+      final earned = _assortmentBonusForGift(rule, g, _orderQtyByProduct());
+      return bonusStockShortage(stockAvailable: g.stockAvailable, giftQty: earned);
+    }
+    return bonusStockShortage(
+      stockAvailable: g.stockAvailable,
+      giftQty: _giftQtyFor(rule, g.productId),
+    );
+  }
 
-  bool _ruleHasStockShortage(OrderBonusPreviewRule rule) => hasAnyBonusStockShortage(
-        lines: [
-          for (final g in rule.giftProducts)
-            (stockAvailable: g.stockAvailable, giftQty: _giftQtyFor(rule, g.productId)),
-        ],
-      );
+  bool _ruleHasStockShortage(OrderBonusPreviewRule rule) {
+    if (_supportsMultiGiftPick(rule) && !_hasPerSkuBonusPlan(rule)) {
+      return _earnedBonusQty(rule) > _selectedGiftTotal(rule);
+    }
+    return hasAnyBonusStockShortage(
+      lines: [
+        for (final g in rule.giftProducts)
+          (
+            stockAvailable: g.stockAvailable,
+            giftQty: _hasPerSkuBonusPlan(rule)
+                ? _assortmentBonusForGift(rule, g, _orderQtyByProduct())
+                : _giftQtyFor(rule, g.productId),
+          ),
+      ],
+    );
+  }
 
   bool _discountRuleHasWarning(OrderDiscountPreviewRule d) {
     if (_discountMode == DiscountMode.none) return false;
@@ -1647,6 +1665,18 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     if (_bonusMode == BonusMode.none) return '';
     final lines = <({String productName, int shortage})>[];
     for (final rule in _preview.eligibleBonuses) {
+      if (_supportsMultiGiftPick(rule) && !_hasPerSkuBonusPlan(rule)) {
+        final earned = _earnedBonusQty(rule);
+        final given = _selectedGiftTotal(rule);
+        final short = earned - given;
+        if (short > 0) {
+          final name = rule.giftProducts.isNotEmpty
+              ? rule.giftProducts.first.name
+              : rule.name;
+          lines.add((productName: name, shortage: short));
+        }
+        continue;
+      }
       for (final g in rule.giftProducts) {
         final shortage = _giftStockShortage(rule, g);
         if (shortage > 0) {

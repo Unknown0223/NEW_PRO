@@ -16,6 +16,7 @@ import {
   type BulkOrderStatusResponse
 } from "./types";
 import type { OrdersListPagePart1 } from "./use-orders-list-page.part1";
+import { orderListDisplayTotalSum } from "@/lib/orders-list-columns";
 
 export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
   const {
@@ -49,7 +50,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     let debt = 0;
     for (const r of selectedRows) {
       qty += Number.parseFloat(String(r.qty).replace(/\s/g, "").replace(",", ".")) || 0;
-      total += Number.parseFloat(String(r.total_sum).replace(/\s/g, "").replace(",", ".")) || 0;
+      total += orderListDisplayTotalSum(r);
       discount += Number.parseFloat(String(r.discount_sum ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
       bonusQty += Number.parseFloat(String(r.bonus_qty ?? "0").replace(/\s/g, "").replace(",", ".")) || 0;
       if (r.debt != null && r.debt !== "") {

@@ -44,7 +44,13 @@ function OrdersListExpandedBody({
           Нет строк товаров
         </p>
       ) : (
-        <OrdersProductsByCategoryView items={items} discount_sum={q.data?.discount_sum} />
+        <OrdersProductsByCategoryView
+          items={items}
+          discount_sum={q.data?.discount_sum}
+          total_sum={q.data?.total_sum}
+          order_type={q.data?.order_type}
+          discount_debt_note={q.data?.discount_debt_note}
+        />
       )}
     </div>
   );

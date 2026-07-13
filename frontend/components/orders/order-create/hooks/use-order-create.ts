@@ -1919,8 +1919,21 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           if (noteJoined) body.note = noteJoined;
           if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
           if (polkiSubmitBonusDebt > 0) body.bonus_debt_amount = polkiSubmitBonusDebt;
-          await api.post(`/api/${tenantSlug}/returns/period-batch`, body);
-          return { bonusDebtApplied: polkiSubmitBonusDebt };
+          const batchRes = await api.post<{
+            returns?: Array<{ discount_debt_amount?: string | null; discount_debt_note?: string | null }>;
+          }>(`/api/${tenantSlug}/returns/period-batch`, body);
+          const discDebt = (batchRes.returns ?? []).reduce((a, r) => {
+            const n = Number.parseFloat(String(r.discount_debt_amount ?? "").replace(/\s/g, ""));
+            return a + (Number.isFinite(n) && n > 0 ? n : 0);
+          }, 0);
+          const discNote = (batchRes.returns ?? [])
+            .map((r) => r.discount_debt_note)
+            .find((n) => n && String(n).trim());
+          return {
+            bonusDebtApplied: polkiSubmitBonusDebt,
+            discountDebtApplied: discDebt,
+            discountDebtNote: discNote ?? null
+          };
         }
 
         submitBonusDebt = polkiSubmitBonusDebt;
@@ -1953,8 +1966,18 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         if (noteJoined) body.note = noteJoined;
         if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
         if (submitBonusDebt > 0) body.bonus_debt_amount = submitBonusDebt;
-        await api.post(`/api/${tenantSlug}/returns/period`, body);
-        return { bonusDebtApplied: submitBonusDebt };
+        const periodRes = await api.post<{
+          discount_debt_amount?: string | null;
+          discount_debt_note?: string | null;
+        }>(`/api/${tenantSlug}/returns/period`, body);
+        const discOne = Number.parseFloat(
+          String(periodRes.discount_debt_amount ?? "").replace(/\s/g, "")
+        );
+        return {
+          bonusDebtApplied: submitBonusDebt,
+          discountDebtApplied: Number.isFinite(discOne) && discOne > 0 ? discOne : 0,
+          discountDebtNote: periodRes.discount_debt_note ?? null
+        };
       }
 
       if (isExchangeFlow) {
@@ -2113,11 +2136,34 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         Number((result as { bonusDebtApplied?: number }).bonusDebtApplied) > 0
           ? Number((result as { bonusDebtApplied: number }).bonusDebtApplied)
           : 0;
+      const discountDebtApplied =
+        result &&
+        typeof result === "object" &&
+        "discountDebtApplied" in result &&
+        Number((result as { discountDebtApplied?: number }).discountDebtApplied) > 0
+          ? Number((result as { discountDebtApplied: number }).discountDebtApplied)
+          : 0;
+      const discountDebtNote =
+        result &&
+        typeof result === "object" &&
+        "discountDebtNote" in result &&
+        typeof (result as { discountDebtNote?: unknown }).discountDebtNote === "string"
+          ? String((result as { discountDebtNote: string }).discountDebtNote).trim()
+          : "";
+      const notices: string[] = [];
       if (debtApplied > 0) {
-        setSelectionNotice(
-          `Долг бонус ${Math.round(debtApplied).toLocaleString("ru-RU")} сум записан в баланс клиента (карточка → Балансы).`
+        notices.push(
+          `Долг бонус ${Math.round(debtApplied).toLocaleString("ru-RU")} сум — в «Балансы клиентов».`
         );
       }
+      if (discountDebtApplied > 0) {
+        notices.push(
+          discountDebtNote
+            ? discountDebtNote
+            : `Долг скидка ${Math.round(discountDebtApplied).toLocaleString("ru-RU")} сум — в «Балансы клиентов» (после приёмки на складе).`
+        );
+      }
+      if (notices.length > 0) setSelectionNotice(notices.join(" "));
       setRequestTypeRef("");
       setOrderNotePreset("");
       setRefSelectKey((k) => k + 1);

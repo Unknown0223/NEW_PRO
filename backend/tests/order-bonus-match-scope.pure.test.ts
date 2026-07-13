@@ -121,6 +121,36 @@ describe("order-bonus-context.match-scope", () => {
     expect(resolveQtyGiftProductId(assortmentRule, 2, new Map(), { minUnits: 2 })).toBe(2);
   });
 
+  it("bonusRoomAfterPaidQty — pullik savatdan keyin bonus joyi", async () => {
+    const { bonusRoomAfterPaidQty } = await import(
+      "../src/modules/orders/order-bonus-context.match-scope"
+    );
+    const room = bonusRoomAfterPaidQty(
+      new Map([
+        [1, 51],
+        [2, 87]
+      ]),
+      new Map([
+        [1, 22],
+        [2, 87]
+      ])
+    );
+    expect(room.get(1)).toBe(29);
+    expect(room.get(2)).toBe(0);
+  });
+
+  it("pickGiftFromAllowedList — pullik yegan SKU o‘rniga qolgan joyi borini tanlaydi", async () => {
+    const { pickGiftFromAllowedList } = await import(
+      "../src/modules/orders/order-bonus-context.match-scope"
+    );
+    // Ombor: M2=87, M1=51; savatdan keyin room: M2=0, M1=29
+    const room = new Map([
+      [1, 29],
+      [2, 0]
+    ]);
+    expect(pickGiftFromAllowedList([1, 2], 2, room, 10)).toBe(1);
+  });
+
   it("resolveQtyGiftProductId — category_stock: ombordagi eng ko‘p qoldiqli mahsulotdan", () => {
     // Kategoriya doirasi, aniq sovg‘a SKU tanlanmagan — xarid qilingan mahsulotdan qat’i nazar
     // eng ko‘p ombor qoldig‘iga ega nomzod tanlanadi (mahsulot 2 emas, mahsulot 20 — ko‘proq qoldiq).

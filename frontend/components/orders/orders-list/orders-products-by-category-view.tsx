@@ -13,10 +13,16 @@ import { useEffect, useMemo, useState } from "react";
 /** Zakaz qatori tagidagi mahsulot bloki — kategoriya tablari + jadval. */
 export function OrdersProductsByCategoryView({
   items,
-  discount_sum
+  discount_sum,
+  total_sum,
+  order_type,
+  discount_debt_note
 }: {
   items: OrderItemRow[];
   discount_sum?: string | null;
+  total_sum?: string | null;
+  order_type?: string | null;
+  discount_debt_note?: string | null;
 }) {
   const groups = useMemo(() => groupItemsByCategory(items), [items]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -69,7 +75,13 @@ export function OrdersProductsByCategoryView({
         </div>
       )}
       {activeGroup ? (
-        <OrderLineProductsTable items={activeGroup.items} discount_sum={discount_sum} />
+        <OrderLineProductsTable
+          items={activeGroup.items}
+          discount_sum={discount_sum}
+          total_sum={total_sum}
+          order_type={order_type}
+          discount_debt_note={discount_debt_note}
+        />
       ) : null}
       {groups.length > 1 ? (
         <p className="mt-3 text-xs text-muted-foreground">

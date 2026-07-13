@@ -13,6 +13,7 @@ import {
   resolveOrderBonusesForCreate,
   type OrderAgentBonusContext
 } from "../order-bonus-apply";
+import { capBonusCreatesToStock, mergeOrderAutoComments } from "../order-bonus-stock-cap";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE, normalizeOrderType } from "../order-status";
 
 import {
@@ -232,7 +233,7 @@ export async function updateOrderLines(
     }
 
     let bonusSum = new Prisma.Decimal(0);
-    const bonusCreates = bonusDrafts.map((b) => {
+    let bonusCreates = bonusDrafts.map((b) => {
       bonusSum = bonusSum.add(b.total);
       return {
         product_id: b.product_id,
@@ -242,6 +243,22 @@ export async function updateOrderLines(
         is_bonus: true as const
       };
     });
+
+    let bonusAlert: string | null = null;
+    let linesComment = existing.comment ?? null;
+    if (applyBonus && bonusCreates.length > 0 && warehouseId != null) {
+      const stockCap = await capBonusCreatesToStock(
+        tx,
+        tenantId,
+        warehouseId,
+        paidAfterDisc,
+        bonusCreates
+      );
+      bonusCreates = stockCap.bonusCreates;
+      bonusSum = stockCap.bonusSum;
+      bonusAlert = stockCap.bonusAlert;
+      linesComment = mergeOrderAutoComments(linesComment, [stockCap.shortageComment]);
+    }
 
     const rawDiscUp = totalSum.sub(paidTotal);
     const discountSum =
@@ -301,6 +318,8 @@ export async function updateOrderLines(
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,
+        bonus_alert: bonusAlert,
+        comment: linesComment,
         applied_auto_bonus_rule_ids: appliedAutoBonusRuleIds,
         applied_bonus_rules_snapshot: bonusSnapshot as Prisma.InputJsonValue,
         bonus_gift_selections: bonusGiftMapToJson(giftSelectionMap),

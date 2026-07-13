@@ -1445,7 +1445,7 @@ class _ExpeditorReturnByOrderPageState
     return lines;
   }
 
-  /// «Оформить возврат» bosilganda: tizim bonus mexanizmi bo'yicha hisoblaydi
+  /// «Оформить возврат» bosilganda: tizim bonus/skidka mexanizmi bo'yicha hisoblaydi
   /// (server preview), kamchilik bo'lsa — markazdan ogohlantirish bilan
   /// tasdiqlash modal oynasi (bekor → tahrirga qaytadi).
   Future<void> _openFinalize(int orderId, List<Map<String, dynamic>> products,
@@ -1460,46 +1460,72 @@ class _ExpeditorReturnByOrderPageState
     double refund;
     double bonusReturned;
     double bonusDebt;
+    double discountDebt = 0;
+    String? discountDebtNote;
+    String discountDebtMode = 'none';
     var warnings = <String>[];
 
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (slug.isEmpty) return;
+
+    // Preview: AUTO — to‘liq; MANUAL — skidka/ogohlantirish uchun paid return_qty.
+    final previewLines = isManual
+        ? [
+            for (final l in lines)
+              if (((l['paid_qty'] as num?)?.toDouble() ?? 0) > 0)
+                {
+                  'product_id': l['product_id'],
+                  'return_qty': (l['paid_qty'] as num).toDouble(),
+                },
+          ]
+        : lines;
+
+    setState(() => _submitting = true);
+    Map<String, dynamic>? preview;
+    try {
+      if (previewLines.isNotEmpty) {
+        preview = await ref.read(expeditorApiProvider).previewReturnByOrder(
+              slug,
+              orderId,
+              lines: previewLines,
+            );
+      }
+    } on ApiException catch (e) {
+      if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
+      return;
+    } catch (e) {
+      if (mounted) _toast('Ошибка: $e', color: AppColors.error);
+      return;
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+    if (!mounted) return;
+
+    final totals = Map<String, dynamic>.from(
+      (preview?['totals'] as Map?) ?? const {},
+    );
     if (isManual) {
-      // «По продуктам» — qo'lda kiritilgan savdo/bonus aynan qaytariladi:
-      // refund = savdo×narx, bonus = kiritilgan bonus, «долг» yo'q.
       refund = saleSum;
       bonusReturned = bonusQty;
       bonusDebt = 0;
     } else {
-      // AUTO — tizim hisobi (umumiy qoidalar / bonus mexanizmi).
-      final slug = ref.read(sessionProvider).tenantSlug ?? '';
-      if (slug.isEmpty) return;
-      setState(() => _submitting = true);
-      Map<String, dynamic> preview;
-      try {
-        preview = await ref
-            .read(expeditorApiProvider)
-            .previewReturnByOrder(slug, orderId, lines: lines);
-      } on ApiException catch (e) {
-        if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
-        return;
-      } catch (e) {
-        if (mounted) _toast('Ошибка: $e', color: AppColors.error);
-        return;
-      } finally {
-        if (mounted) setState(() => _submitting = false);
-      }
-      if (!mounted) return;
-
-      final totals = Map<String, dynamic>.from(
-          (preview['totals'] as Map?) ?? const {},);
       refund = double.tryParse('${totals['refund_amount'] ?? 0}') ?? 0;
       bonusReturned = (totals['bonus_qty'] as num?)?.toDouble() ?? 0;
       bonusDebt = double.tryParse('${totals['bonus_debt_amount'] ?? 0}') ?? 0;
-      warnings = ((preview['warnings'] as List?) ?? const [])
-          .map((e) => e.toString())
-          .where((w) => w.trim().isNotEmpty)
-          .toList();
     }
-    final hasDebt = bonusDebt > 0.0001;
+    discountDebt = double.tryParse('${totals['discount_debt_amount'] ?? 0}') ?? 0;
+    discountDebtNote = totals['discount_debt_note']?.toString();
+    discountDebtMode = totals['discount_debt_mode']?.toString() ?? 'none';
+    warnings = ((preview?['warnings'] as List?) ?? const [])
+        .map((e) => e.toString())
+        .where((w) => w.trim().isNotEmpty)
+        .toList();
+
+    final hasBonusDebt = bonusDebt > 0.0001;
+    final hasDiscountDebt = discountDebt > 0.0001;
+    final hasDiscountRecalc =
+        !hasDiscountDebt && discountDebtMode == 'proportional';
+    final hasDebt = hasBonusDebt || hasDiscountDebt;
 
     var reason = _reason;
     final accepted = await showModalBottomSheet<bool>(
@@ -1579,61 +1605,42 @@ class _ExpeditorReturnByOrderPageState
                       border: OutlineInputBorder(),
                     ),
                   ),
-                  if (hasDebt) ...[
+                  if (hasBonusDebt) ...[
                     const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color:
-                                AppColors.warning.withValues(alpha: 0.5),),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: AppColors.warning, size: 20,),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Не хватает бонусной части',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.warning,),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'По правилам возврата с полки бонусной части '
-                                  'не хватает на '
-                                  "${formatMoneySpaced(bonusDebt)} So'm. "
-                                  'Эта сумма будет отнесена на баланс (долг) '
-                                  'клиента. Отмените, чтобы изменить '
-                                  'количество, или подтвердите.',
-                                  style: AppTypography.caption.copyWith(
-                                      color: AppColors.textSecondary,),
-                                ),
-                                if (warnings.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  ...warnings.map((w) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 2),
-                                        child: Text('• $w',
-                                            style: AppTypography.caption
-                                                .copyWith(
-                                                    color: AppColors
-                                                        .textMuted,),),
-                                      ),),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                    _debtWarningCard(
+                      title: 'Не хватает бонусной части',
+                      body:
+                          'По правилам возврата с полки бонусной части не хватает на '
+                          "${formatMoneySpaced(bonusDebt)} So'm. "
+                          'Эта сумма будет отнесена на баланс (долг) клиента '
+                          'после приёмки на складе.',
+                      extra: warnings
+                          .where((w) => !w.contains('Долг скидка') && !w.contains('Скидка по заказу'))
+                          .toList(),
+                    ),
+                  ],
+                  if (hasDiscountDebt) ...[
+                    const SizedBox(height: 14),
+                    _debtWarningCard(
+                      title: 'Долг скидка',
+                      body: discountDebtNote?.trim().isNotEmpty == true
+                          ? '${discountDebtNote!.trim()}\n\n'
+                              "${formatMoneySpaced(discountDebt)} So'm будет отнесено "
+                              'на баланс клиента после приёмки на складе '
+                              '(скидка по оставшемуся товару отозвана).'
+                          : 'Условие скидки по заказу больше не выполняется. '
+                              "${formatMoneySpaced(discountDebt)} So'm — долг скидка "
+                              'на баланс клиента после приёмки на складе.',
+                    ),
+                  ] else if (hasDiscountRecalc) ...[
+                    const SizedBox(height: 14),
+                    _debtWarningCard(
+                      title: 'Скидка будет пересчитана',
+                      body:
+                          'Сумма скидки по исходному заказу уменьшится пропорционально '
+                          'возврату. Дополнительный долг по скидке не начисляется '
+                          '(возврат уже по цене со скидкой).',
+                      tone: AppColors.info,
                     ),
                   ],
                   const SizedBox(height: 18),
@@ -1693,6 +1700,61 @@ class _ExpeditorReturnByOrderPageState
     await _doSubmit(orderId);
   }
 
+  Widget _debtWarningCard({
+    required String title,
+    required String body,
+    List<String> extra = const [],
+    Color tone = AppColors.warning,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tone.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: tone, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: tone),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                if (extra.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  ...extra.map(
+                    (w) => Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '• $w',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _doSubmit(int orderId) async {
     final lines = _aggregatedLines(withSwap: true);
     if (lines.isEmpty) {
@@ -1717,11 +1779,19 @@ class _ExpeditorReturnByOrderPageState
       ref.invalidate(deliveriesProvider(null));
       if (!mounted) return;
       final refund = (res['refund_amount'])?.toString();
+      final discDebt = double.tryParse('${res['discount_debt_amount'] ?? 0}') ?? 0;
+      final parts = <String>[
+        if (refund != null)
+          'Возврат оформлен · сумма: ${formatMoneySpaced(double.tryParse(refund) ?? 0)}'
+        else
+          'Возврат оформлен',
+      ];
+      if (discDebt > 0.0001) {
+        parts.add('Долг скидка: ${formatMoneySpaced(discDebt)} · после приёмки');
+      }
       _toast(
-        refund != null
-            ? 'Возврат оформлен · сумма: ${formatMoneySpaced(double.tryParse(refund) ?? 0)}'
-            : 'Возврат оформлен',
-        color: AppColors.success,
+        parts.join('\n'),
+        color: discDebt > 0.0001 ? AppColors.warning : AppColors.success,
       );
       context.pop();
     } on ApiException catch (e) {

@@ -30,6 +30,9 @@ export async function persistPeriodReturnBatch(
     for (const p of prepared) {
       const attachDebt = !debtAttached && batchDebt.gt(0);
       if (attachDebt) debtAttached = true;
+      const claw = p.discountClawback;
+      const discDebt =
+        claw != null && claw.amount.gt(0) ? claw : null;
       const ret = await tx.salesReturn.create({
         data: {
           tenant_id: tenantId,
@@ -40,6 +43,10 @@ export async function persistPeriodReturnBatch(
           status: "pending",
           refund_amount: p.recalc.refund_amount,
           bonus_debt_amount: attachDebt ? batchDebt : null,
+          discount_debt_amount: discDebt != null ? discDebt.amount : null,
+          discount_debt_note:
+            discDebt != null && discDebt.note ? discDebt.note.slice(0, 500) : null,
+          discount_sum_after: claw != null ? claw.new_discount_sum : null,
           return_type: "partial",
           date_from: null,
           date_to: null,
@@ -80,7 +87,11 @@ export async function persistPeriodReturnBatch(
         note: input.note?.trim() || null,
         refusalReasonRef: input.refusal_reason_ref ?? null,
         sourceOrderNumber: p.sourceOrderNumber,
-        actorUserId: uid
+        actorUserId: uid,
+        discountDebtAmount: discDebt != null ? discDebt.amount : null,
+        discountDebtNote:
+          discDebt != null && discDebt.note ? discDebt.note.slice(0, 500) : null,
+        discountPct: claw?.discount_pct ?? null
       });
       mirrorOrderIds.push(mid);
 
@@ -132,6 +143,14 @@ export async function persistPeriodReturnBatch(
       id: result.id,
       number: result.number,
       refund_amount: result.refund_amount?.toString() ?? null,
+      discount_debt_amount:
+        p.discountClawback != null && p.discountClawback.amount.gt(0)
+          ? p.discountClawback.amount.toString()
+          : null,
+      discount_debt_note:
+        p.discountClawback != null && p.discountClawback.amount.gt(0)
+          ? p.discountClawback.note
+          : null,
       lines: p.retLines.map((rl) => ({
         product_id: rl.product_id,
         sku: pMap.get(rl.product_id)?.sku ?? "",

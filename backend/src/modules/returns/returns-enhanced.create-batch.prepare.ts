@@ -34,6 +34,11 @@ import {
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
 import { assertOrdersInReturnFilter } from "./returns-filter.service";
+import {
+  resolveOrderDiscountClawback,
+  sumPaidNetFromItems,
+  type DiscountClawbackResult
+} from "./returns-enhanced.discount-debt";
 
 export type PreparedPeriodReturnSlice = {
   orderId: number;
@@ -55,6 +60,7 @@ export type PreparedPeriodReturnSlice = {
     refund_amount: import("@prisma/client").Prisma.Decimal;
   };
   number: string;
+  discountClawback: DiscountClawbackResult | null;
 };
 
 export type PreparePeriodReturnBatchResult = {
@@ -183,6 +189,7 @@ export async function preparePeriodReturnBatch(
       refund_amount: Prisma.Decimal;
     };
     number: string;
+    discountClawback: DiscountClawbackResult | null;
   };
 
   const prepared: PreparedSlice[] = [];
@@ -338,7 +345,18 @@ export async function preparePeriodReturnBatch(
 
     const number = `VR-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
     const sourceOrderNumber = cdata.orders[0]?.number?.trim() || String(orderId);
-    prepared.push({ orderId, sourceOrderNumber, retLines, recalc, number });
+    const remainingPaidNetBefore = sumPaidNetFromItems(itemsAdjusted);
+    const thisReturnPaidNet = retLines.reduce(
+      (a, l) => a.add(R(l.price).mul(l.paid_qty)),
+      new Prisma.Decimal(0)
+    );
+    const discountClawback = await resolveOrderDiscountClawback(
+      tenantId,
+      orderId,
+      thisReturnPaidNet,
+      remainingPaidNetBefore
+    );
+    prepared.push({ orderId, sourceOrderNumber, retLines, recalc, number, discountClawback });
   }
 
   const uid = actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;

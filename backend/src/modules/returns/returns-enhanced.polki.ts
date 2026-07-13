@@ -42,6 +42,11 @@ export async function createPolkiMirrorZayavka(
     sourceOrderNumber?: string | null;
     /** Hujjatni yaratgan foydalanuvchi — manba kanali (web/mobil) shu orqali aniqlanadi. */
     actorUserId?: number | null;
+    /** «Долг скидка» — Заявки da Скидка ustuni + izoh */
+    discountDebtAmount?: Prisma.Decimal | null;
+    discountDebtNote?: string | null;
+    /** Qatorlarda foiz ko‘rsatish (ixtiyoriy) */
+    discountPct?: number | null;
   }
 ): Promise<number> {
   const creates: Prisma.OrderItemCreateWithoutOrderInput[] = [];
@@ -89,6 +94,10 @@ export async function createPolkiMirrorZayavka(
     new Prisma.Decimal(0)
   );
   const headerTotal = paidLineTotal.gt(0) ? paidLineTotal : params.refundAmount;
+  const discountDebt =
+    params.discountDebtAmount != null && params.discountDebtAmount.gt(0)
+      ? R(params.discountDebtAmount)
+      : new Prisma.Decimal(0);
 
   let comment = params.note?.trim() || null;
   if (params.refusalReasonRef?.trim()) {
@@ -98,6 +107,10 @@ export async function createPolkiMirrorZayavka(
   if (params.sourceOrderNumber?.trim()) {
     const tag = `По заказу ${params.sourceOrderNumber.trim()}`;
     comment = comment ? `${comment}\n${tag}` : tag;
+  }
+  if (params.discountDebtNote?.trim()) {
+    const d = params.discountDebtNote.trim().slice(0, 500);
+    comment = comment ? `${comment}\n${d}` : d;
   }
 
   const created = await tx.order.create({
@@ -110,7 +123,7 @@ export async function createPolkiMirrorZayavka(
       status: "returned",
       total_sum: headerTotal,
       bonus_sum: bonusSum,
-      discount_sum: new Prisma.Decimal(0),
+      discount_sum: discountDebt,
       comment,
       ...(creates.length > 0 ? { items: { create: creates } } : {})
     }

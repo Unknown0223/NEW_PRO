@@ -130,6 +130,8 @@ export type OrderListRow = {
   bonus_qty: string;
   /** Foizli chegirma summasi */
   discount_sum: string;
+  /** Vozvrat: «Долг скидка» izohi */
+  discount_debt_note?: string | null;
   /** Skidka kutilgan, lekin qo‘llanmagan */
   discount_alert?: string | null;
   /** Bonus yetarli emas */

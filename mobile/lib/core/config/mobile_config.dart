@@ -269,12 +269,12 @@ class ProductListConfig {
   final bool allowSubmitForNewClient;
 
   const ProductListConfig({
-    this.showOutOfStock = true,
+    this.showOutOfStock = false,
     this.allowSubmitForNewClient = true,
   });
 
   factory ProductListConfig.fromJson(Map<String, dynamic> j) => ProductListConfig(
-        showOutOfStock: j['show_out_of_stock'] ?? true,
+        showOutOfStock: j['show_out_of_stock'] ?? false,
         allowSubmitForNewClient: j['allow_submit_for_new_client'] ?? true,
       );
 }

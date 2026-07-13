@@ -191,13 +191,36 @@ export function ruleRelatesToOrderSelection(
 export const QTY_AGGREGATE_PURCHASED_PID = 0;
 
 export type QtyGiftResolveContext = {
-  /** Omborda mavjud (qty − reserved), bonus tanlash uchun */
+  /**
+   * Bonus tanlash uchun mavjud qoldiq.
+   * Create path: ombor (qty−reserved) minus savatdagi pullik dona — aks holda
+   * «omborda ko‘p, lekin hammasi pullik» SKU tanlanib, keyin bonus 0 bo‘ladi.
+   */
   availableByProductId?: ReadonlyMap<number, number>;
   /** Kamida shuncha dona chiqarish mumkin bo‘lishi kerak */
   minUnits?: number;
   /** `category_stock` qoidalari uchun: kategoriya ichidagi nomzod sovg‘a SKU’lar (ombor ustuvorligi bilan tanlanadi). */
   categoryCandidateIds?: number[];
 };
+
+/**
+ * Sovg‘a tanlash uchun: ombor qoldig‘idan pullik savatni ayirish.
+ * Natija = bonus uchun bo‘sh joy (stock-cap bilan bir xil mantiq).
+ */
+export function bonusRoomAfterPaidQty(
+  warehouseAvailable: ReadonlyMap<number, number>,
+  paidQtyByProduct: ReadonlyMap<number, number>
+): Map<number, number> {
+  const out = new Map<number, number>();
+  const ids = new Set<number>([...warehouseAvailable.keys(), ...paidQtyByProduct.keys()]);
+  for (const id of ids) {
+    if (id <= 0) continue;
+    const avail = warehouseAvailable.get(id) ?? 0;
+    const paid = paidQtyByProduct.get(id) ?? 0;
+    out.set(id, Math.max(0, avail - paid));
+  }
+  return out;
+}
 
 export function pickGiftFromAllowedList(
   allowed: number[],

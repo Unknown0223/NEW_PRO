@@ -128,14 +128,22 @@ function isBonusDebtNote(note: string | null | undefined): boolean {
   return n === "Долг бонус" || n.startsWith("Долг бонус ·");
 }
 
+function isDiscountDebtNote(note: string | null | undefined): boolean {
+  const n = (note ?? "").trim();
+  return n === "Долг скидка" || n.startsWith("Долг скидка ·");
+}
+
 export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   const rk = r.row_kind === "order" ? "order" : "payment";
   const bonusDebtPayment = rk === "payment" && isBonusDebtNote(r.note);
+  const discountDebtPayment = rk === "payment" && isDiscountDebtNote(r.note);
   let type_label: string;
   if (rk === "order") {
     type_label = `Заказ (${r.order_number ?? r.order_id})`;
   } else if (bonusDebtPayment) {
     type_label = "Долг бонус";
+  } else if (discountDebtPayment) {
+    type_label = "Долг скидка";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
     type_label = `Расход (${r.payment_id})`;
   } else {
@@ -146,7 +154,7 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
   let operation_type_code = "1";
   if (rk === "order") {
     operation_type_code = "7";
-  } else if (bonusDebtPayment) {
+  } else if (bonusDebtPayment || discountDebtPayment) {
     operation_type_code = "2";
   } else if (String(r.entry_kind ?? "") === "client_expense") {
     operation_type_code = "2";
@@ -158,9 +166,11 @@ export function mapUnionToLedgerRow(r: UnionRaw): ClientLedgerRow {
       ? "Удержание долга по заказу"
       : bonusDebtPayment
         ? "Долг бонус (возврат с полки)"
-        : rk === "payment" && String(r.entry_kind) === "client_expense"
-          ? "Расход клиента"
-          : null;
+        : discountDebtPayment
+          ? "Долг скидка (возврат с полки по заказу)"
+          : rk === "payment" && String(r.entry_kind) === "client_expense"
+            ? "Расход клиента"
+            : null;
   const comment_transaction = (r.note ?? "").trim() || null;
 
   const created_by_display =

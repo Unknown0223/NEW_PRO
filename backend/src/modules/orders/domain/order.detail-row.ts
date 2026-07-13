@@ -10,10 +10,7 @@ import {
 } from "./order.detail-bonus";
 import { loadOrdersFinanceEnrichment } from "./order.detail-finance";
 import { parseAppliedBonusRulesSnapshot } from "../../bonus-rules/bonus-rules.snapshot";
-import {
-  applyOrderLevelDiscountPctToItems,
-  orderHasAppliedDiscountRule
-} from "../order-merchandise-net";
+import { applyOrderLevelDiscountPctToItems } from "../order-merchandise-net";
 import { enrichItemsBonusDisplay } from "./order.detail-items-bonus";
 import type { OrderDetailLoaded, OrderDetailRow, OrderItemRow } from "./order.types";
 
@@ -225,18 +222,54 @@ export async function enrichOrderDetailRow(
   ]);
   const x = fin.get(o.id);
   let items = base.items;
-  if (o.discount_sum.gt(0)) {
-    const hasDiscountRule = await orderHasAppliedDiscountRule(
-      tenantId,
-      o.applied_auto_bonus_rule_ids ?? []
+  const ot = o.order_type ?? "order";
+  const isReturnDoc = ot === "return" || ot === "return_by_order" || ot === "partial_return";
+
+  let discountDebtNote: string | null = null;
+  let effectiveDiscountSum = o.discount_sum;
+  if (isReturnDoc) {
+    const sr = await prisma.salesReturn.findFirst({
+      where: { tenant_id: tenantId, mirror_order_id: o.id },
+      select: { discount_debt_amount: true, discount_debt_note: true }
+    });
+    if (sr?.discount_debt_amount != null && sr.discount_debt_amount.gt(0)) {
+      effectiveDiscountSum = sr.discount_debt_amount;
+      discountDebtNote = sr.discount_debt_note;
+    }
+  }
+
+  if (o.discount_sum.gt(0) && !isReturnDoc) {
+    // Schema: total_sum va qatorlar allaqachon net (discount yoki sum+discount_pct).
+    items = applyOrderLevelDiscountPctToItems(items, o.discount_sum, {
+      totalSum: o.total_sum,
+      linesAlreadyNet: true
+    }) as OrderItemRow[];
+    // Fallback: agar apply qaytarmagan bo‘lsa ham foizni yozamiz (display).
+    const stillZero = items.some(
+      (it) =>
+        !it.is_bonus &&
+        (!it.discount_pct?.trim() || it.discount_pct === "0" || it.discount_pct === "0.00")
     );
-    if (!hasDiscountRule) {
-      items = applyOrderLevelDiscountPctToItems(items, o.discount_sum) as OrderItemRow[];
+    if (stillZero) {
+      const gross = o.total_sum.add(o.discount_sum);
+      const baseGross = gross.gt(0) ? gross : o.discount_sum;
+      const pct = o.discount_sum
+        .div(baseGross)
+        .mul(100)
+        .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+        .toFixed(0);
+      items = items.map((it) =>
+        it.is_bonus || (it.discount_pct && it.discount_pct !== "0" && it.discount_pct !== "0.00")
+          ? it
+          : { ...it, discount_pct: pct }
+      ) as OrderItemRow[];
     }
   }
   return {
     ...base,
     items,
+    discount_sum: effectiveDiscountSum.toString(),
+    discount_debt_note: discountDebtNote,
     payment_method_label,
     bonus_gift_selections,
     bonus_gift_swap_options: swap,

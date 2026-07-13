@@ -30,6 +30,11 @@ import {
   validateReturnQty
 } from "./returns-enhanced.compute";
 import { resolvePolkiBonusDebtAmount } from "./returns-enhanced.bonus-debt";
+import {
+  resolveOrderDiscountClawback,
+  sumPaidNetFromItems,
+  type DiscountClawbackResult
+} from "./returns-enhanced.discount-debt";
 import { reconcileOrderScopedExplicitLinesWithPreview } from "./returns-enhanced.reconcile-order-scoped";
 import { assertOrdersInReturnFilter } from "./returns-filter.service";
 
@@ -302,11 +307,35 @@ export async function createPeriodReturn(
 
   const bonusDebtAmount = await resolvePolkiBonusDebtAmount(tenantId, input);
 
+  let discountClawback: DiscountClawbackResult | null = null;
+  if (orderScoped && input.order_id != null && input.order_id > 0) {
+    const remainingPaidNetBefore = sumPaidNetFromItems(itemsAdjusted);
+    const thisReturnPaidNet = retLines.reduce(
+      (a, l) => a.add(R(l.price).mul(l.paid_qty)),
+      new Prisma.Decimal(0)
+    );
+    discountClawback = await resolveOrderDiscountClawback(
+      tenantId,
+      input.order_id,
+      thisReturnPaidNet,
+      remainingPaidNetBefore
+    );
+  }
+
   const number = `VR-${tenantId}-${randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
   const uid = actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
   const mirrorOrderType: "return" | "return_by_order" = orderScoped ? "return_by_order" : "return";
   const sourceOrderNumber =
     orderScoped && cdata.orders[0]?.number ? String(cdata.orders[0].number) : null;
+
+  const discountDebtAmount =
+    discountClawback != null && discountClawback.amount.gt(0) ? discountClawback.amount : null;
+  const discountDebtNote =
+    discountDebtAmount != null && discountClawback?.note
+      ? discountClawback.note.slice(0, 500)
+      : null;
+  const discountSumAfter =
+    discountClawback != null ? discountClawback.new_discount_sum : null;
 
   const { ret: result, mirrorOrderId } = await prisma.$transaction(async (tx) => {
     const ret = await tx.salesReturn.create({
@@ -319,6 +348,9 @@ export async function createPeriodReturn(
         status: "pending",
         refund_amount: recalc.refund_amount,
         bonus_debt_amount: bonusDebtAmount.gt(0) ? bonusDebtAmount : null,
+        discount_debt_amount: discountDebtAmount,
+        discount_debt_note: discountDebtNote,
+        discount_sum_after: discountSumAfter,
         return_type: "partial",
         date_from:
           orderScoped ? null : input.date_from ? new Date(input.date_from) : null,
@@ -360,7 +392,10 @@ export async function createPeriodReturn(
       note: input.note?.trim() || null,
       refusalReasonRef: input.refusal_reason_ref ?? null,
       sourceOrderNumber,
-      actorUserId: uid
+      actorUserId: uid,
+      discountDebtAmount: discountDebtAmount,
+      discountDebtNote: discountDebtNote,
+      discountPct: discountClawback?.discount_pct ?? null
     });
 
     // Side-effect'lar (ostatka / balans / bonus / auto-mark) qabulda qo'llanadi —
@@ -399,6 +434,13 @@ export async function createPeriodReturn(
               bonus_debt_amount: bonusDebtAmount.toString(),
               bonus_debt_qty: null
             }
+          : {}),
+        ...(discountDebtAmount != null
+          ? {
+              discount_debt_amount: discountDebtAmount.toString(),
+              discount_debt_mode: discountClawback?.mode ?? null,
+              discount_sum_after: discountClawback?.new_discount_sum.toString() ?? null
+            }
           : {})
       },
       mirror_order_id: mirrorOrderId
@@ -408,6 +450,8 @@ export async function createPeriodReturn(
   return {
     id: result.id, number: result.number,
     refund_amount: result.refund_amount?.toString() ?? null,
+    discount_debt_amount: discountDebtAmount?.toString() ?? null,
+    discount_debt_note: discountDebtNote,
     lines: retLines.map(rl => ({
       product_id: rl.product_id,
       sku: pMap.get(rl.product_id)?.sku ?? "",

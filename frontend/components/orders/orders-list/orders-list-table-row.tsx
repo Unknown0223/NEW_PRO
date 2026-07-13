@@ -6,6 +6,7 @@ import {
   TableRowActionGroup
 } from "@/components/data-table/table-row-actions";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { OrderPromoAlertIcon } from "@/components/orders/discount-alert-icon";
 import { useOrderListCellRenderer } from "@/components/orders/orders-list/order-list-table-cell";
 import { OrdersListExpandedRow } from "@/components/orders/orders-list/orders-list-expanded-row";
 import { orderListColumnTdClass } from "@/lib/orders-list-columns";
@@ -130,6 +131,11 @@ export const OrdersListTableRow = memo(function OrdersListTableRow({
                   >
                     {order.number}
                   </Link>
+                  <OrderPromoAlertIcon
+                    discountAlert={order.discount_alert}
+                    bonusAlert={order.bonus_alert}
+                    size={15}
+                  />
                   <button
                     type="button"
                     className="rounded p-0.5 text-teal-600 opacity-60 hover:bg-teal-100 hover:opacity-100"

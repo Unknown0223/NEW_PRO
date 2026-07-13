@@ -758,8 +758,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
         return;
       }
-      final showOutOfStock =
-          ref.read(sessionProvider).mobileConfig?.productList.showOutOfStock ?? true;
       var products = ctx.products
           .where((p) => p['is_blocked'] != true && p['is_active'] != false)
           .toList();
@@ -782,12 +780,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         prices[id] = unitPriceForProduct(p, _priceType);
       }
 
-      if (!showOutOfStock) {
-        products = products.where((p) {
-          final id = (p['id'] as num?)?.toInt() ?? 0;
-          return (stockMap[id] ?? 0) > 0;
-        }).toList();
-      }
+      // Zakaz katalogida qoldig‘i 0 mahsulotlar ko‘rinmasin.
+      products = products.where((p) {
+        final id = (p['id'] as num?)?.toInt() ?? 0;
+        return (stockMap[id] ?? 0) > 0;
+      }).toList();
 
       if (!mounted) return;
       setState(() {

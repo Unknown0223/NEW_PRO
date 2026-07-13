@@ -25,7 +25,9 @@ function lineToExcelRow(categoryName: string, p: OrderItemRow): (string | number
   const qty = parseOrderItemNum(p.qty);
   const price = parseOrderItemNum(p.price);
   const vol = parseOrderItemNum(p.line_volume_m3 ?? p.volume_m3);
-  const disc = p.is_bonus ? "—" : p.discount_pct?.trim() ? `${p.discount_pct}%` : "0 %";
+  const rawPct = p.discount_pct?.trim();
+  const pctN = rawPct ? Number.parseFloat(rawPct.replace(",", ".")) : 0;
+  const disc = p.is_bonus ? "—" : pctN > 0 ? `${Math.round(pctN)}%` : "0%";
   const lineTotal = p.is_bonus ? 0 : parseOrderItemNum(p.total);
   return [
     categoryName,

@@ -15,6 +15,7 @@ export async function getOrderDetail(
   if (!o) {
     throw new Error("NOT_FOUND");
   }
+  // enrich: discount_pct display (net/gross) — order.detail-row
   return enrichOrderDetailRow(tenantId, o as unknown as OrderDetailLoaded, viewerRole);
 }
 

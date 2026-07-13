@@ -418,12 +418,48 @@ export async function listOrdersPaged(
     }))
   );
 
+  const returnMirrorIds = rows
+    .filter((o) => {
+      const t = o.order_type ?? "order";
+      return t === "return" || t === "return_by_order" || t === "partial_return";
+    })
+    .map((o) => o.id);
+  const returnDiscountByMirror = new Map<
+    number,
+    { amount: Prisma.Decimal; note: string | null }
+  >();
+  if (returnMirrorIds.length > 0) {
+    const srets = await prisma.salesReturn.findMany({
+      where: { tenant_id: tenantId, mirror_order_id: { in: returnMirrorIds } },
+      select: {
+        mirror_order_id: true,
+        discount_debt_amount: true,
+        discount_debt_note: true
+      }
+    });
+    for (const sr of srets) {
+      if (sr.mirror_order_id == null) continue;
+      if (sr.discount_debt_amount != null && sr.discount_debt_amount.gt(0)) {
+        returnDiscountByMirror.set(sr.mirror_order_id, {
+          amount: sr.discount_debt_amount,
+          note: sr.discount_debt_note
+        });
+      }
+    }
+  }
+
   const result = {
     data: rows.map((o) => {
       const ex = o.expeditor_user;
       const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
       const finRow = finance.get(o.id);
       const metaRow = meta.get(o.id);
+      const retDisc = returnDiscountByMirror.get(o.id);
+      const discountSum =
+        retDisc != null
+          ? retDisc.amount.toString()
+          : o.discount_sum.toString();
+      const discountDebtNote = retDisc?.note ?? null;
       return {
       id: o.id,
       number: o.number,
@@ -480,7 +516,8 @@ export async function listOrdersPaged(
         .toString(),
       total_sum: o.total_sum.toString(),
       bonus_qty: sumBonusQty(o.items),
-      discount_sum: o.discount_sum.toString(),
+      discount_sum: discountSum,
+      discount_debt_note: discountDebtNote,
       discount_alert: (o as { discount_alert?: string | null }).discount_alert ?? null,
       bonus_alert: (o as { bonus_alert?: string | null }).bonus_alert ?? null,
       bonus_sum: o.bonus_sum.toString(),

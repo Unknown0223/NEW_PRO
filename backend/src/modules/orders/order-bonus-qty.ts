@@ -18,6 +18,7 @@ import {
   QTY_AGGREGATE_PURCHASED_PID,
   resolveQtyGiftProductId,
   resolveSumRuleGiftProductId,
+  bonusRoomAfterPaidQty,
   ruleBlockedByOncePerClient,
   ruleHasPurchaseScope,
   ruleMatchesClient,
@@ -154,6 +155,8 @@ export async function findQtyBonusPeeks(
   let availableByProductId =
     engineOpts?.availableByProductId ??
     (await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds));
+  /** Sovg‘a tanlash: pullik savatdan keyin qolgan joy. */
+  let giftPickAvail = bonusRoomAfterPaidQty(availableByProductId, qtyByProduct);
 
   const peeks: QtyBonusPeek[] = [];
 
@@ -198,7 +201,7 @@ export async function findQtyBonusPeeks(
       const bonusUnits = computeQtyBonusForRuleRow(view, effAgg);
       if (bonusUnits <= 0) continue;
 
-      const ctx: QtyGiftResolveContext = { availableByProductId, minUnits: bonusUnits };
+      const ctx: QtyGiftResolveContext = { availableByProductId: giftPickAvail, minUnits: bonusUnits };
 
       if (view.bonus_product_ids.length === 0) {
         let heroPid = 0;
@@ -264,6 +267,7 @@ export async function findQtyBonusPeeks(
   if (missingStockIds.size > 0) {
     const extraStock = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, missingStockIds);
     availableByProductId = new Map([...availableByProductId, ...extraStock]);
+    giftPickAvail = bonusRoomAfterPaidQty(availableByProductId, qtyByProduct);
   }
 
   for (const rule of scopedRules) {
@@ -310,7 +314,7 @@ export async function findQtyBonusPeeks(
         if (bonusUnits <= 0) continue;
 
         const giftPid = resolveQtyGiftProductId(view, purchasedPid, giftOverrides, {
-          availableByProductId,
+          availableByProductId: giftPickAvail,
           minUnits: bonusUnits,
           categoryCandidateIds
         });

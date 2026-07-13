@@ -182,6 +182,38 @@ export function formatOrderListDebtAsClientLiability(debt: string | null | undef
   return formatNumberGrouped(String(-n), { maxFractionDigits: 2 });
 }
 
+function parseOrderMoneyField(v: string | null | undefined): number {
+  if (v == null || v === "") return 0;
+  return (
+    Number.parseFloat(
+      String(v)
+        .replace(/\u00a0/g, "")
+        .replace(/\s/g, "")
+        .replace(",", ".")
+    ) || 0
+  );
+}
+
+/**
+ * Ro‘yxat «Сумма»: API `total_sum` chegirmadan keyin (net).
+ * Chegirma bo‘lsa UI da gross (net + skidka) ko‘rsatiladi — shunda
+ * Сумма − Скидка ≈ Баланс/Долг (to‘lanadigan net) ko‘rinadi.
+ */
+/** Ro‘yxat «Сумма»: oddiy zakazda gross (net+skidka); vozvratda faqat refund (skidka = Долг скидка alohida). */
+export function orderListDisplayTotalSum(o: {
+  total_sum: string;
+  discount_sum?: string | null;
+  order_type?: string | null;
+}): number {
+  const net = parseOrderMoneyField(o.total_sum);
+  const ot = (o.order_type ?? "order").trim();
+  if (ot === "return" || ot === "return_by_order" || ot === "partial_return") {
+    return net;
+  }
+  const disc = parseOrderMoneyField(o.discount_sum);
+  return disc > 0 ? net + disc : net;
+}
+
 function requestSourceLabel(o: OrderListRow): string {
   if (o.request_type_ref?.trim()) return o.request_type_ref.trim();
   if (o.creation_channel === "mobile") return "Телефон (агент)";
@@ -229,7 +261,7 @@ export function orderListExportCell(o: OrderListRow, colId: string): string {
         ? formatNumberGrouped(o.volume_m3, { maxFractionDigits: 4 })
         : "";
     case "total_sum":
-      return formatNumberGrouped(o.total_sum, { maxFractionDigits: 2 });
+      return formatNumberGrouped(orderListDisplayTotalSum(o), { maxFractionDigits: 2 });
     case "bonus_sum":
       return formatNumberGrouped(o.bonus_sum ?? "0", { maxFractionDigits: 2 });
     case "cumulative_bonus":
