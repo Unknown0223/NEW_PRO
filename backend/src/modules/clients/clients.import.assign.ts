@@ -88,6 +88,12 @@ export type ImportStaffLookupUser = {
   code: string | null;
   name: string | null;
   phone: string | null;
+  is_active: boolean;
+};
+
+export type ImportStaffLookupOptions = {
+  /** Excel yangilash: arxiv/faol emas agent kodlari ham moslanadi. */
+  includeInactive?: boolean;
 };
 
 export type ImportStaffLookup = {
@@ -110,11 +116,18 @@ function indexImportStaffLookup(
   map.set(normalized, list);
 }
 
-export async function loadImportStaffLookup(tenantId: number): Promise<ImportStaffLookup> {
+export async function loadImportStaffLookup(
+  tenantId: number,
+  opts?: ImportStaffLookupOptions
+): Promise<ImportStaffLookup> {
   const rows = await prisma.user.findMany({
-    where: { tenant_id: tenantId, is_active: true, role: { in: ["agent", "expeditor"] } },
+    where: {
+      tenant_id: tenantId,
+      role: { in: ["agent", "expeditor"] },
+      ...(opts?.includeInactive ? {} : { is_active: true })
+    },
     orderBy: { id: "asc" },
-    select: { id: true, role: true, code: true, name: true, phone: true }
+    select: { id: true, role: true, code: true, name: true, phone: true, is_active: true }
   });
   const byId = new Map<number, ImportStaffLookupUser>();
   const byCode = new Map<string, ImportStaffLookupUser[]>();
@@ -128,7 +141,8 @@ export async function loadImportStaffLookup(tenantId: number): Promise<ImportSta
       role,
       code: row.code ?? null,
       name: row.name ?? null,
-      phone: row.phone ?? null
+      phone: row.phone ?? null,
+      is_active: row.is_active
     };
     byId.set(user.id, user);
     indexImportStaffLookup(byCode, user.code, user);
@@ -206,6 +220,88 @@ type ImportAssignmentRowOutcome = {
   touched: boolean;
 };
 
+function staffUserById(lookup: ImportStaffLookup, id: number): ImportStaffLookupUser | null {
+  return lookup.byId.get(id) ?? null;
+}
+
+function isImportAssignmentColumnMapped(
+  colIndexByKey: Record<string, number>,
+  key: string,
+  assignmentApply?: Set<string> | null
+): boolean {
+  if (!Object.prototype.hasOwnProperty.call(colIndexByKey, key)) return false;
+  return assignmentApply == null || assignmentApply.has(key);
+}
+
+function slotPatchHasData(p: AgentAssignmentPatch): boolean {
+  return (
+    p.agent_id != null ||
+    p.expeditor_user_id != null ||
+    (p.expeditor_phone != null && p.expeditor_phone !== "") ||
+    (p.visit_weekdays?.length ?? 0) > 0
+  );
+}
+
+function assignmentRowHasData(row: {
+  agent_id: number | null;
+  expeditor_user_id: number | null;
+  expeditor_phone: string | null;
+  visit_weekdays: number[];
+}): boolean {
+  return (
+    row.agent_id != null ||
+    row.expeditor_user_id != null ||
+    (row.expeditor_phone != null && row.expeditor_phone !== "") ||
+    row.visit_weekdays.length > 0
+  );
+}
+
+function mergeAssignmentPatchesForImportReplace(
+  touchedBySlot: Map<number, AgentAssignmentPatch>,
+  currentAssignments: Array<{
+    slot: number;
+    agent_id: number | null;
+    expeditor_user_id: number | null;
+    expeditor_phone: string | null;
+    visit_weekdays: number[];
+  }>
+): AgentAssignmentPatch[] {
+  const currentBySlot = new Map(currentAssignments.map((x) => [x.slot, x]));
+  const out: AgentAssignmentPatch[] = [];
+  for (let slot = 1; slot <= CONTACT_SLOTS; slot++) {
+    if (touchedBySlot.has(slot)) {
+      const p = touchedBySlot.get(slot)!;
+      const hadPrev = assignmentRowHasData({
+        agent_id: currentBySlot.get(slot)?.agent_id ?? null,
+        expeditor_user_id: currentBySlot.get(slot)?.expeditor_user_id ?? null,
+        expeditor_phone: currentBySlot.get(slot)?.expeditor_phone ?? null,
+        visit_weekdays: parseVisitWeekdaysJson(currentBySlot.get(slot)?.visit_weekdays)
+      });
+      if (slotPatchHasData(p) || hadPrev) {
+        out.push({
+          slot,
+          agent_id: p.agent_id ?? null,
+          expeditor_user_id: p.expeditor_user_id ?? null,
+          expeditor_phone: p.expeditor_phone ?? null,
+          visit_weekdays: parseVisitWeekdaysJson(p.visit_weekdays)
+        });
+      }
+      continue;
+    }
+    const cur = currentBySlot.get(slot);
+    if (cur && assignmentRowHasData(cur)) {
+      out.push({
+        slot,
+        agent_id: cur.agent_id ?? null,
+        expeditor_user_id: cur.expeditor_user_id ?? null,
+        expeditor_phone: cur.expeditor_phone ?? null,
+        visit_weekdays: parseVisitWeekdaysJson(cur.visit_weekdays)
+      });
+    }
+  }
+  return out.sort((a, b) => a.slot - b.slot);
+}
+
 export function buildAgentAssignmentPatchesFromImportRow(
   row: unknown[],
   colIndexByKey: Record<string, number>,
@@ -238,16 +334,12 @@ export function buildAgentAssignmentPatchesFromImportRow(
   const updateBySlot = new Map<number, AgentAssignmentPatch>();
   let touched = false;
   for (let slot = 1; slot <= CONTACT_SLOTS; slot++) {
-    const canAgent = assignmentApply == null || assignmentApply.has(`import_agent_${slot}`);
-    const canDays = assignmentApply == null || assignmentApply.has(`import_agent_${slot}_days`);
-    const canExp = assignmentApply == null || assignmentApply.has(`import_expeditor_${slot}`);
-    const agentRaw = canAgent
-      ? readArrayCell(row, colIndexByKey[`import_agent_${slot}`])
-      : null;
-    const daysRaw = canDays
-      ? readArrayCell(row, colIndexByKey[`import_agent_${slot}_days`])
-      : null;
-    const expRaw = canExp ? readArrayCell(row, colIndexByKey[`import_expeditor_${slot}`]) : null;
+    const agentKey = `import_agent_${slot}`;
+    const daysKey = `import_agent_${slot}_days`;
+    const expKey = `import_expeditor_${slot}`;
+    const agentMapped = isImportAssignmentColumnMapped(colIndexByKey, agentKey, assignmentApply);
+    const daysMapped = isImportAssignmentColumnMapped(colIndexByKey, daysKey, assignmentApply);
+    const expMapped = isImportAssignmentColumnMapped(colIndexByKey, expKey, assignmentApply);
 
     const prev = currentBySlot.get(slot) ?? {
       slot,
@@ -263,56 +355,79 @@ export function buildAgentAssignmentPatchesFromImportRow(
       expeditor_phone: prev.expeditor_phone,
       visit_weekdays: prev.visit_weekdays
     };
+    let slotTouched = false;
 
-    if (agentRaw != null && !isPlaceholderCell(agentRaw)) {
-      touched = true;
-      if (isAssignmentClearToken(agentRaw)) {
+    if (agentMapped) {
+      slotTouched = true;
+      const agentRaw = readArrayCell(row, colIndexByKey[agentKey]);
+      if (
+        agentRaw == null ||
+        isPlaceholderCell(String(agentRaw)) ||
+        isAssignmentClearToken(agentRaw)
+      ) {
         next.agent_id = null;
       } else {
         const resolved = resolveStaffByRefForImport(staffLookup, agentRaw, ["agent"]);
         if (resolved.id != null) {
           next.agent_id = resolved.id;
+          if (resolved.id !== prev.agent_id) {
+            const staff = staffUserById(staffLookup, resolved.id);
+            if (staff && !staff.is_active) {
+              warn(
+                `Qator ${rowNumExcel}: «Агент ${slot}» («${agentRaw.trim()}») faol emas — tayinlandi.`
+              );
+            }
+          }
         } else {
+          next.agent_id = null;
           warn(
-            `Qator ${rowNumExcel}: «Агент ${slot}» qiymati topilmadi («${agentRaw.trim()}»). Avvalgi qiymat saqlandi.`
+            `Qator ${rowNumExcel}: «Агент ${slot}» qiymati topilmadi («${agentRaw.trim()}») — agent olib tashlandi.`
           );
         }
       }
     }
 
-    if (expRaw != null && !isPlaceholderCell(expRaw)) {
-      touched = true;
-      if (isAssignmentClearToken(expRaw)) {
+    if (expMapped) {
+      slotTouched = true;
+      const expRaw = readArrayCell(row, colIndexByKey[expKey]);
+      if (expRaw == null || isPlaceholderCell(String(expRaw)) || isAssignmentClearToken(expRaw)) {
         next.expeditor_user_id = null;
         next.expeditor_phone = null;
       } else {
+        const expLabel = expRaw.trim();
         const resolved = resolveStaffByRefForImport(staffLookup, expRaw, ["expeditor", "agent"]);
         if (resolved.id != null) {
           next.expeditor_user_id = resolved.id;
           next.expeditor_phone = null;
-        } else {
-          const tr = expRaw.trim();
-          if (/^\+?\d[\d\s\-()]{6,}$/.test(tr)) {
-            next.expeditor_user_id = null;
-            next.expeditor_phone = tr;
-          } else {
-            warn(
-              `Qator ${rowNumExcel}: «Экспедитор ${slot}» qiymati topilmadi («${tr}»). Avvalgi qiymat saqlandi.`
-            );
+          if (resolved.id !== prev.expeditor_user_id) {
+            const staff = staffUserById(staffLookup, resolved.id);
+            if (staff && !staff.is_active) {
+              warn(
+                `Qator ${rowNumExcel}: «Экспедитор ${slot}» («${expLabel}») faol emas — tayinlandi.`
+              );
+            }
           }
+        } else if (/^\+?\d[\d\s\-()]{6,}$/.test(expLabel)) {
+          next.expeditor_user_id = null;
+          next.expeditor_phone = expLabel;
+        } else {
+          next.expeditor_user_id = null;
+          next.expeditor_phone = null;
+          warn(
+            `Qator ${rowNumExcel}: «Экспедитор ${slot}» qiymati topilmadi («${expLabel}») — ekspeditor olib tashlandi.`
+          );
         }
       }
     }
 
-    if (daysRaw != null && !isPlaceholderCell(daysRaw)) {
-      touched = true;
-      if (isAssignmentClearToken(daysRaw)) {
+    if (daysMapped) {
+      slotTouched = true;
+      const daysRaw = readArrayCell(row, colIndexByKey[daysKey]);
+      if (daysRaw == null || isPlaceholderCell(String(daysRaw)) || isAssignmentClearToken(daysRaw)) {
         next.visit_weekdays = [];
       } else {
         const parsedDays = parseRussianVisitDaysDetailed(daysRaw);
-        if (parsedDays.days.length > 0) {
-          next.visit_weekdays = parsedDays.days;
-        }
+        next.visit_weekdays = parsedDays.days;
         if (parsedDays.unknownTokens.length > 0) {
           warn(
             `Qator ${rowNumExcel}: «Агент ${slot} день»da noma’lum kunlar (${parsedDays.unknownTokens.join(", ")}).`
@@ -320,6 +435,8 @@ export function buildAgentAssignmentPatchesFromImportRow(
         }
       }
     }
+
+    if (slotTouched) touched = true;
 
     const createPatch: AgentAssignmentPatch = { slot };
     if (next.agent_id != null) createPatch.agent_id = next.agent_id;
@@ -331,19 +448,16 @@ export function buildAgentAssignmentPatchesFromImportRow(
       createPatch.visit_weekdays = next.visit_weekdays;
     }
 
-    const hasDataForCreate =
-      createPatch.agent_id != null ||
-      createPatch.expeditor_user_id != null ||
-      (createPatch.expeditor_phone != null && createPatch.expeditor_phone.length > 0) ||
-      (createPatch.visit_weekdays?.length ?? 0) > 0;
-    if (hasDataForCreate) createPatches.push(createPatch);
+    if (slotPatchHasData(createPatch)) createPatches.push(createPatch);
 
-    const hasDataForUpdate =
-      next.agent_id != null ||
-      next.expeditor_user_id != null ||
-      (next.expeditor_phone != null && next.expeditor_phone.length > 0) ||
-      (next.visit_weekdays?.length ?? 0) > 0;
-    if (hasDataForUpdate) {
+    const slotChanged =
+      next.agent_id !== prev.agent_id ||
+      next.expeditor_user_id !== prev.expeditor_user_id ||
+      (next.expeditor_phone ?? null) !== (prev.expeditor_phone ?? null) ||
+      JSON.stringify(parseVisitWeekdaysJson(next.visit_weekdays)) !==
+        JSON.stringify(parseVisitWeekdaysJson(prev.visit_weekdays));
+
+    if (slotTouched && slotChanged) {
       updateBySlot.set(slot, {
         slot,
         agent_id: next.agent_id ?? null,
@@ -353,7 +467,10 @@ export function buildAgentAssignmentPatchesFromImportRow(
       });
     }
   }
-  const updatePatches = [...updateBySlot.values()].sort((a, b) => a.slot - b.slot);
+  const updatePatches =
+    currentAssignments != null
+      ? mergeAssignmentPatchesForImportReplace(updateBySlot, currentAssignments)
+      : [...updateBySlot.values()].sort((a, b) => a.slot - b.slot);
   return { createPatches, updatePatches, touched };
 }
 

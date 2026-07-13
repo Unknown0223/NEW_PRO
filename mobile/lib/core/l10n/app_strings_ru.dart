@@ -2,8 +2,15 @@
 abstract final class S {
   static const navHome = 'Главная';
   static const navVisits = 'Визиты';
+  static const navKpi = 'KPI';
   static const navReports = 'Отчёты';
   static const navPoints = 'Тор. точки';
+  static const outlets = 'Торговые точки';
+  static const searchOutlet = 'Поиск по названию или коду...';
+  static const staleCatalog = 'Каталог устарел — синхронизируйте';
+  static const withDebt = 'С долгом';
+  static const cancel = 'Отмена';
+  static const save = 'Сохранить';
 
   static const home = 'Главная';
   static const visits = 'Визиты';
@@ -20,6 +27,16 @@ abstract final class S {
 
   static const visitOrder = 'Добавить заказ';
   static const visitComplete = 'Завершить визит';
+  static const visitInProgressTitle = 'Визит';
+  static const visitActiveLive = 'Визит активен · LIVE';
+  static const visitEndHint = '↓ кейин 5 дақиқалик таҳрирлаш ойнаси очилади';
+  static const noOrderToday = 'сегодня нет заказа';
+  static const photoReport = 'Фотоотчёт';
+  static const createOrderAction = 'Создать заказ';
+  static const refusalAction = 'Отказ (rad etish)';
+  static const supervisionChecklist = 'Чек-лист супервизии';
+  static const draftBadge = 'Черновик';
+  static const visitedBadge = '✓ Посещено';
   static const visitRefuse = 'Отказ от визита';
   static const refuseReason = 'Причина отказа';
   static const startVisit = 'Начать визит';
@@ -47,6 +64,7 @@ abstract final class S {
   static const syncWindowStartsIn = 'Синхронизация через';
   static const syncWindowEndsShort = 'до откл.';
   static const syncWindowStartsShort = 'через';
+  static const syncIn = 'до откл.';
   static const syncWindowTooltipEnds =
       'Осталось времени до отключения синхронизации. Успейте отправить данные.';
   static const syncWindowTooltipStarts =
@@ -57,16 +75,24 @@ abstract final class S {
   static const syncNotificationPermissionHint =
       'Разрешите уведомления — напомним за 10 минут до отключения синхронизации и о новых версиях.';
   static const checkAppUpdate = 'Проверить обновление';
+  static const appUpdateChecking = 'Проверяем обновление…';
+  static String appUpdateAlreadyLatest(String current) =>
+      'У вас актуальная версия: $current';
+  static const appUpdateCheckFailed = 'Не удалось проверить обновление. Проверьте интернет.';
+  static const noVisitsPlannedToday =
+      'На сегодня нет точек в плане. Назначьте дни посещения в веб-панели.';
+  static const noVisitScheduleHint =
+      'Дни посещения не назначены — показаны все торговые точки.';
   static String appUpdateNotificationBody(String latest, String current) =>
       latest.isEmpty
-          ? 'Доступна новая версия. Текущая: $current. Откройте приложение для установки.'
-          : 'Версия $latest доступна. У вас: $current. Нажмите, чтобы обновить.';
+          ? 'Доступна новая версия Sales Arena. Текущая: $current. Откройте приложение для установки.'
+          : 'Sales Arena $latest доступна. У вас: $current. Нажмите, чтобы обновить.';
   static String appUpdateNotificationAfterSync(String latest) =>
       latest.isEmpty
-          ? 'Синхронизация завершена. Доступна новая версия — данные уже отправлены.'
-          : 'Синхронизация завершена. Установите версию $latest — данные уже отправлены.';
-  static const appUpdateTitle = 'Доступна новая версия';
-  static const appUpdateTitleRequired = 'Требуется обновление';
+          ? 'Синхронизация завершена. Доступна новая версия Sales Arena — данные уже отправлены.'
+          : 'Синхронизация завершена. Установите Sales Arena $latest — данные уже отправлены.';
+  static const appUpdateTitle = 'Обновление Sales Arena';
+  static const appUpdateTitleRequired = 'Требуется обновление Sales Arena';
   static const appUpdateAfterSyncHint =
       'Синхронизация завершена — данные отправлены на сервер. '
       'После обновления сохранятся: локальный кеш, PIN и пароль для входа.';
@@ -106,33 +132,76 @@ abstract final class S {
   static const emptyClientOrders = 'Нет заказов за месяц';
   static const emptyClientSearch = 'Клиент не найден';
   static const gpsOn = 'GPS включён';
+  static const gpsActive = 'GPS активен';
+  static const gpsAccuracy = 'Точность';
   static const gpsStarting = 'GPS запускается…';
 
-  static const loginTitle = 'Вход';
-  static const loginSubtitle = 'Мобильное приложение SalesDoc';
-  static const companySlug = 'Код компании';
+  static const appName = 'Sales Arena';
+  static const loginTitle = 'Вход в систему';
+  static const loginSubtitle = 'Мобильное приложение Sales Arena';
+  static const companySlug = 'Компания';
+  static const companyHint = 'Код дилера';
   static const login = 'Логин';
+  static const loginHint = 'Логин';
   static const password = 'Пароль';
   static const signIn = 'Войти';
+  static const connecting = 'Подключение…';
+  static const help = 'Помощь';
+  static const support = 'Техподдержка';
   static const fillAllFields = 'Заполните все поля';
+
+  static const pinSecurity = 'Безопасность';
+  static const pinCreate = 'Создайте PIN-код';
+  static const pinConfirmTitle = 'Подтвердите PIN';
+  static const pinSubtitle = '4 цифры для быстрого входа';
+  static String pinStepLabel(int step) => 'Шаг $step из 2 · $pinConfirmTitle';
+
+  static const pinEnter = 'Введите PIN';
+  static const touchId = 'Touch ID';
+  static const loginOtherAccount = 'Войти другим аккаунтом';
+
+  static const fullSync = 'Полная синхронизация';
+  static const firstLaunch = 'Первый запуск';
+  static const syncRecordsLabel = '847 записей';
+  static const syncDataUpdated = 'Данные обновлены';
+  static const syncAllDone = '100% · все 847 записи';
+  static const syncProgressHint =
+      'Статус badges pulse · progress never jumps backward';
+  static const syncOrdersSent = 'Заказы отправлено';
+  static const syncPhotosUpload = 'Фото выгрузка';
+  static const syncClients = 'Клиенты';
+  static String syncRecordsCount(int n) => '$n записей';
+  static const readyBadge = 'ГОТОВО';
 
   static const weekDays = ['Все', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
   // Buyurtma yaratish (referens «Добавить заказ»)
   static const orderAddTitle = 'Добавить заказ';
+  static const orderSetup = 'Параметры заказа';
   static const orderWarehouse = 'Склад';
   static const orderPriceType = 'Тип цены';
   static const orderDiscount = 'Скидка (%)';
   static const orderComment = 'Комментарий';
+  static const orderCommentHint = 'Опционально…';
   static const orderConsignment = 'Консигнация';
   static const orderConsignmentDue = 'Срок оплаты';
+  static const orderShipmentDate = 'Дата отгрузки';
   static const orderNoConsignmentLimit = 'У вас нет лимита';
   static const creditLimit = 'Кредитный лимит';
   static const limitRemaining = 'Осталось';
   static const consignmentLimit = 'Лимит консигнации';
+  static const consignmentLimitExceeded = 'Превышен лимит консигнации';
   static const consignmentNotAvailable = 'Консигнация недоступна для вашего профиля';
+  static const consignmentClientDisabled =
+      'Консигнация для этого клиента запрещена администратором';
+  static const consignmentBlockedByDebt =
+      'Консигнация запрещена: у клиента есть долг по консигнации';
+  static const orderBlockedByDebt =
+      'Обычный заказ запрещён: у клиента есть долг. Снимите долг или обратитесь к администратору';
   static const close = 'Закрыть';
   static const continueBtn = 'Продолжить';
+  static const continueArrow = 'Продолжить →';
+  static const categoryProductsCount = 'товаров';
   static const finish = 'Завершить';
   static const editOrderSetup = 'Изменить основные данные';
   static const clientLabel = 'Клиент';
@@ -148,6 +217,7 @@ abstract final class S {
   static const orderExitDiscard = 'Выйти без сохранения';
   static const orderAddOrder = 'Добавить заказ';
   static const inStock = 'В наличие';
+  static const outOfStock = 'Остаток нет';
   static const price = 'Цена';
   static const unitPcs = 'Шт';
   static const no = 'Нет';
@@ -159,7 +229,6 @@ abstract final class S {
   static const discountSection = 'Скидка';
   static const bonusAuto = 'Авто';
   static const bonusNone = 'Без бонуса';
-  static const bonusManual = 'Ручной';
   static const discountAuto = 'Авто';
   static const discountNone = 'Без скидки';
   static const discountManual = 'Выбрать скидку';

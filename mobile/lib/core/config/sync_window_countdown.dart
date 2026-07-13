@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_strings_ru.dart';
 import '../notifications/mobile_local_notification_service.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'mobile_config.dart';
 import 'mobile_config_policy.dart';
@@ -114,14 +115,27 @@ String formatCountdownHms(Duration d) {
 }
 
 /// Sinхron oynasi tugashiga qolgan teskari taymer (strip yoki AppBar inline).
+String formatCountdownShort(Duration d) {
+  final t = d.inSeconds.clamp(0, 24 * 3600);
+  final h = t ~/ 3600;
+  final m = (t % 3600) ~/ 60;
+  final s = t % 60;
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}';
+  }
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
 class SyncWindowCountdownStrip extends StatefulWidget {
   final SyncConfig syncConfig;
   final bool inline;
+  final bool designPill;
 
   const SyncWindowCountdownStrip({
     super.key,
     required this.syncConfig,
     this.inline = false,
+    this.designPill = false,
   });
 
   @override
@@ -202,6 +216,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
         initial: _tick,
         label: _label,
         inline: widget.inline,
+        designPill: widget.designPill,
         isWindowEnd: _isWindowEnd,
         windowKey: _windowKey,
         onExpired: _refresh,
@@ -214,6 +229,7 @@ class _CountdownTicker extends StatefulWidget {
   final Duration initial;
   final String label;
   final bool inline;
+  final bool designPill;
   final bool isWindowEnd;
   final String windowKey;
   final VoidCallback onExpired;
@@ -223,6 +239,7 @@ class _CountdownTicker extends StatefulWidget {
     required this.initial,
     required this.label,
     this.inline = false,
+    this.designPill = false,
     required this.isWindowEnd,
     required this.windowKey,
     required this.onExpired,
@@ -272,9 +289,36 @@ class _CountdownTickerState extends State<_CountdownTicker> {
   @override
   Widget build(BuildContext context) {
     final time = formatCountdownHms(_left);
+    final shortTime = formatCountdownShort(_left);
     final color = syncCountdownUrgencyColor(_left, isWindowStart: !widget.isWindowEnd);
     final shortLabel = widget.isWindowEnd ? S.syncWindowEndsShort : S.syncWindowStartsShort;
     final tooltip = widget.isWindowEnd ? S.syncWindowTooltipEnds : S.syncWindowTooltipStarts;
+
+    if (widget.inline && widget.designPill) {
+      final prefix = widget.isWindowEnd ? S.syncIn : shortLabel;
+      return Tooltip(
+        message: '$tooltip\n${widget.label}: $time',
+        waitDuration: const Duration(milliseconds: 400),
+        child: Container(
+          margin: const EdgeInsets.only(right: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$prefix $shortTime',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.captionSmall.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+      );
+    }
 
     if (widget.inline) {
       return Tooltip(

@@ -14,7 +14,8 @@ import {
   listClientEquipmentSplit,
   listClientPhotoReports,
   getClientPhotoReportById,
-  markClientEquipmentRemoved
+  markClientEquipmentRemoved,
+  restoreClientPhotoReport
 } from "./client-assets.service";
 import {
   createClientEquipmentBodySchema,
@@ -116,7 +117,10 @@ export async function registerClientAssetsRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        await markClientEquipmentRemoved(request.tenant!.id, id, equipmentId);
+        const actor = getAccessUser(request);
+        const sub = Number.parseInt(actor.sub, 10);
+        const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+        await markClientEquipmentRemoved(request.tenant!.id, id, equipmentId, actorUserId);
         return reply.send({ ok: true });
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
@@ -140,7 +144,12 @@ export async function registerClientAssetsRoutes(app: FastifyInstance) {
         const q = request.query as Record<string, string | undefined>;
         const includeImages =
           q.include_images === "1" || q.include_images === "true" || q.includeImages === "true";
-        const data = await listClientPhotoReports(request.tenant!.id, id, { includeImages });
+        const archive =
+          q.archive === "1" || q.archive === "true" || q.archive === "True";
+        const data = await listClientPhotoReports(request.tenant!.id, id, {
+          includeImages,
+          archive
+        });
         return reply.send({ data });
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
@@ -220,12 +229,40 @@ export async function registerClientAssetsRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        await deleteClientPhotoReport(request.tenant!.id, id, photoId);
+        const actor = getAccessUser(request);
+        const sub = Number.parseInt(actor.sub, 10);
+        const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+        await deleteClientPhotoReport(request.tenant!.id, id, photoId, actorUserId);
         return reply.send({ ok: true });
       } catch (e) {
-        if (e instanceof Error && e.message === "NOT_FOUND") {
-          return sendApiError(reply, request, 404, "NotFound");
-        }
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/clients/:id/photo-reports/:photoId/restore",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      const photoId = Number.parseInt((request.params as { photoId: string }).photoId, 10);
+      if (Number.isNaN(id) || Number.isNaN(photoId)) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      try {
+        const actor = getAccessUser(request);
+        const sub = Number.parseInt(actor.sub, 10);
+        const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+        await restoreClientPhotoReport(request.tenant!.id, photoId, actorUserId, id);
+        return reply.send({ ok: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
         throw e;
       }
     }

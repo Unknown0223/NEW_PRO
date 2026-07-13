@@ -45,7 +45,7 @@ Future<void> showBiometricSetupDialog(BuildContext context, WidgetRef ref) async
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Разрешить SalesDoc использовать $label для быстрого входа после PIN?',
+            'Разрешить Sales Arena использовать $label для быстрого входа после PIN?',
             style: AppTypography.bodyMedium.copyWith(color: AppColors.textTitle, height: 1.45),
           ),
           const SizedBox(height: 12),

@@ -1,6 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import {
+  assertDocWritableByDate,
+  assertDocWritableById
+} from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -124,6 +132,12 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
+        if (parsed.data.paid_at) {
+          const paidAt = new Date(parsed.data.paid_at);
+          if (!Number.isNaN(paidAt.getTime())) {
+            await assertDocWritableByDate(request, "opening_balances", paidAt);
+          }
+        }
         const row = await createOpeningBalance(
           request.tenant!.id,
           parsed.data,
@@ -131,6 +145,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");
@@ -155,6 +170,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         .object({ delete_reason_ref: z.string().max(128).optional() })
         .parse((request.query as Record<string, unknown>) ?? {});
       try {
+        await assertDocWritableById(request, "opening_balances", id);
         await deleteOpeningBalance(
           request.tenant!.id,
           id,
@@ -163,6 +179,7 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         );
         return reply.status(204).send();
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -181,9 +198,11 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
+        await assertDocWritableById(request, "opening_balances", id);
         const row = await restoreOpeningBalance(request.tenant!.id, id, actorUserIdOrNull(request));
         return reply.send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");

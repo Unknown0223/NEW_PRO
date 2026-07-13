@@ -1,7 +1,8 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { withTransaction } from "../../lib/db-context";
+import { invalidateStock } from "../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { applyStockReceipt } from "./stock.service";
+import { applyStockReceipt, reverseStockReceiptInTx } from "./stock.service";
 
 export async function deleteGoodsReceiptDraft(
   tenantId: number,
@@ -151,10 +152,37 @@ export async function updateGoodsReceiptStatus(
     );
   }
 
-  const updated = await prisma.goodsReceipt.update({
-    where: { id: rec.id },
-    data: { status }
-  });
+  let stockReverse:
+    | { product_id: number; qty: number; qty_before: string; qty_after: string }[]
+    | null = null;
+
+  let updated: { id: number; number: string; status: string };
+
+  if (from === "posted" && status === "cancelled") {
+    const reverseItems = rec.lines
+      .map((l) => ({ product_id: l.product_id, qty: Number(l.qty) }))
+      .filter((l) => Number.isFinite(l.qty) && l.qty > 0);
+    const reversed = await withTransaction(async (tx) => {
+      const lines = await reverseStockReceiptInTx(tx, tenantId, {
+        warehouse_id: rec.warehouse_id,
+        items: reverseItems,
+        note: `Отмена поступления ${rec.number}`
+      });
+      const row = await tx.goodsReceipt.update({
+        where: { id: rec.id },
+        data: { status }
+      });
+      return { lines, row };
+    });
+    stockReverse = reversed.lines;
+    updated = reversed.row;
+    void invalidateStock(tenantId, rec.warehouse_id);
+  } else {
+    updated = await prisma.goodsReceipt.update({
+      where: { id: rec.id },
+      data: { status }
+    });
+  }
 
   await appendTenantAuditEvent({
     tenantId,
@@ -162,7 +190,18 @@ export async function updateGoodsReceiptStatus(
     entityType: AuditEntityType.goods_receipt,
     entityId: String(rec.id),
     action: "status_change",
-    payload: { number: rec.number, from, to: status }
+    payload: {
+      number: rec.number,
+      from,
+      to: status,
+      ...(stockReverse
+        ? {
+            stock_reversed: true,
+            stock_reverse: stockReverse,
+            warehouse_id: rec.warehouse_id
+          }
+        : {})
+    }
   });
 
   return { id: updated.id, number: updated.number, status: updated.status };

@@ -27,6 +27,7 @@ import {
   patchAssignmentLock,
   patchWorkSlot,
   resolvePendingAssignment,
+  restoreWorkSlots,
   suggestNextSlotCode,
   unassignUserFromSlot,
   getWorkSlotActivityReport
@@ -117,6 +118,7 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       slot_type: q.slot_type,
       slot_types: slotTypes.length ? slotTypes : undefined,
       is_active: q.is_active === "true" ? true : q.is_active === "false" ? false : undefined,
+      archive: q.archive === "true" || q.archive === "1",
       q: q.q,
       direction_id:
         directionIds.length === 0 && q.direction_id
@@ -151,7 +153,11 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
     try {
-      const data = await bulkPatchWorkSlots(request.tenant!.id, parsed.data);
+      const data = await bulkPatchWorkSlots(
+        request.tenant!.id,
+        parsed.data,
+        actorUserIdOrNull(request)
+      );
       return reply.send({ data });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
@@ -160,6 +166,27 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       }
       if (msg === "TOO_MANY") return sendApiError(reply, request, 400, "TooManySlots");
       if (msg === "BAD_SLOT_IDS") return sendApiError(reply, request, 400, "BadSlotIds");
+      if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
+      if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
+      if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+      throw e;
+    }
+  });
+
+  app.post("/api/:slug/work-slots/restore", { preHandler: preManage }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const body = request.body as { slot_ids?: number[] };
+    const slotIds = Array.isArray(body?.slot_ids) ? body.slot_ids : [];
+    try {
+      const data = await restoreWorkSlots(request.tenant!.id, slotIds, actorUserIdOrNull(request));
+      return reply.send({ data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "EMPTY_IDS") return sendApiError(reply, request, 400, "ValidationError", msg);
+      if (msg === "TOO_MANY") return sendApiError(reply, request, 400, "TooManySlots");
+      if (msg === "BAD_SLOT_IDS") return sendApiError(reply, request, 400, "BadSlotIds");
+      if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
+      if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
       throw e;
     }
   });
@@ -171,7 +198,11 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
     try {
-      const row = await createWorkSlot(request.tenant!.id, parsed.data);
+      const row = await createWorkSlot(
+        request.tenant!.id,
+        parsed.data,
+        actorUserIdOrNull(request)
+      );
       return reply.status(201).send({ data: row });
     } catch (e) {
       return mapAssignError(reply, request, e);

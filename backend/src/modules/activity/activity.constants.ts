@@ -95,7 +95,41 @@ export const ENTITY_HISTORY: Record<string, EntityHistoryDescriptor> = {
   finance: desc("cash", "otchety", { audit: ["finance"] }),
   // Qaytarishlar: per-return aniq audit (`sales_return` + return id).
   sales_return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
-  return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] })
+  return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
+  work_slot: desc("work_slots", "raboche_mesto", { audit: ["work_slot"] }),
+  geo_boundary: desc("settings", "geo_granitsy", { audit: ["geo_boundary"] }),
+  territory: desc("settings", "territoriya", { audit: ["territory"] }),
+  expense: desc("cash", "rashody_klienta", { audit: ["finance"], activity: ["expense", "finance"] }),
+  report_builder: desc("reports", "otchety", { audit: ["report_builder"] }),
+  automation_rule: desc("orders", "avtomatizatsiya", { audit: ["automation_rule"] }),
+  warehouse_block: desc("warehouse", "sklady", { audit: ["warehouse_block"] }),
+  stock_take: desc("warehouse", "inventarizatsiya", { audit: ["stock_take"] }),
+  product_brand: desc("settings", "tovar", { audit: ["product_brand"] }),
+  product_manufacturer: desc("settings", "tovar", { audit: ["product_manufacturer"] }),
+  product_segment: desc("settings", "tovar", { audit: ["product_segment"] }),
+  product_catalog_group: desc("settings", "tovar", { audit: ["product_catalog_group"] }),
+  product_category: desc("settings", "tovar", { audit: ["product_category"] }),
+  interchangeable_product_group: desc("settings", "tovar", {
+    audit: ["interchangeable_product_group"]
+  }),
+  brand: desc("settings", "tovar", { audit: ["product_brand"], activity: ["product_brand", "brand"] }),
+  /** Foto soft-void — asosan ClientAudit; entity tarixi client orqali. */
+  photo: desc("clients", "klient", {
+    audit: ["client"],
+    activity: ["photo", "client"],
+    sources: ["clientAudit"]
+  }),
+  client_photo: desc("clients", "klient", {
+    audit: ["client"],
+    activity: ["photo", "client"],
+    sources: ["clientAudit"]
+  }),
+  access: desc("access", "dostup", {
+    audit: ["user", "access_bulk"],
+    activity: ["user", "access"],
+    sources: ["accessLog"]
+  }),
+  currency_rate: desc("settings", "valyuta", { audit: ["currency_rate"] })
 };
 
 export function resolveEntityHistory(entityType: string): EntityHistoryDescriptor | null {

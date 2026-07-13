@@ -1,13 +1,31 @@
 import { z } from "zod";
 
+/** UI ba’zan id ni string qilib yuboradi — numberga aylantiramiz. */
+const optionalPositiveIntId = z.preprocess((v) => {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? Math.trunc(v) : v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number.parseInt(v.trim(), 10);
+    return Number.isFinite(n) ? n : v;
+  }
+  return v;
+}, z.number().int().positive().nullable().optional());
+
+const visitWeekdaysSchema = z.preprocess((v) => {
+  if (!Array.isArray(v)) return v;
+  return v
+    .map((x) => (typeof x === "number" ? x : Number.parseInt(String(x), 10)))
+    .filter((n) => Number.isFinite(n));
+}, z.array(z.number().int().min(1).max(7)).max(7).optional());
+
 /** PATCH `/api/:slug/clients/:id` — agent slotlari */
 export const clientAgentAssignmentSlotSchema = z.object({
   slot: z.number().int().min(1).max(10),
-  agent_id: z.number().int().positive().nullable().optional(),
+  agent_id: optionalPositiveIntId,
   visit_date: z.string().nullable().optional(),
   expeditor_phone: z.string().nullable().optional(),
-  expeditor_user_id: z.number().int().positive().nullable().optional(),
-  visit_weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional()
+  expeditor_user_id: optionalPositiveIntId,
+  visit_weekdays: visitWeekdaysSchema
 });
 
 /** PATCH `/api/:slug/clients/:id` — kontakt slotlari */
@@ -65,7 +83,11 @@ export const patchClientBodySchema = z
     agent_id: z.number().int().positive().nullable().optional(),
     agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(10).optional(),
     contact_persons: z.array(clientContactSlotSchema).max(10).optional(),
-    is_active: z.boolean().optional()
+    is_active: z.boolean().optional(),
+    price_type: z.string().max(128).nullable().optional(),
+    allow_order_with_debt: z.boolean().optional(),
+    allow_consignment: z.boolean().optional(),
+    allow_consignment_with_debt: z.boolean().optional()
   })
   .refine((o) => Object.keys(o).length > 0, { message: "empty" });
 

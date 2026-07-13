@@ -6,3 +6,5 @@ export * from "./order.lines";
 export * from "./order.meta";
 export * from "./order.nakladnoy";
 export * from "./order.create";
+export * from "./order.consignment-transfers";
+export * from "./order.consignment-auto";

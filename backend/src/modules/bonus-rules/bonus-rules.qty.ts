@@ -82,6 +82,23 @@ export function computeReturnQtyBonusForRuleRow(rule: BonusRuleRow, returnQty: n
   return b;
 }
 
+/** Birinchi qty sharti (preview / mobil assortiment uchun). */
+export function primaryQtyCondition(rule: BonusRuleRow): {
+  step_qty: number;
+  bonus_qty: number;
+} | null {
+  if (rule.type !== "qty") return null;
+  let conditions = rule.conditions;
+  if (conditions.length === 0 && rule.buy_qty != null && rule.free_qty != null) {
+    return { step_qty: rule.buy_qty, bonus_qty: rule.free_qty };
+  }
+  if (conditions.length === 0) return null;
+  const sorted = [...conditions].sort((a, b) => a.sort_order - b.sort_order);
+  const c = sorted[0]!;
+  if (c.step_qty <= 0) return null;
+  return { step_qty: c.step_qty, bonus_qty: c.bonus_qty };
+}
+
 export function computeQtyBonusForRuleRow(rule: BonusRuleRow, purchasedQty: number): number {
   if (rule.type !== "qty") return 0;
   let conditions = rule.conditions;

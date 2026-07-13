@@ -1,16 +1,22 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { listDistinctPriceTypesForTenant } from "../reference/reference.service";
 import type { InterchangeableGroupRow, ListCatalogOpts } from "./product-catalog.types";
-import { normCode } from "./product-catalog.shared";
+import { catalogDeactivateData, catalogRestoreData, normCode } from "./product-catalog.shared";
 
 export async function listInterchangeableProductGroups(
   tenantId: number,
   opts: ListCatalogOpts
 ): Promise<{ total: number; data: InterchangeableGroupRow[] }> {
   const base: Prisma.InterchangeableProductGroupWhereInput = { tenant_id: tenantId };
-  if (opts.is_active === true) base.is_active = true;
-  if (opts.is_active === false) base.is_active = false;
+  if (opts.include_inactive === true) {
+    // filtr yo‘q
+  } else if (opts.is_active === false) {
+    base.is_active = false;
+  } else {
+    base.is_active = true;
+  }
   if (opts.search?.trim()) {
     const s = opts.search.trim();
     base.OR = [
@@ -75,7 +81,8 @@ export async function createInterchangeableProductGroup(
     is_active?: boolean;
     product_ids?: number[];
     price_types?: string[];
-  }
+  },
+  actorUserId: number | null = null
 ) {
   const name = input.name.trim();
   if (!name) throw new Error("VALIDATION");
@@ -91,8 +98,8 @@ export async function createInterchangeableProductGroup(
     if (cnt !== productIds.length) throw new Error("BAD_PRODUCT");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const g = await tx.interchangeableProductGroup.create({
+  const g = await prisma.$transaction(async (tx) => {
+    const created = await tx.interchangeableProductGroup.create({
       data: {
         tenant_id: tenantId,
         name,
@@ -104,16 +111,25 @@ export async function createInterchangeableProductGroup(
     });
     if (productIds.length) {
       await tx.interchangeableGroupProduct.createMany({
-        data: productIds.map((product_id) => ({ group_id: g.id, product_id }))
+        data: productIds.map((product_id) => ({ group_id: created.id, product_id }))
       });
     }
     if (priceTypes.length) {
       await tx.interchangeableGroupPriceType.createMany({
-        data: priceTypes.map((price_type) => ({ group_id: g.id, price_type }))
+        data: priceTypes.map((price_type) => ({ group_id: created.id, price_type }))
       });
     }
-    return g;
+    return created;
   });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.interchangeable_product_group,
+    entityId: g.id,
+    action: "create",
+    payload: { name: g.name, code: g.code }
+  });
+  return g;
 }
 
 export async function updateInterchangeableProductGroup(
@@ -127,7 +143,8 @@ export async function updateInterchangeableProductGroup(
     is_active: boolean;
     product_ids: number[];
     price_types: string[];
-  }>
+  }>,
+  actorUserId: number | null = null
 ) {
   const row = await prisma.interchangeableProductGroup.findFirst({ where: { id, tenant_id: tenantId } });
   if (!row) throw new Error("NOT_FOUND");
@@ -147,7 +164,7 @@ export async function updateInterchangeableProductGroup(
     await assertTenantPriceTypes(tenantId, priceTypes);
   }
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const data: Prisma.InterchangeableProductGroupUpdateInput = {};
     if (input.name !== undefined) data.name = input.name.trim();
     if (input.code !== undefined) data.code = normCode(input.code);
@@ -180,12 +197,77 @@ export async function updateInterchangeableProductGroup(
 
     return tx.interchangeableProductGroup.findFirstOrThrow({ where: { id } });
   });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.interchangeable_product_group,
+    entityId: id,
+    action: "update",
+    payload: {
+      name: input.name,
+      code: input.code,
+      is_active: input.is_active,
+      product_ids: input.product_ids,
+      price_types: input.price_types
+    }
+  });
+  return updated;
 }
 
-export async function deleteInterchangeableProductGroup(tenantId: number, id: number) {
+/** Hard delete yo‘q — `is_active: false` + code void suffix (mahsulot bog‘lanishlari saqlanadi). */
+export async function deactivateInterchangeableProductGroup(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
   const row = await prisma.interchangeableProductGroup.findFirst({ where: { id, tenant_id: tenantId } });
   if (!row) throw new Error("NOT_FOUND");
-  await prisma.interchangeableProductGroup.delete({ where: { id } });
+  if (!row.is_active) throw new Error("ALREADY_INACTIVE");
+  const updated = await prisma.interchangeableProductGroup.update({
+    where: { id },
+    data: catalogDeactivateData(row.code, id)
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.interchangeable_product_group,
+    entityId: id,
+    action: "soft_delete",
+    payload: { name: row.name, code: row.code, voided_code: updated.code, is_active: false }
+  });
+  return updated;
+}
+
+/** @deprecated Use deactivateInterchangeableProductGroup */
+export async function deleteInterchangeableProductGroup(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
+  return deactivateInterchangeableProductGroup(tenantId, id, actorUserId);
+}
+
+export async function restoreInterchangeableProductGroup(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
+  const row = await prisma.interchangeableProductGroup.findFirst({ where: { id, tenant_id: tenantId } });
+  if (!row) throw new Error("NOT_FOUND");
+  if (row.is_active) throw new Error("NOT_INACTIVE");
+  const updated = await prisma.interchangeableProductGroup.update({
+    where: { id },
+    data: catalogRestoreData(row.code, id)
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.interchangeable_product_group,
+    entityId: id,
+    action: "reactivate",
+    payload: { name: row.name, code: updated.code, is_active: true }
+  });
+  return updated;
 }
 
 export async function getInterchangeableProductGroup(

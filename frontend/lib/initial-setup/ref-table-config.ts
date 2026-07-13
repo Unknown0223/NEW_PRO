@@ -1,10 +1,16 @@
 import type { InitialSetupStep } from "@/lib/initial-setup/types";
 import { normSheetTab, stepIdFromTabLabel } from "@/lib/initial-setup/sheet-labels";
+import type { RelationSource } from "@/lib/initial-setup/relation-options";
 
 export type StepTableColumn = {
   key: string;
   header: string;
   required?: boolean;
+  /** Raqam maydoni — 3 xonali guruhlash bilan kiritish */
+  numeric?: boolean;
+  maxFractionDigits?: number;
+  /** Avval yaratilgan bog‘liq ma’lumotdan tanlash */
+  relation?: RelationSource;
 };
 
 export type StepTableMode =
@@ -12,7 +18,8 @@ export type StepTableMode =
   | "catalog-create"
   | "import"
   | "company-form"
-  | "readonly-api";
+  | "readonly-api"
+  | "entity-create";
 
 export type StepTableConfig = {
   stepId: string;
@@ -20,6 +27,8 @@ export type StepTableConfig = {
   profileRefKey?: string;
   /** POST uchun: trade-directions | sales-channels */
   catalogKind?: "trade-directions" | "sales-channels";
+  /** Ombor / kategoriya yaratish */
+  entityKind?: "warehouses" | "product-categories";
   readonlyQueryKey?: string;
   readonlyFetchPath?: string;
   columns: StepTableColumn[];
@@ -30,7 +39,7 @@ export type StepTableConfig = {
 const REF_COLS: StepTableColumn[] = [
   { key: "name", header: "Название", required: true },
   { key: "code", header: "Код" },
-  { key: "sort_order", header: "Сортировка" },
+  { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
   { key: "comment", header: "Комментарий" }
 ];
 
@@ -54,7 +63,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
       { key: "title", header: "Заголовок" },
-      { key: "sort_order", header: "Сортировка" }
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
   {
@@ -65,8 +74,8 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
-      { key: "is_default", header: "По умолчанию (1/0)" },
-      { key: "sort_order", header: "Сортировка" }
+      { key: "is_default", header: "По умолчанию (1/0)", numeric: true, maxFractionDigits: 0 },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
   {
@@ -77,8 +86,8 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код" },
-      { key: "currency_code", header: "Валюта (код)", required: true },
-      { key: "sort_order", header: "Сортировка" }
+      { key: "currency_code", header: "Валюта (код)", required: true, relation: "currency-code" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
   {
@@ -89,7 +98,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
-      { key: "sort_order", header: "Сортировка" }
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
   {
@@ -97,14 +106,24 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     mode: "catalog-create",
     catalogKind: "trade-directions",
     sheetName: "trade-directions",
-    columns: REF_COLS
+    columns: [
+      { key: "name", header: "Название", required: true },
+      { key: "code", header: "Код" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "comment", header: "Комментарий" }
+    ]
   },
   {
     stepId: "sales-channels",
     mode: "catalog-create",
     catalogKind: "sales-channels",
     sheetName: "sales-channels",
-    columns: REF_COLS
+    columns: [
+      { key: "name", header: "Название", required: true },
+      { key: "code", header: "Код" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "comment", header: "Комментарий" }
+    ]
   },
   {
     stepId: "branches",
@@ -114,7 +133,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код" },
-      { key: "sort_order", header: "Сортировка" }
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
   {
@@ -122,55 +141,69 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     mode: "profile",
     profileRefKey: "client_format_entries",
     sheetName: "client-formats",
-    columns: REF_COLS
+    columns: [
+      { key: "name", header: "Название", required: true },
+      { key: "code", header: "Код" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "comment", header: "Комментарий" }
+    ]
   },
   {
     stepId: "client-types",
     mode: "profile",
     profileRefKey: "client_type_entries",
     sheetName: "client-types",
-    columns: REF_COLS
+    columns: [
+      { key: "name", header: "Название", required: true },
+      { key: "code", header: "Код" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "comment", header: "Комментарий" }
+    ]
   },
   {
     stepId: "client-categories",
     mode: "profile",
     profileRefKey: "client_category_entries",
     sheetName: "client-categories",
-    columns: REF_COLS
+    columns: [
+      { key: "name", header: "Название", required: true },
+      { key: "code", header: "Код" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "comment", header: "Комментарий" }
+    ]
   },
   {
     stepId: "territory",
-    mode: "readonly-api",
+    mode: "profile",
+    profileRefKey: "territory_nodes",
     sheetName: "territory",
-    readonlyQueryKey: "settings-profile-territory",
     columns: [
-      { key: "name", header: "Название" },
-      { key: "level", header: "Уровень" },
-      { key: "parent", header: "Родитель" }
+      { key: "name", header: "Название", required: true },
+      { key: "level", header: "Уровень", relation: "territory-level" },
+      { key: "parent", header: "Родитель", relation: "territory-parent" },
+      { key: "code", header: "Код" }
     ]
   },
   {
     stepId: "warehouses",
-    mode: "readonly-api",
+    mode: "entity-create",
     sheetName: "warehouses",
-    readonlyQueryKey: "reference-warehouses",
-    readonlyFetchPath: "/warehouses",
+    entityKind: "warehouses",
     columns: [
-      { key: "name", header: "Название" },
+      { key: "name", header: "Название", required: true },
       { key: "code", header: "Код" },
-      { key: "branch", header: "Филиал" }
+      { key: "address", header: "Адрес" }
     ]
   },
   {
     stepId: "product-categories",
-    mode: "readonly-api",
+    mode: "entity-create",
     sheetName: "product-categories",
-    readonlyQueryKey: "product-categories",
-    readonlyFetchPath: "/product-categories",
+    entityKind: "product-categories",
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код" },
-      { key: "parent", header: "Родитель" }
+      { key: "parent", header: "Родитель", relation: "product-category-parent" }
     ]
   },
   {
@@ -180,8 +213,8 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название *", required: true },
       { key: "code", header: "Код" },
-      { key: "category_code", header: "Категория(код) *", required: true },
-      { key: "unit_code", header: "Единица измерения(код) *", required: true }
+      { key: "category_name", header: "Категория *", required: true, relation: "product-category-name" },
+      { key: "unit_code", header: "Единица измерения(код) *", required: true, relation: "unit-code" }
     ]
   },
   {
@@ -189,28 +222,61 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     mode: "import",
     sheetName: "product-prices",
     columns: [
-      { key: "sku", header: "Артикул (SKU)", required: true },
-      { key: "price_type", header: "Тип цены" },
-      { key: "price", header: "Цена", required: true }
+      { key: "sku", header: "Артикул (SKU)", required: true, relation: "product-sku" },
+      { key: "price_type", header: "Тип цены", relation: "price-type" },
+      { key: "price", header: "Цена", required: true, numeric: true, maxFractionDigits: 2 }
     ]
   },
   {
     stepId: "clients",
     mode: "import",
     sheetName: "clients",
-    columns: [{ key: "name", header: "Наименование", required: true }]
+    columns: [
+      { key: "name", header: "Наименование", required: true },
+      { key: "legal_name", header: "Юридическое название" },
+      { key: "address", header: "Адрес" },
+      { key: "phone", header: "Телефон" },
+      { key: "contact", header: "Контактное лицо" },
+      { key: "landmark", header: "Ориентир" },
+      { key: "inn", header: "ИНН" },
+      { key: "pinfl", header: "ПИНФЛ" },
+      { key: "sales_channel_code", header: "Торговый канал (код)", relation: "sales-channel-code" },
+      { key: "client_category_code", header: "Категория клиента (код)", relation: "client-category-code" },
+      { key: "client_type_code", header: "Тип клиента (код)", relation: "client-type-code" },
+      { key: "format_code", header: "Формат (код)", relation: "client-format-code" },
+      { key: "city_code", header: "Город (код)", relation: "territory-code" },
+      { key: "latitude", header: "Широта", numeric: true, maxFractionDigits: 6 },
+      { key: "longitude", header: "Долгота", numeric: true, maxFractionDigits: 6 }
+    ]
   },
   {
     stepId: "work-slots",
     mode: "import",
     sheetName: "work-slots",
-    columns: [{ key: "slot_code", header: "slot_code", required: true }]
+    columns: [
+      { key: "slot_code", header: "slot_code", required: true },
+      { key: "label", header: "label" },
+      { key: "branch_code", header: "branch_code", relation: "branch-code" },
+      { key: "slot_type", header: "slot_type" },
+      { key: "is_active", header: "is_active" },
+      { key: "sort_order", header: "sort_order", numeric: true, maxFractionDigits: 0 },
+      { key: "assign_login", header: "assign_login" }
+    ]
   },
   {
     stepId: "stock-receipts",
     mode: "import",
     sheetName: "stock-receipts",
-    columns: []
+    columns: [
+      { key: "row_no", header: "№" },
+      { key: "warehouse", header: "Склад", required: true, relation: "warehouse-name" },
+      { key: "sku", header: "Код товара", required: true, relation: "product-sku" },
+      { key: "category", header: "Категория", relation: "product-category-name" },
+      { key: "name", header: "Продукт" },
+      { key: "price", header: "Цена", numeric: true, maxFractionDigits: 2 },
+      { key: "receipt_qty", header: "Количество прихода", required: true, numeric: true, maxFractionDigits: 3 },
+      { key: "block_qty", header: "Количество в блоке", numeric: true, maxFractionDigits: 0 }
+    ]
   }
 ];
 
@@ -237,9 +303,12 @@ export function sheetNameToStepId(sheetName: string): string | undefined {
     "направление-торговли": "trade-directions",
     "канал-продаж": "sales-channels",
     филиалы: "branches",
+    склады: "warehouses",
+    территория: "territory",
     "формат-клиента": "client-formats",
     "тип-клиента": "client-types",
     "категория-клиента": "client-categories",
+    "категории-продуктов": "product-categories",
     продукты: "products-catalog",
     цены: "product-prices",
     клиенты: "clients",
@@ -254,10 +323,13 @@ export function sheetNameToStepId(sheetName: string): string | undefined {
     "client-formats": "client-formats",
     "client-types": "client-types",
     "client-categories": "client-categories",
+    "product-categories": "product-categories",
     "products-catalog": "products-catalog",
     "product-prices": "product-prices",
     "work-slots": "work-slots",
-    "stock-receipts": "stock-receipts"
+    "stock-receipts": "stock-receipts",
+    warehouses: "warehouses",
+    territory: "territory"
   };
   return aliases[norm];
 }

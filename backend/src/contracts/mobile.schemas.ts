@@ -13,6 +13,8 @@ export const mobilePresenceBodySchema = z.object({
 /** POST `/api/:slug/mobile/sync/full` */
 export const mobileSyncFullBodySchema = z.object({
   last_sync_at: dateLikeSchema,
+  /** Eski 50-limit katalogini qayta yuklash — barcha agent mijozlari. */
+  force_clients_catalog: z.boolean().optional(),
   device_name: z.string().max(255).nullable().optional(),
   user_agent: z.string().max(512).nullable().optional(),
   apk_version: z.string().max(64).nullable().optional()

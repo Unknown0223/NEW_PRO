@@ -7,8 +7,9 @@ import { adminRoles, catalogRoles } from "./reference.route.shared";
 import { createCategoryBody, patchCategoryBody } from "./reference.route.schemas";
 import {
   createProductCategoryRow,
-  deleteProductCategoryRow,
+  deactivateProductCategoryRow,
   listProductCategoriesForTenant,
+  restoreProductCategoryRow,
   updateProductCategoryRow
 } from "./reference.service";
 
@@ -19,7 +20,14 @@ export async function registerReferenceCategoryRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const data = await listProductCategoriesForTenant(request.tenant!.id);
+      const q = request.query as Record<string, string | undefined>;
+      const include_inactive = q.include_inactive === "true";
+      const is_active =
+        q.is_active === "true" ? true : q.is_active === "false" ? false : undefined;
+      const data = await listProductCategoriesForTenant(request.tenant!.id, {
+        include_inactive,
+        is_active
+      });
       return reply.send({ data });
     }
   );
@@ -106,6 +114,7 @@ export async function registerReferenceCategoryRoutes(app: FastifyInstance) {
     }
   );
 
+  /** DELETE = deactivate (is_active=false), hard delete yo‘q. */
   app.delete(
     "/api/:slug/product-categories/:categoryId",
     { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
@@ -116,13 +125,41 @@ export async function registerReferenceCategoryRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        await deleteProductCategoryRow(request.tenant!.id, id, actorUserIdOrNull(request));
-        return reply.status(204).send();
+        const row = await deactivateProductCategoryRow(
+          request.tenant!.id,
+          id,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(row);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "HAS_CHILDREN") return sendApiError(reply, request, 409, "HasChildren");
-        if (msg === "CATEGORY_IN_USE") return sendApiError(reply, request, 409, "CategoryInUse");
+        if (msg === "ALREADY_INACTIVE") return sendApiError(reply, request, 409, "AlreadyInactive");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/product-categories/:categoryId/restore",
+    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { categoryId: string }).categoryId, 10);
+      if (Number.isNaN(id)) {
+        return sendApiError(reply, request, 400, "InvalidId");
+      }
+      try {
+        const row = await restoreProductCategoryRow(
+          request.tenant!.id,
+          id,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(row);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "NOT_INACTIVE") return sendApiError(reply, request, 409, "NotInactive");
         throw e;
       }
     }

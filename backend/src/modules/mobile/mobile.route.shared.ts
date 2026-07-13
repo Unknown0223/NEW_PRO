@@ -6,6 +6,12 @@ import {
   requireMobileAppAccess
 } from "../auth/app-access.service";
 
+/** Mobile client QR bind/unbind body. */
+export const mobileQrBodySchema = z.object({
+  qr_code: z.string().trim().min(1),
+  client_id: z.number().int().positive().nullable().optional()
+});
+
 /** Mobil foto: agent/ekspeditor o'z rolidagi + faqat bugungi kun. */
 export function mobilePhotoReportListOpts(viewer: { role: string }) {
   const viewerRole =
@@ -65,11 +71,6 @@ export function parseDateLike(raw: string | null | undefined): Date | null | und
   const dt = new Date(raw);
   return Number.isNaN(dt.getTime()) ? undefined : dt;
 }
-
-export const mobileQrBodySchema = z.object({
-  qr_code: z.string().trim().min(1).max(128),
-  client_id: z.number().int().positive().optional()
-});
 
 export function parseClientPhotoPathParams(params: { id?: string; photoId?: string }):
   | { ok: true; clientId: number; photoId: number }

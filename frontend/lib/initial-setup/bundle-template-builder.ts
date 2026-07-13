@@ -234,7 +234,7 @@ export async function buildStyledWorkbook(
 ): Promise<Blob> {
   const dataRowStyle = options?.dataRowStyle ?? "sample";
   const wb = new ExcelJS.Workbook();
-  wb.creator = "SALEC";
+  wb.creator = "Sales Arena";
   wb.created = new Date();
 
   await addStartSheet(wb);

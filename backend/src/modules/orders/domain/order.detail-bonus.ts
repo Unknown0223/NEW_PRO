@@ -56,6 +56,7 @@ export async function validateBonusGiftOverrides(
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
     }
     const rule = mapBonusRuleFull(ruleRaw);
+    // Validatsiyada fallback berilmaydi — aks holda assortment_auto istalgan SKU ni qabul qilardi.
     const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
     if (allowed.length === 0 || !allowed.includes(row.bonus_product_id)) {
       throw new Error("BAD_BONUS_GIFT_OVERRIDE");
@@ -122,14 +123,18 @@ export async function buildBonusGiftSwapOptions(
 ): Promise<BonusGiftSwapOptionRow[]> {
   const out: BonusGiftSwapOptionRow[] = [];
   if (!appliedRuleIds.length) return out;
-  const rules = await prisma.bonusRule.findMany({
+  const rulesRaw = await prisma.bonusRule.findMany({
     where: { tenant_id: tenantId, id: { in: appliedRuleIds }, type: "qty" },
-    select: { id: true, name: true, bonus_product_ids: true }
+    include: bonusRuleInclude
   });
+  const rules = rulesRaw.map(mapBonusRuleFull);
   const productIdSet = new Set<number>();
+  const allowedByRule = new Map<number, number[]>();
   for (const r of rules) {
-    if (r.bonus_product_ids.length < 2) continue;
-    for (const pid of r.bonus_product_ids) productIdSet.add(pid);
+    const allowed = await resolveAllowedGiftProductIdsForRule(tenantId, r);
+    if (allowed.length < 2) continue;
+    allowedByRule.set(r.id, allowed);
+    for (const pid of allowed) productIdSet.add(pid);
   }
   if (productIdSet.size === 0) return out;
   const products = await prisma.product.findMany({
@@ -138,14 +143,15 @@ export async function buildBonusGiftSwapOptions(
   });
   const pmap = new Map(products.map((p) => [p.id, p]));
   for (const r of rules) {
-    if (r.bonus_product_ids.length < 2) continue;
-    const chosen = selections.get(r.id) ?? r.bonus_product_ids[0]!;
+    const allowed = allowedByRule.get(r.id);
+    if (!allowed || allowed.length < 2) continue;
+    const chosen = selections.get(r.id) ?? allowed[0]!;
     out.push({
       bonus_rule_id: r.id,
       rule_name: r.name,
-      allowed_product_ids: [...r.bonus_product_ids],
+      allowed_product_ids: [...allowed],
       chosen_product_id: chosen,
-      products: r.bonus_product_ids.map((id) => {
+      products: allowed.map((id) => {
         const p = pmap.get(id);
         return { id, name: p?.name ?? `#${id}`, sku: p?.sku ?? "" };
       })

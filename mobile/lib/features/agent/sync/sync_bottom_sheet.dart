@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/l10n/app_strings_ru.dart';
@@ -83,7 +85,7 @@ class SyncBottomSheet extends ConsumerWidget {
 
   void _run(BuildContext context, WidgetRef ref, {required bool full}) {
     Navigator.pop(context);
-    startManualSync(context, ref, full: full);
+    unawaited(startManualSync(context, ref, full: full));
   }
 }
 

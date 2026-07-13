@@ -10,11 +10,12 @@ import { CATALOG_IMPORT_TEMPLATE_HEADERS } from "./products.import.helpers";
 import {
   allocateUniqueSku,
   cellText,
+  formatCategoryImportError,
   headerToTemplateCol,
   parseNumLoose,
   resolveBrandIdByCode,
   resolveCatalogGroupIdByCode,
-  resolveCategoryIdByCode,
+  resolveCategoryIdForImport,
   resolveSegmentIdByCode,
   type TemplateCol
 } from "./products.import.helpers";
@@ -39,12 +40,12 @@ export async function importProductsFromCatalogTemplateXlsx(
     if (key) colByField[key] = colNumber;
   });
 
-  if (!colByField.name || !colByField.categoryCode || !colByField.unitCode) {
+  if (!colByField.name || !colByField.categoryName || !colByField.unitCode) {
     return {
       created: 0,
       updated: 0,
       errors: [
-        "Шаблон: нужны колонки «Название», «Категория(код)», «Единица измерения(код)». Скачайте шаблон с сервера."
+        "Шаблон: нужны колонки «Название», «Категория», «Единица измерения(код)». Скачайте шаблон с сервера."
       ]
     };
   }
@@ -58,22 +59,23 @@ export async function importProductsFromCatalogTemplateXlsx(
     const name = cellText(row, colByField.name);
     if (!name) continue;
 
-    const categoryCode = cellText(row, colByField.categoryCode);
+    const categoryName = cellText(row, colByField.categoryName);
     const unitCode = cellText(row, colByField.unitCode);
-    if (!categoryCode) {
-      errors.push(`Qator ${r}: «Категория(код)» majburiy`);
+    if (!categoryName) {
+      errors.push(`Строка ${r}: категория обязательна`);
       continue;
     }
     if (!unitCode) {
-      errors.push(`Qator ${r}: «Единица измерения(код)» majburiy`);
+      errors.push(`Строка ${r}: «Единица измерения(код)» обязательна`);
       continue;
     }
 
-    const categoryId = await resolveCategoryIdByCode(tenantId, categoryCode);
-    if (categoryId == null) {
-      errors.push(`Qator ${r}: kategoriya kodi topilmadi: «${categoryCode}»`);
+    const categoryResolved = await resolveCategoryIdForImport(tenantId, categoryName);
+    if (!categoryResolved.ok) {
+      errors.push(formatCategoryImportError(r, categoryName, categoryResolved));
       continue;
     }
+    const categoryId = categoryResolved.id;
 
     let codeVal = colByField.code ? cellText(row, colByField.code) : "";
     let sku = codeVal.trim();
@@ -91,7 +93,7 @@ export async function importProductsFromCatalogTemplateXlsx(
       if (g) {
         product_group_id = await resolveCatalogGroupIdByCode(tenantId, g);
         if (product_group_id == null) {
-          errors.push(`Qator ${r}: «Группа(код)» topilmadi: «${g}»`);
+          errors.push(`Строка ${r}: «Группа(код)» не найдена: «${g}»`);
           continue;
         }
       }
@@ -103,7 +105,7 @@ export async function importProductsFromCatalogTemplateXlsx(
       if (s) {
         segment_id = await resolveSegmentIdByCode(tenantId, s);
         if (segment_id == null) {
-          errors.push(`Qator ${r}: «Сегмент(код)» topilmadi: «${s}»`);
+          errors.push(`Строка ${r}: «Сегмент(код)» не найден: «${s}»`);
           continue;
         }
       }
@@ -115,7 +117,7 @@ export async function importProductsFromCatalogTemplateXlsx(
       if (b) {
         brand_id = await resolveBrandIdByCode(tenantId, b);
         if (brand_id == null) {
-          errors.push(`Qator ${r}: «Бренд(код)» topilmadi: «${b}»`);
+          errors.push(`Строка ${r}: «Бренд(код)» не найден: «${b}»`);
           continue;
         }
       }
@@ -213,7 +215,7 @@ export async function importProductsFromCatalogTemplateXlsx(
         created += 1;
       }
     } catch (e) {
-      errors.push(`Qator ${r}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка сохранения"}`);
     }
   }
 
@@ -236,7 +238,7 @@ export async function exportTenantCatalogProductsXlsx(tenantId: number): Promise
   const products = await prisma.product.findMany({
     where: { tenant_id: tenantId },
     include: {
-      category: { select: { code: true } },
+      category: { select: { name: true } },
       product_group: { select: { code: true } },
       brand: { select: { code: true } },
       segment: { select: { code: true } }
@@ -268,7 +270,7 @@ export async function exportTenantCatalogProductsXlsx(tenantId: number): Promise
     sheet.addRow([
       p.name,
       p.sku,
-      p.category?.code ?? "",
+      p.category?.name ?? "",
       p.unit,
       p.product_group?.code ?? "",
       p.segment?.code ?? "",

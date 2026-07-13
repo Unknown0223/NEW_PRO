@@ -15,6 +15,13 @@ import {
 import { BonusRulePrerequisitesField } from "@/components/bonus-rules/bonus-rule-prerequisites-field";
 import { BonusRuleSelectedClientsField } from "@/components/bonus-rules/bonus-rule-selected-clients-field";
 import { BonusRuleProductDualPanels } from "@/components/bonus-rules/bonus-rule-product-dual-panels";
+import { BonusRuleExtraClauseCard } from "@/components/bonus-rules/bonus-rule-extra-clause-card";
+import {
+  clauseFormToApiPayload,
+  clauseFromApiRow,
+  emptyClauseForm,
+  type ClauseFormState
+} from "@/components/bonus-rules/bonus-rule-clause-state";
 import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
@@ -249,6 +256,8 @@ export function BonusRuleForm({
   const [scopeTradeDirectionIds, setScopeTradeDirectionIds] = useState<number[]>([]);
   const [onlyByAssortment, setOnlyByAssortment] = useState(false);
   const [onlyByCategory, setOnlyByCategory] = useState(false);
+  const [primaryGrantsReward, setPrimaryGrantsReward] = useState(true);
+  const [extraClauses, setExtraClauses] = useState<ClauseFormState[]>([]);
   const [previewPurchaseQty, setPreviewPurchaseQty] = useState("50");
   const [localError, setLocalError] = useState<string | null>(null);
   /** Qaysi blokka scroll, ramka va ichki bildirishnoma bog‘langan */
@@ -345,7 +354,8 @@ export function BonusRuleForm({
         void loadClientLabels(sc);
       }
       setSumThresholdScope(rule.sum_threshold_scope === "calendar_month" ? "calendar_month" : "order");
-      setIsManual(rule.is_manual ?? false);
+      // Bonus qoidalari faqat avto; «Вручную» faqat skidkalarda.
+      setIsManual(discountOnly ? (rule.is_manual ?? false) : false);
       setInBlocks(rule.in_blocks ?? true);
       setOncePerClient(rule.once_per_client ?? false);
       setPrerequisiteRuleIds([...(rule.prerequisite_rule_ids ?? [])]);
@@ -366,6 +376,15 @@ export function BonusRuleForm({
       }
       setTriggerProductIds(pids);
       setSelectedCategoryIds(cids);
+      if (!discountOnly && rule.clauses && rule.clauses.length > 0) {
+        const sorted = [...rule.clauses].sort((a, b) => a.sort_order - b.sort_order);
+        const primary = sorted[0]!;
+        setPrimaryGrantsReward(primary.grants_reward !== false);
+        setExtraClauses(sorted.slice(1).map(clauseFromApiRow));
+      } else {
+        setPrimaryGrantsReward(true);
+        setExtraClauses([]);
+      }
     } else {
       setName("");
       setType(discountOnly ? "discount" : "qty");
@@ -397,6 +416,8 @@ export function BonusRuleForm({
       setScopeTradeDirectionIds([]);
       setOnlyByAssortment(false);
       setOnlyByCategory(false);
+      setPrimaryGrantsReward(true);
+      setExtraClauses([]);
     }
     return () => {
       cancelled = true;
@@ -481,15 +502,64 @@ export function BonusRuleForm({
         scope_restrict_category: onlyByCategory,
         target_all_clients: targetAllClients,
         selected_client_ids: targetAllClients ? [] : selectedClientIds,
-        is_manual: isManual,
+        is_manual: discountOnly ? isManual : false,
         in_blocks: inBlocks,
         once_per_client: oncePerClient,
         one_plus_one_gift: initialRule?.one_plus_one_gift ?? false,
-        prerequisite_rule_ids: prerequisiteRuleIds,
+        prerequisite_rule_ids: discountOnly ? prerequisiteRuleIds : [],
         scope_branch_codes: scopeBranchCodes,
         scope_agent_user_ids: scopeAgentUserIds,
         scope_trade_direction_ids: scopeTradeDirectionIds
       };
+
+      if (!discountOnly && (type === "qty" || type === "sum")) {
+        const primaryState: ClauseFormState = {
+          ...emptyClauseForm(primaryGrantsReward),
+          grantsReward: primaryGrantsReward,
+          priority,
+          clientCategory,
+          paymentType,
+          clientType,
+          salesChannel,
+          priceType,
+          triggerProductIds,
+          bonusProductIds,
+          selectedCategoryIds,
+          targetAllClients,
+          selectedClientIds,
+          selectedClientNames,
+          sumThresholdScope,
+          inBlocks,
+          oncePerClient,
+          onlyByAssortment,
+          onlyByCategory,
+          minSum,
+          conditions,
+          scopeBranchCodes,
+          scopeAgentUserIds,
+          scopeTradeDirectionIds
+        };
+        const clausePayloads = [
+          clauseFormToApiPayload(primaryState, type, 0),
+          ...extraClauses.map((c, i) => clauseFormToApiPayload(c, type, i + 1))
+        ];
+        if (!clausePayloads.some((c) => c.grants_reward === true)) {
+          throw new Error("CLAUSE_REWARD_REQUIRED");
+        }
+        for (const c of clausePayloads) {
+          if (
+            c.grants_reward === true &&
+            !(c.scope_restrict_assortment === true && c.scope_restrict_category !== true) &&
+            Array.isArray(c.bonus_product_ids) &&
+            (c.bonus_product_ids as number[]).length === 0 &&
+            Array.isArray(c.product_ids) &&
+            (c.product_ids as number[]).length === 0
+          ) {
+            throw new Error("CLAUSE_BONUS_PRODUCTS_REQUIRED");
+          }
+        }
+        payload.clauses = clausePayloads;
+      }
 
       if (type === "qty") {
         const rows = conditions.map(parseCondRow);
@@ -555,6 +625,24 @@ export function BonusRuleForm({
         setLocalError(BONUS_SCOPE_REQUIRED_MSG);
         setErrorTarget("restrictions");
         pulseErrorOn("restrictions");
+        return;
+      }
+      if (
+        ax.response?.data?.error === "ClauseRewardRequired" ||
+        (e instanceof Error && e.message === "CLAUSE_REWARD_REQUIRED")
+      ) {
+        setLocalError("Камида битта шартда бонус бериш белгилансин (галочка + товар).");
+        setErrorTarget("products");
+        pulseErrorOn("products");
+        return;
+      }
+      if (
+        ax.response?.data?.error === "ClauseBonusProductsRequired" ||
+        (e instanceof Error && e.message === "CLAUSE_BONUS_PRODUCTS_REQUIRED")
+      ) {
+        setLocalError("Бонус бериладиган шартда камида битта бонус-товар танланг.");
+        setErrorTarget("products");
+        pulseErrorOn("products");
         return;
       }
       if (ax.response?.data?.error === "RuleLocked") {
@@ -673,7 +761,10 @@ export function BonusRuleForm({
   };
 
   const showBonusColumn =
-    !discountOnly && (type === "qty" || type === "sum") && !(onlyByAssortment && !onlyByCategory);
+    !discountOnly &&
+    (type === "qty" || type === "sum") &&
+    primaryGrantsReward &&
+    !(onlyByAssortment && !onlyByCategory);
   const showTriggerColumn =
     discountOnly
       ? (onlyByAssortment || onlyByCategory) && (type === "sum" || type === "discount")
@@ -896,17 +987,19 @@ export function BonusRuleForm({
               }
             ]}
           />
-          <BonusRuleTemplateRadioGroup
-            title="Способ"
-            name="br-method"
-            value={isManual ? "manual" : "auto"}
-            onChange={(v) => setIsManual(v === "manual")}
-            disabled={fieldDisabled}
-            options={[
-              { value: "auto", label: "Автоматически" },
-              { value: "manual", label: "Вручную" }
-            ]}
-          />
+          {discountOnly ? (
+            <BonusRuleTemplateRadioGroup
+              title="Способ"
+              name="br-method"
+              value={isManual ? "manual" : "auto"}
+              onChange={(v) => setIsManual(v === "manual")}
+              disabled={fieldDisabled}
+              options={[
+                { value: "auto", label: "Автоматически" },
+                { value: "manual", label: "Вручную" }
+              ]}
+            />
+          ) : null}
           <BonusRuleTemplateCheckbox
             checked={isActive}
             onChange={setIsActive}
@@ -976,7 +1069,7 @@ export function BonusRuleForm({
           </div>
         ) : null}
 
-        {!isManual ? (
+        {discountOnly && !isManual ? (
           <div className="mt-4 rounded-xl border border-border bg-muted/15 p-4">
             <p className="mb-1 text-sm font-semibold text-foreground">Предварительные условия</p>
             <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
@@ -994,6 +1087,20 @@ export function BonusRuleForm({
         ) : null}
       </BonusRuleSection>
       </div>
+
+      {!discountOnly ? (
+        <div className="mt-2 space-y-2">
+          <BonusRuleTemplateCheckbox
+            checked={primaryGrantsReward}
+            onChange={setPrimaryGrantsReward}
+            disabled={fieldDisabled}
+            label="Выдать бонус по этому условию (основное)"
+          />
+          <p className="text-xs text-muted-foreground">
+            Снимите галочку, если основное условие только проверяется; бонус тогда должен быть на другом условии.
+          </p>
+        </div>
+      ) : null}
 
       {showTriggerColumn || showBonusColumn ? (
         <div
@@ -1022,6 +1129,32 @@ export function BonusRuleForm({
               lockedView={formLocked}
             />
           </div>
+        </div>
+      ) : null}
+
+      {!discountOnly && (type === "qty" || type === "sum") ? (
+        <div className="space-y-3">
+          {extraClauses.map((cl, i) => (
+            <BonusRuleExtraClauseCard
+              key={cl.key}
+              title={`Условие ${i + 2}`}
+              value={cl}
+              onChange={(next) =>
+                setExtraClauses((prev) => prev.map((c, j) => (j === i ? next : c)))
+              }
+              onRemove={() => setExtraClauses((prev) => prev.filter((_, j) => j !== i))}
+              disabled={fieldDisabled}
+              tenantSlug={tenantSlug}
+              bonusType={type === "sum" ? "sum" : "qty"}
+            />
+          ))}
+          <BonusRuleTemplateButton
+            type="button"
+            disabled={fieldDisabled}
+            onClick={() => setExtraClauses((prev) => [...prev, emptyClauseForm(false)])}
+          >
+            + Добавить условие
+          </BonusRuleTemplateButton>
         </div>
       ) : null}
 

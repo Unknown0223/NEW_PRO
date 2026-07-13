@@ -73,3 +73,18 @@ export const bulkPatchBodySchema = z.object({
   client_ids: z.array(z.number().int().positive()).min(1).max(500),
   patch: patchClientBodySchema
 });
+
+export const createClientTagBodySchema = z.object({
+  name: z.string().trim().min(1).max(128)
+});
+
+export const bulkTagsBodySchema = z
+  .object({
+    client_ids: z.array(z.number().int().positive()).min(1).max(500),
+    add_tag_ids: z.array(z.number().int().positive()).max(50).optional(),
+    remove_tag_ids: z.array(z.number().int().positive()).max(50).optional()
+  })
+  .refine(
+    (o) => (o.add_tag_ids?.length ?? 0) > 0 || (o.remove_tag_ids?.length ?? 0) > 0,
+    { message: "empty_tags" }
+  );

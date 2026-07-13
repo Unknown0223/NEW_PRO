@@ -98,6 +98,10 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
         zone: true,
         warehouse_id: true,
         cash_desk_id: true,
+        price_type: true,
+        allow_order_with_debt: true,
+        allow_consignment: true,
+        allow_consignment_with_debt: true,
         contact_persons: true,
         agent: { select: { name: true, code: true } },
         warehouse: { select: { name: true } },
@@ -105,6 +109,9 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
         agent_assignments: {
           orderBy: { slot: "asc" },
           select: agentAssignmentSelectFields
+        },
+        tag_links: {
+          select: { tag: { select: { id: true, name: true } } }
         }
       }
     }),
@@ -207,7 +214,12 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     contact_persons: parseContactPersonsJson(c.contact_persons),
     open_orders_total,
     created_by_user_label: auditActorLabel(createLog?.user ?? undefined),
-    last_modified_by_user_label: auditActorLabel(lastPatchLog?.user ?? undefined)
+    last_modified_by_user_label: auditActorLabel(lastPatchLog?.user ?? undefined),
+    price_type: c.price_type,
+    allow_order_with_debt: c.allow_order_with_debt,
+    allow_consignment: c.allow_consignment,
+    allow_consignment_with_debt: c.allow_consignment_with_debt,
+    tags: c.tag_links.map((l) => ({ id: l.tag.id, name: l.tag.name }))
   };
   void setAppCache(cacheKey, detail, CLIENT_DETAIL_CACHE_TTL_SECONDS);
   return detail;

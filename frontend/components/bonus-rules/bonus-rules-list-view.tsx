@@ -1,6 +1,7 @@
 "use client";
 
 import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
+import { BonusRulesBulkToolbar } from "@/components/bonus-rules/bonus-rules-bulk-toolbar";
 import { BonusRuleOrderScopeDialog } from "@/components/bonus-rules/bonus-rule-order-scope-dialog";
 import { ruleSummary } from "@/components/bonus-rules/rule-summary";
 import { BonusRuleLinkedBonusesCell } from "@/components/bonus-rules/bonus-rule-linked-bonuses-cell";
@@ -121,16 +122,15 @@ type Props = {
   variant?: BonusRulesListVariant;
 };
 
-/** Бонусы: только qty. */
+/** Бонусы: только qty. «Связанные» o‘rniga ichki shartlar. */
 const BONUS_LIST_COLUMNS = [
   { id: "name", label: "Название" },
   { id: "type", label: "Тип бонуса" },
-  { id: "linked", label: "Связанные бонусы" },
+  { id: "clauses", label: "Условия" },
   { id: "only_assortment", label: "Только по ассортименту" },
   { id: "once_per_client", label: "Один раз на клиента" },
   { id: "valid_from", label: "Действует с" },
   { id: "valid_to", label: "Действует до" },
-  { id: "method", label: "Метод" },
   { id: "term", label: "Срок" },
   { id: "priority", label: "Приоритет" },
   { id: "summary", label: "Условие (кол-во или сумма)" },
@@ -177,6 +177,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [focusedRowId, setFocusedRowId] = useState<number | null>(null);
   const [scopeRule, setScopeRule] = useState<BonusRuleRow | null>(null);
+  const [bulkScopeOpen, setBulkScopeOpen] = useState(false);
 
   const listColumns = useMemo(() => listColumnsForVariant(variant), [variant]);
 
@@ -227,11 +228,12 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
       is_active: activeOnly ? "true" : "false"
     });
     if (debouncedSearch) params.set("search", debouncedSearch);
-    if (methodFilter === "auto") params.set("manual", "false");
-    if (methodFilter === "manual") params.set("manual", "true");
     if (isDiscounts) {
+      if (methodFilter === "auto") params.set("manual", "false");
+      if (methodFilter === "manual") params.set("manual", "true");
       params.set("types", "sum,discount");
     } else {
+      // Bonus faqat avto — eski «Вручную» qoidalarni ham ko‘rsatamiz, lekin filtr yo‘q.
       params.set("types", "qty");
     }
     if (termFilter === "expired") params.set("term", "expired");
@@ -297,6 +299,14 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
   }, [shartOptionsRows]);
 
   const rows = useMemo(() => data?.data ?? [], [data?.data]);
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selectedIds.has(r.id)),
+    [rows, selectedIds]
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
 
   const allOnPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
 
@@ -345,7 +355,6 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
           "Один раз на клиента",
           "Действует с",
           "Действует до",
-          "Метод",
           "Срок"
         ];
     const lines = rows.map((r) => {
@@ -366,7 +375,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
         r.once_per_client ? "Да" : "Нет",
         formatRuleDateTime(r.valid_from),
         formatRuleDateTime(r.valid_to),
-        r.is_manual ? "Вручную" : "Авто",
+        ...(isDiscounts ? [r.is_manual ? "Вручную" : "Авто"] : []),
         termLabel
       ];
       return base.join(sep);
@@ -390,7 +399,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
       : "Бонусы (неактивные)";
 
   return (
-    <PageShell>
+    <PageShell className={selectedIds.size > 0 ? "pb-24" : undefined}>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
@@ -472,19 +481,21 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
               </div>
               {filtersVisible ? (
                 <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
-                  <div className="grid min-w-[9.5rem] max-w-[220px] flex-[1_1_9.5rem] gap-1.5">
-                    <Label className="text-xs font-medium text-foreground/88">Способ применения</Label>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                      aria-label="Способ применения"
-                      value={methodFilter}
-                      onChange={(e) => setMethodFilter(e.target.value as typeof methodFilter)}
-                    >
-                      <option value="all">Все</option>
-                      <option value="auto">Авто</option>
-                      <option value="manual">Вручную</option>
-                    </select>
-                  </div>
+                  {isDiscounts ? (
+                    <div className="grid min-w-[9.5rem] max-w-[220px] flex-[1_1_9.5rem] gap-1.5">
+                      <Label className="text-xs font-medium text-foreground/88">Способ применения</Label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        aria-label="Способ применения"
+                        value={methodFilter}
+                        onChange={(e) => setMethodFilter(e.target.value as typeof methodFilter)}
+                      >
+                        <option value="all">Все</option>
+                        <option value="auto">Авто</option>
+                        <option value="manual">Вручную</option>
+                      </select>
+                    </div>
+                  ) : null}
                   <div className="grid min-w-[9.5rem] max-w-[220px] flex-[1_1_9.5rem] gap-1.5">
                     <Label className="text-xs font-medium text-foreground/88">Состояние срока</Label>
                     <select
@@ -668,7 +679,7 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                           key={row.id}
                           className={cn(
                             "border-b last:border-0",
-                            focusedRowId === row.id && "bg-primary/5"
+                            (focusedRowId === row.id || selectedIds.has(row.id)) && "bg-primary/5"
                           )}
                           onClick={() => setFocusedRowId(row.id)}
                         >
@@ -697,11 +708,15 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                                   {isDiscounts ? skidkaTypeLabel(row.type, row.discount_pct) : bonusTypeLabel(row.type)}
                                 </span>
                               ) : colId === "linked" ? (
-                                tenantSlug ? (
+                                isDiscounts && tenantSlug ? (
                                   <div className="min-w-0" onClick={(e) => e.stopPropagation()}>
                                     <BonusRuleLinkedBonusesCell tenantSlug={tenantSlug} row={row} />
                                   </div>
                                 ) : null
+                              ) : colId === "clauses" ? (
+                                <span className="text-muted-foreground">
+                                  {Math.max(1, row.clauses?.length ?? 1)}
+                                </span>
                               ) : colId === "only_assortment" ? (
                                 <span>{onlyByAssortment(row) ? "Да" : "Нет"}</span>
                               ) : colId === "once_per_client" ? (
@@ -806,14 +821,32 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
       )}
 
       {tenantSlug ? (
-        <BonusRuleOrderScopeDialog
-          open={scopeRule != null}
-          onOpenChange={(o) => {
-            if (!o) setScopeRule(null);
-          }}
-          tenantSlug={tenantSlug}
-          rule={scopeRule}
-        />
+        <>
+          <BonusRuleOrderScopeDialog
+            open={scopeRule != null}
+            onOpenChange={(o) => {
+              if (!o) setScopeRule(null);
+            }}
+            tenantSlug={tenantSlug}
+            rule={scopeRule}
+          />
+          <BonusRuleOrderScopeDialog
+            open={bulkScopeOpen}
+            onOpenChange={setBulkScopeOpen}
+            tenantSlug={tenantSlug}
+            rule={null}
+            bulkRuleIds={Array.from(selectedIds)}
+            onBulkSaved={clearSelection}
+          />
+          <BonusRulesBulkToolbar
+            tenantSlug={tenantSlug}
+            selectedIds={selectedIds}
+            selectedRows={selectedRows}
+            activeOnly={activeOnly}
+            onClearSelection={clearSelection}
+            onScopeBulk={() => setBulkScopeOpen(true)}
+          />
+        </>
       ) : null}
 
       {data && data.total > data.limit ? (

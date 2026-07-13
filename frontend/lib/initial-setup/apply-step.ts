@@ -139,6 +139,52 @@ export async function applyProfileRows(
       sort_order: parseSort(cell(r, "sort_order")),
       active: true
     }));
+  } else if (profileRefKey === "territory_nodes") {
+    type Node = {
+      id: string;
+      name: string;
+      code?: string | null;
+      comment?: string | null;
+      sort_order?: number | null;
+      active?: boolean;
+      children: Node[];
+    };
+    const byName = new Map<string, Node>();
+    const roots: Node[] = [];
+    const ordered = preview.rows.filter((r) => cell(r, "name"));
+    for (const r of ordered) {
+      const name = cell(r, "name");
+      const node: Node = {
+        id: cell(r, "_id") || newId("terr"),
+        name,
+        code: cell(r, "code") || null,
+        comment: cell(r, "level") || null,
+        sort_order: parseSort(cell(r, "sort_order")),
+        active: true,
+        children: []
+      };
+      byName.set(name.toLowerCase(), node);
+    }
+    for (const r of ordered) {
+      const name = cell(r, "name");
+      const parentName = cell(r, "parent");
+      const node = byName.get(name.toLowerCase());
+      if (!node) continue;
+      if (parentName) {
+        const parent = byName.get(parentName.toLowerCase());
+        if (parent && parent !== node) {
+          parent.children.push(node);
+          continue;
+        }
+      }
+      roots.push(node);
+    }
+    payload = roots;
+    await api.patch(`/api/${tenantSlug}/settings/profile`, {
+      references: { territory_nodes: payload }
+    });
+    await invalidateAfterApply(tenantSlug, qc);
+    return `${preview.rows.length} zona/shahar saqlandi`;
   } else {
     const prefix =
       profileRefKey === "client_format_entries"
@@ -212,6 +258,64 @@ export async function applyCatalogRows(
   return created ? `${created} yangi yozuv qo‘shildi` : "Yangi yozuv yo‘q (takrorlar o‘tkazildi)";
 }
 
+export async function applyEntityRows(
+  tenantSlug: string,
+  entityKind: "warehouses" | "product-categories",
+  preview: InitialSetupPreviewState,
+  qc?: QueryClient
+): Promise<string> {
+  if (entityKind === "warehouses") {
+    const { data } = await api.get<{ data?: { id: number; name: string; code?: string | null }[] }>(
+      `/api/${tenantSlug}/warehouses`
+    );
+    const existing = new Set((data.data ?? []).map((x) => x.name.trim().toLowerCase()));
+    let created = 0;
+    for (const r of preview.rows) {
+      const name = cell(r, "name");
+      if (!name || existing.has(name.toLowerCase())) continue;
+      await api.post(`/api/${tenantSlug}/warehouses`, {
+        name,
+        code: cell(r, "code") || null,
+        address: cell(r, "address") || null,
+        is_active: true
+      });
+      existing.add(name.toLowerCase());
+      created++;
+    }
+    await invalidateAfterApply(tenantSlug, qc, ["warehouses"]);
+    return created ? `${created} ombor qo‘shildi` : "Yangi ombor yo‘q (takrorlar o‘tkazildi)";
+  }
+
+  const { data } = await api.get<{ data?: { id: number; name: string; code?: string | null }[] }>(
+    `/api/${tenantSlug}/product-categories`
+  );
+  const list = data.data ?? [];
+  const byName = new Map(list.map((x) => [x.name.trim().toLowerCase(), x]));
+  let created = 0;
+  // Avval ildizlar, keyin bolalar
+  const rows = [...preview.rows].sort((a, b) => {
+    const ap = cell(a, "parent") ? 1 : 0;
+    const bp = cell(b, "parent") ? 1 : 0;
+    return ap - bp;
+  });
+  for (const r of rows) {
+    const name = cell(r, "name");
+    if (!name || byName.has(name.toLowerCase())) continue;
+    const parentName = cell(r, "parent");
+    const parent = parentName ? byName.get(parentName.toLowerCase()) : undefined;
+    const row = await api.post<{ id: number; name: string }>(`/api/${tenantSlug}/product-categories`, {
+      name,
+      code: cell(r, "code") || null,
+      parent_id: parent?.id ?? null,
+      is_active: true
+    });
+    byName.set(name.toLowerCase(), { id: row.data.id, name: row.data.name, code: cell(r, "code") || null });
+    created++;
+  }
+  await invalidateAfterApply(tenantSlug, qc, ["product-categories"]);
+  return created ? `${created} kategoriya qo‘shildi` : "Yangi kategoriya yo‘q (takrorlar o‘tkazildi)";
+}
+
 export async function applyImportStep(
   tenantSlug: string,
   step: InitialSetupStep,
@@ -252,6 +356,9 @@ export async function applyStepPreview(
     case "catalog-create":
       if (!config.catalogKind) throw new Error("catalogKind yo‘q");
       return applyCatalogRows(tenantSlug, config.catalogKind, preview, qc);
+    case "entity-create":
+      if (!config.entityKind) throw new Error("entityKind yo‘q");
+      return applyEntityRows(tenantSlug, config.entityKind, preview, qc);
     case "import":
       return applyImportStep(tenantSlug, step, preview, callbacks);
     case "readonly-api":

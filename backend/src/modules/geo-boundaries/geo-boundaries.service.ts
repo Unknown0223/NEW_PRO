@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import type { GeoBoundaryDto, GeoBoundaryKind, GeoBoundaryUpsertInput } from "./geo-boundaries.types";
 import { GeoBoundaryOverlapError } from "./geo-boundary-overlap.error";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
@@ -65,6 +66,10 @@ function parseBoundary(raw: unknown): GeoBoundaryDto | null {
   const color = normalizeHexColor(typeof o.color === "string" ? o.color : undefined);
   const warehouse_id = parseOptionalPositiveInt(o.warehouse_id);
   const cash_desk_id = parseOptionalPositiveInt(o.cash_desk_id);
+  const deleted_at =
+    o.deleted_at == null || o.deleted_at === ""
+      ? null
+      : String(o.deleted_at);
   return {
     id,
     kind,
@@ -74,7 +79,8 @@ function parseBoundary(raw: unknown): GeoBoundaryDto | null {
     ...(color ? { color } : {}),
     ...(warehouse_id !== undefined ? { warehouse_id } : {}),
     ...(cash_desk_id !== undefined ? { cash_desk_id } : {}),
-    updated_at: String(o.updated_at ?? new Date().toISOString())
+    updated_at: String(o.updated_at ?? new Date().toISOString()),
+    deleted_at
   };
 }
 
@@ -108,13 +114,19 @@ function newId(): string {
   return `gb-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export async function listGeoBoundaries(tenantId: number): Promise<GeoBoundaryDto[]> {
-  return readBoundaries(tenantId);
+export async function listGeoBoundaries(
+  tenantId: number,
+  opts?: { archive?: boolean }
+): Promise<GeoBoundaryDto[]> {
+  const all = await readBoundaries(tenantId);
+  if (opts?.archive) return all.filter((b) => b.deleted_at != null);
+  return all.filter((b) => b.deleted_at == null);
 }
 
 export async function upsertGeoBoundary(
   tenantId: number,
-  input: GeoBoundaryUpsertInput
+  input: GeoBoundaryUpsertInput,
+  actorUserId?: number | null
 ): Promise<{ boundary: GeoBoundaryDto; clipped: boolean; clients_assigned: number }> {
   const kind = input.kind;
   const ref_id = input.ref_id.trim();
@@ -123,7 +135,9 @@ export async function upsertGeoBoundary(
 
   let polygon = validatePolygonPoints(input.polygon);
   const all = await readBoundaries(tenantId);
-  const others = all.filter((b) => !(b.kind === kind && b.ref_id === ref_id));
+  const others = all.filter(
+    (b) => !(b.kind === kind && b.ref_id === ref_id) && b.deleted_at == null
+  );
   const overlapping = others.filter(
     (b) => b.polygon.length >= 3 && polygonsHaveAreaOverlap(polygon, b.polygon)
   );
@@ -211,7 +225,8 @@ export async function upsertGeoBoundary(
     color,
     warehouse_id,
     cash_desk_id,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    deleted_at: null
   };
 
   const next =
@@ -225,15 +240,69 @@ export async function upsertGeoBoundary(
       if (updated) clients_assigned += await assignClientsToBoundary(tenantId, updated);
     }
   }
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId: actorUserId ?? null,
+    entityType: "geo_boundary",
+    entityId: boundary.id,
+    action: "geo_boundary.upsert",
+    payload: {
+      kind: boundary.kind,
+      ref_id: boundary.ref_id,
+      name: boundary.name,
+      clipped,
+      clients_assigned
+    }
+  });
   return { boundary, clipped, clients_assigned };
 }
 
-export async function deleteGeoBoundary(tenantId: number, id: string): Promise<void> {
+export async function deleteGeoBoundary(
+  tenantId: number,
+  id: string,
+  actorUserId?: number | null
+): Promise<void> {
   const all = await readBoundaries(tenantId);
+  const existing = all.find((b) => b.id === id);
+  if (!existing) throw new Error("NOT_FOUND");
+  if (existing.deleted_at != null) throw new Error("ALREADY_VOIDED");
+  const now = new Date().toISOString();
   await writeBoundaries(
     tenantId,
-    all.filter((b) => b.id !== id)
+    all.map((b) => (b.id === id ? { ...b, deleted_at: now, updated_at: now } : b))
   );
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId: actorUserId ?? null,
+    entityType: "geo_boundary",
+    entityId: id,
+    action: "geo_boundary.void",
+    payload: { soft: true, name: existing.name, kind: existing.kind }
+  });
+}
+
+export async function restoreGeoBoundary(
+  tenantId: number,
+  id: string,
+  actorUserId?: number | null
+): Promise<void> {
+  const all = await readBoundaries(tenantId);
+  const existing = all.find((b) => b.id === id);
+  if (!existing) throw new Error("NOT_FOUND");
+  if (existing.deleted_at == null) throw new Error("NOT_VOIDED");
+  const now = new Date().toISOString();
+  await writeBoundaries(
+    tenantId,
+    all.map((b) => (b.id === id ? { ...b, deleted_at: null, updated_at: now } : b))
+  );
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId: actorUserId ?? null,
+    entityType: "geo_boundary",
+    entityId: id,
+    action: "geo_boundary.restore",
+    payload: { name: existing.name, kind: existing.kind }
+  });
 }
 
 function patchForKind(
@@ -309,7 +378,7 @@ export async function assignClientsToBoundary(tenantId: number, boundary: GeoBou
 
 export async function assignClientsInBoundaryById(tenantId: number, boundaryId: string): Promise<number> {
   const all = await readBoundaries(tenantId);
-  const b = all.find((x) => x.id === boundaryId);
+  const b = all.find((x) => x.id === boundaryId && x.deleted_at == null);
   if (!b) throw new Error("Boundary not found");
   return assignClientsToBoundary(tenantId, b);
 }

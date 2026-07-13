@@ -30,6 +30,7 @@ export {
   getMobileOrderCreateContext,
   getMobileOrderStock,
   getMobileWarehouseStockView,
+  listMobileAgentClientLedgerBalances,
   listMobileAgentDebtors,
   listMobileAgentOrdersHistory
 } from "./mobile-agent-orders.service";

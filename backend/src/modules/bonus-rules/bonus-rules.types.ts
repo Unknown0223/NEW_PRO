@@ -8,6 +8,36 @@ export type BonusConditionRow = {
   sort_order: number;
 };
 
+export type BonusRuleClauseRow = {
+  id: number;
+  sort_order: number;
+  grants_reward: boolean;
+  priority: number;
+  client_category: string | null;
+  payment_type: string | null;
+  client_type: string | null;
+  sales_channel: string | null;
+  price_type: string | null;
+  product_ids: number[];
+  bonus_product_ids: number[];
+  product_category_ids: number[];
+  scope_restrict_assortment: boolean;
+  scope_restrict_category: boolean;
+  target_all_clients: boolean;
+  selected_client_ids: number[];
+  in_blocks: boolean;
+  once_per_client: boolean;
+  one_plus_one_gift: boolean;
+  buy_qty: number | null;
+  free_qty: number | null;
+  min_sum: number | null;
+  sum_threshold_scope: string;
+  scope_branch_codes: string[];
+  scope_agent_user_ids: number[];
+  scope_trade_direction_ids: number[];
+  conditions: BonusConditionRow[];
+};
+
 export type BonusRuleRow = {
   id: number;
   tenant_id: number;
@@ -53,6 +83,8 @@ export type BonusRuleRow = {
   /** Ro‘yxat API: bog‘langan qoidalar shartining qisqa matni (nomisiz), `prerequisite_rule_ids` tartibi bilan. */
   prerequisite_summaries?: string[];
   conditions: BonusConditionRow[];
+  /** Ichki shartlar (qty/sum gift). Bo‘sh bo‘lsa — legacy flat maydonlar. */
+  clauses: BonusRuleClauseRow[];
 };
 
 export type BonusConditionInput = {
@@ -62,6 +94,35 @@ export type BonusConditionInput = {
   bonus_qty: number;
   max_bonus_qty?: number | null;
   sort_order?: number;
+};
+
+export type BonusRuleClauseInput = {
+  sort_order?: number;
+  grants_reward?: boolean;
+  priority?: number;
+  client_category?: string | null;
+  payment_type?: string | null;
+  client_type?: string | null;
+  sales_channel?: string | null;
+  price_type?: string | null;
+  product_ids?: number[];
+  bonus_product_ids?: number[];
+  product_category_ids?: number[];
+  scope_restrict_assortment?: boolean;
+  scope_restrict_category?: boolean;
+  target_all_clients?: boolean;
+  selected_client_ids?: number[];
+  in_blocks?: boolean;
+  once_per_client?: boolean;
+  one_plus_one_gift?: boolean;
+  buy_qty?: number | null;
+  free_qty?: number | null;
+  min_sum?: number | null;
+  sum_threshold_scope?: "order" | "calendar_month";
+  scope_branch_codes?: string[];
+  scope_agent_user_ids?: number[];
+  scope_trade_direction_ids?: number[];
+  conditions?: BonusConditionInput[];
 };
 
 export type CreateBonusRuleInput = {
@@ -97,6 +158,8 @@ export type CreateBonusRuleInput = {
   scope_agent_user_ids?: number[];
   scope_trade_direction_ids?: number[];
   conditions?: BonusConditionInput[];
+  /** Ichki shartlar — bonus (qty/sum gift) uchun. */
+  clauses?: BonusRuleClauseInput[];
 };
 
 export type UpdateBonusRuleInput = Partial<CreateBonusRuleInput>;
@@ -104,5 +167,13 @@ export type UpdateBonusRuleInput = Partial<CreateBonusRuleInput>;
 export const bonusRuleInclude = {
   conditions: {
     orderBy: { sort_order: "asc" as const }
+  },
+  clauses: {
+    orderBy: { sort_order: "asc" as const },
+    include: {
+      conditions: {
+        orderBy: { sort_order: "asc" as const }
+      }
+    }
   }
 } as const;

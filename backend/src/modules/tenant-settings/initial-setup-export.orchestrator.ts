@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { prisma } from "../../config/database";
 import { listSalesChannelRefs } from "../sales-directions/sales-directions.channels";
 import { listTradeDirections } from "../sales-directions/sales-directions.trade";
 import { getTenantProfile } from "./tenant-settings.service";
@@ -58,9 +59,9 @@ async function addStartSheet(wb: ExcelJS.Workbook) {
   row++;
 
   const legend: [string, string][] = [
-    ["Основа (синий)", "Компания, Единицы, Валюты, Филиалы…"],
+    ["Основа (синий)", "Компания, Территория, Единицы, Валюты, Филиалы, Склады…"],
     ["Справочники клиента (зелёный)", "Формат, Тип, Категория клиента"],
-    ["Продукты (жёлтый)", "Продукты, Цены"],
+    ["Продукты (жёлтый)", "Категории, Продукты, Цены"],
     ["Операции (фиолетовый)", "Клиенты, Слоты, Поступление"]
   ];
   for (const [g, ex] of legend) {
@@ -170,6 +171,61 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
   );
   if (brSheet) byId.set("branches", brSheet);
 
+  // Territory tree → flat rows
+  type TerrNode = { name?: string; code?: string | null; comment?: string | null; children?: TerrNode[] };
+  const terrRoots = (refs.territory_nodes as TerrNode[] | undefined) ?? [];
+  if (terrRoots.length) {
+    const terrRows: string[][] = [["Название", "Уровень", "Родитель", "Код"]];
+    const walk = (nodes: TerrNode[], parent: string, depth: number) => {
+      const level = depth === 0 ? "зона" : depth === 1 ? "регион" : "город";
+      for (const n of nodes) {
+        const name = String(n.name ?? "").trim();
+        if (!name) continue;
+        terrRows.push([name, n.comment || level, parent, String(n.code ?? "")]);
+        if (Array.isArray(n.children) && n.children.length) walk(n.children, name, depth + 1);
+      }
+    };
+    walk(terrRoots, "", 0);
+    if (terrRows.length > 1) byId.set("territory", { sheetName: "territory", rows: terrRows });
+  }
+
+  // Warehouses
+  const warehouses = await prisma.warehouse.findMany({
+    where: { tenant_id: tenantId },
+    orderBy: [{ name: "asc" }],
+    select: { name: true, code: true, address: true }
+  });
+  if (warehouses.length) {
+    byId.set("warehouses", {
+      sheetName: "warehouses",
+      rows: [
+        ["Название", "Код", "Адрес"],
+        ...warehouses.map((w) => [w.name, w.code ?? "", w.address ?? ""])
+      ]
+    });
+  }
+
+  // Product categories
+  const categories = await prisma.productCategory.findMany({
+    where: { tenant_id: tenantId },
+    orderBy: [{ sort_order: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, code: true, parent_id: true }
+  });
+  if (categories.length) {
+    const byIdCat = new Map(categories.map((c) => [c.id, c]));
+    byId.set("product-categories", {
+      sheetName: "product-categories",
+      rows: [
+        ["Название", "Код", "Родитель"],
+        ...categories.map((c) => [
+          c.name,
+          c.code ?? "",
+          c.parent_id != null ? byIdCat.get(c.parent_id)?.name ?? "" : ""
+        ])
+      ]
+    });
+  }
+
   const refSheetDefs: Array<[string, string, string[]]> = [
     ["client-formats", "client_format_entries", ["name", "code", "sort_order", "comment"]],
     ["client-types", "client_type_entries", ["name", "code", "sort_order", "comment"]],
@@ -215,6 +271,43 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
 
   for (const sheet of await collectClientExportSheets(tenantId)) {
     byId.set(sheet.sheetName, sheet);
+  }
+
+  // Current stock → «Поступление» sheet (round-trip with import template)
+  const stockRows = await prisma.stock.findMany({
+    where: { tenant_id: tenantId, qty: { gt: 0 } },
+    orderBy: [{ warehouse_id: "asc" }, { product_id: "asc" }],
+    select: {
+      qty: true,
+      warehouse: { select: { name: true } },
+      product: {
+        select: {
+          sku: true,
+          name: true,
+          qty_per_block: true,
+          category: { select: { name: true } },
+          prices: { take: 1, orderBy: { id: "asc" }, select: { price: true } }
+        }
+      }
+    }
+  });
+  if (stockRows.length) {
+    byId.set("stock-receipts", {
+      sheetName: "stock-receipts",
+      rows: [
+        ["№", "Склад", "Код товара", "Категория", "Продукт", "Цена", "Количество прихода", "Количество в блоке"],
+        ...stockRows.map((s, i) => [
+          String(i + 1),
+          s.warehouse.name,
+          s.product.sku,
+          s.product.category?.name ?? "",
+          s.product.name,
+          s.product.prices[0]?.price != null ? String(s.product.prices[0].price) : "",
+          String(s.qty),
+          s.product.qty_per_block != null ? String(s.product.qty_per_block) : "1"
+        ])
+      ]
+    });
   }
 
   const sheets: ExportSheet[] = [];

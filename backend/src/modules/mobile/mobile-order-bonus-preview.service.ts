@@ -24,10 +24,12 @@ import { bonusGiftSelectionMeta, resolveAllowedGiftProductIdsForRule } from "../
 import { findWinningDiscountRuleWithPrereqs } from "../orders/order-bonus-discount";
 import { calcExpectedDiscountSum } from "../orders/order-discount-alert";
 import { activeRuleWhere } from "../orders/order-bonus-context.match-gifts";
+import { collectRuleStockProductIds, ruleOrAnyClauseUsesCalendarMonth } from "../orders/order-bonus-clauses";
 import { buildCreateOrderLineData } from "../orders/domain/order.create-lines";
 import type { BonusGiftOverrideInput } from "../orders/domain/order.types";
 import { validateBonusGiftOverrides } from "../orders/domain/order.detail-mappers";
 import {
+  buildQtyEligibleRowsFromPeeks,
   dedupeEligibleBonusRows,
   filterEligibleBonusesForPreview,
   rulesLinked,
@@ -134,19 +136,15 @@ export async function previewMobileOrderBonus(
       .map((r) => mapBonusRuleFull(r))
       .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0);
 
-    const stockProductIds = new Set<number>();
-    for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
-
     const qtyRulesRaw = await tx.bonusRule.findMany({
       where: activeRuleWhere(tenantId, "qty", now),
       include: bonusRuleInclude,
       orderBy: { priority: "desc" }
     });
     const qtyRules = qtyRulesRaw.map((r) => mapBonusRuleFull(r));
-    for (const r of qtyRules) {
-      for (const id of r.bonus_product_ids) stockProductIds.add(id);
-      for (const id of r.product_ids) stockProductIds.add(id);
-    }
+
+    const stockProductIds = collectRuleStockProductIds([...qtyRules, ...sumRules]);
+    for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
 
     let availableByProductId = await loadAvailableQtyByProductId(
       tx,
@@ -155,9 +153,7 @@ export async function previewMobileOrderBonus(
       stockProductIds
     );
 
-    const needsQtyMonth = qtyRules.some(
-      (r) => (r.sum_threshold_scope ?? "order") === "calendar_month"
-    );
+    const needsQtyMonth = qtyRules.some((r) => ruleOrAnyClauseUsesCalendarMonth(r));
     const [clientMonthPaidQtyAggregateExclOrder, clientMonthPaidQtyByProductExclOrder] =
       needsQtyMonth
         ? await Promise.all([
@@ -245,6 +241,9 @@ export async function previewMobileOrderBonus(
       for (const id of sumPeek.rule.bonus_product_ids) stockProductIds.add(id);
       for (const id of sumPeek.rule.product_ids) stockProductIds.add(id);
       if (sumPeek.giftPid > 0) stockProductIds.add(sumPeek.giftPid);
+      for (const g of sumPeek.extraGifts ?? []) {
+        if (g.giftPid > 0) stockProductIds.add(g.giftPid);
+      }
     }
 
     const bonusRuleIds = new Set<number>();
@@ -292,48 +291,59 @@ export async function previewMobileOrderBonus(
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const eligibleBonuses: Array<EligibleBonusRow> = [];
-    for (const peek of qtyPeeks) {
-      if (!ruleRelatesToOrderSelection(peek.rule, orderedProductIds, productById)) continue;
-      const giftIds = await resolveAllowedGiftProductIdsForRule(
-        tenantId,
-        peek.rule,
-        peek.giftPid > 0 ? peek.giftPid : undefined
-      );
-      const gift_products = mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
-      const meta = bonusGiftSelectionMeta(peek.rule, gift_products.length);
-      eligibleBonuses.push({
-        rule_id: peek.rule.id,
-        name: peek.rule.name,
-        type: peek.rule.type,
-        bonus_qty: peek.bonusQty,
-        /** Tanlanadigan bonus dona limiti (hisoblangan); `free_qty` emas. */
-        max_bonus_qty: peek.bonusQty > 0 ? peek.bonusQty : null,
-        prerequisite_rule_ids: peek.rule.prerequisite_rule_ids ?? [],
-        default_gift_product_id: peek.giftPid > 0 ? peek.giftPid : giftIds[0] ?? null,
-        gift_selection_kind: meta.kind,
-        allow_gift_swap: meta.allow_gift_swap,
-        gift_products
-      });
-    }
+    const qtyEligible = buildQtyEligibleRowsFromPeeks(
+      qtyPeeks.filter((peek) => {
+        if ((peek.rule.clauses?.length ?? 0) > 0) return true;
+        return ruleRelatesToOrderSelection(peek.rule, orderedProductIds, productById);
+      }),
+      productMap,
+      availableByProductId,
+      qtyByProduct
+    );
+    eligibleBonuses.push(...qtyEligible);
 
-    if (sumPeek && ruleRelatesToOrderSelection(sumPeek.rule, orderedProductIds, productById)) {
+    if (
+      sumPeek &&
+      ((sumPeek.rule.clauses?.length ?? 0) > 0 ||
+        ruleRelatesToOrderSelection(sumPeek.rule, orderedProductIds, productById))
+    ) {
       const giftIds = await resolveAllowedGiftProductIdsForRule(
         tenantId,
         sumPeek.rule,
         sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined
       );
-      const gift_products = mapGiftProducts(giftIds, productMap, availableByProductId, qtyByProduct);
+      const sumBonusByPid = new Map<number, number>();
+      if (sumPeek.giftPid > 0) {
+        sumBonusByPid.set(sumPeek.giftPid, sumPeek.units);
+      }
+      for (const g of sumPeek.extraGifts ?? []) {
+        if (g.giftPid > 0) {
+          sumBonusByPid.set(g.giftPid, (sumBonusByPid.get(g.giftPid) ?? 0) + g.units);
+        }
+      }
+      const gift_products = mapGiftProducts(
+        giftIds,
+        productMap,
+        availableByProductId,
+        qtyByProduct,
+        sumBonusByPid.size > 0 ? sumBonusByPid : undefined
+      );
       const meta = bonusGiftSelectionMeta(sumPeek.rule, gift_products.length);
+      const totalUnits =
+        sumPeek.units + (sumPeek.extraGifts ?? []).reduce((a, g) => a + g.units, 0);
       eligibleBonuses.push({
         rule_id: sumPeek.rule.id,
         name: sumPeek.rule.name,
         type: sumPeek.rule.type,
-        bonus_qty: sumPeek.units,
-        max_bonus_qty: sumPeek.units > 0 ? sumPeek.units : null,
+        bonus_qty: totalUnits,
+        max_bonus_qty: totalUnits > 0 ? totalUnits : null,
         prerequisite_rule_ids: sumPeek.rule.prerequisite_rule_ids ?? [],
         default_gift_product_id: sumPeek.giftPid > 0 ? sumPeek.giftPid : giftIds[0] ?? null,
         gift_selection_kind: meta.kind,
         allow_gift_swap: meta.allow_gift_swap,
+        step_qty: null,
+        bonus_step_qty: null,
+        trigger_product_ids: sumPeek.rule.product_ids ?? [],
         gift_products
       });
     }

@@ -13,21 +13,8 @@ import '../../../core/orders/order_status_labels.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../orders/order_create_models.dart';
+import '../orders/orders_providers.dart';
 import '../shell/agent_app_bar.dart';
-
-final orderDebtsByOrdersProvider = FutureProvider<OrderDebtsListResult>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-  if (slug.isEmpty) {
-    return OrderDebtsListResult(data: [], total: 0, totalRemainder: 0, currency: 'UZS');
-  }
-  return ref.read(mobileApiProvider).getOrderDebts(slug, limit: 100);
-});
-
-final orderDebtDetailProvider = FutureProvider.family<AgentOrderHistoryRow, int>((ref, orderId) async {
-  final slug = ref.read(sessionProvider).tenantSlug ?? '';
-  if (slug.isEmpty) throw StateError('tenant');
-  return ref.read(mobileApiProvider).getOrderDetail(slug, orderId);
-});
 
 /// Должники по закazам — ochiq qarzli buyurtmalar + ichki jadval.
 class AgentDebtorsByOrdersPage extends ConsumerStatefulWidget {
@@ -121,7 +108,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
             onRefresh: () async {
               ref.invalidate(orderDebtsByOrdersProvider);
               if (_expandedOrderId != null) {
-                ref.invalidate(orderDebtDetailProvider(_expandedOrderId!));
+                ref.invalidate(orderHistoryDetailProvider(_expandedOrderId!));
               }
             },
             child: ListView(
@@ -156,7 +143,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
                     currency: result.currency,
                     expanded: _expandedOrderId == row.orderId,
                     detailAsync: _expandedOrderId == row.orderId
-                        ? ref.watch(orderDebtDetailProvider(row.orderId))
+                        ? ref.watch(orderHistoryDetailProvider(row.orderId))
                         : null,
                     onTap: () => setState(() {
                       _expandedOrderId = _expandedOrderId == row.orderId ? null : row.orderId;

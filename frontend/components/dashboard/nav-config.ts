@@ -65,7 +65,6 @@ export const dashboardOrdersNav: {
       items: [
         { href: "/orders", label: "Заявки" },
         { href: "/orders/refusals", label: "Отказы" },
-        { href: "#", label: "Предложения для создания заказов", placeholder: true },
         { href: "/orders/automation", label: "Автоматизация заявок" }
       ]
     }
@@ -190,7 +189,6 @@ export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/clients", label: "Клиенты" },
     { href: "/clients/map", label: "Клиенты на карте" },
     { href: "/clients/visit-planner", label: "Назначение визитов на карте" },
-    { href: "/clients/qr", label: "QR коды клиентов" },
     { href: "/clients/merge", label: "Объединение клиентов" },
     { href: "/clients/equipment", label: "Оборудования" },
     { href: "/clients/retail-stock", label: "Остатки в торговых точках" },
@@ -218,6 +216,9 @@ export function dashboardSuppliersNavFlatItems(): NavItem[] {
 }
 
 /** Отчёт — rasm bo‘yicha alohida modul (hozircha placeholder sahifalar). */
+/** Virtual Pivot — default yoqilgan (Sprint 8 cutover). */
+const pivotEngineNavEnabled = true;
+
 export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Отчёт",
   items: [
@@ -229,7 +230,18 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/reports/expeditor-returns", label: "Возврат экспедитора" },
     { href: "/reports/visits-2", label: "По визитам 2.0" },
     { href: "/reports/visit-totals", label: "Итоги визитов" },
-    { href: "/reports/builder", label: "Конструктор отчетов" },
+    {
+      href: "/reports/builder",
+      label: pivotEngineNavEnabled
+        ? "Конструктор отчётов"
+        : "Конструктор отчетов (WebDataRocks)"
+    },
+    ...(pivotEngineNavEnabled
+      ? [
+          { href: "/reports/builder/pivot", label: "Virtual Pivot (основной)" } satisfies NavItem,
+          { href: "/reports/builder/wdr", label: "WebDataRocks (rollback)" } satisfies NavItem
+        ]
+      : []),
     { href: "/reports/settings", label: "Настройки отчетов" }
   ]
 };

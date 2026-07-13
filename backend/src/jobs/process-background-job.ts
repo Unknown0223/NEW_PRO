@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import { readFile, unlink } from "fs/promises";
 import type { OrderStatusNotifyJobData } from "../modules/jobs/jobs.service";
 import { importClientsFromXlsx } from "../modules/clients/clients.service";
+import { humanizeImportDbError } from "../modules/clients/clients.import.runtime";
 import { notifyOrderParticipantsStatusChange } from "../modules/notifications/notifications.service";
 import { importProductPricesFromXlsx } from "../modules/products/product-prices.service";
 import {
@@ -74,10 +75,13 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
         importMode: d.importMode,
         duplicateKeyFields: d.duplicateKeyFields,
         updateApplyFields: d.updateApplyFields,
+        actorUserId: d.requested_by_user_id ?? null,
         onProgress: async (progress) => {
           await job.updateProgress(progress);
         }
       });
+    } catch (e) {
+      throw new Error(humanizeImportDbError(e));
     } finally {
       await unlink(fp).catch(() => {});
     }

@@ -300,14 +300,15 @@ class AgentProgressGauge extends StatelessWidget {
               children: [
                 Text(
                   S.performance,
-                  style: AppTypography.caption.copyWith(
+                  style: AppTypography.labelLarge.copyWith(
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+                    color: AppColors.textMenu,
                   ),
                 ),
                 Text(
                   '${(p * 100).round()}%',
-                  style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
                 ),
               ],
             ),
@@ -363,6 +364,8 @@ class AgentVisitMetric extends StatelessWidget {
   final String? extraValue;
   /// Asosiy `main` bilan bir xil — «По маршруту» / «Ост. по марш.» yashirish.
   final bool showOnRouteSubRow;
+  /// «Вне маршрута» / «Ост. вне марш.» yashirish.
+  final bool showOutsideSubRow;
 
   const AgentVisitMetric({
     super.key,
@@ -376,13 +379,14 @@ class AgentVisitMetric extends StatelessWidget {
     this.extraLabel,
     this.extraValue,
     this.showOnRouteSubRow = true,
+    this.showOutsideSubRow = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = positive ? AppColors.success : AppColors.error;
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(6),
@@ -394,12 +398,12 @@ class AgentVisitMetric extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 child: Icon(
                   positive ? Icons.check : Icons.location_on,
-                  size: 16,
+                  size: 18,
                   color: Colors.white,
                 ),
               ),
@@ -413,9 +417,9 @@ class AgentVisitMetric extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMenu,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -424,7 +428,7 @@ class AgentVisitMetric extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: positive ? AppColors.success : AppColors.textPrimary,
                       ),
@@ -436,7 +440,7 @@ class AgentVisitMetric extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.75),
               borderRadius: BorderRadius.circular(6),
@@ -447,7 +451,7 @@ class AgentVisitMetric extends StatelessWidget {
                   _subRow(routeLabel ?? S.byRoute, routeValue),
                   const SizedBox(height: 4),
                 ],
-                _subRow(outsideLabel ?? S.offRoute, outsideValue),
+                if (showOutsideSubRow) _subRow(outsideLabel ?? S.offRoute, outsideValue),
                 if (extraLabel != null && extraValue != null) ...[
                   const SizedBox(height: 4),
                   _subRow(extraLabel!, extraValue!),
@@ -469,10 +473,10 @@ class AgentVisitMetric extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 11,
-                height: 1.2,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.25,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMenu,
               ),
             ),
           ),
@@ -480,7 +484,7 @@ class AgentVisitMetric extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
             ),
@@ -499,7 +503,7 @@ class AgentMiniSummary extends StatelessWidget {
     return AgentSurfaceCard(
       padding: const EdgeInsets.all(12),
       child: SizedBox(
-        height: 95,
+        height: 100,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -508,10 +512,10 @@ class AgentMiniSummary extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 14,
-                height: 1.2,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                fontSize: 15,
+                height: 1.25,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textMenu,
               ),
             ),
             const Spacer(),
@@ -521,7 +525,7 @@ class AgentMiniSummary extends StatelessWidget {
               child: Text(
                 value,
                 maxLines: 1,
-                style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
               ),
             ),
           ],
@@ -622,7 +626,7 @@ class AgentOrderCard extends StatelessWidget {
         ((discount != null && discount!.isNotEmpty) || bonus != '0');
 
     return AgentSurfaceCard(
-      padding: EdgeInsets.all(expanded && !compactDebt ? 16 : (compactDebt ? 10 : 12)),
+      padding: EdgeInsets.all(expanded && !compactDebt ? 12 : (compactDebt ? 10 : 12)),
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         onTap: onTap,
@@ -663,7 +667,7 @@ class AgentOrderCard extends StatelessWidget {
                               const SizedBox(height: 8),
                               _row('Скидка:', discount!, compact: true),
                             ],
-                            if (bonus != '0') ...[
+                            if (bonus != '0' && bonusLines.isEmpty) ...[
                               const SizedBox(height: 4),
                               _row('Бонус:', bonus, compact: true),
                             ],
@@ -675,53 +679,29 @@ class AgentOrderCard extends StatelessWidget {
                           if (hasDebtExtras) ...[
                             if (discount != null && discount!.isNotEmpty)
                               _row('Скидка:', discount!, compact: true),
-                            if (bonus != '0') ...[
+                            if (bonus != '0' && bonusLines.isEmpty) ...[
                               if (discount != null && discount!.isNotEmpty) const SizedBox(height: 4),
                               _row('Бонус:', bonus, compact: true),
                             ],
                           ],
                           if (hasDetails) ...[
-                            if (hasExpandedMeta || hasDebtExtras) const SizedBox(height: 10),
-                            if (detailLines.isNotEmpty) ...[
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 6),
-                                child: Text(
-                                  'Продажа',
-                                  style: AppTypography.caption.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                              _orderLinesTable(
-                                detailLines,
-                                footerQty: count != '—' ? count : _sumLineQty(detailLines),
-                                footerAmount: amount.isNotEmpty && amount != '—' ? amount : null,
-                              ),
-                            ],
-                            if (bonusLines.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              if (!compactDebt) ...[
-                                Container(height: 1, color: AppColors.borderLight),
-                                const SizedBox(height: 12),
-                              ],
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 6),
-                                child: Text(
-                                  'Бонус',
-                                  style: AppTypography.caption.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.success,
-                                  ),
-                                ),
-                              ),
-                              _orderLinesTable(
-                                bonusLines,
-                                bonusStyle: true,
-                                footerQty: _sumLineQty(bonusLines),
-                                footerAmount: bonus != '0' ? bonus : null,
-                              ),
-                            ],
+                            if (hasExpandedMeta || hasDebtExtras) const SizedBox(height: 8),
+                            _unifiedOrderLinesTable(
+                              saleLines: detailLines,
+                              bonusLines: bonusLines,
+                              saleFooterQty: detailLines.isNotEmpty
+                                  ? (count != '—' ? count : _sumLineQty(detailLines))
+                                  : null,
+                              saleFooterAmount: detailLines.isNotEmpty &&
+                                      amount.isNotEmpty &&
+                                      amount != '—'
+                                  ? amount
+                                  : null,
+                              bonusFooterQty:
+                                  bonusLines.isNotEmpty ? _sumLineQty(bonusLines) : null,
+                              bonusFooterAmount:
+                                  bonusLines.isNotEmpty && bonus != '0' ? bonus : null,
+                            ),
                           ],
                         ],
                       ),
@@ -832,14 +812,28 @@ class AgentOrderCard extends StatelessWidget {
     return n.toStringAsFixed(1);
   }
 
-  Widget _orderLinesTable(
-    List<AgentOrderLineRow> lines, {
-    bool bonusStyle = false,
-    String? footerQty,
-    String? footerAmount,
+  Widget _unifiedOrderLinesTable({
+    required List<AgentOrderLineRow> saleLines,
+    required List<AgentOrderLineRow> bonusLines,
+    String? saleFooterQty,
+    String? saleFooterAmount,
+    String? bonusFooterQty,
+    String? bonusFooterAmount,
   }) {
-    final showFooter = (footerQty != null && footerQty.isNotEmpty) ||
-        (footerAmount != null && footerAmount.isNotEmpty && footerAmount != '0');
+    final hasSale = saleLines.isNotEmpty;
+    final hasBonus = bonusLines.isNotEmpty;
+    final hasBoth = hasSale && hasBonus;
+    final showSaleFooter = hasSale &&
+        ((saleFooterQty != null && saleFooterQty.isNotEmpty) ||
+            (saleFooterAmount != null &&
+                saleFooterAmount.isNotEmpty &&
+                saleFooterAmount != '0'));
+    final showBonusFooter = hasBonus &&
+        ((bonusFooterQty != null && bonusFooterQty.isNotEmpty) ||
+            (bonusFooterAmount != null &&
+                bonusFooterAmount.isNotEmpty &&
+                bonusFooterAmount != '0'));
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -849,7 +843,7 @@ class AgentOrderCard extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: const BoxDecoration(
               color: Color(0xFFE7EEF5),
               borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
@@ -858,107 +852,198 @@ class AgentOrderCard extends StatelessWidget {
               children: [
                 Expanded(
                   flex: 2,
-                  child: Text('Товар', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                  child: Text(
+                    'Товар',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
                 Expanded(
-                  child: Text('Цена', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                  child: Text(
+                    'Цена',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
                 Expanded(
-                  child: Text('Кол-во', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+                  child: Text(
+                    'Кол-во',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          ...lines.asMap().entries.map((e) {
-            final line = e.value;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                border: e.key > 0 ? const Border(top: BorderSide(color: Colors.white)) : null,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      line.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: bonusStyle ? AppColors.success : AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      line.price,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      line.qty,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: bonusStyle ? AppColors.success : AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          if (showFooter)
+          if (hasBoth) _sectionDividerRow('Продажа', color: AppColors.textSecondary),
+          ...saleLines.map((line) => _orderLineRow(line, isBonus: false)),
+          if (hasBoth) _sectionDividerRow('Бонус', color: AppColors.success),
+          ...bonusLines.map((line) => _orderLineRow(line, isBonus: true)),
+          if (showSaleFooter || showBonusFooter)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: const BoxDecoration(
                 color: Color(0xFFDCE8F2),
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
                 border: Border(top: BorderSide(color: Colors.white)),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'Итого',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: bonusStyle ? AppColors.success : AppColors.textPrimary,
-                      ),
+                  if (showSaleFooter)
+                    _footerRow(
+                      label: hasBoth ? 'Итого продажа' : 'Итого',
+                      amount: saleFooterAmount,
+                      qty: saleFooterQty,
+                      isBonus: false,
+                      showTopBorder: false,
                     ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      footerAmount ?? '—',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: bonusStyle ? AppColors.success : AppColors.primary,
-                      ),
+                  if (showBonusFooter)
+                    _footerRow(
+                      label: hasBoth ? 'Итого бонус' : 'Итого',
+                      amount: bonusFooterAmount,
+                      qty: bonusFooterQty,
+                      isBonus: true,
+                      showTopBorder: showSaleFooter,
                     ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      footerQty ?? '—',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: bonusStyle ? AppColors.success : AppColors.primary,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionDividerRow(String label, {required Color color}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color == AppColors.success ? const Color(0xFFE8F8EE) : const Color(0xFFF1F5F9),
+        border: const Border(top: BorderSide(color: Colors.white)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+      ),
+    );
+  }
+
+  Widget _orderLineRow(AgentOrderLineRow line, {required bool isBonus}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isBonus ? const Color(0xFFF4FBF6) : null,
+        border: const Border(top: BorderSide(color: Colors.white)),
+      ),
+      child: Row(
+        children: [
+          if (isBonus)
+            Container(
+              width: 3,
+              height: 28,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              line.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isBonus ? AppColors.success : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              line.price,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isBonus ? AppColors.success : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              line.qty,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isBonus ? AppColors.success : AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footerRow({
+    required String label,
+    String? amount,
+    String? qty,
+    required bool isBonus,
+    required bool showTopBorder,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        border: showTopBorder ? const Border(top: BorderSide(color: Colors.white)) : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isBonus ? AppColors.success : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              amount ?? '—',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isBonus ? AppColors.success : AppColors.primary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              qty ?? '—',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: isBonus ? AppColors.success : AppColors.primary,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -980,16 +1065,16 @@ class AgentOrderCard extends StatelessWidget {
       );
 
   Widget _statCell(String l, String v, {bool highlight = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
         child: Column(
           children: [
-            Text(l, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600, color: AppColors.textMuted)),
-            const SizedBox(height: 4),
+            Text(l, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600, color: AppColors.textMuted, fontSize: 11)),
+            const SizedBox(height: 2),
             Text(
               v,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: highlight ? AppColors.primary : AppColors.textPrimary,
               ),
@@ -1093,6 +1178,11 @@ class AgentBalanceBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isStockCountOut(String count) {
+  final normalized = count.replaceAll('\u00a0', ' ').replaceAll(' ', '');
+  return double.tryParse(normalized.replaceAll(',', '.')) == null;
 }
 
 class AgentExpandableStockGroup extends StatelessWidget {
@@ -1207,7 +1297,13 @@ class AgentExpandableStockGroup extends StatelessWidget {
                                     child: Text(
                                       it.count,
                                       textAlign: TextAlign.right,
-                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: _isStockCountOut(it.count)
+                                            ? AppColors.error
+                                            : AppColors.primary,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -2007,12 +2103,12 @@ Future<void> showAgentClientActionsSheet(
   required VoidCallback onPhotoReport,
   VoidCallback? onRefusal,
   VoidCallback? onCreateOrder,
-  VoidCallback? onQrBind,
+  VoidCallback? onEdit,
   VoidCallback? onSupervisionChecklist,
   bool photoReportEnabled = true,
   bool refusalEnabled = true,
   bool createOrderEnabled = true,
-  bool qrEnabled = false,
+  bool editEnabled = false,
   bool supervisionEnabled = false,
 }) {
   return showModalBottomSheet<void>(
@@ -2078,8 +2174,8 @@ Future<void> showAgentClientActionsSheet(
               actionTile(icon: Icons.close, title: 'Отказ', onTap: onRefusal),
             if (createOrderEnabled && onCreateOrder != null)
               actionTile(icon: Icons.add_shopping_cart_outlined, title: 'Добавить заказ', onTap: onCreateOrder),
-            if (qrEnabled && onQrBind != null)
-              actionTile(icon: Icons.qr_code_2_outlined, title: 'QR kod', onTap: onQrBind),
+            if (editEnabled && onEdit != null)
+              actionTile(icon: Icons.edit_outlined, title: 'Редактировать', onTap: onEdit),
             if (supervisionEnabled && onSupervisionChecklist != null)
               actionTile(icon: Icons.checklist_outlined, title: 'Audit checklist', onTap: onSupervisionChecklist),
             const SizedBox(height: 8),
@@ -2089,4 +2185,448 @@ Future<void> showAgentClientActionsSheet(
     );
     },
   );
+}
+
+/// Buyurtmalar xulosasi (shablon #18).
+class AgentOrdersHeroCard extends StatelessWidget {
+  final String totalSum;
+  final int totalCount;
+  final int inProgressCount;
+  final String debtLabel;
+
+  const AgentOrdersHeroCard({
+    super.key,
+    required this.totalSum,
+    required this.totalCount,
+    required this.inProgressCount,
+    required this.debtLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF07958F), Color(0xFF055B57)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'МЕНИНГ ЗАКАЗЛАРИМ',
+            style: AppTypography.caption.copyWith(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$totalSum сум',
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _stat('Жами', '$totalCount')),
+              Expanded(child: _stat('В процессе', '$inProgressCount')),
+              Expanded(child: _stat('Қарз', debtLabel)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.75))),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+      ],
+    );
+  }
+}
+
+/// Kutilayotgan zakaz (taymer bilan).
+class AgentHeldOrderCard extends StatelessWidget {
+  final String clientName;
+  final String countdown;
+  final String sumLabel;
+  final int itemCount;
+  final VoidCallback? onTap;
+
+  const AgentHeldOrderCard({
+    super.key,
+    required this.clientName,
+    required this.countdown,
+    required this.sumLabel,
+    required this.itemCount,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AgentSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.warningSoft,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.timer_outlined, color: AppColors.warning, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Ожидание', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          countdown,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.warning),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(clientName, style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700)),
+                  Text('$itemCount поз. · $sumLabel', style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Zakaz status pipeline (shablon #18).
+class AgentOrderStatusPipeline extends StatelessWidget {
+  final String statusLabel;
+
+  const AgentOrderStatusPipeline({super.key, required this.statusLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = statusLabel.toLowerCase();
+    int active = 0;
+    if (s.contains('достав') || s.contains('deliver')) {
+      active = 3;
+    } else if (s.contains('пути') || s.contains('transit') || s.contains('в пути')) {
+      active = 2;
+    } else if (s.contains('собран') || s.contains('collect')) {
+      active = 1;
+    } else {
+      active = 0;
+    }
+    const colors = [Color(0xFF2563EB), Color(0xFF64748B), AppColors.warning, AppColors.success];
+    return Row(
+      children: List.generate(4, (i) {
+        final on = i <= active;
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: i < 3 ? 2 : 0),
+            height: 3,
+            decoration: BoxDecoration(
+              color: on ? colors[i] : const Color(0xFFE5EDF3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+/// Bonus yoki skidka pog‘onasi (shablon #29 — sariq / shafq rang).
+class AgentTierStrip extends StatelessWidget {
+  final String kind; // 'bonus' | 'discount'
+  final int currentQty;
+  final List<Map<String, dynamic>> tiers; // [{qty: 5, reward: '+1шт'}, ...]
+  final String? subtitle;
+  /// Tanlangan / hisoblangan bonus dona (masalan 3/5).
+  final int? earnedBonusQty;
+  final int? maxBonusQty;
+  /// Keyingi pog‘ona uchun maxsus matn (assortiment rejimida).
+  final String? nextHintOverride;
+  /// Ichki qismlarda tashqi margin yo‘q.
+  final bool embedded;
+  final bool compact;
+  final Widget? trailing;
+
+  const AgentTierStrip({
+    super.key,
+    required this.kind,
+    required this.currentQty,
+    required this.tiers,
+    this.subtitle,
+    this.earnedBonusQty,
+    this.maxBonusQty,
+    this.nextHintOverride,
+    this.embedded = false,
+    this.compact = false,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (tiers.isEmpty) return const SizedBox.shrink();
+
+    final isBonus = kind == 'bonus';
+    final bg = isBonus ? AppColors.bonusBg : AppColors.discBg;
+    final bg2 = isBonus ? AppColors.bonusBg2 : AppColors.discBg2;
+    final ink = isBonus ? AppColors.bonusInk : AppColors.discInk;
+    final accent = isBonus ? AppColors.bonusAccent : AppColors.discAccent;
+    final icon = isBonus ? '🎁' : '🏷';
+    final label = isBonus ? 'БОНУС АКЦИЯ' : 'СКИДКА';
+
+    final maxQty = tiers.last['qty'] as int;
+    final next = tiers.cast<Map<String, dynamic>>().firstWhere(
+          (t) => (t['qty'] as int) > currentQty,
+          orElse: () => tiers.last,
+        );
+    final nextQty = next['qty'] as int;
+    final hasNextTier = nextQty > currentQty;
+    final pct = !hasNextTier
+        ? 1.0
+        : maxQty > 0
+            ? (currentQty / maxQty).clamp(0.0, 1.0)
+            : 0.0;
+    final showTierLadder = !isBonus;
+    final statusTopRight = isBonus && compact;
+
+    final footerParts = <String>[];
+    if (isBonus && earnedBonusQty != null && maxBonusQty != null && maxBonusQty! > 0) {
+      footerParts.add('$earnedBonusQty/$maxBonusQty');
+    }
+    if (nextHintOverride != null && nextHintOverride!.trim().isNotEmpty) {
+      footerParts.add(nextHintOverride!.trim());
+    } else if (hasNextTier) {
+      final remaining = nextQty - currentQty;
+      final increment = next['increment'] as String? ?? next['reward'] as String;
+      footerParts.add('ещё $remaining → $increment');
+    } else if (isBonus && earnedBonusQty != null && earnedBonusQty! > 0 && !statusTopRight) {
+      footerParts.add('получено +$earnedBonusQty шт');
+    }
+    final footer = footerParts.join(' · ');
+    final statusPrimary = isBonus && earnedBonusQty != null && maxBonusQty != null && maxBonusQty! > 0
+        ? '$earnedBonusQty/$maxBonusQty'
+        : null;
+    String? statusSecondary;
+    if (nextHintOverride != null && nextHintOverride!.trim().isNotEmpty) {
+      statusSecondary = nextHintOverride!.trim();
+    } else if (hasNextTier) {
+      final remaining = nextQty - currentQty;
+      final increment = next['increment'] as String? ?? next['reward'] as String;
+      statusSecondary = 'ещё $remaining → $increment';
+    } else if (isBonus && earnedBonusQty != null && earnedBonusQty! > 0) {
+      statusSecondary = '+$earnedBonusQty шт';
+    }
+
+    final hPad = compact ? 10.0 : 12.0;
+    final vPad = compact ? 6.0 : 8.0;
+    final bottomPad = compact ? (statusTopRight ? 4.0 : 7.0) : 10.0;
+
+    return Container(
+      margin: embedded ? EdgeInsets.zero : const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(embedded ? 0 : 12),
+        border: embedded ? null : Border.all(color: bg2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(hPad, compact ? 7 : 9, hPad, statusTopRight ? 4 : 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(icon, style: TextStyle(fontSize: compact ? 13 : 14)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: compact ? 11 : 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: ink,
+                          letterSpacing: 0.04,
+                        ),
+                      ),
+                      if (subtitle != null && subtitle!.trim().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            subtitle!,
+                            style: AppTypography.caption.copyWith(
+                              color: ink,
+                              fontWeight: FontWeight.w600,
+                              fontSize: compact ? 12 : null,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (statusTopRight && statusPrimary != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Бонус: $statusPrimary',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: accent,
+                                height: 1.15,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                            if (statusSecondary != null)
+                              Text(
+                                statusSecondary,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: ink,
+                                  height: 1.15,
+                                ),
+                                textAlign: TextAlign.right,
+                              ),
+                          ],
+                        ),
+                        if (trailing != null) ...[
+                          const SizedBox(width: 2),
+                          trailing!,
+                        ],
+                      ],
+                    ),
+                  )
+                else if (trailing != null)
+                  trailing!,
+              ],
+            ),
+          ),
+          if (!statusTopRight && subtitle != null && subtitle!.trim().isNotEmpty)
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPad, 3, hPad, 0),
+              child: Text(
+                subtitle!,
+                style: AppTypography.caption.copyWith(
+                  color: ink,
+                  fontWeight: FontWeight.w600,
+                  fontSize: compact ? 11 : null,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          if ((footer.isNotEmpty && !statusTopRight) || showTierLadder)
+            Padding(
+              padding: EdgeInsets.fromLTRB(hPad, vPad, hPad, bottomPad),
+              child: Column(
+                children: [
+                  if (showTierLadder) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        backgroundColor: bg2,
+                        valueColor: AlwaysStoppedAnimation<Color>(accent),
+                        minHeight: compact ? 5 : 6,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 4 : 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: tiers.map<Widget>((t) {
+                        final qty = t['qty'] as int;
+                        final reached = currentQty >= qty;
+                        return Flexible(
+                          child: Column(
+                            children: [
+                              Text(
+                                '${qty}шт',
+                                style: TextStyle(
+                                  fontSize: compact ? 10 : 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: ink.withValues(alpha: reached ? 1 : 0.55),
+                                ),
+                              ),
+                              Text(
+                                t['reward'] as String,
+                                style: TextStyle(
+                                  fontSize: compact ? 9.5 : 10,
+                                  color: reached ? accent : ink.withValues(alpha: 0.75),
+                                  fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  if (footer.isNotEmpty && !statusTopRight)
+                    Padding(
+                      padding: EdgeInsets.only(top: showTierLadder ? (compact ? 4 : 6) : 0),
+                      child: Text(
+                        footer,
+                        style: TextStyle(
+                          fontSize: compact ? 10.5 : 11,
+                          fontWeight: FontWeight.w600,
+                          color: ink,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

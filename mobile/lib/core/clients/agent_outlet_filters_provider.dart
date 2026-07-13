@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/agent/clients/clients_list_provider.dart';
 import '../../features/agent/route/agent_route_provider.dart';
+import '../api/mobile_api.dart';
+import '../auth/session.dart';
 import '../database/app_database.dart';
 import '../l10n/app_strings_ru.dart';
 import '../prefs/agent_local_prefs_provider.dart';
@@ -23,6 +25,13 @@ final outletCategoryFilterProvider = StateProvider<String?>((ref) => null);
 final outletVisitStatusFilterProvider = StateProvider<String?>((ref) => S.dayAll);
 
 final outletDebtsOnlyProvider = StateProvider<bool>((ref) => false);
+
+/// Joriy agent bo‘yicha mijozlar umumiy balansi (veb kartochka «Общий» per agent).
+final clientAgentLedgerBalancesProvider = FutureProvider<Map<int, double>>((ref) async {
+  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  if (slug.isEmpty) return {};
+  return ref.read(mobileApiProvider).getClientLedgerBalances(slug);
+});
 
 final visitedTodayClientIdsProvider = FutureProvider<Set<int>>((ref) async {
   final rows = await AppDatabase().getVisitsForDay();
@@ -51,9 +60,18 @@ final filteredClientsProvider = FutureProvider<List<Map<String, dynamic>>>((ref)
   Set<int>? routeClientIds;
   if (weekdayTab > 0) {
     final route = await ref.watch(todayRouteProvider.future);
-    final ids = routeClientIdsFromRoute(route);
-    if (ids.isNotEmpty) routeClientIds = ids;
+    // Faqat server marshruti qo‘shimcha filtr — local «barcha GPS» fallback emas.
+    final isServerRoute = route != null &&
+        route['_localFallback'] != true &&
+        route['_plannedFallback'] != true;
+    if (isServerRoute) {
+      final ids = routeClientIdsFromRoute(route);
+      if (ids.isNotEmpty) routeClientIds = ids;
+    }
   }
+
+  // Kun tabida faqat rejalashtirilgan mijozlar (veb: agent + kun filtri bilan mos).
+  final includeUnscheduled = weekdayTab <= 0 && !tenantHasAnyVisitSchedule(all);
 
   return applyOutletFilters(
     all,
@@ -63,5 +81,6 @@ final filteredClientsProvider = FutureProvider<List<Map<String, dynamic>>>((ref)
     visitedTodayIds: visitedIds,
     debtsOnly: debtsOnly,
     routeClientIds: routeClientIds,
+    includeUnscheduled: includeUnscheduled,
   );
 });

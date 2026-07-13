@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../clients/agent_outlet_filters_provider.dart';
+import '../../features/agent/visits/agent_visits_page.dart';
 import '../../features/agent/clients/agent_clients_page.dart';
 import '../../features/agent/home/agent_dashboard_provider.dart';
 import '../../features/agent/home/agent_home_page.dart';
@@ -16,6 +17,8 @@ void _invalidateAll(ProviderInvalidator invalidate) {
   invalidate(syncCountTodayProvider);
   invalidate(agentDashboardProvider);
   invalidate(homeVisitMetricsProvider);
+  invalidate(visitedTodayClientIdsProvider);
+  invalidate(visitsTodayProvider);
   invalidate(realTodayRouteProvider);
   invalidate(clientsListProvider);
   invalidate(filteredClientsProvider);

@@ -7,6 +7,8 @@ import * as path from "node:path";
 import type { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import * as XLSX from "xlsx";
+import { findExcelInDownloads } from "./excel-download-paths";
+import { parseGorodRowsFromXlsx } from "./gorod-xlsx-import";
 import {
   buildTerritoryForestWithCitiesFromRows,
   buildTerritoryForestWithRegionAndCityRows,
@@ -23,6 +25,16 @@ function asRecord(v: unknown): Record<string, unknown> {
 }
 
 export function parseCityRowsFromXlsx(filePath: string): CityXlsxRow[] {
+  const gorod = parseGorodRowsFromXlsx(filePath);
+  if (gorod.length > 0) {
+    return gorod.map((r) => ({
+      order_num: r.order_num,
+      name: r.name,
+      code: r.code,
+      region: r.region
+    }));
+  }
+
   if (!fs.existsSync(filePath)) {
     throw new Error(`Fayl topilmadi: ${filePath}`);
   }
@@ -137,13 +149,18 @@ export function resolveCityXlsxPath(cwdBackend: string): ResolveCityXlsxResult {
   const candidates = [
     path.join(cwdBackend, "scripts", "data", "Данные Город.xlsx"),
     path.join(cwdBackend, "scripts", "data", "Данные Город (1).xlsx"),
-    path.join(cwdBackend, "scripts", "data", "gorod.xlsx"),
-    path.join(process.env.USERPROFILE || "", "Downloads", "Данные Город (1).xlsx"),
-    path.join(process.env.USERPROFILE || "", "Downloads", "Данные Город.xlsx")
+    path.join(cwdBackend, "scripts", "data", "gorod.xlsx")
   ];
   for (const p of candidates) {
     if (p && fs.existsSync(p)) return { ok: true, path: p };
   }
+
+  const fromDownloads = findExcelInDownloads(
+    ["Данные Город.xlsx", "Данные Город (1).xlsx", "gorod.xlsx"],
+    ["город", "gorod", "данные город"]
+  );
+  if (fromDownloads) return { ok: true, path: fromDownloads };
+
   return { ok: false, reason: "not_found" };
 }
 

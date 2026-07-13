@@ -13,6 +13,7 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? belowTitle;
   final Widget? titleTrailing;
   final VoidCallback? onBack;
+  final int? menuBadge;
 
   const AgentAppBar({
     super.key,
@@ -23,6 +24,7 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.belowTitle,
     this.titleTrailing,
     this.onBack,
+    this.menuBadge,
   });
 
   @override
@@ -59,6 +61,7 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
       onBack: !useMenuLeading ? () => _goBack(context) : null,
       belowTitle: belowTitle,
       titleTrailing: titleTrailing,
+      menuBadge: menuBadge,
       actions: [
         if (showBack && useMenuLeading)
           AgentIconButton(icon: Icons.arrow_back, onPressed: () => _goBack(context)),

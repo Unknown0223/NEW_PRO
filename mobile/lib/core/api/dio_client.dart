@@ -82,6 +82,17 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
+    final path = err.requestOptions.path;
+    // Login / refresh 401 — sessiya emas (noto‘g‘ri parol yoki refresh token).
+    // Aks holda notifySessionExpired «Sessiya tugadi» bilan to‘g‘ri xatoni yopib qo‘yadi.
+    if (path.contains('/auth/login') || path.contains('/auth/refresh')) {
+      handler.next(err);
+      return;
+    }
+    if (isInvalidCredentialsResponse(err.response?.statusCode, err.response?.data)) {
+      handler.next(err);
+      return;
+    }
     if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
       await clearAuthTokens(_ref);
       Future.microtask(() => notifySessionExpired(_ref));
