@@ -29,7 +29,6 @@ frontend/components/clients/client-detail-view.tsx
 frontend/components/dashboard/app-shell.tsx
 frontend/components/staff/operators-workspace.tsx
 frontend/components/cash-desks/cash-desks-workspace.tsx
-frontend/components/clients/client-qr-workspace.tsx
 frontend/app/(dashboard)/reports/expeditor-returns/page.tsx
 frontend/app/(dashboard)/stock/transfers/page.tsx
 frontend/components/products/product-form.tsx

@@ -1,16 +1,9 @@
-import { z } from "zod";
 import { jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import {
   MOBILE_FIELD_ROLE_NAMES,
   requireActiveMobileSession,
   requireMobileAppAccess
 } from "../auth/app-access.service";
-
-/** Mobile client QR bind/unbind body. */
-export const mobileQrBodySchema = z.object({
-  qr_code: z.string().trim().min(1),
-  client_id: z.number().int().positive().nullable().optional()
-});
 
 /** Mobil foto: agent/ekspeditor o'z rolidagi + faqat bugungi kun. */
 export function mobilePhotoReportListOpts(viewer: { role: string }) {
