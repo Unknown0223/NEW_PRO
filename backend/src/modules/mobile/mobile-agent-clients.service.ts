@@ -19,7 +19,7 @@ import {
 import {
   agentScopedClientWhere,
   assertAgentScopedClient,
-  clientSyncSelectForAgent,
+  clientSyncSelect,
   compactClient,
   loadAgentMobileConfig,
   normalizePhotoBase64Url,
@@ -65,16 +65,15 @@ export async function deleteMobileClientPhotoReport(
   photoId: number
 ) {
   await assertAgentScopedClient(tenantId, userId, clientId);
-  await deleteClientPhotoReport(tenantId, clientId, photoId, userId);
+  await deleteClientPhotoReport(tenantId, clientId, photoId);
 }
 
 export async function deleteMobileExpeditorClientPhotoReport(
   tenantId: number,
   clientId: number,
-  photoId: number,
-  actorUserId?: number | null
+  photoId: number
 ) {
-  await deleteClientPhotoReport(tenantId, clientId, photoId, actorUserId ?? null);
+  await deleteClientPhotoReport(tenantId, clientId, photoId);
 }
 
 export async function linkMobileClientPhotoToOrder(
@@ -97,7 +96,7 @@ export async function linkMobileClientPhotoToOrder(
   if (!order) throw new Error("ORDER_NOT_FOUND");
 
   const row = await prisma.clientPhotoReport.findFirst({
-    where: { id: photoId, tenant_id: tenantId, client_id: clientId, deleted_at: null },
+    where: { id: photoId, tenant_id: tenantId, client_id: clientId },
     select: { id: true }
   });
   if (!row) throw new Error("NOT_FOUND");
@@ -163,7 +162,7 @@ export async function createMobileAgentClient(
 
   const row = await prisma.client.findFirst({
     where: { id, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelect
   });
   return compactClient(row as unknown as CompactClientRow);
 }
@@ -189,7 +188,7 @@ export async function patchMobileAgentClient(
 
   const row = await prisma.client.findFirst({
     where: { id: clientId, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelect
   });
   return compactClient(row as unknown as CompactClientRow);
 }

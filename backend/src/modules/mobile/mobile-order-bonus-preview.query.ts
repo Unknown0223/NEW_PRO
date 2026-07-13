@@ -65,31 +65,23 @@ export type GiftProductPreview = {
   name: string;
   category_name: string | null;
   stock_available: number;
-  /** Zakazdagi pullik dona (bonuslarsiz). */
-  purchased_qty: number;
-  /** Assortiment qty: shu SKU uchun hisoblangan bonus dona (har qoida alohida). */
-  bonus_qty: number;
 };
 
 export function mapGiftProducts(
   giftIds: number[],
   productMap: Map<number, { id: number; name: string; category: { name: string } | null }>,
   availableByProductId: Map<number, number>,
-  qtyByProduct: ReadonlyMap<number, number>,
-  bonusQtyByProductId?: ReadonlyMap<number, number>
+  qtyByProduct: ReadonlyMap<number, number>
 ): GiftProductPreview[] {
   return giftIds.map((pid) => {
     const p = productMap.get(pid);
     const warehouseQty = availableByProductId.get(pid) ?? 0;
     const orderedQty = qtyByProduct.get(pid) ?? 0;
-    const earned = bonusQtyByProductId?.get(pid) ?? 0;
     return {
       product_id: pid,
       name: p?.name ?? `#${pid}`,
       category_name: p?.category?.name ?? null,
-      stock_available: Math.max(0, warehouseQty - orderedQty),
-      purchased_qty: orderedQty,
-      bonus_qty: earned
+      stock_available: Math.max(0, warehouseQty - orderedQty)
     };
   });
 }

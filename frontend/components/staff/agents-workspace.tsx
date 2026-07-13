@@ -4,17 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
-import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { STALE } from "@/lib/query-stale";
 import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { AgentFormModal } from "@/components/staff/agent-form-modal";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { AgentRestrictionsDialog } from "@/components/staff/agent-restrictions-dialog";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
-import {
-  AgentsBulkEditDialog,
-  type AgentsBulkEditFields
-} from "@/components/staff/agents-bulk-edit-dialog";
+import { AgentsBulkEditDialog } from "@/components/staff/agents-bulk-edit-dialog";
 import { AgentsFiltersRow } from "@/components/staff/agents-filters-row";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
@@ -267,7 +263,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const pageSize = tablePrefs.pageSize;
 
   const [addOpen, setAddOpen] = useState(false);
-  const [createAgentError, setCreateAgentError] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<AgentRow | null>(null);
   const [sessionAgent, setSessionAgent] = useState<AgentRow | null>(null);
   const [restrictAgent, setRestrictAgent] = useState<AgentRow | null>(null);
@@ -389,7 +384,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
     }
   });
 
@@ -399,14 +393,9 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
       return data;
     },
     onSuccess: () => {
-      setCreateAgentError(null);
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
       setAddOpen(false);
-    },
-    onError: (e: unknown) => {
-      setCreateAgentError(messageFromStaffCreateError(e));
     }
   });
 
@@ -418,7 +407,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
       setGroupDialog(null);
       setSelectedIds(new Set());
     },
@@ -428,49 +416,20 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   });
 
   const bulkEditMut = useMutation({
-    mutationFn: async (fields: AgentsBulkEditFields) => {
+    mutationFn: async (fields: Record<string, unknown>) => {
       const ids = Array.from(selectedIds);
-      if (ids.length === 0) return;
-
-      if (fields.consignment !== undefined) {
-        await api.post(`/api/${tenantSlug}/agents/bulk`, {
-          action: "set_consignment",
-          agent_ids: ids,
-          consignment: fields.consignment
-        });
-      }
-      if (fields.close_schedule) {
-        await api.post(`/api/${tenantSlug}/agents/bulk`, {
-          action: "set_consignment_close",
-          agent_ids: ids,
-          close_day: fields.close_schedule.close_day,
-          close_hour: fields.close_schedule.close_hour,
-          close_minute: fields.close_schedule.close_minute
-        });
-      }
-
-      const patch: Record<string, unknown> = {};
-      if (fields.warehouse_id !== undefined) patch.warehouse_id = fields.warehouse_id;
-      if (fields.trade_direction !== undefined) patch.trade_direction = fields.trade_direction;
-      if (fields.branch !== undefined) patch.branch = fields.branch;
-      if (fields.position !== undefined) patch.position = fields.position;
-      if (fields.agent_type !== undefined) patch.agent_type = fields.agent_type;
-
-      if (Object.keys(patch).length > 0) {
-        for (const id of ids) {
-          await api.patch(`/api/${tenantSlug}/agents/${id}`, patch);
-        }
+      for (const id of ids) {
+        await api.patch(`/api/${tenantSlug}/agents/${id}`, fields);
       }
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
       setBulkEditOpen(false);
       setSelectedIds(new Set());
     },
     onError: (e: unknown) => {
-      window.alert(messageFromAgentsBulkError(e));
+      window.alert(e instanceof Error ? e.message : "Ошибка сохранения");
     }
   });
 
@@ -660,10 +619,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         title="Агент"
         subtitle="Управление агентами, доступом к приложению и мобильной конфигурацией"
         addLabel="Добавить агента"
-        onAdd={() => {
-          setCreateAgentError(null);
-          setAddOpen(true);
-        }}
+        onAdd={() => setAddOpen(true)}
         onColumnSettings={() => setColumnDialogOpen(true)}
       />
 
@@ -831,11 +787,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         tradeDirections={tradeDirectionsWithId}
         priceTypes={priceTypesQ.data ?? []}
         loading={createMut.isPending}
-        submitError={createAgentError}
-        onClose={() => {
-          setAddOpen(false);
-          setCreateAgentError(null);
-        }}
+        onClose={() => setAddOpen(false)}
         onSubmitCreate={(body) => createMut.mutate(body)}
         onSubmitEdit={async () => {}}
       />

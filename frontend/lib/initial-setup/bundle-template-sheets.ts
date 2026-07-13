@@ -3,7 +3,7 @@
 export const PRODUCT_CATALOG_HEADERS = [
   "Название *",
   "Код",
-  "Категория *",
+  "Категория(код) *",
   "Единица измерения(код) *",
   "Группа(код)",
   "Сегмент(код)",
@@ -40,7 +40,6 @@ export const PRICE_IMPORT_HEADERS = ["Артикул (SKU)", "Тип цены", 
 
 export const STOCK_RECEIPT_HEADERS = [
   "№",
-  "Склад",
   "Код товара",
   "Категория",
   "Продукт",
@@ -131,31 +130,6 @@ export const BUNDLE_REFERENCE_SHEETS: BundleTemplateSheet[] = [
     ]
   },
   {
-    sheetName: "territory",
-    rows: [
-      ["Название", "Уровень", "Родитель", "Код"],
-      ["Узбекистан", "зона", "", "UZ"],
-      ["Ташкент", "регион", "Узбекистан", "TASH"],
-      ["Чиланзар", "город", "Ташкент", "CHIL"]
-    ]
-  },
-  {
-    sheetName: "warehouses",
-    rows: [
-      ["Название", "Код", "Адрес"],
-      ["Основной склад", "WH-01", "г. Ташкент"],
-      ["Склад 2", "WH-02", ""]
-    ]
-  },
-  {
-    sheetName: "product-categories",
-    rows: [
-      ["Название", "Код", "Родитель"],
-      ["Напитки", "DRINK", ""],
-      ["Соки", "JUICE", "Напитки"]
-    ]
-  },
-  {
     sheetName: "client-formats",
     rows: [
       ["Название", "Код", "Сортировка", "Комментарий"],
@@ -189,7 +163,7 @@ export const BUNDLE_IMPORT_SHEETS_FALLBACK: BundleTemplateSheet[] = [
       [
         "Пример товара",
         "SKU-001",
-        "Напитки",
+        "CAT01",
         "SHT",
         "",
         "",
@@ -247,7 +221,7 @@ export const BUNDLE_IMPORT_SHEETS_FALLBACK: BundleTemplateSheet[] = [
     sheetName: "stock-receipts",
     rows: [
       [...STOCK_RECEIPT_HEADERS],
-      ["1", "Основной склад", "SKU-001", "Напитки", "Пример товара", "12000", "100", "1"]
+      ["1", "SKU-001", "Напитки", "Пример товара", "12000", "100", "1"]
     ]
   }
 ];

@@ -207,7 +207,7 @@ export type VisitAdminMapPolygon = {
 
 /** Barcha viloyatlar — xarita fonida sezilarli chegara (ADM1). */
 export function buildAdminRegionReferencePolygons(regions: UzAdminRegion[]): VisitAdminMapPolygon[] {
-  const stroke = "#6b7c8f";
+  const stroke = "#94a3b8";
   const out: VisitAdminMapPolygon[] = [];
   for (const region of regions) {
     region.rings.forEach((ring, ringIdx) => {

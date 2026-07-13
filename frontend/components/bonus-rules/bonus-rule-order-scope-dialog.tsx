@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
 import type { AgentRow } from "@/components/staff/agents-workspace";
@@ -27,8 +27,6 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   tenantSlug: string;
   rule: BonusRuleRow | null;
-  bulkRuleIds?: number[];
-  onBulkSaved?: () => void;
 };
 
 function sortStr(a: string, b: string) {
@@ -63,15 +61,7 @@ const AgentScopeRow = memo(function AgentScopeRow({
   );
 });
 
-export function BonusRuleOrderScopeDialog({
-  open,
-  onOpenChange,
-  tenantSlug,
-  rule,
-  bulkRuleIds,
-  onBulkSaved
-}: Props) {
-  const bulkMode = Boolean(bulkRuleIds && bulkRuleIds.length > 0);
+export function BonusRuleOrderScopeDialog({ open, onOpenChange, tenantSlug, rule }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState("branches");
 
@@ -102,24 +92,7 @@ export function BonusRuleOrderScopeDialog({
   }, [searchAgent]);
 
   useEffect(() => {
-    if (!open) return;
-    if (bulkMode) {
-      setTab("branches");
-      setBranchSel(new Set());
-      setAgentSel(new Set());
-      setTargetAllClients(true);
-      setClientIds([]);
-      setClientNameById({});
-      setTradeDirSel(new Set());
-      setSearchBranch("");
-      setSearchAgent("");
-      setClientSearch("");
-      setSearchTd("");
-      setShowSelectedOnly(false);
-      setExpandedGroups(new Set());
-      return;
-    }
-    if (!rule) return;
+    if (!open || !rule) return;
     setTab("branches");
     setBranchSel(new Set(rule.scope_branch_codes ?? []));
     setAgentSel(new Set(rule.scope_agent_user_ids ?? []));
@@ -133,16 +106,16 @@ export function BonusRuleOrderScopeDialog({
     setSearchTd("");
     setShowSelectedOnly(false);
     setExpandedGroups(new Set());
-  }, [open, rule, bulkMode]);
+  }, [open, rule]);
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "bonus-scope-branches"],
     enabled: open && Boolean(tenantSlug),
     staleTime: STALE.profile,
     queryFn: async () => {
-      const { data } = await api.get<{
-        references?: { branches?: Array<{ name: string; active?: boolean; is_active?: boolean }> };
-      }>(`/api/${tenantSlug}/settings/profile`);
+      const { data } = await api.get<{ references?: { branches?: Array<{ name: string; is_active?: boolean }> } }>(
+        `/api/${tenantSlug}/settings/profile`
+      );
       return data;
     }
   });
@@ -189,6 +162,7 @@ export function BonusRuleOrderScopeDialog({
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (!rule) throw new Error("no rule");
       const body = {
         scope_branch_codes: Array.from(branchSel).sort(sortStr),
         scope_agent_user_ids: Array.from(agentSel).sort((a, b) => a - b),
@@ -196,14 +170,6 @@ export function BonusRuleOrderScopeDialog({
         selected_client_ids: targetAllClients ? [] : [...clientIds].sort((a, b) => a - b),
         scope_trade_direction_ids: Array.from(tradeDirSel).sort((a, b) => a - b)
       };
-      if (bulkMode && bulkRuleIds) {
-        const { data } = await api.patch<{ updated: number; failed: Array<{ id: number; error: string }> }>(
-          `/api/${tenantSlug}/bonus-rules/bulk`,
-          { rule_ids: bulkRuleIds, patch: body }
-        );
-        return data;
-      }
-      if (!rule) throw new Error("no rule");
       const { data } = await api.patch<BonusRuleRow>(
         `/api/${tenantSlug}/bonus-rules/${rule.id}/order-scope`,
         body
@@ -212,33 +178,20 @@ export function BonusRuleOrderScopeDialog({
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["bonus-rules", tenantSlug] });
-      if (bulkMode) {
-        onBulkSaved?.();
-      }
       onOpenChange(false);
     }
   });
 
-  const branchesFromProfile = useMemo(
+  const branchesFromApi = useMemo(
     () => activeBranchNamesFromProfile(profileQ.data?.references?.branches),
     [profileQ.data]
   );
-  const branchesFromAgents = useMemo(() => {
-    const names = new Set<string>();
-    for (const a of agentsQ.data ?? []) {
-      const name = (a.branch ?? "").trim();
-      if (name) names.add(name);
-    }
-    return [...names].sort(sortStr);
-  }, [agentsQ.data]);
-  const branchSource = branchesFromProfile.length > 0 ? "settings" : "agents";
   const branchRows = useMemo(() => {
     const q = searchBranch.trim().toLowerCase();
-    const list = branchesFromProfile.length > 0 ? [...branchesFromProfile] : [...branchesFromAgents];
-    list.sort(sortStr);
+    const list = [...branchesFromApi].sort(sortStr);
     if (!q) return list;
     return list.filter((b) => b.toLowerCase().includes(q));
-  }, [branchesFromProfile, branchesFromAgents, searchBranch]);
+  }, [branchesFromApi, searchBranch]);
 
   const agentGroups = useMemo(() => {
     const agents = agentsQ.data ?? [];
@@ -313,21 +266,18 @@ export function BonusRuleOrderScopeDialog({
     return agents.filter((a) => agentSel.has(a.id));
   }, [showSelectedOnly, agentsQ.data, agentSel]);
 
-  if (!bulkMode && !rule) return null;
+  if (!rule) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "flex max-h-[min(640px,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl",
-          "max-md:left-1/2 md:left-[calc(50%+min(150px,14vw))]"
+          "flex max-h-[min(640px,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
         )}
       >
         <DialogHeader className="border-b border-border/60 px-4 py-3 pr-10">
           <DialogTitle className="text-left text-base leading-snug">
-            {bulkMode
-              ? `Привязка к заказу: ${bulkRuleIds?.length ?? 0} правил`
-              : `Привязка к заказу: ${rule?.name ?? ""}`}
+            Привязка к заказу: {rule.name}
             <span className="mt-1 block text-xs font-normal text-muted-foreground">
               Филиал (все агенты филиала), отдельные агенты (ИЛИ с филиалом), клиенты и направление
               торговли. Пустые списки = без ограничения по этому признаку. Для срабатывания в заказе
@@ -394,17 +344,9 @@ export function BonusRuleOrderScopeDialog({
                 {profileQ.isLoading ? (
                   <p className="p-3 text-xs text-muted-foreground">Загрузка…</p>
                 ) : branchRows.length === 0 ? (
-                  <p className="p-3 text-xs text-muted-foreground">
-                    Нет филиалов. Добавьте в «Настройки → Филиалы» или назначьте филиал агентам.
-                  </p>
+                  <p className="p-3 text-xs text-muted-foreground">Нет филиалов в данных агентов.</p>
                 ) : (
-                  <>
-                    {branchSource === "agents" ? (
-                      <p className="border-b border-border/40 px-3 py-2 text-[11px] text-muted-foreground">
-                        Список из филиалов агентов (в справочнике филиалов пусто).
-                      </p>
-                    ) : null}
-                    <ul className="divide-y divide-border/50">
+                  <ul className="divide-y divide-border/50">
                     {branchRows.map((b) => (
                       <li key={b} className="flex items-center gap-2 px-3 py-2">
                         <input
@@ -420,7 +362,6 @@ export function BonusRuleOrderScopeDialog({
                       </li>
                     ))}
                   </ul>
-                  </>
                 )}
               </div>
             </TabsContent>

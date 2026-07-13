@@ -111,13 +111,6 @@ describe.skipIf(!dbReady)("bonus-rules API (database)", () => {
 
     it("POST qty with sum_threshold_scope calendar_month → PUT order → DELETE", async () => {
       const token = await adminToken();
-      const products = await request(app.server)
-        .get("/api/test1/products?limit=1&is_active=true")
-        .set("Authorization", `Bearer ${token}`);
-      expect(products.status).toBe(200);
-      const productId = (products.body.data as { id: number }[])[0]?.id;
-      expect(productId).toBeGreaterThan(0);
-
       const name = `IT-qty-month-${Date.now()}`;
       const post = await request(app.server)
         .post("/api/test1/bonus-rules")
@@ -125,13 +118,11 @@ describe.skipIf(!dbReady)("bonus-rules API (database)", () => {
         .send({
           name,
           type: "qty",
-          is_manual: false,
+          is_manual: true,
           is_active: false,
           priority: -9_000_001,
           sum_threshold_scope: "calendar_month",
           in_blocks: true,
-          scope_restrict_assortment: true,
-          product_ids: [productId],
           conditions: [{ step_qty: 6, bonus_qty: 1, sort_order: 0 }]
         });
       expect(post.status).toBe(201);
@@ -140,12 +131,7 @@ describe.skipIf(!dbReady)("bonus-rules API (database)", () => {
       const put = await request(app.server)
         .put(`/api/test1/bonus-rules/${post.body.id}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({
-          sum_threshold_scope: "order",
-          scope_restrict_assortment: true,
-          product_ids: [productId],
-          conditions: [{ step_qty: 6, bonus_qty: 1, sort_order: 0 }]
-        });
+        .send({ sum_threshold_scope: "order" });
       expect(put.status).toBe(200);
       expect(put.body.sum_threshold_scope).toBe("order");
 
@@ -157,13 +143,6 @@ describe.skipIf(!dbReady)("bonus-rules API (database)", () => {
 
     it("POST sum gift with calendar_month scope → GET → DELETE", async () => {
       const token = await adminToken();
-      const products = await request(app.server)
-        .get("/api/test1/products?limit=1&is_active=true")
-        .set("Authorization", `Bearer ${token}`);
-      expect(products.status).toBe(200);
-      const productId = (products.body.data as { id: number }[])[0]?.id;
-      expect(productId).toBeGreaterThan(0);
-
       const name = `IT-sum-month-${Date.now()}`;
       const post = await request(app.server)
         .post("/api/test1/bonus-rules")
@@ -174,12 +153,9 @@ describe.skipIf(!dbReady)("bonus-rules API (database)", () => {
           min_sum: 9_999_999,
           free_qty: 1,
           sum_threshold_scope: "calendar_month",
-          is_manual: false,
+          is_manual: true,
           is_active: false,
-          priority: -9_000_002,
-          scope_restrict_assortment: true,
-          product_ids: [productId],
-          bonus_product_ids: [productId]
+          priority: -9_000_002
         });
       expect(post.status).toBe(201);
       expect(post.body.type).toBe("sum");

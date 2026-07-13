@@ -3,10 +3,14 @@
 import { useRef, type ReactNode } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { pickFirstExcelFile, EXCEL_ACCEPT } from "@/lib/excel-file-pick";
+import {
+  formatPriceDraftDisplay,
+  isAllowedPriceInput,
+  parsePriceDraft,
+  sanitizePriceInput
+} from "@/lib/price-matrix-draft";
 
 type Props = {
   bulk: string;
@@ -46,14 +50,22 @@ export function PriceMatrixToolbar({
         <div className="grid gap-1">
         <Label className="text-xs">Все строки (сумма)</Label>
         <div className="flex gap-2">
-          <GroupedNumberInput
+          <Input
             className="h-10 w-40 font-mono text-sm tabular-nums"
             value={bulk}
             disabled={disabled || bulkDisabled}
-            maxFractionDigits={2}
+            inputMode="decimal"
             maxLength={16}
             placeholder="0"
-            onValueChange={onBulkChange}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!isAllowedPriceInput(v)) return;
+              onBulkChange(sanitizePriceInput(v));
+            }}
+            onBlur={() => {
+              const parsed = parsePriceDraft(bulk);
+              if (parsed.ok) onBulkChange(formatPriceDraftDisplay(parsed.value));
+            }}
           />
           <Button
             type="button"
@@ -81,29 +93,24 @@ export function PriceMatrixToolbar({
           <Download className="size-4" aria-hidden />
           {templateLoading ? "…" : "Shablon (.xlsx)"}
         </Button>
-        <ExcelDropTarget
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-10 gap-1.5"
           disabled={!canImportExcel || disabled}
-          onFile={(f) => onImportFile?.(f)}
+          onClick={() => fileRef.current?.click()}
         >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-10 gap-1.5"
-            disabled={!canImportExcel || disabled}
-            onClick={() => fileRef.current?.click()}
-          >
-            <FileSpreadsheet className="size-4 text-emerald-600" aria-hidden />
-            Excel import
-          </Button>
-        </ExcelDropTarget>
+          <FileSpreadsheet className="size-4 text-emerald-600" aria-hidden />
+          Excel import
+        </Button>
         <input
           ref={fileRef}
           type="file"
-          accept={EXCEL_ACCEPT}
+          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
           className="hidden"
           onChange={(e) => {
-            const f = pickFirstExcelFile(e.target.files);
+            const f = e.target.files?.[0];
             if (f) onImportFile?.(f);
             e.target.value = "";
           }}

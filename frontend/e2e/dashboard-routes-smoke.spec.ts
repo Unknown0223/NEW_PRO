@@ -10,6 +10,7 @@ const CORE_PANEL_PATHS = [
   "/orders",
   "/orders/new",
   "/clients",
+  "/clients/qr",
   "/clients/map",
   "/products",
   "/orders/automation",

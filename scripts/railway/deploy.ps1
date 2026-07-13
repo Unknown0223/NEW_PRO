@@ -32,9 +32,6 @@ Invoke-Railway @("up", "--detach", "--service", "backend")
 
 Write-Host "`n--- Frontend deploy ---" -ForegroundColor Yellow
 Set-Location (Join-Path $Root "frontend")
-Write-Host "pivot-engine sync + build..." -ForegroundColor DarkGray
-& node "scripts\sync-pivot-engine.mjs"
-if ($LASTEXITCODE -ne 0) { throw "pivot-engine sync xato" }
 Invoke-Railway @("link", "--project", $ProjectName, "--service", "frontend", "--environment", "production")
 Invoke-Railway @("up", "--detach", "--service", "frontend")
 

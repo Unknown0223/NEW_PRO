@@ -28,7 +28,7 @@ class UserFacingError {
   static UserFacingError serverUnreachable({String? context}) {
     return UserFacingError(
       title: 'Нет связи с сервером',
-      message: context ?? 'Не удалось связаться с сервером Sales Arena.',
+      message: context ?? 'Не удалось связаться с сервером SALESDOC.',
       steps: const [
         'Проверьте интернет на телефоне (Wi‑Fi или мобильная сеть)',
         'Убедитесь, что сервер запущен на компьютере (npm run dev в папке backend)',

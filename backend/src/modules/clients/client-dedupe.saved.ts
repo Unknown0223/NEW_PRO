@@ -1,16 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { appendTenantAuditEvent } from "../../lib/tenant-audit";
-import {
-  assertIsVoided,
-  assertNotVoided,
-  softRestoreData,
-  softVoidData,
-  softVoidListFilter
-} from "../../lib/soft-void";
 
-export async function listSavedDuplicateGroups(tenantId: number, opts?: { archive?: boolean }) {
+export async function listSavedDuplicateGroups(tenantId: number) {
   const rows = await prisma.clientSavedDuplicateGroup.findMany({
-    where: { tenant_id: tenantId, ...softVoidListFilter(opts?.archive) },
+    where: { tenant_id: tenantId },
     orderBy: { created_at: "desc" },
     include: {
       master_client: { select: { id: true, name: true } },
@@ -35,8 +28,7 @@ export async function listSavedDuplicateGroups(tenantId: number, opts?: { archiv
       created_by_user_id: r.created_by_user_id,
       created_by_name: r.created_by?.name ?? null,
       similar_count: r.client_ids.length,
-      not_merged_count: notMerged,
-      deleted_at: r.deleted_at?.toISOString() ?? null
+      not_merged_count: notMerged
     };
   });
 }
@@ -61,50 +53,10 @@ export async function createSavedDuplicateGroup(
   return { id: row.id };
 }
 
-export async function deleteSavedDuplicateGroup(
-  tenantId: number,
-  id: number,
-  actorUserId?: number | null
-) {
-  const existing = await prisma.clientSavedDuplicateGroup.findFirst({
-    where: { id, tenant_id: tenantId },
-    select: { id: true, deleted_at: true }
+export async function deleteSavedDuplicateGroup(tenantId: number, id: number) {
+  const r = await prisma.clientSavedDuplicateGroup.deleteMany({
+    where: { id, tenant_id: tenantId }
   });
-  assertNotVoided(existing);
-  await prisma.clientSavedDuplicateGroup.update({
-    where: { id },
-    data: softVoidData(actorUserId ?? null, null, { includeReason: false })
-  });
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId ?? null,
-    entityType: "client_dedupe",
-    entityId: id,
-    action: "client_dedupe.void",
-    payload: { saved_id: id, soft: true }
-  });
+  if (r.count === 0) throw new Error("NOT_FOUND");
 }
 
-export async function restoreSavedDuplicateGroup(
-  tenantId: number,
-  id: number,
-  actorUserId?: number | null
-) {
-  const existing = await prisma.clientSavedDuplicateGroup.findFirst({
-    where: { id, tenant_id: tenantId },
-    select: { id: true, deleted_at: true }
-  });
-  assertIsVoided(existing);
-  await prisma.clientSavedDuplicateGroup.update({
-    where: { id },
-    data: softRestoreData({ includeReason: false })
-  });
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId ?? null,
-    entityType: "client_dedupe",
-    entityId: id,
-    action: "client_dedupe.restore",
-    payload: { saved_id: id }
-  });
-}

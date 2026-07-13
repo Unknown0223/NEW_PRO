@@ -3,11 +3,6 @@ import { adminRoles, catalogRoles } from "./stock.route.shared";
 
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import { assertDocWritableByDate } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { requireRolesOrSkladchikEntitlement } from "../staff/skladchik-access.prehandler";
@@ -146,12 +141,6 @@ export async function registerStockCorrectionRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.occurred_at) {
-          const occurredAt = new Date(parsed.data.occurred_at);
-          if (!Number.isNaN(occurredAt.getTime())) {
-            await assertDocWritableByDate(request, "stock", occurredAt, null, "correction");
-          }
-        }
         const result = await createWarehouseCorrectionBulk(
           request.tenant!.id,
           parsed.data,
@@ -169,7 +158,6 @@ export async function registerStockCorrectionRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");

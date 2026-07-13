@@ -3,16 +3,10 @@
  *
  * `DELETE ... WHERE tenant_id` — katta hajmda Prisma `deleteMany` dan tezroq ishlaydi.
  *
- * Himoya (ikkala bosqich + backup majburiy):
- *   CONFIRM_TRUNCATE=YES
- *   --confirm-phrase=DELETE_ALL_DATA
- *   --backup-ok
- *   IMPORT_TENANT_SLUG=test1
- *
  * PowerShell (backend papkasida):
- *   $env:CONFIRM_TRUNCATE="YES"
+ *   $env:CONFIRM_RESET_CLIENTS="yes"
  *   $env:IMPORT_TENANT_SLUG="test1"
- *   npm run reset:clients-once -- --confirm-phrase=DELETE_ALL_DATA --backup-ok
+ *   npm run reset:clients-once
  *
  * Eski usul (faqat Prisma API): $env:RESET_CLIENTS_USE_PRISMA_ONLY="1"
  *
@@ -22,10 +16,6 @@
 
 import "dotenv/config";
 import { Prisma, PrismaClient } from "@prisma/client";
-import {
-  assertOpsDestructiveGate,
-  tryAppendOpsPurgeAudit
-} from "./lib/ops-destructive-gate";
 
 const prisma = new PrismaClient();
 
@@ -137,12 +127,10 @@ async function resetWithPrismaOnly(tenantId: number, t0: number) {
 }
 
 async function main() {
-  const gate = assertOpsDestructiveGate({
-    scriptName: "reset-clients-once",
-    altConfirmEnv: "CONFIRM_RESET_CLIENTS"
-  });
-  if (!gate.ok) {
-    console.error(gate.message);
+  if (process.env.CONFIRM_RESET_CLIENTS !== "yes") {
+    console.error(
+      "[reset-clients] To‘xtatildi. Tasdiqlash uchun:\n  CONFIRM_RESET_CLIENTS=yes"
+    );
     process.exit(1);
   }
 
@@ -176,13 +164,6 @@ async function main() {
     await prisma.$disconnect();
     return;
   }
-
-  await tryAppendOpsPurgeAudit({
-    prisma,
-    tenantId,
-    script: "reset-clients-once",
-    detail: { tenant_slug: slug, clients_before: countBefore }
-  });
 
   const t0 = Date.now();
   if (prismaOnly) {

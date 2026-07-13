@@ -98,41 +98,8 @@ function strArr(v: unknown): string[] {
 
 const DATE_MODES = new Set<ReportBuilderDateMode>(["order_date", "shipped_date", "delivered_date", "created_date"]);
 
-function defaultDateRange() {
-  const t = new Date();
-  const y = t.getFullYear();
-  const m = t.getMonth();
-  const from = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
-  const to = new Date(Date.UTC(y, m + 1, 0, 0, 0, 0, 0)).toISOString().slice(0, 10);
-  return { from, to };
-}
-
-/** Virtual / WDR builder uchun boshlang'ich dataset filtrlari. */
-export function defaultDatasetFilters(): DatasetFiltersPayload {
-  const r = defaultDateRange();
-  return {
-    datasetId: DATASET_ID,
-    dateMode: "order_date",
-    dateFrom: r.from,
-    dateTo: r.to,
-    agentIds: [],
-    statuses: [],
-    orderTypes: [],
-    ...emptyReportBuilderExtraFilters()
-  };
-}
-
 function coerceDateMode(v: unknown): ReportBuilderDateMode {
   return typeof v === "string" && DATE_MODES.has(v as ReportBuilderDateMode) ? (v as ReportBuilderDateMode) : "order_date";
-}
-
-/** Saqlangan hisobot konfigidan dataset filtrlarini ajratadi. */
-export function extractSavedDatasetFilters(config: unknown): DatasetFiltersPayload | null {
-  if (!config || typeof config !== "object") return null;
-  const c = config as Record<string, unknown>;
-  if (c.savdoDatasetFilters) return normalizeSavedDatasetFilters(c.savdoDatasetFilters);
-  if ("dateFrom" in c && "dateTo" in c) return normalizeSavedDatasetFilters(c);
-  return null;
 }
 
 /** Saqlangan WDR / legacy ichidagi `savdoDatasetFilters` dan to‘liq dataset filtri. */

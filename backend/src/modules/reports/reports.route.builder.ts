@@ -117,9 +117,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
     if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
-    const q = request.query as Record<string, string | undefined>;
-    const archive = q.archive === "true" || q.archive === "1";
-    const data = await reportBuilderSaved.list(request.tenant!.id, userId, { archive });
+    const data = await reportBuilderSaved.list(request.tenant!.id, userId);
     return reply.send({ data });
   });
 
@@ -177,33 +175,8 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
     if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
-    try {
-      const ok = await reportBuilderSaved.delete(request.tenant!.id, userId, id);
-      if (!ok) return sendApiError(reply, request, 404, "NotFound");
-      return reply.status(204).send();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-      if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-      throw e;
-    }
-  });
-
-  app.post("/api/:slug/reports/report-builder/saved/:id/restore", { preHandler: reportViewPreHandler }, async (request, reply) => {
-    if (!ensureTenantContext(request, reply)) return;
-    const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
-    const id = Number.parseInt((request.params as { id: string }).id, 10);
-    if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
-    try {
-      const ok = await reportBuilderSaved.restore(request.tenant!.id, userId, id);
-      if (!ok) return sendApiError(reply, request, 404, "NotFound");
-      return reply.send({ ok: true });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "";
-      if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
-      if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-      throw e;
-    }
+    const ok = await reportBuilderSaved.delete(request.tenant!.id, userId, id);
+    if (!ok) return sendApiError(reply, request, 404, "NotFound");
+    return reply.status(204).send();
   });
 }

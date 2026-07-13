@@ -101,28 +101,6 @@ export function readImportRefCell(
   return null;
 }
 
-export function readMappedCell(
-  row: unknown[],
-  colIndexByKey: Record<string, number>,
-  key: string
-): string | null | undefined {
-  if (!Object.prototype.hasOwnProperty.call(colIndexByKey, key)) return undefined;
-  return readArrayCell(row, colIndexByKey[key]);
-}
-
-/** Birinchi xaritalangan ustun (bo‘sh katak ham qaytariladi). */
-export function readMappedRefCell(
-  row: unknown[],
-  colIndexByKey: Record<string, number>,
-  keys: string[]
-): string | null | undefined {
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(colIndexByKey, key)) continue;
-    return readArrayCell(row, colIndexByKey[key]);
-  }
-  return undefined;
-}
-
 export function headerLabelFromCell(cell: unknown): string {
   if (cell == null) return "";
   return String(cell).trim();

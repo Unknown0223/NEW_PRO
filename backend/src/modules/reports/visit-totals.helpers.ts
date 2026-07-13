@@ -224,7 +224,6 @@ export async function fetchVisitTotalsForSingleDay(
       JOIN users u ON u.id = pr.created_by_user_id
       JOIN clients c ON c.id = pr.client_id
       WHERE pr.tenant_id = ${tenantId}
-        AND pr.deleted_at IS NULL
         AND pr.created_at >= ${dayStart}
         AND pr.created_at < ${dayEnd}
         AND pr.created_by_user_id IS NOT NULL

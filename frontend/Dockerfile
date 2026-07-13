@@ -1,28 +1,22 @@
 # SALESDOC panel — Railway / Docker (Next.js 14)
-# Build context: frontend/ (vendor/pivot-engine deploy oldidan sync qilinadi)
 FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
+# Build vaqtida brauzer API manzili (ixtiyoriy — berilsa proxy o‘chadi, client to‘g‘ridan-to‘g‘ri backendga uradi)
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Prod proxy uchun backend origin (Railway: `https://<backend>.*.railway.app`) — build vaqtida majburiy, agar NEXT_PUBLIC_API_URL bo‘sh bo‘lsa
 ARG API_INTERNAL_ORIGIN
 ENV API_INTERNAL_ORIGIN=${API_INTERNAL_ORIGIN}
 
 COPY package.json package-lock.json ./
-COPY vendor/pivot-engine ./vendor/pivot-engine
-RUN test -f vendor/pivot-engine/dist/index.js
 RUN npm ci
-RUN test -e node_modules/@salec/pivot-engine/package.json \
-  && test -f node_modules/@salec/pivot-engine/dist/index.js
 
 COPY . .
-# COPY . . vendor ni qayta yozishi mumkin — npm linkni yangilash
-RUN npm install --ignore-scripts --no-save ./vendor/pivot-engine \
-  && test -f node_modules/@salec/pivot-engine/dist/index.js
 
-RUN npx next build
+RUN npm run build
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runner

@@ -5,7 +5,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
-import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { normalizeOrderType } from "../order-status";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import { ORDER_LINES_EDITABLE_STATUSES } from "./order.lines";
@@ -283,15 +282,5 @@ export async function updateOrderMeta(
       void invalidateStock(tenantId, nextWarehouseId);
     }
   }
-
-  void appendTenantAuditEvent({
-    tenantId,
-    actorUserId: logUserId,
-    entityType: AuditEntityType.order,
-    entityId: String(orderId),
-    action: "order.meta",
-    payload: { order_id: orderId }
-  });
-
   return enrichOrderDetailRow(tenantId, updated as unknown as OrderDetailLoaded, viewerRole);
 }

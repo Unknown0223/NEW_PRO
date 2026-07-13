@@ -18,7 +18,7 @@ class AppDatabase {
     final path = p.join(dbPath, 'salesdoc.db');
     return openDatabase(
       path,
-      version: 15,
+      version: 14,
       onOpen: (db) async {
         // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
         try {
@@ -149,29 +149,6 @@ class AppDatabase {
             status TEXT NOT NULL DEFAULT 'pending'
           )
         ''');
-        await db.execute('''
-          CREATE TABLE held_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_id INTEGER NOT NULL,
-            client_name TEXT,
-            warehouse_id INTEGER NOT NULL,
-            price_type TEXT NOT NULL DEFAULT 'default',
-            comment TEXT,
-            items_json TEXT NOT NULL,
-            apply_bonus INTEGER NOT NULL DEFAULT 1,
-            apply_discount INTEGER NOT NULL DEFAULT 1,
-            gift_overrides_json TEXT,
-            gift_lines_json TEXT,
-            is_consignment INTEGER NOT NULL DEFAULT 0,
-            consignment_due_date TEXT,
-            shipment_date TEXT,
-            estimated_total REAL NOT NULL DEFAULT 0,
-            item_count INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            submit_at TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending'
-          )
-        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -238,31 +215,6 @@ class AppDatabase {
               caption TEXT NOT NULL,
               order_id INTEGER,
               created_at TEXT NOT NULL,
-              status TEXT NOT NULL DEFAULT 'pending'
-            )
-          ''');
-        }
-        if (oldVersion < 15) {
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS held_orders (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              client_id INTEGER NOT NULL,
-              client_name TEXT,
-              warehouse_id INTEGER NOT NULL,
-              price_type TEXT NOT NULL DEFAULT 'default',
-              comment TEXT,
-              items_json TEXT NOT NULL,
-              apply_bonus INTEGER NOT NULL DEFAULT 1,
-              apply_discount INTEGER NOT NULL DEFAULT 1,
-              gift_overrides_json TEXT,
-              gift_lines_json TEXT,
-              is_consignment INTEGER NOT NULL DEFAULT 0,
-              consignment_due_date TEXT,
-              shipment_date TEXT,
-              estimated_total REAL NOT NULL DEFAULT 0,
-              item_count INTEGER NOT NULL DEFAULT 0,
-              created_at TEXT NOT NULL,
-              submit_at TEXT NOT NULL,
               status TEXT NOT NULL DEFAULT 'pending'
             )
           ''');
@@ -412,7 +364,7 @@ class AppDatabase {
       if (markAgentClientsSynced) {
         await txn.insert(
           'sync_meta',
-          {'key': 'agent_clients_v', 'value': agentClientsCatalogVersion},
+          {'key': 'agent_clients_v', 'value': '4'},
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
@@ -555,48 +507,11 @@ class AppDatabase {
     await db.update('agent_visits', row, where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Eski mobil katalog (50 ta limit) yoki `visit_weekdays` yo‘q — qayta to‘liq yuklash.
-  static const agentClientsCatalogVersion = '6';
-  static const legacyClientCatalogCap = 50;
-
-  Future<bool> needsAgentClientCatalogUpgrade() async {
-    final db = await database;
-    final r = await db.query('sync_meta', where: "key = 'agent_clients_v'");
-    if (r.isEmpty) return true;
-    return r.first['value']?.toString() != agentClientsCatalogVersion;
-  }
-
-  Future<bool> needsFullClientCatalogResync() async {
-    if (await needsAgentClientCatalogUpgrade()) return true;
-    final n = await clientCount();
-    if (n > 0 && n <= legacyClientCatalogCap) return true;
-    // Delta-sync eski katalog: mijozlar bor, lekin tashrif kunlari SQLite da saqlanmagan.
-    if (n >= 100 && await clientsWithVisitWeekdaysCount() == 0) return true;
-    return false;
-  }
-
-  /// Lokal katalogda kamida bitta mijozda `visit_weekdays` bor-yo‘qligi.
-  Future<int> clientsWithVisitWeekdaysCount() async {
-    final db = await database;
-    final r = await db.rawQuery(
-      "SELECT COUNT(*) AS c FROM clients "
-      "WHERE visit_weekdays IS NOT NULL "
-      "AND TRIM(visit_weekdays) != '' "
-      "AND TRIM(visit_weekdays) != '[]'",
-    );
-    return (r.first['c'] as num?)?.toInt() ?? 0;
-  }
-
-  Future<void> clearAgentClientsCatalogMarker() async {
-    final db = await database;
-    await db.delete('sync_meta', where: "key = 'agent_clients_v'");
-  }
-
   Future<void> markAgentClientsSynced() async {
     final db = await database;
     await db.insert(
       'sync_meta',
-      {'key': 'agent_clients_v', 'value': agentClientsCatalogVersion},
+      {'key': 'agent_clients_v', 'value': '4'},
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -909,49 +824,5 @@ class AppDatabase {
   Future<void> deleteOrderDraft(int clientId) async {
     final db = await database;
     await db.delete('order_drafts', where: 'client_id = ?', whereArgs: [clientId]);
-  }
-
-  Future<int> insertHeldOrder(Map<String, dynamic> row) async {
-    final db = await database;
-    return db.insert('held_orders', row);
-  }
-
-  Future<void> updateHeldOrder(int id, Map<String, dynamic> row) async {
-    final db = await database;
-    await db.update('held_orders', row, where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<List<Map<String, dynamic>>> getPendingHeldOrders() async {
-    final db = await database;
-    return db.query(
-      'held_orders',
-      where: "status = 'pending'",
-      orderBy: 'submit_at ASC',
-    );
-  }
-
-  Future<Map<String, dynamic>?> getHeldOrderById(int id) async {
-    final db = await database;
-    final rows = await db.query('held_orders', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (rows.isEmpty) return null;
-    return rows.first;
-  }
-
-  Future<void> deleteHeldOrder(int id) async {
-    final db = await database;
-    await db.delete('held_orders', where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<void> markHeldOrderStatus(int id, String status) async {
-    final db = await database;
-    await db.update('held_orders', {'status': status}, where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<int> pendingHeldOrderCount() async {
-    final db = await database;
-    final r = await db.rawQuery(
-      "SELECT COUNT(*) as cnt FROM held_orders WHERE status = 'pending'",
-    );
-    return (r.first['cnt'] as num?)?.toInt() ?? 0;
   }
 }

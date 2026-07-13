@@ -8,38 +8,6 @@ export const IMPORT_PROGRESS_STEP_ROWS = 75;
 export const IMPORT_PROGRESS_CHUNK_ROWS = 1000;
 export const IMPORT_HEADER_SCAN_ROWS = 50;
 export const IMPORT_MAX_DATA_ROWS = 200_000;
-/** PostgreSQL prepared statement: `IN (...)` uchun xavfsiz paket (limit 32767). */
-export const IMPORT_ID_LOOKUP_CHUNK = 5000;
-
-export function chunkNumericIds(ids: readonly number[], chunkSize = IMPORT_ID_LOOKUP_CHUNK): number[][] {
-  if (ids.length === 0) return [];
-  const out: number[][] = [];
-  for (let i = 0; i < ids.length; i += chunkSize) {
-    out.push(ids.slice(i, i + chunkSize) as number[]);
-  }
-  return out;
-}
-
-/** Prisma/PostgreSQL texnik xabarlarini import UI uchun qisqartirish. */
-export function humanizeImportDbError(err: unknown): string {
-  const raw =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "Import xatosi";
-  if (/too many bind variables/i.test(raw) || /expected maximum of 32767/i.test(raw)) {
-    return (
-      "Ma’lumotlar bazasi so‘rovi juda katta (PostgreSQL bind limiti). " +
-      "Backend worker qayta ishga tushirilganini tekshiring va importni qayta urinib ko‘ring."
-    );
-  }
-  if (/Invalid `prisma\./i.test(raw)) {
-    const assertion = raw
-      .split("\n")
-      .map((l) => l.trim())
-      .find((l) => /Assertion violation|too many bind variables/i.test(l));
-    if (assertion) return humanizeImportDbError(assertion);
-    return "Ma’lumotlar bazasida import vaqtida xato. Faylni kichikroq qilib qayta urinib ko‘ring.";
-  }
-  return raw.length > 500 ? `${raw.slice(0, 500)}…` : raw;
-}
 
 export type ClientImportProgressStage =
   | "queued"
@@ -207,8 +175,6 @@ export type ClientXlsxImportOptions = {
    */
   updateApplyFields?: string[];
   onProgress?: ClientImportProgressSink;
-  /** Import aktori (yo‘q bo‘lsa audit null-safe). */
-  actorUserId?: number | null;
 };
 
 /** Import tugagach job/API javobida qatorlar bo‘yicha aniq hisob (UI «N / M» uchun). */
@@ -217,8 +183,6 @@ export type ClientImportFinalStats = {
   processedRows: number;
   skippedDuplicate: number;
   skippedEmpty: number;
-  /** Yangilash: Excel bazadagi qiymat bilan bir xil (o‘zgarish yozilmagan). */
-  unchangedRows?: number;
 };
 
 export type ClientXlsxImportResult = {
@@ -237,7 +201,6 @@ export type ImportFlowContext = {
   parseMs: number;
   resolveMs: number;
   writeMs: number;
-  actorUserId?: number | null;
 };
 
 export async function reportImportRowProgress(

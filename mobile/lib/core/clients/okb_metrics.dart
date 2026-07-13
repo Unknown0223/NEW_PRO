@@ -74,46 +74,10 @@ int countDormantForWeekday({
 Set<int> resolveRouteClientIdsForDay({
   required Map<String, dynamic>? route,
   required Set<int> plannedClientIds,
-  Set<int>? unscheduledFallbackIds,
 }) {
   final fromApi = routeClientIdsFromRoute(route);
   if (fromApi.isNotEmpty) return fromApi;
-  if (plannedClientIds.isNotEmpty) return plannedClientIds;
-  return unscheduledFallbackIds ?? const {};
-}
-
-/// Bosh sahifa: bugungi kunlik vizit rejasi — ОКБ (vizitlar ro‘yxati bilan mos).
-Set<int> resolveDailyVisitPlanIds({
-  required Map<String, dynamic>? route,
-  required List<Map<String, dynamic>> allClients,
-  required int weekday,
-  required String todayIso,
-}) {
-  final plannedToday = plannedClientIdsForDay(allClients, weekday, todayIso);
-  if (plannedToday.isNotEmpty) return plannedToday;
-  return routeClientIdsFromRoute(route);
-}
-
-/// Reja bo‘yicha bajarilgan tashriflar.
-({int visitedOnPlan, int remainingOnPlan, int visitedOffPlan}) splitVisitProgress({
-  required Set<int> planIds,
-  required Set<int> visitedIds,
-}) {
-  var visitedOnPlan = 0;
-  var visitedOffPlan = 0;
-  for (final id in visitedIds) {
-    if (planIds.contains(id)) {
-      visitedOnPlan++;
-    } else {
-      visitedOffPlan++;
-    }
-  }
-  final remainingOnPlan = (planIds.length - visitedOnPlan).clamp(0, 999999);
-  return (
-    visitedOnPlan: visitedOnPlan,
-    remainingOnPlan: remainingOnPlan,
-    visitedOffPlan: visitedOffPlan,
-  );
+  return plannedClientIds;
 }
 
 DateTime okbLookbackSince([DateTime? now]) {

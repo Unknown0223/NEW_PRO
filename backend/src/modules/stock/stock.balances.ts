@@ -25,16 +25,6 @@ import {
   totalsFromByWh
 } from "./stock.balances.helpers";
 
-function formatProductDisplayNameForExport(
-  name: string,
-  categoryName: string | null | undefined
-): string {
-  const n = name.trim();
-  const cat = categoryName?.trim();
-  if (cat && cat.length > 0 && cat !== n) return `${n} · ${cat}`;
-  return n;
-}
-
 export type StockBalancesListResponse =
   | {
       view: "summary";
@@ -254,7 +244,7 @@ export async function buildStockBalancesExportBuffer(
       sheet.addRow({
         wh: row.warehouse_name,
         cat: row.category_name ?? "",
-        name: formatProductDisplayNameForExport(row.name, row.category_name),
+        name: row.name,
         sku: row.sku,
         qty: row.qty,
         res: row.reserved_qty,

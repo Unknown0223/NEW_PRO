@@ -1,14 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import {
-  assertDocWritableByDate,
-  assertDocWritableById
-} from "../../lib/document-edit-lock.request";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -147,7 +139,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
       }
       try {
-        await assertDocWritableById(request, "stock", id, "goods_receipt");
         const out = await updateGoodsReceiptStatus(
           request.tenant!.id,
           id,
@@ -156,21 +147,10 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
         return reply.send({ data: out });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "POSTED_IMMUTABLE") return sendApiError(reply, request, 409, "PostedImmutable");
         if (msg === "CANCELLED_IMMUTABLE") return sendApiError(reply, request, 409, "CancelledImmutable");
-        if (msg === "CANNOT_CANCEL_POSTED_INSUFFICIENT_STOCK") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "CannotCancelPostedInsufficientStock",
-            "Нельзя отменить проведённое поступление: на складе недостаточно остатка для сторно (товар уже списан)."
-          );
-        }
-        if (msg === "INVALID_TRANSITION") return sendApiError(reply, request, 409, "InvalidTransition");
         throw e;
       }
     }
@@ -197,7 +177,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
       }
       try {
-        await assertDocWritableById(request, "stock", id, "goods_receipt");
         const out = await updateGoodsReceipt(
           request.tenant!.id,
           id,
@@ -206,7 +185,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
         return reply.send({ data: out });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "POSTED_IMMUTABLE") return sendApiError(reply, request, 409, "PostedImmutable");
@@ -239,12 +217,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.receipt_at) {
-          const receiptAt = new Date(parsed.data.receipt_at);
-          if (!Number.isNaN(receiptAt.getTime())) {
-            await assertDocWritableByDate(request, "stock", receiptAt, null, "goods_receipt");
-          }
-        }
         const out = await createGoodsReceipt(
           request.tenant!.id,
           parsed.data,
@@ -252,7 +224,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send({ data: out });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
@@ -287,7 +258,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
       }
       const dq = dqParsed.data;
       try {
-        await assertDocWritableById(request, "stock", id, "goods_receipt");
         await deleteGoodsReceiptDraft(
           request.tenant!.id,
           id,
@@ -296,7 +266,6 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         );
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_DRAFT") return sendApiError(reply, request, 409, "NotDraft");
@@ -316,11 +285,9 @@ export async function registerGoodsReceiptRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        await assertDocWritableById(request, "stock", id, "goods_receipt");
         await restoreGoodsReceiptDraft(request.tenant!.id, id, actorUserIdOrNull(request));
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");

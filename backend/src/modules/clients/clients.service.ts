@@ -13,4 +13,3 @@ export * from "./clients.detail";
 export * from "./clients.write";
 export * from "./clients.merge";
 export * from "./clients.import";
-export * from "./clients.tags";

@@ -5,7 +5,6 @@ import '../../core/auth/app_pin_store.dart';
 import '../../core/auth/biometric_preferences.dart';
 import '../../core/auth/biometric_service.dart';
 import '../../core/auth/session.dart';
-import '../../core/l10n/app_strings_ru.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
@@ -23,7 +22,8 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   static const _pinLen = 4;
   String _pin = '';
   bool _bioEnabled = false;
-  String _bioLabel = S.touchId;
+  bool _showPinPad = true;
+  String _bioLabel = 'отпечаток пальца';
   bool _bioInProgress = false;
   bool _initialized = false;
 
@@ -40,11 +40,12 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     final available = enabled && await ref.read(biometricServiceProvider).isAvailable();
     final label = available
         ? await ref.read(biometricServiceProvider).getBiometricLabel()
-        : S.touchId;
+        : 'отпечаток пальца';
 
     if (!mounted) return;
     setState(() {
       _bioEnabled = available;
+      _showPinPad = !available;
       _bioLabel = label;
       _initialized = true;
     });
@@ -62,9 +63,13 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     final ok = await ref.read(authStateProvider.notifier).unlockWithBiometric();
     if (!mounted) return;
     setState(() => _bioInProgress = false);
-    if (!ok && !auto) {
-      setState(() => _pin = '');
+    if (!ok) {
+      setState(() => _showPinPad = true);
     }
+  }
+
+  void _showPinFallback() {
+    setState(() => _showPinPad = true);
   }
 
   void _onDigit(String d) {
@@ -83,24 +88,6 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
-  String _userSubtitle(SessionState session) {
-    final name = session.user?.name.trim();
-    final code = session.user?.code?.trim();
-    final login = session.user?.login.trim();
-
-    final displayName = (name != null && name.isNotEmpty)
-        ? name
-        : ((login != null && login.isNotEmpty) ? login : '');
-    final displayCode = (code != null && code.isNotEmpty) ? code : '';
-
-    if (displayName.isNotEmpty && displayCode.isNotEmpty) {
-      return '$displayName · $displayCode';
-    }
-    if (displayName.isNotEmpty) return displayName;
-    if (displayCode.isNotEmpty) return displayCode;
-    return session.tenantSlug ?? '';
-  }
-
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authStateProvider, (prev, next) {
@@ -111,91 +98,119 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
 
     final session = ref.watch(sessionProvider);
     final auth = ref.watch(authStateProvider);
-    final userSubtitle = _userSubtitle(session);
+    final tenantLabel = session.tenantName?.trim().isNotEmpty == true
+        ? session.tenantName!
+        : (session.tenantSlug ?? '');
+    final userLabel = session.user?.name.trim().isNotEmpty == true
+        ? session.user!.name.trim()
+        : session.user?.login ?? '';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 26),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 56),
+              const SizedBox(height: 32),
               Container(
-                width: 58,
-                height: 58,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
                 ),
-                child: const Icon(Icons.lock_rounded, size: 26, color: AppColors.primary),
+                child: Icon(
+                  _bioEnabled && !_showPinPad ? Icons.fingerprint_rounded : Icons.lock_rounded,
+                  size: 36,
+                  color: AppColors.primary,
+                ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               Text(
-                S.pinEnter,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTitle,
-                ),
+                _showPinPad ? 'Введите PIN' : 'Подтвердите $_bioLabel',
+                style: AppTypography.displayMedium.copyWith(color: AppColors.textTitle),
                 textAlign: TextAlign.center,
               ),
-              if (userSubtitle.isNotEmpty) ...[
+              if (tenantLabel.isNotEmpty) ...[
                 const SizedBox(height: 4),
+                Text(tenantLabel, style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted)),
+              ],
+              if (userLabel.isNotEmpty) ...[
+                const SizedBox(height: 2),
                 Text(
-                  userSubtitle,
+                  userLabel,
                   style: AppTypography.bodyMedium.copyWith(
-                    fontSize: 13,
-                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textTitle,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ],
-              const SizedBox(height: 30),
-              PinDots(
-                filled: _pin.length,
-                pinLength: _pinLen,
-                variant: PinDotsVariant.unlock,
-              ),
-              if (auth.error != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  auth.error!,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.error),
-                ),
+              const SizedBox(height: 28),
+              if (_showPinPad) ...[
+                PinDots(filled: _pin.length, pinLength: _pinLen),
+                if (auth.error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    auth.error!,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+                  ),
+                ],
+              ] else ...[
+                const SizedBox(height: 8),
+                if (_bioInProgress)
+                  const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  )
+                else
+                  Text(
+                    'Приложение SalesDoc заблокировано',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
+                  ),
               ],
-              const SizedBox(height: 38),
+              const Spacer(),
               if (!_initialized)
-                const SizedBox(height: 248)
-              else
+                const SizedBox(height: 120)
+              else if (_showPinPad) ...[
                 PinPad(
-                  enabled: !_bioInProgress,
-                  variant: PinPadVariant.unlock,
+                  enabled: true,
                   onDigit: _onDigit,
                   onBackspace: _backspace,
+                  showBiometric: _bioEnabled,
+                  onBiometric: _bioEnabled ? () => _tryBiometric() : null,
                 ),
-              const SizedBox(height: 22),
-              if (_bioEnabled)
-                PinBiometricButton(
-                  label: _bioLabel,
-                  loading: _bioInProgress,
-                  onPressed: _tryBiometric,
+              ] else ...[
+                Material(
+                  color: AppColors.surfaceVariant,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _bioInProgress ? null : () => _tryBiometric(),
+                    child: SizedBox(
+                      width: 88,
+                      height: 88,
+                      child: Icon(
+                        Icons.fingerprint_rounded,
+                        size: 48,
+                        color: _bioInProgress ? AppColors.textMuted : AppColors.primary,
+                      ),
+                    ),
+                  ),
                 ),
-              const Spacer(),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: _bioInProgress ? null : _showPinFallback,
+                  child: const Text('Ввести PIN'),
+                ),
+                const SizedBox(height: 48),
+              ],
               TextButton(
                 onPressed: () => ref.read(authStateProvider.notifier).logout(),
-                child: Text(
-                  S.loginOtherAccount,
-                  style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-                ),
+                child: const Text('Войти другим аккаунтом'),
               ),
               const SizedBox(height: 8),
             ],

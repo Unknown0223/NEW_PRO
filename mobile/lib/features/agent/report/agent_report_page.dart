@@ -3,12 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/api/mobile_api.dart';
 import '../shell/agent_app_bar.dart';
-import '../home/home_visit_metrics_provider.dart';
 import 'agent_report_mock_data.dart';
 import 'agent_report_provider.dart';
 
@@ -26,21 +24,20 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
     return [for (var i = 0; i < rows.length; i++) if (rows[i].depth == 0) i];
   }
 
-  int? _rootCategoryIndex(List<AgentReportRow> rows, int index) {
-    for (var j = index - 1; j >= 0; j--) {
-      if (rows[j].depth == 0) return j;
-    }
-    return null;
-  }
-
   List<({int idx, AgentReportRow row, bool open, bool clickable})> _visibleRows(List<AgentReportRow> rows) {
     final list = <({int idx, AgentReportRow row, bool open, bool clickable})>[];
     for (var i = 0; i < rows.length; i++) {
       final r = rows[i];
       if (r.depth == 0) {
         list.add((idx: i, row: r, open: _openParentIndex == i, clickable: true));
-      } else if (_openParentIndex != null && _rootCategoryIndex(rows, i) == _openParentIndex) {
-        list.add((idx: i, row: r, open: false, clickable: false));
+      } else if (_openParentIndex != null) {
+        var lastParent = -1;
+        for (var j = 0; j < i; j++) {
+          if (rows[j].depth == 0) lastParent = j;
+        }
+        if (lastParent == _openParentIndex) {
+          list.add((idx: i, row: r, open: false, clickable: false));
+        }
       }
     }
     return list;
@@ -57,7 +54,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
       final parents = _parentIndices(rows);
       if (_openParentIndex != null && parents.contains(_openParentIndex)) return;
       setState(() {
-        _openParentIndex = parents.isEmpty ? null : parents.first;
+        _openParentIndex = parents.isEmpty ? null : (parents.length > 4 ? parents[4] : parents.first);
       });
     });
 
@@ -101,19 +98,65 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                     AgentSurfaceCard(
                       padding: EdgeInsets.zero,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                            child: Text(
-                              'Продажи по категориям',
-                              style: AppTypography.headlineSmall.copyWith(fontWeight: FontWeight.w800, fontSize: 14),
-                            ),
-                          ),
                           Container(
                             color: const Color(0xFFF6F9FB),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            child: _tableHeader(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: const Row(
+                              children: [
+                                Expanded(
+                                  flex: 135,
+                                  child: Text(
+                                    'Категория',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 82,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      'Количество',
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 82,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      'Объем',
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 115,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      'Сумма',
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           for (final item in visible) _categoryRow(item),
                         ],
@@ -131,76 +174,14 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
 
   Widget _statGrid(AgentDailySalesTotals? salesTotals) {
     final totals = salesTotals ?? AgentDailySalesTotals(qty: 0, volumeM3: 0, sum: 0, akb: 0);
-    final metrics = ref.watch(homeVisitMetricsProvider).valueOrNull;
-    final visitLabel = metrics != null && metrics.total > 0
-        ? '${metrics.visited}/${metrics.total}'
-        : '—';
-    final kpi = metrics != null && metrics.total > 0
-        ? '${((metrics.onRoute / metrics.total) * 100).round()}%'
-        : '—';
 
     return AgentReportStatGrid(
       items: [
-        (label: 'Продажи', value: _fmtSum(totals.sum)),
-        (label: 'Объём', value: '${_fmtQty(totals.qty)} шт'),
-        (label: 'KPI', value: kpi),
-        (label: 'Визиты', value: visitLabel),
+        (label: 'Общая сумма', value: _fmtSum(totals.sum)),
+        (label: 'Акб', value: '${totals.akb}'),
+        (label: 'Общий кол-во', value: _fmtQty(totals.qty)),
+        (label: 'Общий объем', value: _fmtVolume(totals.volumeM3)),
       ],
-    );
-  }
-
-  static const _qtyColWidth = 52.0;
-  static const _sumColFlex = 5;
-
-  Widget _tableHeader() {
-    return Row(
-      children: [
-        const Expanded(
-          flex: 7,
-          child: Text(
-            'Категория',
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
-          ),
-        ),
-        SizedBox(
-          width: _qtyColWidth,
-          child: const Text(
-            'Кол-во',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          flex: _sumColFlex,
-          child: Text(
-            'Сумма',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textMuted),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _metricText(
-    String value, {
-    required Color color,
-    bool bold = false,
-    double fontSize = 12.5,
-  }) {
-    return Text(
-      value,
-      maxLines: 1,
-      textAlign: TextAlign.right,
-      overflow: TextOverflow.fade,
-      softWrap: false,
-      style: TextStyle(
-        fontSize: fontSize,
-        fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-        color: color,
-        height: 1.1,
-      ),
     );
   }
 
@@ -208,7 +189,7 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
     final r = item.row;
     final open = item.open;
     final color = open ? AppColors.primary : AppColors.textPrimary;
-    final bg = r.depth > 0 ? const Color(0xFFF0F4F8) : null;
+    final bg = r.depth == 1 ? const Color(0xFFF0F4F8) : null;
 
     return Material(
       color: bg ?? AppColors.surface,
@@ -220,13 +201,12 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
             : null,
         child: Container(
           decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.borderLight))),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          constraints: const BoxConstraints(minHeight: 48),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                flex: 7,
+                flex: 135,
                 child: Row(
                   children: [
                     if (r.depth == 0)
@@ -235,23 +215,22 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                         duration: const Duration(milliseconds: 180),
                         child: Icon(
                           Icons.keyboard_arrow_down,
-                          size: 20,
+                          size: 22,
                           color: open ? AppColors.primary : AppColors.textMuted,
                         ),
                       ),
-                    if (r.depth == 0) const SizedBox(width: 2),
+                    if (r.depth == 0) const SizedBox(width: 4),
                     Expanded(
                       child: Padding(
-                        padding: EdgeInsets.only(left: r.depth > 0 ? 14.0 * r.depth : 0),
+                        padding: EdgeInsets.only(left: r.depth == 1 ? 20 : 0),
                         child: Text(
                           r.name,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: r.depth == 0 ? 13.5 : 12.5,
+                            fontSize: r.depth == 1 ? 13 : 14,
                             fontWeight: r.depth == 0 ? FontWeight.w600 : FontWeight.w500,
-                            color: r.depth == 0 ? color : AppColors.textSecondary,
-                            height: 1.2,
+                            color: r.depth == 1 ? AppColors.textSecondary : color,
                           ),
                         ),
                       ),
@@ -259,21 +238,49 @@ class _AgentReportPageState extends ConsumerState<AgentReportPage> {
                   ],
                 ),
               ),
-              SizedBox(
-                width: _qtyColWidth,
+              Expanded(
+                flex: 82,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: _metricText(r.count, color: color),
+                  alignment: Alignment.center,
+                  child: Text(
+                    r.count,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: color),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
               Expanded(
-                flex: _sumColFlex,
+                flex: 82,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    r.volume,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: color),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 115,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
-                  child: _metricText(r.sum, color: color, bold: true),
+                  child: Text(
+                    r.sum,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontWeight: FontWeight.w800, color: color),
+                  ),
                 ),
               ),
             ],

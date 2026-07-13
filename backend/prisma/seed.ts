@@ -4,7 +4,6 @@ import { prisma as seedPrisma } from "./seed/helpers";
 import { prisma as appPrisma } from "../src/config/database";
 import { closeAppRedis } from "../src/lib/redis-cache";
 import { seedDemoTenant } from "./seed/seed-demo";
-import { seedKomandaTestFive } from "./seed/seed-komanda-test-five";
 import { seedTest1Tenant } from "./seed/seed-test1";
 
 async function shutdown() {
@@ -18,8 +17,6 @@ async function main() {
   }
   console.log("[seed] test1 tenant…");
   await seedTest1Tenant();
-  console.log("[seed] komanda (5×6 foydalanuvchi + bog‘lanishlar)…");
-  await seedKomandaTestFive("test1");
   console.log("[seed] demo tenant…");
   await seedDemoTenant();
   console.log("[seed] tayyor");

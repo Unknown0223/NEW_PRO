@@ -6,7 +6,6 @@ type RuleWithConditions = BonusRule & { conditions: BonusRuleCondition[] };
 
 import type {
   BonusConditionInput,
-  BonusRuleClauseInput,
   BonusRuleRow,
   CreateBonusRuleInput,
   UpdateBonusRuleInput
@@ -14,19 +13,11 @@ import type {
 import { bonusRuleInclude } from "./bonus-rules.types";
 import {
   fetchBonusRuleFull,
-  mapBonusRuleFull,
   normalizeScopeBranchCodes,
   normalizeScopePositiveIds,
   parseOptionalDate
 } from "./bonus-rules.mappers";
 import { bonusRuleHasBeenUsed } from "./bonus-rules.usage";
-import {
-  clauseCreateData,
-  isGiftBonusType,
-  primaryRewardClause,
-  synthesizePrimaryClauseFromFlat,
-  validateClausesForGiftBonus
-} from "./bonus-rules.clauses";
 import {
   normalizeConditions,
   validateAutoBonusProductScope,
@@ -34,73 +25,6 @@ import {
   validateForType,
   validatePrerequisiteRuleIds
 } from "./bonus-rules.validate";
-
-/** Flat gift update primary clause maydonlariga tegsa — clauses orqali yoziladi. */
-const GIFT_FLAT_CLAUSE_KEYS = new Set<keyof UpdateBonusRuleInput>([
-  "in_blocks",
-  "once_per_client",
-  "one_plus_one_gift",
-  "product_ids",
-  "bonus_product_ids",
-  "product_category_ids",
-  "scope_restrict_assortment",
-  "scope_restrict_category",
-  "target_all_clients",
-  "selected_client_ids",
-  "buy_qty",
-  "free_qty",
-  "min_sum",
-  "sum_threshold_scope",
-  "conditions",
-  "priority",
-  "client_category",
-  "payment_type",
-  "client_type",
-  "sales_channel",
-  "price_type",
-  "scope_branch_codes",
-  "scope_agent_user_ids",
-  "scope_trade_direction_ids"
-]);
-
-function clauseRowToInput(c: BonusRuleRow["clauses"][number]): BonusRuleClauseInput {
-  return {
-    sort_order: c.sort_order,
-    grants_reward: c.grants_reward,
-    priority: c.priority,
-    client_category: c.client_category,
-    payment_type: c.payment_type,
-    client_type: c.client_type,
-    sales_channel: c.sales_channel,
-    price_type: c.price_type,
-    product_ids: [...c.product_ids],
-    bonus_product_ids: [...c.bonus_product_ids],
-    product_category_ids: [...c.product_category_ids],
-    scope_restrict_assortment: c.scope_restrict_assortment,
-    scope_restrict_category: c.scope_restrict_category,
-    target_all_clients: c.target_all_clients,
-    selected_client_ids: [...c.selected_client_ids],
-    in_blocks: c.in_blocks,
-    once_per_client: c.once_per_client,
-    one_plus_one_gift: c.one_plus_one_gift,
-    buy_qty: c.buy_qty,
-    free_qty: c.free_qty,
-    min_sum: c.min_sum,
-    sum_threshold_scope:
-      c.sum_threshold_scope === "calendar_month" ? "calendar_month" : "order",
-    scope_branch_codes: [...c.scope_branch_codes],
-    scope_agent_user_ids: [...c.scope_agent_user_ids],
-    scope_trade_direction_ids: [...c.scope_trade_direction_ids],
-    conditions: c.conditions.map((cond) => ({
-      min_qty: cond.min_qty,
-      max_qty: cond.max_qty,
-      step_qty: cond.step_qty,
-      bonus_qty: cond.bonus_qty,
-      max_bonus_qty: cond.max_bonus_qty,
-      sort_order: cond.sort_order
-    }))
-  };
-}
 
 export async function updateBonusRule(
   tenantId: number,
@@ -134,180 +58,6 @@ export async function updateBonusRule(
   }
 
   const type = input.type ?? existing.type;
-  const gift = isGiftBonusType(
-    type,
-    input.discount_pct !== undefined
-      ? input.discount_pct
-      : existing.discount_pct != null
-        ? Number(existing.discount_pct)
-        : null
-  );
-
-  // Flat gift update: mapper primary clause dan o‘qiydi — flat maydonlarni clauses ga aylantiramiz.
-  if (gift && input.clauses === undefined) {
-    const existingFull = mapBonusRuleFull(existing as Parameters<typeof mapBonusRuleFull>[0]);
-    if ((existingFull.clauses?.length ?? 0) > 0) {
-      const flatTouches = (Object.keys(input) as (keyof UpdateBonusRuleInput)[]).some((k) =>
-        GIFT_FLAT_CLAUSE_KEYS.has(k)
-      );
-      if (flatTouches) {
-        const primarySynth = synthesizePrimaryClauseFromFlat({
-          type,
-          priority: input.priority ?? existingFull.priority,
-          client_category:
-            input.client_category !== undefined ? input.client_category : existingFull.client_category,
-          payment_type:
-            input.payment_type !== undefined ? input.payment_type : existingFull.payment_type,
-          client_type: input.client_type !== undefined ? input.client_type : existingFull.client_type,
-          sales_channel:
-            input.sales_channel !== undefined ? input.sales_channel : existingFull.sales_channel,
-          price_type: input.price_type !== undefined ? input.price_type : existingFull.price_type,
-          product_ids: input.product_ids ?? existingFull.product_ids,
-          bonus_product_ids: input.bonus_product_ids ?? existingFull.bonus_product_ids,
-          product_category_ids: input.product_category_ids ?? existingFull.product_category_ids,
-          scope_restrict_assortment:
-            input.scope_restrict_assortment ?? existingFull.scope_restrict_assortment,
-          scope_restrict_category:
-            input.scope_restrict_category ?? existingFull.scope_restrict_category,
-          target_all_clients: input.target_all_clients ?? existingFull.target_all_clients,
-          selected_client_ids: input.selected_client_ids ?? existingFull.selected_client_ids,
-          in_blocks: input.in_blocks ?? existingFull.in_blocks,
-          once_per_client: input.once_per_client ?? existingFull.once_per_client,
-          one_plus_one_gift: input.one_plus_one_gift ?? existingFull.one_plus_one_gift,
-          buy_qty: input.buy_qty !== undefined ? input.buy_qty : existingFull.buy_qty,
-          free_qty: input.free_qty !== undefined ? input.free_qty : existingFull.free_qty,
-          min_sum:
-            input.min_sum !== undefined
-              ? input.min_sum
-              : existingFull.min_sum,
-          sum_threshold_scope:
-            input.sum_threshold_scope !== undefined
-              ? input.sum_threshold_scope === "calendar_month"
-                ? "calendar_month"
-                : "order"
-              : existingFull.sum_threshold_scope === "calendar_month"
-                ? "calendar_month"
-                : "order",
-          scope_branch_codes: input.scope_branch_codes ?? existingFull.scope_branch_codes,
-          scope_agent_user_ids: input.scope_agent_user_ids ?? existingFull.scope_agent_user_ids,
-          scope_trade_direction_ids:
-            input.scope_trade_direction_ids ?? existingFull.scope_trade_direction_ids,
-          conditions:
-            input.conditions ??
-            existingFull.conditions.map((c) => ({
-              min_qty: c.min_qty,
-              max_qty: c.max_qty,
-              step_qty: c.step_qty,
-              bonus_qty: c.bonus_qty,
-              max_bonus_qty: c.max_bonus_qty,
-              sort_order: c.sort_order
-            }))
-        });
-        const gateInputs = existingFull.clauses
-          .filter((c) => !c.grants_reward)
-          .map(clauseRowToInput);
-        input = { ...input, clauses: [primarySynth, ...gateInputs] };
-      }
-    }
-  }
-
-  // Ichki shartlar: to‘liq almashtirish
-  if (input.clauses !== undefined && gift) {
-    const clauses = validateClausesForGiftBonus(
-      type,
-      input.clauses,
-      input.discount_pct !== undefined
-        ? input.discount_pct
-        : existing.discount_pct != null
-          ? Number(existing.discount_pct)
-          : null
-    );
-    const primary = primaryRewardClause(clauses);
-    const valid_from =
-      input.valid_from !== undefined ? parseOptionalDate(input.valid_from) : undefined;
-    const valid_to =
-      input.valid_to !== undefined ? parseOptionalDate(input.valid_to) : undefined;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.bonusRuleCondition.deleteMany({ where: { bonus_rule_id: id } });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (tx as any).bonusRuleClause.deleteMany({ where: { bonus_rule_id: id } });
-
-      for (let i = 0; i < clauses.length; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (tx as any).bonusRuleClause.create({
-          data: clauseCreateData(id, clauses[i]!, i)
-        });
-      }
-
-      const conds = primary.conditions;
-      const buyForVal =
-        conds && conds.length > 0
-          ? Math.floor(conds[0]!.step_qty)
-          : (primary.buy_qty ?? null);
-      const freeForVal =
-        conds && conds.length > 0
-          ? Math.floor(conds[0]!.bonus_qty)
-          : (primary.free_qty ?? null);
-
-      await tx.bonusRule.update({
-        where: { id },
-        data: {
-          name: input.name !== undefined ? input.name.trim() : undefined,
-          type: input.type !== undefined ? type : undefined,
-          is_active: input.is_active,
-          ...(valid_from !== undefined ? { valid_from } : {}),
-          ...(valid_to !== undefined ? { valid_to } : {}),
-          prerequisite_rule_ids: [],
-          priority: primary.priority ?? 0,
-          client_category: primary.client_category?.trim() || null,
-          payment_type: primary.payment_type?.trim() || null,
-          client_type: primary.client_type?.trim() || null,
-          sales_channel: primary.sales_channel?.trim() || null,
-          price_type: primary.price_type?.trim() || null,
-          product_ids: primary.product_ids ?? [],
-          bonus_product_ids: primary.bonus_product_ids ?? [],
-          product_category_ids: primary.product_category_ids ?? [],
-          scope_restrict_assortment: primary.scope_restrict_assortment ?? false,
-          scope_restrict_category: primary.scope_restrict_category ?? false,
-          target_all_clients: primary.target_all_clients ?? true,
-          selected_client_ids:
-            primary.target_all_clients === false ? (primary.selected_client_ids ?? []) : [],
-          in_blocks: primary.in_blocks ?? true,
-          once_per_client: primary.once_per_client ?? false,
-          one_plus_one_gift: primary.one_plus_one_gift ?? false,
-          buy_qty: buyForVal,
-          free_qty: freeForVal,
-          min_sum: primary.min_sum ?? null,
-          sum_threshold_scope:
-            primary.sum_threshold_scope === "calendar_month" ? "calendar_month" : "order",
-          scope_branch_codes: normalizeScopeBranchCodes(primary.scope_branch_codes ?? []),
-          scope_agent_user_ids: normalizeScopePositiveIds(primary.scope_agent_user_ids ?? []),
-          scope_trade_direction_ids: normalizeScopePositiveIds(
-            primary.scope_trade_direction_ids ?? []
-          )
-        }
-      });
-    });
-
-    const full = await fetchBonusRuleFull(tenantId, id);
-    if (!full) throw new Error("NOT_FOUND");
-    if (locked) full.has_been_used = true;
-    await appendTenantAuditEvent({
-      tenantId,
-      actorUserId,
-      entityType: AuditEntityType.bonus_rule,
-      entityId: id,
-      action: "update",
-      payload: { changed_keys: Object.keys(input), locked, clauses: true }
-    });
-    return full;
-  }
-
-  // Gift bonus: flat update da связанный yozilmasin
-  if (gift && input.prerequisite_rule_ids !== undefined) {
-    input = { ...input, prerequisite_rule_ids: [] };
-  }
   const merged: CreateBonusRuleInput = {
     name: (input.name ?? existing.name).trim(),
     type,
@@ -594,32 +344,7 @@ export async function updateBonusRuleOrderScope(
     throw new Error("VALIDATION");
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.bonusRule.update({ where: { id }, data });
-    // Mapper primary clause dan scope o‘qiydi — barcha clause larni sinxron yangilaymiz.
-    const clauseData: Record<string, unknown> = {};
-    if (data.scope_branch_codes !== undefined) {
-      clauseData.scope_branch_codes = data.scope_branch_codes;
-    }
-    if (data.scope_agent_user_ids !== undefined) {
-      clauseData.scope_agent_user_ids = data.scope_agent_user_ids;
-    }
-    if (data.scope_trade_direction_ids !== undefined) {
-      clauseData.scope_trade_direction_ids = data.scope_trade_direction_ids;
-    }
-    if (data.target_all_clients !== undefined) {
-      clauseData.target_all_clients = data.target_all_clients;
-    }
-    if (data.selected_client_ids !== undefined) {
-      clauseData.selected_client_ids = data.selected_client_ids;
-    }
-    if (Object.keys(clauseData).length > 0) {
-      await (tx as any).bonusRuleClause.updateMany({
-        where: { bonus_rule_id: id },
-        data: clauseData
-      });
-    }
-  });
+  await prisma.bonusRule.update({ where: { id }, data });
 
   const full = await fetchBonusRuleFull(tenantId, id);
   if (!full) throw new Error("NOT_FOUND");

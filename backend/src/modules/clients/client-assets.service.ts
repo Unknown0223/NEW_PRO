@@ -2,14 +2,6 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { CLIENT_PHOTO_MAX_IMAGE_URL_LEN } from "../../lib/client-photo-limits";
 import { resolveClientPhotoImageUrl } from "../../lib/client-photo-storage";
-import {
-  assertIsVoided,
-  assertNotVoided,
-  softRestoreData,
-  softVoidData,
-  softVoidListFilter
-} from "../../lib/soft-void";
-import { appendClientAuditLog } from "./clients.audit";
 
 async function assertClient(tenantId: number, clientId: number): Promise<void> {
   const c = await prisma.client.findFirst({
@@ -92,12 +84,7 @@ export async function createClientEquipmentRow(
   };
 }
 
-export async function markClientEquipmentRemoved(
-  tenantId: number,
-  clientId: number,
-  equipmentId: number,
-  actorUserId?: number | null
-): Promise<void> {
+export async function markClientEquipmentRemoved(tenantId: number, clientId: number, equipmentId: number): Promise<void> {
   await assertClient(tenantId, clientId);
   const r = await prisma.clientEquipment.findFirst({
     where: { id: equipmentId, tenant_id: tenantId, client_id: clientId }
@@ -106,10 +93,6 @@ export async function markClientEquipmentRemoved(
   await prisma.clientEquipment.update({
     where: { id: equipmentId },
     data: { removed_at: new Date() }
-  });
-  await appendClientAuditLog(tenantId, clientId, actorUserId ?? null, "client.equipment_remove", {
-    equipment_id: equipmentId,
-    inventory_type: r.inventory_type
   });
 }
 
@@ -307,12 +290,10 @@ export type ClientPhotoReportSummary = {
   caption: string | null;
   order_id: number | null;
   created_at: string;
-  content_purged?: boolean;
 };
 
 export type ClientPhotoReportApi = ClientPhotoReportSummary & {
   image_url: string;
-  content_purged?: boolean;
 };
 
 /** Bugungi kun (server lokal vaqti) uchun [00:00:00.000 .. 23:59:59.999] oralig'i. */
@@ -326,20 +307,10 @@ function localTodayRange(): { start: Date; end: Date } {
 export async function listClientPhotoReports(
   tenantId: number,
   clientId: number,
-  opts?: {
-    includeImages?: boolean;
-    viewerRole?: string | null;
-    todayOnly?: boolean;
-    /** true → faqat void; default → faqat aktiv */
-    archive?: boolean;
-  }
+  opts?: { includeImages?: boolean; viewerRole?: string | null; todayOnly?: boolean }
 ): Promise<Array<ClientPhotoReportSummary | ClientPhotoReportApi>> {
   await assertClient(tenantId, clientId);
-  const where: Prisma.ClientPhotoReportWhereInput = {
-    tenant_id: tenantId,
-    client_id: clientId,
-    ...softVoidListFilter(opts?.archive)
-  };
+  const where: Prisma.ClientPhotoReportWhereInput = { tenant_id: tenantId, client_id: clientId };
   // Agent va ekspeditor fotohisobotlari aralashmasligi kerak:
   // ekspeditor faqat o'zi rolidagilarni, agent esa ekspeditornikidan boshqasini ko'radi.
   if (opts?.viewerRole === "expeditor") {
@@ -357,28 +328,18 @@ export async function listClientPhotoReports(
     orderBy: { created_at: "desc" },
     take: 200,
     select: opts?.includeImages
-      ? {
-          id: true,
-          caption: true,
-          order_id: true,
-          created_at: true,
-          image_url: true,
-          content_purged_at: true
-        }
-      : { id: true, caption: true, order_id: true, created_at: true, content_purged_at: true }
+      ? { id: true, caption: true, order_id: true, created_at: true, image_url: true }
+      : { id: true, caption: true, order_id: true, created_at: true }
   });
   return rows.map((r) => {
-    const purged = r.content_purged_at != null;
     const base = {
       id: r.id,
       caption: r.caption,
       order_id: r.order_id,
-      created_at: r.created_at.toISOString(),
-      content_purged: purged
+      created_at: r.created_at.toISOString()
     };
     if (opts?.includeImages && "image_url" in r) {
-      const url = purged || !String(r.image_url ?? "").trim() ? "" : r.image_url;
-      return { ...base, image_url: url };
+      return { ...base, image_url: r.image_url };
     }
     return base;
   });
@@ -388,14 +349,13 @@ export async function getClientPhotoReportById(
   tenantId: number,
   clientId: number,
   photoId: number,
-  opts?: { viewerRole?: string | null; todayOnly?: boolean; archive?: boolean }
+  opts?: { viewerRole?: string | null; todayOnly?: boolean }
 ): Promise<ClientPhotoReportApi> {
   await assertClient(tenantId, clientId);
   const where: Prisma.ClientPhotoReportWhereInput = {
     id: photoId,
     tenant_id: tenantId,
-    client_id: clientId,
-    ...softVoidListFilter(opts?.archive)
+    client_id: clientId
   };
   const viewerRole = opts?.viewerRole;
   if (viewerRole === "expeditor") {
@@ -409,14 +369,12 @@ export async function getClientPhotoReportById(
   }
   const row = await prisma.clientPhotoReport.findFirst({ where });
   if (!row) throw new Error("NOT_FOUND");
-  const purged = row.content_purged_at != null || !row.image_url?.trim();
   return {
     id: row.id,
-    image_url: purged ? "" : row.image_url,
+    image_url: row.image_url,
     caption: row.caption,
     order_id: row.order_id,
-    created_at: row.created_at.toISOString(),
-    content_purged: purged
+    created_at: row.created_at.toISOString()
   };
 }
 
@@ -460,46 +418,12 @@ export async function createClientPhotoReportRow(
 export async function deleteClientPhotoReport(
   tenantId: number,
   clientId: number,
-  photoId: number,
-  actorUserId?: number | null
+  photoId: number
 ): Promise<void> {
   await assertClient(tenantId, clientId);
   const r = await prisma.clientPhotoReport.findFirst({
     where: { id: photoId, tenant_id: tenantId, client_id: clientId }
   });
-  assertNotVoided(r);
-  await prisma.clientPhotoReport.update({
-    where: { id: photoId },
-    data: softVoidData(actorUserId, null, { includeReason: false })
-  });
-  await appendClientAuditLog(tenantId, clientId, actorUserId ?? null, "client.photo_report_delete", {
-    photo_id: photoId,
-    order_id: r!.order_id,
-    soft: true
-  });
-}
-
-/** Soft-void qilingan fotohisobotni tiklash (fayl diskda qoladi). */
-export async function restoreClientPhotoReport(
-  tenantId: number,
-  photoId: number,
-  actorUserId?: number | null,
-  clientId?: number
-): Promise<void> {
-  const r = await prisma.clientPhotoReport.findFirst({
-    where: {
-      id: photoId,
-      tenant_id: tenantId,
-      ...(clientId != null && Number.isFinite(clientId) ? { client_id: clientId } : {})
-    }
-  });
-  assertIsVoided(r);
-  await prisma.clientPhotoReport.update({
-    where: { id: photoId },
-    data: softRestoreData({ includeReason: false })
-  });
-  await appendClientAuditLog(tenantId, r!.client_id, actorUserId ?? null, "client.photo_report_restore", {
-    photo_id: photoId,
-    order_id: r!.order_id
-  });
+  if (!r) throw new Error("NOT_FOUND");
+  await prisma.clientPhotoReport.delete({ where: { id: photoId } });
 }

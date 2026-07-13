@@ -1,13 +1,5 @@
 import { prisma } from "../../config/database";
 import type { Prisma } from "@prisma/client";
-import { appendTenantAuditEvent } from "../../lib/tenant-audit";
-import {
-  assertIsVoided,
-  assertNotVoided,
-  softRestoreData,
-  softVoidData,
-  softVoidListFilter
-} from "../../lib/soft-void";
 import type { ReportBuilderConfigPayload } from "./report-builder.types";
 import { DATASET_ORDERS_SALES_LINES } from "./report-builder.constants";
 
@@ -20,7 +12,6 @@ export type SavedReportRow = {
   dataset_id: string;
   config: ReportBuilderSavedConfigUnion;
   updated_at: string;
-  deleted_at?: string | null;
 };
 
 function parseConfigJson(raw: unknown): ReportBuilderSavedConfigUnion {
@@ -38,24 +29,19 @@ function savedConfigDatasetId(c: ReportBuilderSavedConfigUnion): string {
   return DATASET_ORDERS_SALES_LINES;
 }
 
-export async function listReportBuilderSaved(
-  tenantId: number,
-  userId: number,
-  opts?: { archive?: boolean }
-): Promise<SavedReportRow[]> {
+export async function listReportBuilderSaved(tenantId: number, userId: number): Promise<SavedReportRow[]> {
   const rows = await prisma.reportBuilderSavedConfig.findMany({
-    where: { tenant_id: tenantId, user_id: userId, ...softVoidListFilter(opts?.archive) },
+    where: { tenant_id: tenantId, user_id: userId },
     orderBy: { updated_at: "desc" },
     take: 100,
-    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true, deleted_at: true }
+    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true }
   });
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     dataset_id: r.dataset_id,
     config: parseConfigJson(r.config),
-    updated_at: r.updated_at.toISOString(),
-    deleted_at: r.deleted_at?.toISOString() ?? null
+    updated_at: r.updated_at.toISOString()
   }));
 }
 
@@ -65,8 +51,8 @@ export async function getReportBuilderSaved(
   id: number
 ): Promise<SavedReportRow | null> {
   const r = await prisma.reportBuilderSavedConfig.findFirst({
-    where: { id, tenant_id: tenantId, user_id: userId, deleted_at: null },
-    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true, deleted_at: true }
+    where: { id, tenant_id: tenantId, user_id: userId },
+    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true }
   });
   if (!r) return null;
   return {
@@ -74,8 +60,7 @@ export async function getReportBuilderSaved(
     name: r.name,
     dataset_id: r.dataset_id,
     config: parseConfigJson(r.config),
-    updated_at: r.updated_at.toISOString(),
-    deleted_at: null
+    updated_at: r.updated_at.toISOString()
   };
 }
 
@@ -95,15 +80,14 @@ export async function createReportBuilderSaved(
       dataset_id: savedConfigDatasetId(config),
       config: config as unknown as Prisma.InputJsonValue
     },
-    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true, deleted_at: true }
+    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true }
   });
   return {
     id: r.id,
     name: r.name,
     dataset_id: r.dataset_id,
     config: parseConfigJson(r.config),
-    updated_at: r.updated_at.toISOString(),
-    deleted_at: null
+    updated_at: r.updated_at.toISOString()
   };
 }
 
@@ -117,7 +101,6 @@ export async function updateReportBuilderSaved(
     where: { id, tenant_id: tenantId, user_id: userId }
   });
   if (!existing) return null;
-  assertNotVoided(existing);
   const name = patch.name != null ? patch.name.trim().slice(0, 200) : existing.name;
   if (!name) throw new Error("EMPTY_NAME");
   const config = patch.config ?? parseConfigJson(existing.config);
@@ -128,58 +111,20 @@ export async function updateReportBuilderSaved(
       dataset_id: savedConfigDatasetId(config),
       config: config as unknown as Prisma.InputJsonValue
     },
-    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true, deleted_at: true }
+    select: { id: true, name: true, dataset_id: true, config: true, updated_at: true }
   });
   return {
     id: r.id,
     name: r.name,
     dataset_id: r.dataset_id,
     config: parseConfigJson(r.config),
-    updated_at: r.updated_at.toISOString(),
-    deleted_at: r.deleted_at?.toISOString() ?? null
+    updated_at: r.updated_at.toISOString()
   };
 }
 
 export async function deleteReportBuilderSaved(tenantId: number, userId: number, id: number): Promise<boolean> {
-  const existing = await prisma.reportBuilderSavedConfig.findFirst({
-    where: { id, tenant_id: tenantId, user_id: userId },
-    select: { id: true, deleted_at: true }
+  const r = await prisma.reportBuilderSavedConfig.deleteMany({
+    where: { id, tenant_id: tenantId, user_id: userId }
   });
-  if (!existing) return false;
-  assertNotVoided(existing);
-  await prisma.reportBuilderSavedConfig.update({
-    where: { id },
-    data: softVoidData(userId, null, { includeReason: false })
-  });
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: userId,
-    entityType: "report_builder",
-    entityId: id,
-    action: "report_builder.void",
-    payload: { saved_id: id, soft: true }
-  });
-  return true;
-}
-
-export async function restoreReportBuilderSaved(tenantId: number, userId: number, id: number): Promise<boolean> {
-  const existing = await prisma.reportBuilderSavedConfig.findFirst({
-    where: { id, tenant_id: tenantId, user_id: userId },
-    select: { id: true, deleted_at: true }
-  });
-  if (!existing) return false;
-  assertIsVoided(existing);
-  await prisma.reportBuilderSavedConfig.update({
-    where: { id },
-    data: softRestoreData({ includeReason: false })
-  });
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: userId,
-    entityType: "report_builder",
-    entityId: id,
-    action: "report_builder.restore",
-    payload: { saved_id: id }
-  });
-  return true;
+  return r.count > 0;
 }

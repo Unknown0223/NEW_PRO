@@ -103,17 +103,10 @@ export async function generateQrCodes(input: {
 export async function lookupQrByCode(tenantId: number, qrCode: string) {
   const code = qrCode.trim();
   if (!code) return null;
-  const rows = await prisma.$queryRaw<
-    Array<{ id: number; qr_code: string; client_id: number | null; status: string }>
-  >(Prisma.sql`
-    SELECT q.id, q.qr_code, q.client_id, q.status
-    FROM client_qr_codes q
-    WHERE q.tenant_id = ${tenantId}
-      AND q.qr_code = ${code}
-      AND q.is_active = TRUE
-    LIMIT 1
-  `);
-  return rows[0] ?? null;
+  return prisma.clientQrCode.findFirst({
+    where: { tenant_id: tenantId, qr_code: code, is_active: true },
+    select: { id: true, qr_code: true, client_id: true, status: true }
+  });
 }
 
 export async function bindQrByCode(input: {

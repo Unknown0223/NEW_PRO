@@ -52,7 +52,6 @@ function ruleRow(over: Partial<BonusRuleRow> = {}): BonusRuleRow & { conditions:
     scope_agent_user_ids: [],
     scope_trade_direction_ids: [],
     conditions: [],
-    clauses: [],
     ...over
   };
 }

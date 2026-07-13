@@ -272,11 +272,7 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
   };
 
   const handleCancelDoc = () => {
-    const confirmMsg =
-      detail?.status === "posted"
-        ? "Отменить проведённую инвентаризацию? Остатки будут возвращены к значениям до проведения."
-        : "Отменить черновик? Документ перейдёт в статус «отменён».";
-    if (!window.confirm(confirmMsg)) return;
+    if (!window.confirm("Отменить черновик? Документ перейдёт в статус «отменён».")) return;
     setErrorMsg(null);
     setLineFieldErrs({});
     cancelMut.mutate();
@@ -315,8 +311,6 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
 
   const pickResults = productsPickQ.data ?? [];
   const isDraft = detail?.status === "draft";
-  const isPosted = detail?.status === "posted";
-  const canCancel = isDraft || isPosted;
 
   const diffPreview = useMemo(() => {
     return lineRows.map((r) => {
@@ -510,47 +504,33 @@ export function InventoryTakeEditor({ tenantSlug, takeId, onClose }: Props) {
           </div>
         </>
       ) : (
-        <div className="space-y-3">
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="app-table-thead">
-                <tr>
-                  <th className="px-3 py-2 text-left">SKU</th>
-                  <th className="px-3 py-2 text-left">Товар</th>
-                  <th className="px-3 py-2 text-right">Было в системе</th>
-                  <th className="px-3 py-2 text-right">Факт</th>
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="app-table-thead">
+              <tr>
+                <th className="px-3 py-2 text-left">SKU</th>
+                <th className="px-3 py-2 text-left">Товар</th>
+                <th className="px-3 py-2 text-right">Было в системе</th>
+                <th className="px-3 py-2 text-right">Факт</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lineRows.map((r) => (
+                <tr key={r.product_id} className="border-t">
+                  <td className="px-3 py-2 font-mono text-xs">{r.sku}</td>
+                  <td className="max-w-[240px] truncate px-3 py-2">{r.name}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {formatNumberGrouped(r.system_qty, { maxFractionDigits: 3 })}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {r.counted_qty?.trim()
+                      ? formatNumberGrouped(r.counted_qty, { maxFractionDigits: 3 })
+                      : "—"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {lineRows.map((r) => (
-                  <tr key={r.product_id} className="border-t">
-                    <td className="px-3 py-2 font-mono text-xs">{r.sku}</td>
-                    <td className="max-w-[240px] truncate px-3 py-2">{r.name}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatNumberGrouped(r.system_qty, { maxFractionDigits: 3 })}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {r.counted_qty?.trim()
-                        ? formatNumberGrouped(r.counted_qty, { maxFractionDigits: 3 })
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {canCancel ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={cancelMut.isPending}
-                onClick={() => void handleCancelDoc()}
-              >
-                {isPosted ? "Отменить проведение" : "Отменить"}
-              </Button>
-            </div>
-          ) : null}
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

@@ -29,16 +29,6 @@ if (-not (Test-Path $feLocal)) {
 # Mobile - faqat lokal URL
 $mobEnv = Join-Path $Root "mobile\.env"
 $mobLocal = Join-Path $Root "mobile\.env.local"
-$mobExample = Join-Path $Root "mobile\.env.example"
-if (-not (Test-Path $mobLocal)) {
-  if (-not (Test-Path $mobExample)) {
-    throw 'mobile\.env.example topilmadi'
-  }
-  Copy-Item $mobExample $mobLocal
-  Write-Host "Yaratildi: mobile\.env.local"
-} else {
-  Write-Host "Mavjud: mobile\.env.local"
-}
 Copy-Item $mobLocal $mobEnv -Force
 Write-Host "mobile\.env <= .env.local (127.0.0.1:18080)"
 

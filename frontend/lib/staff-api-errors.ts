@@ -8,7 +8,7 @@ export function messageFromStaffCreateError(err: unknown): string {
   const status = ax.response?.status;
   const code = ax.response?.data?.error;
   if (status === 409 && code === "LoginExists") {
-    return withApiSupportLine("Этот логин уже занят. Укажите другой логин.", err);
+    return withApiSupportLine("Bu login allaqachon band. Boshqa login kiriting.", err);
   }
   if (status === 409 && code === "AgentAlreadyAssigned") {
     return withApiSupportLine(

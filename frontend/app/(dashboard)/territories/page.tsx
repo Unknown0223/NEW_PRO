@@ -129,7 +129,7 @@ export default function TerritoriesPage() {
                     {archiveOnly ? (
                       <TableCell className="text-right">
                         <Button size="sm" variant="outline" onClick={() => void handleRestoreTerritory(t.id)}>
-                          Восстановить
+                          Tiklash
                         </Button>
                       </TableCell>
                     ) : null}

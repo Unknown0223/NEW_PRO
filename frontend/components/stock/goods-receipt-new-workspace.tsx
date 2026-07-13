@@ -12,7 +12,6 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -33,7 +32,6 @@ type ProductRow = {
   id: number;
   sku: string;
   name: string;
-  category_id: number | null;
   volume_m3: string | null;
   weight_kg: string | null;
   /** Dona (yoki boshqa birlik) soni bitta qadoq/blokda */
@@ -107,8 +105,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
   const [priceType, setPriceType] = useState("");
   const [externalRef, setExternalRef] = useState("");
   const [selectedCats, setSelectedCats] = useState<Set<number>>(new Set());
-  /** Faol katalog tabi — jadval faqat shu kategoriya mahsulotlari */
-  const [activeCatalogCategoryId, setActiveCatalogCategoryId] = useState<number | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<Set<number>>(new Set());
   const [lines, setLines] = useState<Record<number, LineEdit>>({});
   const [supplierOpen, setSupplierOpen] = useState(false);
@@ -203,21 +199,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
 
   const catIds = useMemo(() => Array.from(selectedCats), [selectedCats]);
 
-  const selectedCatIdsOrdered = useMemo(() => {
-    const order = new Map(flatCats.map((c, i) => [c.id, i]));
-    return catIds.slice().sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
-  }, [catIds, flatCats]);
-
-  useEffect(() => {
-    if (catIds.length === 0) {
-      setActiveCatalogCategoryId(null);
-      return;
-    }
-    setActiveCatalogCategoryId((cur) =>
-      cur != null && catIds.includes(cur) ? cur : catIds[0]!
-    );
-  }, [catIds]);
-
   const productQueries = useQueries({
     queries: catIds.map((cid) => ({
       queryKey: ["products-receipt-cat", tenantSlug, cid],
@@ -228,31 +209,21 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
 
   const mergedProducts = useMemo(() => {
     const m = new Map<number, ProductRow>();
-    for (let i = 0; i < catIds.length; i++) {
-      const cid = catIds[i]!;
-      const q = productQueries[i];
+    for (const q of productQueries) {
       for (const p of q.data ?? []) {
-        if (m.has(p.id)) continue;
-        m.set(p.id, { ...p, category_id: p.category_id ?? cid });
+        m.set(p.id, p);
       }
     }
     return Array.from(m.values()).sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [productQueries, catIds]);
-
-  const activeCategoryId = activeCatalogCategoryId ?? selectedCatIdsOrdered[0] ?? null;
-
-  const activeCategoryProducts = useMemo(() => {
-    if (activeCategoryId == null) return [];
-    return mergedProducts.filter((p) => p.category_id === activeCategoryId);
-  }, [mergedProducts, activeCategoryId]);
+  }, [productQueries]);
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
-    if (!q) return activeCategoryProducts;
-    return activeCategoryProducts.filter(
+    if (!q) return mergedProducts;
+    return mergedProducts.filter(
       (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
     );
-  }, [activeCategoryProducts, productSearch]);
+  }, [mergedProducts, productSearch]);
 
   useEffect(() => {
     setSelectedProducts((prev) => {
@@ -378,8 +349,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
     setSelectedProducts(nextProducts);
     setSelectedCats(nextCats);
     setLines(nextLines);
-    const firstCat = Array.from(nextCats)[0];
-    if (firstCat != null) setActiveCatalogCategoryId(firstCat);
     prefetchedOnce.current = true;
   }, [isEditMode, sourceReceiptQ.data]);
 
@@ -731,42 +700,6 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
             </div>
           </div>
 
-          {selectedCatIdsOrdered.length > 0 ? (
-            <div className="mb-3 rounded-lg border border-border bg-muted/20 px-2 pt-2">
-              <p className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Выбранные категории
-              </p>
-              <div
-                role="tablist"
-                aria-label="Категории товаров"
-                className="flex flex-wrap gap-x-0.5 overflow-x-auto border-b border-border/80"
-              >
-                {selectedCatIdsOrdered.map((cid) => {
-                  const row = flatCats.find((c) => c.id === cid);
-                  const label = row?.name ?? `#${cid}`;
-                  const active = activeCategoryId === cid;
-                  return (
-                    <button
-                      key={cid}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      className={cn(
-                        "relative -mb-px min-h-[2.75rem] shrink-0 rounded-t-md border-b-2 px-3 py-2 text-left text-sm font-medium transition-colors",
-                        active
-                          ? "border-primary bg-card text-foreground"
-                          : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                      )}
-                      onClick={() => setActiveCatalogCategoryId(cid)}
-                    >
-                      <span className="block min-w-0 leading-snug">{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
           <div className={tableShell}>
             <table className="w-full min-w-[760px] text-sm">
               <thead className="app-table-thead">
@@ -841,10 +774,10 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                       Загрузка товаров…
                     </td>
                   </tr>
-                ) : activeCategoryProducts.length === 0 ? (
+                ) : mergedProducts.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-muted-foreground px-3 py-10 text-center">
-                      В выбранной категории нет активных товаров.
+                      В выбранных категориях нет активных товаров.
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
@@ -890,29 +823,29 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                           </div>
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <GroupedNumberInput
+                          <Input
                             className="ml-auto h-8 w-24 text-right tabular-nums"
-                            maxFractionDigits={2}
+                            inputMode="decimal"
                             value={ln.price}
-                            onValueChange={(v) => updateLine(p.id, { price: v })}
+                            onChange={(e) => updateLine(p.id, { price: e.target.value })}
                             placeholder="авто"
                           />
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <GroupedNumberInput
+                          <Input
                             className="ml-auto h-8 w-20 text-right tabular-nums"
-                            maxFractionDigits={3}
+                            inputMode="decimal"
                             value={ln.block}
                             placeholder={p.qty_per_block != null && p.qty_per_block > 0 ? "упак." : "—"}
-                            onValueChange={(v) => setBlockForProduct(p.id, v, p)}
+                            onChange={(e) => setBlockForProduct(p.id, e.target.value, p)}
                           />
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <GroupedNumberInput
+                          <Input
                             className="ml-auto h-8 w-20 text-right tabular-nums"
-                            maxFractionDigits={3}
+                            inputMode="decimal"
                             value={ln.qty}
-                            onValueChange={(v) => updateLine(p.id, { qty: v })}
+                            onChange={(e) => updateLine(p.id, { qty: e.target.value })}
                           />
                         </td>
                         <td className="text-muted-foreground px-3 py-2 text-right text-xs tabular-nums">
@@ -928,10 +861,7 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                   })
                 )}
               </tbody>
-              {catIds.length > 0 &&
-              !productsLoading &&
-              activeCategoryProducts.length > 0 &&
-              filteredProducts.length > 0 ? (
+              {catIds.length > 0 && !productsLoading && mergedProducts.length > 0 && filteredProducts.length > 0 ? (
                 <tfoot>
                   <tr className="bg-muted/40 border-t font-medium">
                     <td className="px-3 py-3" />

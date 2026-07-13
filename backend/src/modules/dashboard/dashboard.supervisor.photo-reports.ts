@@ -95,7 +95,6 @@ export async function listSupervisorAgentPhotoReports(
   const photoWhere: Prisma.ClientPhotoReportWhereInput = {
     tenant_id: tenantId,
     created_by_user_id: agentId,
-    deleted_at: null,
     created_at: { gte: dayStart, lt: dayEnd },
     ...(Object.keys(clientWhere).length > 0 ? { client: clientWhere } : {}),
     ...(search
@@ -212,7 +211,7 @@ export async function fetchSupervisorPhotoImages(
   const ids = [...new Set(photoIds)].filter((id) => Number.isFinite(id) && id > 0);
   if (ids.length === 0) return [];
   const rows = await prisma.clientPhotoReport.findMany({
-    where: { tenant_id: tenantId, id: { in: ids.slice(0, 100) }, deleted_at: null },
+    where: { tenant_id: tenantId, id: { in: ids.slice(0, 100) } },
     select: { id: true, image_url: true, caption: true, created_at: true }
   });
   return rows.map((r) => ({

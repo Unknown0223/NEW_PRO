@@ -1,6 +1,5 @@
 "use client";
 
-import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +16,7 @@ import { getUserFacingError } from "@/lib/error-utils";
 import { formatGroupedInteger } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Pencil, RotateCcw } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Props = {
@@ -50,7 +49,6 @@ export function CatalogSimpleTab({
   const [sortOrder, setSortOrder] = useState("");
   const [active, setActive] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
-  const [voidTarget, setVoidTarget] = useState<CatalogSimpleRow | null>(null);
 
   const isActiveParam = statusTab === "active";
 
@@ -61,14 +59,9 @@ export function CatalogSimpleTab({
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
-        limit: String(pageSize)
+        limit: String(pageSize),
+        is_active: isActiveParam ? "true" : "false"
       });
-      if (statusTab === "inactive") {
-        params.set("include_inactive", "true");
-        params.set("is_active", "false");
-      } else {
-        params.set("is_active", "true");
-      }
       if (search.trim()) params.set("search", search.trim());
       const { data } = await api.get<{ data: CatalogSimpleRow[]; total: number }>(
         `/api/${tenantSlug}/${apiPath}?${params}`
@@ -123,39 +116,11 @@ export function CatalogSimpleTab({
       setMsg(null);
       setOpen(false);
       await qc.invalidateQueries({ queryKey: ["catalog-simple", apiPath, tenantSlug] });
+      // Bu spravochnik (brend/kategoriya/guruh/...) nomi mahsulotlar ro'yxatida
+      // ham ko'rinadi — o'sha keshlar ham yangi nom bilan yangilansin.
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     },
     onError: (e: unknown) => setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."))
-  });
-
-  const deactivateMut = useMutation({
-    mutationFn: async (id: number) => {
-      if (!tenantSlug) throw new Error("no");
-      await api.delete(`/api/${tenantSlug}/${apiPath}/${id}`);
-    },
-    onSuccess: async () => {
-      setVoidTarget(null);
-      setMsg(null);
-      await qc.invalidateQueries({ queryKey: ["catalog-simple", apiPath, tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
-    },
-    onError: (e: unknown) => {
-      setMsg(getUserFacingError(e, "Не удалось деактивировать."));
-      setVoidTarget(null);
-    }
-  });
-
-  const restoreMut = useMutation({
-    mutationFn: async (id: number) => {
-      if (!tenantSlug) throw new Error("no");
-      await api.post(`/api/${tenantSlug}/${apiPath}/${id}/restore`);
-    },
-    onSuccess: async () => {
-      setMsg(null);
-      await qc.invalidateQueries({ queryKey: ["catalog-simple", apiPath, tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
-    },
-    onError: (e: unknown) => setMsg(getUserFacingError(e, "Не удалось восстановить."))
   });
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -164,7 +129,7 @@ export function CatalogSimpleTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{title}</p>
-        {isAdmin && statusTab === "active" ? (
+        {isAdmin ? (
           <Button type="button" size="sm" onClick={openCreate}>
             {addLabel}
           </Button>
@@ -218,32 +183,6 @@ export function CatalogSimpleTab({
                         >
                           <Pencil className="size-3.5" aria-hidden />
                         </Button>
-                        {statusTab === "active" ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-amber-800 hover:bg-amber-500/15"
-                            title="Деактивировать"
-                            aria-label="Деактивировать"
-                            onClick={() => setVoidTarget(r)}
-                          >
-                            <Ban className="size-3.5" aria-hidden />
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-emerald-800 hover:bg-emerald-500/15"
-                            title="Восстановить"
-                            aria-label="Восстановить"
-                            disabled={restoreMut.isPending}
-                            onClick={() => restoreMut.mutate(r.id)}
-                          >
-                            <RotateCcw className="size-3.5" aria-hidden />
-                          </Button>
-                        )}
                       </TableRowActionGroup>
                     ) : null}
                   </td>
@@ -324,28 +263,6 @@ export function CatalogSimpleTab({
           </div>
         </DialogContent>
       </Dialog>
-
-      <SoftVoidConfirmDialog
-        open={voidTarget != null}
-        onClose={() => {
-          if (deactivateMut.isPending) return;
-          setVoidTarget(null);
-        }}
-        onConfirm={async () => {
-          if (voidTarget) await deactivateMut.mutateAsync(voidTarget.id);
-        }}
-        title="Деактивировать"
-        description={
-          voidTarget
-            ? `«${voidTarget.name}» будет деактивирован и скрыт из активного списка.`
-            : "Запись будет деактивирована."
-        }
-        reasonRequired={false}
-        reasonPlaceholder="Комментарий (необязательно)"
-        confirmLabel="Деактивировать"
-        pending={deactivateMut.isPending}
-        consequences={["Запись останется в базе и может быть восстановлена во вкладке «Не активный»"]}
-      />
     </div>
   );
 }

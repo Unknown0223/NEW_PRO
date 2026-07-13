@@ -96,40 +96,15 @@ const envSchema = z.object({
   /** UserActivityEvent yozuvlarining saqlash muddati (kun). Eskilari cron bilan tozalanadi. */
   ACTIVITY_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
 
-  /** Audit / jurnal store lar saqlash muddati (kun). */
-  AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().default(730),
-
-  /**
-   * Klient fotootchet rasm kontenti saqlash muddati (kun).
-   * Muddatdan keyin image_url tozalanadi, qator (son) qoladi. Default 60 (~2 oy).
-   */
-  PHOTO_CONTENT_RETENTION_DAYS: z.coerce.number().int().positive().default(60),
-
-  /**
-   * Soft-void v1 UI / rollout bayrog‘i. Default `1` (yoqilgan).
-   * `0` — frontend arxiv/restore UI ni yashirish uchun (NEXT_PUBLIC_SOFT_VOID_V1).
-   * Backend har doim soft-void qiladi: flag hard delete ni qayta yoqmaydi.
-   */
-  SOFT_VOID_V1: z.enum(["0", "1"]).default("1"),
-
   /** `/ready` endpoint: `x-internal-token` header bilan himoya (ixtiyoriy). */
   INTERNAL_HEALTH_TOKEN: z.string().min(16).optional(),
 
   /** Sentry DSN — berilmasa Sentry o‘chiq. */
-  SENTRY_DSN: z.preprocess(
-    (v) => (typeof v === "string" && (!v.trim() || v.includes("<") || v.includes("your-")) ? undefined : v),
-    z.string().url().optional()
-  ),
+  SENTRY_DSN: z.string().url().optional(),
 
   /** OpenTelemetry OTLP endpoint (masalan http://otel-collector:4318/v1/traces). */
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
-    (v) => (typeof v === "string" && (!v.trim() || v.includes("<") || v.includes("your-")) ? undefined : v),
-    z.string().url().optional()
-  ),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default("salec-backend"),
-
-  /** `staging` | `production` — observability va deploy tekshiruvlari uchun. */
-  DEPLOY_ENV: z.enum(["development", "staging", "production"]).optional(),
 
   /** Verbose request log sampling (0.0–1.0). Default 1.0 = har doim. */
   LOG_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1),
@@ -183,17 +158,6 @@ if (env.NODE_ENV === "production") {
         "Ensure all tenants have run: npm run seed:rbac-defaults"
     );
   }
-  if (!env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()) {
-    console.warn(
-      "[env] OTEL_EXPORTER_OTLP_ENDPOINT not set — tracing disabled. " +
-        "Set a real OTLP URL (Grafana Cloud / collector) when ready."
-    );
-  }
-}
-
-const deployEnv = env.DEPLOY_ENV ?? (env.NODE_ENV === "production" ? "production" : "development");
-if (deployEnv === "staging" && !env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim()) {
-  console.warn("[env] Staging: OTEL_EXPORTER_OTLP_ENDPOINT not set — tracing disabled.");
 }
 
 /** Prisma `schema.prisma` to‘g‘ridan-to‘g‘ri `process.env.DATABASE_URL` ni o‘qiydi; zod default faqat `env` obyektida bo‘lib qolmasin. */

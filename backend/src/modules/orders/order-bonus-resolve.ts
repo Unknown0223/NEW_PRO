@@ -24,7 +24,6 @@ import {
   type QtyBonusPeek,
   type SumBonusPeek
 } from "./order-bonus-rules";
-import { collectRuleStockProductIds, ruleOrAnyClauseUsesCalendarMonth } from "./order-bonus-clauses";
 
 type BonusSlot =
   | { kind: "discount"; priority: number; rule: BonusRuleRow }
@@ -83,8 +82,11 @@ export async function resolveOrderBonusesForCreate(
     .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0);
   const qtyRules = qtyRaw.map((r) => mapBonusRuleFull(r));
 
-  const stockProductIds = collectRuleStockProductIds([...discountRules, ...sumRules, ...qtyRules]);
+  const stockProductIds = new Set<number>();
   for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
+  for (const r of [...discountRules, ...sumRules, ...qtyRules]) {
+    for (const id of r.bonus_product_ids) stockProductIds.add(id);
+  }
   const availableByProductId = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds);
 
   const refAt = calendarContext?.referenceAt ?? new Date();
@@ -96,7 +98,9 @@ export async function resolveOrderBonusesForCreate(
     timeZone: BONUS_SUM_THRESHOLD_TIMEZONE
   });
 
-  const needsQtyMonth = qtyRules.some((r) => ruleOrAnyClauseUsesCalendarMonth(r));
+  const needsQtyMonth = qtyRules.some(
+    (r) => (r.sum_threshold_scope ?? "order") === "calendar_month"
+  );
   const [clientMonthPaidQtyAggregateExclOrder, clientMonthPaidQtyByProductExclOrder] =
     needsQtyMonth
       ? await Promise.all([
@@ -210,9 +214,6 @@ export async function resolveOrderBonusesForCreate(
 
   if (chosen.some((s) => s.kind === "sum") && sumPeek) {
     bonusParts.push(...(await buildSumBonusDraft(tenantId, sumPeek.giftPid, sumPeek.units)));
-    for (const g of sumPeek.extraGifts ?? []) {
-      bonusParts.push(...(await buildSumBonusDraft(tenantId, g.giftPid, g.units)));
-    }
   }
 
   const chosenQty = chosen.filter((s): s is BonusSlot & { kind: "qty" } => s.kind === "qty");

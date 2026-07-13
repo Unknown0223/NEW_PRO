@@ -18,7 +18,7 @@ export function headerToKey(h: string): string | null {
 export const CATALOG_IMPORT_TEMPLATE_HEADERS = [
   "Название *",
   "Код",
-  "Категория *",
+  "Категория(код) *",
   "Единица измерения(код) *",
   "Группа(код)",
   "Сегмент(код)",
@@ -36,7 +36,7 @@ export const CATALOG_IMPORT_TEMPLATE_HEADERS = [
 export type TemplateCol =
   | "name"
   | "code"
-  | "categoryName"
+  | "categoryCode"
   | "unitCode"
   | "groupCode"
   | "segmentCode"
@@ -62,8 +62,8 @@ export function normalizeTemplateHeader(raw: string): string {
 export function headerToTemplateCol(raw: string): TemplateCol | null {
   const h = normalizeTemplateHeader(raw);
   if (!h) return null;
-  if (h.includes("категория")) return "categoryName";
   if (h.includes("название")) return "name";
+  if (h.includes("категория")) return "categoryCode";
   if (h.includes("единица") && h.includes("измер")) return "unitCode";
   if (h.includes("группа") && h.includes("код")) return "groupCode";
   if (h.includes("сегмент")) return "segmentCode";
@@ -101,64 +101,16 @@ export function parseNumLoose(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export type CategoryImportResolveResult =
-  | { ok: true; id: number }
-  | { ok: false; reason: "empty" | "not_found" | "ambiguous"; detail?: string };
-
-/** Kategoriya: avvalo nom bo‘yicha (trim, registrsiz), keyin eski fayllar uchun kod bo‘yicha. */
-export async function resolveCategoryIdForImport(
-  tenantId: number,
-  raw: string
-): Promise<CategoryImportResolveResult> {
-  const t = raw.trim();
-  if (!t) return { ok: false, reason: "empty" };
-
-  const byName = await prisma.productCategory.findMany({
-    where: {
-      tenant_id: tenantId,
-      name: { equals: t, mode: "insensitive" }
-    },
-    select: { id: true, name: true, code: true }
-  });
-  if (byName.length === 1) return { ok: true, id: byName[0].id };
-  if (byName.length > 1) {
-    const hint = byName
-      .map((c) => (c.code ? `${c.name} (код ${c.code})` : c.name))
-      .join("; ");
-    return { ok: false, reason: "ambiguous", detail: hint };
-  }
-
-  const byCode = await prisma.productCategory.findFirst({
+export async function resolveCategoryIdByCode(tenantId: number, code: string): Promise<number | null> {
+  const t = code.trim();
+  if (!t) return null;
+  const row = await prisma.productCategory.findFirst({
     where: {
       tenant_id: tenantId,
       code: { equals: t, mode: "insensitive" }
-    },
-    select: { id: true }
+    }
   });
-  if (byCode) return { ok: true, id: byCode.id };
-
-  return { ok: false, reason: "not_found" };
-}
-
-export function formatCategoryImportError(
-  row: number,
-  raw: string,
-  result: Extract<CategoryImportResolveResult, { ok: false }>
-): string {
-  const label = raw.trim() || "—";
-  if (result.reason === "empty") {
-    return `Строка ${row}: категория обязательна`;
-  }
-  if (result.reason === "not_found") {
-    return `Строка ${row}: категория «${label}» не найдена в системе`;
-  }
-  return `Строка ${row}: категория «${label}» неоднозначна — ${result.detail ?? "несколько совпадений"}`;
-}
-
-/** @deprecated Eski importlar uchun; yangi shablon nom bo‘yicha ishlaydi. */
-export async function resolveCategoryIdByCode(tenantId: number, code: string): Promise<number | null> {
-  const r = await resolveCategoryIdForImport(tenantId, code);
-  return r.ok ? r.id : null;
+  return row?.id ?? null;
 }
 
 export async function resolveCatalogGroupIdByCode(tenantId: number, code: string): Promise<number | null> {

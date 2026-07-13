@@ -51,9 +51,6 @@ export function validateAgentMobileConfig(
     }
     if (sy.allowed_window_from != null && !HH_MM.test(sy.allowed_window_from)) throw new Error("BAD_MOBILE_CONFIG_SYNC_WINDOW");
     if (sy.allowed_window_to != null && !HH_MM.test(sy.allowed_window_to)) throw new Error("BAD_MOBILE_CONFIG_SYNC_WINDOW");
-    if (sy.post_order_delay_minutes != null && (sy.post_order_delay_minutes < 0 || sy.post_order_delay_minutes > 120)) {
-      throw new Error("BAD_MOBILE_CONFIG_SYNC");
-    }
   }
 
   const m = mc.misc;

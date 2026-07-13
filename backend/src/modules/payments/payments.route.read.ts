@@ -11,11 +11,6 @@ import {
 } from "../../contracts/payments.schemas";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import { assertDocWritableByDate } from "../../lib/document-edit-lock.request";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
@@ -110,16 +105,9 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.paid_at) {
-          const paidAt = new Date(parsed.data.paid_at);
-          if (!Number.isNaN(paidAt.getTime())) {
-            await assertDocWritableByDate(request, "payments", paidAt);
-          }
-        }
         const row = await createPayment(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(row);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");

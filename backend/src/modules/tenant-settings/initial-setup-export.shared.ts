@@ -19,7 +19,6 @@ export const START_SHEET_TAB = "Инструкция";
 
 export const STEP_TAB: Record<string, string> = {
   company: "Компания",
-  territory: "Территория",
   units: "Единицы",
   currencies: "Валюты",
   "payment-methods": "Способ оплаты",
@@ -27,11 +26,9 @@ export const STEP_TAB: Record<string, string> = {
   "trade-directions": "Направление",
   "sales-channels": "Канал продаж",
   branches: "Филиалы",
-  warehouses: "Склады",
   "client-formats": "Формат клиента",
   "client-types": "Тип клиента",
   "client-categories": "Категория клиента",
-  "product-categories": "Категории продуктов",
   "products-catalog": "Продукты",
   "product-prices": "Цены",
   clients: "Клиенты",
@@ -41,7 +38,6 @@ export const STEP_TAB: Record<string, string> = {
 
 export const EXPORT_ORDER = [
   "company",
-  "territory",
   "units",
   "currencies",
   "payment-methods",
@@ -49,11 +45,9 @@ export const EXPORT_ORDER = [
   "trade-directions",
   "sales-channels",
   "branches",
-  "warehouses",
   "client-formats",
   "client-types",
   "client-categories",
-  "product-categories",
   "products-catalog",
   "product-prices",
   "clients",
@@ -135,15 +129,13 @@ export function tabColorForStep(stepId: string): string {
   if (
     [
       "company",
-      "territory",
       "units",
       "currencies",
       "payment-methods",
       "price-types",
       "trade-directions",
       "sales-channels",
-      "branches",
-      "warehouses"
+      "branches"
     ].includes(stepId)
   ) {
     return C.blue;
@@ -151,7 +143,7 @@ export function tabColorForStep(stepId: string): string {
   if (["client-formats", "client-types", "client-categories"].includes(stepId)) {
     return C.emerald;
   }
-  if (["product-categories", "products-catalog", "product-prices"].includes(stepId)) {
+  if (["products-catalog", "product-prices"].includes(stepId)) {
     return C.amber;
   }
   if (["clients", "work-slots", "stock-receipts"].includes(stepId)) {

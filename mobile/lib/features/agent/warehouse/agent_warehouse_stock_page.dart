@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/api/stock_snapshot_api.dart';
+import '../../../core/api/client_qr_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
@@ -55,7 +55,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
     try {
-      await ref.read(stockSnapshotApiProvider).recordStockSnapshot(slug);
+      await ref.read(clientQrApiProvider).recordStockSnapshot(slug);
       final now = DateTime.now();
       final day =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -74,14 +74,6 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
       if (next == '/warehouse-stock') {
         _refreshStock();
         ref.read(agentRouteReselectProvider.notifier).state = null;
-      }
-    });
-
-    ref.listen(warehouseStockProvider, (prev, next) {
-      final view = next.valueOrNull;
-      if (view?.warehouseId != null &&
-          ref.read(warehouseStockWarehouseIdProvider) == null) {
-        ref.read(warehouseStockWarehouseIdProvider.notifier).state = view!.warehouseId;
       }
     });
 

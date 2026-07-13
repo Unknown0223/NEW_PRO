@@ -9,7 +9,6 @@ export type ListWorkSlotsFilters = {
   slot_type?: string;
   slot_types?: string[];
   is_active?: boolean;
-  archive?: boolean;
   q?: string;
   direction_id?: number;
   direction_ids?: number[];
@@ -40,12 +39,6 @@ export function normPositiveIds(values?: number[]): number[] {
 
 export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters): Prisma.WorkSlotWhereInput {
   const where: Prisma.WorkSlotWhereInput = { tenant_id: tenantId };
-
-  if (filters.archive) {
-    where.deleted_at = { not: null };
-  } else {
-    where.deleted_at = null;
-  }
 
   const branchCodes = normStrings(
     filters.branch_codes?.length ? filters.branch_codes : filters.branch_code ? [filters.branch_code] : []

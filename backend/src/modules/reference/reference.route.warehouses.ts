@@ -17,7 +17,6 @@ import {
   listWarehousePickers,
   listWarehousesForTenant,
   listWarehousesTable,
-  restoreWarehouseRow,
   updateWarehouseRow
 } from "./reference.service";
 
@@ -45,7 +44,6 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
-      const archive = q.archive === "true" || q.archive === "1";
       const is_active =
         q.is_active === "true" ? true : q.is_active === "false" ? false : undefined;
       const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
@@ -53,7 +51,6 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
       const search = (q.q ?? "").trim();
       const result = await listWarehousesTable(request.tenant!.id, {
         is_active,
-        archive,
         q: search || undefined,
         page,
         limit
@@ -183,30 +180,8 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
         if (msg === "HAS_STOCK") return sendApiError(reply, request, 409, "WarehouseHasStock");
         if (msg === "HAS_ORDERS") return sendApiError(reply, request, 409, "WarehouseHasOrders");
-        throw e;
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/warehouses/:warehouseId/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { warehouseId: string }).warehouseId, 10);
-      if (Number.isNaN(id)) {
-        return sendApiError(reply, request, 400, "InvalidId");
-      }
-      try {
-        await restoreWarehouseRow(request.tenant!.id, id, actorUserIdOrNull(request));
-        return reply.send({ ok: true });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
         throw e;
       }
     }

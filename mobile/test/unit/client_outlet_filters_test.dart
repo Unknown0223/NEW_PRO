@@ -85,30 +85,4 @@ void main() {
     );
     expect(visited.map((c) => c['id']).toList(), [1, 3]);
   });
-
-  test('tenantHasAnyVisitSchedule detects configured clients', () {
-    expect(tenantHasAnyVisitSchedule([{'id': 1}, {'id': 2}]), isFalse);
-    expect(tenantHasAnyVisitSchedule([{'id': 1, 'visit_weekdays': [2]}]), isTrue);
-  });
-
-  test('applyOutletFilters — kun tabida faqat shu kun rejalari', () {
-    final clients = [
-      {'id': 1, 'visit_weekdays': [7]},
-      {'id': 2, 'visit_weekdays': [1]},
-      {'id': 3, 'visit_weekdays': []},
-    ];
-    final sunday = applyOutletFilters(clients, weekdayTab: 7, includeUnscheduled: false);
-    expect(sunday.map((c) => c['id']).toList(), [1]);
-  });
-
-  test('clientMatchesWeekdayTab includeUnscheduled fallback', () {
-    expect(
-      clientMatchesWeekdayTab({'id': 1}, 2, includeUnscheduled: true),
-      isTrue,
-    );
-    expect(
-      clientMatchesWeekdayTab({'id': 1}, 2, includeUnscheduled: false),
-      isFalse,
-    );
-  });
 }

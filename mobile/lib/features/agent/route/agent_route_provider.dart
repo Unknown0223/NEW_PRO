@@ -121,20 +121,14 @@ Future<Map<String, dynamic>> resolveTodayRoute(
         );
     final merged = await mergeRouteWithLocal(raw);
     if (merged['_localFallback'] == true) {
-      return plannedRouteFallback(
-        routeDate: routeDate,
-        weekday: DateTime.parse(routeDate).weekday,
-      );
+      return {...merged, '_routeDate': routeDate};
     }
     final stops = (merged['stops'] as List?) ?? [];
     if (stops.isNotEmpty) return {...merged, '_routeDate': routeDate};
   } on UnauthorizedException {
     rethrow;
   } catch (_) {}
-  return plannedRouteFallback(
-    routeDate: routeDate,
-    weekday: DateTime.parse(routeDate).weekday,
-  );
+  return localRouteFallback(routeDate: routeDate);
 }
 
 /// Haqiqiy bugungi kun marshruti (kalendar tabidan mustaqil — KPI uchun).
@@ -175,18 +169,15 @@ final todayRouteProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final routeDate = routeDateIsoForWeekdayTab(weekdayTab);
   final slug = session.tenantSlug ?? '';
   final agentId = session.user?.id;
-  final wd = weekdayTab > 0 ? weekdayTab : DateTime.parse(routeDate).weekday;
-  if (slug.isEmpty || agentId == null) {
-    return plannedRouteFallback(routeDate: routeDate, weekday: wd);
-  }
+  if (slug.isEmpty || agentId == null) return localRouteFallback(routeDate: routeDate);
 
   await ensureAuthTokens(ref);
 
   try {
     return await resolveTodayRoute(ref, slug, agentId, routeDate: routeDate);
   } on UnauthorizedException {
-    return plannedRouteFallback(routeDate: routeDate, weekday: wd);
+    return localRouteFallback(routeDate: routeDate);
   } catch (_) {
-    return plannedRouteFallback(routeDate: routeDate, weekday: wd);
+    return localRouteFallback(routeDate: routeDate);
   }
 });

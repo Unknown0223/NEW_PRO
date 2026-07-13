@@ -15,7 +15,6 @@ const backendRoot = path.join(__dirname, "..");
 const clientDir = path.join(backendRoot, "node_modules", ".prisma", "client");
 const indexJs = path.join(clientDir, "index.js");
 const schemaPath = path.join(backendRoot, "prisma", "schema.prisma");
-const modelsDir = path.join(backendRoot, "prisma", "models");
 const migrationsDir = path.join(backendRoot, "prisma", "migrations");
 
 function prismaClientLooksReady() {
@@ -31,36 +30,23 @@ function prismaClientLooksReady() {
   );
 }
 
-/** Schema (asosiy + models/) yoki migratsiyalar client yaratilgan vaqtdan yangi bo‘lsa — generate. */
+/** Schema yoki migratsiyalar client yaratilgan vaqtdan yangi bo‘lsa — generate kerak (stale client EPERM sababini oldini oladi). */
 function prismaClientStaleVsSchema() {
-  if (!fs.existsSync(indexJs)) return false;
-  let sourcesMs = 0;
+  if (!fs.existsSync(schemaPath) || !fs.existsSync(indexJs)) return false;
+  let schemaMs = 0;
   try {
-    if (fs.existsSync(schemaPath)) sourcesMs = Math.max(sourcesMs, fs.statSync(schemaPath).mtimeMs);
+    schemaMs = fs.statSync(schemaPath).mtimeMs;
   } catch {
-    /* skip */
+    return false;
   }
-  try {
-    if (fs.existsSync(modelsDir)) {
-      for (const name of fs.readdirSync(modelsDir)) {
-        if (!name.endsWith(".prisma")) continue;
-        try {
-          sourcesMs = Math.max(sourcesMs, fs.statSync(path.join(modelsDir, name)).mtimeMs);
-        } catch {
-          /* skip */
-        }
-      }
-    }
-  } catch {
-    /* skip */
-  }
+  let migrationsMs = 0;
   try {
     if (fs.existsSync(migrationsDir)) {
       for (const name of fs.readdirSync(migrationsDir)) {
         const sql = path.join(migrationsDir, name, "migration.sql");
         if (!fs.existsSync(sql)) continue;
         try {
-          sourcesMs = Math.max(sourcesMs, fs.statSync(sql).mtimeMs);
+          migrationsMs = Math.max(migrationsMs, fs.statSync(sql).mtimeMs);
         } catch {
           /* skip */
         }
@@ -69,7 +55,7 @@ function prismaClientStaleVsSchema() {
   } catch {
     /* skip */
   }
-  if (sourcesMs <= 0) return false;
+  const sourcesMs = Math.max(schemaMs, migrationsMs);
   let clientMs = 0;
   try {
     clientMs = fs.statSync(indexJs).mtimeMs;

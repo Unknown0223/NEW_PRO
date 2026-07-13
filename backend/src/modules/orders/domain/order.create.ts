@@ -14,7 +14,6 @@ import {
   invalidateOrdersListCache,
   invalidateStock
 } from "../../../lib/redis-cache";
-import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -119,11 +118,7 @@ export async function createOrder(
       zone: true,
       neighborhood: true,
       address: true,
-      credit_limit: true,
-      price_type: true,
-      allow_order_with_debt: true,
-      allow_consignment: true,
-      allow_consignment_with_debt: true
+      credit_limit: true
     }
   });
   if (!client) {
@@ -169,8 +164,7 @@ export async function createOrder(
     };
   }
 
-  const priceType =
-    (input.price_type ?? "").trim() || (client.price_type ?? "").trim() || "retail";
+  const priceType = (input.price_type ?? "").trim() || "retail";
 
   const {
     lineData,
@@ -259,22 +253,6 @@ export async function createOrder(
   void invalidateOrdersListCache(tenantId);
   void invalidateDashboard(tenantId);
   void invalidateStock(tenantId, input.warehouse_id);
-
-  void appendTenantAuditEvent({
-    tenantId,
-    actorUserId: viewerCtx.userId,
-    entityType: AuditEntityType.order,
-    entityId: String(order.id),
-    action: "order.create",
-    payload: {
-      order_id: order.id,
-      number: order.number,
-      client_id: client.id,
-      warehouse_id: input.warehouse_id,
-      order_type: orderType,
-      total_sum: String(totalSum)
-    }
-  });
 
   void planAutoConfirmAfterCreate(
     tenantId,

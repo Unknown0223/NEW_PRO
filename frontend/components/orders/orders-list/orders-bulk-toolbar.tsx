@@ -610,7 +610,6 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
               order_ids: consignmentEligibleIds,
               is_consignment: payload.is_consignment,
               consignment_due_date: payload.consignment_due_date,
-              conditions_note: payload.conditions_note ?? null,
               skipped_ineligible: count - consignmentEligibleIds.length
             },
             { onSuccess: () => setConsignmentOpen(false) }

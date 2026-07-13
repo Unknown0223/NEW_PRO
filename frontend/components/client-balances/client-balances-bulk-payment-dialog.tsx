@@ -9,7 +9,6 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateTimePickerField, localValueToDatetimeInput } from "@/components/ui/datetime-popover";
@@ -456,13 +455,13 @@ export function ClientBalancesBulkPaymentDialog({
                     >
                       <div className="flex flex-col gap-1">
                         <span className="text-left font-medium leading-tight">{lab}</span>
-                        <GroupedNumberInput
+                        <Input
                           className="h-8 text-xs tabular-nums"
-                          maxFractionDigits={2}
+                          inputMode="decimal"
                           placeholder="Для всех"
                           value={bulkAmountDrafts[lab] ?? ""}
-                          onValueChange={(v) =>
-                            setBulkAmountDrafts((p) => ({ ...p, [lab]: v }))
+                          onChange={(e) =>
+                            setBulkAmountDrafts((p) => ({ ...p, [lab]: e.target.value }))
                           }
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
@@ -540,12 +539,12 @@ export function ClientBalancesBulkPaymentDialog({
                       </td>
                       {paymentColumnLabels.map((lab) => (
                         <td key={`${d.client_id}-${lab}`} className="px-1 py-1.5 align-top">
-                          <GroupedNumberInput
+                          <Input
                             className="h-9 tabular-nums"
-                            maxFractionDigits={2}
+                            inputMode="decimal"
                             placeholder="0"
                             value={d.amounts[lab] ?? ""}
-                            onValueChange={(v) => updateAmount(d.client_id, lab, v)}
+                            onChange={(e) => updateAmount(d.client_id, lab, e.target.value)}
                             disabled={submitMut.isPending}
                           />
                         </td>

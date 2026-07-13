@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,11 +10,9 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch, useTenant } from "@/lib/api-client";
-import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import {
@@ -73,9 +70,6 @@ export default function ExpensesPage() {
   const [pnl, setPnl] = useState<PnlReport | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [showArchive, setShowArchive] = useState(false);
-  const [voidTargetId, setVoidTargetId] = useState<number | null>(null);
-  const [voidPending, setVoidPending] = useState(false);
-  const [voidError, setVoidError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [newAmount, setNewAmount] = useState("");
@@ -127,29 +121,16 @@ export default function ExpensesPage() {
     fetchAll();
   };
 
+  const handleDeleteDraft = async (id: number) => {
+    if (!confirm(`Chiqim #${id} ni arxivga o‘tkazish?`)) return;
+    await apiFetch(`/api/${tenant}/expenses/${id}`, { method: "DELETE" });
+    fetchAll();
+  };
+
   const handleRestoreExpense = async (id: number) => {
     if (!confirm(`Chiqim #${id} ni tiklash?`)) return;
     await apiFetch(`/api/${tenant}/expenses/${id}/restore`, { method: "POST" });
     fetchAll();
-  };
-
-  const handleConfirmVoidExpense = async (reason: string) => {
-    if (voidTargetId == null) return;
-    try {
-      setVoidPending(true);
-      setVoidError(null);
-      const params = new URLSearchParams();
-      if (reason.trim()) params.set("cancel_reason_ref", reason.trim());
-      const qs = params.toString();
-      await apiFetch(`/api/${tenant}/expenses/${voidTargetId}${qs ? `?${qs}` : ""}`, { method: "DELETE" });
-      setVoidTargetId(null);
-      await fetchAll();
-    } catch (e) {
-      console.error(e);
-      setVoidError("Chiqimni arxivga o‘tkazib bo‘lmadi.");
-    } finally {
-      setVoidPending(false);
-    }
   };
 
   const expenseTypeLabel = useCallback(
@@ -235,11 +216,11 @@ export default function ExpensesPage() {
           </div>
           <div className="grid gap-1.5">
             <Label>Summa ({defaultCurrency})</Label>
-            <GroupedNumberInput
-              maxFractionDigits={2}
+            <Input
+              inputMode="decimal"
               placeholder="0"
               value={newAmount}
-              onValueChange={setNewAmount}
+              onChange={(e) => setNewAmount(e.target.value)}
             />
           </div>
           <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
@@ -281,7 +262,7 @@ export default function ExpensesPage() {
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Faol</SelectItem>
-                {isSoftVoidUiEnabled() ? <SelectItem value="archive">Arxiv</SelectItem> : null}
+                <SelectItem value="archive">Arxiv</SelectItem>
               </SelectContent>
             </Select>
             <Select
@@ -336,13 +317,13 @@ export default function ExpensesPage() {
                     <TableCell className="text-right">
                       {showArchive ? (
                         <Button size="sm" variant="outline" onClick={() => void handleRestoreExpense(e.id)}>
-                          Восстановить
+                          Tiklash
                         </Button>
                       ) : e.status === "draft" ? (
                         <div className="flex flex-wrap gap-1 justify-end">
                           <Button size="sm" variant="default" onClick={() => void handleAction(e.id, "approve")}>Tasdiqlash</Button>
                           <Button size="sm" variant="destructive" onClick={() => void handleAction(e.id, "reject")}>Rad etish</Button>
-                          <Button size="sm" variant="outline" onClick={() => { setVoidError(null); setVoidTargetId(e.id); }}>Arxivga</Button>
+                          <Button size="sm" variant="outline" onClick={() => void handleDeleteDraft(e.id)}>Arxivga</Button>
                         </div>
                       ) : null}
                     </TableCell>
@@ -363,24 +344,6 @@ export default function ExpensesPage() {
           )}
         </CardContent>
       </Card>
-
-      <SoftVoidConfirmDialog
-        open={voidTargetId != null}
-        onClose={() => {
-          if (voidPending) return;
-          setVoidTargetId(null);
-          setVoidError(null);
-        }}
-        onConfirm={handleConfirmVoidExpense}
-        title="Аннулировать расход"
-        description="Расход будет перемещён в архив и может быть восстановлен позже."
-        reasonRequired
-        reasonPlaceholder="Причина"
-        confirmLabel="В архив"
-        pending={voidPending}
-        error={voidError}
-        consequences={["Запись исчезнет из активного списка", "P&L пересчитается без этого расхода"]}
-      />
     </div>
   );
 }

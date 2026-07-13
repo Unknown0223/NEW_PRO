@@ -44,13 +44,6 @@ bool isSessionRevokedResponse(int? statusCode, dynamic data) {
   return data['error']?.toString() == 'SESSION_REVOKED';
 }
 
-/// Login 401: noto‘g‘ri login/parol — sessiya tugash sifatida ko‘rsatilmasin.
-bool isInvalidCredentialsResponse(int? statusCode, dynamic data) {
-  if (statusCode != 401) return false;
-  if (data is! Map) return false;
-  return data['error']?.toString() == 'INVALID_CREDENTIALS';
-}
-
 bool isAppAccessDeniedResponse(int? statusCode, dynamic data) {
   if (statusCode != 403) return false;
   if (data is! Map) return false;

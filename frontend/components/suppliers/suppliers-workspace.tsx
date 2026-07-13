@@ -1,6 +1,5 @@
 "use client";
 
-import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
@@ -32,7 +31,7 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, LayoutGrid, Pencil, RefreshCw, RotateCcw, Search, Ban } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, LayoutGrid, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -227,34 +226,18 @@ export function SuppliersWorkspace() {
       await qc.invalidateQueries({ queryKey: ["suppliers-module", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["suppliers", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["suppliers-balances", tenantSlug] });
-      setMsg("Деактивировано.");
+      setMsg("Удалено.");
       setConfirmDelete(null);
     },
     onError: (err: unknown) => {
       const d = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
       if (d?.error === "HasReceipts") {
-        setMsg(withApiSupportLine(d.message ?? "Есть приходы — деактивация невозможна.", err));
+        setMsg(withApiSupportLine(d.message ?? "Есть приходы — удаление невозможно.", err));
       } else if (d?.error === "HasPayments") {
-        setMsg(withApiSupportLine(d.message ?? "Есть оплаты — деактивация невозможна.", err));
+        setMsg(withApiSupportLine(d.message ?? "Есть оплаты — удаление невозможно.", err));
       } else {
-        setMsg(getUserFacingError(err, "Ошибка деактивации."));
+        setMsg(getUserFacingError(err, "Ошибка удаления."));
       }
-      setConfirmDelete(null);
-    }
-  });
-
-  const restoreMut = useMutation({
-    mutationFn: async (id: number) => {
-      await api.post(`/api/${tenantSlug}/suppliers/${id}/restore`);
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["suppliers-module", tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["suppliers", tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["suppliers-balances", tenantSlug] });
-      setMsg("Восстановлено.");
-    },
-    onError: (err: unknown) => {
-      setMsg(getUserFacingError(err, "Ошибка восстановления."));
     }
   });
 
@@ -387,37 +370,16 @@ export function SuppliersWorkspace() {
       actions: (r: SupplierRow) =>
         isAdmin ? (
           <TableRowActionGroup className="justify-end" ariaLabel="Поставщик">
-            {tab === "active" ? (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                type="button"
-                title="Деактивировать"
-                aria-label="Деактивировать"
-                onClick={() => setConfirmDelete(r)}
-              >
-                <Ban className="size-3.5" />
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                type="button"
-                title="Восстановить"
-                aria-label="Восстановить"
-                disabled={restoreMut.isPending}
-                onClick={() => restoreMut.mutate(r.id)}
-              >
-                <RotateCcw className="size-3.5" />
-              </Button>
-            )}
+            <Button variant="outline" size="icon-sm" type="button" title="Удалить" aria-label="Удалить" onClick={() => setConfirmDelete(r)}>
+              <Trash2 className="size-3.5" />
+            </Button>
             <Button variant="outline" size="icon-sm" type="button" title="Редактировать" aria-label="Редактировать" onClick={() => openEdit(r)}>
               <Pencil className="size-3.5" />
             </Button>
           </TableRowActionGroup>
         ) : null
     }),
-    [isAdmin, openEdit, tab, restoreMut]
+    [isAdmin, openEdit]
   );
 
   function toggleRegSort(colId: string) {
@@ -479,7 +441,7 @@ export function SuppliersWorkspace() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-foreground/80">Статус</p>
             <div className="flex flex-wrap gap-2">
               {tabBtn("active", "Активный")}
-              {tabBtn("inactive", "Архив")}
+              {tabBtn("inactive", "Не активный")}
             </div>
           </CardContent>
         </Card>
@@ -777,30 +739,30 @@ export function SuppliersWorkspace() {
         </DialogContent>
       </Dialog>
 
-      <SoftVoidConfirmDialog
-        open={confirmDelete != null}
-        onClose={() => {
-          if (deleteMut.isPending) return;
-          setConfirmDelete(null);
-        }}
-        onConfirm={async () => {
-          if (confirmDelete) await deleteMut.mutateAsync(confirmDelete.id);
-        }}
-        title="Деактивировать поставщика"
-        description={
-          confirmDelete
-            ? `«${confirmDelete.name}» будет деактивирован. При наличии приходов или оплат операция будет отклонена.`
-            : "Поставщик будет деактивирован."
-        }
-        reasonRequired={false}
-        reasonPlaceholder="Комментарий (необязательно)"
-        confirmLabel="Деактивировать"
-        pending={deleteMut.isPending}
-        consequences={[
-          "Поставщик исчезнет из выбора в новых приходах",
-          "Можно восстановить из вкладки «Архив»"
-        ]}
-      />
+      <Dialog open={confirmDelete != null} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <DialogContent className="sm:max-w-[400px]" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Удалить</DialogTitle>
+            <DialogDescription>
+              {confirmDelete
+                ? `Удалить «${confirmDelete.name}»? При наличии приходов или оплат удаление будет отклонено.`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              onClick={() => confirmDelete && deleteMut.mutate(confirmDelete.id)}
+            >
+              Удалить
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

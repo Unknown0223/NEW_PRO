@@ -3,14 +3,11 @@ import { prisma } from "../../config/database";
 
 export async function listWarehousesForTenant(
   tenantId: number,
-  opts?: { allowed_ids?: number[]; archive?: boolean; includeAll?: boolean }
+  opts?: { allowed_ids?: number[] }
 ) {
   const where: Prisma.WarehouseWhereInput = { tenant_id: tenantId };
   if (opts?.allowed_ids !== undefined) {
     where.id = { in: opts.allowed_ids };
-  }
-  if (!opts?.includeAll) {
-    where.is_active = opts?.archive ? false : true;
   }
   return prisma.warehouse.findMany({
     where,

@@ -1,6 +1,12 @@
 "use client";
 
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
+import { Input } from "@/components/ui/input";
+import {
+  formatPriceDraftDisplay,
+  isAllowedPriceInput,
+  parsePriceDraft,
+  sanitizePriceInput
+} from "@/lib/price-matrix-draft";
 import { formatGroupedInteger } from "@/lib/format-numbers";
 import type { PriceMatrixRow } from "./price-matrix-types";
 
@@ -79,13 +85,25 @@ export function PriceMatrixTable({
                 <td className="px-3 py-2">{r.name}</td>
                 <td className="px-3 py-2 font-mono text-xs">{r.sku}</td>
                 <td className="px-3 py-2">
-                  <GroupedNumberInput
+                  <Input
                     className="h-9 min-w-[9rem] max-w-[12rem] font-mono text-sm tabular-nums"
                     value={draft[r.product_id] ?? ""}
                     disabled={disabled}
-                    maxFractionDigits={2}
+                    inputMode="decimal"
                     maxLength={16}
-                    onValueChange={(v) => onDraftChange(r.product_id, v)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!isAllowedPriceInput(v)) return;
+                      onDraftChange(r.product_id, sanitizePriceInput(v));
+                    }}
+                    onBlur={() => {
+                      const raw = draft[r.product_id] ?? "";
+                      if (raw.trim() === "") return;
+                      const parsed = parsePriceDraft(raw);
+                      if (parsed.ok) {
+                        onDraftChange(r.product_id, formatPriceDraftDisplay(parsed.value));
+                      }
+                    }}
                   />
                 </td>
               </tr>

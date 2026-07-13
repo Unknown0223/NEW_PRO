@@ -13,7 +13,6 @@ import {
   invalidateOrdersListCache,
   invalidateStock
 } from "../../../lib/redis-cache";
-import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
@@ -165,8 +164,9 @@ export async function updateOrderStatus(
       }
     });
 
-    // Orqaga qaytarishda — yangi statusdan KEYINGI bosqich loglarini soft-supersede.
-    // Tarix saqlanadi; enrichment faqat superseded_at IS NULL loglarni oladi.
+    // Orqaga qaytarishda — yangi statusdan KEYINGI bosqich loglarini o'chiramiz.
+    // Aks holda "Дата отгрузки/доставки" kabi eski sanalar qolib ketadi, va zakaz
+    // qayta oldinga surilganda enrichment eng erta logni olib eski sanani ko'rsatadi.
     if (isBackwardTransition(fromStatus, trimmed, orderType)) {
       const targetRank = MILESTONE_RANK[trimmed];
       if (targetRank != null) {
@@ -174,13 +174,8 @@ export async function updateOrderStatus(
           .filter(([, rank]) => rank > targetRank)
           .map(([s]) => s);
         if (aheadStatuses.length > 0) {
-          await tx.orderStatusLog.updateMany({
-            where: {
-              order_id: o.id,
-              to_status: { in: aheadStatuses },
-              superseded_at: null
-            },
-            data: { superseded_at: new Date() }
+          await tx.orderStatusLog.deleteMany({
+            where: { order_id: o.id, to_status: { in: aheadStatuses } }
           });
         }
       }
@@ -193,15 +188,15 @@ export async function updateOrderStatus(
         where: { order_id: o.id },
         select: { product_id: true, qty: true, is_bonus: true, exchange_line_kind: true }
       });
-      // Bonus sovg‘alar create da reserved — confirm/cancel/reopen ham ularni hisobga oladi.
-      const outboundStockItems = items.filter((i) => {
+      const nonBonusItems = items.filter((i) => {
+        if (i.is_bonus) return false;
         if (i.exchange_line_kind === "minus") return false;
         return true;
       });
 
       if (trimmed === "confirmed" && fromStatus === "new") {
         // Rezlarga chiqarish + haqiqiy qoldiqdan ayirish
-        for (const item of outboundStockItems) {
+        for (const item of nonBonusItems) {
           await tx.stock.upsert({
             where: {
               tenant_id_warehouse_id_product_id: {
@@ -233,7 +228,7 @@ export async function updateOrderStatus(
         const stockWasConsumed = ["confirmed", "picking", "delivering", "delivered"].includes(
           fromStatus
         );
-        for (const item of outboundStockItems) {
+        for (const item of nonBonusItems) {
           await tx.stock.upsert({
             where: {
               tenant_id_warehouse_id_product_id: {
@@ -278,7 +273,7 @@ export async function updateOrderStatus(
         }
       } else if (fromStatus === "cancelled" && trimmed === "new") {
         // Qayta tiklash: rezervni qo'shish
-        for (const item of outboundStockItems) {
+        for (const item of nonBonusItems) {
           await tx.stock.upsert({
             where: {
               tenant_id_warehouse_id_product_id: {
@@ -347,22 +342,6 @@ export async function updateOrderStatus(
   if (o.warehouse_id != null) {
     void invalidateStock(tenantId, o.warehouse_id);
   }
-
-  const auditAction = trimmed === "cancelled" ? "order.cancel" : "order.status";
-  void appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId,
-    entityType: AuditEntityType.order,
-    entityId: String(orderId),
-    action: auditAction,
-    payload: {
-      order_id: orderId,
-      number: o.number,
-      from_status: fromStatus,
-      to_status: trimmed
-    }
-  });
-
   return enrichOrderDetailRow(tenantId, updated as unknown as OrderDetailLoaded, actorRole);
 }
 
@@ -392,7 +371,7 @@ export async function updateOrderMilestoneAt(
   }
 
   const log = await prisma.orderStatusLog.findFirst({
-    where: { order_id: orderId, to_status: milestoneStatus, superseded_at: null },
+    where: { order_id: orderId, to_status: milestoneStatus },
     orderBy: { created_at: "asc" },
     select: { id: true }
   });
@@ -509,26 +488,12 @@ export async function bulkUpdateOrderConsignment(
   orderIds: number[],
   isConsignment: boolean,
   consignmentDueDateRaw: string | null | undefined,
-  actorUserId: number | null,
-  conditionsNoteRaw?: string | null
+  _actorUserId: number | null
 ): Promise<BulkOrderConsignmentResult> {
   const { ORDER_LINES_EDITABLE_STATUSES } = await import("./order.lines");
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderConsignmentResult["failed"] = [];
-  const conditionsNote = conditionsNoteRaw?.trim() || null;
-  const actorId =
-    actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
-
-  let actorLabel = "система";
-  if (actorId != null) {
-    const u = await prisma.user.findFirst({
-      where: { id: actorId, tenant_id: tenantId },
-      select: { name: true, first_name: true, last_name: true, login: true }
-    });
-    const composed = [u?.last_name, u?.first_name].filter(Boolean).join(" ").trim();
-    actorLabel = (composed || u?.name || u?.login || `user#${actorId}`).trim();
-  }
 
   let consignmentDueDate: Date | null = null;
   if (isConsignment && consignmentDueDateRaw?.trim()) {
@@ -536,22 +501,11 @@ export async function bulkUpdateOrderConsignment(
     if (!Number.isNaN(d.getTime())) consignmentDueDate = d;
   }
 
-  const dueLabel = consignmentDueDate
-    ? consignmentDueDate.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" })
-    : "—";
-
   for (const id of ids) {
     try {
       const existing = await prisma.order.findFirst({
         where: { id, tenant_id: tenantId },
-        select: {
-          id: true,
-          status: true,
-          order_type: true,
-          is_consignment: true,
-          consignment_due_date: true,
-          comment: true
-        }
+        select: { id: true, status: true, order_type: true }
       });
       if (!existing) {
         failed.push({ id, error: "NOT_FOUND" });
@@ -566,73 +520,17 @@ export async function bulkUpdateOrderConsignment(
         failed.push({ id, error: "BAD_ORDER_TYPE" });
         continue;
       }
-
-      const now = new Date();
-      const stamp = now.toLocaleString("ru-RU", {
-        timeZone: "Asia/Tashkent",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-      });
-
-      let nextComment = existing.comment ?? null;
-      if (isConsignment) {
-        const line = [
-          `[Консигнация] ${stamp}`,
-          `Кто: ${actorLabel}`,
-          `Срок: ${dueLabel}`,
-          conditionsNote ? `Условия: ${conditionsNote}` : null
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        nextComment = existing.comment?.trim() ? `${existing.comment.trim()}\n${line}` : line;
-        if (nextComment.length > 4000) nextComment = nextComment.slice(-4000);
-      }
-
-      await prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id },
-          data: {
-            is_consignment: isConsignment,
-            consignment_due_date: isConsignment ? consignmentDueDate : null,
-            consignment_moved_at: isConsignment ? now : null,
-            consignment_moved_by_user_id: isConsignment ? actorId : null,
-            ...(nextComment !== existing.comment ? { comment: nextComment } : {})
-          }
-        });
-        await tx.orderChangeLog.create({
-          data: {
-            order_id: id,
-            user_id: actorId,
-            action: isConsignment ? "consignment.set" : "consignment.unset",
-            payload: {
-              from: {
-                is_consignment: existing.is_consignment,
-                consignment_due_date: existing.consignment_due_date?.toISOString() ?? null
-              },
-              to: {
-                is_consignment: isConsignment,
-                consignment_due_date: isConsignment
-                  ? (consignmentDueDate?.toISOString() ?? null)
-                  : null
-              },
-              conditions_note: conditionsNote,
-              actor_label: actorLabel
-            } as Prisma.InputJsonObject
-          }
-        });
+      await prisma.order.update({
+        where: { id },
+        data: {
+          is_consignment: isConsignment,
+          consignment_due_date: isConsignment ? consignmentDueDate : null
+        }
       });
       updated.push(id);
-      emitOrderUpdated(tenantId, id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
     }
-  }
-  if (updated.length > 0) {
-    await invalidateOrdersListCache(tenantId);
   }
   return { updated, failed };
 }

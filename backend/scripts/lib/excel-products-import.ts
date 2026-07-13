@@ -7,7 +7,7 @@ import type { PrismaClient } from "@prisma/client";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { cellNum, cellStr, colIndex, loadFirstSheet, sheetHeaderRow } from "./excel-import-helpers";
-import { findExcelInDownloads } from "./excel-download-paths";
+import { findInDir } from "./excel-bundle-paths";
 import { normalizeWarehouseLabel } from "./warehouse-resolve-import";
 
 export type ProductsExcelOptions = {
@@ -40,11 +40,14 @@ export function resolveProductsXlsxPath(cwdBackend: string): ResolveProductsXlsx
     if (fs.existsSync(p)) return { ok: true, path: p };
   }
 
-  const downloadsFound = findExcelInDownloads(
-    ["Продукты.xlsx", "Продукты (1).xlsx", "products.xlsx"],
-    ["продукты", "продукт"]
-  );
-  if (downloadsFound) return { ok: true, path: downloadsFound };
+  const downloads =
+    process.platform === "win32" && process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Downloads")
+      : null;
+  if (downloads) {
+    const found = findInDir(downloads, ["продукты", "продукт", "products"]);
+    if (found) return { ok: true, path: found };
+  }
 
   return { ok: false, reason: "not_found" };
 }
@@ -117,7 +120,7 @@ export async function runProductsExcelImport(opts: ProductsExcelOptions): Promis
     category: colIndex(headers, ["категория", "category", "группа", "тип"]),
     name: colIndex(headers, ["названия", "наименование", "название", "name", "товар", "номенклатура"]),
     unit: colIndex(headers, ["единицы измерения", "единица", "ед", "unit", "бирлик"]),
-    sku: colIndex(headers, ["1с код", "sku", "артикул", "код товара", "код номенклатуры", "код"]),
+    sku: colIndex(headers, ["sku", "артикул", "код товара", "код номенклатуры", "код"]),
     barcode: colIndex(headers, ["штрих", "barcode", "ean", "gtin", "шк"]),
     sort: colIndex(headers, ["сортировка", "порядок", "sort", "№"]),
     comment: colIndex(headers, ["комментарий", "comment", "примечание", "изоҳ"]),

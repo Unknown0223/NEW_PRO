@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/clients/agent_client_balance.dart';
-import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/clients/client_outlet_filters.dart';
 import '../../../core/format/money_display.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
@@ -108,20 +107,16 @@ class _AgentSearchPageState extends ConsumerState<AgentSearchPage> {
                         itemCount: _filtered.length,
                         itemBuilder: (_, i) {
                           final c = _filtered[i];
-                          final id = (c['id'] as num?)?.toInt();
-                          final agentBalances =
-                              ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
-                          final balance = clientAgentLedgerBalance(agentBalances, id);
-                          final debtColor = balance != null
-                              ? colorForClientBalance(balance)
-                              : AppColors.textPrimary;
+                          final id = c['id'];
+                          final balance = parseMoneyAmount(c['balance']);
+                          final debtColor = colorForClientBalance(balance);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: AgentOutletCard(
                               name: '${c['name'] ?? '—'}',
                               subtitle: '${c['owner_name'] ?? c['contact_name'] ?? c['client_code'] ?? ''}',
                               grade: '${c['grade'] ?? 'B'}',
-                              trailing: balance != null ? formatClientBalanceAmount(balance) : '',
+                              trailing: formatClientBalanceAmount(balance),
                               trailingColor: debtColor,
                               onTap: id != null
                                   ? () => context.push('/clients/$id')

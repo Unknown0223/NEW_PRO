@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../core/l10n/app_strings_ru.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/ui/agent_ui.dart';
@@ -83,57 +81,28 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final filled = _confirmStep ? _confirm.length : _first.length;
-    final step = _confirmStep ? 2 : 1;
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        title: Text(
-          S.pinSecurity,
-          style: AppTypography.headlineMedium.copyWith(
-            fontWeight: FontWeight.w700,
-            color: AppColors.textTitle,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textMuted),
-          onPressed: _busy ? null : () => context.pop(),
-        ),
-      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 26),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 38),
+              const SizedBox(height: 40),
               Text(
-                step == 1 ? S.pinCreate : S.pinConfirmTitle,
-                style: AppTypography.headlineMedium.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textTitle,
-                ),
+                _confirmStep ? 'Повторите PIN' : 'Создайте PIN приложения',
+                style: AppTypography.displayMedium.copyWith(color: AppColors.textTitle),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                S.pinSubtitle,
-                style: AppTypography.bodyMedium.copyWith(
-                  fontSize: 13.5,
-                  color: AppColors.textMuted,
-                ),
+                'Вы уже вошли в аккаунт. Этот PIN — дополнительная защита только на '
+                'этом телефоне. Логин и пароль на сервер больше не отправляются.',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 34),
-              PinDots(
-                filled: filled,
-                pinLength: _pinLen,
-                variant: PinDotsVariant.onboarding,
-              ),
+              const SizedBox(height: 32),
+              PinDots(filled: filled, pinLength: _pinLen),
               if (_busy)
                 const Padding(
                   padding: EdgeInsets.only(top: 24),
@@ -142,12 +111,9 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
               const Spacer(),
               PinPad(
                 enabled: !_busy,
-                variant: PinPadVariant.onboarding,
                 onDigit: _onDigit,
                 onBackspace: _backspace,
               ),
-              const SizedBox(height: 28),
-              AgentRoleBadge(label: S.pinStepLabel(step)),
               const SizedBox(height: 24),
             ],
           ),

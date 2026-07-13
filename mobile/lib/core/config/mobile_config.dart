@@ -183,6 +183,10 @@ class MiscConfig {
   final bool requireShipmentDate;
   final bool allowExchangeRequest;
   final List<String> disallowedPaymentMethodCodes;
+  final bool qrAttachVisitPage;
+  final bool qrChangeVisitPage;
+  final bool qrAttachClientPage;
+  final bool qrChangeClientPage;
 
   const MiscConfig({
     this.visitStartEndEnabled = false,
@@ -191,6 +195,10 @@ class MiscConfig {
     this.requireShipmentDate = false,
     this.allowExchangeRequest = false,
     this.disallowedPaymentMethodCodes = const [],
+    this.qrAttachVisitPage = false,
+    this.qrChangeVisitPage = false,
+    this.qrAttachClientPage = false,
+    this.qrChangeClientPage = false,
   });
 
   factory MiscConfig.fromJson(Map<String, dynamic> j) => MiscConfig(
@@ -204,6 +212,10 @@ class MiscConfig {
                 .where((s) => s.isNotEmpty)
                 .toList() ??
             const [],
+        qrAttachVisitPage: j['qr_attach_visit_page'] ?? false,
+        qrChangeVisitPage: j['qr_change_visit_page'] ?? false,
+        qrAttachClientPage: j['qr_attach_client_page'] ?? false,
+        qrChangeClientPage: j['qr_change_client_page'] ?? false,
       );
 }
 
@@ -212,14 +224,12 @@ class SyncConfig {
   final bool blockSync;
   final String? allowedWindowFrom;
   final String? allowedWindowTo;
-  final int postOrderDelayMinutes;
 
   const SyncConfig({
     this.mandatorySyncCount = 0,
     this.blockSync = false,
     this.allowedWindowFrom,
     this.allowedWindowTo,
-    this.postOrderDelayMinutes = 0,
   });
 
   factory SyncConfig.fromJson(Map<String, dynamic> j) => SyncConfig(
@@ -227,7 +237,6 @@ class SyncConfig {
         blockSync: j['block_sync'] ?? false,
         allowedWindowFrom: _optHm(j['allowed_window_from']),
         allowedWindowTo: _optHm(j['allowed_window_to']),
-        postOrderDelayMinutes: (j['post_order_delay_minutes'] as num?)?.toInt() ?? 0,
       );
 }
 

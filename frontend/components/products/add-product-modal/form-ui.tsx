@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDecimalInputDisplay, sanitizeDecimalInput } from "@/lib/format-numbers";
 
 export type SelectOption = { value: string; label: string };
 
@@ -49,32 +48,19 @@ export function TextInput({
   error?: boolean;
   maxLength?: number;
 }) {
-  const isNumber = type === "number";
-  const display = isNumber
-    ? formatDecimalInputDisplay(value, { allowNegative: false, maxFractionDigits: 6 })
-    : value;
-
   return (
     <div className="relative">
       <input
-        type={isNumber ? "text" : type}
-        inputMode={isNumber ? "decimal" : undefined}
-        value={display}
+        type={type}
+        value={value}
         maxLength={maxLength}
-        onChange={(e) => {
-          if (isNumber) {
-            onChange(sanitizeDecimalInput(e.target.value, { allowNegative: false, maxFractionDigits: 6 }));
-            return;
-          }
-          onChange(e.target.value);
-        }}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={cn(
           "h-10 w-full rounded-xl border bg-white px-3.5 text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400",
           "focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10",
           error ? "border-rose-400" : "border-slate-200 hover:border-slate-300",
-          suffix && "pr-11",
-          isNumber && "text-right tabular-nums tracking-tight"
+          suffix && "pr-11"
         )}
       />
       {suffix ? <span className="absolute inset-y-0 right-2 flex items-center">{suffix}</span> : null}

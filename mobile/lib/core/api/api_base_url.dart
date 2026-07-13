@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Emulyatorda `127.0.0.1` → `10.0.2.2`. Haqiqiy telefonda o'zgartirilmaydi.
@@ -11,23 +11,12 @@ void configureApiHostForAndroidEmulator(bool isEmulator) {
 }
 
 String resolveApiBaseUrl() {
-  var url = dotenv.env['API_BASE_URL']?.trim();
-  // Release: lokal fallback taqiqlangan — production API
+  var url = dotenv.env['API_BASE_URL'];
   if (url == null || url.isEmpty) {
-    url = kReleaseMode
-        ? 'https://backend-production-3cf2.up.railway.app'
-        : 'http://127.0.0.1:18080';
+    url = 'http://127.0.0.1:18080';
   }
 
-  // Production URL ni hech qachon emulyator localhost ga almashtirmaslik
-  final uriCheck = Uri.tryParse(url);
-  final isProdHost = uriCheck != null &&
-      uriCheck.host.contains('railway.app');
-
-  if (!kIsWeb &&
-      Platform.isAndroid &&
-      _androidEmulatorHost != null &&
-      !isProdHost) {
+  if (!kIsWeb && Platform.isAndroid && _androidEmulatorHost != null) {
     final uri = Uri.tryParse(url);
     if (uri != null) {
       final host = uri.host.toLowerCase();

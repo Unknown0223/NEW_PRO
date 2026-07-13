@@ -8,8 +8,6 @@ import { cn } from "@/lib/utils";
 
 /** Быстрые ссылки по приоритету (см. SETTINGS_STRUCTURE_PLAN.md). */
 const PRIORITY_QUICK_LINKS: { label: string; href: string }[] = [
-  { label: "Davr cheklovi", href: "/settings/document-edit-lock" },
-  { label: "Заказы → консигнация", href: "/settings/period/orders-consignment" },
   { label: "Boshlang‘ich sozlash", href: "/settings/initial-setup" },
   { label: "Tizim migratsiyasi", href: "/settings/system-migration" },
   { label: "Должности", href: "/settings/web-staff-position-presets" },
@@ -29,10 +27,7 @@ export default function SettingsHubPage() {
       : PRIORITY_QUICK_LINKS.filter(
           (l) =>
             l.href !== "/settings/web-staff-position-presets" &&
-            l.href !== "/settings/system-migration" &&
-            l.href !== "/settings/initial-setup" &&
-            l.href !== "/settings/document-edit-lock" &&
-            l.href !== "/settings/period/orders-consignment"
+            l.href !== "/settings/system-migration"
         );
 
   return (
@@ -51,14 +46,12 @@ export default function SettingsHubPage() {
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {role === "admin" ? (
-          <Link
-            href="/settings/initial-setup"
-            className={cn(buttonVariants({ variant: "default", size: "sm" }))}
-          >
-            Boshlang‘ich sozlash
-          </Link>
-        ) : null}
+        <Link
+          href="/settings/initial-setup"
+          className={cn(buttonVariants({ variant: "default", size: "sm" }))}
+        >
+          Boshlang‘ich sozlash
+        </Link>
         <Link href="/settings/appearance" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Тема и цвета
         </Link>

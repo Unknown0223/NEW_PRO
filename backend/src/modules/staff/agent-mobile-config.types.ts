@@ -87,6 +87,12 @@ export type AgentMobileMiscConfig = {
   allow_exchange_request?: boolean;
   /** Payment method entry ids (tenant finance refs) blocked for this agent */
   disallowed_payment_method_codes?: string[];
+  /** Супервайзер / мобильные: QR на странице визитов */
+  qr_attach_visit_page?: boolean;
+  qr_change_visit_page?: boolean;
+  /** QR на странице клиента */
+  qr_attach_client_page?: boolean;
+  qr_change_client_page?: boolean;
 };
 
 export type AgentMobileSyncConfig = {
@@ -94,8 +100,6 @@ export type AgentMobileSyncConfig = {
   block_sync?: boolean;
   allowed_window_from?: string;
   allowed_window_to?: string;
-  /** Zakaz yakunlangach avtomatik yuborishdan oldin kutish (daqiqa). 0/null = darhol. */
-  post_order_delay_minutes?: number | null;
 };
 
 export type AgentMobileOrdersConfig = {

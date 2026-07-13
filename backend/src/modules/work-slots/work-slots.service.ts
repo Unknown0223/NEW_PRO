@@ -1,14 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { appendTenantAuditEvent } from "../../lib/tenant-audit";
-import {
-  assertIsVoided,
-  assertNotVoided,
-  restoreVoidedCode,
-  softRestoreData,
-  softVoidData,
-  voidCodeSuffix
-} from "../../lib/soft-void";
+import { suggestNextSlotCode } from "./work-slots.codes";
 import { getWorkSlotDetail } from "./work-slots.query";
 import {
   bulkPatchActiveUsersOnSlots,
@@ -49,8 +41,7 @@ export async function createWorkSlot(
     slot_type?: string;
     is_active?: boolean;
     sort_order?: number;
-  },
-  actorUserId?: number | null
+  }
 ) {
   const code = body.slot_code.trim().toUpperCase();
   if (!code) throw new Error("VALIDATION");
@@ -76,14 +67,6 @@ export async function createWorkSlot(
         sort_order: body.sort_order ?? 0
       }
     });
-    await appendTenantAuditEvent({
-      tenantId,
-      actorUserId: actorUserId ?? null,
-      entityType: "work_slot",
-      entityId: row.id,
-      action: "work_slot.create",
-      payload: { slot_code: row.slot_code, slot_type: row.slot_type }
-    });
     return getWorkSlotDetail(tenantId, row.id);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -103,8 +86,7 @@ export async function patchWorkSlot(
     slot_type?: string;
     is_active?: boolean;
     sort_order?: number;
-  } & ActiveUserAttrsPatch,
-  actorUserId?: number | null
+  } & ActiveUserAttrsPatch
 ) {
   const existing = await prisma.workSlot.findFirst({
     where: { id: slotId, tenant_id: tenantId },
@@ -147,15 +129,6 @@ export async function patchWorkSlot(
     await patchActiveUserOnSlot(tenantId, slotId, body);
   }
 
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId ?? null,
-    entityType: "work_slot",
-    entityId: slotId,
-    action: "work_slot.update",
-    payload: body as unknown as Record<string, unknown>
-  });
-
   return getWorkSlotDetail(tenantId, slotId);
 }
 
@@ -171,8 +144,7 @@ export async function bulkPatchWorkSlots(
     territory_zones?: string[];
     territory_oblasts?: string[];
     territory_cities?: string[];
-  } & ActiveUserAttrsPatch,
-  actorUserId?: number | null
+  } & ActiveUserAttrsPatch
 ) {
   const ids = [...new Set(body.slot_ids)];
   if (!ids.length) throw new Error("EMPTY_IDS");
@@ -184,34 +156,10 @@ export async function bulkPatchWorkSlots(
   if (found !== ids.length) throw new Error("BAD_SLOT_IDS");
 
   if (body.delete === true) {
-    const slots = await prisma.workSlot.findMany({
-      where: { tenant_id: tenantId, id: { in: ids } },
-      select: { id: true, slot_code: true, deleted_at: true }
+    const result = await prisma.workSlot.deleteMany({
+      where: { tenant_id: tenantId, id: { in: ids } }
     });
-    for (const s of slots) {
-      assertNotVoided(s);
-    }
-    await prisma.$transaction(
-      slots.map((s) =>
-        prisma.workSlot.update({
-          where: { id: s.id },
-          data: {
-            ...softVoidData(actorUserId ?? null, null, { includeReason: false }),
-            is_active: false,
-            slot_code: voidCodeSuffix(s.slot_code, s.id, 32)
-          }
-        })
-      )
-    );
-    await appendTenantAuditEvent({
-      tenantId,
-      actorUserId: actorUserId ?? null,
-      entityType: "work_slot",
-      entityId: ids[0]!,
-      action: "work_slot.void",
-      payload: { slot_ids: ids, deleted: slots.length, soft: true }
-    });
-    return { deleted: slots.length };
+    return { deleted: result.count };
   }
 
   const data: {
@@ -296,53 +244,5 @@ export async function bulkPatchWorkSlots(
     skipped_no_user = r.skipped_no_user;
   }
 
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId ?? null,
-    entityType: "work_slot",
-    entityId: ids[0]!,
-    action: "work_slot.update",
-    payload: { slot_ids: ids, updated, users_updated, skipped_no_user }
-  });
-
   return { updated, users_updated, skipped_no_user };
-}
-
-export async function restoreWorkSlots(
-  tenantId: number,
-  slotIds: number[],
-  actorUserId?: number | null
-) {
-  const ids = [...new Set(slotIds)];
-  if (!ids.length) throw new Error("EMPTY_IDS");
-  if (ids.length > 500) throw new Error("TOO_MANY");
-
-  const slots = await prisma.workSlot.findMany({
-    where: { tenant_id: tenantId, id: { in: ids } },
-    select: { id: true, slot_code: true, deleted_at: true }
-  });
-  if (slots.length !== ids.length) throw new Error("BAD_SLOT_IDS");
-  for (const s of slots) assertIsVoided(s);
-
-  await prisma.$transaction(
-    slots.map((s) =>
-      prisma.workSlot.update({
-        where: { id: s.id },
-        data: {
-          ...softRestoreData({ includeReason: false }),
-          is_active: true,
-          slot_code: restoreVoidedCode(s.slot_code).slice(0, 32)
-        }
-      })
-    )
-  );
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId: actorUserId ?? null,
-    entityType: "work_slot",
-    entityId: ids[0]!,
-    action: "work_slot.restore",
-    payload: { slot_ids: ids, restored: slots.length }
-  });
-  return { restored: slots.length };
 }

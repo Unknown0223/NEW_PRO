@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -16,12 +14,9 @@ import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popove
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Download, FileSpreadsheet, Pencil, Search, Upload } from "lucide-react";
+import { CalendarDays, Download, FileSpreadsheet, Search, Upload } from "lucide-react";
 import { formatConsignmentCloseSchedule } from "@/lib/consignment-close-schedule";
-import { formatNumberGrouped, normalizeNumericInput } from "@/lib/format-numbers";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
-import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
-import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 
 type ConsignmentAgentApi = {
   id: number;
@@ -85,35 +80,50 @@ function formatYearMonthRu(ym: string): string {
 
 const CURRENCY_LABEL = "So'm";
 
+function normLimit(s: string | null | undefined): string {
+  return (s ?? "").trim().replace(/\s/g, "").replace(",", ".");
+}
+
 /** Лимит задан и > 0 — тогда доступна опция «без долгов прошлых месяцев» */
 function hasPositiveLimit(s: string | null | undefined): boolean {
-  const n = normalizeNumericInput(s);
+  const n = normLimit(s);
   if (n === "") return false;
   const v = Number.parseFloat(n);
   return Number.isFinite(v) && v > 0;
+}
+
+/** Ввод лимита: только цифры и одна точка (в черновике — для API) */
+function sanitizeLimitTyping(input: string): string {
+  let t = input.replace(/\s/g, "").replace(",", ".");
+  t = t.replace(/[^\d.]/g, "");
+  const di = t.indexOf(".");
+  if (di === -1) return t;
+  const intp = t.slice(0, di);
+  const frac = t.slice(di + 1).replace(/\./g, "");
+  return `${intp}.${frac}`;
+}
+
+/** Чтение сумм: группы по 3 знака (как 2 434 342), ru-RU */
+function formatAmountRuReadable(raw: string | null | undefined): string {
+  const n = normLimit(raw ?? "");
+  if (n === "") return "";
+  const x = Number.parseFloat(n);
+  if (!Number.isFinite(x)) return String(raw ?? "").trim();
+  return x.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function formatDateRu(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" });
+  return d.toLocaleDateString("ru-RU");
 }
 
 function formatDateTimeRu(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("ru-RU", {
-    timeZone: "Asia/Tashkent",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  });
+  return d.toLocaleString("ru-RU");
 }
 
 /** Guruh: barcha agentlar qarzini yopganda — oxirgi sana. */
@@ -132,7 +142,7 @@ function groupDebtClearedAt(rows: ConsignmentAgentApi[]): string | null {
 
 function formatRemainingCell(raw: string | null | undefined): string {
   if (raw == null || raw === "" || raw === "—") return "—";
-  return formatNumberGrouped(raw, { maxFractionDigits: 2 });
+  return formatAmountRuReadable(raw);
 }
 
 function baseDraft(r: ConsignmentAgentApi): RowDraft {
@@ -149,7 +159,7 @@ function isRowDirty(r: ConsignmentAgentApi, d: RowDraft | undefined): boolean {
   return (
     d.consignment !== b.consignment ||
     d.ignoreDebt !== b.ignoreDebt ||
-    normalizeNumericInput(d.limitStr) !== normalizeNumericInput(b.limitStr)
+    normLimit(d.limitStr) !== normLimit(b.limitStr)
   );
 }
 
@@ -162,8 +172,8 @@ function buildConsignmentBulkRow(
   consignment_limit_amount: string | null;
   consignment_ignore_previous_months_debt: boolean;
 } {
-  const lim = normalizeNumericInput(d.limitStr);
-  const limitPayload = lim === "" ? null : lim;
+  const lim = normLimit(d.limitStr);
+  const limitPayload = lim === "" ? null : d.limitStr.trim().replace(/\s/g, "").replace(",", ".");
   const ignorePayload = limitPayload == null || !d.consignment ? false : d.ignoreDebt;
   return {
     user_id: r.id,
@@ -194,12 +204,13 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [consFilter, setConsFilter] = useState<"" | "yes" | "no">("");
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<Record<number, RowDraft>>({});
-  const [editingGroups, setEditingGroups] = useState<Set<string>>(() => new Set());
   const [toast, setToast] = useState<string | null>(null);
   const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
   const [savingGroupKey, setSavingGroupKey] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [limitFocusedRowId, setLimitFocusedRowId] = useState<number | null>(null);
+
   const tradeDirectionsQ = useActiveTradeDirectionsCatalog(tenantSlug, "consignment");
   const directionSelected =
     tradeDirectionId.trim() !== "" && Number.parseInt(tradeDirectionId, 10) > 0;
@@ -208,7 +219,6 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     setSupervisorSelected(new Set());
     setDrafts({});
     setGroupSearch({});
-    setEditingGroups(new Set());
   }, [tradeDirectionId]);
 
   const supervisorsQ = useQuery({
@@ -367,36 +377,9 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     });
   };
 
-  const exitGroupEdit = (groupTitle: string, list: ConsignmentAgentApi[]) => {
-    cancelDraftsInList(list);
-    setEditingGroups((prev) => {
-      if (!prev.has(groupTitle)) return prev;
-      const next = new Set(prev);
-      next.delete(groupTitle);
-      return next;
-    });
-  };
-
-  const enterGroupEdit = (groupTitle: string) => {
-    setEditingGroups((prev) => {
-      if (prev.has(groupTitle)) return prev;
-      const next = new Set(prev);
-      next.add(groupTitle);
-      return next;
-    });
-  };
-
   const saveGroupDrafts = async (groupTitle: string, visible: ConsignmentAgentApi[]) => {
     const dirty = visible.filter((r) => isRowDirty(r, drafts[r.id]));
-    if (dirty.length === 0) {
-      setEditingGroups((prev) => {
-        if (!prev.has(groupTitle)) return prev;
-        const next = new Set(prev);
-        next.delete(groupTitle);
-        return next;
-      });
-      return;
-    }
+    if (dirty.length === 0) return;
     setSavingGroupKey(groupTitle);
     try {
       const body = {
@@ -404,16 +387,9 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       };
       await api.patch(`/api/${tenantSlug}/consignment/agents/bulk-rows`, body);
       cancelDraftsInList(dirty);
-      setEditingGroups((prev) => {
-        if (!prev.has(groupTitle)) return prev;
-        const next = new Set(prev);
-        next.delete(groupTitle);
-        return next;
-      });
       setToast(`Сохранено строк: ${dirty.length}`);
-      await qc.invalidateQueries({ queryKey: ["consignment"] });
-      await qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
-      await listQ.refetch();
+      void qc.invalidateQueries({ queryKey: ["consignment", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
     } catch {
       setToast("Ошибка сохранения — проверьте данные и права");
     } finally {
@@ -436,11 +412,9 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       };
       await api.patch(`/api/${tenantSlug}/consignment/agents/bulk-rows`, body);
       cancelDraftsInList(dirty);
-      setEditingGroups(new Set());
       setToast(`Сохранено изменений: ${dirty.length}`);
-      await qc.invalidateQueries({ queryKey: ["consignment"] });
-      await qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
-      await listQ.refetch();
+      void qc.invalidateQueries({ queryKey: ["consignment", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
     } catch {
       setToast("Ошибка сохранения — проверьте данные и права");
     } finally {
@@ -478,7 +452,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       CURRENCY_LABEL,
       r.consignment ? "Да" : "Нет",
       r.consignment_updated_at
-        ? new Date(r.consignment_updated_at).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" })
+        ? new Date(r.consignment_updated_at).toLocaleString("ru-RU")
         : "",
       r.consignment
         ? formatConsignmentCloseSchedule(
@@ -551,7 +525,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           `Импорт завершён: обновлено ${r.updated}${r.skipped ? `, пропущено пустых строк ${r.skipped}` : ""}`
         );
       }
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
+      void qc.invalidateQueries({ queryKey: ["consignment", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
     } catch {
       setToast("Ошибка импорта — проверьте шаблон и смарт-коды агентов");
@@ -596,19 +570,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   return (
     <div className="space-y-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Консигнация</h1>
-          <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            Расписание закрытия (день/час) задаётся в{" "}
-            <Link
-              href="/settings/spravochnik/agents"
-              className="text-primary underline-offset-2 hover:underline"
-            >
-              Агент
-            </Link>
-            : карточка или групповое редактирование выбранных.
-          </p>
-        </div>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Консигнация</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -621,29 +583,24 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             <Download className="size-4" />
             Шаблон
           </Button>
-          <ExcelDropTarget
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
             disabled={!directionSelected || importing}
-            onFile={(f) => void importFromExcel(f)}
+            onClick={() => importInputRef.current?.click()}
           >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled={!directionSelected || importing}
-              onClick={() => importInputRef.current?.click()}
-            >
-              <Upload className="size-4" />
-              {importing ? "Импорт…" : "Импорт из Excel"}
-            </Button>
-          </ExcelDropTarget>
+            <Upload className="size-4" />
+            {importing ? "Импорт…" : "Импорт из Excel"}
+          </Button>
           <input
             ref={importInputRef}
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
             onChange={(e) => {
-              const f = pickFirstExcelFile(e.target.files);
+              const f = e.target.files?.[0];
               if (f) void importFromExcel(f);
               if (importInputRef.current) importInputRef.current.value = "";
             }}
@@ -836,7 +793,6 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const ignSome = ignEligible.some((r) => rowIgnoreDebt(r));
           const ignMixed = ignSome && !ignAllOn;
           const dirty = groupHasDirty(visible);
-          const groupEditing = editingGroups.has(groupTitle);
           const sumEstablished = parseSum(visible.map((r) => r.consignment_limit_amount));
           const sumCurrent = parseSum(visible.map((r) => r.remaining_limit));
           const groupClearedAt = groupDebtClearedAt(visible);
@@ -875,42 +831,30 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     />
                   </div>
                   <div className="flex shrink-0 flex-row flex-nowrap items-center gap-2">
-                    {!groupEditing ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5"
-                        disabled={visible.length === 0 || savingGroupKey != null || savingAll}
-                        onClick={() => enterGroupEdit(groupTitle)}
-                      >
-                        <Pencil className="size-3.5" />
-                        Изменить
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
-                          disabled={!dirty || savingGroupKey === groupTitle || savingAll}
-                          onClick={() => void saveGroupDrafts(groupTitle, visible)}
-                        >
-                          Сохранить
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          disabled={savingGroupKey === groupTitle || savingAll}
-                          onClick={() => exitGroupEdit(groupTitle, visible)}
-                        >
-                          Отменить
-                        </Button>
-                      </>
-                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={
+                        !dirty || savingGroupKey === groupTitle || savingAll
+                      }
+                      onClick={() => void saveGroupDrafts(groupTitle, visible)}
+                    >
+                      Сохранить
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      disabled={
+                        !dirty || savingGroupKey === groupTitle || savingAll
+                      }
+                      onClick={() => cancelDraftsInList(visible)}
+                    >
+                      Отменить
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -926,19 +870,15 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                         <div className="flex flex-col items-center gap-1">
                           <input
                             type="checkbox"
-                            className="size-4 rounded border-input accent-primary disabled:opacity-40"
+                            className="size-4 rounded border-input accent-primary"
                             ref={(el) => {
                               if (el) el.indeterminate = consMixed;
                             }}
                             checked={consAllOn}
                             onChange={() => patchAllDrafts(visible, { consignment: !consAllOn })}
-                            disabled={!groupEditing || visible.length === 0}
+                            disabled={visible.length === 0}
                             aria-label="Включить или выключить консигнацию для всех строк группы"
-                            title={
-                              groupEditing
-                                ? "Отметить все: консигнация вкл/откл"
-                                : "Сначала нажмите «Изменить»"
-                            }
+                            title="Отметить все: консигнация вкл/откл"
                           />
                           <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                             вкл/откл
@@ -979,21 +919,15 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                         <div className="flex flex-col items-center gap-1">
                           <input
                             type="checkbox"
-                            className="size-4 rounded border-input accent-primary disabled:opacity-40"
+                            className="size-4 rounded border-input accent-primary"
                             ref={(el) => {
                               if (el) el.indeterminate = ignMixed;
                             }}
                             checked={ignAllOn}
                             onChange={() => patchAllIgnoreDebtInGroup(visible, !ignAllOn)}
-                            disabled={
-                              !groupEditing || visible.length === 0 || ignEligible.length === 0
-                            }
+                            disabled={visible.length === 0 || ignEligible.length === 0}
                             aria-label="Включить опцию «без долгов прошлых месяцев» для всех строк группы (где задан лимит)"
-                            title={
-                              groupEditing
-                                ? "Только для строк с лимитом и включённой консигнацией"
-                                : "Сначала нажмите «Изменить»"
-                            }
+                            title="Только для строк с лимитом и включённой консигнацией"
                           />
                           <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">
                             без долг.
@@ -1033,15 +967,10 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                           <td className="px-2 py-1.5 text-center align-middle">
                             <input
                               type="checkbox"
-                              className="size-4 rounded border-input accent-primary disabled:opacity-40"
+                              className="size-4 rounded border-input accent-primary"
                               checked={disp.consignment}
-                              disabled={!groupEditing}
                               onChange={(e) => updateDraft(r, { consignment: e.target.checked })}
-                              title={
-                                groupEditing
-                                  ? "Консигнация для агента"
-                                  : "Сначала нажмите «Изменить»"
-                              }
+                              title="Консигнация для агента"
                             />
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs text-muted-foreground tabular-nums">
@@ -1078,47 +1007,37 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary disabled:opacity-40"
                               checked={disp.ignoreDebt}
-                              disabled={!groupEditing || !disp.canIgnoreDebt}
+                              disabled={!disp.canIgnoreDebt}
                               onChange={(e) => updateDraft(r, { ignoreDebt: e.target.checked })}
                               title={
-                                !groupEditing
-                                  ? "Сначала нажмите «Изменить»"
-                                  : disp.canIgnoreDebt
-                                    ? "Лимит без учёта долгов за прошлые месяцы (только с лимитом и вкл. консигнацией)"
-                                    : "Сначала включите консигнацию и укажите лимит > 0"
+                                disp.canIgnoreDebt
+                                  ? "Лимит без учёта долгов за прошлые месяцы (только с лимитом и вкл. консигнацией)"
+                                  : "Сначала включите консигнацию и укажите лимит > 0"
                               }
                             />
                           </td>
                           <td className="px-2 py-1.5 text-right align-middle">
-                            {groupEditing ? (
-                              <GroupedNumberInput
-                                className="h-7 w-full min-w-[7.5rem] text-right text-xs tabular-nums disabled:opacity-50"
-                                maxFractionDigits={2}
-                                value={disp.limitStr}
-                                disabled={!disp.consignment}
-                                onValueChange={(v) => updateDraft(r, { limitStr: v })}
-                                placeholder="—"
-                                title={
-                                  disp.consignment
-                                    ? "Установленный лимит"
-                                    : "Включите консигнацию для строки"
-                                }
-                              />
-                            ) : (
-                              <span
-                                className={cn(
-                                  "block min-w-[7.5rem] text-right text-xs tabular-nums",
-                                  disp.consignment && disp.limitStr
-                                    ? "text-foreground"
-                                    : "text-muted-foreground"
-                                )}
-                                title="Сначала нажмите «Изменить»"
-                              >
-                                {disp.consignment && disp.limitStr
-                                  ? formatNumberGrouped(disp.limitStr, { maxFractionDigits: 2 })
-                                  : "—"}
-                              </span>
-                            )}
+                            <Input
+                              className="h-7 w-full min-w-[7.5rem] text-right text-xs tabular-nums disabled:opacity-50"
+                              inputMode="decimal"
+                              value={
+                                limitFocusedRowId === r.id
+                                  ? disp.limitStr
+                                  : formatAmountRuReadable(disp.limitStr)
+                              }
+                              disabled={!disp.consignment}
+                              onFocus={() => setLimitFocusedRowId(r.id)}
+                              onBlur={() => setLimitFocusedRowId(null)}
+                              onChange={(e) =>
+                                updateDraft(r, { limitStr: sanitizeLimitTyping(e.target.value) })
+                              }
+                              placeholder="—"
+                              title={
+                                disp.consignment
+                                  ? "Установленный лимит (группы по 3 цифры при просмотре)"
+                                  : "Включите консигнацию для строки"
+                              }
+                            />
                           </td>
                           <td
                             className={cn(

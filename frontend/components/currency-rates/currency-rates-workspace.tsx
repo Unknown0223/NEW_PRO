@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -631,11 +630,11 @@ export function CurrencyRatesWorkspace() {
             ) : null}
             <div className="space-y-1">
               <Label>Курс</Label>
-              <GroupedNumberInput
-                maxFractionDigits={6}
-                placeholder="например 12 550"
+              <Input
+                inputMode="decimal"
+                placeholder="например 12550"
                 value={formRate}
-                onValueChange={setFormRate}
+                onChange={(e) => setFormRate(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
                 1 {formBase} = {formRate || "…"} {formQuote}

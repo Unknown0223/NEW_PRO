@@ -184,7 +184,6 @@ export async function updateWarehouseRow(
   return updated!;
 }
 
-/** Soft void: `is_active=false` (hard delete yo‘q). */
 export async function deleteWarehouseRow(
   tenantId: number,
   warehouseId: number,
@@ -195,9 +194,6 @@ export async function deleteWarehouseRow(
   });
   if (!row) {
     throw new Error("NOT_FOUND");
-  }
-  if (!row.is_active) {
-    throw new Error("ALREADY_VOIDED");
   }
   const stockN = await prisma.stock.count({
     where: { tenant_id: tenantId, warehouse_id: warehouseId }
@@ -211,44 +207,13 @@ export async function deleteWarehouseRow(
   if (orderN > 0) {
     throw new Error("HAS_ORDERS");
   }
-  await prisma.warehouse.update({
-    where: { id: warehouseId },
-    data: { is_active: false }
-  });
+  await prisma.warehouse.delete({ where: { id: warehouseId } });
   await appendTenantAuditEvent({
     tenantId,
     actorUserId,
     entityType: AuditEntityType.warehouse,
     entityId: warehouseId,
-    action: "warehouse.void",
-    payload: { name: row.name, soft: true }
-  });
-}
-
-export async function restoreWarehouseRow(
-  tenantId: number,
-  warehouseId: number,
-  actorUserId: number | null = null
-): Promise<void> {
-  const row = await prisma.warehouse.findFirst({
-    where: { id: warehouseId, tenant_id: tenantId }
-  });
-  if (!row) {
-    throw new Error("NOT_FOUND");
-  }
-  if (row.is_active) {
-    throw new Error("NOT_VOIDED");
-  }
-  await prisma.warehouse.update({
-    where: { id: warehouseId },
-    data: { is_active: true }
-  });
-  await appendTenantAuditEvent({
-    tenantId,
-    actorUserId,
-    entityType: AuditEntityType.warehouse,
-    entityId: warehouseId,
-    action: "warehouse.restore",
+    action: "delete",
     payload: { name: row.name }
   });
 }

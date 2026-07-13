@@ -22,7 +22,6 @@ import {
   verifyTerritorySync,
   printTerritoryVerifyReport
 } from "./territory-codes-enrich";
-import { findExcelInDownloads } from "./excel-download-paths";
 import { normKey, normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 
 export type GorodXlsxRow = {
@@ -48,63 +47,6 @@ function headerLooksUnified(row: unknown[]): boolean {
   );
 }
 
-type GorodColumnLayout = {
-  nameIdx: number;
-  codeIdx: number;
-  regionIdx: number;
-  zoneIdx: number;
-  oblastIdx: number;
-};
-
-function normHeaderCell(v: unknown): string {
-  return String(v ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
-/** Sarlavha qatoridan ustun indekslari (Gorod | kod Gorod | … yoki Gorod Kod | Gorod | …). */
-function detectGorodColumnLayout(header: unknown[]): GorodColumnLayout | null {
-  const cells = header.map(normHeaderCell);
-  const pick = (pred: (h: string, i: number) => boolean): number => {
-    for (let i = 0; i < cells.length; i++) {
-      if (pred(cells[i]!, i)) return i;
-    }
-    return -1;
-  };
-
-  const nameIdx = pick(
-    (h) =>
-      (h === "gorod" || h === "город" || h === "имя" || h === "shahar" || h === "name") &&
-      !h.includes("kod") &&
-      !h.includes("код")
-  );
-  const codeIdx = pick(
-    (h) =>
-      h.includes("kod gorod") ||
-      h.includes("gorod kod") ||
-      h.includes("код города") ||
-      ((h.includes("kod") || h.includes("код")) && !h.includes("ikpu") && !h.includes("1с"))
-  );
-  const regionIdx = pick(
-    (h) =>
-      h.includes("название региона") ||
-      h.includes("регион") ||
-      h.includes("viloyat") ||
-      h.includes("oblast") ||
-      h.includes("област")
-  );
-  const zoneIdx = pick((h) => h === "zona" || h === "зона" || (h.includes("zona") && !h.includes("gorod")));
-  const oblastIdx = pick((h) => h === "oblist" || h === "област");
-
-  if (nameIdx < 0 || regionIdx < 0) return null;
-  return { nameIdx, codeIdx, regionIdx, zoneIdx, oblastIdx };
-}
-
-function isValidCityCode(code: string): boolean {
-  return /^[A-Z0-9_]+$/.test(code);
-}
-
 /** Excel zonasi → tizimdagi standart zona nomi. */
 export function canonicalZoneNameFromExcel(zoneRaw: string): string {
   const t = zoneRaw.trim();
@@ -126,9 +68,7 @@ function sanitizeCode(raw: string): string {
 }
 
 /**
- * Yangi format (sarlavhali):
- *   Gorod | kod Gorod | Название региона | Zona
- *   Gorod Kod | Gorod | Название региона | Oblist | Zona
+ * Yangi format: Gorod Kod | Gorod | Название региона | Oblist | Zona
  * Eski format: # | Имя | Код | Название региона
  */
 export function parseGorodRowsFromXlsx(filePath: string): GorodXlsxRow[] {
@@ -143,7 +83,6 @@ export function parseGorodRowsFromXlsx(filePath: string): GorodXlsxRow[] {
 
   const first = matrix[0];
   const unified = Array.isArray(first) && headerLooksUnified(first);
-  const layout = unified && Array.isArray(first) ? detectGorodColumnLayout(first) : null;
 
   const out: GorodXlsxRow[] = [];
   const start = unified ? 1 : 0;
@@ -152,45 +91,17 @@ export function parseGorodRowsFromXlsx(filePath: string): GorodXlsxRow[] {
     const row = matrix[i];
     if (!Array.isArray(row) || row.length < 2) continue;
 
-    if (unified && layout) {
-      const name = String(row[layout.nameIdx] ?? "").trim();
-      const code =
-        layout.codeIdx >= 0 ? sanitizeCode(String(row[layout.codeIdx] ?? "")) : "";
-      const regionCol = String(row[layout.regionIdx] ?? "").trim();
-      const oblastCol = layout.oblastIdx >= 0 ? String(row[layout.oblastIdx] ?? "").trim() : "";
-      const zoneCol = layout.zoneIdx >= 0 ? String(row[layout.zoneIdx] ?? "").trim() : "";
+    if (unified) {
+      const code = sanitizeCode(String(row[0] ?? ""));
+      const name = String(row[1] ?? "").trim();
+      const regionCol = String(row[2] ?? "").trim();
+      const oblastCol = String(row[3] ?? "").trim();
+      const zoneCol = String(row[4] ?? "").trim();
       const region = regionCol || oblastCol;
       const zone = canonicalZoneNameFromExcel(zoneCol);
-
-      if (!name || !region) continue;
-      if (layout.zoneIdx >= 0 && !zone) continue;
-      if (!code || !isValidCityCode(code)) continue;
-
+      if (!code || !name || !region || !zone) continue;
+      if (!/^[A-Z0-9_]+$/.test(code)) continue;
       out.push({ order_num: parseOrderNum(i), code, name, region, zone });
-      continue;
-    }
-
-    if (unified) {
-      const codeFirst = sanitizeCode(String(row[0] ?? ""));
-      const nameFirst = String(row[1] ?? "").trim();
-      if (isValidCityCode(codeFirst)) {
-        const regionCol = String(row[2] ?? "").trim();
-        const oblastCol = String(row[3] ?? "").trim();
-        const zoneCol = String(row[4] ?? "").trim();
-        const region = regionCol || oblastCol;
-        const zone = canonicalZoneNameFromExcel(zoneCol);
-        if (codeFirst && nameFirst && region && zone) {
-          out.push({ order_num: parseOrderNum(i), code: codeFirst, name: nameFirst, region, zone });
-        }
-        continue;
-      }
-      const codeSecond = sanitizeCode(String(row[1] ?? ""));
-      const nameSecond = String(row[0] ?? "").trim();
-      const region = String(row[2] ?? "").trim();
-      const zone = canonicalZoneNameFromExcel(String(row[3] ?? "").trim());
-      if (isValidCityCode(codeSecond) && nameSecond && region && zone) {
-        out.push({ order_num: parseOrderNum(i), code: codeSecond, name: nameSecond, region, zone });
-      }
       continue;
     }
 
@@ -267,6 +178,8 @@ export function resolveGorodXlsxPath(cwdBackend: string, cliPath?: string): stri
   }
 
   const candidates = [
+    path.join(process.env.USERPROFILE || "", "Downloads", "Данные Город (1).xlsx"),
+    path.join(process.env.USERPROFILE || "", "Downloads", "Данные Город.xlsx"),
     path.join(cwdBackend, "scripts", "data", "Данные Город (1).xlsx"),
     path.join(cwdBackend, "scripts", "data", "Данные Город.xlsx"),
     path.join(cwdBackend, "scripts", "data", "gorod.xlsx")
@@ -274,13 +187,6 @@ export function resolveGorodXlsxPath(cwdBackend: string, cliPath?: string): stri
   for (const p of candidates) {
     if (p && fs.existsSync(p)) return p;
   }
-
-  const fromDownloads = findExcelInDownloads(
-    ["Данные Город (1).xlsx", "Данные Город.xlsx", "gorod.xlsx"],
-    ["город", "gorod", "данные город"]
-  );
-  if (fromDownloads) return fromDownloads;
-
   throw new Error(
     "Excel topilmadi. Yo‘l bering: npm run import:gorod-xlsx -- \"C:\\path\\Данные Город.xlsx\""
   );

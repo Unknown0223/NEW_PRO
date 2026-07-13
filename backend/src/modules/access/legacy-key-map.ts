@@ -38,7 +38,7 @@ const SECTION_ALIAS: Record<string, string> = {
   // clients (top-level → klient)
   "clients": "clients.klient",
   "clients.profil_klienta": "clients.profil",
-  "clients.qr_kody_klientov": "clients.klient",
+  "clients.qr_kody_klientov": "clients.qr_kody",
   "clients.oborudovanie": "clients.oborudovanie",
   "clients.obedinenye": "clients.obedinenie",
   "clients.otchety": "clients.otchety",

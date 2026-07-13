@@ -3,7 +3,6 @@
 import { AppThemeProvider } from "@/components/app-theme-provider";
 import { LoaderPrefsProvider } from "@/components/loader-prefs-provider";
 import { ShiftWheelHorizontalScroll } from "@/components/shift-wheel-horizontal-scroll";
-import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import { isApiUnreachable } from "@/lib/error-utils";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { persistQueryClient } from "@tanstack/react-query-persist-client";
@@ -64,7 +63,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AppThemeProvider>
         <LoaderPrefsProvider>
           <ShiftWheelHorizontalScroll />
-          <WebVitalsReporter />
           {children}
         </LoaderPrefsProvider>
       </AppThemeProvider>

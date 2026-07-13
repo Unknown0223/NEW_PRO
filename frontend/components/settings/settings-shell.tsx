@@ -266,7 +266,6 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                     <li key={item.slug}>
                       <Link
                         href={href}
-                        title={item.description}
                         className={cn(
                           "relative block rounded-md py-1.5 pl-6 pr-2 text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
                           "before:absolute before:left-2 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",

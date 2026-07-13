@@ -4,8 +4,7 @@ import {
   ruleHasPurchaseScope,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
-  qtyRuleMatchingProductIds,
-  resolveQtyGiftProductId
+  qtyRuleMatchingProductIds
 } from "../src/modules/orders/order-bonus-context.match-scope";
 import type { OrderAgentBonusContext, ProductLite } from "../src/modules/orders/order-bonus-context.fetch";
 
@@ -111,39 +110,6 @@ describe("order-bonus-context.match-scope", () => {
     const catRule = rule({ target_all_clients: true, client_category: "VIP" });
     expect(ruleMatchesClient(catRule, { id: 1, category: "VIP" })).toBe(true);
     expect(ruleMatchesClient(catRule, { id: 1, category: "STD" })).toBe(false);
-  });
-
-  it("resolveQtyGiftProductId — assortiment (5+1): har trigger-mahsulot o‘z sovg‘asiga qulflangan", () => {
-    // Mahsulot 1 = 17 dona (17÷5=3), Mahsulot 2 = 12 dona (12÷5=2) — har biri FAQAT o‘zidan sovg‘a beradi,
-    // boshqa mahsulotga almashtirib bo‘lmaydi (mobil UI’da locked/read-only bo‘lishi kerak).
-    const assortmentRule = rule({ product_ids: [1, 2], bonus_product_ids: [] });
-    expect(resolveQtyGiftProductId(assortmentRule, 1, new Map(), { minUnits: 3 })).toBe(1);
-    expect(resolveQtyGiftProductId(assortmentRule, 2, new Map(), { minUnits: 2 })).toBe(2);
-  });
-
-  it("resolveQtyGiftProductId — category_stock: ombordagi eng ko‘p qoldiqli mahsulotdan", () => {
-    // Kategoriya doirasi, aniq sovg‘a SKU tanlanmagan — xarid qilingan mahsulotdan qat’i nazar
-    // eng ko‘p ombor qoldig‘iga ega nomzod tanlanadi (mahsulot 2 emas, mahsulot 20 — ko‘proq qoldiq).
-    const categoryRule = rule({ product_category_ids: [5], bonus_product_ids: [] });
-    const availableByProductId = new Map<number, number>([
-      [10, 2],
-      [20, 9],
-      [30, 5]
-    ]);
-    expect(
-      resolveQtyGiftProductId(categoryRule, 10, new Map(), {
-        availableByProductId,
-        minUnits: 3,
-        categoryCandidateIds: [10, 20, 30]
-      })
-    ).toBe(20);
-  });
-
-  it("resolveQtyGiftProductId — category_stock: nomzodlar bo‘sh bo‘lsa xarid qilingan mahsulotga qaytadi", () => {
-    const categoryRule = rule({ product_category_ids: [5], bonus_product_ids: [] });
-    expect(
-      resolveQtyGiftProductId(categoryRule, 10, new Map(), { minUnits: 1, categoryCandidateIds: [] })
-    ).toBe(10);
   });
 
   it("roundMoney — 2 xona yaxlitlash", async () => {

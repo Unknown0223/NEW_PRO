@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -657,23 +656,25 @@ export function ProductForm({
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-1.5">
               <Label htmlFor="pf-retail">Chakana (retail)</Label>
-              <GroupedNumberInput
+              <Input
                 id="pf-retail"
-                maxFractionDigits={2}
-                placeholder="masalan 25 000"
+                type="text"
+                inputMode="decimal"
+                placeholder="masalan 25000"
                 value={retailPrice}
-                onValueChange={setRetailPrice}
+                onChange={(e) => setRetailPrice(e.target.value)}
                 disabled={mutation.isPending}
               />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pf-wholesale">Ulgurji (wholesale)</Label>
-              <GroupedNumberInput
+              <Input
                 id="pf-wholesale"
-                maxFractionDigits={2}
+                type="text"
+                inputMode="decimal"
                 placeholder="ixtiyoriy"
                 value={wholesalePrice}
-                onValueChange={setWholesalePrice}
+                onChange={(e) => setWholesalePrice(e.target.value)}
                 disabled={mutation.isPending}
               />
             </div>
@@ -984,22 +985,24 @@ export function ProductForm({
                   <div className="grid grid-cols-2 gap-2">
                     <div className="grid gap-1.5">
                       <Label htmlFor="pf-x-retail">Chakana (retail)</Label>
-                      <GroupedNumberInput
+                      <Input
                         id="pf-x-retail"
-                        maxFractionDigits={2}
-                        placeholder="25 000"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="25000"
                         value={retailPrice}
-                        onValueChange={setRetailPrice}
+                        onChange={(e) => setRetailPrice(e.target.value)}
                         disabled={mutation.isPending}
                       />
                     </div>
                     <div className="grid gap-1.5">
                       <Label htmlFor="pf-x-wholesale">Ulgurji (wholesale)</Label>
-                      <GroupedNumberInput
+                      <Input
                         id="pf-x-wholesale"
-                        maxFractionDigits={2}
+                        type="text"
+                        inputMode="decimal"
                         value={wholesalePrice}
-                        onValueChange={setWholesalePrice}
+                        onChange={(e) => setWholesalePrice(e.target.value)}
                         disabled={mutation.isPending}
                       />
                     </div>

@@ -1,9 +1,6 @@
 import type { BonusRuleRow } from "../bonus-rules/bonus-rules.service";
-import { primaryQtyCondition } from "../bonus-rules/bonus-rules.qty";
-import { bonusGiftSelectionMeta } from "../orders/bonus-gift-selection";
-import type { QtyBonusPeek } from "../orders/order-bonus-qty";
 import { parseBonusStackPolicy, resolveBonusSlotTakeCount } from "../orders/bonus-stack-policy";
-import { mapGiftProducts, type GiftProductPreview } from "./mobile-order-bonus-preview.query";
+import type { GiftProductPreview } from "./mobile-order-bonus-preview.query";
 
 export type EligibleBonusRow = {
   rule_id: number;
@@ -15,9 +12,6 @@ export type EligibleBonusRow = {
   default_gift_product_id: number | null;
   gift_selection_kind: string;
   allow_gift_swap: boolean;
-  step_qty: number | null;
-  bonus_step_qty: number | null;
-  trigger_product_ids: number[];
   gift_products: GiftProductPreview[];
 };
 
@@ -64,18 +58,7 @@ export function dedupeEligibleBonusRows(rows: EligibleBonusRow[]): EligibleBonus
     }
     const gifts = new Map(prev.gift_products.map((g) => [g.product_id, g]));
     for (const g of row.gift_products) {
-      const prevG = gifts.get(g.product_id);
-      if (!prevG) {
-        gifts.set(g.product_id, g);
-        continue;
-      }
-      const prevEarned = prevG.bonus_qty ?? 0;
-      const rowEarned = g.bonus_qty ?? 0;
-      gifts.set(g.product_id, {
-        ...g,
-        bonus_qty: prevEarned + rowEarned,
-        purchased_qty: Math.max(prevG.purchased_qty ?? 0, g.purchased_qty ?? 0)
-      });
+      gifts.set(g.product_id, g);
     }
     byId.set(row.rule_id, {
       ...prev,
@@ -87,73 +70,4 @@ export function dedupeEligibleBonusRows(rows: EligibleBonusRow[]): EligibleBonus
     });
   }
   return [...byId.values()];
-}
-
-/** Qty peeklarini qoida bo‘yicha birlashtiradi; har SKU uchun `bonus_qty` saqlanadi. */
-export function buildQtyEligibleRowsFromPeeks(
-  qtyPeeks: QtyBonusPeek[],
-  productMap: Map<number, { id: number; name: string; category: { name: string } | null }>,
-  availableByProductId: Map<number, number>,
-  qtyByProduct: ReadonlyMap<number, number>
-): EligibleBonusRow[] {
-  const groups = new Map<number, { rule: BonusRuleRow; peeks: QtyBonusPeek[] }>();
-  for (const peek of qtyPeeks) {
-    const cur = groups.get(peek.rule.id);
-    if (!cur) {
-      groups.set(peek.rule.id, { rule: peek.rule, peeks: [peek] });
-      continue;
-    }
-    cur.peeks.push(peek);
-  }
-
-  const rows: EligibleBonusRow[] = [];
-  for (const { rule, peeks } of groups.values()) {
-    const bonusByPid = new Map<number, number>();
-    const giftPidSet = new Set<number>();
-    let totalBonus = 0;
-    let defaultGiftPid: number | null = null;
-
-    for (const p of peeks) {
-      totalBonus += p.bonusQty;
-      if (p.giftPid > 0) {
-        giftPidSet.add(p.giftPid);
-        bonusByPid.set(p.giftPid, (bonusByPid.get(p.giftPid) ?? 0) + p.bonusQty);
-        if (defaultGiftPid == null && p.bonusQty > 0) defaultGiftPid = p.giftPid;
-      }
-    }
-    for (const pid of rule.product_ids) {
-      if (pid > 0) giftPidSet.add(pid);
-    }
-
-    const giftIds = [...giftPidSet];
-    const gift_products = mapGiftProducts(
-      giftIds,
-      productMap,
-      availableByProductId,
-      qtyByProduct,
-      bonusByPid
-    );
-    const meta = bonusGiftSelectionMeta(
-      rule,
-      Math.max(giftIds.length, rule.product_ids.length, gift_products.length)
-    );
-    const primary = primaryQtyCondition(rule);
-
-    rows.push({
-      rule_id: rule.id,
-      name: rule.name,
-      type: rule.type,
-      bonus_qty: totalBonus,
-      max_bonus_qty: totalBonus > 0 ? totalBonus : null,
-      prerequisite_rule_ids: rule.prerequisite_rule_ids ?? [],
-      default_gift_product_id: defaultGiftPid ?? giftIds[0] ?? null,
-      gift_selection_kind: meta.kind,
-      allow_gift_swap: meta.allow_gift_swap,
-      step_qty: primary?.step_qty ?? null,
-      bonus_step_qty: primary?.bonus_qty ?? null,
-      trigger_product_ids: [...rule.product_ids],
-      gift_products
-    });
-  }
-  return rows;
 }

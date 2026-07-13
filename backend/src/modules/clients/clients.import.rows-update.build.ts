@@ -12,45 +12,11 @@ import {
   parseOptionalLatitudeImport,
   parseOptionalLongitudeImport,
   readArrayCell,
-  readMappedCell,
-  readMappedRefCell,
+  readImportRefCell,
   trimImportClientCode,
   trimImportPinfl
 } from "./clients.import.parse";
 import { importColPresent } from "./clients.import.scalar";
-
-function applyMappedNullableText(
-  data: Prisma.ClientUpdateInput,
-  field: keyof Prisma.ClientUpdateInput,
-  row: unknown[],
-  colIndexByKey: Record<string, number>,
-  key: string
-) {
-  const raw = readMappedCell(row, colIndexByKey, key);
-  if (raw === undefined) return;
-  if (raw != null && !isPlaceholderCell(raw)) {
-    (data as Record<string, unknown>)[field as string] = raw.trim();
-  } else {
-    (data as Record<string, unknown>)[field as string] = null;
-  }
-}
-
-function applyMappedRefField(
-  data: Prisma.ClientUpdateInput,
-  field: keyof Prisma.ClientUpdateInput,
-  row: unknown[],
-  colIndexByKey: Record<string, number>,
-  keys: string[],
-  resolve: (raw: string | null) => string | null
-) {
-  const raw = readMappedRefCell(row, colIndexByKey, keys);
-  if (raw === undefined) return;
-  if (raw != null && !isPlaceholderCell(raw)) {
-    (data as Record<string, unknown>)[field as string] = resolve(raw);
-  } else {
-    (data as Record<string, unknown>)[field as string] = null;
-  }
-}
 
 export function buildImportUpdateScalarData(
   row: unknown[],
@@ -63,92 +29,161 @@ export function buildImportUpdateScalarData(
         const v = readArrayCell(row, colIndexByKey.name);
         if (v != null && !isPlaceholderCell(v)) data.name = v.trim();
       }
-      applyMappedNullableText(data, "legal_name", row, colIndexByKey, "legal_name");
-      if (readMappedCell(row, colIndexByKey, "phone") !== undefined) {
-        const v = readMappedCell(row, colIndexByKey, "phone");
+      if (importColPresent(colIndexByKey, "legal_name")) {
+        const v = readArrayCell(row, colIndexByKey.legal_name);
+        if (v != null && !isPlaceholderCell(v)) data.legal_name = v.trim();
+        else if (v !== null && isPlaceholderCell(String(v))) data.legal_name = null;
+      }
+      if (importColPresent(colIndexByKey, "phone")) {
+        const v = readArrayCell(row, colIndexByKey.phone);
         if (v != null && !isPlaceholderCell(v)) {
           data.phone = v.trim();
           data.phone_normalized = normalizePhoneDigits(v);
-        } else {
-          data.phone = null;
-          data.phone_normalized = null;
         }
       }
-      applyMappedNullableText(data, "address", row, colIndexByKey, "address");
-      if (readMappedCell(row, colIndexByKey, "client_code") !== undefined) {
+      if (importColPresent(colIndexByKey, "address")) {
+        const v = readArrayCell(row, colIndexByKey.address);
+        if (v != null && !isPlaceholderCell(v)) data.address = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "client_code")) {
         data.client_code = trimImportClientCode(readArrayCell(row, colIndexByKey.client_code));
       }
-      if (readMappedCell(row, colIndexByKey, "client_pinfl") !== undefined) {
+      if (importColPresent(colIndexByKey, "client_pinfl")) {
         data.client_pinfl = trimImportPinfl(readArrayCell(row, colIndexByKey.client_pinfl));
       }
-      applyMappedRefField(data, "category", row, colIndexByKey, [
-        "category_code",
-        "category_name",
-        "category"
-      ], (raw) => refResolver.resolveCategory(raw));
-      applyMappedRefField(data, "client_type_code", row, colIndexByKey, [
-        "client_type_code",
-        "client_type_name"
-      ], (raw) => refResolver.resolveClientType(raw));
-      if (readMappedCell(row, colIndexByKey, "credit_limit") !== undefined) {
+      if (
+        importColPresent(colIndexByKey, "category_code") ||
+        importColPresent(colIndexByKey, "category_name") ||
+        importColPresent(colIndexByKey, "category")
+      ) {
+        const rawC = readImportRefCell(row, colIndexByKey, ["category_code", "category_name", "category"]);
+        if (rawC != null && !isPlaceholderCell(rawC)) {
+          data.category = refResolver.resolveCategory(rawC);
+        }
+      }
+      if (
+        importColPresent(colIndexByKey, "client_type_code") ||
+        importColPresent(colIndexByKey, "client_type_name")
+      ) {
+        const rawT = readImportRefCell(row, colIndexByKey, ["client_type_code", "client_type_name"]);
+        if (rawT != null && !isPlaceholderCell(rawT)) {
+          data.client_type_code = refResolver.resolveClientType(rawT);
+        }
+      }
+      if (importColPresent(colIndexByKey, "credit_limit")) {
         data.credit_limit = parseCreditLimit(readArrayCell(row, colIndexByKey.credit_limit));
       }
-      if (readMappedCell(row, colIndexByKey, "is_active") !== undefined) {
+      if (importColPresent(colIndexByKey, "is_active")) {
         const rawA = readArrayCell(row, colIndexByKey.is_active);
         if (rawA != null && !isPlaceholderCell(rawA)) data.is_active = parseIsActive(rawA);
       }
-      applyMappedNullableText(data, "responsible_person", row, colIndexByKey, "responsible_person");
-      applyMappedNullableText(data, "landmark", row, colIndexByKey, "landmark");
-      applyMappedNullableText(data, "inn", row, colIndexByKey, "inn");
-      applyMappedNullableText(data, "pdl", row, colIndexByKey, "pdl");
-      applyMappedNullableText(data, "logistics_service", row, colIndexByKey, "logistics_service");
-      if (readMappedCell(row, colIndexByKey, "license_until") !== undefined) {
+      if (importColPresent(colIndexByKey, "responsible_person")) {
+        const v = readArrayCell(row, colIndexByKey.responsible_person);
+        if (v != null && !isPlaceholderCell(v)) data.responsible_person = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "landmark")) {
+        const v = readArrayCell(row, colIndexByKey.landmark);
+        if (v != null && !isPlaceholderCell(v)) data.landmark = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "inn")) {
+        const v = readArrayCell(row, colIndexByKey.inn);
+        if (v != null && !isPlaceholderCell(v)) data.inn = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "pdl")) {
+        const v = readArrayCell(row, colIndexByKey.pdl);
+        if (v != null && !isPlaceholderCell(v)) data.pdl = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "logistics_service")) {
+        const v = readArrayCell(row, colIndexByKey.logistics_service);
+        if (v != null && !isPlaceholderCell(v)) data.logistics_service = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "license_until")) {
         data.license_until = parseOptionalDate(readArrayCell(row, colIndexByKey.license_until));
       }
-      applyMappedNullableText(data, "working_hours", row, colIndexByKey, "working_hours");
-      applyMappedNullableText(data, "region", row, colIndexByKey, "region");
-      applyMappedNullableText(data, "district", row, colIndexByKey, "district");
-      applyMappedRefField(
-        data,
-        "city",
-        row,
-        colIndexByKey,
-        ["city_code", "city"],
-        (raw) => refResolver.resolveCity(raw)
-      );
-      applyMappedNullableText(data, "neighborhood", row, colIndexByKey, "neighborhood");
-      applyMappedNullableText(data, "zone", row, colIndexByKey, "zone");
-      applyMappedNullableText(data, "street", row, colIndexByKey, "street");
-      applyMappedNullableText(data, "house_number", row, colIndexByKey, "house_number");
-      applyMappedNullableText(data, "apartment", row, colIndexByKey, "apartment");
-      applyMappedNullableText(data, "gps_text", row, colIndexByKey, "gps_text");
-      if (readMappedCell(row, colIndexByKey, "latitude") !== undefined) {
+      if (importColPresent(colIndexByKey, "working_hours")) {
+        const v = readArrayCell(row, colIndexByKey.working_hours);
+        if (v != null && !isPlaceholderCell(v)) data.working_hours = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "region")) {
+        const v = readArrayCell(row, colIndexByKey.region);
+        if (v != null && !isPlaceholderCell(v)) data.region = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "district")) {
+        const v = readArrayCell(row, colIndexByKey.district);
+        if (v != null && !isPlaceholderCell(v)) data.district = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "city") || importColPresent(colIndexByKey, "city_code")) {
+        const cityRaw =
+          readArrayCell(row, colIndexByKey.city_code) ?? readArrayCell(row, colIndexByKey.city);
+        if (cityRaw != null && !isPlaceholderCell(cityRaw)) {
+          data.city = refResolver.resolveCity(cityRaw);
+        }
+      }
+      if (importColPresent(colIndexByKey, "neighborhood")) {
+        const v = readArrayCell(row, colIndexByKey.neighborhood);
+        if (v != null && !isPlaceholderCell(v)) data.neighborhood = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "zone")) {
+        const v = readArrayCell(row, colIndexByKey.zone);
+        if (v != null && !isPlaceholderCell(v)) data.zone = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "street")) {
+        const v = readArrayCell(row, colIndexByKey.street);
+        if (v != null && !isPlaceholderCell(v)) data.street = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "house_number")) {
+        const v = readArrayCell(row, colIndexByKey.house_number);
+        if (v != null && !isPlaceholderCell(v)) data.house_number = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "apartment")) {
+        const v = readArrayCell(row, colIndexByKey.apartment);
+        if (v != null && !isPlaceholderCell(v)) data.apartment = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "gps_text")) {
+        const v = readArrayCell(row, colIndexByKey.gps_text);
+        if (v != null && !isPlaceholderCell(v)) data.gps_text = v.trim();
+      }
+      if (importColPresent(colIndexByKey, "latitude")) {
         data.latitude = parseOptionalLatitudeImport(readArrayCell(row, colIndexByKey.latitude));
       }
-      if (readMappedCell(row, colIndexByKey, "longitude") !== undefined) {
+      if (importColPresent(colIndexByKey, "longitude")) {
         data.longitude = parseOptionalLongitudeImport(readArrayCell(row, colIndexByKey.longitude));
       }
-      applyMappedNullableText(data, "notes", row, colIndexByKey, "notes");
-      applyMappedRefField(
-        data,
-        "client_format",
-        row,
-        colIndexByKey,
-        ["client_format_code", "client_format_name", "client_format"],
-        (raw) => refResolver.resolveClientFormat(raw)
-      );
-      applyMappedRefField(
-        data,
-        "sales_channel",
-        row,
-        colIndexByKey,
-        ["sales_channel_code", "sales_channel_name", "sales_channel"],
-        (raw) => refResolver.resolveSalesChannel(raw)
-      );
-      if (readMappedCell(row, colIndexByKey, "product_category_ref") !== undefined) {
+      if (importColPresent(colIndexByKey, "notes")) {
+        const v = readArrayCell(row, colIndexByKey.notes);
+        if (v != null && !isPlaceholderCell(v)) data.notes = v.trim();
+      }
+      if (
+        importColPresent(colIndexByKey, "client_format_code") ||
+        importColPresent(colIndexByKey, "client_format_name") ||
+        importColPresent(colIndexByKey, "client_format")
+      ) {
+        const rawF = readImportRefCell(row, colIndexByKey, [
+          "client_format_code",
+          "client_format_name",
+          "client_format"
+        ]);
+        if (rawF != null && !isPlaceholderCell(rawF)) {
+          data.client_format = refResolver.resolveClientFormat(rawF);
+        }
+      }
+      if (
+        importColPresent(colIndexByKey, "sales_channel_code") ||
+        importColPresent(colIndexByKey, "sales_channel_name") ||
+        importColPresent(colIndexByKey, "sales_channel")
+      ) {
+        const rawS = readImportRefCell(row, colIndexByKey, [
+          "sales_channel_code",
+          "sales_channel_name",
+          "sales_channel"
+        ]);
+        if (rawS != null && !isPlaceholderCell(rawS)) {
+          data.sales_channel = refResolver.resolveSalesChannel(rawS);
+        }
+      }
+      if (importColPresent(colIndexByKey, "product_category_ref")) {
         const rawP = readArrayCell(row, colIndexByKey.product_category_ref);
-        data.product_category_ref =
-          rawP != null && !isPlaceholderCell(rawP) ? rawP.trim() || null : null;
+        if (rawP != null && !isPlaceholderCell(rawP)) data.product_category_ref = rawP.trim() || null;
       }
 
       const slots: ContactPersonSlot[] = Array.from({ length: IMPORT_CONTACT_PERSON_SLOTS }, () => ({
@@ -160,28 +195,22 @@ export function buildImportUpdateScalarData(
       for (let i = 0; i < IMPORT_CONTACT_PERSON_SLOTS; i++) {
         const p = i + 1;
         const fnK = `contact${p}_firstName`;
-        const lnK = `contact${p}_lastName`;
-        const phK = `contact${p}_phone`;
-        const fnRaw = readMappedCell(row, colIndexByKey, fnK);
-        const lnRaw = readMappedCell(row, colIndexByKey, lnK);
-        const phRaw = readMappedCell(row, colIndexByKey, phK);
-        if (fnRaw === undefined && lnRaw === undefined && phRaw === undefined) continue;
-        const allowedContact =
-          applySet == null || applySet.has(fnK) || applySet.has(lnK) || applySet.has(phK);
-        if (!allowedContact) continue;
-        touchContacts = true;
-        const toContactValue = (raw: string | null | undefined) => {
-          if (raw === undefined) return undefined;
-          if (raw != null && !isPlaceholderCell(raw)) return raw.trim() || null;
-          return null;
-        };
-        const fn = toContactValue(fnRaw);
-        const ln = toContactValue(lnRaw);
-        const ph = toContactValue(phRaw);
+        const hasMap =
+          importColPresent(colIndexByKey, fnK) ||
+          importColPresent(colIndexByKey, `contact${p}_lastName`) ||
+          importColPresent(colIndexByKey, `contact${p}_phone`);
+        if (hasMap) {
+          const allowedContact =
+            applySet == null ||
+            applySet.has(fnK) ||
+            applySet.has(`contact${p}_lastName`) ||
+            applySet.has(`contact${p}_phone`);
+          if (allowedContact) touchContacts = true;
+        }
         slots[i] = {
-          firstName: fn !== undefined ? fn : slots[i].firstName,
-          lastName: ln !== undefined ? ln : slots[i].lastName,
-          phone: ph !== undefined ? ph : slots[i].phone
+          firstName: readArrayCell(row, colIndexByKey[`contact${p}_firstName`]),
+          lastName: readArrayCell(row, colIndexByKey[`contact${p}_lastName`]),
+          phone: readArrayCell(row, colIndexByKey[`contact${p}_phone`])
         };
       }
       if (touchContacts) {

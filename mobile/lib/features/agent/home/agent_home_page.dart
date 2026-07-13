@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +6,6 @@ import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/mobile_config_policy.dart';
-import '../../../core/config/sync_policy_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -20,8 +17,6 @@ import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/config/sync_window_countdown.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/sync_bottom_sheet.dart';
-import '../visits/visit_stats_helper.dart';
-import '../../../core/sync/sync_data_refresh.dart';
 import 'agent_dashboard_provider.dart';
 import 'home_visit_metrics_provider.dart';
 import 'sync_count_provider.dart';
@@ -52,67 +47,10 @@ class AgentHomePage extends ConsumerStatefulWidget {
 }
 
 class _AgentHomePageState extends ConsumerState<AgentHomePage> {
-  Timer? _syncPolicyPoll;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      refreshVisitStatsProviders(ref.invalidate);
-      unawaited(_refreshSyncConfigOnOpen());
-      _fixStaleClientCatalog();
-    });
-  }
-
-  @override
-  void dispose() {
-    _syncPolicyPoll?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _refreshSyncConfigOnOpen() async {
-    await ref.read(authStateProvider.notifier).refreshMobileConfig();
-    if (!mounted) return;
-    _ensureSyncPolicyPoll();
-  }
-
-  void _ensureSyncPolicyPoll() {
-    final allowed = ref.read(syncPolicyProvider).allowed;
-    if (allowed) {
-      _syncPolicyPoll?.cancel();
-      _syncPolicyPoll = null;
-      return;
-    }
-    if (_syncPolicyPoll != null) return;
-    _syncPolicyPoll = Timer.periodic(const Duration(seconds: 45), (_) async {
-      if (!mounted) return;
-      await ref.read(authStateProvider.notifier).refreshMobileConfig();
-      if (!mounted) return;
-      if (ref.read(syncPolicyProvider).allowed) {
-        _syncPolicyPoll?.cancel();
-        _syncPolicyPoll = null;
-        setState(() {});
-      }
-    });
-  }
-
-  Future<void> _tryRefreshAndOpenSync() async {
-    final policy =
-        await ref.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
-    if (!mounted) return;
-    if (policy.allowed) {
-      if (!context.mounted) return;
-      await SyncBottomSheet.show(context);
-      return;
-    }
-    if (!context.mounted) return;
-    showAgentToast(
-      context,
-      policy.denialMessage ?? syncWindowMessage(
-        ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig(),
-      ),
-      accentColor: AppColors.warning,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fixStaleClientCatalog());
   }
 
   Future<void> _fixStaleClientCatalog() async {
@@ -120,13 +58,13 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final syncCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
     if (!evaluateSyncPolicy(syncCfg).allowed) return;
     final db = AppDatabase();
-    if (!await db.needsFullClientCatalogResync()) return;
-    final r = await ref.read(authStateProvider.notifier).resync(
-          full: false,
-          forceClientCatalog: true,
-        );
+    if (await db.isAgentClientsSynced()) return;
+    final n = await db.clientCount();
+    if (n <= 50) return;
+    final r = await ref.read(authStateProvider.notifier).resync(full: true);
     if (mounted && r.ok) {
-      invalidateSyncedData(ref.invalidate);
+      ref.invalidate(homeStatsProvider);
+      ref.invalidate(syncCountTodayProvider);
     }
   }
 
@@ -134,15 +72,6 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<SyncPolicyEvaluation>(syncPolicyProvider, (previous, next) {
-      if (!next.allowed) {
-        _ensureSyncPolicyPoll();
-      } else {
-        _syncPolicyPoll?.cancel();
-        _syncPolicyPoll = null;
-      }
-    });
-
     final session = ref.watch(sessionProvider);
     final statsAsync = ref.watch(homeStatsProvider);
     final dashAsync = ref.watch(agentDashboardProvider);
@@ -150,9 +79,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
     final dash = dashAsync.valueOrNull;
     final metrics = metricsAsync.valueOrNull;
     final showPlan = session.mobileConfig?.outlet.showPlanInReports ?? false;
-    final performance = (metrics != null && metrics.total > 0)
-        ? metrics.onRoute / metrics.total
-        : 0.0;
+    final performance = (dashAsync.valueOrNull?.performancePct ?? 0) / 100.0;
     final syncCfg = session.mobileConfig?.sync ?? const SyncConfig();
     final syncCountAsync = ref.watch(syncCountTodayProvider);
     final mustSync = syncCountAsync.maybeWhen(
@@ -176,26 +103,22 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.read(authStateProvider.notifier).refreshMobileConfig();
-          final freshCfg = ref.read(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
-          final policy = evaluateSyncPolicy(freshCfg);
-          if (!policy.allowed) {
-            if (!context.mounted) return;
-            showAgentToast(
+          if (!evaluateSyncPolicy(syncCfg).allowed) {
+            if (mounted) {
+              showAgentToast(
                 context,
-                policy.denialMessage ?? syncWindowMessage(freshCfg),
+                syncPolicy.denialMessage ?? syncWindowMessage(syncCfg),
                 accentColor: AppColors.warning,
-            );
+              );
+            }
             return;
           }
-          final forceCatalog = await AppDatabase().needsFullClientCatalogResync();
-          final r = await ref.read(authStateProvider.notifier).resync(
-                full: false,
-                forceClientCatalog: forceCatalog,
-              );
-          invalidateSyncedData(ref.invalidate);
-          if (!context.mounted) return;
-          if (!r.ok && r.error != null) {
+          final r = await ref.read(authStateProvider.notifier).resync(full: false);
+          ref.invalidate(homeStatsProvider);
+          ref.invalidate(agentDashboardProvider);
+          ref.invalidate(homeVisitMetricsProvider);
+          ref.invalidate(syncCountTodayProvider);
+          if (mounted && !r.ok && r.error != null) {
             showAgentToast(context, r.error!, accentColor: AppColors.error);
           }
         },
@@ -252,9 +175,8 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.headlineSmall.copyWith(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.textHeadline,
                             ),
                           ),
                         ),
@@ -274,24 +196,20 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                             const SizedBox(height: 8),
                             Text(
                               planDashboardLine(dash, session.mobileConfig?.outlet.planVersion),
-                              style: AppTypography.bodySmall.copyWith(
-                                fontSize: 14,
-                                color: AppColors.textMenu,
-                              ),
+                              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                               textAlign: TextAlign.center,
                             ),
                           ],
                           const SizedBox(height: 4),
                           Builder(
                             builder: (context) {
-                              final visited = metrics?.onRoute ?? metrics?.visited ?? dash?.visitsToday ?? 0;
+                              final visited = metrics?.visited ?? dash?.visitsToday ?? 0;
                               final total = metrics?.total ?? dash?.clientsCount ?? 0;
-                              final left = metrics?.remainingOnRoute ?? (total - visited).clamp(0, 999999);
-                              final offRouteVisited = metrics?.offRoute ?? 0;
-                              final offRouteRemaining = metrics?.remainingOffRoute ?? 0;
+                              final left = (total - visited).clamp(0, 999999);
+                              final offRoute = metrics?.offRoute ?? 0;
+                              final leftOffRoute = metrics?.remainingOffRoute ?? 0;
                               final dormantOnWeekday = metrics?.dormantOnWeekday ?? 0;
                               final todayWd = serverTodayWeekday();
-                              final showOffRoute = total > 0 && (offRouteVisited > 0 || offRouteRemaining > 0);
                               return IntrinsicHeight(
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -302,8 +220,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                                         title: S.visited,
                                         main: '$visited / $total',
                                         showOnRouteSubRow: false,
-                                        showOutsideSubRow: showOffRoute,
-                                        outsideValue: '$offRouteVisited',
+                                        outsideValue: '$offRoute',
                                         extraLabel: S.dormantNotVisitedToday(todayWd),
                                         extraValue: '$dormantOnWeekday',
                                       ),
@@ -315,9 +232,8 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                                         title: S.remaining,
                                         main: '$left / $total',
                                         showOnRouteSubRow: false,
-                                        showOutsideSubRow: showOffRoute,
+                                        outsideValue: '$leftOffRoute',
                                         outsideLabel: S.remainingOffRoute,
-                                        outsideValue: '$offRouteRemaining',
                                         extraLabel: S.dormantNotVisitedMonth,
                                         extraValue: '${metrics?.dormantUnique ?? 0}',
                                       ),
@@ -327,28 +243,6 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                               );
                             },
                           ),
-                          if (metrics?.noVisitsPlannedToday == true) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              S.noVisitsPlannedToday,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.caption.copyWith(
-                                fontSize: 13,
-                                color: AppColors.warning,
-                              ),
-                            ),
-                          ] else if (metrics?.noVisitScheduleConfigured == true &&
-                              (statsAsync.valueOrNull?['clients'] ?? 0) > 0) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              S.noVisitScheduleHint,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.caption.copyWith(
-                                fontSize: 13,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -370,10 +264,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     const SizedBox(height: 12),
                     AgentPrimaryButton(
                       label: S.sync,
-                      height: 44,
-                      onPressed: syncAllowed
-                          ? () => SyncBottomSheet.show(context)
-                          : () => unawaited(_tryRefreshAndOpenSync()),
+                      onPressed: !syncAllowed ? null : () => SyncBottomSheet.show(context),
                     ),
                   ],
                 ),
@@ -383,13 +274,9 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                 data: (s) => Row(
                   children: [
                     Expanded(
-                      child: InkWell(
-                        onTap: () => context.push('/orders'),
-                        borderRadius: BorderRadius.circular(16),
-                        child: AgentMiniSummary(
-                          title: S.ordersSumToday,
-                          value: _formatSum(dash?.ordersSumToday ?? 0),
-                        ),
+                      child: AgentMiniSummary(
+                        title: S.ordersSumToday,
+                        value: _formatSum(dash?.ordersSumToday ?? 0),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -419,13 +306,13 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
 
   Widget _infoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMenu),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
             ),
           ),
           const SizedBox(width: 8),
@@ -435,7 +322,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
             ),
           ),
         ],

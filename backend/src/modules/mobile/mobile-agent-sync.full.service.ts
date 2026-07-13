@@ -5,44 +5,13 @@ import {
   agentScopedClientWhere,
   agentScopedOrderWhere,
   applyMobileSyncGate,
-  clientSyncSelectForAgent,
+  clientSyncSelect,
   compactClient,
   type CompactClientRow,
   type PresenceOpts
 } from "./mobile-agent-sync.config.service";
 
-const MOBILE_SYNC_CLIENT_BATCH = 500;
-const MOBILE_SYNC_CLIENT_MAX = 20_000;
-
-export async function fetchSyncClients(
-  tenantId: number,
-  agentId: number,
-  since: Date
-): Promise<ReturnType<typeof compactClient>[]> {
-  const out: ReturnType<typeof compactClient>[] = [];
-  let skip = 0;
-
-  while (out.length < MOBILE_SYNC_CLIENT_MAX) {
-    const take = Math.min(MOBILE_SYNC_CLIENT_BATCH, MOBILE_SYNC_CLIENT_MAX - out.length);
-    const rows = await prisma.client.findMany({
-      where: {
-        ...agentScopedClientWhere(tenantId, agentId),
-        is_active: true,
-        ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
-      },
-      orderBy: { id: "asc" },
-      skip,
-      take,
-      select: clientSyncSelectForAgent(agentId)
-    });
-    if (rows.length === 0) break;
-    out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow)));
-    if (rows.length < take) break;
-    skip += rows.length;
-  }
-
-  return out;
-}
+const MOBILE_SYNC_CLIENT_LIMIT = 50;
 
 export function compactProduct(p: {
   id: number;
@@ -113,6 +82,24 @@ function compactOrder(o: {
   };
 }
 
+export async function fetchSyncClients(
+  tenantId: number,
+  agentId: number,
+  since: Date
+): Promise<ReturnType<typeof compactClient>[]> {
+  const rows = await prisma.client.findMany({
+    where: {
+      ...agentScopedClientWhere(tenantId, agentId),
+      is_active: true,
+      ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
+    },
+    take: MOBILE_SYNC_CLIENT_LIMIT,
+    orderBy: { updated_at: "desc" },
+    select: clientSyncSelect
+  });
+  return rows.map((r) => compactClient(r as unknown as CompactClientRow));
+}
+
 export async function fetchSyncOrders(tenantId: number, agentId: number, since: Date) {
   const excluded = [...ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE];
   const rows = await prisma.order.findMany({
@@ -142,16 +129,14 @@ export async function syncFull(
   tenantId: number,
   userId: number,
   lastSyncAt: Date | null,
-  presence?: PresenceOpts & { forceClientsCatalog?: boolean }
+  presence?: PresenceOpts
 ) {
   await applyMobileSyncGate(tenantId, userId, presence);
-  const forceClients = presence?.forceClientsCatalog === true;
-  const clientSince = forceClients || lastSyncAt == null ? new Date(0) : lastSyncAt;
   const since: Date = lastSyncAt ?? new Date(0);
-  const clientsReplaceAll = lastSyncAt == null || forceClients;
+  const firstSync = lastSyncAt == null;
 
   const [clients, products, productPrices, orders] = await Promise.all([
-    fetchSyncClients(tenantId, userId, clientSince),
+    fetchSyncClients(tenantId, userId, since),
     prisma.product.findMany({
       where: {
         tenant_id: tenantId,
@@ -192,7 +177,7 @@ export async function syncFull(
 
   return {
     sync_at: now.toISOString(),
-    clients_replace_all: clientsReplaceAll,
+    clients_replace_all: firstSync,
     clients,
     products: products.map(compactProduct),
     prices: productPrices.map(compactPrice),

@@ -82,23 +82,8 @@ export function ClientImportMappingDialog({
   const [localErr, setLocalErr] = useState<string | null>(null);
   const [checkDuplicates, setCheckDuplicates] = useState(false);
   const [dupKeySet, setDupKeySet] = useState<Set<string>>(() => new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
-  const [restrictUpdate, setRestrictUpdate] = useState(importMode === "update");
-  const updateFieldOptions = useMemo(() => buildUpdateApplyFieldOptions(), []);
-  const [updateApplySet, setUpdateApplySet] = useState<Set<string>>(
-    () => new Set(updateFieldOptions.map((o) => o.key))
-  );
-
-  const selectAllUpdateFields = useCallback(() => {
-    setUpdateApplySet(new Set(updateFieldOptions.map((o) => o.key)));
-  }, [updateFieldOptions]);
-
-  const deselectAllUpdateFields = useCallback(() => {
-    setUpdateApplySet(new Set());
-  }, []);
-
-  const allUpdateFieldsSelected =
-    updateFieldOptions.length > 0 && updateFieldOptions.every((o) => updateApplySet.has(o.key));
-  const noUpdateFieldsSelected = updateApplySet.size === 0;
+  const [restrictUpdate, setRestrictUpdate] = useState(false);
+  const [updateApplySet, setUpdateApplySet] = useState<Set<string>>(() => new Set());
 
   const resetState = useCallback(() => {
     xlsxModRef.current = null;
@@ -110,9 +95,9 @@ export function ClientImportMappingDialog({
     setLocalErr(null);
     setCheckDuplicates(false);
     setDupKeySet(new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
-    setRestrictUpdate(importMode === "update");
+    setRestrictUpdate(false);
     setUpdateApplySet(new Set(buildUpdateApplyFieldOptions().map((o) => o.key)));
-  }, [importMode]);
+  }, []);
 
   useEffect(() => {
     if (!open || !file) {
@@ -254,7 +239,7 @@ export function ClientImportMappingDialog({
                 <span className="break-all">
                   Файл: <strong>{file.name}</strong>
                   {importMode === "update"
-                    ? " — строки с «ИД» из системы; пустые ячейки в сопоставленных столбцах очищают поле в базе. Несуществующие коды справочника и агентов тоже очищаются. Столбцы «Агент N / Агент N день / Экспедитор N» подхватываются автоматически только если найдены в шапке."
+                    ? " — строки с «ИД» из системы; пустые ячейки не перезаписывают поля. Столбцы «Агент N / Агент N день / Экспедитор N» подхватываются автоматически только если найдены в шапке."
                     : " — для каждого поля системы выберите столбец. «Агент 1…10 / день / Экспедитор» можно не мапить вручную: если таких столбцов нет, они будут пропущены."}
                 </span>
               ) : (
@@ -342,41 +327,12 @@ export function ClientImportMappingDialog({
                       </label>
                       {restrictUpdate ? (
                         <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-muted-foreground text-xs">
-                              Отмеченные поля будут изменены в клиенте; остальные — нет, даже если
-                              столбец сопоставлен ниже. Снимите галочки с агента / дней / экспедитора,
-                              если не нужно менять их из файла.
-                            </p>
-                            <div className="flex shrink-0 flex-wrap items-center gap-1">
-                              <span className="text-muted-foreground text-xs tabular-nums">
-                                {updateApplySet.size} / {updateFieldOptions.length}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                disabled={isSubmitting || allUpdateFieldsSelected}
-                                onClick={() => selectAllUpdateFields()}
-                              >
-                                Выбрать все
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                disabled={isSubmitting || noUpdateFieldsSelected}
-                                onClick={() => deselectAllUpdateFields()}
-                              >
-                                Снять все
-                              </Button>
-                            </div>
-                          </div>
+                          <p className="text-muted-foreground text-xs">
+                            Снимите галочки с агента / дней / экспедитора, если не нужно менять их из файла.
+                          </p>
                           <div className="max-h-48 overflow-y-auto rounded border border-border/60 bg-background/50 p-2">
                             <div className="grid gap-1 sm:grid-cols-2">
-                              {updateFieldOptions.map(({ key, label }) => (
+                              {buildUpdateApplyFieldOptions().map(({ key, label }) => (
                                 <label key={key} className="flex cursor-pointer items-center gap-2 text-xs">
                                   <input
                                     type="checkbox"
