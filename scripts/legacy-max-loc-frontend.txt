@@ -4,7 +4,8 @@ frontend/components/access/access-user-detail-panel.tsx
 frontend/components/staff/agents-workspace.tsx
 frontend/components/client-balances/client-balances-workspace.tsx
 frontend/components/orders/order-create/hooks/use-order-create.ts
-frontend/components/orders/order-create/view/order-create-view.tsx
+frontend/components/orders/order-create/view/order-create-form-section.tsx
+frontend/components/orders/order-create/view/order-create-catalog-section.tsx
 frontend/components/staff/skladchik-workspace.tsx
 frontend/components/clients/client-edit-form.tsx
 frontend/components/dashboard/dashboard-home.tsx
@@ -93,7 +94,6 @@ frontend/components/clients/clients-data-table.tsx
 frontend/components/settings/generic-ref-settings.tsx
 frontend/components/clients/client-import-mapping-dialog.tsx
 frontend/app/(dashboard)/routes/track/page.tsx
-frontend/components/orders/order-create/view/order-create-standard-params.tsx
 frontend/components/ui/searchable-multi-select-panel.tsx
 frontend/components/settings/sales-directions/trade-directions-workspace.tsx
 frontend/components/client-balances/client-balances-bulk-payment-dialog.tsx
@@ -102,8 +102,6 @@ frontend/components/opening-balances/add-opening-balance-dialog.tsx
 frontend/components/settings/client-ref-settings-page.tsx
 frontend/components/work-slots/work-slots-bulk-dialog.tsx
 frontend/app/(dashboard)/clients/map/page.tsx
-frontend/components/orders/order-create/view/order-create-polki-params.tsx
-frontend/components/orders/order-create/view/order-create-catalog-table.tsx
 frontend/components/settings/finance-price-types-settings.tsx
 frontend/components/settings/sales-directions/sales-channels-workspace.tsx
 frontend/components/stock/stock-by-date-workspace.tsx
