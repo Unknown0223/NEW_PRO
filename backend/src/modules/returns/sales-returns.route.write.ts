@@ -1,6 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import {
+  assertDocWritableByDate,
+  assertDocWritableById
+} from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -169,9 +177,11 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
+        await assertDocWritableByDate(request, "returns", new Date());
         const data = await createPeriodReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (code === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
@@ -251,6 +261,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
+        await assertDocWritableByDate(request, "returns", new Date());
         const data = await createPeriodReturnBatch(
           request.tenant!.id,
           parsed.data,
@@ -258,6 +269,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (code === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
@@ -337,9 +349,11 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
+        await assertDocWritableByDate(request, "returns", new Date());
         const data = await createFullReturnFromOrder(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
         if (code === "ORDER_NOT_RETURNABLE")
@@ -371,9 +385,11 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
+        await assertDocWritableByDate(request, "returns", new Date());
         const row = await createSalesReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
@@ -400,9 +416,11 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "BadId");
       }
       try {
+        await assertDocWritableById(request, "returns", id);
         const data = await acceptSalesReturn(request.tenant!.id, id, actorUserIdOrNull(request));
         return reply.send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "RETURN_NOT_FOUND") return sendApiError(reply, request, 404, "ReturnNotFound");
         if (code === "RETURN_ALREADY_ACCEPTED")
@@ -429,6 +447,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "BadParams");
       }
       try {
+        await assertDocWritableByDate(request, "returns", new Date(`${date}T00:00:00.000Z`));
         const data = await acceptDailyReturnWaybill(
           request.tenant!.id,
           courierId,
@@ -437,6 +456,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "WAYBILL_NOT_FOUND") return sendApiError(reply, request, 404, "WaybillNotFound");
         if (code === "WAYBILL_NOTHING_PENDING")
@@ -461,9 +481,11 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           ? (request.body as { reason: string }).reason
           : null;
       try {
+        await assertDocWritableById(request, "returns", id);
         const data = await rejectSalesReturn(request.tenant!.id, id, actorUserIdOrNull(request), reason);
         return reply.send(data);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const code = e instanceof Error ? e.message : "";
         if (code === "RETURN_NOT_FOUND") return sendApiError(reply, request, 404, "ReturnNotFound");
         if (code === "RETURN_ALREADY_ACCEPTED")

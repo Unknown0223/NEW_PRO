@@ -11,7 +11,6 @@ import type { RefSelectOption } from "@/lib/ref-select-options";
 import { cn } from "@/lib/utils";
 import { ClientsListSearchInput } from "@/components/clients/clients-list-search-input";
 import { CalendarDays, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Layers, ListOrdered, RefreshCw, RotateCcw } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState } from "react";
 
 const VISIT_WEEKDAY_OPTIONS: { value: string; label: string }[] = [
@@ -424,7 +423,9 @@ export function ClientsTemplateListToolbar({
   onImportUpdate,
   onImportCreate,
   importDisabled = false,
-  onExportExcel
+  onExportExcel,
+  onGroupProcessing,
+  groupProcessingDisabled = false
 }: {
   search: string;
   onSearchChange: (v: string) => void;
@@ -438,6 +439,9 @@ export function ClientsTemplateListToolbar({
   onImportCreate: () => void;
   importDisabled?: boolean;
   onExportExcel?: () => void;
+  /** Belgilangan klientlar bo‘yicha guruh ishlov modalini ochish */
+  onGroupProcessing?: () => void;
+  groupProcessingDisabled?: boolean;
 }) {
   const toolbarBtn =
     "flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-card px-2.5 text-xs font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50";
@@ -504,10 +508,18 @@ export function ClientsTemplateListToolbar({
             <Download className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
             Импорт
           </button>
-          <Link href="/clients/merge" className={toolbarBtn}>
-            <Layers className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
-            Групповая обработка
-          </Link>
+          {onGroupProcessing ? (
+            <button
+              type="button"
+              disabled={groupProcessingDisabled}
+              onClick={onGroupProcessing}
+              className={toolbarBtn}
+              title={groupProcessingDisabled ? "Avval klientlarni belgilang" : undefined}
+            >
+              <Layers className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
+              Групповые обработки
+            </button>
+          ) : null}
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -542,11 +554,15 @@ export function ClientsTemplateListToolbar({
 export function ClientsTableSectionHeader({
   onImportUpdate,
   onImportCreate,
-  importDisabled = false
+  importDisabled = false,
+  onGroupProcessing,
+  groupProcessingDisabled = false
 }: {
   onImportUpdate: () => void;
   onImportCreate: () => void;
   importDisabled?: boolean;
+  onGroupProcessing?: () => void;
+  groupProcessingDisabled?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -570,13 +586,17 @@ export function ClientsTableSectionHeader({
           <Download className="h-4 w-4 text-gray-600" aria-hidden />
           Импорт
         </button>
-        <Link
-          href="/clients/merge"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted"
-        >
-          <Layers className="h-4 w-4 text-gray-600" aria-hidden />
-          Групповая обработка
-        </Link>
+        {onGroupProcessing ? (
+          <button
+            type="button"
+            disabled={groupProcessingDisabled}
+            onClick={onGroupProcessing}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-gray-800 transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
+          >
+            <Layers className="h-4 w-4 text-gray-600" aria-hidden />
+            Групповые обработки
+          </button>
+        ) : null}
       </div>
     </div>
   );

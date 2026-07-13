@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -853,7 +854,12 @@ export function SuppliersPaymentsWorkspace() {
             </div>
             <div className="grid gap-1.5">
               <Label>Сумма</Label>
-              <Input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+              <GroupedNumberInput
+                maxFractionDigits={2}
+                value={amount}
+                onValueChange={setAmount}
+                placeholder="0"
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>Дата оплаты</Label>

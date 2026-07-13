@@ -1,9 +1,12 @@
 "use client";
 
+import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
+import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { Input } from "@/components/ui/input";
+import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { SettingsWorkspace } from "@/components/settings/settings-workspace";
 import type { ProductRow } from "@/lib/product-types";
@@ -11,6 +14,7 @@ import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { getUserFacingError } from "@/lib/error-utils";
+import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { QueryErrorState } from "@/components/common/query-error-state";
@@ -301,7 +305,7 @@ function EquipmentItemsTab({
                           disabled={savingId === r.id}
                           onClick={() => void toggleActive(r, false)}
                         >
-                          Неактив қилиш
+                          Деактивировать
                         </Button>
                       ) : (
                         <Button
@@ -312,7 +316,7 @@ function EquipmentItemsTab({
                           disabled={savingId === r.id}
                           onClick={() => void toggleActive(r, true)}
                         >
-                          Фаоллаштириш
+                          Восстановить
                         </Button>
                       )}
                     </TableRowActionGroup>
@@ -463,6 +467,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const [fullProductOpen, setFullProductOpen] = useState(false);
   const [fullProductId, setFullProductId] = useState<number | null>(null);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<ProductRow | null>(null);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -545,6 +550,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
       await api.delete(`/api/${tenantSlug}/products/${id}`);
     },
     onSuccess: async () => {
+      setVoidTarget(null);
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     }
   });
@@ -728,9 +734,8 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                       role="menuitem"
                       className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted"
                       onClick={() => {
-                        setFullProductId(null);
-                        setFullProductOpen(true);
                         setAddMenuOpen(false);
+                        router.push(`${productsBasePath}/add`);
                       }}
                     >
                       Полная форма
@@ -744,7 +749,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                         router.push(`${productsBasePath}/bulk`);
                       }}
                     >
-                      Bir nechta qo‘shish
+                      Несколько товаров
                     </button>
                     <button
                       type="button"
@@ -760,16 +765,21 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                   </div>
                 ) : null}
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-9"
-              onClick={() => priceFileRef.current?.click()}
+            <ExcelDropTarget
               disabled={priceImportMut.isPending}
+              onFile={(f) => priceImportMut.mutate(f)}
             >
-              Narx import
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9"
+                onClick={() => priceFileRef.current?.click()}
+                disabled={priceImportMut.isPending}
+              >
+                Narx import
+              </Button>
+            </ExcelDropTarget>
           </>
         ) : null}
         <Button
@@ -808,8 +818,9 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           accept=".xlsx,.xls"
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
+            const f = pickFirstExcelFile(e.target.files);
             if (f) priceImportMut.mutate(f);
+            e.target.value = "";
           }}
         />
       </div>
@@ -917,17 +928,9 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                               variant="outline"
                               className="text-amber-800 hover:bg-amber-500/15 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-500/20"
                               disabled={deactivateMut.isPending}
-                              title="Neaktiv qilish"
-                              aria-label="Neaktiv qilish"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `«${r.name}» neaktiv qilinsinmi? Ma’lumot o‘chirilmaydi — mahsulot «Не активный» ro‘yxatiga o‘tadi.`
-                                  )
-                                ) {
-                                  deactivateMut.mutate(r.id);
-                                }
-                              }}
+                              title="Деактивировать"
+                              aria-label="Деактивировать"
+                              onClick={() => setVoidTarget(r)}
                             >
                               <Ban className="size-3.5" aria-hidden />
                             </Button>
@@ -938,14 +941,10 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                               variant="outline"
                               className="text-emerald-800 hover:bg-emerald-500/15 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
                               disabled={activateMut.isPending}
-                              title="Faollashtirish"
-                              aria-label="Faollashtirish"
+                              title="Восстановить"
+                              aria-label="Восстановить"
                               onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `«${r.name}» qayta faol qilinsinmi? U «Активный» ro‘yxatida ko‘rinadi.`
-                                  )
-                                ) {
+                                if (window.confirm(`Восстановить «${r.name}»?`)) {
                                   activateMut.mutate(r.id);
                                 }
                               }}
@@ -1000,6 +999,28 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
         onOpenChange={setQuickAddOpen}
         tenantSlug={tenantSlug}
         onDone={() => void qc.invalidateQueries({ queryKey: ["products", tenantSlug] })}
+      />
+
+      <SoftVoidConfirmDialog
+        open={voidTarget != null}
+        onClose={() => {
+          if (deactivateMut.isPending) return;
+          setVoidTarget(null);
+        }}
+        onConfirm={async () => {
+          if (voidTarget) await deactivateMut.mutateAsync(voidTarget.id);
+        }}
+        title="Деактивировать товар"
+        description={
+          voidTarget
+            ? `«${voidTarget.name}» будет деактивирован и скрыт из активного списка. Данные не удаляются.`
+            : "Товар будет деактивирован."
+        }
+        reasonRequired={false}
+        reasonPlaceholder="Комментарий (необязательно)"
+        confirmLabel="Деактивировать"
+        pending={deactivateMut.isPending}
+        consequences={["Товар останется в базе и доступен во вкладке «Не активный»"]}
       />
 
       <Dialog
@@ -1207,16 +1228,18 @@ function ProductsCatalogWorkspaceInner({
               >
                 Активный
               </button>
-              <button
-                type="button"
-                className={cn(
-                  "rounded px-2 py-1 text-xs",
-                  statusTab === "inactive" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"
-                )}
-                onClick={() => setStatusTab("inactive")}
-              >
-                Не активный
-              </button>
+              {isSoftVoidUiEnabled() ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded px-2 py-1 text-xs",
+                    statusTab === "inactive" ? "border-b-2 border-primary font-medium" : "text-muted-foreground"
+                  )}
+                  onClick={() => setStatusTab("inactive")}
+                >
+                  Не активный / Архив
+                </button>
+              ) : null}
             </div>
 
             <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">

@@ -71,6 +71,17 @@ String productQuantityLabel(Map<String, dynamic> product, double qty, {required 
 
 String formatOrderMoney(double v) => formatMoneySpaced(v);
 
+/// Mahsulot nomi + kategoriya (ostatka jadvali va zakaz ro‘yxati).
+String productDisplayName(Map<String, dynamic> product) {
+  final name = product['name']?.toString().trim() ?? '';
+  final cat = product['category_name']?.toString().trim() ??
+      (product['category'] is Map ? product['category']['name']?.toString().trim() : null);
+  if (cat != null && cat.isNotEmpty && cat != name) {
+    return '$name · $cat';
+  }
+  return name.isNotEmpty ? name : '—';
+}
+
 double parseOrderNum(dynamic v) {
   if (v is num) return v.toDouble();
   return double.tryParse(v?.toString().replaceAll(',', '.') ?? '') ?? 0;

@@ -81,6 +81,53 @@ export async function applyStockReceipt(
   }
 }
 
+export type StockReverseLineResult = {
+  product_id: number;
+  qty: number;
+  qty_before: string;
+  qty_after: string;
+};
+
+/**
+ * Posted prihod bekor qilish: kirim miqdorlarini kamaytirish (applyStockReceipt ning aksi).
+ * Yetarli qoldiq bo‘lmasa — CANNOT_CANCEL_POSTED_INSUFFICIENT_STOCK.
+ */
+export async function reverseStockReceiptInTx(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  input: StockReceiptInput
+): Promise<StockReverseLineResult[]> {
+  if (!input.items.length) return [];
+
+  const reversed: StockReverseLineResult[] = [];
+  for (const line of input.items) {
+    if (!Number.isFinite(line.qty) || line.qty <= 0) {
+      throw new Error("BAD_QTY");
+    }
+    try {
+      const { qty_before, qty_after } = await applyStockAdjustmentInTx(tx, tenantId, {
+        warehouse_id: input.warehouse_id,
+        product_id: line.product_id,
+        delta: -line.qty,
+        note: input.note ?? null
+      });
+      reversed.push({
+        product_id: line.product_id,
+        qty: line.qty,
+        qty_before,
+        qty_after
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "NEGATIVE_QTY" || msg === "BELOW_RESERVED") {
+        throw new Error("CANNOT_CANCEL_POSTED_INSUFFICIENT_STOCK");
+      }
+      throw e;
+    }
+  }
+  return reversed;
+}
+
 export type StockAdjustmentInput = {
   warehouse_id: number;
   product_id: number;

@@ -10,7 +10,9 @@ import {
   ClientMapSearchToolbar,
   ClientMapZoomControls
 } from "@/components/clients/map/client-map-toolbar";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import {
   applyClientMapFilters,
@@ -25,7 +27,8 @@ import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ClientsLeafletMapDynamic = dynamic(
   () =>
@@ -48,6 +51,33 @@ function hasCoords(c: ClientRow): boolean {
   return !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
 }
 
+function parseFocusIds(raw: string | null): number[] {
+  if (!raw?.trim()) return [];
+  return [
+    ...new Set(
+      raw
+        .split(/[, ]+/)
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0)
+    )
+  ].slice(0, 5000);
+}
+
+function loadStoredFocusIds(): number[] {
+  try {
+    const raw = sessionStorage.getItem(GROUP_PROCESSING_IDS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .slice(0, 5000);
+  } catch {
+    return [];
+  }
+}
+
 type PanelSection = "filter" | "category";
 
 type ClientRefOptionDto = { value: string; label: string };
@@ -68,6 +98,23 @@ export function ClientMapWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const authHydrated = useAuthStoreHydrated();
   const mapControlsRef = useRef<ClientMapControlsHandle | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const seedFocusIds = useMemo(() => {
+    const fromQ = parseFocusIds(searchParams.get("ids"));
+    if (fromQ.length) return fromQ;
+    if (searchParams.get("from") === "group") return loadStoredFocusIds();
+    return [];
+  }, [searchParams]);
+
+  const [focusIds, setFocusIds] = useState<number[] | null>(() =>
+    seedFocusIds.length ? seedFocusIds : null
+  );
+
+  useEffect(() => {
+    setFocusIds(seedFocusIds.length ? seedFocusIds : null);
+  }, [seedFocusIds]);
 
   const [draftFilters, setDraftFilters] = useState<ClientMapFiltersState>(INITIAL_CLIENT_MAP_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<ClientMapFiltersState>(INITIAL_CLIENT_MAP_FILTERS);
@@ -113,6 +160,7 @@ export function ClientMapWorkspace() {
   const allClients = useMemo(() => clientsQ.data?.data ?? [], [clientsQ.data?.data]);
   const gpsTotal = clientsQ.data?.total ?? allClients.length;
   const refData = refsQ.data;
+  const focusSet = useMemo(() => (focusIds?.length ? new Set(focusIds) : null), [focusIds]);
 
   const cityLabelByValue = useMemo(() => {
     const m: Record<string, string> = {};
@@ -183,17 +231,29 @@ export function ClientMapWorkspace() {
 
   const clientsWithGps = useMemo(() => allClients.filter(hasCoords), [allClients]);
 
-  const filteredClients = useMemo(
-    () =>
-      applyClientMapFilters(clientsWithGps, appliedFilters, {
-        regionLabelByValue,
-        cityLabelByValue,
-        search: appliedSearch
-      }),
-    [clientsWithGps, appliedFilters, regionLabelByValue, cityLabelByValue, appliedSearch]
-  );
+  const focusStats = useMemo(() => {
+    if (!focusSet) return null;
+    const withGps = clientsWithGps.filter((c) => focusSet.has(c.id)).length;
+    return {
+      total: focusSet.size,
+      withGps,
+      withoutGps: Math.max(0, focusSet.size - withGps)
+    };
+  }, [focusSet, clientsWithGps]);
 
-  const categoryStats = useMemo(() => computeCategoryCounts(clientsWithGps), [clientsWithGps]);
+  const filteredClients = useMemo(() => {
+    const base = focusSet ? clientsWithGps.filter((c) => focusSet.has(c.id)) : clientsWithGps;
+    return applyClientMapFilters(base, appliedFilters, {
+      regionLabelByValue,
+      cityLabelByValue,
+      search: appliedSearch
+    });
+  }, [clientsWithGps, appliedFilters, regionLabelByValue, cityLabelByValue, appliedSearch, focusSet]);
+
+  const categoryStats = useMemo(
+    () => computeCategoryCounts(focusSet ? clientsWithGps.filter((c) => focusSet.has(c.id)) : clientsWithGps),
+    [clientsWithGps, focusSet]
+  );
 
   const clientsWithCoords: ClientMapPoint[] = useMemo(
     () =>
@@ -232,6 +292,17 @@ export function ClientMapWorkspace() {
     setSelectedClientId(null);
   }, []);
 
+  const clearFocus = useCallback(() => {
+    setFocusIds(null);
+    setSelectedClientId(null);
+    try {
+      sessionStorage.removeItem(GROUP_PROCESSING_IDS_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    router.replace("/clients/map");
+  }, [router]);
+
   const handleFindOnMap = useCallback(() => {
     setAppliedSearch(searchDraft.trim());
     const q = searchDraft.trim().toLowerCase();
@@ -253,7 +324,7 @@ export function ClientMapWorkspace() {
     setDraftFilters((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  const displayedTotal = gpsTotal;
+  const displayedTotal = focusSet ? (focusStats?.withGps ?? clientsWithCoords.length) : gpsTotal;
 
   if (!authHydrated) {
     return (
@@ -279,6 +350,28 @@ export function ClientMapWorkspace() {
           Отображено клиентов на карте ({clientsQ.isLoading ? "…" : clientsWithCoords.length}
           {displayedTotal !== clientsWithCoords.length ? ` из ${displayedTotal}` : ""})
         </p>
+        {focusStats ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <span>
+              Выбрано из списка: <b>{focusStats.total}</b>
+              {focusStats.withGps > 0 ? (
+                <>
+                  {" "}
+                  · с GPS: <b>{focusStats.withGps}</b>
+                </>
+              ) : null}
+              {focusStats.withoutGps > 0 ? (
+                <>
+                  {" "}
+                  · без координат: <b>{focusStats.withoutGps}</b>
+                </>
+              ) : null}
+            </span>
+            <Button type="button" variant="outline" size="sm" className="h-7" onClick={clearFocus}>
+              Показать всех
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {clientsQ.isLoading ? (
@@ -334,15 +427,20 @@ export function ClientMapWorkspace() {
             />
 
             {clientsWithCoords.length === 0 ? (
-              <div className="flex h-full min-h-[460px] items-center justify-center">
+              <div className="flex h-full min-h-[460px] items-center justify-center px-6 text-center">
                 <p className="text-sm text-slate-500">
-                  {allClients.length === 0 ? "Клиенты не найдены." : "Нет клиентов по выбранным фильтрам."}
+                  {focusSet
+                    ? "У выбранных клиентов нет координат на карте."
+                    : allClients.length === 0
+                      ? "Клиенты не найдены."
+                      : "Нет клиентов по выбранным фильтрам."}
                 </p>
               </div>
             ) : (
               <ClientsLeafletMapDynamic
                 clients={clientsWithCoords}
                 selectedClientId={selectedClientId}
+                selectedClientIds={focusIds ?? undefined}
                 fillHeight
                 hideBuiltinControls
                 mapControlsRef={mapControlsRef}

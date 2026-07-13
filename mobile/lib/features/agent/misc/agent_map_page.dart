@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/clients/client_outlet_filters.dart';
 import '../../../core/format/money_display.dart';
@@ -408,7 +409,7 @@ class _MapStatsBar extends StatelessWidget {
   }
 }
 
-class _OutletDetailBar extends StatelessWidget {
+class _OutletDetailBar extends ConsumerWidget {
   final Map<String, dynamic> client;
   final VoidCallback onClose;
   final VoidCallback onDetails;
@@ -422,10 +423,13 @@ class _OutletDetailBar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = client['legal_name']?.toString().trim();
     final title = (name != null && name.isNotEmpty) ? name : client['name']?.toString() ?? '—';
     final subtitle = client['name']?.toString() ?? '';
+    final clientId = (client['id'] as num?)?.toInt();
+    final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
+    final balanceAmount = clientAgentLedgerBalance(agentBalances, clientId);
 
     return Material(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -458,13 +462,14 @@ class _OutletDetailBar extends StatelessWidget {
                           Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
                               style: AppTypography.caption.copyWith(color: AppColors.textMuted),),
                         const SizedBox(height: 4),
-                        Text(
-                          formatClientBalance(client),
-                          style: AppTypography.caption.copyWith(
-                            color: colorForClientBalance(parseMoneyAmount(client['balance'])),
-                            fontWeight: FontWeight.w700,
+                        if (balanceAmount != null)
+                          Text(
+                            formatClientBalanceAmount(balanceAmount),
+                            style: AppTypography.caption.copyWith(
+                              color: colorForClientBalance(balanceAmount),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -624,7 +629,7 @@ class _OutletListSheetState extends State<_OutletListSheet> {
   }
 }
 
-class _OutletTile extends StatelessWidget {
+class _OutletTile extends ConsumerWidget {
   final Map<String, dynamic> client;
   final bool visited;
   final VoidCallback onTap;
@@ -632,14 +637,16 @@ class _OutletTile extends StatelessWidget {
   const _OutletTile({required this.client, required this.visited, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = client['legal_name']?.toString().trim();
     final title = (name != null && name.isNotEmpty) ? name : client['name']?.toString() ?? '—';
     final subtitle = client['name']?.toString() ?? '';
     final cat = client['category']?.toString().trim();
-    final balanceAmount = parseMoneyAmount(client['balance']);
-    final balance = formatClientBalanceAmount(balanceAmount);
-    final hasDebt = isClientDebtBalance(balanceAmount);
+    final clientId = (client['id'] as num?)?.toInt();
+    final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
+    final balanceAmount = clientAgentLedgerBalance(agentBalances, clientId);
+    final balance = balanceAmount != null ? formatClientBalanceAmount(balanceAmount) : '';
+    final hasDebt = balanceAmount != null && isClientDebtBalance(balanceAmount);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -671,15 +678,19 @@ class _OutletTile extends StatelessWidget {
                             Text(cat, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
                           const Spacer(),
                           Text(
-                            hasDebt
-                                ? balance
-                                : (balanceAmount.abs() < 0.0001 ? 'Без долгов' : balance),
+                            balanceAmount == null
+                                ? ''
+                                : (hasDebt
+                                    ? balance
+                                    : (balanceAmount.abs() < 0.0001 ? 'Без долгов' : balance)),
                             style: AppTypography.caption.copyWith(
-                              color: hasDebt
-                                  ? AppColors.error
-                                  : (balanceAmount.abs() < 0.0001
-                                      ? AppColors.textMuted
-                                      : AppColors.textPrimary),
+                              color: balanceAmount == null
+                                  ? AppColors.textMuted
+                                  : (hasDebt
+                                      ? AppColors.error
+                                      : (balanceAmount.abs() < 0.0001
+                                          ? AppColors.textMuted
+                                          : AppColors.textPrimary)),
                               fontWeight: FontWeight.w700,
                             ),
                           ),

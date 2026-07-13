@@ -113,7 +113,12 @@ export async function registerPlansRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
     try {
-      const data = await saveApproverConfig(request.tenant!.id, q.data.direction_id, parsed.data);
+      const data = await saveApproverConfig(
+        request.tenant!.id,
+        q.data.direction_id,
+        parsed.data,
+        actorUserIdOrNull(request)
+      );
       return reply.send({ data });
     } catch (e) {
       return mapApproverError(reply, request, e);

@@ -31,6 +31,7 @@ import { ClientsListPopup } from "@/components/clients/clients-list-popup";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, UserRound } from "lucide-react";
 import Link from "next/link";
@@ -428,8 +429,12 @@ export function ClientsDataTable({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={colCount} className="px-3 py-10 text-center text-sm text-gray-600">
-                Нет данных. Попробуйте изменить фильтры
+              <td colSpan={colCount} className="p-0">
+                <EmptyState
+                  title="Нет клиентов"
+                  description="Попробуйте изменить фильтры или добавьте нового клиента."
+                  className="rounded-none border-0 bg-transparent"
+                />
               </td>
             </tr>
           ) : (

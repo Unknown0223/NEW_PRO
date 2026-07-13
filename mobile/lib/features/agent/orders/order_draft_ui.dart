@@ -195,12 +195,14 @@ class _OrderDraftCountdownTextState extends State<OrderDraftCountdownText> {
 /// Mijoz kartasidagi chernovik bloki.
 class OrderDraftClientCard extends StatelessWidget {
   final OrderDraft draft;
+  final String? clientName;
   final VoidCallback? onTap;
   final VoidCallback? onOptions;
 
   const OrderDraftClientCard({
     super.key,
     required this.draft,
+    this.clientName,
     this.onTap,
     this.onOptions,
   });
@@ -222,9 +224,27 @@ class OrderDraftClientCard extends StatelessWidget {
                   const Icon(Icons.description_outlined, size: 20, color: Color(0xFFFF9800)),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      '${S.draft} в ${formatDraftSavedAt(draft.savedAt)}',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (clientName != null && clientName!.trim().isNotEmpty)
+                          Text(
+                            clientName!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          ),
+                        Text(
+                          '${S.draft} · ${formatDraftSavedAt(draft.savedAt)}',
+                          style: TextStyle(
+                            fontSize: clientName != null && clientName!.trim().isNotEmpty ? 12 : 15,
+                            fontWeight: FontWeight.w700,
+                            color: clientName != null && clientName!.trim().isNotEmpty
+                                ? AppColors.textMuted
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   OrderDraftCountdownText(

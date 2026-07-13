@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { restoreVoidedCode, voidCodeSuffix } from "../../lib/soft-void";
 
 const supplierSelect = {
   id: true,
@@ -209,22 +210,44 @@ export async function updateSupplierRow(
   });
 }
 
-export async function deleteSupplierRow(tenantId: number, id: number) {
+export async function deleteSupplierRow(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
   const existing = await prisma.supplier.findFirst({
     where: { id, tenant_id: tenantId },
-    select: { id: true }
+    select: { id: true, name: true, code: true, is_active: true }
   });
   if (!existing) throw new Error("NOT_FOUND");
+  if (!existing.is_active) throw new Error("ALREADY_VOIDED");
 
-  const receipts = await prisma.goodsReceipt.count({
-    where: { tenant_id: tenantId, supplier_id: id, deleted_at: null }
+  const data: Prisma.SupplierUpdateInput = { is_active: false };
+  if (existing.code) {
+    data.code = voidCodeSuffix(existing.code, existing.id, 64);
+  }
+  await prisma.supplier.update({ where: { id }, data });
+  void actorUserId;
+  return existing;
+}
+
+export async function restoreSupplierRow(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
+  const existing = await prisma.supplier.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, name: true, code: true, is_active: true }
   });
-  if (receipts > 0) throw new Error("HAS_RECEIPTS");
+  if (!existing) throw new Error("NOT_FOUND");
+  if (existing.is_active) throw new Error("NOT_VOIDED");
 
-  const payments = await prisma.supplierPayment.count({
-    where: { tenant_id: tenantId, supplier_id: id, reversed_at: null }
-  });
-  if (payments > 0) throw new Error("HAS_PAYMENTS");
-
-  await prisma.supplier.delete({ where: { id } });
+  const data: Prisma.SupplierUpdateInput = { is_active: true };
+  if (existing.code) {
+    data.code = restoreVoidedCode(existing.code).slice(0, 64);
+  }
+  await prisma.supplier.update({ where: { id }, data });
+  void actorUserId;
+  return existing;
 }

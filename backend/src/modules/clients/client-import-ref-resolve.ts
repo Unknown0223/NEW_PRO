@@ -111,11 +111,6 @@ function resolveCityPairs(
   return null;
 }
 
-function keepRawRefValue(raw: string | null): string | null {
-  const t = raw?.trim();
-  return t ? t : null;
-}
-
 export type ClientImportRefMissCounts = {
   category: number;
   client_type_code: number;
@@ -195,7 +190,7 @@ export class ClientImportRefResolver {
     if (v == null) v = resolveLegacyList(raw, this.catLegacy);
     if (v == null) {
       this.miss.category += 1;
-      return keepRawRefValue(raw);
+      return null;
     }
     return v;
   }
@@ -207,7 +202,7 @@ export class ClientImportRefResolver {
     if (v == null) v = resolveLegacyList(raw, this.typeLegacy);
     if (v == null) {
       this.miss.client_type_code += 1;
-      return keepRawRefValue(raw);
+      return null;
     }
     return v;
   }
@@ -219,7 +214,7 @@ export class ClientImportRefResolver {
     if (v == null) v = resolveLegacyList(raw, this.fmtLegacy);
     if (v == null) {
       this.miss.client_format += 1;
-      return keepRawRefValue(raw);
+      return null;
     }
     return v;
   }
@@ -231,7 +226,7 @@ export class ClientImportRefResolver {
     if (v == null) v = resolveLegacyList(raw, this.salesLegacy);
     if (v == null) {
       this.miss.sales_channel += 1;
-      return keepRawRefValue(raw);
+      return null;
     }
     return v;
   }
@@ -243,7 +238,7 @@ export class ClientImportRefResolver {
     if (v == null) v = resolveCityLegacyList(raw, this.cityLegacy);
     if (v == null) {
       this.miss.city += 1;
-      return keepRawRefValue(raw);
+      return null;
     }
     return v;
   }
@@ -253,27 +248,27 @@ export class ClientImportRefResolver {
     const m = this.miss;
     if (m.category > 0) {
       out.push(
-        `Import: ${m.category} qatorda «Категория клиента (код)» spravochnikda topilmadi — kiritilgan qiymat saqlandi.`
+        `Import: ${m.category} qatorda «Категория клиента (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
       );
     }
     if (m.client_type_code > 0) {
       out.push(
-        `Import: ${m.client_type_code} qatorda «Тип клиента (код)» spravochnikda topilmadi — kiritilgan qiymat saqlandi.`
+        `Import: ${m.client_type_code} qatorda «Тип клиента (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
       );
     }
     if (m.client_format > 0) {
       out.push(
-        `Import: ${m.client_format} qatorda «Формат (код)» spravochnikda topilmadi — kiritilgan qiymat saqlandi.`
+        `Import: ${m.client_format} qatorda «Формат (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
       );
     }
     if (m.sales_channel > 0) {
       out.push(
-        `Import: ${m.sales_channel} qatorda «Торговый канал (код)» spravochnikda topilmadi — kiritilgan qiymat saqlandi.`
+        `Import: ${m.sales_channel} qatorda «Торговый канал (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
       );
     }
     if (m.city > 0) {
       out.push(
-        `Import: ${m.city} qatorda «Город (код)» spravochnik / hudud daraxtida topilmadi — kiritilgan qiymat saqlandi.`
+        `Import: ${m.city} qatorda «Город (код)» spravochnik / hudud daraxtida topilmadi — maydon bo‘sh qoldirildi.`
       );
     }
     return out;

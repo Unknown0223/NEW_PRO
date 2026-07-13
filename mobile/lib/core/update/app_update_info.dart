@@ -89,3 +89,22 @@ String storeUpdateHint(AppUpdateInfo info) {
   }
   return 'Yangi APK yuklab oling va o\'rnating';
 }
+
+/// Qo‘lda «Проверить обновление» natijasi.
+sealed class AppUpdateManualCheckResult {
+  const AppUpdateManualCheckResult();
+}
+
+class AppUpdateUpToDate extends AppUpdateManualCheckResult {
+  final String currentVersion;
+  const AppUpdateUpToDate(this.currentVersion);
+}
+
+class AppUpdateOffered extends AppUpdateManualCheckResult {
+  const AppUpdateOffered();
+}
+
+class AppUpdateCheckFailed extends AppUpdateManualCheckResult {
+  final String message;
+  const AppUpdateCheckFailed(this.message);
+}

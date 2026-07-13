@@ -1,7 +1,7 @@
 "use client";
 
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { QueryErrorState } from "@/components/common/query-error-state";
+import { PageError } from "@/components/ui/page-error";
 import { OrderStatusDatetimeDialog } from "@/components/orders/orders-list/order-status-datetime-dialog";
 import { OrdersListTableRow } from "@/components/orders/orders-list/orders-list-table-row";
 import { Button } from "@/components/ui/button";
@@ -333,21 +333,21 @@ export function OrdersListTable(props: OrdersListTableProps) {
               <p className="px-3 py-6 text-sm text-muted-foreground sm:px-4">Загрузка…</p>
             ) : isError ? (
               <div className="p-4 sm:p-5">
-                <QueryErrorState
+                <PageError
                   message={getUserFacingError(error, "Zakazlarni yuklab bo'lmadi.")}
                   onRetry={() => void refetch()}
                 />
               </div>
             ) : rows.length === 0 ? (
-              <div className="py-16 text-center text-muted-foreground">
-                <Package className="mx-auto mb-3 size-12 text-muted-foreground/40" aria-hidden />
-                <p className="text-lg font-medium text-foreground">Заказы не найдены</p>
-                <p className="mt-1 text-sm">
-                  {data?.total === 0
+              <EmptyState
+                title="Заказы не найдены"
+                description={
+                  data?.total === 0
                     ? "По выбранным фильтрам и периоду заказов нет. Измените условия или создайте новый заказ."
-                    : "На этой странице нет строк — перейдите на другую страницу."}
-                </p>
-              </div>
+                    : "На этой странице нет строк — перейдите на другую страницу."
+                }
+                className="mx-4 my-8 border-none bg-transparent"
+              />
             ) : (
               <>
                 <div

@@ -39,11 +39,6 @@ const WEEKDAY_OPTS: TemplateSelectOption[] = [
   { value: "7", label: "Вс" }
 ];
 
-const STATUS_OPTS: TemplateSelectOption[] = [
-  { value: "active", label: "Активный" },
-  { value: "inactive", label: "Не активный" }
-];
-
 const INN_OPTS: TemplateSelectOption[] = [
   { value: "has_inn", label: "С ИНН" },
   { value: "no_inn", label: "Без ИНН" }
@@ -210,23 +205,6 @@ export function ClientsTemplateFiltersPanel({
       onChange: (v) => patch({ expeditorFilter: joinMultiFilterValues(v) })
     },
     {
-      id: "status",
-      label: "Статус",
-      options: STATUS_OPTS,
-      values:
-        draft.activeFilter === "true"
-          ? ["active"]
-          : draft.activeFilter === "false"
-            ? ["inactive"]
-            : [],
-      onChange: (v) => {
-        const x = v[0]?.trim();
-        if (x === "active") patch({ activeFilter: "true" });
-        else if (x === "inactive") patch({ activeFilter: "false" });
-        else patch({ activeFilter: "all" });
-      }
-    },
-    {
       id: "location",
       label: "Локация",
       options: LOCATION_OPTS,
@@ -343,7 +321,37 @@ export function ClientsTemplateFiltersPanel({
   return (
     <div className="w-full rounded-lg border border-border bg-card px-4 pb-3 pt-4 shadow-sm sm:px-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-gray-800">Клиенты</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-xl font-bold text-gray-800">Клиенты</h2>
+          <div
+            className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
+            role="group"
+            aria-label="Статус клиентов"
+          >
+            <button
+              type="button"
+              onClick={() => patch({ activeFilter: "true" })}
+              className={
+                draft.activeFilter !== "false"
+                  ? "rounded-md bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
+                  : "rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-card hover:text-gray-900"
+              }
+            >
+              Активные
+            </button>
+            <button
+              type="button"
+              onClick={() => patch({ activeFilter: "false" })}
+              className={
+                draft.activeFilter === "false"
+                  ? "rounded-md bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white shadow-sm"
+                  : "rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-card hover:text-gray-900"
+              }
+            >
+              Неактивные
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
             <span className="mr-1 text-xs font-medium text-gray-600">📅 Дата</span>

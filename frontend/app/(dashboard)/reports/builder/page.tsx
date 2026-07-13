@@ -1,10 +1,6 @@
-import dynamic from "next/dynamic";
+import { redirect } from "next/navigation";
 
-const WdrReportBuilder = dynamic(() => import("@/components/reports/wdr-report-builder"), {
-  ssr: false,
-  loading: () => <p className="p-4 text-sm text-muted-foreground">Загрузка конструктора…</p>
-});
-
+/** Asosiy hisobot konstruktori — Virtual Pivot (Sprint 8 default). */
 export default function ReportBuilderPage() {
-  return <WdrReportBuilder />;
+  redirect("/reports/builder/pivot");
 }

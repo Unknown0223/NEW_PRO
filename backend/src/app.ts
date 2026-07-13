@@ -1,5 +1,6 @@
 import multipart from "@fastify/multipart";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import Fastify from "fastify";
 import { ZodError } from "zod";
@@ -14,10 +15,12 @@ import { metricsPlugin } from "./plugins/metrics.plugin";
 import { sentryPlugin } from "./plugins/sentry.plugin";
 import { telemetryPlugin } from "./plugins/telemetry.plugin";
 import { registerBusinessMetricsRoutes } from "./modules/health/business-metrics.route";
+import { registerWebVitalsRoutes } from "./modules/health/web-vitals.route";
 import { ExcelImportTooLargeError } from "./lib/multipart-limits";
 import { checkReadiness } from "./modules/health/health.service";
 import { buildCorsOrigin } from "./lib/cors-options";
 import { GLOBAL_HTTP_BODY_LIMIT_BYTES } from "./lib/constants";
+import { helmetOptions } from "./lib/helmet-options";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
 import { registerAllRoutes } from "./route-registry";
 
@@ -31,6 +34,7 @@ export function buildApp() {
   });
 
   app.register(cors, { origin: buildCorsOrigin(), credentials: true });
+  app.register(helmet, helmetOptions);
   app.register(multipart, {
     limits: {
       fileSize: Math.max(env.MULTIPART_MAX_FILE_BYTES, env.MULTIPART_APK_MAX_BYTES)
@@ -45,6 +49,7 @@ export function buildApp() {
   app.register(requestObservabilityPlugin);
   app.register(metricsPlugin);
   void registerBusinessMetricsRoutes(app);
+  void registerWebVitalsRoutes(app);
   /** Strukturali ruxsat tekshiruvi (RBAC_ENFORCE_PERMISSIONS=1 bo‘lganda faol). */
   registerRoutePermissionGuard(app);
   registerAllRoutes(app);

@@ -86,6 +86,11 @@ export type ClientListRow = {
   contact_persons: ContactPersonSlot[];
   created_at: string;
   active_equipment_count?: number;
+  price_type: string | null;
+  allow_order_with_debt: boolean;
+  allow_consignment: boolean;
+  allow_consignment_with_debt: boolean;
+  tags: Array<{ id: number; name: string }>;
 };
 
 export type ListClientsQuery = {
@@ -172,6 +177,10 @@ export type ListClientsQuery = {
   has_coords?: boolean;
   /** GPS koordinatasi yo‘q yozuvlar */
   missing_coords?: boolean;
+  /** Teg bo‘yicha filtr */
+  tag_id?: number;
+  price_type?: string;
+  allow_order_with_debt?: boolean;
 };
 
 

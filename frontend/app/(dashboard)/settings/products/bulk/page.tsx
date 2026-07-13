@@ -16,8 +16,8 @@ export default function SettingsProductsBulkPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Bir nechta mahsulot"
-        description="Bir sahifada ketma-ket bir nechta mahsulot kiriting. Har bir to‘ldirilgan qator uchun kategoriya, nom va o‘lchov birligi majburiy."
+        title="Добавление нескольких товаров"
+        description="Введите несколько товаров в таблице. Для каждой заполненной строки обязательны категория, название и единица измерения."
       />
       <SettingsWorkspace>
         <ProductBulkAddPanel

@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { sendApiError } from "../../lib/api-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser, jwtAccessVerify } from "../auth/auth.prehandlers";
 import {
@@ -18,6 +23,10 @@ import {
 } from "./warehouse-transfers.service";
 
 function replyWarehouseTransferError(reply: FastifyReply, request: FastifyRequest, e: unknown): boolean {
+  if (isDocumentEditPeriodLockedError(e)) {
+    void sendDocumentEditPeriodLocked(reply, request);
+    return true;
+  }
   const msg = e instanceof Error ? e.message : String(e);
   if (msg === "EMPTY_LINES") {
     void sendApiError(reply, request, 400, "EmptyLines");
@@ -122,6 +131,7 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
     const { id } = (request.params as Record<string, string>);
     const body = request.body as any;
     try {
+      await assertDocWritableById(request, "stock", parseInt(id), "transfer");
       const data = await updateTransfer(request.tenant!.id, parseInt(id), body);
       return reply.send(data);
     } catch (e) {
@@ -134,6 +144,7 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const { id } = (request.params as Record<string, string>);
     try {
+      await assertDocWritableById(request, "stock", parseInt(id), "transfer");
       await startTransfer(request.tenant!.id, parseInt(id));
       return reply.send({ ok: true });
     } catch (e) {
@@ -147,14 +158,26 @@ export async function registerWarehouseTransferRoutes(app: FastifyInstance) {
     const { id } = (request.params as Record<string, string>);
     const body = request.body as any;
     const jwtUser = getAccessUser(request);
-    const data = await receiveTransfer(request.tenant!.id, parseInt(id), Number(jwtUser.sub), body.adjustments || []);
-    return reply.send(data);
+    try {
+      await assertDocWritableById(request, "stock", parseInt(id), "transfer");
+      const data = await receiveTransfer(request.tenant!.id, parseInt(id), Number(jwtUser.sub), body.adjustments || []);
+      return reply.send(data);
+    } catch (e) {
+      if (replyWarehouseTransferError(reply, request, e)) return;
+      throw e;
+    }
   });
 
   app.post("/api/:slug/transfers/:id/cancel", { preHandler: preWrite }, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!ensureTenantContext(request, reply)) return;
     const { id } = (request.params as Record<string, string>);
-    const data = await cancelTransfer(request.tenant!.id, parseInt(id));
-    return reply.send(data);
+    try {
+      await assertDocWritableById(request, "stock", parseInt(id), "transfer");
+      const data = await cancelTransfer(request.tenant!.id, parseInt(id));
+      return reply.send(data);
+    } catch (e) {
+      if (replyWarehouseTransferError(reply, request, e)) return;
+      throw e;
+    }
   });
 }

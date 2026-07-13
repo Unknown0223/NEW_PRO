@@ -17,6 +17,10 @@ export type CreateOrderClientRow = {
   neighborhood: string | null;
   address: string | null;
   credit_limit: Prisma.Decimal;
+  price_type: string | null;
+  allow_order_with_debt: boolean;
+  allow_consignment: boolean;
+  allow_consignment_with_debt: boolean;
 };
 
 export type CreateOrderTxParams = {

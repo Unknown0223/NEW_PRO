@@ -29,6 +29,164 @@ import { cn } from "@/lib/utils";
 import { AlertCircle, CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button-variants";
+import type { StepTableColumn, StepTableConfig } from "@/lib/initial-setup/ref-table-config";
+import { formatNumberGrouped } from "@/lib/format-numbers";
+import {
+  RELATION_SOURCE_LABEL,
+  loadRelationOptions,
+  relationSourcesForColumns,
+  type RelationOption,
+  type RelationOptionsMap,
+  type RelationSource
+} from "@/lib/initial-setup/relation-options";
+import { INPUT_SURFACE_CLASS } from "@/lib/ui-input-styles";
+
+const FIELD_INPUT_CLASS =
+  "h-9 min-w-0 w-full rounded-lg border-slate-200 bg-white text-sm shadow-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20";
+
+function RelationSelect({
+  value,
+  options,
+  enabled,
+  isErr,
+  placeholder,
+  onChange
+}: {
+  value: string;
+  options: RelationOption[];
+  enabled: boolean;
+  isErr: boolean;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  const hasValue = Boolean(value.trim());
+  const known = options.some((o) => o.value === value);
+  return (
+    <select
+      className={cn(
+        INPUT_SURFACE_CLASS,
+        FIELD_INPUT_CLASS,
+        "appearance-none bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat pr-8",
+        isErr && "border-destructive focus-visible:ring-destructive/25"
+      )}
+      style={{
+        backgroundImage:
+          "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")"
+      }}
+      value={value}
+      disabled={!enabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">{options.length ? `— ${placeholder} —` : "Avval bog‘liq ma’lumot qo‘shing"}</option>
+      {hasValue && !known ? <option value={value}>{value} (joriy)</option> : null}
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function StepFieldInput({
+  col,
+  value,
+  readOnly,
+  enabled,
+  isErr,
+  errorTitle,
+  options,
+  onChange
+}: {
+  col: StepTableColumn;
+  value: string;
+  readOnly: boolean;
+  enabled: boolean;
+  isErr: boolean;
+  errorTitle?: string;
+  options?: RelationOption[];
+  onChange: (v: string) => void;
+}) {
+  if (readOnly) {
+    const shown =
+      col.numeric && value
+        ? formatNumberGrouped(value, { maxFractionDigits: col.maxFractionDigits ?? 6 })
+        : value || "—";
+    return <span className={cn("block px-1.5 text-sm", col.numeric && "text-right tabular-nums")}>{shown}</span>;
+  }
+
+  if (col.relation) {
+    return (
+      <RelationSelect
+        value={value}
+        options={options ?? []}
+        enabled={enabled}
+        isErr={isErr}
+        placeholder={col.header.replace(/\s*\*$/, "")}
+        onChange={onChange}
+      />
+    );
+  }
+
+  return (
+    <Input
+      type={col.numeric ? "number" : "text"}
+      maxFractionDigits={col.maxFractionDigits ?? 6}
+      allowNegative={false}
+      className={cn(FIELD_INPUT_CLASS, isErr && "border-destructive focus-visible:ring-destructive/25")}
+      value={value}
+      disabled={!enabled}
+      placeholder={col.header.replace(/\s*\*$/, "")}
+      title={errorTitle}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+function RelationHintsBar({
+  columns,
+  optionsMap
+}: {
+  columns: StepTableColumn[];
+  optionsMap: RelationOptionsMap;
+}) {
+  const items = columns
+    .filter((c) => c.relation)
+    .map((c) => {
+      const src = c.relation as RelationSource;
+      const opts = optionsMap[src] ?? [];
+      return { key: c.key, header: c.header, label: RELATION_SOURCE_LABEL[src], count: opts.length, opts };
+    });
+  if (!items.length) return null;
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/80">
+        Bog‘liq ma’lumotlar (tanlash)
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {items.map((it) => (
+          <span
+            key={it.key}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]",
+              it.count > 0
+                ? "border-emerald-200 bg-white text-emerald-900"
+                : "border-amber-200 bg-amber-50 text-amber-900"
+            )}
+            title={it.opts
+              .slice(0, 12)
+              .map((o) => o.label)
+              .join(", ")}
+          >
+            <span className="font-medium">{it.label}</span>
+            <span className="tabular-nums text-muted-foreground">{it.count}</span>
+            {it.count === 0 ? <span className="text-amber-700">— avval qo‘shing</span> : null}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   tenantSlug: string;
@@ -59,7 +217,12 @@ export function InitialSetupStepTable({
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug],
-    enabled: Boolean(config && (config.mode === "profile" || config.mode === "company-form" || config.stepId === "territory")),
+    enabled: Boolean(
+      config &&
+        (config.mode === "profile" ||
+          config.mode === "company-form" ||
+          config.stepId === "territory")
+    ),
     staleTime: STALE.profile,
     queryFn: async () => {
       const { data } = await api.get<{
@@ -69,6 +232,24 @@ export function InitialSetupStepTable({
         references: Record<string, unknown>;
       }>(`/api/${tenantSlug}/settings/profile`);
       return data;
+    }
+  });
+
+  const entityListQ = useQuery({
+    queryKey: ["initial-setup-entity", step.id, tenantSlug],
+    enabled: Boolean(config?.mode === "entity-create" && config.entityKind),
+    staleTime: STALE.list,
+    queryFn: async () => {
+      if (config!.entityKind === "warehouses") {
+        const { data } = await api.get<{ data?: { name: string; code?: string | null; address?: string | null }[] }>(
+          `/api/${tenantSlug}/warehouses`
+        );
+        return { kind: "warehouses" as const, rows: data.data ?? [] };
+      }
+      const { data } = await api.get<{
+        data?: { id: number; name: string; code?: string | null; parent_id?: number | null }[];
+      }>(`/api/${tenantSlug}/product-categories`);
+      return { kind: "product-categories" as const, rows: data.data ?? [] };
     }
   });
 
@@ -82,12 +263,76 @@ export function InitialSetupStepTable({
     }
   });
 
+  const relationSources = useMemo(
+    () => relationSourcesForColumns(config?.columns ?? []),
+    [config?.columns]
+  );
+
+  const relationQ = useQuery({
+    queryKey: ["initial-setup-relations", tenantSlug, step.id, relationSources.join("|")],
+    enabled: Boolean(tenantSlug && relationSources.length),
+    staleTime: STALE.list,
+    queryFn: () => loadRelationOptions(tenantSlug, relationSources)
+  });
+
+  /** Joriy jadvaldagi nomlar ham parent tanloviga qo‘shiladi (hali saqlanmagan) */
+  const relationOptionsMap = useMemo((): RelationOptionsMap => {
+    const base: RelationOptionsMap = { ...(relationQ.data ?? {}) };
+    const namesFromPreview = (preview?.rows ?? [])
+      .map((r) => (r.cells.name ?? "").trim())
+      .filter(Boolean)
+      .map((name) => ({ value: name, label: name }));
+
+    const merge = (src: RelationSource) => {
+      const prev = base[src] ?? [];
+      const seen = new Set(prev.map((o) => o.value.toLowerCase()));
+      const extra = namesFromPreview.filter((o) => !seen.has(o.value.toLowerCase()));
+      if (extra.length) base[src] = [...prev, ...extra];
+    };
+
+    if (config?.stepId === "territory") merge("territory-parent");
+    if (config?.stepId === "product-categories") merge("product-category-parent");
+    return base;
+  }, [relationQ.data, preview?.rows, config?.stepId]);
+
+  function optionsForCol(col: StepTableColumn): RelationOption[] | undefined {
+    if (!col.relation) return undefined;
+    return relationOptionsMap[col.relation] ?? [];
+  }
+
   const loadedPreview = useMemo(() => {
     if (!config) return null;
-    if (config.stepId === "territory") {
+    if (config.stepId === "territory" || config.profileRefKey === "territory_nodes") {
       const nodes = profileQ.data?.references?.territory_nodes;
       const rows = flattenTerritoryNodes(nodes);
       return rows.length ? previewFromRows(config, rows) : emptyPreview(config);
+    }
+    if (config.mode === "entity-create" && entityListQ.data) {
+      const rows: { rowIndex: number; cells: Record<string, string> }[] = [];
+      if (entityListQ.data.kind === "warehouses") {
+        entityListQ.data.rows.forEach((w, i) => {
+          rows.push({
+            rowIndex: i + 1,
+            cells: { name: w.name, code: w.code ?? "", address: w.address ?? "" }
+          });
+        });
+      } else {
+        const list = entityListQ.data.rows as {
+          id: number;
+          name: string;
+          code?: string | null;
+          parent_id?: number | null;
+        }[];
+        const byId = new Map(list.map((x) => [x.id, x]));
+        list.forEach((c, i) => {
+          const parent = c.parent_id != null ? byId.get(c.parent_id)?.name ?? "" : "";
+          rows.push({
+            rowIndex: i + 1,
+            cells: { name: c.name, code: c.code ?? "", parent }
+          });
+        });
+      }
+      return previewFromRows(config, rows);
     }
     if (config.mode === "readonly-api") {
       const rows: { rowIndex: number; cells: Record<string, string> }[] = [];
@@ -127,7 +372,7 @@ export function InitialSetupStepTable({
       return fromProfile ?? emptyPreview(config);
     }
     return emptyPreview(config);
-  }, [config, profileQ.data, readonlyQ.data]);
+  }, [config, profileQ.data, readonlyQ.data, entityListQ.data]);
 
   useEffect(() => {
     if (!loadedPreview || !config) return;
@@ -150,12 +395,29 @@ export function InitialSetupStepTable({
   const hasErrors = useMemo(() => (preview ? previewHasBlockingErrors(preview) : false), [preview]);
 
   const columnDefs = useMemo(() => {
-    if (!config) return [];
-    return preview?.columns.map((header, i) => ({
-      header,
-      key: config.columns[i]?.key ?? header
-    })) ?? config.columns.map((c) => ({ header: c.header, key: c.key }));
+    if (!config) return [] as Array<{ header: string; key: string; meta?: StepTableColumn }>;
+    return (
+      preview?.columns.map((header, i) => ({
+        header,
+        key: config.columns[i]?.key ?? header,
+        meta: config.columns[i]
+      })) ?? config.columns.map((c) => ({ header: c.header, key: c.key, meta: c }))
+    );
   }, [config, preview?.columns]);
+
+  function resolveColMeta(key: string, header: string): StepTableColumn {
+    const fromConfig = config?.columns.find((c) => c.key === key);
+    if (fromConfig) return fromConfig;
+    return {
+      key,
+      header,
+      numeric: /цена|price|количеств|qty|sort|сумм|miqdor|soni|широт|долгот/i.test(header)
+    };
+  }
+
+  function setCell(rowIndex: number, key: string, value: string) {
+    setPreview((p) => (p && config ? updatePreviewCell(p, rowIndex, key, value, config) : p));
+  }
 
   if (!config) {
     return (
@@ -205,6 +467,9 @@ export function InitialSetupStepTable({
       setMsg(message);
       onApplied?.(message);
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["initial-setup-relations", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["initial-setup-entity", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["initial-setup-readiness", tenantSlug] });
     } catch (e) {
       setMsg(getUserFacingError(e, "Saqlash xatosi"));
     } finally {
@@ -213,22 +478,110 @@ export function InitialSetupStepTable({
   }
 
   const errorCount = preview?.rows.filter((r) => r.errors.length).length ?? 0;
-  const loading = profileQ.isLoading || readonlyQ.isLoading;
+  const loading = profileQ.isLoading || readonlyQ.isLoading || entityListQ.isLoading;
+
+  function renderTableView(cfg: StepTableConfig) {
+    if (!preview) return null;
+    return (
+      <div className="max-h-[28rem] overflow-auto rounded-xl border border-border/80 bg-background shadow-sm">
+        <table className="w-full min-w-[520px] border-collapse text-sm">
+          <thead>
+            <tr className="sticky top-0 z-[1] bg-slate-50/95 backdrop-blur">
+              <th className="border-b px-3 py-2.5 text-left text-xs font-semibold text-slate-600">#</th>
+              {columnDefs.map((col) => (
+                <th key={col.key} className="border-b px-3 py-2.5 text-left text-xs font-semibold text-slate-600">
+                  {col.header}
+                  {cfg.columns.find((c) => c.key === col.key)?.required ? (
+                    <span className="text-destructive"> *</span>
+                  ) : null}
+                </th>
+              ))}
+              <th className="border-b px-3 py-2.5 text-left text-xs font-semibold text-slate-600">Статус</th>
+              {!readOnly ? <th className="w-10 border-b px-2 py-2.5" /> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {preview.rows.map((row) => (
+              <tr
+                key={row.rowIndex}
+                className={cn(
+                  "transition-colors",
+                  row.errors.length
+                    ? "bg-destructive/[0.04]"
+                    : row.warnings.length
+                      ? "bg-amber-50/60"
+                      : "hover:bg-slate-50/80"
+                )}
+              >
+                <td className="border-b border-border/60 px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
+                  {row.rowIndex}
+                </td>
+                {columnDefs.map((col) => {
+                  const meta = resolveColMeta(col.key, col.header);
+                  const isErr = row.errors.some((e) => e.includes(col.header));
+                  return (
+                    <td key={col.key} className="border-b border-border/60 px-1.5 py-1">
+                      <StepFieldInput
+                        col={meta}
+                        value={row.cells[col.key] ?? ""}
+                        readOnly={readOnly}
+                        enabled={enabled}
+                        isErr={isErr}
+                        errorTitle={isErr ? row.errors.find((e) => e.includes(col.header)) : undefined}
+                        options={optionsForCol(meta)}
+                        onChange={(v) => setCell(row.rowIndex, col.key, v)}
+                      />
+                    </td>
+                  );
+                })}
+                <td className="border-b border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground">
+                  {row.errors.length ? (
+                    <span className="text-destructive">{row.errors.join("; ")}</span>
+                  ) : row.warnings.length ? (
+                    row.warnings.join("; ")
+                  ) : (
+                    <span className="font-medium text-emerald-700">OK</span>
+                  )}
+                </td>
+                {!readOnly ? (
+                  <td className="border-b border-border/60 px-1 py-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      disabled={!enabled}
+                      onClick={() => removeRow(row.rowIndex)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </td>
+                ) : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   return (
-    <div className={cn("mt-3 space-y-2", compact && "text-xs")}>
+    <div className={cn("mt-3 space-y-3", compact && "text-xs")}>
       {loading ? (
-        <p className="text-xs text-muted-foreground">Tizimdan yuklanmoqda…</p>
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" /> Tizimdan yuklanmoqda…
+        </p>
       ) : null}
 
       {depsBlockedMsg ? (
-        <p className="text-xs font-medium text-amber-700">{depsBlockedMsg}</p>
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {depsBlockedMsg}
+        </p>
       ) : null}
 
       {readOnly ? (
-        <p className="text-xs text-amber-800/90">
-          Tizimdagi ma’lumot (o‘qish). Tahrirlash — asosiy sozlamalar sahifasida; u yerda saqlanganlar shu jadvalda
-          ham ko‘rinadi.
+        <p className="rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Tizimdagi ma’lumot (o‘qish). Tahrirlash — asosiy sozlamalar sahifasida.
           {step.settingsHref ? (
             <>
               {" "}
@@ -240,17 +593,24 @@ export function InitialSetupStepTable({
         </p>
       ) : null}
 
+      {relationSources.length ? (
+        <RelationHintsBar columns={config.columns} optionsMap={relationOptionsMap} />
+      ) : null}
+
       {preview && preview.rows.length > 0 ? (
         <>
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            <span className="inline-flex items-center gap-1 text-emerald-700">
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
               <CheckCircle2 className="size-3" /> {preview.rows.length - errorCount} OK
             </span>
             {errorCount > 0 ? (
-            <div className="w-full space-y-1">
-              <span className="inline-flex items-center gap-1 text-destructive">
+              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 font-medium text-destructive">
                 <AlertCircle className="size-3" /> {errorCount} xato
               </span>
+            ) : null}
+          </div>
+          {errorCount > 0 ? (
+            <div className="max-h-20 space-y-0.5 overflow-auto rounded-md border border-destructive/20 bg-destructive/5 px-2 py-1.5">
               {preview.rows
                 .filter((r) => r.errors.length)
                 .map((r) => (
@@ -260,115 +620,50 @@ export function InitialSetupStepTable({
                 ))}
             </div>
           ) : null}
-          </div>
-          <div className="max-h-64 overflow-auto rounded-lg border">
-            <table className="w-full min-w-[480px] border-collapse text-xs">
-              <thead>
-                <tr className="bg-muted/50">
-                  <th className="border-b px-2 py-1.5 text-left font-semibold">#</th>
-                  {columnDefs.map((col) => (
-                    <th key={col.key} className="border-b px-2 py-1.5 text-left font-semibold">
-                      {col.header}
-                      {config.columns.find((c) => c.key === col.key)?.required ? (
-                        <span className="text-destructive"> *</span>
-                      ) : null}
-                    </th>
-                  ))}
-                  <th className="border-b px-2 py-1.5 text-left font-semibold">Статус</th>
-                  {!readOnly ? <th className="border-b px-2 py-1.5 w-8" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.rows.map((row) => (
-                  <tr
-                    key={row.rowIndex}
-                    className={cn(
-                      row.errors.length ? "bg-destructive/5" : row.warnings.length ? "bg-amber-50/80" : ""
-                    )}
-                  >
-                    <td className="border-b px-2 py-1 tabular-nums text-muted-foreground">{row.rowIndex}</td>
-                    {columnDefs.map((col) => {
-                      const isErr = row.errors.some((e) => e.includes(col.header));
-                      return (
-                        <td key={col.key} className="border-b px-1 py-1">
-                          {readOnly ? (
-                            <span>{row.cells[col.key] ?? "—"}</span>
-                          ) : (
-                            <Input
-                              className={cn(
-                                "h-7 min-w-[5rem] text-xs",
-                                isErr && "border-destructive ring-1 ring-destructive/30"
-                              )}
-                              value={row.cells[col.key] ?? ""}
-                              disabled={!enabled}
-                              title={isErr ? row.errors.find((e) => e.includes(col.header)) : undefined}
-                              onChange={(e) =>
-                                setPreview((p) =>
-                                  p ? updatePreviewCell(p, row.rowIndex, col.key, e.target.value, config) : p
-                                )
-                              }
-                            />
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="border-b px-2 py-1 text-[11px] text-muted-foreground">
-                      {row.errors.length ? (
-                        <span className="text-destructive">{row.errors.join("; ")}</span>
-                      ) : row.warnings.length ? (
-                        row.warnings.join("; ")
-                      ) : (
-                        <span className="text-emerald-700">OK</span>
-                      )}
-                    </td>
-                    {!readOnly ? (
-                      <td className="border-b px-1 py-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="size-7 text-muted-foreground"
-                          disabled={!enabled}
-                          onClick={() => removeRow(row.rowIndex)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {renderTableView(config)}
         </>
       ) : (
-        <p className="rounded-md border border-dashed bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
-          {readOnly ? "Tizimda hali ma’lumot yo‘q" : "Excel yuklang yoki qator qo‘shing"}
-        </p>
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
+          <p className="text-sm font-medium text-slate-700">
+            {readOnly ? "Tizimda hali ma’lumot yo‘q" : "Ma’lumot qo‘shing"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {readOnly
+              ? "Asosiy sozlamalarda yarating yoki Excel shablondan yuklang"
+              : "«Qator» tugmasi yoki Excel shablon orqali to‘ldiring"}
+          </p>
+        </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-slate-50/60 px-3 py-2.5">
         {!readOnly ? (
           <>
-            <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={!enabled} onClick={addRow}>
-              <Plus className="size-3.5" />
-              Qator
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 rounded-lg text-sm"
+              disabled={!enabled}
+              onClick={addRow}
+            >
+              <Plus className="size-4" />
+              Qator qo‘shish
             </Button>
             <Button
               type="button"
               size="sm"
-              className="h-7 text-xs"
+              className="h-9 rounded-lg text-sm"
               disabled={!canApply || busy || hasErrors || !preview?.rows.length}
               onClick={() => void apply()}
             >
-              {busy ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
+              {busy ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
               Qo‘llash (tizimga)
             </Button>
           </>
         ) : step.settingsHref ? (
           <Link
             href={step.settingsHref}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 text-xs")}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9 rounded-lg text-sm")}
           >
             Asosiy sozlamalarda tahrirlash
           </Link>
@@ -376,7 +671,14 @@ export function InitialSetupStepTable({
       </div>
 
       {msg ? (
-        <p className={cn("text-xs", msg.includes("xato") || msg.includes("Xato") ? "text-destructive" : "text-emerald-700")}>
+        <p
+          className={cn(
+            "rounded-lg px-3 py-2 text-sm",
+            msg.includes("xato") || msg.includes("Xato") || msg.includes("Ошибка")
+              ? "border border-destructive/20 bg-destructive/5 text-destructive"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-800"
+          )}
+        >
           {msg}
         </p>
       ) : null}

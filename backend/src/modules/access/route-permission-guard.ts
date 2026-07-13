@@ -118,6 +118,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Клиенты (clients) ───────────
   r(WRITE, /\/clients\/bulk-active$/, "clients.klient.activate", "clients.klient.deactivate"),
   r(WRITE, /\/clients\/bulk$/, "clients.klient.update", "clients.klient.assign"),
+  r(WRITE, /\/clients\/bulk-tags$/, "clients.klient.update", "clients.klient.assign"),
+  r(WRITE, /\/clients\/tags$/, "clients.klient.update", "clients.klient.assign"),
   r(WRITE, /\/clients\/import/, "clients.klient.import"),
   r(READ, /\/clients\/export$/, "clients.klient.copy"),
   r(WRITE, /\/clients\/:id\/equipment/, "clients.oborudovanie.create", "clients.oborudovanie.update", "clients.oborudovanie.delete"),
@@ -126,12 +128,6 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["PUT", "PATCH"], /\/clients\/:id$/, "clients.klient.update"),
   r(["DELETE"], /\/clients\/:id$/, "clients.klient.delete"),
   r(READ, /\/clients(\/|$)/, "clients.klient.view"),
-  // QR коды клиентов
-  r(WRITE, /\/client-qr-codes\/(generate)$/, "clients.qr_kody.create"),
-  r(WRITE, /\/client-qr-codes\/(bind|unbind)$/, "clients.qr_kody.assign"),
-  r(WRITE, /\/client-qr-codes\/(mark-printed)$/, "clients.qr_kody.status"),
-  r(READ, /\/client-qr-codes\/.*export/, "clients.qr_kody.copy"),
-  r(READ, /\/client-qr-codes(\/|$)/, "clients.qr_kody.view"),
 
   // ─────────── Накладные / списания (assembly via returns write-offs) ───────────
   r(WRITE, /\/order-automation/, "automation.zaiavki.create", "automation.zaiavki.update"),
@@ -196,6 +192,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/reports(\/|$)/, "reports.otchety.view"),
 
   // ─────────── Бонусы и скидки (bonus-rules) ───────────
+  r(WRITE, /\/bonus-rules\/bulk$/, "settings.bonusy_i_skidki.update"),
   r(WRITE, /\/bonus-rules\/:id\/active$/, "settings.bonusy_i_skidki.update"),
   r(WRITE, /\/bonus-rules\/:id\/order-scope$/, "settings.bonusy_i_skidki.update"),
   r(["POST"], /\/bonus-rules$/, "settings.bonusy_i_skidki.create"),

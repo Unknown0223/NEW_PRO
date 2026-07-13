@@ -7,7 +7,6 @@ import { registerAuthRoutes } from "./modules/auth/auth.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
 import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
 import { registerClientBalanceRoutes } from "./modules/client-balances/client-balances.route";
-import { registerClientQrRoutes } from "./modules/client-qr/client-qr.route";
 import { registerClientRoutes } from "./modules/clients/clients.route";
 import { registerConsignmentRoutes } from "./modules/consignment/consignment.route";
 import { registerCurrencyExchangeRateRoutes } from "./modules/currency-rates/currency-exchange-rates.route";
@@ -44,6 +43,7 @@ import { registerStockTakeRoutes } from "./modules/stock/stock-takes.route";
 import { registerWarehouseTransferRoutes } from "./modules/stock/warehouse-transfers.route";
 import { registerSystemMigrationRoutes } from "./modules/system-migration/system-migration.route";
 import { registerTenantSettingsRoutes } from "./modules/tenant-settings/tenant-settings.route";
+import { registerDocumentEditLockRoutes } from "./modules/document-edit-lock/document-edit-lock.route";
 import { registerTerritoryRoutes } from "./modules/territory/territory.route";
 import { registerTimesheetRoutes } from "./modules/timesheet/timesheet.route";
 import { registerUserUiRoutes } from "./modules/users/user-ui.route";
@@ -74,6 +74,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerSalesReturnRoutes,
   registerReferenceRoutes,
   registerTenantSettingsRoutes,
+  registerDocumentEditLockRoutes,
   registerAuditEventRoutes,
   registerActivityRoutes,
   registerStockRoutes,
@@ -100,7 +101,6 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerNotificationRoutes,
   registerMobileRoutes,
   registerLinkageRoutes,
-  registerClientQrRoutes,
   registerJobRoutes,
   registerTimesheetRoutes,
   registerWorkSlotRoutes,

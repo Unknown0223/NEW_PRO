@@ -1,4 +1,4 @@
-import type { BonusConditionRow, BonusRuleRow } from "./bonus-rules.types";
+import type { BonusConditionRow, BonusRuleClauseRow, BonusRuleRow } from "./bonus-rules.types";
 
 /** Zakazda saqlanadigan qoida snapshot (tahrirdan keyin ham ko‘rinadi). */
 export type AppliedBonusRuleSnapshot = {
@@ -32,6 +32,8 @@ export type AppliedBonusRuleSnapshot = {
   scope_agent_user_ids: number[];
   scope_trade_direction_ids: number[];
   conditions: BonusConditionRow[];
+  /** Multi-shart: barcha clause lar (gate + reward). */
+  clauses: BonusRuleClauseRow[];
   captured_at: string;
 };
 
@@ -67,6 +69,17 @@ export function buildBonusRuleApplySnapshot(rule: BonusRuleRow): AppliedBonusRul
     scope_agent_user_ids: [...(rule.scope_agent_user_ids ?? [])],
     scope_trade_direction_ids: [...(rule.scope_trade_direction_ids ?? [])],
     conditions: rule.conditions.map((c) => ({ ...c })),
+    clauses: (rule.clauses ?? []).map((c) => ({
+      ...c,
+      product_ids: [...c.product_ids],
+      bonus_product_ids: [...c.bonus_product_ids],
+      product_category_ids: [...c.product_category_ids],
+      selected_client_ids: [...c.selected_client_ids],
+      scope_branch_codes: [...c.scope_branch_codes],
+      scope_agent_user_ids: [...c.scope_agent_user_ids],
+      scope_trade_direction_ids: [...c.scope_trade_direction_ids],
+      conditions: c.conditions.map((cond) => ({ ...cond }))
+    })),
     captured_at: new Date().toISOString()
   };
 }
@@ -130,6 +143,7 @@ export function parseAppliedBonusRulesSnapshot(raw: unknown): AppliedBonusRuleSn
       conditions: Array.isArray(o.conditions)
         ? (o.conditions as AppliedBonusRuleSnapshot["conditions"])
         : [],
+      clauses: Array.isArray(o.clauses) ? (o.clauses as BonusRuleClauseRow[]) : [],
       captured_at: typeof o.captured_at === "string" ? o.captured_at : new Date(0).toISOString()
     });
   }

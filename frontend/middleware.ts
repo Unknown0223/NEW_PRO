@@ -45,6 +45,11 @@ export function middleware(request: NextRequest) {
     url.pathname = pathname.replace(/^\/products/, "/settings/products");
     return NextResponse.redirect(url);
   }
+  if (pathname === "/products/add" || pathname.startsWith("/products/add/")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/products/, "/settings/products");
+    return NextResponse.redirect(url);
+  }
 
   /** Login sahifasi ochiq; allaqachon kirgan bo'lsa — dashboardga. */
   if (isPublicPath(pathname)) {
@@ -78,6 +83,6 @@ export const config = {
    * (dashboard) sahifasi avtomatik himoyalanadi.
    */
   matcher: [
-    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff2?|ttf|ico|map)$).*)"
+    "/((?!api|auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff2?|ttf|ico|map|geojson)$).*)"
   ]
 };

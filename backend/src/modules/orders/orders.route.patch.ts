@@ -11,6 +11,11 @@ import {
 } from "../../contracts/orders.schemas";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { getErrorCode } from "../../lib/app-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
@@ -58,6 +63,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
+        await assertDocWritableById(request, "orders", id);
         const viewer = getAccessUser(request);
         const sub = Number.parseInt(viewer.sub, 10);
         const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -70,6 +76,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {
@@ -125,6 +132,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
+        await assertDocWritableById(request, "orders", id);
         const viewer = getAccessUser(request);
         const sub = Number.parseInt(viewer.sub, 10);
         const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -137,6 +145,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {

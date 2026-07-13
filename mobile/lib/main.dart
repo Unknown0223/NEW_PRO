@@ -82,7 +82,7 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
 
     return MobileSessionGuard(
       child: MaterialApp.router(
-        title: 'SalesDoc',
+        title: 'Sales Arena',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         routerConfig: router,

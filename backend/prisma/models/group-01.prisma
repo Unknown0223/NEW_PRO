@@ -58,15 +58,16 @@ model Tenant {
   expenses                       Expense[]
   payment_allocations            PaymentAllocation[]
   payment_edit_grants            PaymentEditGrant[]
+  document_edit_grants           DocumentEditGrant[]
   territories                    Territory[]
   warehouse_corrections          WarehouseCorrection[]
   client_equipment               ClientEquipment[]
   client_photo_reports           ClientPhotoReport[]
   retail_outlet_stocks           RetailOutletStock[]
   stock_uploads                  StockUpload[]
-  client_qr_codes               ClientQrCode[]
   client_merge_logs             ClientMergeLog[]
   client_saved_duplicate_groups ClientSavedDuplicateGroup[]
+  client_tags                   ClientTag[]
   report_builder_saved_configs  ReportBuilderSavedConfig[]
   roles                         Role[]
   permissions                   Permission[]
@@ -89,34 +90,6 @@ model Tenant {
   agent_consignment_month_status AgentConsignmentMonthStatus[]
 
   @@map("tenants")
-}
-
-
-model ClientQrCode {
-  id                 Int      @id @default(autoincrement())
-  tenant_id          Int
-  qr_code            String   @db.VarChar(128)
-  client_id          Int?
-  status             String   @default("new") @db.VarChar(24)
-  created_by_user_id Int?
-  printed_by_user_id Int?
-  bound_by_user_id   Int?
-  detached_by_user_id Int?
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  printed_at         DateTime?
-  bound_at           DateTime?
-  detached_at        DateTime?
-  is_active          Boolean  @default(true)
-  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  client             Client?  @relation(fields: [client_id], references: [id], onDelete: SetNull)
-
-  @@unique([tenant_id, qr_code])
-  @@index([tenant_id, status])
-  @@index([tenant_id, client_id])
-  @@index([tenant_id, created_at(sort: Desc)])
-  @@index([tenant_id, bound_at(sort: Desc)])
-  @@map("client_qr_codes")
 }
 
 
@@ -194,6 +167,8 @@ model User {
   payments_ledger_agent      Payment[]               @relation("PaymentLedgerAgent")
   payment_edit_grants_access PaymentEditGrant[]      @relation("PaymentEditGrantAccess")
   payment_edit_grants_created PaymentEditGrant[]     @relation("PaymentEditGrantCreator")
+  document_edit_grants_access DocumentEditGrant[]    @relation("DocumentEditGrantAccess")
+  document_edit_grants_created DocumentEditGrant[]   @relation("DocumentEditGrantCreator")
   opening_balances_created   ClientOpeningBalanceEntry[] @relation("OpeningBalanceCreator")
   clients_as_agent           Client[]                @relation("UserAgents")
   goods_receipts_created     GoodsReceipt[]          @relation("GoodsReceiptCreator")
@@ -203,6 +178,7 @@ model User {
   order_status_changes       OrderStatusLog[]
   orders_as_agent            Order[]                 @relation("OrderAgents")
   orders_as_expeditor        Order[]                 @relation("OrderExpeditor")
+  orders_consignment_moved   Order[]                 @relation("OrderConsignmentMovedBy")
   refresh_tokens             RefreshToken[]
   sales_returns_created      SalesReturn[]           @relation("SalesReturnCreator")
   stock_takes_created        StockTake[]             @relation("StockTakeCreator")
@@ -228,6 +204,13 @@ model User {
   territory_assignments      TerritoryUserLink[]     @relation("TerritoryAssigner")
   warehouse_corrections_created WarehouseCorrection[] @relation("WarehouseCorrectionCreator")
   client_photo_reports_created  ClientPhotoReport[]   @relation("ClientPhotoReportCreator")
+  client_photo_reports_voided   ClientPhotoReport[]   @relation("ClientPhotoReportVoidedBy")
+  work_slots_voided              WorkSlot[]            @relation("WorkSlotVoidedBy")
+  order_restriction_rules_voided OrderRestrictionRule[] @relation("OrderRestrictionRuleVoidedBy")
+  order_auto_confirm_rules_voided OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleVoidedBy")
+  currency_rates_voided          CurrencyExchangeRate[] @relation("CurrencyExchangeRateVoidedBy")
+  report_builder_saved_voided    ReportBuilderSavedConfig[] @relation("ReportBuilderSavedVoidedBy")
+  saved_duplicate_groups_voided  ClientSavedDuplicateGroup[] @relation("SavedDupGroupVoidedBy")
   saved_duplicate_groups_created ClientSavedDuplicateGroup[] @relation("SavedDupGroupCreator")
   warehouse_block_expeditors     WarehouseBlockExpeditor[]   @relation("WarehouseBlockExpeditorUser")
   warehouse_blocks_as_gruzchik   WarehouseBlock[]            @relation("WarehouseBlockGruzchik")
@@ -306,19 +289,23 @@ model DeviceToken {
 /// «Конструктор отчетов» — foydalanuvchi saqlagan pivot/konfig (JSON).
 
 model ReportBuilderSavedConfig {
-  id          Int      @id @default(autoincrement())
-  tenant_id   Int
-  user_id     Int
-  name        String   @db.VarChar(200)
-  dataset_id  String   @db.VarChar(64)
-  config      Json     @default("{}")
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  user_id            Int
+  name               String    @db.VarChar(200)
+  dataset_id         String    @db.VarChar(64)
+  config             Json      @default("{}")
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  deleted_at         DateTime?
+  deleted_by_user_id Int?
+  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  deleted_by         User?     @relation("ReportBuilderSavedVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, user_id])
   @@index([tenant_id, user_id, updated_at(sort: Desc)])
+  @@index([tenant_id, deleted_at])
   @@map("report_builder_saved_configs")
 }
 
@@ -351,8 +338,8 @@ model ProductCategory {
   parent_id    Int?
   created_at   DateTime          @default(now())
   updated_at   DateTime          @updatedAt
-  /// Qisqa kod (masalan SKU prefiks / filtr)
-  code         String?           @db.VarChar(24)
+  /// Qisqa kod (UI max 24; deactivate `__void_{id}` uchun 64)
+  code         String?           @db.VarChar(64)
   sort_order   Int?
   /// Kategoriya uchun tavsiya etilgan birlik (mahsulot `unit` bilan mos kelishi mumkin)
   default_unit String?           @db.VarChar(64)
@@ -365,6 +352,7 @@ model ProductCategory {
 
   @@index([tenant_id])
   @@index([tenant_id, parent_id])
+  @@index([tenant_id, is_active])
   @@map("product_categories")
 }
 
@@ -443,7 +431,8 @@ model ProductCatalogGroup {
   id         Int       @id @default(autoincrement())
   tenant_id  Int
   name       String
-  code       String?   @db.VarChar(24)
+  /// UI max 24; deactivate `__void_{id}` uchun 64
+  code       String?   @db.VarChar(64)
   sort_order Int?
   is_active  Boolean   @default(true)
   created_at DateTime  @default(now())
@@ -452,6 +441,7 @@ model ProductCatalogGroup {
   products   Product[]
 
   @@index([tenant_id])
+  @@index([tenant_id, is_active])
   @@map("product_catalog_groups")
 }
 

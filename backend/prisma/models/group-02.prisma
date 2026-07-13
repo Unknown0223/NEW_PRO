@@ -2,7 +2,8 @@ model ProductBrand {
   id         Int       @id @default(autoincrement())
   tenant_id  Int
   name       String
-  code       String?   @db.VarChar(24)
+  /// UI max 24; deactivate `__void_{id}` uchun 64
+  code       String?   @db.VarChar(64)
   sort_order Int?
   is_active  Boolean   @default(true)
   created_at DateTime  @default(now())
@@ -11,6 +12,7 @@ model ProductBrand {
   products   Product[]
 
   @@index([tenant_id])
+  @@index([tenant_id, is_active])
   @@map("product_brands")
 }
 
@@ -19,7 +21,8 @@ model ProductManufacturer {
   id         Int       @id @default(autoincrement())
   tenant_id  Int
   name       String
-  code       String?   @db.VarChar(24)
+  /// UI max 24; deactivate `__void_{id}` uchun 64
+  code       String?   @db.VarChar(64)
   sort_order Int?
   is_active  Boolean   @default(true)
   created_at DateTime  @default(now())
@@ -28,6 +31,7 @@ model ProductManufacturer {
   products   Product[]
 
   @@index([tenant_id])
+  @@index([tenant_id, is_active])
   @@map("product_manufacturers")
 }
 
@@ -36,7 +40,8 @@ model ProductSegment {
   id         Int       @id @default(autoincrement())
   tenant_id  Int
   name       String
-  code       String?   @db.VarChar(24)
+  /// UI max 24; deactivate `__void_{id}` uchun 64
+  code       String?   @db.VarChar(64)
   sort_order Int?
   is_active  Boolean   @default(true)
   created_at DateTime  @default(now())
@@ -46,6 +51,7 @@ model ProductSegment {
   segment_links ProductSegmentLink[] @relation("ProductSegmentLinks")
 
   @@index([tenant_id])
+  @@index([tenant_id, is_active])
   @@map("product_segments")
 }
 
@@ -54,7 +60,8 @@ model InterchangeableProductGroup {
   id               Int                             @id @default(autoincrement())
   tenant_id        Int
   name             String
-  code             String?                         @db.VarChar(24)
+  /// UI max 24; deactivate `__void_{id}` uchun 64
+  code             String?                         @db.VarChar(64)
   sort_order       Int?
   comment          String?
   is_active        Boolean                         @default(true)
@@ -65,6 +72,7 @@ model InterchangeableProductGroup {
   tenant           Tenant                          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id])
+  @@index([tenant_id, is_active])
   @@map("interchangeable_product_groups")
 }
 
@@ -250,6 +258,14 @@ model Client {
   warehouse_id          Int?
   /// Bog‘langan kassa
   cash_desk_id          Int?
+  /// Mijoz uchun default narx turi (buyurtmada so‘rovda yo‘q bo‘lsa)
+  price_type            String?                 @db.VarChar(128)
+  /// false: oddiy zakazda umumiy balans qarzda (balance < 0) bo‘lsa yangi zakaz taqiqlanadi
+  allow_order_with_debt Boolean                 @default(true)
+  /// false: bu mijozga konsignatsiya zakazi umuman taqiqlanadi
+  allow_consignment     Boolean                 @default(true)
+  /// false: konsignatsiya bo‘yicha to‘lanmagan qarz bo‘lsa yangi konsignatsiya taqiqlanadi
+  allow_consignment_with_debt Boolean           @default(true)
   /// Oxirgi agent tashrif vaqti (`agent_visits` check-in bilan yangilanadi, hisobot keshi).
   last_visit_at         DateTime?
   agent_visits          AgentVisit[]
@@ -259,6 +275,7 @@ model Client {
   client_balances                ClientBalance[]
   client_opening_balance_entries ClientOpeningBalanceEntry[]
   payments                       Payment[]
+  tag_links                      ClientTagLink[]
   warehouse                      Warehouse?              @relation("ClientWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   cash_desk                      CashDesk?               @relation("ClientCashDesk", fields: [cash_desk_id], references: [id], onDelete: SetNull)
   agent                          User?                   @relation("UserAgents", fields: [agent_id], references: [id])
@@ -270,7 +287,6 @@ model Client {
   client_equipment      ClientEquipment[]
   client_photo_reports  ClientPhotoReport[]
   retail_outlet_stocks  RetailOutletStock[]
-  qr_codes              ClientQrCode[]
   merge_logs_as_master  ClientMergeLog[] @relation("MergeLogMaster")
   merge_logs_as_merged  ClientMergeLog[] @relation("MergeLogMerged")
   saved_duplicate_groups  ClientSavedDuplicateGroup[] @relation("SavedDupGroupMaster")
@@ -282,7 +298,34 @@ model Client {
   @@index([tenant_id, last_visit_at(sort: Desc)])
   @@index([tenant_id, warehouse_id])
   @@index([tenant_id, cash_desk_id])
+  @@index([tenant_id, price_type])
   @@map("clients")
+}
+
+/// Klient tegi (tenant ichida unikal nom)
+model ClientTag {
+  id         Int             @id @default(autoincrement())
+  tenant_id  Int
+  name       String          @db.VarChar(128)
+  created_at DateTime        @default(now())
+  tenant     Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  links      ClientTagLink[]
+
+  @@unique([tenant_id, name])
+  @@index([tenant_id])
+  @@map("client_tags")
+}
+
+model ClientTagLink {
+  client_id  Int
+  tag_id     Int
+  created_at DateTime  @default(now())
+  client     Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  tag        ClientTag @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([client_id, tag_id])
+  @@index([tag_id])
+  @@map("client_tag_links")
 }
 
 /// Mijozlarni birlashtirish jurnali (CRM dedupe / audit).
@@ -307,18 +350,22 @@ model ClientMergeLog {
 /// Operator saqlagan dublikat guruhi («Сохранённые»).
 
 model ClientSavedDuplicateGroup {
-  id                  Int      @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   tenant_id           Int
   master_client_id    Int
   client_ids          Int[]
-  note                String?  @db.VarChar(2000)
+  note                String?   @db.VarChar(2000)
   created_by_user_id  Int?
-  created_at          DateTime @default(now())
-  tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  master_client       Client   @relation("SavedDupGroupMaster", fields: [master_client_id], references: [id], onDelete: Cascade)
-  created_by          User?    @relation("SavedDupGroupCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  created_at          DateTime  @default(now())
+  deleted_at          DateTime?
+  deleted_by_user_id  Int?
+  tenant              Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  master_client       Client    @relation("SavedDupGroupMaster", fields: [master_client_id], references: [id], onDelete: Cascade)
+  created_by          User?     @relation("SavedDupGroupCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  deleted_by          User?     @relation("SavedDupGroupVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, created_at(sort: Desc)])
+  @@index([tenant_id, deleted_at])
   @@map("client_saved_duplicate_groups")
 }
 
@@ -405,14 +452,22 @@ model ClientPhotoReport {
   order_id           Int?
   created_by_user_id Int?
   created_at         DateTime  @default(now())
+  /// Yumshoq bekor (arxiv): NULL = faol
+  deleted_at         DateTime?
+  deleted_by_user_id Int?
+  /// Rasm kontenti tozalangan (joy bo‘shatish). Qator/son qoladi.
+  content_purged_at  DateTime?
   client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   order              Order?    @relation(fields: [order_id], references: [id], onDelete: SetNull)
   created_by         User?     @relation("ClientPhotoReportCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  deleted_by         User?     @relation("ClientPhotoReportVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, client_id])
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, created_by_user_id, created_at(sort: Desc)])
+  @@index([tenant_id, deleted_at])
+  @@index([content_purged_at, created_at])
   @@map("client_photo_reports")
 }
 

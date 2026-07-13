@@ -7,11 +7,12 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { updateProduct } from "./products.crud";
 import {
   cellText,
+  formatCategoryImportError,
   headerToTemplateCol,
   parseNumLoose,
   resolveBrandIdByCode,
   resolveCatalogGroupIdByCode,
-  resolveCategoryIdByCode,
+  resolveCategoryIdForImport,
   resolveSegmentIdByCode,
   type TemplateCol
 } from "./products.import.helpers";
@@ -76,14 +77,14 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       errors: ["«Код» (SKU) ustuni majburiy — eksport faylidan foydalaning."]
     };
   }
-  if (!colByField.name || !colByField.categoryCode || !colByField.unitCode) {
+  if (!colByField.name || !colByField.categoryName || !colByField.unitCode) {
     return {
       updated: 0,
       skipped_empty: 0,
       skipped_unknown_sku: 0,
       skipped_no_change: 0,
       errors: [
-        "Нужны колонки: Название, Категория(код), Единица измерения(код), Код — как в шаблоне/экспорте."
+        "Нужны колонки: Название, Категория, Единица измерения(код), Код — как в шаблоне/экспорте."
       ]
     };
   }
@@ -122,14 +123,14 @@ export async function importProductsCatalogUpdateOnlyXlsx(
     if (!unit) unit = existing.unit;
 
     let category_id = existing.category_id;
-    const catCell = cellText(row, colByField.categoryCode).trim();
+    const catCell = cellText(row, colByField.categoryName).trim();
     if (catCell) {
-      const cid = await resolveCategoryIdByCode(tenantId, catCell);
-      if (cid == null) {
-        errors.push(`Qator ${r}: kategoriya kodi «${catCell}» topilmadi`);
+      const resolved = await resolveCategoryIdForImport(tenantId, catCell);
+      if (!resolved.ok) {
+        errors.push(formatCategoryImportError(r, catCell, resolved));
         continue;
       }
-      category_id = cid;
+      category_id = resolved.id;
     }
 
     let product_group_id: number | null = existing.product_group_id;
@@ -140,7 +141,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       } else {
         const gid = await resolveCatalogGroupIdByCode(tenantId, g);
         if (gid == null) {
-          errors.push(`Qator ${r}: «Группа(код)» «${g}» topilmadi`);
+          errors.push(`Строка ${r}: «Группа(код)» «${g}» не найдена`);
           continue;
         }
         product_group_id = gid;
@@ -155,7 +156,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       } else {
         const sid = await resolveSegmentIdByCode(tenantId, s);
         if (sid == null) {
-          errors.push(`Qator ${r}: «Сегмент(код)» «${s}» topilmadi`);
+          errors.push(`Строка ${r}: «Сегмент(код)» «${s}» не найден`);
           continue;
         }
         segment_id = sid;
@@ -170,7 +171,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       } else {
         const bid = await resolveBrandIdByCode(tenantId, b);
         if (bid == null) {
-          errors.push(`Qator ${r}: «Бренд(код)» «${b}» topilmadi`);
+          errors.push(`Строка ${r}: «Бренд(код)» «${b}» не найден`);
           continue;
         }
         brand_id = bid;
@@ -324,7 +325,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       );
       updated += 1;
     } catch (e) {
-      errors.push(`Qator ${r}: ${e instanceof Error ? e.message : "xato"}`);
+      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка сохранения"}`);
     }
   }
 

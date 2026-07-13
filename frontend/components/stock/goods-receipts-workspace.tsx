@@ -8,11 +8,13 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
+import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { cn } from "@/lib/utils";
 import { formatGroupedDecimal } from "@/lib/format-numbers";
+import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { api } from "@/lib/api";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { STALE } from "@/lib/query-stale";
@@ -455,16 +457,18 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
         actions={
           canWrite ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => importFileRef.current?.click()}
-                disabled={uploading}
-              >
-                <Upload className="mr-1 size-3.5" />
-                {uploading ? "Импорт..." : "Импортировать с excel"}
-              </Button>
+              <ExcelDropTarget disabled={uploading} onFile={(f) => void importFromExcel(f)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => importFileRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="mr-1 size-3.5" />
+                  {uploading ? "Импорт..." : "Импортировать с excel"}
+                </Button>
+              </ExcelDropTarget>
               <Link
                 href="/stock/receipts/new"
                 className={cn(buttonVariants({ size: "sm" }), "bg-teal-600 text-white hover:bg-teal-700")}
@@ -481,7 +485,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 accept=".xlsx,.xlsm"
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
+                  const f = pickFirstExcelFile(e.target.files);
                   e.target.value = "";
                   if (f) void importFromExcel(f);
                 }}

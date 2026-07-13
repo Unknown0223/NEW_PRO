@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import {
@@ -185,32 +185,16 @@ export function PriceMatrixImportPreviewDialog({
                       </td>
                       <td className="px-3 py-2 text-right">
                         {isEditing && r.product_id != null && r.status !== "error" ? (
-                          <Input
+                          <GroupedNumberInput
                             className="ml-auto h-9 w-full max-w-[11rem] font-mono text-sm tabular-nums"
                             value={r.priceDisplay}
                             maxLength={16}
-                            inputMode="decimal"
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              if (!isAllowedPriceInput(v)) return;
+                            maxFractionDigits={2}
+                            onValueChange={(v) => {
                               setRows((prev) =>
                                 prev.map((x) =>
                                   x.rowNum === r.rowNum && x.sku === r.sku
-                                    ? revalidateRow({ ...x, priceDisplay: sanitizePriceInput(v) })
-                                    : x
-                                )
-                              );
-                            }}
-                            onBlur={() => {
-                              const parsed = parsePriceDraft(r.priceDisplay);
-                              if (!parsed.ok) return;
-                              setRows((prev) =>
-                                prev.map((x) =>
-                                  x.rowNum === r.rowNum && x.sku === r.sku
-                                    ? revalidateRow({
-                                        ...x,
-                                        priceDisplay: formatPriceDraftDisplay(parsed.value)
-                                      })
+                                    ? revalidateRow({ ...x, priceDisplay: v })
                                     : x
                                 )
                               );

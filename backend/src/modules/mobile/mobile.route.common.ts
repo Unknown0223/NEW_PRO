@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { registerMobileClientQrRoutes } from "./mobile.route.client-qr";
 import { registerMobilePaymentRoutes } from "./mobile.route.payments";
 import { registerMobilePhotoRoutes } from "./mobile.route.photos";
 import { registerMobileProfileRoutes } from "./mobile.route.profile";
+import { registerMobileStockSnapshotRoutes } from "./mobile.route.stock-snapshot";
 import { registerMobileSyncRoutes } from "./mobile.route.sync";
 
 export async function registerMobileCommonRoutes(app: FastifyInstance) {
@@ -10,5 +10,5 @@ export async function registerMobileCommonRoutes(app: FastifyInstance) {
   await registerMobileSyncRoutes(app);
   await registerMobilePhotoRoutes(app);
   await registerMobilePaymentRoutes(app);
-  await registerMobileClientQrRoutes(app);
+  await registerMobileStockSnapshotRoutes(app);
 }

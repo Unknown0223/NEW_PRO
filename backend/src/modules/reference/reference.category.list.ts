@@ -2,9 +2,20 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ProductCategoryListRow } from "./reference.category.types";
 
-export async function listProductCategoriesForTenant(tenantId: number): Promise<ProductCategoryListRow[]> {
+export async function listProductCategoriesForTenant(
+  tenantId: number,
+  opts?: { include_inactive?: boolean; is_active?: boolean }
+): Promise<ProductCategoryListRow[]> {
+  const where: Prisma.ProductCategoryWhereInput = { tenant_id: tenantId };
+  if (opts?.include_inactive === true) {
+    // filtr yo‘q
+  } else if (opts?.is_active === false) {
+    where.is_active = false;
+  } else {
+    where.is_active = true;
+  }
   const rows = await prisma.productCategory.findMany({
-    where: { tenant_id: tenantId },
+    where,
     select: {
       id: true,
       name: true,

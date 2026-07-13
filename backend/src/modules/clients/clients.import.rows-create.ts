@@ -11,7 +11,7 @@ import {
   parseContactPersonsJson
 } from "./clients.helpers";
 import { replaceClientAgentAssignments } from "./clients.agent-assignments";
-import { appendClientAuditLog } from "./clients.audit";
+import { appendClientAuditLogsBatch } from "./clients.audit";
 import {
   buildAgentAssignmentPatchesFromImportRow,
   colMapHasAgentSlots,
@@ -64,6 +64,7 @@ export async function importClientDataRows(
   let created = 0;
   let skippedEmpty = 0;
   let skippedDuplicate = 0;
+  const createdIds: number[] = [];
   const hasAgentSlots = colMapHasAgentSlots(colIndexByKey);
 
   const firstDataRow = headerRowIdx + 1;
@@ -112,6 +113,7 @@ export async function importClientDataRows(
     const batchDuplicateKeys: string[] = [];
 
     try {
+      const batchCreatedIds: number[] = [];
       await prisma.$transaction(async (tx) => {
         for (let bi = 0; bi < batchRows.length; bi++) {
           const row = batchRows[bi]!;
@@ -260,12 +262,14 @@ export async function importClientDataRows(
             });
           }
 
+          batchCreatedIds.push(client.id);
           created += 1;
           if (dupKey) batchDuplicateKeys.push(dupKey);
           ctx.processedRows += 1;
         }
       });
 
+      createdIds.push(...batchCreatedIds);
       for (const k of batchDuplicateKeys) {
         seenDuplicateKeys.add(k);
       }
@@ -278,6 +282,16 @@ export async function importClientDataRows(
   }
 
   ctx.writeMs += Date.now() - writeStarted;
+
+  if (createdIds.length > 0) {
+    await appendClientAuditLogsBatch(
+      tenantId,
+      createdIds,
+      ctx.actorUserId ?? null,
+      "client.import.create",
+      { source: "xlsx_import" }
+    );
+  }
 
   const out = [...errors];
   if (created === 0 && errors.length === 0 && skippedEmpty > 0) {

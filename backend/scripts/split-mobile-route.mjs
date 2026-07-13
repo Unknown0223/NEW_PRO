@@ -106,7 +106,6 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser } from "../auth/auth.prehandlers";
-import { bindQrByCode, unbindQrByCode } from "../client-qr/client-qr.write";
 import { getClientPhotoReportById, listClientPhotoReports } from "../clients/client-assets.service";
 import {
   createOrderCashInBatch,

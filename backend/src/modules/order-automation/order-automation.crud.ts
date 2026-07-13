@@ -1,6 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
+  assertIsVoided,
+  assertNotVoided,
+  softRestoreData,
+  softVoidData
+} from "../../lib/soft-void";
+import {
   fetchAutoConfirmRuleFull,
   fetchRestrictionRuleFull,
   mapAutoConfirmRuleRow,
@@ -115,9 +121,37 @@ export async function updateRestrictionRule(
   return mapRestrictionRuleRow(tenantId, row);
 }
 
-export async function deleteRestrictionRule(tenantId: number, id: number): Promise<void> {
-  const r = await prisma.orderRestrictionRule.deleteMany({ where: { tenant_id: tenantId, id } });
-  if (r.count === 0) throw new Error("NOT_FOUND");
+export async function deleteRestrictionRule(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.orderRestrictionRule.findFirst({
+    where: { tenant_id: tenantId, id },
+    select: { id: true, deleted_at: true }
+  });
+  assertNotVoided(existing);
+  await prisma.orderRestrictionRule.update({
+    where: { id },
+    data: softVoidData(actorUserId, null, { includeReason: false })
+  });
+}
+
+export async function restoreRestrictionRule(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.orderRestrictionRule.findFirst({
+    where: { tenant_id: tenantId, id },
+    select: { id: true, deleted_at: true }
+  });
+  assertIsVoided(existing);
+  await prisma.orderRestrictionRule.update({
+    where: { id },
+    data: softRestoreData({ includeReason: false })
+  });
+  void actorUserId;
 }
 
 export async function duplicateRestrictionRule(
@@ -254,9 +288,37 @@ export async function updateAutoConfirmRule(
   return mapAutoConfirmRuleRow(tenantId, row);
 }
 
-export async function deleteAutoConfirmRule(tenantId: number, id: number): Promise<void> {
-  const r = await prisma.orderAutoConfirmRule.deleteMany({ where: { tenant_id: tenantId, id } });
-  if (r.count === 0) throw new Error("NOT_FOUND");
+export async function deleteAutoConfirmRule(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.orderAutoConfirmRule.findFirst({
+    where: { tenant_id: tenantId, id },
+    select: { id: true, deleted_at: true }
+  });
+  assertNotVoided(existing);
+  await prisma.orderAutoConfirmRule.update({
+    where: { id },
+    data: softVoidData(actorUserId, null, { includeReason: false })
+  });
+}
+
+export async function restoreAutoConfirmRule(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.orderAutoConfirmRule.findFirst({
+    where: { tenant_id: tenantId, id },
+    select: { id: true, deleted_at: true }
+  });
+  assertIsVoided(existing);
+  await prisma.orderAutoConfirmRule.update({
+    where: { id },
+    data: softRestoreData({ includeReason: false })
+  });
+  void actorUserId;
 }
 
 export async function duplicateAutoConfirmRule(

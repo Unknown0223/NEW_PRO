@@ -51,6 +51,12 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
     'BadAgent': 'Agent topilmadi',
     'OrderRestricted': 'Buyurtma cheklovi — administrator bilan bog\'laning',
     'CreditLimitExceeded': 'Kredit limiti oshdi',
+    'OrderBlockedByDebt':
+        'Обычный заказ запрещён: у клиента есть долг. Снимите долг или обратитесь к администратору',
+    'ConsignmentClientDisabled':
+        'Консигнация для этого клиента запрещена администратором',
+    'ConsignmentBlockedByDebt':
+        'Консигнация запрещена: у клиента есть долг по консигнации',
     'ConsignmentRequiresAgent': 'Konsignatsiya uchun agent kerak',
     'ConsignmentAgentDisabled': 'Agent uchun konsignatsiya o\'chirilgan',
     'ConsignmentLimitExceeded': 'Konsignatsiya limiti oshdi',
@@ -132,12 +138,33 @@ String? _formatLimitError(String apiCode, Map<dynamic, dynamic>? data) {
     final outstanding = pick('outstanding');
     final orderTotal = pick('order_total');
     final parts = <String>[];
-    if (limit != null) parts.add('limit: $limit');
-    if (outstanding != null) parts.add('qarz: $outstanding');
-    if (orderTotal != null) parts.add('buyurtma: $orderTotal');
+    if (limit != null) parts.add('limit: ${_fmtMoneyPlain(limit)}');
+    if (outstanding != null) parts.add('qarz: ${_fmtMoneyPlain(outstanding)}');
+    if (limit != null && outstanding != null && orderTotal != null) {
+      final lim = double.tryParse(limit.replaceAll(' ', '').replaceAll(',', '.'));
+      final out = double.tryParse(outstanding.replaceAll(' ', '').replaceAll(',', '.'));
+      if (lim != null && out != null) {
+        parts.add('mavjud: ${_fmtMoneyPlain((lim - out).toString())}');
+      }
+    }
+    if (orderTotal != null) parts.add('buyurtma: ${_fmtMoneyPlain(orderTotal)}');
     return parts.isEmpty ? 'Konsignatsiya limiti oshdi' : 'Konsignatsiya limiti oshdi (${parts.join(', ')})';
   }
   return null;
+}
+
+String _fmtMoneyPlain(String raw) {
+  final cleaned = raw.trim().replaceAll(' ', '').replaceAll(',', '.');
+  final v = double.tryParse(cleaned);
+  if (v == null) return raw.trim();
+  final n = v.round();
+  final s = n.abs().toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buf.write(' ');
+    buf.write(s[i]);
+  }
+  return n < 0 ? '-$buf' : buf.toString();
 }
 
 class UnauthorizedException extends ApiException {

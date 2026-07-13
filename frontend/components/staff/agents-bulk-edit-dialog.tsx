@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AgentFormField,
@@ -11,6 +11,7 @@ import {
   agentModalBtnPrimary,
   agentModalInputClass
 } from "@/components/staff/agent-workspace-template-ui";
+import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
 import type { TradeDirectionCatalogRow } from "@/lib/catalog-filter-options";
 
 const AGENT_TYPE_OPTIONS = [
@@ -19,6 +20,20 @@ const AGENT_TYPE_OPTIONS = [
   { value: "Супервайзер", label: "Супервайзер" },
   { value: "Экспедитор", label: "Экспедитор" }
 ];
+
+export type AgentsBulkEditFields = {
+  warehouse_id?: number;
+  trade_direction?: string;
+  branch?: string;
+  position?: string;
+  agent_type?: string;
+  consignment?: boolean;
+  close_schedule?: {
+    close_day: number;
+    close_hour: number;
+    close_minute: number;
+  };
+};
 
 type Props = {
   open: boolean;
@@ -29,7 +44,7 @@ type Props = {
   tradeDirections: TradeDirectionCatalogRow[];
   positions: string[];
   onClose: () => void;
-  onSave: (fields: Record<string, unknown>) => Promise<void>;
+  onSave: (fields: AgentsBulkEditFields) => Promise<void>;
 };
 
 /** Shablon: tanlangan agentlar uchun umumiy maydonlarni tahrirlash. */
@@ -50,7 +65,26 @@ export function AgentsBulkEditDialog({
   const [position, setPosition] = useState("");
   const [agentType, setAgentType] = useState("");
   const [consignment, setConsignment] = useState<"" | "yes" | "no">("");
+  const [scheduleMode, setScheduleMode] = useState<"" | "set">("");
+  const [closeDay, setCloseDay] = useState("25");
+  const [closeHour, setCloseHour] = useState("0");
+  const [closeMinute, setCloseMinute] = useState("0");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setWarehouseId("");
+    setTradeDirection("");
+    setBranch("");
+    setPosition("");
+    setAgentType("");
+    setConsignment("");
+    setScheduleMode("");
+    setCloseDay("25");
+    setCloseHour("0");
+    setCloseMinute("0");
+    setError(null);
+  }, [open]);
 
   const hasChanges =
     warehouseId !== "" ||
@@ -58,7 +92,8 @@ export function AgentsBulkEditDialog({
     branch !== "" ||
     position !== "" ||
     agentType !== "" ||
-    consignment !== "";
+    consignment !== "" ||
+    scheduleMode === "set";
 
   const handleSave = async () => {
     if (!hasChanges) {
@@ -66,7 +101,7 @@ export function AgentsBulkEditDialog({
       return;
     }
     setError(null);
-    const body: Record<string, unknown> = {};
+    const body: AgentsBulkEditFields = {};
     if (warehouseId) body.warehouse_id = Number.parseInt(warehouseId, 10);
     if (tradeDirection) body.trade_direction = tradeDirection;
     if (branch) body.branch = branch;
@@ -74,6 +109,24 @@ export function AgentsBulkEditDialog({
     if (agentType) body.agent_type = agentType;
     if (consignment === "yes") body.consignment = true;
     if (consignment === "no") body.consignment = false;
+    if (scheduleMode === "set") {
+      const d = Number.parseInt(closeDay, 10);
+      const h = Number.parseInt(closeHour, 10);
+      const m = Number.parseInt(closeMinute, 10);
+      if (!Number.isInteger(d) || d < 1 || d > 31) {
+        setError("День закрытия: от 1 до 31");
+        return;
+      }
+      if (!Number.isInteger(h) || h < 0 || h > 23) {
+        setError("Часы закрытия: от 0 до 23");
+        return;
+      }
+      if (!Number.isInteger(m) || m < 0 || m > 59) {
+        setError("Минуты закрытия: от 0 до 59");
+        return;
+      }
+      body.close_schedule = { close_day: d, close_hour: h, close_minute: m };
+    }
     await onSave(body);
   };
 
@@ -89,7 +142,7 @@ export function AgentsBulkEditDialog({
             </>
           }
         />
-        <div className="space-y-4 px-6 py-4">
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-4">
           <AgentFormField label="Склад">
             <AgentFormSelect
               value={warehouseId}
@@ -147,6 +200,28 @@ export function AgentsBulkEditDialog({
               <option value="no">Нет</option>
             </select>
           </AgentFormField>
+          <div className="space-y-2 rounded-lg border border-border bg-card px-3 py-2">
+            <AgentFormField label="Расписание закрытия">
+              <select
+                className={agentModalInputClass}
+                value={scheduleMode}
+                onChange={(e) => setScheduleMode(e.target.value as "" | "set")}
+              >
+                <option value="">Не изменять</option>
+                <option value="set">Задать единое…</option>
+              </select>
+            </AgentFormField>
+            {scheduleMode === "set" ? (
+              <ConsignmentCloseScheduleFields
+                closeDay={closeDay}
+                closeHour={closeHour}
+                closeMinute={closeMinute}
+                onCloseDayChange={setCloseDay}
+                onCloseHourChange={setCloseHour}
+                onCloseMinuteChange={setCloseMinute}
+              />
+            ) : null}
+          </div>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </div>
         <AgentTemplateModalFooter>
