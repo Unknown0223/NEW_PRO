@@ -11,35 +11,6 @@ const conditionSchema = z.object({
   sort_order: z.number().int().optional()
 });
 
-const clauseSchema = z.object({
-  sort_order: z.number().int().optional(),
-  grants_reward: z.boolean().optional(),
-  priority: z.number().int().optional(),
-  client_category: z.string().nullable().optional(),
-  payment_type: z.string().nullable().optional(),
-  client_type: z.string().nullable().optional(),
-  sales_channel: z.string().nullable().optional(),
-  price_type: z.string().nullable().optional(),
-  product_ids: z.array(z.number().int().positive()).optional(),
-  bonus_product_ids: z.array(z.number().int().positive()).optional(),
-  product_category_ids: z.array(z.number().int().positive()).optional(),
-  scope_restrict_assortment: z.boolean().optional(),
-  scope_restrict_category: z.boolean().optional(),
-  target_all_clients: z.boolean().optional(),
-  selected_client_ids: z.array(z.number().int().positive()).optional(),
-  in_blocks: z.boolean().optional(),
-  once_per_client: z.boolean().optional(),
-  one_plus_one_gift: z.boolean().optional(),
-  buy_qty: z.number().int().nonnegative().nullable().optional(),
-  free_qty: z.number().int().nonnegative().nullable().optional(),
-  min_sum: z.number().nonnegative().nullable().optional(),
-  sum_threshold_scope: z.enum(["order", "calendar_month"]).optional(),
-  scope_branch_codes: z.array(z.string().max(500)).max(200).optional(),
-  scope_agent_user_ids: z.array(z.number().int().positive()).max(2000).optional(),
-  scope_trade_direction_ids: z.array(z.number().int().positive()).max(200).optional(),
-  conditions: z.array(conditionSchema).optional()
-});
-
 const targetingFields = {
   client_category: z.string().nullable().optional(),
   payment_type: z.string().nullable().optional(),
@@ -59,7 +30,6 @@ const targetingFields = {
   one_plus_one_gift: z.boolean().optional(),
   prerequisite_rule_ids: z.array(z.number().int().positive()).max(200).optional(),
   conditions: z.array(conditionSchema).optional(),
-  clauses: z.array(clauseSchema).max(50).optional(),
   sum_threshold_scope: z.enum(["order", "calendar_month"]).optional(),
   scope_branch_codes: z.array(z.string().max(500)).max(200).optional(),
   scope_agent_user_ids: z.array(z.number().int().positive()).max(2000).optional(),
@@ -96,25 +66,6 @@ export const orderScopeBodySchema = z
 export const activeBodySchema = z.object({
   is_active: z.boolean()
 });
-
-export const bulkPatchBodySchema = z
-  .object({
-    rule_ids: z.array(z.number().int().positive()).min(1).max(500),
-    patch: z
-      .object({
-        is_active: z.boolean().optional(),
-        is_manual: z.boolean().optional(),
-        valid_to: z.string().nullable().optional(),
-        extend_days: z.number().int().positive().max(3650).optional(),
-        scope_branch_codes: z.array(z.string().max(500)).max(200).optional(),
-        scope_agent_user_ids: z.array(z.number().int().positive()).max(2000).optional(),
-        scope_trade_direction_ids: z.array(z.number().int().positive()).max(200).optional(),
-        target_all_clients: z.boolean().optional(),
-        selected_client_ids: z.array(z.number().int().positive()).optional()
-      })
-      .refine((p) => Object.keys(p).length > 0, { message: "EmptyPatch" })
-  })
-  .refine((v) => Object.keys(v.patch).length > 0, { message: "EmptyPatch" });
 
 export const previewQtyBodySchema = z.object({
   purchased_qty: z.number().nonnegative()

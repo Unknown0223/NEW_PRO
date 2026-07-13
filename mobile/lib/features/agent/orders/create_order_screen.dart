@@ -20,7 +20,6 @@ import '../../../core/config/mobile_order_guards.dart';
 import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/database/app_database.dart';
-import '../visits/visit_stats_helper.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -38,8 +37,6 @@ import 'order_draft_model.dart';
 import 'order_draft_provider.dart';
 import 'order_draft_ui.dart';
 import 'bonus_stock_utils.dart';
-import '../warehouse/warehouse_stock_providers.dart';
-import 'held_orders_provider.dart';
 import 'orders_providers.dart';
 import 'van_selling_payment_sheet.dart';
 
@@ -48,14 +45,8 @@ import 'van_selling_payment_sheet.dart';
 class CreateOrderScreen extends ConsumerStatefulWidget {
   final int? initialClientId;
   final Map<String, dynamic>? initialClient;
-  final int? heldOrderId;
 
-  const CreateOrderScreen({
-    super.key,
-    this.initialClientId,
-    this.initialClient,
-    this.heldOrderId,
-  });
+  const CreateOrderScreen({super.key, this.initialClientId, this.initialClient});
 
   @override
   ConsumerState<CreateOrderScreen> createState() => _CreateOrderScreenState();
@@ -67,7 +58,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   Map<String, dynamic>? _selectedClient;
   int? _warehouseId;
-  int? _defaultWarehouseId;
   String _priceType = '';
   String _comment = '';
   bool _isConsignment = false;
@@ -77,7 +67,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   List<String> _priceTypes = const ['default'];
 
   List<Map<String, dynamic>> _allProducts = [];
-  Map<int, Map<String, dynamic>> _productById = {};
   List<OrderCategoryGroup> _categories = [];
   OrderCategoryGroup? _openCategory;
 
@@ -94,165 +83,26 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   String _productSearch = '';
   bool _setupShown = false;
   bool _bootstrappingInitialClient = false;
-  int? _heldOrderId;
   OrderClientFinance? _clientFinance;
   bool _hasUnlinkedPhotoToday = false;
   Map<int, double>? _pendingDraftRestore;
 
-  OrderCreateContext? _createContextCache;
-  int? _createContextCacheClientId;
-  int? _createContextCacheWarehouseId;
-  DateTime? _createContextCacheAt;
-  DateTime? _configRefreshedAt;
-  DateTime? _photoStatusFetchedAt;
-  DateTime? _mandatoryChecksPassedAt;
-
-  final _productSearchCtrl = TextEditingController();
-  Timer? _productSearchDebounce;
-
-  static const _createContextCacheTtl = Duration(minutes: 2);
-  static const _photoStatusCacheTtl = Duration(minutes: 2);
-  static const _configRefreshTtl = Duration(minutes: 5);
-  static const _mandatoryChecksCacheTtl = Duration(minutes: 10);
-
-  @override
-  void dispose() {
-    _productSearchDebounce?.cancel();
-    _productSearchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _invalidateCreateContextCache() {
-    _createContextCache = null;
-    _createContextCacheClientId = null;
-    _createContextCacheWarehouseId = null;
-    _createContextCacheAt = null;
-  }
-
-  Future<OrderCreateContext?> _getCreateContext({int? warehouseId, bool forceRefresh = false}) async {
-    final clientId = _effectiveClientId;
-    if (clientId <= 0) return null;
-    final slug = ref.read(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) return null;
-
-    final wh = warehouseId ?? _warehouseId;
-    final now = DateTime.now();
-    if (!forceRefresh &&
-        _createContextCache != null &&
-        _createContextCacheClientId == clientId &&
-        _createContextCacheWarehouseId == wh &&
-        _createContextCacheAt != null &&
-        now.difference(_createContextCacheAt!) < _createContextCacheTtl) {
-      return _createContextCache;
-    }
-
-    final ctx = await ref.read(ordersApiProvider).getCreateContext(
-          slug,
-          clientId: clientId,
-          warehouseId: wh,
-        );
-    _createContextCache = ctx;
-    _createContextCacheClientId = clientId;
-    _createContextCacheWarehouseId = wh;
-    _createContextCacheAt = now;
-    return ctx;
-  }
-
-  Future<void> _refreshAgentConfigIfStale() async {
-    final now = DateTime.now();
-    if (_configRefreshedAt != null && now.difference(_configRefreshedAt!) < _configRefreshTtl) {
-      return;
-    }
-    await ref.read(authStateProvider.notifier).refreshMobileConfig();
-    _configRefreshedAt = now;
-    if (mounted) setState(() {});
-  }
-
-  void _onProductSearchChanged(String value) {
-    _productSearchDebounce?.cancel();
-    _productSearchDebounce = Timer(const Duration(milliseconds: 250), () {
-      if (!mounted) return;
-      setState(() => _productSearch = value.trim().toLowerCase());
-    });
-  }
-
   @override
   void initState() {
     super.initState();
-    _heldOrderId = widget.heldOrderId;
-    if (_heldOrderId != null && _heldOrderId! > 0) {
+    final initialId = widget.initialClientId;
+    if (initialId != null && initialId > 0) {
       _bootstrappingInitialClient = true;
-      _bootstrapHeldOrder().then((_) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _refreshAgentConfigIfStale();
-        });
-      });
-    } else {
-      final initialId = widget.initialClientId;
-      if (initialId != null && initialId > 0) {
-        _bootstrappingInitialClient = true;
-      }
-      _bootstrap().then((_) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _refreshAgentConfigIfStale();
-        });
-      });
     }
-  }
-
-  Future<void> _bootstrapHeldOrder() async {
-    ref.read(heldOrderSchedulerProvider);
-    final held = await ref.read(heldOrderRepositoryProvider).getById(_heldOrderId!);
-    if (held == null) {
-      if (mounted) setState(() => _bootstrappingInitialClient = false);
-      return;
-    }
-    await _waitAuthReady();
-    if (!mounted) return;
-    var client = _normalizeClientRow(await AppDatabase().getClientById(held.clientId), expectedId: held.clientId);
-    client ??= {
-      'id': held.clientId,
-      'name': held.clientName.isNotEmpty ? held.clientName : 'Клиент #${held.clientId}',
-    };
-    setState(() {
-      _selectedClient = client;
-      _warehouseId = held.warehouseId;
-      _priceType = held.priceType;
-      _comment = held.comment;
-      _isConsignment = held.isConsignment;
-      _consignmentDueDate = held.consignmentDueDate ?? '';
-      _shipmentDate = held.shipmentDate ?? '';
-      _setupShown = true;
-      _step = _CreateStep.categories;
+    _bootstrap().then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAgentConfig());
     });
-    _quantities
-      ..clear()
-      ..addAll({for (final i in held.items) i.productId: i.qty});
-    await _loadCatalog(clearCart: false);
-    if (mounted) setState(() => _bootstrappingInitialClient = false);
   }
 
-  Future<void> _cancelHeldOrder() async {
-    if (_heldOrderId == null) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Отменить заказ?'),
-        content: const Text('Заказ будет удалён из очереди отправки.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Нет')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Да, отменить')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(_heldOrderId!);
-    _heldOrderId = null;
-    if (!mounted) return;
-    _toast('Заказ отменён', accent: AppColors.warning);
-    context.go('/orders');
+  Future<void> _refreshAgentConfig() async {
+    await ref.read(authStateProvider.notifier).refreshMobileConfig();
+    if (mounted) setState(() {});
   }
-
 
   void _toast(String message, {Color accent = AppColors.error}) {
     if (!mounted) return;
@@ -267,22 +117,22 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     await _waitAuthReady();
     if (!mounted) return;
 
-    // Vizit / mijoz detali orqali kelgan — mijozni qayta tanlatmaymiz.
     var client = _normalizeClientRow(widget.initialClient, expectedId: id);
     client ??= _normalizeClientRow(await AppDatabase().getClientById(id), expectedId: id);
     client ??= _normalizeClientRow(await _fetchClientFromServer(id), expectedId: id);
 
-    // Minimal fallback: ID ma'lum — tanlash ekranini o'tkazib yuboramiz.
-    client ??= {
-      'id': id,
-      'name': 'Клиент #$id',
-    };
-
-    if (client['name'] != 'Клиент #$id') {
+    if (client != null) {
       await AppDatabase().upsertClients([client]);
     }
 
     if (!mounted) return;
+    if (client == null) {
+      setState(() => _bootstrappingInitialClient = false);
+      _toast('Клиент не найден', accent: AppColors.warning);
+      if (mounted && context.canPop()) context.pop();
+      return;
+    }
+
     setState(() => _selectedClient = client);
 
     final draft = await ref.read(orderDraftRepositoryProvider).loadForClient(id);
@@ -316,15 +166,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   Map<String, dynamic>? _normalizeClientRow(Map<String, dynamic>? raw, {required int expectedId}) {
     if (raw == null) return null;
-    final rawId = raw['id'];
-    final id = rawId is num
-        ? rawId.toInt()
-        : int.tryParse(rawId?.toString() ?? '');
+    final id = (raw['id'] as num?)?.toInt();
     if (id != expectedId) return null;
-    // SQLite / extra dan kelgan qator — id har doim int bo‘lsin.
-    if (rawId is! int) {
-      return {...raw, 'id': id};
-    }
     return raw;
   }
 
@@ -337,11 +180,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             clientId: clientId,
           );
       for (final c in ctx.clients) {
-        final rawId = c['id'];
-        final id = rawId is num
-            ? rawId.toInt()
-            : int.tryParse(rawId?.toString() ?? '');
-        if (id == clientId) return _normalizeClientRow(c, expectedId: clientId);
+        final id = (c['id'] as num?)?.toInt();
+        if (id == clientId) return c;
       }
     } catch (_) {}
     return null;
@@ -351,35 +191,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final id = _selectedClient?['id'];
     if (id is int) return id;
     if (id is num) return id.toInt();
-    return int.tryParse(id?.toString() ?? '') ?? 0;
-  }
-
-  /// Route/query dan kelgan mijoz — tanlangan mijoz hali yuklanmagan bo‘lsa ham.
-  int get _effectiveClientId {
-    final selected = _selectedClientId;
-    if (selected > 0) return selected;
-    final initial = widget.initialClientId;
-    if (initial != null && initial > 0) return initial;
     return 0;
-  }
-
-  Future<void> _ensureSelectedClientFromRoute() async {
-    final id = _effectiveClientId;
-    if (id <= 0) return;
-    if (_selectedClient != null && _selectedClientId == id) return;
-
-    var client = _normalizeClientRow(widget.initialClient, expectedId: id);
-    client ??= _normalizeClientRow(await AppDatabase().getClientById(id), expectedId: id);
-    client ??= _normalizeClientRow(await _fetchClientFromServer(id), expectedId: id);
-    client ??= {
-      'id': id,
-      'name': widget.initialClient?['name']?.toString() ??
-          _selectedClient?['name']?.toString() ??
-          'Клиент #$id',
-    };
-
-    if (!mounted) return;
-    setState(() => _selectedClient = client);
   }
 
   double get _total {
@@ -407,13 +219,16 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     var v = 0.0;
     for (final e in _quantities.entries) {
       if (e.value <= 0) continue;
-      final p = _productById[e.key];
-      if (p == null) continue;
-      final cat = p['category'];
-      final vol = parseOrderNum(
-        p['volume_m3'] ?? (cat is Map ? cat['volume_m3'] : null),
-      );
-      v += e.value * vol;
+      for (final p in _allProducts) {
+        final id = (p['id'] as num?)?.toInt() ?? 0;
+        if (id != e.key) continue;
+        final cat = p['category'];
+        final vol = parseOrderNum(
+          p['volume_m3'] ?? (cat is Map ? cat['volume_m3'] : null),
+        );
+        v += e.value * vol;
+        break;
+      }
     }
     return v;
   }
@@ -441,7 +256,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     );
     await ref.read(orderDraftRepositoryProvider).save(draft);
     ref.invalidate(orderDraftsProvider);
-    ref.invalidate(orderDraftListProvider);
     ref.invalidate(orderDraftForClientProvider(_selectedClientId));
     if (mounted) {
       _toast(S.orderDraftSaved, accent: AppColors.success);
@@ -477,22 +291,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _refreshPhotoStatus({bool force = false}) async {
+  Future<void> _refreshPhotoStatus() async {
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty || _selectedClientId <= 0) return;
-    final now = DateTime.now();
-    if (!force &&
-        _hasUnlinkedPhotoToday &&
-        _photoStatusFetchedAt != null &&
-        now.difference(_photoStatusFetchedAt!) < _photoStatusCacheTtl) {
-      return;
-    }
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
-      if (mounted) {
-        setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(photos));
-        _photoStatusFetchedAt = now;
-      }
+      if (mounted) setState(() => _hasUnlinkedPhotoToday = hasUnlinkedPhotoReportToday(photos));
     } catch (_) {}
   }
 
@@ -535,44 +339,26 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         _selectedClient = picked;
         _hasUnlinkedPhotoToday = false;
       });
-      _invalidateCreateContextCache();
-      _photoStatusFetchedAt = null;
-      _mandatoryChecksPassedAt = null;
       await _openSetupSheet();
     }
   }
 
   Future<void> _prefetchWarehouses() async {
-    if (_effectiveClientId <= 0) return;
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (slug.isEmpty || _selectedClientId <= 0) return;
     try {
-      final ctx = await _getCreateContext();
-      if (ctx == null || !mounted) return;
+      final ctx = await ref.read(ordersApiProvider).getCreateContext(
+        slug,
+        clientId: _selectedClientId,
+      );
+      if (!mounted) return;
       setState(() {
         _warehouses = ctx.warehouses;
-        _defaultWarehouseId = ctx.defaultWarehouseId;
         _priceTypes = ctx.priceTypes.isNotEmpty ? ctx.priceTypes : const ['retail'];
         if (_priceType.isEmpty || !_priceTypes.contains(_priceType)) {
           _priceType = _priceTypes.first;
         }
-        if (_warehouseId == null) {
-          final stockWh = ref.read(warehouseStockWarehouseIdProvider);
-          final allowedIds = ctx.warehouses
-              .map((w) => (w['id'] as num?)?.toInt())
-              .whereType<int>()
-              .toSet();
-          if (stockWh != null && allowedIds.contains(stockWh)) {
-            _warehouseId = stockWh;
-          } else if (ctx.defaultWarehouseId != null) {
-            _warehouseId = ctx.defaultWarehouseId;
-          }
-        }
-        if (ctx.clientFinance != null) {
-          _clientFinance = ctx.clientFinance;
-          if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
-            _isConsignment = false;
-            _consignmentDueDate = '';
-          }
-        }
+        if (ctx.clientFinance != null) _clientFinance = ctx.clientFinance;
       });
     } catch (_) {}
   }
@@ -581,7 +367,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     if (_selectedClient == null || _setupShown && _warehouseId != null) {
       // qayta ochish — asosiy ma'lumotlarni o'zgartirish
     }
-    await _ensureSelectedClientFromRoute();
     await _prefetchWarehouses();
     if (!mounted) return;
 
@@ -594,18 +379,26 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             creditLimitRaw != '0.00')
         ? creditLimitRaw
         : null;
-    if (creditLimitHint == null) {
-      for (final c in _createContextCache?.clients ?? const <Map<String, dynamic>>[]) {
-        final id = (c['id'] as num?)?.toInt();
-        if (id != _selectedClientId) continue;
-        final cl = c['credit_limit']?.toString().trim();
-        if (cl != null && cl.isNotEmpty && cl != '0' && cl != '0.00') {
-          creditLimitHint = cl;
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (creditLimitHint == null && slug.isNotEmpty && _selectedClientId > 0) {
+      try {
+        final ctx = await ref.read(ordersApiProvider).getCreateContext(
+          slug,
+          clientId: _selectedClientId,
+        );
+        for (final c in ctx.clients) {
+          final id = (c['id'] as num?)?.toInt();
+          if (id != _selectedClientId) continue;
+          final cl = c['credit_limit']?.toString().trim();
+          if (cl != null && cl.isNotEmpty && cl != '0' && cl != '0.00') {
+            creditLimitHint = cl;
+          }
+          break;
         }
-        break;
-      }
+      } catch (_) {}
     }
     if (!mounted) return;
+    await _refreshAgentConfig();
     await _refreshPhotoStatus();
     final photoRequired =
         ref.read(sessionProvider).mobileConfig?.photo.requiredForOrder ?? false;
@@ -616,7 +409,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       warehouses: _warehouses,
       priceTypes: _priceTypes,
       initialWarehouseId: _warehouseId,
-      defaultWarehouseId: _defaultWarehouseId,
       initialPriceType: _priceType,
       initialComment: _comment,
       showConsignmentField: agentLimits.consignment,
@@ -626,9 +418,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       clientCreditLimitHint: creditLimitHint,
       clientFinance: _clientFinance,
       cartTotal: _total,
-      consignmentCheckboxEnabled: _clientFinance != null
-          ? _clientFinance!.consignmentToggleEnabled
-          : agentLimits.consignment,
+      consignmentCheckboxEnabled:
+          _clientFinance?.agentConsignmentEnabled ?? agentLimits.consignment,
       photoRequired: photoRequired,
       initialHasUnlinkedPhoto: _hasUnlinkedPhotoToday,
       showShipmentDateField: requireShipmentDate,
@@ -660,25 +451,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       _consignmentDueDate = result.consignmentDueDate ?? '';
       _shipmentDate = result.shipmentDate ?? '';
       _setupShown = true;
-      if (_effectiveClientId > 0) _step = _CreateStep.categories;
     });
-    if (result.warehouseId != prevWarehouseId) {
-      _invalidateCreateContextCache();
-      _mandatoryChecksPassedAt = null;
-    }
-    if (result.warehouseId != null) {
-      ref.read(warehouseStockWarehouseIdProvider.notifier).state = result.warehouseId;
-    }
     if (!await _ensureMandatoryBeforeProductSelection()) {
       return;
     }
-    // Ombor `_prefetchWarehouses` da oldindan to'ldirilishi mumkin (ostatkalar sahifasidan).
-    // Shunda foydalanuvchi xuddi shu omborni tanlasa ham katalog birinchi marta yuklanishi kerak.
-    final needsCatalogLoad =
-        prevWarehouseId != result.warehouseId ||
-        prevWarehouseId == null ||
-        _allProducts.isEmpty;
-    if (needsCatalogLoad) {
+    if (prevWarehouseId != result.warehouseId || prevWarehouseId == null) {
       await _loadCatalog(clearCart: true);
     } else if (prevPriceType != result.priceType) {
       await _reloadUnitPrices();
@@ -689,19 +466,18 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   }
 
   Future<void> _refreshClientFinance() async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
     final clientId = _selectedClientId;
-    if (clientId <= 0) return;
+    if (slug.isEmpty || clientId <= 0) return;
     try {
-      final ctx = await _getCreateContext(warehouseId: _warehouseId);
-      if (!mounted || ctx == null) return;
+      final ctx = await ref.read(ordersApiProvider).getCreateContext(
+        slug,
+        clientId: clientId,
+        warehouseId: _warehouseId,
+      );
+      if (!mounted) return;
       if (ctx.clientFinance != null) {
-        setState(() {
-          _clientFinance = ctx.clientFinance;
-          if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
-            _isConsignment = false;
-            _consignmentDueDate = '';
-          }
-        });
+        setState(() => _clientFinance = ctx.clientFinance);
       }
     } catch (_) {}
   }
@@ -717,8 +493,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   }
 
   Future<void> _loadCatalog({bool clearCart = true}) async {
-    await _ensureSelectedClientFromRoute();
-    final clientId = _effectiveClientId;
+    final clientId = _selectedClientId;
     final whId = _warehouseId;
     if (clientId <= 0 || whId == null) return;
 
@@ -748,21 +523,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     try {
-      final ctx = await _getCreateContext(warehouseId: whId, forceRefresh: clearCart);
-      if (ctx == null) {
-        if (mounted) {
-          setState(() {
-            _loadError = 'Katalog yuklanmadi';
-            _loadingCatalog = false;
-          });
-        }
-        return;
-      }
+      final ctx = await ref.read(ordersApiProvider).getCreateContext(
+        slug,
+        clientId: clientId,
+        warehouseId: whId,
+      );
       final showOutOfStock =
           ref.read(sessionProvider).mobileConfig?.productList.showOutOfStock ?? true;
-      var products = ctx.products
-          .where((p) => p['is_blocked'] != true && p['is_active'] != false)
-          .toList();
+      var products = ctx.products.where((p) => p['is_blocked'] != true).toList();
       final productIds = products
           .map((p) => (p['id'] as num?)?.toInt() ?? 0)
           .where((id) => id > 0)
@@ -793,19 +561,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       setState(() {
         _priceTypes = ctx.priceTypes.isNotEmpty ? ctx.priceTypes : _priceTypes;
         _warehouses = ctx.warehouses.isNotEmpty ? ctx.warehouses : _warehouses;
-        _defaultWarehouseId = ctx.defaultWarehouseId ?? _defaultWarehouseId;
-        if (ctx.clientFinance != null) {
-          _clientFinance = ctx.clientFinance;
-          if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
-            _isConsignment = false;
-            _consignmentDueDate = '';
-          }
-        }
+        if (ctx.clientFinance != null) _clientFinance = ctx.clientFinance;
         _allProducts = products;
-        _productById = {
-          for (final p in products)
-            if (((p['id'] as num?)?.toInt() ?? 0) > 0) (p['id'] as num).toInt(): p,
-        };
         final sortProducts = ref.read(agentLocalPrefsProvider).valueOrNull?.sortProductsAlphabetically ?? true;
         _categories = groupProductsByCategory(products, sortProductsAlphabetically: sortProducts);
         _stockAvailable
@@ -851,6 +608,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   }
 
   Future<bool> _runOrderMandatoryChecks({required bool offerPhotoCapture}) async {
+    await _refreshAgentConfig();
     final cfg = ref.read(sessionProvider).mobileConfig ?? const MobileConfig();
     final guardBlock = await evaluateAgentOrderGuards(
       ref,
@@ -926,9 +684,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final slug = ref.read(sessionProvider).tenantSlug ?? '';
       if (slug.isEmpty) return false;
       try {
-        if (!_hasUnlinkedPhotoToday) {
-          await _refreshPhotoStatus(force: true);
-        }
+        await _refreshPhotoStatus();
         if (!_hasUnlinkedPhotoToday) {
           if (!mounted) return false;
           if (!offerPhotoCapture) {
@@ -968,19 +724,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     return true;
   }
 
-  Future<bool> _ensureMandatoryBeforeProductSelection() async {
-    final now = DateTime.now();
-    final photoRequired =
-        ref.read(sessionProvider).mobileConfig?.photo.requiredForOrder ?? false;
-    if (_mandatoryChecksPassedAt != null &&
-        now.difference(_mandatoryChecksPassedAt!) < _mandatoryChecksCacheTtl &&
-        (!photoRequired || _hasUnlinkedPhotoToday)) {
-      return true;
-    }
-    final ok = await _runOrderMandatoryChecks(offerPhotoCapture: true);
-    if (ok) _mandatoryChecksPassedAt = now;
-    return ok;
-  }
+  Future<bool> _ensureMandatoryBeforeProductSelection() =>
+      _runOrderMandatoryChecks(offerPhotoCapture: true);
 
   Future<bool> _ensureOrderPolicy() => _runOrderMandatoryChecks(offerPhotoCapture: false);
 
@@ -1006,10 +751,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       category: category,
     );
     if (row != null && mounted) {
-      setState(() {
-        _hasUnlinkedPhotoToday = true;
-        _photoStatusFetchedAt = DateTime.now();
-      });
+      setState(() => _hasUnlinkedPhotoToday = true);
       _toast('Фотоотчет сохранён', accent: AppColors.success);
       return true;
     }
@@ -1037,26 +779,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   }) async {
     if (_selectedClient == null || _warehouseId == null || _cartQty == 0) return;
     setState(() => _submitting = true);
-
-    final finance = _clientFinance;
-    final gateReason = _isConsignment
-        ? finance?.consignmentBlockReason()
-        : finance?.regularOrderBlockReason();
-    if (gateReason != null) {
-      if (mounted) {
-        _toast(gateReason);
-        setState(() => _submitting = false);
-      }
-      return;
-    }
-    final limitReason = _consignmentLimitGateReason();
-    if (limitReason != null) {
-      if (mounted) {
-        _toast(limitReason);
-        setState(() => _submitting = false);
-      }
-      return;
-    }
 
     if (!await _ensureOrderPolicy()) {
       if (mounted) setState(() => _submitting = false);
@@ -1119,14 +841,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           comment: _comment.isEmpty ? null : _comment,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
-        ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
-        refreshVisitStatsProviders(ref.invalidate);
         if (mounted) {
           _toast('Oflayn navbatga qo\'shildi', accent: AppColors.warning);
           if (context.canPop()) context.pop();
@@ -1138,54 +854,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
       }
       if (mounted) setState(() => _submitting = false);
-      return;
-    }
-
-    final delayMin = ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ?? 0;
-    if (delayMin > 0) {
-      try {
-        await saveHeldOrder(
-          ref: ref,
-          clientId: _selectedClientId,
-          clientName: _selectedClient?['name']?.toString() ?? '',
-          warehouseId: _warehouseId!,
-          priceType: _priceType,
-          comment: _comment,
-          items: items,
-          applyBonus: applyBonus,
-          applyDiscount: applyDiscount,
-          giftOverrides: giftOverrides,
-          giftLines: giftLines,
-          isConsignment: _isConsignment,
-          consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
-          shipmentDate: _shipmentDate.isEmpty ? null : _shipmentDate,
-          estimatedTotal: _total,
-          delayMinutes: delayMin,
-          existingId: _heldOrderId,
-        );
-        await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
-        ref.invalidate(orderDraftsProvider);
-        ref.invalidate(orderDraftListProvider);
-        ref.invalidate(orderDraftForClientProvider(_selectedClientId));
-        ref.invalidate(heldOrdersProvider);
-        ref.invalidate(heldOrderCountProvider);
-        refreshVisitStatsProviders(ref.invalidate);
-        if (mounted) {
-          _toast(
-            'Заказ в очереди — отправка через $delayMin мин',
-            accent: AppColors.warning,
-          );
-          context.go('/orders');
-        }
-      } catch (e) {
-        if (mounted) _toast('Ошибка очереди: $e');
-      } finally {
-        if (mounted) setState(() => _submitting = false);
-      }
       return;
     }
 
@@ -1236,14 +904,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (mounted) {
         setState(() => _hasUnlinkedPhotoToday = false);
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
         ref.invalidate(orderDraftsProvider);
-        ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
-        refreshVisitStatsProviders(ref.invalidate);
         _toast('Заказ №$orderNumber создан', accent: AppColors.success);
         final vanCfg = ref.read(sessionProvider).mobileConfig?.vanSelling;
         if (vanCfg?.paymentRequired == true && orderId != null) {
@@ -1280,28 +942,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
   }
 
-  String? _consignmentLimitGateReason() {
-    if (!_isConsignment) return null;
-    return _clientFinance?.consignmentLimitBlockReason(_total);
-  }
-
   Future<void> _onFinishOrder() async {
     if (_cartQty == 0) {
       _toast('Kamida bitta mahsulot tanlang', accent: AppColors.warning);
-      return;
-    }
-
-    final finance = _clientFinance;
-    final gateReason = _isConsignment
-        ? finance?.consignmentBlockReason()
-        : finance?.regularOrderBlockReason();
-    if (gateReason != null) {
-      _toast(gateReason);
-      return;
-    }
-    final limitReason = _consignmentLimitGateReason();
-    if (limitReason != null) {
-      _toast(limitReason);
       return;
     }
 
@@ -1350,81 +993,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       applyDiscount: result.applyDiscount,
       giftOverrides: result.giftOverrides,
       giftLines: result.giftLines,
-    );
-  }
-
-  Widget _buildCategoryList({
-    required List<OrderCategoryGroup> visible,
-    required bool productSelectionBlocked,
-  }) {
-    if (_categories.isEmpty) {
-      return const Center(child: AgentEmptyState(message: S.emptyCategories));
-    }
-    if (visible.isEmpty) {
-      return const Center(child: AgentEmptyState(message: 'Ничего не найдено'));
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: visible.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final cat = visible[i];
-        final qQty = _qtyInCategory(cat);
-        final blocked = productSelectionBlocked;
-        final count = cat.products.length;
-        return Card(
-          margin: EdgeInsets.zero,
-          color: blocked ? Colors.grey.shade50 : null,
-          child: ListTile(
-            enabled: !blocked,
-            title: Text(
-              cat.name,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: blocked ? AppColors.textMuted : null,
-              ),
-            ),
-            subtitle: blocked
-                ? const Text(
-                    'Сначала добавьте фотоотчет',
-                    style: TextStyle(fontSize: 12, color: AppColors.warning),
-                  )
-                : Text('$count ${S.categoryProductsCount}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (blocked)
-                  const Icon(Icons.photo_camera_outlined, color: AppColors.warning, size: 20)
-                else if (qQty > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$qQty',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, color: blocked ? AppColors.textMuted : null),
-              ],
-            ),
-            onTap: blocked
-                ? () async {
-                    await _addPhotoReport();
-                    await _refreshPhotoStatus(force: true);
-                  }
-                : () => _enterCategory(cat),
-          ),
-        );
-      },
     );
   }
 
@@ -1581,18 +1149,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       );
     }
 
-    final visible = _productSearch.isEmpty
-        ? _categories
-        : _categories.where((cat) {
-            final q = _productSearch.toLowerCase();
-            if (cat.name.toLowerCase().contains(q)) return true;
-            return cat.products.any((p) {
-              final name = p['name']?.toString().toLowerCase() ?? '';
-              final sku = p['sku']?.toString().toLowerCase() ?? '';
-              return name.contains(q) || sku.contains(q);
-            });
-          }).toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1601,94 +1157,86 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: MandatoryPhotoInlinePrompt(onAdd: _addPhotoReport),
           ),
-        if (!_isConsignment &&
-            (_clientFinance?.regularOrderBlockReason() != null))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
-              _clientFinance!.regularOrderBlockReason()!,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        if (_isConsignment &&
-            (_clientFinance?.consignmentBlockReason() != null))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
-              _clientFinance!.consignmentBlockReason()!,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        if (_consignmentLimitGateReason() != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
-              ),
-              child: Text(
-                _consignmentLimitGateReason()!,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w700,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _selectedClient?['name']?.toString() ?? S.orderAddTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _openSetupSheet,
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                label: const Text(S.editOrderSetup),
-              ),
-            ],
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: TextField(
-            controller: _productSearchCtrl,
-            onChanged: _onProductSearchChanged,
-            decoration: const InputDecoration(
-              hintText: 'Поиск товаров…',
-              prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
-            ),
+          child: OutlinedButton.icon(
+            onPressed: _openSetupSheet,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text(S.editOrderSetup),
           ),
         ),
-        Expanded(
-          child: _buildCategoryList(
-            visible: visible,
-            productSelectionBlocked: productSelectionBlocked,
+        if (_selectedClient != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              '${S.clientLabel}: ${_selectedClient!['name']}',
+              style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+            ),
           ),
+        Expanded(
+          child: _categories.isEmpty
+              ? const Center(child: AgentEmptyState(message: S.emptyCategories))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final cat = _categories[i];
+                    final q = _qtyInCategory(cat);
+                    final blocked = productSelectionBlocked;
+                    return Card(
+                      color: blocked ? Colors.grey.shade50 : null,
+                      child: ListTile(
+                        enabled: !blocked,
+                        title: Text(
+                          cat.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: blocked ? AppColors.textMuted : null,
+                          ),
+                        ),
+                        subtitle: blocked
+                            ? const Text(
+                                'Сначала добавьте фотоотчет',
+                                style: TextStyle(fontSize: 12, color: AppColors.warning),
+                              )
+                            : null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (blocked)
+                              const Icon(Icons.photo_camera_outlined, color: AppColors.warning, size: 20)
+                            else if (q > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '$q',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.chevron_right, color: blocked ? AppColors.textMuted : null),
+                          ],
+                        ),
+                        onTap: blocked
+                            ? () async {
+                                await _addPhotoReport();
+                                await _refreshPhotoStatus();
+                              }
+                            : () => _enterCategory(cat),
+                      ),
+                    );
+                  },
+                ),
         ),
         _buildBottomBar(
           primaryLabel: S.orderAddOrder,
           onPrimary: _cartQty > 0 ? _onFinishOrder : null,
-          primaryEnabled: _cartQty > 0 &&
-              (!photoRequired || _hasUnlinkedPhotoToday) &&
-              _consignmentLimitGateReason() == null,
+          primaryEnabled: _cartQty > 0 && (!photoRequired || _hasUnlinkedPhotoToday),
           photoRequired: photoRequired,
         ),
       ],
@@ -1707,7 +1255,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             final sku = p['sku']?.toString().toLowerCase() ?? '';
             return name.contains(_productSearch) || sku.contains(_productSearch);
           }).toList();
-    final showBoxes = ref.watch(agentLocalPrefsProvider).valueOrNull?.showBoxCount ?? false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1717,10 +1264,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Chip(
               label: Text('Filtr: $_productSearch'),
-              onDeleted: () {
-                _productSearchCtrl.clear();
-                setState(() => _productSearch = '');
-              },
+              onDeleted: () => setState(() => _productSearch = ''),
             ),
           ),
         Expanded(
@@ -1740,10 +1284,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
               final stockLabel = qty > 0
                   ? '${S.warehouseStock}: ${avail.toStringAsFixed(0)} · ${S.remaining}: ${remaining.toStringAsFixed(0)}'
                   : '${S.inStock}: ${avail.toStringAsFixed(0)}';
-              final stockText = out ? S.outOfStock : stockLabel;
+              final stockText = out ? S.no : stockLabel;
+              final showBoxes = ref.watch(agentLocalPrefsProvider).valueOrNull?.showBoxCount ?? false;
               final boxLabel = productQuantityLabel(p, qty.toDouble(), showBoxes: showBoxes);
-              return RepaintBoundary(
-                child: Card(
+              return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 color: out ? Colors.grey.shade100 : null,
                 shape: RoundedRectangleBorder(
@@ -1757,7 +1301,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(productDisplayName(p), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(p['name']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -1807,7 +1351,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
                     ],
                   ),
                 ),
-              ),
               );
             },
           ),
@@ -1858,8 +1401,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         drawerScaffoldKey: _scaffoldKey,
         onBack: _handleBack,
         actions: [
-          if (_heldOrderId != null)
-            AgentIconButton(icon: Icons.close, onPressed: _cancelHeldOrder),
           if (_selectedClientId > 0)
             AgentIconButton(icon: Icons.more_horiz, onPressed: _showOrderActionsSheet),
           if (_step == _CreateStep.categoryProducts || _step == _CreateStep.categories)
@@ -1870,7 +1411,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         children: [
           if (_bootstrappingInitialClient)
             const Center(child: CircularProgressIndicator())
-          else if (_step == _CreateStep.pickClient && _effectiveClientId <= 0)
+          else if (_step == _CreateStep.pickClient)
             _buildPickClient()
           else if (_step == _CreateStep.categories)
             _buildCategories(photoRequired: photoRequired)
@@ -1948,7 +1489,6 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
   var _searching = false;
   var _query = '';
   var _searchToken = 0;
-  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -1959,7 +1499,6 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -1968,11 +1507,6 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
   void _closeSheet() {
     _focusNode.unfocus();
     Navigator.pop(context);
-  }
-
-  void _scheduleSearch(String q) {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 250), () => _runSearch(q));
   }
 
   Future<void> _runSearch(String q) async {
@@ -2037,7 +1571,7 @@ class _ClientPickerSheetState extends State<_ClientPickerSheet> {
                       onPressed: _closeSheet,
                     ),
                   ),
-                  onChanged: _scheduleSearch,
+                  onChanged: _runSearch,
                 ),
               ),
               Expanded(

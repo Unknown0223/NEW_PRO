@@ -195,8 +195,6 @@ export type QtyGiftResolveContext = {
   availableByProductId?: ReadonlyMap<number, number>;
   /** Kamida shuncha dona chiqarish mumkin bo‘lishi kerak */
   minUnits?: number;
-  /** `category_stock` qoidalari uchun: kategoriya ichidagi nomzod sovg‘a SKU’lar (ombor ustuvorligi bilan tanlanadi). */
-  categoryCandidateIds?: number[];
 };
 
 export function pickGiftFromAllowedList(
@@ -239,7 +237,6 @@ export function resolveQtyGiftProductId(
   const allowed = rule.bonus_product_ids;
   const minUnits = Math.max(1, ctx?.minUnits ?? 1);
   const avail = ctx?.availableByProductId;
-  const categoryCandidateIds = ctx?.categoryCandidateIds ?? [];
 
   /** 5+1 assortiment: sovg‘a — xarid qilingan SKU; ombor qoldig‘i alohida tekshirilmaydi. */
   const selectionMeta = bonusGiftSelectionMeta(
@@ -254,19 +251,9 @@ export function resolveQtyGiftProductId(
   if (override !== undefined && Number.isFinite(override) && override > 0) {
     if (allowed.length > 0) {
       if (allowed.includes(override)) return override;
-    } else if (selectionMeta.kind === "category_stock") {
-      if (categoryCandidateIds.includes(override)) return override;
     } else if (purchasedPid > 0 && override === purchasedPid) {
       return override;
     }
-  }
-
-  /** Faqat kategoriya (aniq sovg‘a SKU yo‘q): xarid qilingan mahsulotdan qat’i nazar, omborda eng ko‘p qoldiqli mahsulotdan. */
-  if (selectionMeta.kind === "category_stock") {
-    if (categoryCandidateIds.length === 0) {
-      return purchasedPid > 0 ? purchasedPid : 0;
-    }
-    return pickGiftFromAllowedList(categoryCandidateIds, 0, avail, minUnits);
   }
 
   if (allowed.length === 0) {

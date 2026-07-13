@@ -1,6 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/sync/bootstrap_sync_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -14,8 +15,6 @@ class FullSyncView extends StatelessWidget {
   final VoidCallback? onContinue;
   final VoidCallback? onBack;
   final String title;
-  final String? subtitle;
-  final int recordTotal;
   final Color? accentColor;
 
   const FullSyncView({
@@ -26,8 +25,6 @@ class FullSyncView extends StatelessWidget {
     this.onContinue,
     this.onBack,
     this.title = 'Полная синхронизация',
-    this.subtitle,
-    this.recordTotal = 847,
     this.accentColor,
   });
 
@@ -42,169 +39,61 @@ class FullSyncView extends StatelessWidget {
 
   static const successExtraLabel = 'Другие';
 
-  int get _recordCurrent => (progress.clamp(0.0, 1.0) * recordTotal).round();
-
   @override
   Widget build(BuildContext context) {
     final accent = accentColor ?? AppColors.primary;
-    final syncSubtitle = subtitle ?? '${S.firstLaunch} · ${S.syncRecordsLabel}';
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentTopBar(
         title: title,
         onBack: onBack,
-        belowTitle: Text(
-          syncSubtitle,
-          style: AppTypography.bodyMedium.copyWith(
-            fontSize: 13,
-            color: AppColors.textMuted,
-          ),
-        ),
       ),
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-          child: Column(
-            children: [
-              AgentOnboardingCard(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                child: Column(
-                  children: [
-                    if (isSuccess)
-                      const _BootstrapSuccessIcon()
-                    else
-                      SyncProgressRing(
-                        progress: progress,
-                        current: _recordCurrent,
-                        total: recordTotal,
-                      ),
-                    const SizedBox(height: 20),
-                    ...items.asMap().entries.map((entry) {
-                      return TweenAnimationBuilder<Offset>(
-                        key: ValueKey('${entry.value.label}-${entry.value.status}'),
-                        tween: Tween(begin: const Offset(-0.1, 0), end: Offset.zero),
-                        duration: Duration(milliseconds: 400 + entry.key * 100),
-                        curve: Curves.easeOut,
-                        builder: (context, offset, child) {
-                          return Transform.translate(
-                            offset: offset * 20,
-                            child: Opacity(
-                              opacity: (1 - offset.dx.abs()).clamp(0.0, 1.0),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _SyncCheckRow(item: entry.value),
-                      );
-                    }),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: isSuccess ? onContinue : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
-                          disabledBackgroundColor: const Color(0xFFCBD5E1),
-                          disabledForegroundColor: Colors.white,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                        child: Text(S.continueBtn),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isSuccess) ...[
-                const SizedBox(height: 14),
-                AgentOnboardingCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
+      body: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: AgentSurfaceCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEAFBEF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_rounded, color: AppColors.success, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              S.syncDataUpdated,
-                              style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            Text(
-                              S.syncAllDone,
-                              style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const _ReadyBadge(),
+                      if (isSuccess) ...[
+                        _SuccessBadge(),
+                        const SizedBox(height: 28),
+                      ] else ...[
+                        _SyncProgressRing(key: const ValueKey('sync-ring'), progress: progress),
+                        const SizedBox(height: 28),
+                      ],
+                      ...items.map(_SyncCheckRow.new),
                     ],
                   ),
                 ),
-              ],
-            ],
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BootstrapSuccessIcon extends StatelessWidget {
-  const _BootstrapSuccessIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 148,
-      height: 148,
-      alignment: Alignment.center,
-      child: Container(
-        width: 88,
-        height: 88,
-        decoration: const BoxDecoration(
-          color: Color(0xFFEAFBEF),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.check_rounded, size: 42, color: AppColors.success),
-      ),
-    );
-  }
-}
-
-class _ReadyBadge extends StatelessWidget {
-  const _ReadyBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFDCFCE7),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Text(
-        S.readyBadge,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: Color(0xFF157F3A),
-          height: 1.2,
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: isSuccess ? onContinue : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accent,
+                  disabledBackgroundColor: const Color(0xFFE2E8F0),
+                  disabledForegroundColor: AppColors.textDisabled,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                child: const Text('Продолжить'),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -219,29 +108,148 @@ class FullSyncItemState {
   const FullSyncItemState(this.label, this.status);
 }
 
+/// Progress halqasi — qiymat hech qachon orqaga qaytmaydi (UI «qayta to‘lish» effektini yo‘qotadi).
+class _SyncProgressRing extends StatefulWidget {
+  final double progress;
+
+  const _SyncProgressRing({super.key, required this.progress});
+
+  @override
+  State<_SyncProgressRing> createState() => _SyncProgressRingState();
+}
+
+class _SyncProgressRingState extends State<_SyncProgressRing> {
+  double _displayed = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayed = widget.progress.clamp(0.0, 1.0);
+  }
+
+  @override
+  void didUpdateWidget(_SyncProgressRing oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.progress.clamp(0.0, 1.0);
+    if (next < _displayed - 0.08) {
+      _displayed = next;
+    } else if (next > _displayed) {
+      _displayed = next;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (_displayed * 100).round();
+    return SizedBox(
+      width: 168,
+      height: 168,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size(168, 168),
+            painter: _GradientRingPainter(progress: _displayed),
+          ),
+          Text(
+            '$pct%',
+            style: AppTypography.headlineMedium.copyWith(
+              fontSize: 32,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF22A06B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientRingPainter extends CustomPainter {
+  final double progress;
+
+  _GradientRingPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 10;
+    const stroke = 12.0;
+
+    final bg = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawCircle(center, radius, bg);
+
+    if (progress <= 0) return;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const gradient = SweepGradient(
+      startAngle: -math.pi / 2,
+      endAngle: 3 * math.pi / 2,
+      colors: [
+        Color(0xFF12C86F),
+        Color(0xFF079BD4),
+        Color(0x6612C86F),
+      ],
+    );
+
+    final fg = Paint()
+      ..shader = gradient.createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * progress, false, fg);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GradientRingPainter oldDelegate) => oldDelegate.progress != progress;
+}
+
+class _SuccessBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCFCE7),
+        borderRadius: BorderRadius.circular(44),
+      ),
+      child: const Icon(Icons.check_rounded, size: 48, color: Color(0xFF22C55E)),
+    );
+  }
+}
+
 class _SyncCheckRow extends StatelessWidget {
   final FullSyncItemState item;
 
-  const _SyncCheckRow({required this.item});
+  const _SyncCheckRow(this.item);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.5),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            item.label,
-            style: AppTypography.bodyMedium.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: item.status == FullSyncItemStatus.pending
-                  ? AppColors.textMuted
-                  : AppColors.textTitle,
+          _StatusIcon(status: item.status),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              item.label,
+              style: AppTypography.bodyMedium.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: item.status == FullSyncItemStatus.pending
+                    ? AppColors.textDisabled
+                    : AppColors.textPrimary,
+              ),
             ),
           ),
-          _StatusIcon(status: item.status),
         ],
       ),
     );
@@ -257,20 +265,39 @@ class _StatusIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case FullSyncItemStatus.done:
-        return const Icon(Icons.check_rounded, color: AppColors.success, size: 18);
+        return Container(
+          width: 28,
+          height: 28,
+          decoration: const BoxDecoration(
+            color: Color(0xFF22C55E),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.check, size: 18, color: Colors.white),
+        );
       case FullSyncItemStatus.loading:
-        return const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+        return Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.borderLight),
+          ),
+          child: const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+          ),
         );
       case FullSyncItemStatus.pending:
         return Container(
-          width: 14,
-          height: 14,
-          decoration: const BoxDecoration(
-            color: Color(0xFFD8E2EA),
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
             shape: BoxShape.circle,
+            border: Border.all(color: AppColors.borderLight),
           ),
         );
     }

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
-import { ENTITY_TYPE_LABEL, humanizeAction } from "@/lib/history-labels";
 import { STALE } from "@/lib/query-stale";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useQuery } from "@tanstack/react-query";
@@ -24,10 +23,6 @@ type AuditRow = {
   created_at: string;
 };
 
-const AUDIT_ENTITY_TYPE_OPTIONS = Object.entries(ENTITY_TYPE_LABEL).sort((a, b) =>
-  a[1].localeCompare(b[1], "ru")
-);
-
 const AUDIT_COLUMN_META = [
   { id: "created_at", label: "Vaqt" },
   { id: "actor", label: "Kim" },
@@ -44,7 +39,6 @@ export default function AuditJournalPage() {
   const [entityType, setEntityType] = useState("");
   const [entityId, setEntityId] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
-  const [exportBusy, setExportBusy] = useState(false);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -128,21 +122,15 @@ export default function AuditJournalPage() {
         </label>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">entity_type</label>
-          <select
-            className="h-9 w-52 rounded-md border border-input bg-background px-2 text-sm"
+          <Input
+            placeholder="masalan: client, user"
             value={entityType}
             onChange={(e) => {
               setEntityType(e.target.value);
               setPage(1);
             }}
-          >
-            <option value="">Barchasi</option>
-            {AUDIT_ENTITY_TYPE_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label} ({value})
-              </option>
-            ))}
-          </select>
+            className="w-44"
+          />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">entity_id</label>
@@ -177,39 +165,6 @@ export default function AuditJournalPage() {
         >
           <ListOrdered className="size-3.5" />
           Ustunlar
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8"
-          disabled={!tenantSlug || exportBusy}
-          onClick={() => {
-            void (async () => {
-              if (!tenantSlug) return;
-              setExportBusy(true);
-              try {
-                const params = new URLSearchParams();
-                if (entityType.trim()) params.set("entity_type", entityType.trim());
-                if (entityId.trim()) params.set("entity_id", entityId.trim());
-                const qs = params.toString();
-                const res = await api.get<Blob>(
-                  `/api/${tenantSlug}/audit-events/export.xlsx${qs ? `?${qs}` : ""}`,
-                  { responseType: "blob" }
-                );
-                const url = URL.createObjectURL(res.data);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "audit-jurnal.xlsx";
-                a.click();
-                URL.revokeObjectURL(url);
-              } finally {
-                setExportBusy(false);
-              }
-            })();
-          }}
-        >
-          {exportBusy ? "…" : "Excel"}
         </Button>
       </div>
 
@@ -271,13 +226,13 @@ export default function AuditJournalPage() {
                           ) : null}
                         </>
                       ) : colId === "object" ? (
-                        <span className="text-xs">
-                          {ENTITY_TYPE_LABEL[row.entity_type] ?? row.entity_type} #{row.entity_id}
-                        </span>
+                        <>
+                          <span className="font-mono text-xs">{row.entity_type}</span>
+                          <span className="text-muted-foreground"> / </span>
+                          <span className="font-mono text-xs">{row.entity_id}</span>
+                        </>
                       ) : colId === "action" ? (
-                        <span className="text-xs" title={row.action}>
-                          {humanizeAction(row.action)}
-                        </span>
+                        <span className="font-mono text-xs">{row.action}</span>
                       ) : colId === "payload" ? (
                         <span className="max-w-[240px] truncate font-mono text-[11px] text-muted-foreground">
                           {JSON.stringify(row.payload)}

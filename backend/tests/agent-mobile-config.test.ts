@@ -86,16 +86,16 @@ describe("agent-mobile-config", () => {
     ).toThrow("BAD_MOBILE_CONFIG_PAYMENT_METHOD");
   });
 
-  it("parseMobileConfigV1 reads misc visit and stock flags", () => {
+  it("parseMobileConfigV1 reads misc QR flags", () => {
     const mc = parseMobileConfigV1({
       schema_version: 1,
       misc: {
-        visit_start_end_enabled: true,
-        require_stock_snapshot_for_order: true
+        qr_attach_visit_page: true,
+        qr_change_client_page: true
       }
     });
-    expect(mc?.misc?.visit_start_end_enabled).toBe(true);
-    expect(mc?.misc?.require_stock_snapshot_for_order).toBe(true);
+    expect(mc?.misc?.qr_attach_visit_page).toBe(true);
+    expect(mc?.misc?.qr_change_client_page).toBe(true);
     validateAgentMobileConfig(1, mc);
   });
 

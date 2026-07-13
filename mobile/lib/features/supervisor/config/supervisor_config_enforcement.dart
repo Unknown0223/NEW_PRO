@@ -6,6 +6,8 @@ class SupervisorConfigPolicy {
 
   const SupervisorConfigPolicy({this.supervision, this.misc});
 
+  bool get visitQrEnabled => misc?.visitStartEndEnabled ?? false;
+
   bool get hasAnyChecklist =>
       supervision?.checkReceiptFaces == true ||
       supervision?.checkMerchandising == true ||

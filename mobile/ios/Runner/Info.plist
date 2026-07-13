@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sales Arena</string>
+	<string>SalesDoc</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Sales Arena</string>
+	<string>SalesDoc</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,23 +29,23 @@
 
 	<!-- Location permissions -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Sales Arena mijozlarga yetib borish va marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
+	<string>SalesDoc mijozlarga yetib borish va marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Sales Arena fon rejimida ham marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
+	<string>SalesDoc fon rejimida ham marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Sales Arena fon rejimida ham marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
+	<string>SalesDoc fon rejimida ham marshrutni kuzatish uchun joylashuvingizni ishlatadi</string>
 
 	<!-- Camera permission -->
 	<key>NSCameraUsageDescription</key>
-	<string>Sales Arena vizit va buyurtmalarda rasm olish uchun kamerangizni ishlatadi</string>
+	<string>SalesDoc vizit va buyurtmalarda rasm olish uchun kamerangizni ishlatadi</string>
 
 	<!-- Photo library permission -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Sales Arena mahsulot rasmlarini saqlash uchun gallareyangizga kirishni xohlaydi</string>
+	<string>SalesDoc mahsulot rasmlarini saqlash uchun gallareyangizga kirishni xohlaydi</string>
 
 	<!-- Biometrics -->
 	<key>NSFaceIDUsageDescription</key>
-	<string>Sales Arena ilovaga xavfsiz kirish uchun Face ID ni ishlatadi</string>
+	<string>SalesDoc ilovaga xavfsiz kirish uchun Face ID ni ishlatadi</string>
 
 	<!-- Background modes -->
 	<key>UIBackgroundModes</key>

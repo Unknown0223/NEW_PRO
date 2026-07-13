@@ -298,8 +298,7 @@ export const reportBuilderSaved = {
   get: saved.getReportBuilderSaved,
   create: saved.createReportBuilderSaved,
   update: saved.updateReportBuilderSaved,
-  delete: saved.deleteReportBuilderSaved,
-  restore: saved.restoreReportBuilderSaved
+  delete: saved.deleteReportBuilderSaved
 };
 
 export type { ReportBuilderConfigPayload, ReportBuilderDatasetResponse };

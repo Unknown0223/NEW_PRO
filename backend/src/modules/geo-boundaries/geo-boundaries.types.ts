@@ -16,7 +16,6 @@ export type GeoBoundaryDto = {
   /** Zona uchun bog‘langan kassa */
   cash_desk_id?: number | null;
   updated_at: string;
-  deleted_at?: string | null;
 };
 
 export type GeoBoundaryOverlapResolution = "existing_wins" | "incoming_wins";

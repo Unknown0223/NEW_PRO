@@ -45,13 +45,16 @@ export type AgentMobileConfigDraft = {
     require_shipment_date?: boolean;
     allow_exchange_request?: boolean;
     disallowed_payment_method_codes?: string[];
+    qr_attach_visit_page?: boolean;
+    qr_change_visit_page?: boolean;
+    qr_attach_client_page?: boolean;
+    qr_change_client_page?: boolean;
   };
   sync?: {
     mandatory_sync_count?: number | null;
     block_sync?: boolean;
     allowed_window_from?: string;
     allowed_window_to?: string;
-    post_order_delay_minutes?: number | null;
   };
   orders?: {
     consignment_payment_due_rule?: string;

@@ -6,11 +6,9 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
-import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
@@ -495,24 +493,19 @@ function StockPageContent() {
                     accept=".xlsx,.xlsm"
                     className="hidden"
                     onChange={(e) => {
-                      const f = pickFirstExcelFile(e.target.files);
+                      const f = e.target.files?.[0];
                       e.target.value = "";
                       if (f) importMutation.mutate({ file: f, warehouseId: importWarehouseId });
                     }}
                   />
-                  <ExcelDropTarget
+                  <Button
+                    type="button"
+                    size="sm"
                     disabled={importMutation.isPending}
-                    onFile={(f) => importMutation.mutate({ file: f, warehouseId: importWarehouseId })}
+                    onClick={() => excelRef.current?.click()}
                   >
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={importMutation.isPending}
-                      onClick={() => excelRef.current?.click()}
-                    >
-                      {importMutation.isPending ? "Import…" : "Excel faylni tanlash"}
-                    </Button>
-                  </ExcelDropTarget>
+                    {importMutation.isPending ? "Import…" : "Excel faylni tanlash"}
+                  </Button>
                 </div>
                 {importSummary && (
                   <p className="text-sm text-emerald-700 dark:text-emerald-400">{importSummary}</p>

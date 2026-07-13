@@ -5,11 +5,6 @@ import {
   restorePaymentBodySchema
 } from "../../contracts/payments.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
@@ -32,7 +27,6 @@ export function registerPaymentAdminWriteRoutes(app: FastifyInstance): void {
       }
       const q = deletePaymentQuerySchema.parse((request.query as Record<string, unknown>) ?? {});
       try {
-        await assertDocWritableById(request, "payments", id);
         await deletePayment(
           request.tenant!.id,
           id,
@@ -41,7 +35,6 @@ export function registerPaymentAdminWriteRoutes(app: FastifyInstance): void {
         );
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -71,7 +64,6 @@ export function registerPaymentAdminWriteRoutes(app: FastifyInstance): void {
             zodValidationExtras(parsed.error)
           );
         }
-        await assertDocWritableById(request, "payments", id);
         await restorePayment(
           request.tenant!.id,
           id,
@@ -80,7 +72,6 @@ export function registerPaymentAdminWriteRoutes(app: FastifyInstance): void {
         );
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");

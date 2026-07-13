@@ -61,17 +61,13 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
       if (!parsed) {
         return sendApiError(reply, request, 400, "NoFile");
       }
-      const actor = getAccessUser(request);
-      const sub = Number.parseInt(actor.sub, 10);
-      const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
       const result = await importClientsFromXlsx(request.tenant!.id, parsed.buf, {
         sheetName: parsed.sheetName,
         headerRowIndex: parsed.headerRowIndex,
         columnMap: parsed.columnMap,
         importMode: parsed.importMode,
         duplicateKeyFields: parsed.duplicateKeyFields,
-        updateApplyFields: parsed.updateApplyFields,
-        actorUserId
+        updateApplyFields: parsed.updateApplyFields
       });
       return reply.send(result);
     }

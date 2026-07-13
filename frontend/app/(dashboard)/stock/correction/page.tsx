@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -1168,42 +1167,45 @@ export default function StockCorrectionPage() {
                               {formatNumberGrouped(r.available_qty, { maxFractionDigits: 3 })}
                             </td>
                             <td className="px-1 py-1">
-                              <GroupedNumberInput
+                              <Input
                                 className={cn(
                                   "h-8 text-right tabular-nums",
                                   deltaInvalid && "border-destructive"
                                 )}
-                                allowNegative
-                                maxFractionDigits={3}
+                                inputMode="decimal"
                                 title={
                                   deltaInvalid
                                     ? `Мин. Δ ${formatNumberGrouped(minDelta, { maxFractionDigits: 3 })}`
                                     : undefined
                                 }
                                 value={rowCorrection[r.product_id] ?? ""}
-                                onValueChange={(v) => handleDeltaInput(r.product_id, qty, v)}
+                                onChange={(e) =>
+                                  handleDeltaInput(r.product_id, qty, e.target.value)
+                                }
                               />
                             </td>
                             <td className="px-1 py-1">
-                              <GroupedNumberInput
+                              <Input
                                 className={cn(
                                   "h-8 text-right tabular-nums",
                                   deltaInvalid && "border-destructive"
                                 )}
-                                maxFractionDigits={3}
+                                inputMode="decimal"
                                 value={rowFact[r.product_id] ?? ""}
-                                onValueChange={(v) => handleFactInput(r.product_id, qty, v)}
+                                onChange={(e) =>
+                                  handleFactInput(r.product_id, qty, e.target.value)
+                                }
                               />
                             </td>
                             <td className="px-1 py-1">
-                              <GroupedNumberInput
+                              <Input
                                 className="h-8 text-right tabular-nums"
-                                maxFractionDigits={2}
+                                inputMode="decimal"
                                 value={rowPrice[r.product_id] ?? ""}
-                                onValueChange={(v) =>
+                                onChange={(e) =>
                                   setRowPrice((prev) => ({
                                     ...prev,
-                                    [r.product_id]: v
+                                    [r.product_id]: e.target.value
                                   }))
                                 }
                               />

@@ -50,8 +50,7 @@ import "dotenv/config";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { PrismaClient } from "@prisma/client";
-import { resolveCityXlsxPath } from "./lib/cities-xlsx-import";
-import { runGorodXlsxImport, resolveGorodXlsxPath } from "./lib/gorod-xlsx-import";
+import { resolveCityXlsxPath, runCitiesXlsxImport } from "./lib/cities-xlsx-import";
 import { runLalakuReferenceImport } from "./lib/lalaku-reference-import";
 import { runStaffImportFromCsv } from "./lib/staff-csv-import";
 import { runProductsImportFromJson } from "./lib/import-products-json";
@@ -103,39 +102,22 @@ async function main() {
 
   const allowProdCities = truthy(process.env.ALLOW_PROD_REF_IMPORT) || truthy(process.env.ALLOW_PROD_CITIES_IMPORT);
   if (!truthy(process.env.IMPORT_ONCE_NO_CITIES)) {
-    const envCity = (process.env.CITY_XLSX_PATH || "").trim();
-    let cityPath: string | null = null;
-    if (envCity) {
-      const abs = path.isAbsolute(envCity) ? envCity : path.join(cwdBackend, envCity);
-      if (!fs.existsSync(abs)) {
-        throw new Error(`CITY_XLSX_PATH berildi, fayl yo‘q: ${abs}`);
-      }
-      cityPath = abs;
-    } else {
-      const cityResolved = resolveCityXlsxPath(cwdBackend);
-      if (cityResolved.ok) cityPath = cityResolved.path;
-      else {
-        try {
-          cityPath = resolveGorodXlsxPath(cwdBackend);
-        } catch {
-          /* not found */
-        }
-      }
-    }
-
-    if (cityPath) {
-      console.log("\n════════════  QO‘SHIMCHA: hududlar (Excel → zona/viloyat/shahar)  ════════════");
-      await runGorodXlsxImport({
+    const cityResolved = resolveCityXlsxPath(cwdBackend);
+    if (cityResolved.ok) {
+      console.log("\n════════════  QO‘SHIMCHA: shaharlar (Excel → territoriya)  ════════════");
+      await runCitiesXlsxImport({
         prisma,
         tenantId: tenant.id,
         tenantSlug: slug,
-        xlsxPath: cityPath,
+        xlsxPath: cityResolved.path,
         dry,
         allowProdWrite: allowProdCities
       });
+    } else if (cityResolved.reason === "missing_env_file") {
+      throw new Error(`CITY_XLSX_PATH berildi, fayl yo‘q: ${cityResolved.detail}`);
     } else {
       console.log(
-        "\n(o‘tkazib yuborildi) Shaharlar Excel — fayl topilmadi. CITY_XLSX_PATH yoki scripts/data/Данные Город.xlsx | Downloads/Telegram Desktop ga qo‘ying."
+        "\n(o‘tkazib yuborildi) Shaharlar Excel — fayl topilmadi. CITY_XLSX_PATH yoki scripts/data/Данные Город.xlsx | gorod.xlsx qo‘ying."
       );
     }
   } else {

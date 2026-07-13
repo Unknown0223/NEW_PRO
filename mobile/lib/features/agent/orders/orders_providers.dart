@@ -52,29 +52,12 @@ bool _matchesHistoryDate(String? createdAt, String dateKey) {
   if (createdAt == null || createdAt.isEmpty) return false;
   final dt = DateTime.tryParse(createdAt);
   if (dt == null) return createdAt.startsWith(dateKey);
-  final wr = toWorkRegionFromIso(createdAt);
-  if (wr == null) return false;
-  return ordersHistoryDateKey(DateTime(wr.year, wr.month, wr.day)) == dateKey;
+  final local = dt.toLocal();
+  return ordersHistoryDateKey(DateTime(local.year, local.month, local.day)) == dateKey;
 }
 
 final pendingCountProvider = FutureProvider<int>((ref) async {
   final se = ref.read(syncEngineProvider);
   if (se != null) return se.pendingCount();
   return AppDatabase().pendingCount();
-});
-
-/// Zakaz bo‘yicha ochiq qarzlar (agent scope).
-final orderDebtsByOrdersProvider = FutureProvider<OrderDebtsListResult>((ref) async {
-  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
-  if (slug.isEmpty) {
-    return OrderDebtsListResult(data: [], total: 0, totalRemainder: 0, currency: 'UZS');
-  }
-  return ref.read(mobileApiProvider).getOrderDebts(slug, limit: 200);
-});
-
-/// Zakaz tafsiloti — expand qilinganda.
-final orderHistoryDetailProvider = FutureProvider.family<AgentOrderHistoryRow, int>((ref, orderId) async {
-  final slug = ref.read(sessionProvider).tenantSlug ?? '';
-  if (slug.isEmpty) throw StateError('tenant');
-  return ref.read(mobileApiProvider).getOrderDetail(slug, orderId);
 });

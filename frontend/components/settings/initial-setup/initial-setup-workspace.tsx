@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
-import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { InitialSetupBundleDialog } from "@/components/settings/initial-setup/initial-setup-bundle-dialog";
 import { InitialSetupStepTable } from "@/components/settings/initial-setup/initial-setup-step-table";
 import {
@@ -40,6 +38,7 @@ import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -49,11 +48,6 @@ import {
   SkipForward,
   Upload
 } from "lucide-react";
-import {
-  AdaptiveCardGrid,
-  ViewModeToggle,
-  useDataViewMode
-} from "@/components/ui/adaptive-grid";
 
 type Props = {
   tenantSlug: string | null;
@@ -77,7 +71,6 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
   const [bundleData, setBundleData] = useState<BundleParseResult>({});
   const [templateBusy, setTemplateBusy] = useState<string | null>(null);
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
-  const [listViewMode, setListViewMode] = useDataViewMode("grid");
 
   const doneIds = useMemo(() => doneStepIds(progress), [progress]);
 
@@ -124,25 +117,11 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
     [doneIds, systemDoneIds]
   );
 
-  const didAutoExpandRef = useRef(false);
-
   useEffect(() => {
-    // Faqat birinchi marta ochiladi — foydalanuvchi yopsa qayta ochilmaydi
-    if (didAutoExpandRef.current) return;
-    if (!nextReadyStep?.id) return;
-    didAutoExpandRef.current = true;
-    setExpandedStepId(nextReadyStep.id);
-  }, [nextReadyStep?.id]);
-
-  useEffect(() => {
-    if (!expandedStepId) return;
-    const el = document.getElementById(`setup-step-${expandedStepId}`);
-    if (!el) return;
-    const t = window.setTimeout(() => {
-      el.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-    }, 50);
-    return () => window.clearTimeout(t);
-  }, [expandedStepId]);
+    if (nextReadyStep?.id && expandedStepId === null) {
+      setExpandedStepId(nextReadyStep.id);
+    }
+  }, [nextReadyStep?.id, expandedStepId]);
 
   const flowSteps = useMemo(() => getColdStartSteps(), []);
   const doneCount = flowSteps.filter((s) => doneIds.has(s.id) || systemDoneIds.has(s.id)).length;
@@ -267,13 +246,10 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
         id={`setup-step-${step.id}`}
         className={cn(
           "overflow-hidden rounded-xl border transition-colors",
-          expanded && "col-span-full sticky top-2 z-20 shadow-md",
           isNext && !expanded ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20" : "",
           expanded && isNext ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20" : "",
-          status === "done" ? "border-emerald-200/80 bg-emerald-50/30" : skipped ? "border-dashed bg-muted/20" : "border-border bg-card",
-          expanded && "bg-card"
+          status === "done" ? "border-emerald-200/80 bg-emerald-50/30" : skipped ? "border-dashed bg-muted/20" : "border-border bg-card"
         )}
-        style={expanded ? { gridColumn: "1 / -1" } : undefined}
       >
         <button
           type="button"
@@ -303,22 +279,9 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
               {status === "done" ? (
                 <span className="text-[10px] font-medium text-emerald-700">Выполнено</span>
               ) : null}
-              {!ok && !done && !systemDone && missing.length > 0 ? (
-                <span
-                  className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900"
-                  title={`Сначала: ${missing.join(" → ")}`}
-                >
-                  Kutish: {missing[0]}
-                  {missing.length > 1 ? ` +${missing.length - 1}` : ""}
-                </span>
-              ) : null}
             </div>
             {!expanded ? (
-              <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
-                {!ok && !done && !systemDone && missing.length > 0
-                  ? `Avval: ${missing.join(" → ")}`
-                  : step.description}
-              </p>
+              <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{step.description}</p>
             ) : null}
           </div>
         </button>
@@ -373,32 +336,27 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                 <FileSpreadsheet className="size-3.5 text-emerald-600" />
                 {templateBusy === step.id ? "Загрузка…" : "Шаблон"}
               </Button>
-              <ExcelDropTarget
-                disabled={!canEdit || parsing === step.id}
-                onFile={(f) => void onStepFilePicked(step, f)}
+              <label
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "cursor-pointer gap-1.5",
+                  (!canEdit || parsing === step.id) && "pointer-events-none opacity-50"
+                )}
               >
-                <label
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "sm" }),
-                    "cursor-pointer gap-1.5",
-                    (!canEdit || parsing === step.id) && "pointer-events-none opacity-50"
-                  )}
-                >
-                  <Upload className="size-3.5" />
-                  {parsing === step.id ? "Чтение…" : "Excel"}
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="sr-only"
-                    disabled={!canEdit}
-                    onChange={(e) => {
-                      const f = pickFirstExcelFile(e.target.files);
-                      e.target.value = "";
-                      if (f) void onStepFilePicked(step, f);
-                    }}
-                  />
-                </label>
-              </ExcelDropTarget>
+                <Upload className="size-3.5" />
+                {parsing === step.id ? "Чтение…" : "Excel"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="sr-only"
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void onStepFilePicked(step, f);
+                  }}
+                />
+              </label>
             </div>
 
             {tenantSlug ? (
@@ -434,130 +392,114 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-slate-200/90 shadow-sm">
-        <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white pb-4">
-          <CardTitle className="text-base">Excel: shablon · eksport · yuklash</CardTitle>
-          <CardDescription className="text-sm leading-relaxed">
-            Umumiy shablon va eksport bir xil formatda. Yangi serverga: eski tizimdan eksport → shu yerga
-            yuklash. Har bir qadamni alohida ham to‘ldirish mumkin.
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Bitta Excel — hammasi bir joyda</CardTitle>
+          <CardDescription>
+            Shablon yuklang yoki joriy ma’lumotlarni eksport qiling — format bir xil. Yangi serverga tez ko‘chirish uchun
+            eski tizimdan eksport → yangi tizimga import.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1.5 rounded-lg"
-              disabled={templateBusy === "bundle"}
-              onClick={() => void onDownloadBundleTemplate()}
-            >
-              <FileSpreadsheet className="size-3.5 text-emerald-600" />
-              {templateBusy === "bundle" ? "Tayyorlanmoqda…" : "Umumiy shablon"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1.5 rounded-lg"
-              disabled={templateBusy === "export"}
-              onClick={() => void onExportBundleData()}
-            >
-              <Download className="size-3.5 text-primary" />
-              {templateBusy === "export" ? "Eksport…" : "Ma’lumotlarni eksport"}
-            </Button>
-            <ExcelDropTarget
-              disabled={parsing === "bundle"}
-              onFile={(f) => void onBundlePicked(f)}
-            >
-              <label
-                className={cn(
-                  buttonVariants({ variant: "default", size: "sm" }),
-                  "h-9 cursor-pointer gap-1.5 rounded-lg",
-                  parsing === "bundle" && "pointer-events-none opacity-50"
-                )}
-              >
-                <Upload className="size-3.5" />
-                {parsing === "bundle" ? "O‘qilmoqda…" : "Excel yuklash"}
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = pickFirstExcelFile(e.target.files);
-                    e.target.value = "";
-                    if (f) void onBundlePicked(f);
-                  }}
-                />
-              </label>
-            </ExcelDropTarget>
-          </div>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={templateBusy === "bundle"}
+            onClick={() => void onDownloadBundleTemplate()}
+          >
+            <FileSpreadsheet className="size-3.5 text-emerald-600" />
+            {templateBusy === "bundle" ? "Tayyorlanmoqda…" : "Umumiy shablon (.xlsx)"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={templateBusy === "export"}
+            onClick={() => void onExportBundleData()}
+          >
+            <Download className="size-3.5 text-primary" />
+            {templateBusy === "export" ? "Экспорт…" : "Экспорт данных (.xlsx)"}
+          </Button>
+          <label
+            className={cn(
+              buttonVariants({ variant: "default", size: "sm" }),
+              "cursor-pointer gap-1.5",
+              parsing === "bundle" && "pointer-events-none opacity-50"
+            )}
+          >
+            <Upload className="size-3.5" />
+            {parsing === "bundle" ? "O‘qilmoqda…" : "Bitta Excel yuklash"}
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void onBundlePicked(f);
+              }}
+            />
+          </label>
+        </CardContent>
+      </Card>
 
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="h-2.5 min-w-[160px] flex-1 overflow-hidden rounded-full bg-slate-200/80">
-                <div
-                  className="h-full rounded-full bg-emerald-600 transition-all duration-500"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-sm font-semibold tabular-nums text-slate-800">
-                {doneCount} / {flowSteps.length}
-                <span className="ml-1 font-normal text-muted-foreground">({pct}%)</span>
-              </span>
-              <ViewModeToggle value={listViewMode} onChange={setListViewMode} />
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Boshlang‘ich sozlash</CardTitle>
+          <CardDescription>
+            Каждый шаг — по порядку. Excel и таблица применяются только когда предыдущие шаги готовы. «Применить» =
+            тот же API, что в основных настройках.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="h-2 min-w-[200px] flex-1 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Компания → Территория → … → Клиенты → Слоты → Поступление
-              {nextReadyStep ? (
-                <>
-                  {" · "}
-                  <span className="font-medium text-primary">Сейчас: {nextReadyStep.title}</span>
-                </>
-              ) : null}
-            </p>
+            <span className="text-sm font-medium tabular-nums">
+              {doneCount} / {flowSteps.length} ({pct}%)
+            </span>
           </div>
+          <ol className="mt-4 space-y-1 text-sm text-muted-foreground">
+            <li className="flex items-center gap-2">
+              <ArrowRight className="size-3.5 shrink-0" />
+              Компания → Территория → Филиалы → Единицы → Валюты → … → Клиенты → Слоты → Остатки
+            </li>
+            {nextReadyStep ? (
+              <li className="font-medium text-primary">
+                Сейчас: {nextReadyStep.title}
+              </li>
+            ) : null}
+          </ol>
         </CardContent>
       </Card>
 
       {toast ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-900">
-          {toast}
-        </p>
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{toast}</p>
       ) : null}
 
-      {INITIAL_SETUP_GROUPS.filter((g) => g.inColdStartFlow).map((group) => {
-        const steps = stepsForGroup(group.id);
-        return (
-          <section key={group.id} className="space-y-2">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{group.title}</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">{group.subtitle}</p>
-            </div>
-            {listViewMode === "grid" ? (
-              <AdaptiveCardGrid minCardWidth={260} maxHeight="none" className="overflow-visible">
-                {steps.map(renderStep)}
-              </AdaptiveCardGrid>
-            ) : (
-              <div className="space-y-2">{steps.map(renderStep)}</div>
-            )}
-          </section>
-        );
-      })}
+      {INITIAL_SETUP_GROUPS.filter((g) => g.inColdStartFlow).map((group) => (
+        <section key={group.id}>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">{group.title}</h2>
+          <p className="mb-3 text-sm text-muted-foreground">{group.subtitle}</p>
+          <div className="space-y-2">{stepsForGroup(group.id).map(renderStep)}</div>
+        </section>
+      ))}
 
-      <section className="space-y-2">
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-            {INITIAL_SETUP_GROUPS.find((g) => g.id === "later-settings")?.title}
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Bonus, skidka, xodimlar — alohida sozlamalarda.
-          </p>
-        </div>
-        <AdaptiveCardGrid minCardWidth={240} maxHeight="none" className="overflow-visible">
+      <section>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+          {INITIAL_SETUP_GROUPS.find((g) => g.id === "later-settings")?.title}
+        </h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Bonus, skidka, xodimlar — alohida sozlamalarda.
+        </p>
+        <div className="space-y-3">
           {stepsForGroup("later-settings").map((step) => (
-            <div key={step.id} className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4">
-              <h3 className="font-semibold text-slate-900">{step.title}</h3>
+            <div key={step.id} className="rounded-xl border border-dashed bg-muted/20 p-4">
+              <h3 className="font-semibold">{step.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
               {step.settingsHref ? (
                 <Link
@@ -569,7 +511,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
               ) : null}
             </div>
           ))}
-        </AdaptiveCardGrid>
+        </div>
       </section>
 
       <InitialSetupBundleDialog

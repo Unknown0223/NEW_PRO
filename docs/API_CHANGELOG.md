@@ -2,28 +2,6 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/). API versiyasi backend deploy bilan birga.
 
-## Versioning policy
-
-### Hozirgi model
-
-- Barcha tenant API: `/api/:slug/...` (versiya prefiksi yo‘q).
-- **Breaking change** (maydon o‘chirish, semantika o‘zgarishi, 4xx/5xx kod o‘zgarishi):
-  1. `API_CHANGELOG.md` ga yoziladi (migration period bilan).
-  2. Kamida **2 hafta** eski va yangi xatti-harakat parallel (feature flag yoki ixtiyoriy query).
-  3. Mobile va frontend contract testlari yangilanadi (`npm run test:contracts`).
-
-### Kelajak: `/api/v2/:slug/...`
-
-- Faqat **breaking** o‘zgarishda yangi prefiks.
-- `v1` (`/api/:slug`) kamida 6 oy qo‘llab-quvvatlanadi.
-- OpenAPI: `npm run openapi:generate` — `info.version` semver (major = breaking).
-
-### Non-breaking
-
-- Yangi ixtiyoriy maydonlar, yangi endpoint, kengaytirilgan filter — changelog `Added` bo‘limi, versiya o‘zgarmaydi.
-
----
-
 ## [Unreleased]
 
 ### Added

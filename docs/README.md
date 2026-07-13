@@ -65,8 +65,6 @@ Bu katalog mavjud hujjatlarga havolalar. Eski reja fayllari (`API-reference.md`,
 | [ACCESS_WORKSPACE_SPLIT_YAKUNLANDI.md](./ACCESS_WORKSPACE_SPLIT_YAKUNLANDI.md) | **✅ Access workspace split (to‘liq, ≤400 LOC)** |
 | [MOBILE_CONFIG_CLEANUP_YAKUNLANDI.md](./MOBILE_CONFIG_CLEANUP_YAKUNLANDI.md) | **✅ Mobile config Faza 1–4 + cleanup** |
 | [YAKUNLANDI_AUDIT_REJA.md](./YAKUNLANDI_AUDIT_REJA.md) | Qisqa yakun bildirishnomasi |
-| [SOFT_VOID_AND_AUDIT.md](./SOFT_VOID_AND_AUDIT.md) | Soft-void standarti + coverage matrix |
-| [SOFT_VOID_AUDIT_YAKUNLANDI.md](./SOFT_VOID_AUDIT_YAKUNLANDI.md) | **✅ Soft-void va audit overhaul yakunlandi** |
 | [../.cursor/plans/salec_refaktoring_reja_v1.plan.md](../.cursor/plans/salec_refaktoring_reja_v1.plan.md) | Backend refaktoring v1 |
 | [../.cursor/plans/refaktoring_davom_handoff_2026-05-17.md](../.cursor/plans/refaktoring_davom_handoff_2026-05-17.md) | Frontend refaktoring handoff |
 

@@ -78,11 +78,4 @@ class AppTypography {
     height: 1.3,
     letterSpacing: 0.2,
   );
-
-  static const TextStyle captionSmall = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
-    height: 1.25,
-    letterSpacing: 0.1,
-  );
 }

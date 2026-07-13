@@ -1,5 +1,4 @@
 /** Clients XLSX import — barrel. */
-export * from "./clients.import.id-lookup";
 export * from "./clients.import.keys";
 export * from "./clients.import.parse";
 export * from "./clients.import.templates";

@@ -35,13 +35,10 @@ import {
   type ProductLite,
   type QtyGiftResolveContext
 } from "./order-bonus-context";
-import { rewardRuleViews, ruleOrAnyClauseUsesCalendarMonth } from "./order-bonus-clauses";
 export type SumBonusPeek = {
   rule: BonusRuleRow;
   giftPid: number;
   units: number;
-  /** Qo‘shimcha reward clause sovg‘alari (birinchi giftPid/units dan tashqari). */
-  extraGifts?: Array<{ giftPid: number; units: number }>;
 };
 
 /**
@@ -83,7 +80,9 @@ export async function findWinningSumPeek(
   let monthExcl = new PrismaClient.Decimal(0);
   if (engineOpts?.prereqEnv) {
     monthExcl = engineOpts.prereqEnv.clientMonthMerchandiseSubtotalExclOrder;
-  } else if (filtered.some((r) => ruleOrAnyClauseUsesCalendarMonth(r))) {
+  } else if (
+    filtered.some((r) => r.type === "sum" && (r.sum_threshold_scope ?? "order") === "calendar_month")
+  ) {
     monthExcl = await fetchClientMonthMerchandiseSubtotalExclOrder(tx, {
       tenantId,
       clientId: client.id,
@@ -97,51 +96,25 @@ export async function findWinningSumPeek(
     engineOpts?.prereqEnv?.orderAgent ?? engineOpts?.orderAgent ?? null;
 
   for (const rule of filtered) {
-    const hasClauses = (rule.clauses?.length ?? 0) > 0;
-    if (rule.min_sum == null && !hasClauses) continue;
+    if (rule.min_sum == null) continue;
     if (rule.discount_pct != null && Number(rule.discount_pct) > 0) continue;
-    if (!hasClauses) {
-      if (rule.min_sum == null) continue;
-      const minSum = new PrismaClient.Decimal(rule.min_sum);
-      const effective = effectiveSubtotalForSumMinRule(rule, baseSubtotalBeforeDiscount, monthExcl);
-      if (effective.lt(minSum)) continue;
-    }
-    if (hasClauses) {
-      if (engineOpts?.prereqEnv) {
-        if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
-      } else {
-        if (!ruleMatchesClient(rule, client)) continue;
-        if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
-      }
-    } else {
-      if (!ruleMatchesClient(rule, client)) continue;
-      if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
-      if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
-      if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
-      if (engineOpts?.prereqEnv) {
-        if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
-      }
+    const minSum = new PrismaClient.Decimal(rule.min_sum);
+    const effective = effectiveSubtotalForSumMinRule(rule, baseSubtotalBeforeDiscount, monthExcl);
+    if (effective.lt(minSum)) continue;
+    if (!ruleMatchesClient(rule, client)) continue;
+    if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
+    if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
+
+    const giftPid = resolveSumRuleGiftProductId(rule, orderedProductIds, productById, qtyByProduct);
+    if (giftPid == null || giftPid <= 0) continue;
+
+    if (engineOpts?.prereqEnv) {
+      if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
     }
 
-    const gifts: Array<{ giftPid: number; units: number }> = [];
-    for (const view of rewardRuleViews(rule)) {
-      if (view.min_sum == null) continue;
-      const minSumV = new PrismaClient.Decimal(view.min_sum);
-      const effectiveV = effectiveSubtotalForSumMinRule(view, baseSubtotalBeforeDiscount, monthExcl);
-      if (effectiveV.lt(minSumV)) continue;
-      const giftPid = resolveSumRuleGiftProductId(view, orderedProductIds, productById, qtyByProduct);
-      if (giftPid == null || giftPid <= 0) continue;
-      const units = view.free_qty != null && view.free_qty > 0 ? view.free_qty : 1;
-      gifts.push({ giftPid, units });
-    }
-    if (gifts.length === 0) continue;
-
-    return {
-      rule,
-      giftPid: gifts[0]!.giftPid,
-      units: gifts[0]!.units,
-      extraGifts: gifts.slice(1)
-    };
+    const units = rule.free_qty != null && rule.free_qty > 0 ? rule.free_qty : 1;
+    return { rule, giftPid, units };
   }
 
   return null;
@@ -191,9 +164,5 @@ export async function computeSumThresholdBonusLines(
     }
   );
   if (!peek) return [];
-  const drafts = await buildSumBonusDraft(tenantId, peek.giftPid, peek.units);
-  for (const g of peek.extraGifts ?? []) {
-    drafts.push(...(await buildSumBonusDraft(tenantId, g.giftPid, g.units)));
-  }
-  return drafts;
+  return buildSumBonusDraft(tenantId, peek.giftPid, peek.units);
 }

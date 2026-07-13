@@ -1,101 +1,24 @@
-"use client";
+import * as React from "react"
+import { Input as InputPrimitive } from "@base-ui/react/input"
 
-import * as React from "react";
-import { Input as InputPrimitive } from "@base-ui/react/input";
+import { cn } from "@/lib/utils"
 
-import { cn } from "@/lib/utils";
-import { INPUT_NUMERIC_CLASS, INPUT_SURFACE_CLASS } from "@/lib/ui-input-styles";
-import {
-  formatDecimalInputDisplay,
-  sanitizeDecimalInput
-} from "@/lib/format-numbers";
-
-export type InputProps = React.ComponentProps<"input"> & {
-  /** type="number" uchun kasr xonalari (default 6) */
-  maxFractionDigits?: number;
-  /** type="number" da manfiy ruxsat (default true) */
-  allowNegative?: boolean;
-};
-
-function emitRawChange(
-  e: React.ChangeEvent<HTMLInputElement>,
-  raw: string,
-  onChange?: React.ChangeEventHandler<HTMLInputElement>
-) {
-  if (!onChange) return;
-  const target = e.target;
-  const prev = target.value;
-  target.value = raw;
-  onChange(e);
-  target.value = prev;
-}
-
-/**
- * Standart input. `type="number"` — avtomatik 3 xonali (minglik) guruhlash;
- * `onChange` da qiymat bo‘shliqsiz (API/state uchun) keladi.
- */
-const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
-  {
-    className,
-    type = "text",
-    value,
-    defaultValue,
-    onChange,
-    maxFractionDigits,
-    allowNegative,
-    inputMode,
-    ...props
-  },
-  ref
-) {
-  const isGroupedNumber = type === "number";
-  const sanitizeOpts = {
-    allowNegative: allowNegative ?? true,
-    maxFractionDigits: maxFractionDigits ?? 6
-  };
-
-  if (isGroupedNumber) {
-    const controlled = value !== undefined;
-    const source = controlled
-      ? value == null
-        ? ""
-        : String(value)
-      : defaultValue == null
-        ? ""
-        : String(defaultValue);
-    const display = formatDecimalInputDisplay(source, sanitizeOpts);
-
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  function Input({ className, type, ...props }, ref) {
     return (
       <InputPrimitive
         ref={ref}
-        {...props}
-        type="text"
-        inputMode={inputMode ?? "decimal"}
+        type={type}
         data-slot="input"
-        data-grouped-number=""
-        className={cn(INPUT_SURFACE_CLASS, INPUT_NUMERIC_CLASS, className)}
-        {...(controlled ? { value: display } : { defaultValue: display })}
-        onChange={(e) => {
-          emitRawChange(e, sanitizeDecimalInput(e.target.value, sanitizeOpts), onChange);
-        }}
+        className={cn(
+          "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          className
+        )}
+        {...props}
       />
-    );
+    )
   }
+)
+Input.displayName = "Input"
 
-  return (
-    <InputPrimitive
-      ref={ref}
-      {...props}
-      type={type}
-      data-slot="input"
-      className={cn(INPUT_SURFACE_CLASS, className)}
-      value={value}
-      defaultValue={defaultValue}
-      onChange={onChange}
-      inputMode={inputMode}
-    />
-  );
-});
-Input.displayName = "Input";
-
-export { Input };
+export { Input }

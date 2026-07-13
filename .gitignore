@@ -12,14 +12,6 @@ out/
 # Test / coverage
 coverage/
 **/coverage/
-backend/coverage-tmp/
-**/coverage-tmp/
-backend/logs/
-**/*.bak
-**/test-output.txt
-**/_tmp-*
-**/tmp-*.json
-backend/vitest.config.js
 test-results/
 **/test-results/
 playwright-report/
@@ -48,9 +40,7 @@ mobile/.env.*.local
 **/*.backup-*/
 backend/assets/nakladnoy/warehouse.backup-*/
 **/node_modules/
-# Umumiy dist emas — frontend/vendor/pivot-engine/dist Railway deploy uchun kerak
-backend/dist/
-packages/*/dist/
+**/dist/
 **/build/
 **/.DS_Store
 *.log
@@ -65,20 +55,3 @@ archive/
 
 # KPI planning template (repoda saqlanmaydi)
 _template-kpi-planning/
-
-# Lokal extract / dizayn / vaqtinchalik
-_audit_extract/
-_extracted_files*/
-_logo_pack/
-_mobile-ui-design/
-_scope_dialog_original.tsx
-.cursor/plans/
-
-# Excel import (scripts/data ildizidagi qo‘lda fayllar)
-backend/scripts/data/*.xlsx
-
-# Mobile build artefaktlari
-*.hprof
-mobile/dist/
-mobile/releases/*.apk
-!mobile/releases/README.txt

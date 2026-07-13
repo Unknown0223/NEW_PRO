@@ -15,8 +15,6 @@ import {
   duplicateRestrictionRule,
   listAutoConfirmRules,
   listRestrictionRules,
-  restoreAutoConfirmRule,
-  restoreRestrictionRule,
   updateAutoConfirmRule,
   updateRestrictionRule,
   type ListQuery
@@ -39,7 +37,6 @@ function parseListQuery(q: Record<string, string | undefined>): ListQuery {
     page: Number.isFinite(page) ? page : 1,
     limit: Number.isFinite(limit) ? limit : 50,
     is_active: q.is_active === "true" ? true : q.is_active === "false" ? false : undefined,
-    archive: q.archive === "true" || q.archive === "1",
     search: q.search,
     agent_user_id: Number.isFinite(agentId) && agentId > 0 ? agentId : undefined,
     warehouse_id: Number.isFinite(warehouseId) && warehouseId > 0 ? warehouseId : undefined,
@@ -198,46 +195,18 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       try {
-        await deleteRestrictionRule(request.tenant!.id, id, actorUserIdOrNull(request));
+        await deleteRestrictionRule(request.tenant!.id, id);
         await appendTenantAuditEvent({
           tenantId: request.tenant!.id,
           actorUserId: actorUserIdOrNull(request),
           entityType: "automation_rule",
           entityId: id,
-          action: "automation_rule.void",
-          payload: { kind: "restriction", id, soft: true }
+          action: "automation_rule.delete",
+          payload: { kind: "restriction", id }
         });
         return reply.status(204).send();
       } catch (e) {
-        const code = getErrorCode(e);
-        if (code === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (code === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-        throw e;
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/order-restriction-rules/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      try {
-        await restoreRestrictionRule(request.tenant!.id, id, actorUserIdOrNull(request));
-        await appendTenantAuditEvent({
-          tenantId: request.tenant!.id,
-          actorUserId: actorUserIdOrNull(request),
-          entityType: "automation_rule",
-          entityId: id,
-          action: "automation_rule.restore",
-          payload: { kind: "restriction", id }
-        });
-        return reply.send({ ok: true });
-      } catch (e) {
-        const code = getErrorCode(e);
-        if (code === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (code === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
+        if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         throw e;
       }
     }
@@ -414,46 +383,18 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       try {
-        await deleteAutoConfirmRule(request.tenant!.id, id, actorUserIdOrNull(request));
+        await deleteAutoConfirmRule(request.tenant!.id, id);
         await appendTenantAuditEvent({
           tenantId: request.tenant!.id,
           actorUserId: actorUserIdOrNull(request),
           entityType: "automation_rule",
           entityId: id,
-          action: "automation_rule.void",
-          payload: { kind: "auto_confirm", id, soft: true }
+          action: "automation_rule.delete",
+          payload: { kind: "auto_confirm", id }
         });
         return reply.status(204).send();
       } catch (e) {
-        const code = getErrorCode(e);
-        if (code === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (code === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-        throw e;
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/order-auto-confirm-rules/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      try {
-        await restoreAutoConfirmRule(request.tenant!.id, id, actorUserIdOrNull(request));
-        await appendTenantAuditEvent({
-          tenantId: request.tenant!.id,
-          actorUserId: actorUserIdOrNull(request),
-          entityType: "automation_rule",
-          entityId: id,
-          action: "automation_rule.restore",
-          payload: { kind: "auto_confirm", id }
-        });
-        return reply.send({ ok: true });
-      } catch (e) {
-        const code = getErrorCode(e);
-        if (code === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (code === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
+        if (getErrorCode(e) === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         throw e;
       }
     }

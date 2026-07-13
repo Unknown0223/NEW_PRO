@@ -43,12 +43,17 @@ class _SupervisorVisitsPageState extends ConsumerState<SupervisorVisitsPage> {
       supervision: session.mobileConfig?.supervision,
       misc: session.mobileConfig?.misc,
     );
+    final canQr = policy.visitQrEnabled;
     final dateKey = _dateParam() ?? 'today';
     final visitsAsync = ref.watch(supervisorVisitsProvider(dateKey));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vizitlar'),
+        actions: [
+          if (canQr)
+            IconButton(icon: const Icon(Icons.qr_code_scanner), onPressed: () => _scanQr(context)),
+        ],
       ),
       body: Column(
         children: [
@@ -202,6 +207,22 @@ class _SupervisorVisitsPageState extends ConsumerState<SupervisorVisitsPage> {
               error: (e, _) => Center(child: Text('$e')),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _scanQr(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('QR Skaner'),
+        content: const Text(
+          'Vizitni QR orqali boshlash/yakunlash uchun kamera kerak.\n\n'
+          'Mobile Scanner integratsiyasi keyingi versiyada qo\'shiladi.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Yopish')),
         ],
       ),
     );

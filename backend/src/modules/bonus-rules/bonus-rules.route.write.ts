@@ -28,24 +28,6 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
-        if (msg === "CLAUSES_REQUIRED" || msg === "CLAUSE_REWARD_REQUIRED") {
-          return sendApiError(
-            reply,
-            request,
-            400,
-            "ClauseRewardRequired",
-            "Kamida bitta shartda bonus mahsuloti (galichka) bo‘lishi kerak."
-          );
-        }
-        if (msg === "CLAUSE_BONUS_PRODUCTS_REQUIRED") {
-          return sendApiError(
-            reply,
-            request,
-            400,
-            "ClauseBonusProductsRequired",
-            "Bonus beriladigan shartda kamida bitta bonus-mahsulot tanlang."
-          );
-        }
         if (msg === "PRODUCT_SCOPE_REQUIRED") {
           return sendApiError(
             reply,
@@ -89,24 +71,6 @@ export async function registerBonusRuleWriteRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
-        if (msg === "CLAUSES_REQUIRED" || msg === "CLAUSE_REWARD_REQUIRED") {
-          return sendApiError(
-            reply,
-            request,
-            400,
-            "ClauseRewardRequired",
-            "Kamida bitta shartda bonus mahsuloti (galichka) bo‘lishi kerak."
-          );
-        }
-        if (msg === "CLAUSE_BONUS_PRODUCTS_REQUIRED") {
-          return sendApiError(
-            reply,
-            request,
-            400,
-            "ClauseBonusProductsRequired",
-            "Bonus beriladigan shartda kamida bitta bonus-mahsulot tanlang."
-          );
-        }
         if (msg === "PRODUCT_SCOPE_REQUIRED") {
           return sendApiError(
             reply,

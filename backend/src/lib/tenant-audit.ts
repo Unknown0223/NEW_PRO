@@ -6,11 +6,6 @@ export const AuditEntityType = {
   user: "user",
   product: "product",
   product_category: "product_category",
-  product_brand: "product_brand",
-  product_manufacturer: "product_manufacturer",
-  product_segment: "product_segment",
-  product_catalog_group: "product_catalog_group",
-  interchangeable_product_group: "interchangeable_product_group",
   warehouse: "warehouse",
   tenant_settings: "tenant_settings",
   product_price: "product_price",
@@ -19,15 +14,7 @@ export const AuditEntityType = {
   order: "order",
   goods_receipt: "goods_receipt",
   supplier: "supplier",
-  finance: "finance",
-  work_slot: "work_slot",
-  geo_boundary: "geo_boundary",
-  report_builder: "report_builder",
-  territory: "territory",
-  warehouse_block: "warehouse_block",
-  currency_rate: "currency_rate",
-  automation_rule: "automation_rule",
-  client_dedupe: "client_dedupe"
+  finance: "finance"
 } as const;
 
 export type AuditEntityTypeValue = (typeof AuditEntityType)[keyof typeof AuditEntityType];

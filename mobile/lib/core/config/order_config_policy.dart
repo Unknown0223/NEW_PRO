@@ -16,15 +16,13 @@ String defaultBonusModeKey(OrdersConfig orders) {
 }
 
 bool isBonusModeKeyAllowed(OrdersConfig orders, String modeKey) {
-  // Manual bonus rejim olib tashlangan — faqat auto | none.
-  if (modeKey == 'manual') return false;
   switch (orders.bonusFillMode) {
     case 'all_required':
       return modeKey == 'auto';
     case 'free':
       return modeKey == 'none';
     default:
-      return modeKey == 'auto' || modeKey == 'none';
+      return true;
   }
 }
 

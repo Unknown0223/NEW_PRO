@@ -1,13 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { softVoidListFilter } from "../../lib/soft-void";
 import { mapAutoConfirmRuleRow, mapRestrictionRuleRow } from "./order-automation.mappers";
 import type { AutoConfirmRuleRow, RestrictionRuleRow } from "./order-automation.types";
 export type ListQuery = {
   page?: number;
   limit?: number;
   is_active?: boolean;
-  archive?: boolean;
   search?: string;
   agent_user_id?: number;
   warehouse_id?: number;
@@ -21,10 +19,7 @@ export type ListQuery = {
 };
 
 export function buildListWhere(tenantId: number, q: ListQuery): Prisma.OrderRestrictionRuleWhereInput {
-  const where: Prisma.OrderRestrictionRuleWhereInput = {
-    tenant_id: tenantId,
-    ...softVoidListFilter(q.archive)
-  };
+  const where: Prisma.OrderRestrictionRuleWhereInput = { tenant_id: tenantId };
   if (q.is_active === true) where.is_active = true;
   if (q.is_active === false) where.is_active = false;
   const and: Prisma.OrderRestrictionRuleWhereInput[] = [];
@@ -98,7 +93,6 @@ export async function listAutoConfirmRules(
   }
   const where: Prisma.OrderAutoConfirmRuleWhereInput = {
     tenant_id: tenantId,
-    ...softVoidListFilter(q.archive),
     is_active: base.is_active,
     AND: and.length ? and : undefined
   };

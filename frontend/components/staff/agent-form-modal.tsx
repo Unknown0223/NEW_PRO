@@ -13,7 +13,11 @@ import {
   parseAgentFio
 } from "@/components/staff/agent-workspace-template-ui";
 import type { AgentRow } from "@/components/staff/agents-workspace";
-import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
+import {
+  CONSIGNMENT_CLOSE_DAY_OPTIONS,
+  CONSIGNMENT_CLOSE_HOUR_OPTIONS,
+  CONSIGNMENT_CLOSE_MINUTE_OPTIONS
+} from "@/lib/consignment-close-schedule";
 
 function randomPassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -32,7 +36,6 @@ type Props = {
   tradeDirections: Array<{ id: number; name: string; code: string | null }>;
   priceTypes: string[];
   loading: boolean;
-  submitError?: string | null;
   onClose: () => void;
   onSubmitCreate: (body: Record<string, unknown>) => void;
   onSubmitEdit: (id: number, body: Record<string, unknown>) => Promise<unknown>;
@@ -49,7 +52,6 @@ export function AgentFormModal({
   tradeDirections,
   priceTypes,
   loading,
-  submitError,
   onClose,
   onSubmitCreate,
   onSubmitEdit,
@@ -154,8 +156,7 @@ export function AgentFormModal({
       setPassword(randomPassword());
       setConsignment(false);
       setCloseDay("25");
-      setCloseHour("0");
-      setCloseMinute("0");
+      setCloseTime("00:00");
       setCloseErr(null);
       setKpi("#d41c1c");
       setAppAccess(true);
@@ -521,14 +522,38 @@ export function AgentFormModal({
                   Консигнация
                 </label>
                 {consignment ? (
-                  <ConsignmentCloseScheduleFields
-                    closeDay={closeDay}
-                    closeHour={closeHour}
-                    closeMinute={closeMinute}
-                    onCloseDayChange={setCloseDay}
-                    onCloseHourChange={setCloseHour}
-                    onCloseMinuteChange={setCloseMinute}
-                  />
+                  <div className="grid grid-cols-3 gap-2 border-t border-border/60 pt-2">
+                    <AgentFormField label="День месяца">
+                      <AgentFormSelect
+                        value={closeDay}
+                        onChange={setCloseDay}
+                        options={CONSIGNMENT_CLOSE_DAY_OPTIONS.map((d) => ({
+                          value: String(d),
+                          label: String(d)
+                        }))}
+                      />
+                    </AgentFormField>
+                    <AgentFormField label="Часы">
+                      <AgentFormSelect
+                        value={closeHour}
+                        onChange={setCloseHour}
+                        options={CONSIGNMENT_CLOSE_HOUR_OPTIONS.map((h) => ({
+                          value: String(h),
+                          label: String(h).padStart(2, "0")
+                        }))}
+                      />
+                    </AgentFormField>
+                    <AgentFormField label="Минуты">
+                      <AgentFormSelect
+                        value={closeMinute}
+                        onChange={setCloseMinute}
+                        options={CONSIGNMENT_CLOSE_MINUTE_OPTIONS.map((m) => ({
+                          value: String(m),
+                          label: String(m).padStart(2, "0")
+                        }))}
+                      />
+                    </AgentFormField>
+                  </div>
                 ) : null}
                 {closeErr ? <p className="text-xs text-red-600">{closeErr}</p> : null}
               </div>
@@ -600,7 +625,6 @@ export function AgentFormModal({
         </div>
 
         <div className="border-t border-border bg-muted px-6 py-4">
-          {submitError ? <p className="mb-3 text-sm text-destructive">{submitError}</p> : null}
           <button
             type="button"
             disabled={

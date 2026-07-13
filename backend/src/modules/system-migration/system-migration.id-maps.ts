@@ -52,6 +52,7 @@ export type MigrationIdMaps = {
   orderAutoConfirmSchedule: Map<number, number>;
   retailOutletStock: Map<number, number>;
   clientEquipment: Map<number, number>;
+  clientQrCode: Map<number, number>;
   clientMergeLog: Map<number, number>;
   clientSavedDuplicateGroup: Map<number, number>;
   agentConsignmentMonthStatus: Map<number, number>;
@@ -119,6 +120,7 @@ export function emptyIdMaps(): MigrationIdMaps {
     orderAutoConfirmSchedule: new Map(),
     retailOutletStock: new Map(),
     clientEquipment: new Map(),
+    clientQrCode: new Map(),
     clientMergeLog: new Map(),
     clientSavedDuplicateGroup: new Map(),
     agentConsignmentMonthStatus: new Map(),

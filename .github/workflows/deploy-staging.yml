@@ -1,14 +1,12 @@
 name: Deploy Staging
 
 on:
-  push:
-    branches: [staging]
   workflow_dispatch:
     inputs:
       ref:
         description: Git ref (branch/tag/SHA)
         required: false
-        default: staging
+        default: main
       skip_migrations:
         description: Skip database migrations
         required: false
@@ -23,17 +21,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
-      - name: Deploy backend (Railway staging)
+      - name: Deploy backend (template)
         run: |
-          echo "Deploy staging backend from ref: ${{ github.sha }}"
-          echo "Set RAILWAY_TOKEN + RAILWAY_SERVICE_ID in GitHub staging environment."
+          echo "Deploy staging backend from ref: ${{ inputs.ref }}"
+          echo "Configure Railway/GitHub deployment secrets for your staging project."
           echo "Suggested: railway up --service backend --environment staging"
+          # railway CLI yoki API chaqiruvi shu yerda ulang
 
-      - name: Deploy frontend (Railway staging)
+      - name: Deploy frontend (template)
         run: |
-          echo "Deploy staging frontend from ref: ${{ github.sha }}"
+          echo "Deploy staging frontend from ref: ${{ inputs.ref }}"
           echo "Suggested: railway up --service frontend --environment staging"
 
       - name: Run migrations
@@ -54,8 +53,3 @@ jobs:
           else
             echo "STAGING_HEALTH_URL not configured — skip smoke"
           fi
-
-      - name: Rollback hint
-        if: failure()
-        run: |
-          echo "Rollback: redeploy previous Railway release or run backup:pre-release checklist"

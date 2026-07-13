@@ -9,26 +9,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 $adb = Join-Path $AndroidHome 'platform-tools\adb.exe'
 $emulatorExe = Join-Path $AndroidHome 'emulator\emulator.exe'
 $argsFile = Join-Path $env:TEMP 'salec-emulator-camera.args'
-$activeFile = Join-Path $env:TEMP 'salec-emulator-camera.active'
 $gpuPrefFile = Join-Path $env:TEMP 'salec-emulator-gpu.txt'
-
-function Get-CameraArgs {
-    if (-not (Test-Path $argsFile)) { return '-camera-back emulated' }
-    $args = (Get-Content $argsFile -Raw).Trim()
-    if (-not $args) { return '-camera-back emulated' }
-    return $args
-}
-
-function Test-CameraModeChanged {
-    $current = Get-CameraArgs
-    if (-not (Test-Path $activeFile)) { return $true }
-    $active = (Get-Content $activeFile -Raw).Trim()
-    return $current -ne $active
-}
-
-function Set-ActiveCameraMode {
-    Set-Content -Path $activeFile -Value (Get-CameraArgs) -Encoding ASCII -NoNewline
-}
 
 function Test-EmulatorReady {
     if (-not (Test-Path $adb)) { return $false }
@@ -109,13 +90,8 @@ function Start-EmulatorInstance {
 }
 
 if (Test-BootCompleted) {
-    if (Test-CameraModeChanged) {
-        Write-Host 'Kamera rejimi o''zgardi - emulyator qayta ishga tushirilmoqda...'
-        Stop-StuckEmulators
-    } else {
-        Write-Host 'Emulyator ulangan va tayyor.'
-        exit 0
-    }
+    Write-Host 'Emulyator ulangan va tayyor.'
+    exit 0
 }
 
 if (Test-EmulatorReady) {
@@ -133,7 +109,8 @@ if (-not (Test-Path $argsFile)) {
     exit 1
 }
 
-$cameraArgs = Get-CameraArgs
+$cameraArgs = (Get-Content $argsFile -Raw).Trim()
+if (-not $cameraArgs) { $cameraArgs = '-camera-back emulated' }
 
 $avd = $null
 if (Test-Path (Join-Path $env:USERPROFILE '.android\avd\salesdoc_pixel7.avd')) {
@@ -190,8 +167,7 @@ foreach ($gpu in $gpuModes) {
 
     if (Wait-BootCompleted -TimeoutSeconds ($BootWaitSeconds + 300)) {
         Set-Content -Path $gpuPrefFile -Value $gpu -Encoding ASCII -NoNewline
-        Set-ActiveCameraMode
-        Write-Host ('Emulyator tayyor (-gpu ' + $gpu + ', ' + $cameraArgs + ').')
+        Write-Host ('Emulyator tayyor (-gpu ' + $gpu + ').')
         exit 0
     }
 

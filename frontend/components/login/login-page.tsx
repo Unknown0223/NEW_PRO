@@ -2,7 +2,6 @@
 
 import "./login.css";
 
-import { SalesArenaLogo } from "@/components/brand/sales-arena-logo";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { describeDevice, getOrCreateDeviceId } from "@/lib/device-id";
@@ -244,8 +243,8 @@ export function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setSession = useAuthStore((s) => s.setSession);
-  const [slug, setSlug] = useState("");
-  const [login, setLogin] = useState("");
+  const [slug, setSlug] = useState("test1");
+  const [login, setLogin] = useState("admin");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -345,7 +344,13 @@ export function LoginPage() {
         <div className="relative z-10">
           <div className="mb-16 flex items-center justify-between">
             <div className="group flex items-center gap-3">
-              <SalesArenaLogo variant="dark" height={56} className="drop-shadow-lg transition-transform duration-300 group-hover:scale-[1.02]" />
+              <div className="login-logo-glow flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-900/50 transition-all duration-300 group-hover:rotate-6 group-hover:scale-110">
+                <IconBox />
+              </div>
+              <div>
+                <div className="text-lg font-bold tracking-tight">SALESDOC</div>
+                <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-cyan-400/80">Enterprise Edition</div>
+              </div>
             </div>
 
             <div className="hidden text-right sm:block">
@@ -399,7 +404,7 @@ export function LoginPage() {
         </div>
 
         <div className="relative z-10 mt-8 flex items-center justify-between border-t border-white/5 pt-5 text-xs text-slate-500">
-          <span>© 2026 Sales Arena</span>
+          <span>© 2026 SALESDOC</span>
           <div className="flex items-center gap-5">
             <span className="transition-colors hover:text-slate-300">Помощь</span>
             <span className="transition-colors hover:text-slate-300">Конфиденциальность</span>
@@ -425,6 +430,19 @@ export function LoginPage() {
               </div>
             ) : null}
 
+            <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-900">
+              <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-blue-500" />
+              <span>
+                Демо: <code className="font-mono font-semibold">test1</code> /{" "}
+                <code className="font-mono font-semibold">admin</code> /{" "}
+                <code className="font-mono font-semibold">secret123</code>
+                <span className="mt-1 block text-blue-800/80">
+                  Сотрудники после импорта: <code className="font-mono">demo_sup_sample</code> — пароль{" "}
+                  <code className="font-mono">Parol123!</code>
+                </span>
+              </span>
+            </div>
+
             <form className="space-y-5" onSubmit={onSubmit}>
               <LoginInput
                 id="slug"
@@ -432,7 +450,7 @@ export function LoginPage() {
                 value={slug}
                 onChange={setSlug}
                 icon={<IconBox />}
-                placeholder="Код дилера"
+                placeholder="Например: test1"
                 autoComplete="organization"
                 required
               />
@@ -442,7 +460,7 @@ export function LoginPage() {
                 value={login}
                 onChange={setLogin}
                 icon={<IconUser />}
-                placeholder="Логин"
+                placeholder="admin"
                 autoComplete="username"
                 required
               />

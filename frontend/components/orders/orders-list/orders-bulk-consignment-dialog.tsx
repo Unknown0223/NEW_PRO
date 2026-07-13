@@ -23,11 +23,7 @@ type Props = {
   selectedCount: number;
   eligibleCount: number;
   isPending?: boolean;
-  onApply: (payload: {
-    is_consignment: boolean;
-    consignment_due_date: string | null;
-    conditions_note?: string | null;
-  }) => void;
+  onApply: (payload: { is_consignment: boolean; consignment_due_date: string | null }) => void;
 };
 
 export function OrdersBulkConsignmentDialog({
@@ -40,7 +36,6 @@ export function OrdersBulkConsignmentDialog({
 }: Props) {
   const [mode, setMode] = useState<"yes" | "no">("yes");
   const [dueDate, setDueDate] = useState("");
-  const [conditions, setConditions] = useState("");
   const [dueOpen, setDueOpen] = useState(false);
   const dueAnchorRef = useRef<HTMLButtonElement>(null);
 
@@ -48,7 +43,6 @@ export function OrdersBulkConsignmentDialog({
     if (!open) return;
     setMode("yes");
     setDueDate("");
-    setConditions("");
     setDueOpen(false);
   }, [open]);
 
@@ -117,15 +111,6 @@ export function OrdersBulkConsignmentDialog({
                 value={dueDate}
                 onChange={setDueDate}
               />
-              <Label>Условия (в комментарий заказа)</Label>
-              <textarea
-                rows={2}
-                disabled={isPending}
-                className="min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                placeholder="Кто согласовал / почему переводим…"
-                value={conditions}
-                onChange={(e) => setConditions(e.target.value)}
-              />
             </div>
           ) : null}
         </div>
@@ -140,8 +125,7 @@ export function OrdersBulkConsignmentDialog({
               onApply({
                 is_consignment: mode === "yes",
                 consignment_due_date:
-                  mode === "yes" && dueDate.trim() ? `${dueDate.trim()}T12:00:00.000Z` : null,
-                conditions_note: mode === "yes" && conditions.trim() ? conditions.trim() : null
+                  mode === "yes" && dueDate.trim() ? `${dueDate.trim()}T12:00:00.000Z` : null
               });
             }}
           >

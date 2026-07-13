@@ -1,7 +1,6 @@
 "use client";
 
 import { FilterSelect } from "@/components/ui/filter-select";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -258,12 +257,12 @@ export function ExchangeOrderCreatePanel({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Минус: кол-во</Label>
-            <GroupedNumberInput
+            <Input
               className={fieldClass}
-              maxFractionDigits={3}
+              inputMode="decimal"
               placeholder="0"
               value={minusQty}
-              onValueChange={onMinusQtyChange}
+              onChange={(e) => onMinusQtyChange(e.target.value)}
               disabled={mutationPending || !minusKey}
             />
           </div>
@@ -300,12 +299,12 @@ export function ExchangeOrderCreatePanel({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Плюс: кол-во</Label>
-            <GroupedNumberInput
+            <Input
               className={fieldClass}
-              maxFractionDigits={3}
+              inputMode="decimal"
               placeholder="0"
               value={plusQty}
-              onValueChange={onPlusQtyChange}
+              onChange={(e) => onPlusQtyChange(e.target.value)}
               disabled={mutationPending}
             />
           </div>

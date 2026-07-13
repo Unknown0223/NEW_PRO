@@ -1,9 +1,6 @@
 export type ListCatalogOpts = {
   search?: string;
-  /** Explicit filter; default list = active only unless include_inactive. */
   is_active?: boolean | null;
-  /** true → is_active filtr yo‘q (aktiv + noaktiv). */
-  include_inactive?: boolean;
   page: number;
   limit: number;
 };

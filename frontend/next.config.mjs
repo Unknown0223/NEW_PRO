@@ -1,11 +1,4 @@
 /** @type {import('next').NextConfig} */
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const withBundleAnalyzer = process.env.ANALYZE === "true"
   ? require("@next/bundle-analyzer")({ enabled: true })
   : (config) => config;
@@ -26,7 +19,6 @@ const nextConfig = {
   // @tanstack/query-core sinf ichidagi #private maydonlarni loyiha SWC orqali maqsad brauzerga moslashtiradi
   // (aks holda ba’zi muhitlarda "Invalid or unexpected token" / layout.js xatosi).
   transpilePackages: [
-    "@salec/pivot-engine",
     "@tanstack/react-query",
     "@tanstack/query-core",
     "@webdatarocks/react-webdatarocks",
@@ -62,10 +54,6 @@ const nextConfig = {
     ];
   },
   webpack(config, { dev }) {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "@salec/pivot-engine": path.join(__dirname, "vendor/pivot-engine/dist/index.js")
-    };
     if (dev) {
       // Windows'da disk (filesystem) pack cache yozuvi buzilib, chunk/module 404 siklini berardi.
       // Disk cache o'rniga XOTIRA (memory) cache — disk korruptsiyasi yo'q, ammo bitta

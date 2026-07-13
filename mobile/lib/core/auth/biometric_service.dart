@@ -38,7 +38,7 @@ class BiometricService {
         localizedReason: reason,
         authMessages: const [
           AndroidAuthMessages(
-            signInTitle: 'Sales Arena',
+            signInTitle: 'SalesDoc',
             biometricHint: 'Barmoq izini skanerlang',
             cancelButton: 'Bekor qilish',
           ),

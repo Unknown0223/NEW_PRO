@@ -43,10 +43,9 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
     const AgentMenuItem(label: 'Черновик', route: '/draft'),
     const AgentMenuItem(label: 'Задачи', route: '', soon: true),
     const AgentMenuItem(label: 'Моя локация', route: '/map'),
-    const AgentMenuItem(label: 'Табель · jadval', route: '', soon: true),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
   ];
-  return items.where((it) => it.visible?.call(config) ?? true).toList();
+  return items.where((it) => !it.soon && (it.visible?.call(config) ?? true)).toList();
 }
 
 /// Pastki nav yashiriladigan sahifalar (shablon).
@@ -60,7 +59,6 @@ bool agentShellHidesBottomNav(String location) {
   if (location.startsWith('/search')) return true;
   if (location.startsWith('/settings')) return true;
   if (location.startsWith('/debtors-by-orders')) return true;
-  if (location.startsWith('/visits/start')) return true;
-  if (location.startsWith('/visits/active')) return true;
+  if (location.startsWith('/profile')) return true;
   return false;
 }

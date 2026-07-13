@@ -7,7 +7,6 @@ import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.sche
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { CLIENT_PHOTO_HTTP_BODY_LIMIT_BYTES } from "../../lib/client-photo-limits";
 import { ensureTenantContext } from "../../lib/tenant-context";
-import { actorUserIdOrNull } from "../../lib/request-actor";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { getClientPhotoReportById, listClientPhotoReports } from "../clients/client-assets.service";
 import {
@@ -140,12 +139,7 @@ export async function registerMobilePhotoRoutes(app: FastifyInstance) {
       const userId = Number.parseInt(viewer.sub, 10);
       try {
         if (viewer.role === "expeditor") {
-          await deleteMobileExpeditorClientPhotoReport(
-            request.tenant!.id,
-            ids.clientId,
-            ids.photoId,
-            actorUserIdOrNull(request)
-          );
+          await deleteMobileExpeditorClientPhotoReport(request.tenant!.id, ids.clientId, ids.photoId);
         } else {
           await deleteMobileClientPhotoReport(request.tenant!.id, userId, ids.clientId, ids.photoId);
         }

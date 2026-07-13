@@ -67,17 +67,10 @@ class MobileApi {
     }
   }
 
-  Map<String, dynamic> _syncFullBody({
-    String? lastSyncAt,
-    Map<String, String>? device,
-    bool forceClientsCatalog = false,
-  }) {
+  Map<String, dynamic> _syncFullBody({String? lastSyncAt, Map<String, String>? device}) {
     final body = <String, dynamic>{};
     if (lastSyncAt != null && lastSyncAt.isNotEmpty) {
       body['last_sync_at'] = lastSyncAt;
-    }
-    if (forceClientsCatalog) {
-      body['force_clients_catalog'] = true;
     }
     if (device != null) {
       for (final e in device.entries) {
@@ -92,16 +85,11 @@ class MobileApi {
     String slug, {
     String? lastSyncAt,
     Map<String, String>? device,
-    bool forceClientsCatalog = false,
   }) async {
     try {
       final r = await _dio.post<String>(
         '/api/$slug/mobile/sync/full',
-        data: _jsonBody(_syncFullBody(
-          lastSyncAt: lastSyncAt,
-          device: device,
-          forceClientsCatalog: forceClientsCatalog,
-        )),
+        data: _jsonBody(_syncFullBody(lastSyncAt: lastSyncAt, device: device)),
         options: Options(
           receiveTimeout: const Duration(seconds: 120),
           responseType: ResponseType.plain,
@@ -254,24 +242,6 @@ class MobileApi {
       final list = r.data['data'] as List? ?? [];
       return list.map((e) => DebtorClient.fromJson(e as Map<String, dynamic>)).toList();
     } on DioException catch (e) { throw _map(e); }
-  }
-
-  /// Joriy agent bo‘yicha mijozlar umumiy balansi (veb kartochka «Общий» per agent).
-  Future<Map<int, double>> getClientLedgerBalances(String slug) async {
-    try {
-      final r = await _dio.get('/api/$slug/mobile/clients/balances');
-      final list = r.data['data'] as List? ?? [];
-      final out = <int, double>{};
-      for (final raw in list) {
-        final j = raw as Map<String, dynamic>;
-        final id = (j['id'] as num?)?.toInt();
-        if (id == null) continue;
-        out[id] = (j['balance'] as num?)?.toDouble() ?? 0;
-      }
-      return out;
-    } on DioException catch (e) {
-      throw _map(e);
-    }
   }
 
   /// Zakaz bo‘yicha ochiq qarzlar (web `reports/order-debts` bilan bir xil hisob).

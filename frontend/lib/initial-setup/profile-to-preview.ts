@@ -72,34 +72,28 @@ export function profileToPreview(
 
 export function flattenTerritoryNodes(
   nodes: unknown,
-  parent = "",
-  depth = 0
+  parent = ""
 ): { rowIndex: number; cells: Record<string, string> }[] {
   if (!Array.isArray(nodes)) return [];
   const out: { rowIndex: number; cells: Record<string, string> }[] = [];
   let idx = 1;
-  function walk(list: unknown[], p: string, d: number) {
-    const defaultLevel = d === 0 ? "зона" : d === 1 ? "регион" : "город";
+  function walk(list: unknown[], p: string) {
     for (const n of list) {
       if (n == null || typeof n !== "object" || Array.isArray(n)) continue;
       const o = n as Record<string, unknown>;
       const name = typeof o.name === "string" ? o.name : "";
-      const level =
-        (typeof o.comment === "string" && o.comment.trim()) ||
-        (typeof o.level === "string" && o.level.trim()) ||
-        defaultLevel;
-      const code = typeof o.code === "string" ? o.code : o.code != null ? String(o.code) : "";
+      const level = typeof o.level === "string" ? o.level : "";
       if (name) {
         out.push({
           rowIndex: idx++,
-          cells: { name, level, parent: p, code }
+          cells: { name, level, parent: p }
         });
       }
       const children = o.children;
-      if (Array.isArray(children) && children.length) walk(children, name || p, d + 1);
+      if (Array.isArray(children) && children.length) walk(children, name || p);
     }
   }
-  walk(nodes, parent, depth);
+  walk(nodes, parent);
   return out;
 }
 

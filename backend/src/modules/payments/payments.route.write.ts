@@ -9,14 +9,6 @@ import {
   rejectPaymentBodySchema
 } from "../../contracts/payments.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import {
-  assertDocWritableByDate,
-  assertDocWritableById
-} from "../../lib/document-edit-lock.request";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
@@ -67,11 +59,9 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
-        await assertDocWritableById(request, "payments", id);
         const payload = await updatePayment(tenantId, id, parsed.data, actorUserIdOrNull(request));
         return reply.send(payload);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "PAYMENT_VOIDED") return sendApiError(reply, request, 409, "PaymentVoided");
@@ -105,7 +95,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
       const viewer = getAccessUser(request);
       const uid = Number.parseInt(viewer.sub, 10);
       try {
-        await assertDocWritableById(request, "payments", id);
         const data = await allocatePayment(
           tenantId,
           id,
@@ -113,7 +102,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.send({ data });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "PAYMENT_NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "PAYMENT_VOIDED") return sendApiError(reply, request, 409, "PaymentVoided");
@@ -134,11 +122,9 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
-        await assertDocWritableById(request, "payments", id);
         const data = await confirmPendingPayment(tenantId, id, actorUserIdOrNull(request));
         return reply.send(data);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_PENDING") {
@@ -178,11 +164,9 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
-        await assertDocWritableById(request, "payments", id);
         await rejectPendingPayment(tenantId, id, actorUserIdOrNull(request), parsed.data.reason ?? null);
         return reply.status(204).send();
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "NOT_PENDING") {
@@ -224,7 +208,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
       const durationMinutes =
         typeof rawDuration === "number" && Number.isFinite(rawDuration) ? rawDuration : null;
       try {
-        await assertDocWritableById(request, "payments", id);
         const result = await returnPaymentToExpeditor(
           tenantId,
           id,
@@ -234,7 +217,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.status(200).send(result);
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -265,12 +247,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.paid_at) {
-          const paidAt = new Date(parsed.data.paid_at);
-          if (!Number.isNaN(paidAt.getTime())) {
-            await assertDocWritableByDate(request, "payments", paidAt);
-          }
-        }
         const data = await createOrderCashInBatch(
           request.tenant!.id,
           parsed.data,
@@ -278,7 +254,6 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send({ data });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
@@ -310,20 +285,12 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
-      try {
-        for (const paymentId of parsed.data.ids) {
-          await assertDocWritableById(request, "payments", paymentId);
-        }
-        const result = await confirmPendingPaymentsBatch(
-          request.tenant!.id,
-          parsed.data.ids,
-          actorUserIdOrNull(request)
-        );
-        return reply.send(result);
-      } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
-        throw e;
-      }
+      const result = await confirmPendingPaymentsBatch(
+        request.tenant!.id,
+        parsed.data.ids,
+        actorUserIdOrNull(request)
+      );
+      return reply.send(result);
     }
   );
 

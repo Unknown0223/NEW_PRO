@@ -16,7 +16,6 @@ import {
   createWarehouseBlock,
   deleteWarehouseBlock,
   listWarehouseBlocks,
-  restoreWarehouseBlock,
   updateWarehouseBlock
 } from "./warehouse-blocks.service";
 import { listWarehousePickers, listWarehousesForTenant } from "../reference/reference.service";
@@ -27,7 +26,6 @@ const blockWriteBase = ADMIN_AND_OPERATOR_LIKE_ROLES;
 const listQuerySchema = z.object({
   warehouse_id: z.coerce.number().int().positive().optional(),
   is_active: z.enum(["true", "false"]).optional(),
-  archive: z.enum(["true", "false", "1", "0"]).optional(),
   q: z.string().max(500).optional().default(""),
   sort: z.enum(["name_asc", "name_desc", "sort_asc", "sort_desc"]).optional().default("sort_asc"),
   page: z.coerce.number().int().min(1).optional().default(1),
@@ -55,8 +53,6 @@ function mapBlockError(reply: FastifyReply, request: FastifyRequest, e: unknown)
   }
   if (msg === "EMPTY_NAME") return sendApiError(reply, request, 400, "EmptyName");
   if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-  if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-  if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
   throw e;
 }
 
@@ -98,12 +94,10 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       const q = parsed.data;
-      const archive = q.archive === "true" || q.archive === "1";
       const is_active = q.is_active === "true" ? true : q.is_active === "false" ? false : undefined;
       const buf = await buildWarehouseBlocksExportBuffer(request.tenant!.id, {
         warehouse_id: q.warehouse_id,
         is_active,
-        archive,
         q: q.q,
         sort: q.sort
       });
@@ -126,12 +120,10 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       const q = parsed.data;
-      const archive = q.archive === "true" || q.archive === "1";
       const is_active = q.is_active === "true" ? true : q.is_active === "false" ? false : undefined;
       const data = await listWarehouseBlocks(request.tenant!.id, {
         warehouse_id: q.warehouse_id,
         is_active,
-        archive,
         q: q.q,
         sort: q.sort,
         page: q.page,
@@ -203,23 +195,15 @@ export async function registerWarehouseBlockRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
       try {
-        await deleteWarehouseBlock(request.tenant!.id, id, actorUserIdOrNull(request));
-        return reply.send({ ok: true });
-      } catch (e) {
-        return mapBlockError(reply, request, e);
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/warehouse-blocks/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(blockWriteBase, "warehouse_block_list")] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
-      try {
-        await restoreWarehouseBlock(request.tenant!.id, id, actorUserIdOrNull(request));
+        await deleteWarehouseBlock(request.tenant!.id, id);
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "warehouse_block",
+          entityId: id,
+          action: "warehouse_block.delete",
+          payload: { id }
+        });
         return reply.send({ ok: true });
       } catch (e) {
         return mapBlockError(reply, request, e);

@@ -27,7 +27,7 @@ class MobileLocalNotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    const android = AndroidInitializationSettings('@drawable/ic_stat_sales_arena');
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -55,7 +55,7 @@ class MobileLocalNotificationService {
       const AndroidNotificationChannel(
         _appUpdateChannelId,
         'Обновление приложения',
-        description: 'Доступна новая версия Sales Arena',
+        description: 'Доступна новая версия SalesDoc',
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
@@ -126,7 +126,7 @@ class MobileLocalNotificationService {
           priority: Priority.high,
           playSound: true,
           enableVibration: true,
-          icon: '@drawable/ic_stat_sales_arena',
+          icon: '@mipmap/ic_launcher',
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
@@ -150,40 +150,10 @@ class MobileLocalNotificationService {
         ? S.appUpdateNotificationAfterSync(latest ?? '')
         : S.appUpdateNotificationBody(latest ?? '', info.currentVersion);
 
-    await _showAppUpdateNotification(title: title, body: body, payloadSuffix: latest ?? info.currentVersion);
-  }
-
-  /// Qo‘lda tekshirish: versiya yangilangan.
-  Future<void> notifyAppUpdateUpToDate(String currentVersion) async {
-    await _showAppUpdateNotification(
-      title: 'Обновление',
-      body: S.appUpdateAlreadyLatest(currentVersion),
-      payloadSuffix: 'up_to_date|$currentVersion',
-      playSound: false,
-    );
-  }
-
-  /// Qo‘lda tekshirish: xato.
-  Future<void> notifyAppUpdateCheckFailed(String message) async {
-    await _showAppUpdateNotification(
-      title: 'Обновление',
-      body: message,
-      payloadSuffix: 'check_failed',
-      playSound: false,
-    );
-  }
-
-  Future<void> _showAppUpdateNotification({
-    required String title,
-    required String body,
-    required String payloadSuffix,
-    bool playSound = true,
-  }) async {
-    await init();
     final granted = await ensureNotificationPermission(requestIfNeeded: false);
     if (!granted) return;
 
-    final payload = '$_appUpdatePayloadPrefix|$payloadSuffix';
+    final payload = '$_appUpdatePayloadPrefix|${latest ?? info.currentVersion}';
     await _plugin.show(
       _appUpdateNotificationId,
       title,
@@ -192,16 +162,16 @@ class MobileLocalNotificationService {
         android: AndroidNotificationDetails(
           _appUpdateChannelId,
           'Обновление приложения',
-          channelDescription: 'Доступна новая версия Sales Arena',
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: playSound,
-          enableVibration: playSound,
-          icon: '@drawable/ic_stat_sales_arena',
+          channelDescription: 'Доступна новая версия SalesDoc',
+          importance: info.required ? Importance.max : Importance.high,
+          priority: info.required ? Priority.max : Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
         ),
-        iOS: DarwinNotificationDetails(
+        iOS: const DarwinNotificationDetails(
           presentAlert: true,
-          presentSound: playSound,
+          presentSound: true,
           presentBadge: false,
         ),
       ),

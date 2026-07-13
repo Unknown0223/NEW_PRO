@@ -379,50 +379,7 @@ export const bulkOrderExpeditorBodySchema = z.object({
 export const bulkOrderConsignmentBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
   is_consignment: z.boolean(),
-  consignment_due_date: z.string().max(40).optional().nullable(),
-  /** Shartlar / sabab — kommentariyaga va change log ga yoziladi */
-  conditions_note: z.string().trim().max(2000).optional().nullable()
-});
-
-export const consignmentTransfersListQuerySchema = z.object({
-  date_from: z.string().trim().min(8).max(40),
-  date_to: z.string().trim().min(8).max(40),
-  search: z.string().trim().max(120).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  page_size: z.coerce.number().int().min(1).max(200).default(50)
-});
-
-export const CONSIGNMENT_COMMENT_FIELD_KEYS = [
-  "order_number",
-  "client",
-  "agent",
-  "expeditor",
-  "payment_method",
-  "total_sum",
-  "delivered_at",
-  "days_overdue",
-  "unpaid",
-  "conditions"
-] as const;
-
-export const consignmentAutoSettingsPatchSchema = z.object({
-  days_after_delivered: z.number().int().min(1).max(365).optional(),
-  comment_fields: z.array(z.enum(CONSIGNMENT_COMMENT_FIELD_KEYS)).min(1).max(20).optional()
-});
-
-export const consignmentAutoCandidatesQuerySchema = z.object({
-  search: z.string().trim().max(120).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  page_size: z.coerce.number().int().min(1).max(200).default(50),
-  days_after_delivered: z.coerce.number().int().min(1).max(365).optional()
-});
-
-export const consignmentAutoConvertBodySchema = z.object({
-  order_ids: orderIdsBulkSchema,
-  comment_fields: z.array(z.enum(CONSIGNMENT_COMMENT_FIELD_KEYS)).min(1).max(20),
-  conditions_note: z.string().trim().max(2000).optional().nullable(),
-  consignment_due_date: z.string().max(40).optional().nullable(),
-  save_comment_fields: z.boolean().optional()
+  consignment_due_date: z.string().max(40).optional().nullable()
 });
 
 /** PATCH `/api/:slug/orders/:id/lines` */

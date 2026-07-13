@@ -1,20 +1,64 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "../../config/database";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
+import { getAccessUser, jwtAccessVerify, requirePermission } from "../auth/auth.prehandlers";
+import {
+  buildAccessHistoryXlsxBuffer,
+  formatAccessHistoryDateRu,
+  listAccessHistory,
+  listAccessHistoryActionTypes
+} from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
 import { loadGrantDelegationOperationKeys, repairNestedGrantDelegationKeys } from "./access-grant-delegation";
+import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
-  AccessModuleViewRequiredError
+  AccessModuleViewRequiredError,
+  bulkMergeUserPermissionKeysForUsers,
+  bulkRemoveUserPermissionsByKeysForUsers,
+  ensurePermissionIdsForKeys,
+  ensureRoleByKey,
+  ensureTenantRolesForRoleDefaults,
+  getOperationsCountsForUsers,
+  getUsersHaveAccessManage,
+  type AccessManageRoleCatalog,
+  resolveUserPermissionKeys,
+  setRolePermissions
 } from "./rbac.service";
 import {
+  collectPermissionKeysFromBulkSlice,
+  collectTerritoryIdsFromBulkSlice,
+  tryUniformMergeBulk,
+  tryUniformRemoveBulk,
+  tryUniformWarehouseDelegateBulk,
+  type BulkAccessPatchItem
+} from "./access-bulk-detect";
+import {
   applyAccessUserPatchBody,
+  applyAccessUserPatchBodyTx,
   SuperviseePatchError
 } from "./access-user-patch.apply";
-import { replaceUserScopes } from "./scope.service";
+import {
+  buildAccessTerritorySyncPayload,
+  buildAccessTerritoryTreeFromPayload,
+  computeAccessTerritoryCatalogDigest,
+  setTerritoryCatalogResponseCache,
+  syncTerritoriesFromPayload,
+  tryTerritoryCatalogResponseCache
+} from "./access-territories-sync";
+import { bulkSetWarehouseDelegateForUsers, replaceUserScopes } from "./scope.service";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadTenantBranchesForAccess,
+  type BranchDto
+} from "../tenant-settings/tenant-settings.service";
+import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
+import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
 
 export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
@@ -247,6 +291,21 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         new_value: { source_user_id: sourceId }
       }
     });
+    return reply.send({ ok: true });
+  });
+
+  app.post("/api/:slug/access/users/:id/reset", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
+    const ok = ensureTenantContext(request, reply);
+    if (!ok) return;
+    const tenantId = request.tenant!.id;
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    const user = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { role: true } });
+    if (!user) return sendApiError(reply, request, 404, "UserNotFound");
+    const role = await prisma.role.findUnique({ where: { tenant_id_key: { tenant_id: tenantId, key: user.role } } });
+    await prisma.userPermission.deleteMany({ where: { user_id: id } });
+    await prisma.userRole.deleteMany({ where: { user_id: id } });
+    if (role) await prisma.userRole.create({ data: { user_id: id, role_id: role.id } });
     return reply.send({ ok: true });
   });
 }

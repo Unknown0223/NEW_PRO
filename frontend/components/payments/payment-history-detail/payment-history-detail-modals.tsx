@@ -111,7 +111,7 @@ function ReceiptPreview({ payment }: { payment: PaymentDetailRow }) {
   ];
   return (
     <div className="border border-dashed border-slate-300 bg-white p-6 font-mono text-[13px] text-slate-800">
-      <div className="mb-1 text-center text-[15px] font-bold tracking-wide">Sales Arena</div>
+      <div className="mb-1 text-center text-[15px] font-bold tracking-wide">SALEC</div>
       <div className="mb-4 text-center text-[12px] text-slate-500">Квитанция об оплате · № {payment.id}</div>
       <div className="mb-4 border-b border-dashed border-slate-300" />
       {rows.map(([k, v]) => (

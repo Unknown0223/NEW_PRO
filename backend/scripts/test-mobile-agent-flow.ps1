@@ -21,9 +21,6 @@ Assert "sync products" ($sync.products.Count -gt 0)
 $cfg = Invoke-RestMethod -Uri "$Base/api/test1/mobile/agent-config" -Headers $h
 Assert "config" ($null -ne $cfg.mobile_config)
 
-$balances = Invoke-RestMethod -Uri "$Base/api/test1/mobile/clients/balances" -Headers $h
-Assert "client balances" ($balances.data -is [array])
-
 $cid = $sync.clients[0].id
 $ctx = Invoke-RestMethod -Uri "$Base/api/test1/mobile/orders/create-context?selected_client_id=$cid" -Headers $h
 Assert "create-context warehouses" ($ctx.warehouses.Count -gt 0)

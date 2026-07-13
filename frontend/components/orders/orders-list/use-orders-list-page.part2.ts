@@ -140,7 +140,6 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       order_ids: number[];
       is_consignment: boolean;
       consignment_due_date?: string | null;
-      conditions_note?: string | null;
       skipped_ineligible?: number;
     }) => {
       const { skipped_ineligible = 0, ...body } = payload;

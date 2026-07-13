@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
-import '../orders/order_draft_list.dart';
+import '../../../core/ui/agent_ui_extended.dart';
 import '../shell/agent_app_bar.dart';
 
-/// Saqlangan buyurtma chernoviklari.
-class AgentDraftPage extends ConsumerWidget {
+/// Qoralama (shablon DraftScreen).
+class AgentDraftPage extends StatelessWidget {
   const AgentDraftPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const Scaffold(
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AgentAppBar(title: 'Черновик', showBack: true),
-      body: OrderDraftPageBody(),
+      appBar: const AgentAppBar(title: 'Черновик', showBack: true),
+      body: AgentEmptyState.fill(message: S.emptyDraft),
     );
   }
 }

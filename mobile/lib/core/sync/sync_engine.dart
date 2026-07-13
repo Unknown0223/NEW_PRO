@@ -103,23 +103,16 @@ class SyncEngine {
   Future<ParsedSyncPayload> pullSync({
     String? lastSyncAt,
     void Function(int phase)? onPhase,
-    bool forceClientsCatalog = false,
   }) async {
     onPhase?.call(0);
     final deviceFuture = MobileDeviceInfo.syncPayload();
     final offlineFuture = flushOfflineQueue(policySync: _syncConfig);
     final photoFuture = flushPendingPhotoReports();
     final device = await deviceFuture;
-    final payload = await _mobileApi.syncFullParsed(
-      _slug,
-      lastSyncAt: lastSyncAt,
-      device: device,
-      forceClientsCatalog: forceClientsCatalog,
-    );
+    final payload = await _mobileApi.syncFullParsed(_slug, lastSyncAt: lastSyncAt, device: device);
 
     onPhase?.call(1);
-    final replaceCatalog = _userRole == 'agent' &&
-        (isFullCatalogSync(lastSyncAt) || forceClientsCatalog);
+    final replaceCatalog = _userRole == 'agent' && isFullCatalogSync(lastSyncAt);
     await _db.persistSync(
       replaceProductCatalog: replaceCatalog,
       replaceClients: payload.clientsReplaceAll,

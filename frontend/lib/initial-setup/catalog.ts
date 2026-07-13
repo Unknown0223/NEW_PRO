@@ -130,7 +130,7 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
   {
     id: "product-categories",
     title: "Категории продуктов",
-    description: "Дерево категорий — названия используются в Excel каталога.",
+    description: "Дерево категорий с кодами — коды используются в Excel каталога.",
     dependsOn: ["units"],
     kind: "manual",
     settingsHref: "/settings/product-categories",
@@ -140,9 +140,9 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
     id: "products-catalog",
     title: "Каталог продуктов (Excel)",
     description:
-      "Полный импорт: название, категория (название), единица (код), SKU, штрихкод, бренд и др.",
+      "Полный импорт: название, категория (код), единица (код), SKU, штрихкод, бренд и др.",
     dependsOn: ["units", "product-categories"],
-    dependencyHint: "Категория — по названию из справочника; единица — по коду.",
+    dependencyHint: "Категория и единица — по коду из справочников выше.",
     kind: "excel-import",
     settingsHref: "/settings/products/excel",
     importApi: {

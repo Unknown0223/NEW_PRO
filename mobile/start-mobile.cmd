@@ -78,14 +78,17 @@ if not exist "%BUILD_DIR%\pubspec.yaml" (
 
 ) else (
 
-  call "%REPO_ROOT%\mobile\scripts\link-build-lib.cmd"
-  if errorlevel 1 (
-    echo Xato: link-build-lib.cmd
-    pause
-    exit /b 1
-  )
+  robocopy "%MOBILE_SRC%\lib" "%BUILD_DIR%\lib" /E /NFL /NDL /NJH /NJS >nul
 
   robocopy "%MOBILE_SRC%\android" "%BUILD_DIR%\android" /E /XD .gradle /NFL /NDL /NJH /NJS >nul
+
+  copy /Y "%MOBILE_SRC%\pubspec.yaml" "%BUILD_DIR%\" >nul
+
+  copy /Y "%MOBILE_SRC%\pubspec.lock" "%BUILD_DIR%\" >nul 2>nul
+
+  if exist "%MOBILE_SRC%\.env.local" copy /Y "%MOBILE_SRC%\.env.local" "%BUILD_DIR%\" >nul
+
+  if exist "%MOBILE_SRC%\.env.production" copy /Y "%MOBILE_SRC%\.env.production" "%BUILD_DIR%\" >nul
 
 )
 
@@ -154,8 +157,10 @@ call flutter pub get
 
 if errorlevel 1 exit /b 1
 
-REM Eski Gradle daemon (OOM) — to'liq tozalash.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\stop-gradle-daemons.ps1" -BuildDir "%BUILD_DIR%"
+REM Eski Gradle daemon (8G heap) RAM ni band qilmasin
+if exist "%BUILD_DIR%\android\gradlew.bat" (
+  call "%BUILD_DIR%\android\gradlew.bat" --stop >nul 2>&1
+)
 
 
 
@@ -189,7 +194,7 @@ if not defined EMU_ID set "EMU_ID=emulator-5554"
 
 echo Qurilma: !EMU_ID!
 echo.
-echo Hot reload: r  ^|  Hot restart: R  ^|  kod: %MOBILE_SRC%\lib (junction orqali ulangan)
+echo Hot restart: R  ^|  toliq qayta: q keyin run-mobile.cmd
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\wait-for-emulator-boot.ps1" -TimeoutSeconds 300
@@ -207,7 +212,7 @@ flutter run --no-pub -d !EMU_ID!
 if errorlevel 1 (
   echo.
   echo Build xato — Gradle to'xtatiladi, cache tozalanadi, qayta uriniladi...
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\stop-gradle-daemons.ps1" -BuildDir "%BUILD_DIR%"
+  if exist "%BUILD_DIR%\android\gradlew.bat" call "%BUILD_DIR%\android\gradlew.bat" --stop >nul 2>&1
   call flutter clean >nul 2>&1
   call flutter pub get
   if errorlevel 1 exit /b 1

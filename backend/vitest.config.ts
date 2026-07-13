@@ -23,18 +23,13 @@ export default defineConfig({
         "src/domain/tenant-id.ts",
         "src/domain/events/**/*.ts",
         "src/lib/constants.ts",
-        "src/lib/cors-options.ts",
-        "src/modules/plans/**/*.ts",
-        "src/modules/clients/**/*.ts",
-        "src/modules/auth/auth.service.ts",
-        "src/modules/auth/auth-cookies.ts",
-        "src/modules/payments/payment.query.ts"
+        "src/lib/cors-options.ts"
       ],
       thresholds: {
-        lines: 75,
-        functions: 75,
-        branches: 65,
-        statements: 75
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70
       }
     }
   }

@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -574,13 +573,13 @@ export function AddClientExpenseDialog({
               <Label htmlFor="ace-amt" className="text-sm font-medium text-foreground">
                 Сумма
               </Label>
-              <GroupedNumberInput
+              <Input
                 id="ace-amt"
                 className={cn(controlClass, "h-10")}
-                maxFractionDigits={2}
+                inputMode="decimal"
                 placeholder="0"
                 value={amount}
-                onValueChange={setAmount}
+                onChange={(e) => setAmount(e.target.value)}
                 disabled={submitMut.isPending}
               />
               {fieldErrs.amount ? (

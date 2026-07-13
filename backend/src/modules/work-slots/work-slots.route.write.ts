@@ -27,7 +27,6 @@ import {
   patchAssignmentLock,
   patchWorkSlot,
   resolvePendingAssignment,
-  restoreWorkSlots,
   suggestNextSlotCode,
   unassignUserFromSlot,
   getWorkSlotActivityReport
@@ -96,12 +95,7 @@ export async function registerWorkSlotDetailRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
     try {
-      const row = await patchWorkSlot(
-        request.tenant!.id,
-        p.data.id,
-        parsed.data,
-        actorUserIdOrNull(request)
-      );
+      const row = await patchWorkSlot(request.tenant!.id, p.data.id, parsed.data);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     } catch (e) {

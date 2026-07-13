@@ -6,14 +6,8 @@ import {
   ClientsTemplateListToolbar
 } from "@/components/clients/clients-table-toolbar";
 import { ClientsTemplateFiltersPanel } from "@/components/clients/clients-template-filters-panel";
-import { GroupProcessingPickDialog } from "@/components/clients/group-processing/group-processing-pick-dialog";
-import {
-  GROUP_PROCESSING_IDS_STORAGE_KEY,
-  type GroupProcessingActionId
-} from "@/components/clients/group-processing/group-processing-actions";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ClientRow } from "@/lib/client-types";
 import { CLIENT_COLUMN_TO_SORT, type ClientSortField } from "@/lib/client-list-sort";
@@ -48,7 +42,6 @@ import {
 import { ClientImportLaunchDialog } from "@/components/clients/client-import-launch-dialog";
 import { QueryErrorState } from "@/components/common/query-error-state";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
-import { humanizeClientImportJobError } from "@/lib/clients-import-errors";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { isAxiosError, type AxiosProgressEvent } from "axios";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -100,7 +93,6 @@ type ClientImportApiResult = {
     processedRows: number;
     skippedDuplicate: number;
     skippedEmpty: number;
-    unchangedRows?: number;
   };
 };
 
@@ -185,7 +177,6 @@ export default function ClientsPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
-  const [groupPickOpen, setGroupPickOpen] = useState(false);
   const [showSessionLoadingHint, setShowSessionLoadingHint] = useState(false);
   const clientsPrefsMigrated = useRef(false);
 
@@ -343,9 +334,7 @@ export default function ClientsPage() {
           ? `Добавлено: ${c}.`
           : u > 0
             ? `Обновлено: ${u}.`
-            : st != null && (st.unchangedRows ?? 0) > 0
-              ? `Изменений нет: ${st.unchangedRows} строк уже совпадают с базой (Excel = текущие данные).`
-              : "Изменений по строкам нет.";
+            : "Изменений по строкам нет.";
     return `${summary}${statPart}${errPart}`;
   };
 
@@ -588,9 +577,7 @@ export default function ClientsPage() {
         }
         if (job.state === "failed") {
           logClientImport("job failed", { jobId, failedReason: job.failedReason });
-          throw new Error(
-            humanizeClientImportJobError(job.failedReason || "ImportFailed")
-          );
+          throw new Error(job.failedReason || "ImportFailed");
         }
       }
       logClientImport("polling timeout", { jobId, maxAttempts, pollDelayMs });
@@ -616,16 +603,12 @@ export default function ClientsPage() {
     },
     onError: (e: unknown) => {
       console.error("[clients import] xato", e);
-      const friendly =
-        e instanceof Error
-          ? humanizeClientImportJobError(e.message)
-          : getUserFacingError(e, "Ошибка импорта.");
       setImportProgress((prev) =>
         normalizeImportProgress({
           ...prev,
           stage: "failed",
           percent: 100,
-          message: friendly
+          message: getUserFacingError(e, "Ошибка импорта.")
         })
       );
       if (isAxiosError(e)) {
@@ -660,7 +643,12 @@ export default function ClientsPage() {
           return;
         }
       }
-      setImportMsg(getUserFacingError(e, friendly));
+      setImportMsg(
+        getUserFacingError(
+          e,
+          "Ошибка импорта: .xlsx, 1 лист, 1 строка заголовков (name / название / RU: имя). Консоль: F12."
+        )
+      );
     }
   });
 
@@ -975,7 +963,6 @@ export default function ClientsPage() {
   });
 
   const onToolbarDraftChange = (patch: Partial<ClientToolbarFiltersState>) => {
-    let shouldAutoApply = false;
     setDraftToolbar((prev) => {
       const next = { ...prev, ...patch };
       if (patch.zoneFilter !== undefined && patch.zoneFilter !== prev.zoneFilter) {
@@ -984,17 +971,6 @@ export default function ClientsPage() {
       }
       if (patch.regionFilter !== undefined && patch.regionFilter !== prev.regionFilter) {
         next.cityFilter = "";
-      }
-      if (
-        (patch.agentFilter !== undefined && patch.agentFilter !== prev.agentFilter) ||
-        (patch.visitWeekdayFilter !== undefined && patch.visitWeekdayFilter !== prev.visitWeekdayFilter) ||
-        (patch.activeFilter !== undefined && patch.activeFilter !== prev.activeFilter)
-      ) {
-        shouldAutoApply = true;
-      }
-      if (shouldAutoApply) {
-        setAppliedToolbar(next);
-        setPage(1);
       }
       return next;
     });
@@ -1236,8 +1212,6 @@ export default function ClientsPage() {
             onImportUpdate={() => openImportLaunch("update")}
             onImportCreate={() => openImportLaunch("create")}
             importDisabled={importMut.isPending || !tenantSlug}
-            onGroupProcessing={() => setGroupPickOpen(true)}
-            groupProcessingDisabled={selectedIds.size === 0}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
             <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-contain">
@@ -1289,29 +1263,6 @@ export default function ClientsPage() {
         </div>
       )}
 
-      <GroupProcessingPickDialog
-        open={groupPickOpen}
-        onOpenChange={setGroupPickOpen}
-        selectedCount={selectedIds.size}
-        onPick={(actionId: GroupProcessingActionId) => {
-          const ids = [...selectedIds].slice(0, 5000);
-          try {
-            sessionStorage.setItem(GROUP_PROCESSING_IDS_STORAGE_KEY, JSON.stringify(ids));
-          } catch {
-            /* ignore */
-          }
-          setGroupPickOpen(false);
-          if (actionId === "map") {
-            if (ids.length === 0) return;
-            const qs =
-              ids.length <= 200 ? `?ids=${ids.join(",")}` : "?from=group";
-            router.push(`/clients/map${qs}`);
-            return;
-          }
-          const qs = ids.length <= 500 && ids.length > 0 ? `?ids=${ids.join(",")}` : "";
-          router.push(`/clients/group-processing/${actionId}${qs}`);
-        }}
-      />
     </PageShell>
   );
 }

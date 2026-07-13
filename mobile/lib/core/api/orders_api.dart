@@ -212,19 +212,11 @@ class StockRow {
   final double qty;
   final double reservedQty;
   StockRow({required this.productId, required this.qty, required this.reservedQty});
-  factory StockRow.fromJson(Map<String, dynamic> j) {
-    final productId = (j['product_id'] as num?)?.toInt() ?? 0;
-    // Mobile `/orders/stock` returns precomputed `available`, not raw qty fields.
-    if (j.containsKey('available')) {
-      final avail = _parseNum(j['available']);
-      return StockRow(productId: productId, qty: avail, reservedQty: 0);
-    }
-    return StockRow(
-      productId: productId,
-      qty: _parseNum(j['qty']),
-      reservedQty: _parseNum(j['reserved_qty']),
-    );
-  }
+  factory StockRow.fromJson(Map<String, dynamic> j) => StockRow(
+        productId: (j['product_id'] as num?)?.toInt() ?? 0,
+        qty: _parseNum(j['qty']),
+        reservedQty: _parseNum(j['reserved_qty']),
+      );
   double get available => (qty - reservedQty).clamp(0, double.infinity);
 }
 
@@ -237,11 +229,6 @@ class OrderClientFinance {
   final bool agentConsignmentEnabled;
   final double? consignmentLimitAmount;
   final double? consignmentOutstanding;
-  final bool allowOrderWithDebt;
-  final bool allowConsignment;
-  final bool allowConsignmentWithDebt;
-  final bool hasAccountDebt;
-  final bool hasConsignmentDebt;
 
   const OrderClientFinance({
     this.creditLimit = 0,
@@ -251,11 +238,6 @@ class OrderClientFinance {
     this.agentConsignmentEnabled = false,
     this.consignmentLimitAmount,
     this.consignmentOutstanding,
-    this.allowOrderWithDebt = true,
-    this.allowConsignment = true,
-    this.allowConsignmentWithDebt = true,
-    this.hasAccountDebt = false,
-    this.hasConsignmentDebt = false,
   });
 
   factory OrderClientFinance.fromJson(Map<String, dynamic>? j) {
@@ -272,11 +254,6 @@ class OrderClientFinance {
       consignmentOutstanding: j['consignment_outstanding'] != null
           ? _parseNum(j['consignment_outstanding'])
           : null,
-      allowOrderWithDebt: j['allow_order_with_debt'] != false,
-      allowConsignment: j['allow_consignment'] != false,
-      allowConsignmentWithDebt: j['allow_consignment_with_debt'] != false,
-      hasAccountDebt: j['has_account_debt'] == true,
-      hasConsignmentDebt: j['has_consignment_debt'] == true,
     );
   }
 
@@ -284,74 +261,11 @@ class OrderClientFinance {
     return creditHeadroom - openOrdersTotal - orderTotal;
   }
 
-  /// Joriy oyda konsignatsiyaga yana qancha summa (limit − ochiq qarz).
-  double? get consignmentAvailable {
+  double? consignmentRemainingAfterOrder(double orderTotal) {
     final lim = consignmentLimitAmount;
     final out = consignmentOutstanding;
     if (lim == null || out == null) return null;
-    return lim - out;
-  }
-
-  double? consignmentRemainingAfterOrder(double orderTotal) {
-    final available = consignmentAvailable;
-    if (available == null) return null;
-    return available - orderTotal;
-  }
-
-  /// `true` — joriy savat summasi agent konsignatsiya limitidan oshib ketadi.
-  bool consignmentLimitExceededBy(double orderTotal) {
-    final rem = consignmentRemainingAfterOrder(orderTotal);
-    return rem != null && rem < 0;
-  }
-
-  /// Limit oshganda ko‘rsatiladigan qisqa sabab (null — blok yo‘q).
-  String? consignmentLimitBlockReason(double orderTotal) {
-    if (!consignmentLimitExceededBy(orderTotal)) return null;
-    final lim = consignmentLimitAmount;
-    final out = consignmentOutstanding ?? 0;
-    final avail = consignmentAvailable;
-    final parts = <String>[];
-    if (lim != null) parts.add('limit: ${_fmtLimitNum(lim)}');
-    parts.add('qarz: ${_fmtLimitNum(out)}');
-    if (avail != null) parts.add('mavjud: ${_fmtLimitNum(avail)}');
-    parts.add('buyurtma: ${_fmtLimitNum(orderTotal)}');
-    return 'Konsignatsiya limiti oshdi (${parts.join(', ')})';
-  }
-
-  static String _fmtLimitNum(double v) {
-    final n = v.round();
-    final s = n.abs().toString();
-    final buf = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write(' ');
-      buf.write(s[i]);
-    }
-    return n < 0 ? '-$buf' : buf.toString();
-  }
-
-  /// Обычный (не консигнация) заказ — блокировка по долгу клиента.
-  String? regularOrderBlockReason() {
-    if (!allowOrderWithDebt && hasAccountDebt) {
-      return 'Обычный заказ запрещён: у клиента есть долг. Снимите долг или обратитесь к администратору';
-    }
-    return null;
-  }
-
-  /// Консигнация — блокировка по настройкам клиента.
-  String? consignmentBlockReason() {
-    if (!allowConsignment) {
-      return 'Консигнация для этого клиента запрещена администратором';
-    }
-    if (!allowConsignmentWithDebt && hasConsignmentDebt) {
-      return 'Консигнация запрещена: у клиента есть долг по консигнации';
-    }
-    return null;
-  }
-
-  /// Можно ли включать переключатель «Консигнация».
-  bool get consignmentToggleEnabled {
-    if (!agentConsignmentEnabled) return false;
-    return consignmentBlockReason() == null;
+    return lim - out - orderTotal;
   }
 }
 
@@ -361,7 +275,6 @@ class OrderCreateContext {
   final List<Map<String, dynamic>> warehouses;
   final List<String> priceTypes;
   final OrderClientFinance? clientFinance;
-  final int? defaultWarehouseId;
 
   OrderCreateContext({
     this.clients = const [],
@@ -369,7 +282,6 @@ class OrderCreateContext {
     this.warehouses = const [],
     this.priceTypes = const ['default'],
     this.clientFinance,
-    this.defaultWarehouseId,
   });
 
   factory OrderCreateContext.fromJson(Map<String, dynamic> j) {
@@ -393,7 +305,6 @@ class OrderCreateContext {
       clientFinance: cf is Map
           ? OrderClientFinance.fromJson(Map<String, dynamic>.from(cf))
           : null,
-      defaultWarehouseId: (j['default_warehouse_id'] as num?)?.toInt(),
     );
   }
 }

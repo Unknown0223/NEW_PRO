@@ -6,19 +6,17 @@
     "dev": "cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev -p 3000",
     "dev:clean": "node clean-next.cjs && cross-env NEXT_IGNORE_INCORRECT_LOCKFILE=1 node scripts/next-dev-wasm.cjs dev -p 3000",
     "clean": "node clean-next.cjs",
-    "build": "node scripts/sync-pivot-engine.mjs && next build",
-    "predev": "node scripts/sync-pivot-engine.mjs",
-    "sync:pivot-engine": "node scripts/sync-pivot-engine.mjs",
+    "build": "next build",
     "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:report-builder": "vitest run tests/report-builder-wdr-migrate.test.ts tests/pivot-bridge-saved.test.ts tests/usePivot-smoke.test.ts",
+    "test:report-builder": "vitest run tests/report-builder-wdr-migrate.test.ts",
     "test:ci": "npm run typecheck && vitest run",
     "test:quality": "npm run typecheck && npm run lint && npm run test",
     "test:e2e": "playwright test",
-    "test:e2e:smoke": "playwright test e2e/login-smoke.spec.ts e2e/dashboard-shell-smoke.spec.ts e2e/dashboard-routes-smoke.spec.ts e2e/orders-payments-shell-smoke.spec.ts e2e/payment-allocate-order-status-smoke.spec.ts e2e/order-create-full-stack.spec.ts e2e/reports-builder-pivot-smoke.spec.ts",
+    "test:e2e:smoke": "playwright test e2e/login-smoke.spec.ts e2e/dashboard-shell-smoke.spec.ts e2e/dashboard-routes-smoke.spec.ts e2e/client-qr-page-smoke.spec.ts e2e/orders-payments-shell-smoke.spec.ts e2e/payment-allocate-order-status-smoke.spec.ts e2e/order-create-full-stack.spec.ts",
     "test:e2e:ci": "cross-env CI=true playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
@@ -41,7 +39,6 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-select": "^2.2.6",
-    "@salec/pivot-engine": "file:./vendor/pivot-engine",
     "@tanstack/query-sync-storage-persister": "^5.100.9",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-query-persist-client": "^5.100.9",
@@ -66,7 +63,6 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
     "@next/bundle-analyzer": "^14.2.35",
     "@next/swc-wasm-nodejs": "^14.2.33",
     "@playwright/test": "^1.59.1",
@@ -84,8 +80,7 @@
     "jsdom": "^25.0.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "~6.0.3",
-    "vitest": "^2.1.8",
-    "web-vitals": "^5.3.0"
+    "typescript": "^5",
+    "vitest": "^2.1.8"
   }
 }

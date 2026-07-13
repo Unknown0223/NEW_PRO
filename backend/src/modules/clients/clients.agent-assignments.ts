@@ -109,22 +109,6 @@ export async function replaceClientAgentAssignments(
     bySlot.set(slot, s);
   }
 
-  const existingBySlot = new Map(
-    (
-      await tx.clientAgentAssignment.findMany({
-        where: { client_id: clientId },
-        select: {
-          slot: true,
-          lock_type: true,
-          lock_reason: true,
-          lock_set_by: true,
-          auto_assign_status: true,
-          work_slot_id: true
-        }
-      })
-    ).map((row) => [row.slot, row])
-  );
-
   const rows: Array<{
     slot: number;
     agent_id: number | null;
@@ -132,11 +116,6 @@ export async function replaceClientAgentAssignments(
     expeditor_phone: string | null;
     expeditor_user_id: number | null;
     visit_weekdays: Prisma.InputJsonValue;
-    lock_type: string;
-    lock_reason: string | null;
-    lock_set_by: number | null;
-    auto_assign_status: string;
-    work_slot_id: number | null;
   }> = [];
 
   for (const slot of [...bySlot.keys()].sort((a, b) => a - b)) {
@@ -154,7 +133,7 @@ export async function replaceClientAgentAssignments(
           where: { id: uid, tenant_id: tenantId, is_active: true }
         });
         if (!u) {
-          throw new Error("AGENT_NOT_FOUND");
+          throw new Error("VALIDATION");
         }
         agent_id = uid;
       }
@@ -184,7 +163,7 @@ export async function replaceClientAgentAssignments(
           where: { id: eid, tenant_id: tenantId, is_active: true }
         });
         if (!eu) {
-          throw new Error("EXPEDITOR_NOT_FOUND");
+          throw new Error("VALIDATION");
         }
         expeditor_user_id = eid;
       }
@@ -201,30 +180,14 @@ export async function replaceClientAgentAssignments(
       weekdaysArr.length > 0;
     if (!hasData) continue;
 
-    const prev = existingBySlot.get(slot);
     rows.push({
       slot,
       agent_id,
       visit_date,
       expeditor_phone,
       expeditor_user_id,
-      visit_weekdays: weekdaysJson,
-      lock_type: prev?.lock_type ?? "none",
-      lock_reason: prev?.lock_reason ?? null,
-      lock_set_by: prev?.lock_set_by ?? null,
-      auto_assign_status: prev?.auto_assign_status ?? "assigned",
-      work_slot_id: prev?.work_slot_id ?? null
+      visit_weekdays: weekdaysJson
     });
-  }
-
-  /** Bitta yo‘nalish = bitta agent; bir xil agent bir klientda ikki yo‘nalishda bo‘lmasin. */
-  const seenAgents = new Set<number>();
-  for (const r of rows) {
-    if (r.agent_id == null) continue;
-    if (seenAgents.has(r.agent_id)) {
-      throw new Error("DUPLICATE_AGENT_DIRECTION");
-    }
-    seenAgents.add(r.agent_id);
   }
 
   await tx.clientAgentAssignment.deleteMany({ where: { client_id: clientId } });
@@ -238,12 +201,7 @@ export async function replaceClientAgentAssignments(
         visit_date: r.visit_date,
         expeditor_phone: r.expeditor_phone,
         expeditor_user_id: r.expeditor_user_id,
-        visit_weekdays: r.visit_weekdays,
-        lock_type: r.lock_type,
-        lock_reason: r.lock_reason,
-        lock_set_by: r.lock_set_by,
-        auto_assign_status: r.auto_assign_status,
-        work_slot_id: r.work_slot_id
+        visit_weekdays: r.visit_weekdays
       }))
     });
   }

@@ -152,8 +152,6 @@ type MergeResult = {
   merged: number[];
   orders_reassigned: number;
   payments_reassigned: number;
-  irreversible?: boolean;
-  consequences?: string[];
 };
 
 type MergePreviewResult = {
@@ -164,14 +162,13 @@ type MergePreviewResult = {
   sales_returns_to_reassign: number;
   equipment_to_reassign: number;
   photo_reports_to_reassign: number;
+  qr_codes_to_reassign: number;
   visits_to_reassign: number;
   opening_balances_to_reassign: number;
   total_balance_before: string;
   master_balance_before: string;
   expected_master_balance_after: string;
   conflict_summary: { safe: number; warning: number; critical: number };
-  irreversible?: boolean;
-  consequences?: string[];
 };
 
 export function ClientMergeWorkspace() {

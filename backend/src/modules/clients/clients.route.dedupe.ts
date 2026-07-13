@@ -10,11 +10,9 @@ import {
   deleteSavedDuplicateGroup,
   listClientMergeHistory,
   listMergeSessionsForTenant,
-  listSavedDuplicateGroups,
-  restoreSavedDuplicateGroup
+  listSavedDuplicateGroups
 } from "./client-dedupe.service";
 import { mergeBodySchema, savedDupGroupBodySchema } from "./clients.route.schemas";
-import { actorUserIdOrNull } from "../../lib/request-actor";
 
 export async function registerClientDedupeRoutes(app: FastifyInstance) {
   app.get(
@@ -35,9 +33,7 @@ export async function registerClientDedupeRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const q = request.query as Record<string, string | undefined>;
-      const archive = q.archive === "true" || q.archive === "1";
-      const rows = await listSavedDuplicateGroups(request.tenant!.id, { archive });
+      const rows = await listSavedDuplicateGroups(request.tenant!.id);
       return reply.send({ data: rows });
     }
   );
@@ -82,31 +78,11 @@ export async function registerClientDedupeRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "ValidationError");
       try {
-        await deleteSavedDuplicateGroup(request.tenant!.id, id, actorUserIdOrNull(request));
+        await deleteSavedDuplicateGroup(request.tenant!.id, id);
         return reply.send({ ok: true });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
-        throw e;
-      }
-    }
-  );
-
-  app.post(
-    "/api/:slug/clients/saved-duplicate-groups/:id/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const id = Number.parseInt((request.params as { id: string }).id, 10);
-      if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "ValidationError");
-      try {
-        await restoreSavedDuplicateGroup(request.tenant!.id, id, actorUserIdOrNull(request));
-        return reply.send({ ok: true });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
         throw e;
       }
     }

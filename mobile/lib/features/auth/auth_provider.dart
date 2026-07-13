@@ -31,7 +31,6 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_payload_parser.dart';
 import '../../core/time/work_region_time.dart';
 import '../../core/notifications/mobile_local_notification_service.dart';
-import '../../core/l10n/app_strings_ru.dart';
 import '../../core/update/app_update_info.dart';
 import '../../core/update/app_update_installer.dart';
 
@@ -215,7 +214,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final bio = _ref.read(biometricServiceProvider);
     if (!await bio.isAvailable()) return false;
     final ok = await bio.authenticate(
-      reason: 'Подтвердите биометрию для быстрого входа в Sales Arena',
+      reason: 'Подтвердите биометрию для быстрого входа в SalesDoc',
       biometricOnly: false,
     );
     if (!ok) return false;
@@ -239,7 +238,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (!await _canBiometricLock()) return false;
     final bio = _ref.read(biometricServiceProvider);
     final ok = await bio.authenticate(
-      reason: 'Вход в Sales Arena',
+      reason: 'Вход в SalesDoc',
       biometricOnly: true,
     );
     if (!ok) {
@@ -299,21 +298,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
       }
 
-      unawaited(_safeRefreshMobileConfigAfterUnlock());
+      unawaited(refreshMobileConfig(gateUpdate: true));
       unawaited(_reportDevicePresence());
       if (_session.state.user?.role == 'agent') {
         unawaited(_refreshAgentClientsFromServer());
       }
-    } catch (_) {}
-  }
-
-  Future<void> _safeRefreshMobileConfigAfterUnlock() async {
-    try {
-      await refreshMobileConfig(gateUpdate: true);
-    } on UnauthorizedException {
-      await sessionExpired();
-    } on ApiException {
-      // Majburiy yangilash yoki boshqa API xatosi — PIN ochiq qoladi.
     } catch (_) {}
   }
 
@@ -646,56 +635,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Qo‘lda yangilashni tekshirish (menyu / sinхрон tugagach).
   Future<void> checkForAppUpdate({bool afterSync = false}) async {
-    await _checkForAppUpdateInternal(afterSync: afterSync, notifyUpToDate: false);
-  }
-
-  /// Menyudan: loader + toast + bildirishnoma.
-  Future<AppUpdateManualCheckResult> checkForAppUpdateManual() async {
-    final slug = _session.state.tenantSlug ?? '';
-    if (slug.isEmpty) {
-      return const AppUpdateCheckFailed('Компания не выбрана');
-    }
-    try {
-      final version = await MobileDeviceInfo.apkVersion;
-      final info = await _mobileApi.fetchAppRelease(slug, version);
-      if (info == null || !info.hasAction) {
-        unawaited(
-          MobileLocalNotificationService.instance.notifyAppUpdateUpToDate(version),
-        );
-        return AppUpdateUpToDate(version);
-      }
-      unawaited(MobileLocalNotificationService.instance.ensureNotificationPermission());
-      await _gateAppUpdate(info, afterSync: false);
-      return const AppUpdateOffered();
-    } on ApiException catch (e) {
-      final message = e.message.trim().isEmpty ? S.appUpdateCheckFailed : e.message;
-      unawaited(
-        MobileLocalNotificationService.instance.notifyAppUpdateCheckFailed(message),
-      );
-      return AppUpdateCheckFailed(message);
-    } catch (_) {
-      unawaited(
-        MobileLocalNotificationService.instance.notifyAppUpdateCheckFailed(S.appUpdateCheckFailed),
-      );
-      return const AppUpdateCheckFailed(S.appUpdateCheckFailed);
-    }
-  }
-
-  Future<void> _checkForAppUpdateInternal({
-    required bool afterSync,
-    required bool notifyUpToDate,
-  }) async {
     final slug = _session.state.tenantSlug ?? '';
     if (slug.isEmpty) return;
     try {
       final version = await MobileDeviceInfo.apkVersion;
       final info = await _mobileApi.fetchAppRelease(slug, version);
       if (info == null || !info.hasAction) {
-        if (notifyUpToDate) {
-          unawaited(
-            MobileLocalNotificationService.instance.notifyAppUpdateUpToDate(version),
-          );
-        }
         state = state.copyWith(
           status: state.status,
           error: null,
@@ -1033,11 +978,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     ParsedSyncPayload payload, {
     void Function(int phase)? onPhase,
     String? lastSyncAt,
-    bool forceClientCatalog = false,
   }) async {
     final role = _session.state.user?.role;
-    final replaceCatalog = role == 'agent' &&
-        (SyncEngine.isFullCatalogSync(lastSyncAt) || forceClientCatalog);
+    final replaceCatalog =
+        role == 'agent' && SyncEngine.isFullCatalogSync(lastSyncAt);
 
     _reportSyncPhase(0, onPhase: onPhase);
     _reportSyncPhase(3, onPhase: onPhase);
@@ -1088,12 +1032,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Serverdan konfig yangilab, sinxron siyosatini qayta baholaydi (vaqt oynasi kengaytirilganda).
-  Future<SyncPolicyEvaluation> refreshConfigAndEvaluateSyncPolicy() async {
-    await refreshMobileConfig();
-    return evaluateSyncPolicy(_syncCfg);
-  }
-
   /// Mobil konfiguratsiyani serverdan qayta yuklash (menyu/ruxsatlar yangilanishi).
   Future<void> refreshMobileConfig({bool gateUpdate = false}) async {
     final slug = _session.state.tenantSlug ?? '';
@@ -1118,8 +1056,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         agentLimits: config.agentLimits,
         agentCities: config.agentCities,
       );
-    } on UnauthorizedException {
-      await sessionExpired();
     } catch (e) {
       if (gateUpdate && e is ApiException) rethrow;
     }
@@ -1160,7 +1096,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Qo'lda sinxronizatsiya — to'liq (full) yoki oddiy (oxirgi vaqt bilan).
   Future<AgentSyncResult> resync({
     bool full = false,
-    bool forceClientCatalog = false,
     bool refreshConfig = false,
     void Function(int phase)? onPhase,
   }) async {
@@ -1228,18 +1163,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return const AgentSyncResult(ok: true);
       }
 
-      var policy = evaluateSyncPolicy(_syncCfg);
-      if (!policy.allowed) {
-        await refreshMobileConfig();
-        policy = evaluateSyncPolicy(_syncCfg);
-      }
+      final policy = evaluateSyncPolicy(_syncCfg);
       if (!policy.allowed) {
         return AgentSyncResult(ok: false, error: policy.denialMessage);
       }
 
       final lastAt = full ? null : _session.state.lastSyncAt;
-      final forceCatalog = forceClientCatalog ||
-          (role == 'agent' && await AppDatabase().needsFullClientCatalogResync());
       int clients = 0;
       int products = 0;
       int prices = 0;
@@ -1249,7 +1178,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final payload = await syncEngine.pullSync(
           lastSyncAt: lastAt,
           onPhase: onPhase,
-          forceClientsCatalog: forceCatalog,
         );
         await _session.setLastSyncAt(payload.syncAt);
         clients = payload.clients.length;
@@ -1262,14 +1190,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           slug,
           lastSyncAt: lastAt,
           device: await MobileDeviceInfo.syncPayload(),
-          forceClientsCatalog: forceCatalog,
         );
-        await _persistSyncPayload(
-          payload,
-          onPhase: onPhase,
-          lastSyncAt: lastAt,
-          forceClientCatalog: forceCatalog,
-        );
+        await _persistSyncPayload(payload, onPhase: onPhase, lastSyncAt: lastAt);
         await _session.setLastSyncAt(payload.syncAt);
         clients = payload.clients.length;
         products = payload.products.length;
@@ -1338,6 +1260,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await ensureAuthTokens(_ref);
       await _authApi.me();
     } on UnauthorizedException {
+      if (await _lockForApp()) return;
       await sessionExpired();
     } on AppAccessDeniedException {
       await appAccessRevoked();
@@ -1354,21 +1277,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
   }
 
-  /// JWT/refresh tugagan — login ekraniga (PIN qulfi emas).
+  /// JWT/refresh tugagan — biometrik qulf yoki to‘liq chiqish.
   Future<void> sessionExpired({bool forceLogout = false}) async {
-    if (!forceLogout && state.status == AuthStatus.ready) {
-      try {
-        await ensureAuthTokens(_ref);
-        await _authApi.me();
-        return;
-      } on UnauthorizedException {
-        // pastda to‘liq chiqish
-      } on NetworkException {
-        return;
-      } catch (_) {
-        return;
-      }
-    }
+    if (!forceLogout && await _lockForApp()) return;
     state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
     _session.state = const SessionState();
     await _wipeLocalAuth();

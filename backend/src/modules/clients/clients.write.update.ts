@@ -212,18 +212,6 @@ export async function updateClientFields(
   if (input.is_active !== undefined) {
     data.is_active = input.is_active;
   }
-  if (input.price_type !== undefined) {
-    data.price_type = input.price_type?.trim().slice(0, 128) || null;
-  }
-  if (input.allow_order_with_debt !== undefined) {
-    data.allow_order_with_debt = input.allow_order_with_debt;
-  }
-  if (input.allow_consignment !== undefined) {
-    data.allow_consignment = input.allow_consignment;
-  }
-  if (input.allow_consignment_with_debt !== undefined) {
-    data.allow_consignment_with_debt = input.allow_consignment_with_debt;
-  }
 
   const hasClientScalars = Object.keys(data).length > 0;
   const hasAssignments = input.agent_assignments !== undefined;

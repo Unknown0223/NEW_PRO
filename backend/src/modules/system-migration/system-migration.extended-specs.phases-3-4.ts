@@ -237,6 +237,19 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       dates: ["assigned_at", "removed_at", "created_at", "updated_at"]
     },
     {
+      file: "client_qr_codes",
+      delegate: "clientQrCode",
+      idMap: "clientQrCode",
+      fk: {
+        client_id: "client",
+        created_by_user_id: "user",
+        printed_by_user_id: "user",
+        bound_by_user_id: "user",
+        detached_by_user_id: "user"
+      },
+      dates: ["created_at", "updated_at", "printed_at", "bound_at", "detached_at"]
+    },
+    {
       file: "client_merge_logs",
       delegate: "clientMergeLog",
       idMap: "clientMergeLog",

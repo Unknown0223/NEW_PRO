@@ -108,7 +108,6 @@ model BonusRule {
   once_per_client      Boolean              @default(false)
   one_plus_one_gift    Boolean              @default(false)
   /// Shu qoida qo‘llanishidan oldin zakazda bajarilgan bo‘lishi kerak bo‘lgan boshqa avto-qoidalar (ID lar tartibsiz).
-  /// Bonus (qty/sum gift) uchun eskirgan — ichki `clauses` ishlatiladi; skidkada saqlanadi.
   prerequisite_rule_ids Int[]              @default([])
   /// Bo‘sh = filial cheklovi yo‘q. `User.branch` bilan mos (trim, case-insensitive).
   scope_branch_codes         String[] @default([])
@@ -117,68 +116,25 @@ model BonusRule {
   /// Bo‘sh = yo‘nalish cheklovi yo‘q. Agent `trade_direction_id` shu ID lardan biri bo‘lishi kerak.
   scope_trade_direction_ids  Int[]    @default([])
   conditions           BonusRuleCondition[]
-  clauses              BonusRuleClause[]
   tenant               Tenant               @relation(fields: [tenant_id], references: [id])
 
   @@index([tenant_id])
   @@map("bonus_rules")
 }
 
-/// Bitta bonus ichidagi shart (clause): hammasi AND; `grants_reward` = sovg‘a beriladimi.
-model BonusRuleClause {
-  id                        Int       @id @default(autoincrement())
-  bonus_rule_id             Int
-  sort_order                Int       @default(0)
-  /// true: shu shart bo‘yicha sovg‘a beriladi; false: faqat gate.
-  grants_reward             Boolean   @default(true)
-  priority                  Int       @default(0)
-  client_category           String?
-  payment_type              String?
-  client_type               String?
-  sales_channel             String?
-  price_type                String?
-  product_ids               Int[]     @default([])
-  bonus_product_ids         Int[]     @default([])
-  product_category_ids      Int[]     @default([])
-  scope_restrict_assortment Boolean   @default(false)
-  scope_restrict_category   Boolean   @default(false)
-  target_all_clients        Boolean   @default(true)
-  selected_client_ids       Int[]     @default([])
-  in_blocks                 Boolean   @default(true)
-  once_per_client           Boolean   @default(false)
-  one_plus_one_gift         Boolean   @default(false)
-  buy_qty                   Int?
-  free_qty                  Int?
-  min_sum                   Decimal?  @db.Decimal(15, 2)
-  sum_threshold_scope       String    @default("order") @db.VarChar(32)
-  scope_branch_codes        String[]  @default([])
-  scope_agent_user_ids      Int[]     @default([])
-  scope_trade_direction_ids Int[]     @default([])
-  created_at                DateTime  @default(now())
-  updated_at                DateTime  @updatedAt
-  bonus_rule                BonusRule @relation(fields: [bonus_rule_id], references: [id], onDelete: Cascade)
-  conditions                BonusRuleCondition[]
-
-  @@index([bonus_rule_id])
-  @@map("bonus_rule_clauses")
-}
 
 model BonusRuleCondition {
-  id            Int              @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   bonus_rule_id Int
-  /// Ichki shart (clause); null = legacy rule-level condition.
-  clause_id     Int?
-  min_qty       Decimal?         @db.Decimal(15, 3)
-  max_qty       Decimal?         @db.Decimal(15, 3)
-  step_qty      Decimal          @db.Decimal(15, 3)
-  bonus_qty     Decimal          @db.Decimal(15, 3)
-  max_bonus_qty Decimal?         @db.Decimal(15, 3)
-  sort_order    Int              @default(0)
-  bonus_rule    BonusRule        @relation(fields: [bonus_rule_id], references: [id], onDelete: Cascade)
-  clause        BonusRuleClause? @relation(fields: [clause_id], references: [id], onDelete: Cascade)
+  min_qty       Decimal?  @db.Decimal(15, 3)
+  max_qty       Decimal?  @db.Decimal(15, 3)
+  step_qty      Decimal   @db.Decimal(15, 3)
+  bonus_qty     Decimal   @db.Decimal(15, 3)
+  max_bonus_qty Decimal?  @db.Decimal(15, 3)
+  sort_order    Int       @default(0)
+  bonus_rule    BonusRule @relation(fields: [bonus_rule_id], references: [id], onDelete: Cascade)
 
   @@index([bonus_rule_id])
-  @@index([clause_id])
   @@map("bonus_rule_conditions")
 }
 
@@ -259,26 +215,21 @@ model CashDeskShift {
 /// Kunlik valyuta kursi: 1 base_currency = rate quote_currency (spravochnikdagi kodlar bilan).
 
 model CurrencyExchangeRate {
-  id                 Int       @id @default(autoincrement())
+  id                 Int      @id @default(autoincrement())
   tenant_id          Int
-  rate_date          DateTime  @db.Date
-  base_currency      String    @db.VarChar(8)
-  quote_currency     String    @db.VarChar(8)
-  rate               Decimal   @db.Decimal(20, 8)
-  source             String?   @db.VarChar(64)
-  note               String?   @db.VarChar(500)
+  rate_date          DateTime @db.Date
+  base_currency      String   @db.VarChar(8)
+  quote_currency     String   @db.VarChar(8)
+  rate               Decimal  @db.Decimal(20, 8)
+  source             String?  @db.VarChar(64)
+  note               String?  @db.VarChar(500)
   created_by_user_id Int?
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
-  deleted_at         DateTime?
-  deleted_by_user_id Int?
-  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-  deleted_by         User?     @relation("CurrencyExchangeRateVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
-  /// Active (non-voided) uniqueness is enforced by partial unique index in migration.
-  @@index([tenant_id, rate_date, base_currency, quote_currency])
+  @@unique([tenant_id, rate_date, base_currency, quote_currency])
   @@index([tenant_id, rate_date])
-  @@index([tenant_id, deleted_at])
   @@map("currency_exchange_rates")
 }
 
@@ -312,8 +263,6 @@ model StockTakeLine {
   product_id    Int
   system_qty    Decimal   @db.Decimal(15, 3)
   counted_qty   Decimal?  @db.Decimal(15, 3)
-  /// Post paytidagi ombor qoldig‘i (cancel da tiklash uchun).
-  previous_qty  Decimal?  @db.Decimal(15, 3)
   product       Product   @relation(fields: [product_id], references: [id], onDelete: Cascade)
   stock_take    StockTake @relation(fields: [stock_take_id], references: [id], onDelete: Cascade)
 

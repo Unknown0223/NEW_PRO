@@ -20,16 +20,8 @@ const HEADER_TO_KEY: Record<string, string> = {
   адрес: "address",
   артикул_sku: "sku",
   артикул: "sku",
-  код_товара: "sku",
   тип_цены: "price_type",
-  цена: "price",
-  склад: "warehouse",
-  категория: "category",
-  продукт: "name",
-  количество_прихода: "receipt_qty",
-  количество_в_блоке: "block_qty",
-  уровень: "level",
-  родитель: "parent"
+  цена: "price"
 };
 
 export function resolveCellKey(headerOrKey: string, config?: StepTableConfig): string {

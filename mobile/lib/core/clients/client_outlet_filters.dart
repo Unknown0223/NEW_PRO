@@ -134,25 +134,6 @@ bool clientPlannedForVisitDay(
   return wd.contains(weekday);
 }
 
-/// Kamida bitta mijozda tashrif jadvali (kunlar yoki sana) bor.
-bool tenantHasAnyVisitSchedule(List<Map<String, dynamic>> clients) {
-  for (final c in clients) {
-    if (resolveClientVisitWeekdays(c).isNotEmpty) return true;
-    final vd = c['visit_date']?.toString().trim();
-    if (vd != null && vd.length >= 10) return true;
-  }
-  return false;
-}
-
-Set<int> activeClientIds(Iterable<Map<String, dynamic>> clients) {
-  final ids = <int>{};
-  for (final c in clients) {
-    final id = (c['id'] as num?)?.toInt();
-    if (id != null) ids.add(id);
-  }
-  return ids;
-}
-
 /// Agentning bugungi ОКБ rejasi — shu kunga rejalashtirilgan mijozlar.
 Set<int> plannedClientIdsForDay(
   List<Map<String, dynamic>> clients,
@@ -184,7 +165,6 @@ bool clientMatchesWeekdayTab(
   Map<String, dynamic> client,
   int tabIndex, {
   Set<int>? routeClientIds,
-  bool includeUnscheduled = false,
 }) {
   if (tabIndex <= 0) return true;
   final id = (client['id'] as num?)?.toInt();
@@ -192,7 +172,7 @@ bool clientMatchesWeekdayTab(
     return true;
   }
   final wd = resolveClientVisitWeekdays(client);
-  if (wd.isEmpty) return includeUnscheduled;
+  if (wd.isEmpty) return false;
   return wd.contains(tabIndex);
 }
 
@@ -215,17 +195,9 @@ List<Map<String, dynamic>> applyOutletFilters(
   Set<int>? visitedTodayIds,
   bool debtsOnly = false,
   Set<int>? routeClientIds,
-  bool includeUnscheduled = false,
 }) {
   var list = clients
-      .where(
-        (c) => clientMatchesWeekdayTab(
-          c,
-          weekdayTab,
-          routeClientIds: routeClientIds,
-          includeUnscheduled: includeUnscheduled,
-        ),
-      )
+      .where((c) => clientMatchesWeekdayTab(c, weekdayTab, routeClientIds: routeClientIds))
       .toList();
 
   if (category != null && category.isNotEmpty) {

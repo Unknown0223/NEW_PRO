@@ -16,7 +16,6 @@ class AppColors {
   static const Color primary = Color(0xFF07958F);
   static const Color primaryLight = Color(0xFF3AB8B1);
   static const Color primaryDark = Color(0xFF064C4C);
-  static const Color primarySoft = Color(0xFFE8F6F5);
   static const Color primaryGradientStart = Color(0xFF12C86F);
   static const Color primaryGradientEnd = Color(0xFF079BD4);
 
@@ -50,30 +49,8 @@ class AppColors {
   static const Color shadow = Color(0x1A000000);
   static const Color topBarShadow = Color(0x12CBD5E1);
 
-  static const Color successSoft = Color(0xFFEAFBEF);
-  static const Color warningSoft = Color(0xFFFFF7ED);
-
-  static List<BoxShadow> get fabShadow => [
-        BoxShadow(
-          color: primary.withValues(alpha: 0.36),
-          blurRadius: 28,
-          offset: const Offset(0, 12),
-        ),
-      ];
-
   // Teal aliases (eski kod bilan moslik)
   static const Color teal800 = Color(0xFF115E59);
   static const Color teal700 = Color(0xFF0F766E);
   static const Color teal600 = Color(0xFF0D9488);
-
-  // Bonus / Discount (shablon #29 — BONUS & DISCOUNT LADDER)
-  static const Color bonusBg = Color(0xFFFEF9C3);
-  static const Color bonusBg2 = Color(0xFFFEF08A);
-  static const Color bonusInk = Color(0xFF854D0E);
-  static const Color bonusAccent = Color(0xFFCA8A04);
-
-  static const Color discBg = Color(0xFFFFEDD5);
-  static const Color discBg2 = Color(0xFFFED7AA);
-  static const Color discInk = Color(0xFF7C2D12);
-  static const Color discAccent = Color(0xFFEA580C);
 }

@@ -51,7 +51,7 @@ export async function buildStockImportTemplateBuffer(): Promise<Buffer> {
   return Buffer.from(buf);
 }
 
-/** Shablon: «Поступление» — №, Склад, Код товара, Категория, Продукт, Цена, Количество прихода, Количество в блоке */
+/** Shablon: «Поступление» — №, Код товара, Категория, Продукт, Цена, Количество прихода, Количество в блоке */
 export async function buildPostupleniya2StockTemplateBuffer(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Поступление", {
@@ -60,7 +60,6 @@ export async function buildPostupleniya2StockTemplateBuffer(): Promise<Buffer> {
 
   const headers = [
     "№",
-    "Склад",
     "Код товара",
     "Категория",
     "Продукт",
@@ -68,7 +67,7 @@ export async function buildPostupleniya2StockTemplateBuffer(): Promise<Buffer> {
     "Количество прихода",
     "Количество в блоке"
   ];
-  const sample = ["1", "Основной склад", "SKU-001", "Ichimliklar", "Namuna mahsulot", "12000", "10", "1"];
+  const sample = ["1", "SKU-001", "Ichimliklar", "Namuna mahsulot", "12000", "10", "1"];
 
   const hRow = sheet.getRow(1);
   headers.forEach((text, i) => {
@@ -80,7 +79,6 @@ export async function buildPostupleniya2StockTemplateBuffer(): Promise<Buffer> {
   });
   sheet.columns = [
     { width: 6 },
-    { width: 22 },
     { width: 18 },
     { width: 22 },
     { width: 36 },

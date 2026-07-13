@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
-import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -624,8 +623,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
     staleTime: STALE.list,
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (tab === "inactive") params.set("archive", "true");
-      else params.set("is_active", "true");
+      params.set("is_active", tab === "active" ? "true" : "false");
       params.set("page", String(page));
       params.set("limit", String(limit));
       if (search) params.set("q", search);
@@ -777,7 +775,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                   )}
                   onClick={() => setTab("inactive")}
                 >
-                  Не активный / Архив
+                  Не активный
                 </button>
               </div>
             </div>
@@ -933,7 +931,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                               variant="ghost"
                               size="icon-sm"
                               className="text-primary hover:bg-primary/10"
-                              title="Восстановить"
+                              title="Активировать"
                               disabled={activateMut.isPending}
                               onClick={() => activateMut.mutate(r.id)}
                             >
@@ -1013,27 +1011,32 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
         onSaved={() => {}}
       />
 
-      <SoftVoidConfirmDialog
-        open={deactivateTarget != null}
-        onClose={() => {
-          if (deactivateMut.isPending) return;
-          setDeactivateTarget(null);
-        }}
-        onConfirm={async () => {
-          if (deactivateTarget) await deactivateMut.mutateAsync(deactivateTarget.id);
-        }}
-        title="Деактивировать склад"
-        description={
-          deactivateTarget
-            ? `«${deactivateTarget.name}» будет скрыт из активного списка и доступен во вкладке архива.`
-            : "Склад будет перемещён в архив."
-        }
-        reasonRequired={false}
-        reasonPlaceholder="Комментарий (необязательно)"
-        confirmLabel="Деактивировать"
-        pending={deactivateMut.isPending}
-        consequences={["Склад исчезнет из выбора в документах", "Можно восстановить из вкладки «Архив»"]}
-      />
+      <Dialog open={deactivateTarget != null} onOpenChange={(o) => !o && setDeactivateTarget(null)}>
+        <DialogContent className="max-w-sm" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>Деактивировать склад?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {deactivateTarget
+              ? `«${deactivateTarget.name}» будет скрыт из активного списка. Повторно включить можно на вкладке «Не активный».`
+              : null}
+          </p>
+          <DialogFooter className="flex flex-row justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeactivateTarget(null)}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              disabled={deactivateMut.isPending}
+              onClick={() => {
+                if (deactivateTarget) deactivateMut.mutate(deactivateTarget.id);
+              }}
+            >
+              Деактивировать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

@@ -42,11 +42,7 @@ COPY shared ./shared
 COPY scripts/docker-start.sh ./scripts/docker-start.sh
 RUN chmod +x scripts/docker-start.sh
 
-RUN mkdir -p uploads tmp && chown -R node:node /app
-
 ENV NODE_ENV=production
-
-USER node
 
 EXPOSE 4000
 

@@ -4,11 +4,6 @@ import {
   orderCashInContextQuerySchema
 } from "../../contracts/payments.schemas";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import { assertDocWritableByDate } from "../../lib/document-edit-lock.request";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import {
@@ -75,12 +70,6 @@ export async function registerMobilePaymentRoutes(app: FastifyInstance) {
         );
       }
       try {
-        if (parsed.data.paid_at) {
-          const paidAt = new Date(parsed.data.paid_at);
-          if (!Number.isNaN(paidAt.getTime())) {
-            await assertDocWritableByDate(request, "payments", paidAt);
-          }
-        }
         const data = await createOrderCashInBatch(
           request.tenant!.id,
           parsed.data,
@@ -88,7 +77,6 @@ export async function registerMobilePaymentRoutes(app: FastifyInstance) {
         );
         return reply.status(201).send({ data });
       } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");

@@ -25,28 +25,6 @@ export async function clientIdsWithVisitWeekday(tenantId: number, day: number): 
   return rows.map((r) => r.client_id);
 }
 
-/** Agent + hafta kuni — bir xil `client_agent_assignments` qatorida (supervisor dashboard planScope bilan mos). */
-export async function clientIdsWithAgentVisitWeekday(
-  tenantId: number,
-  agentIds: number[],
-  day: number
-): Promise<number[]> {
-  const d = Math.floor(day);
-  const uniqAgents = [...new Set(agentIds.filter((id) => Number.isFinite(id) && id > 0))];
-  if (d < 1 || d > 7 || uniqAgents.length === 0) return [];
-  const json = JSON.stringify([d]);
-  const rows = await prisma.$queryRaw<{ client_id: number }[]>(
-    Prisma.sql`
-      SELECT DISTINCT client_id
-      FROM client_agent_assignments
-      WHERE tenant_id = ${tenantId}
-        AND agent_id IN (${Prisma.join(uniqAgents)})
-        AND visit_weekdays::jsonb @> CAST(${json} AS jsonb)
-    `
-  );
-  return rows.map((r) => r.client_id);
-}
-
 async function loadTenantReferencesForClientTerritoryFilters(tenantId: number): Promise<{
   hints: Record<string, CityTerritoryHintDto>;
   ref: Record<string, unknown> | undefined;
@@ -176,6 +154,13 @@ export async function buildClientListWhereInput(
     ...(q.agent_id != null && Number.isFinite(q.agent_id) && q.agent_id > 0 ? [q.agent_id] : [])
   ];
   const uniqAgentIds = [...new Set(agentIds)];
+  if (uniqAgentIds.length > 0) {
+    andList.push({
+      OR: uniqAgentIds.map((aid) => ({
+        OR: [{ agent_id: aid }, { agent_assignments: { some: { agent_id: aid } } }]
+      }))
+    });
+  }
 
   if (Array.isArray(q.client_ids)) {
     const ids = q.client_ids
@@ -207,32 +192,16 @@ export async function buildClientListWhereInput(
       : [])
   ];
   const uniqVisitDays = [...new Set(visitDays)];
-
-  if (uniqAgentIds.length > 0 && uniqVisitDays.length > 0) {
+  if (uniqVisitDays.length > 0) {
     const clientIdSet = new Set<number>();
     for (const day of uniqVisitDays) {
-      const ids = await clientIdsWithAgentVisitWeekday(tenantId, uniqAgentIds, day);
+      const ids = await clientIdsWithVisitWeekday(tenantId, day);
       ids.forEach((id) => clientIdSet.add(id));
     }
-    if (clientIdSet.size === 0) return null;
+    if (clientIdSet.size === 0) {
+      return null;
+    }
     andList.push({ id: { in: [...clientIdSet] } });
-  } else {
-    if (uniqAgentIds.length > 0) {
-      andList.push({
-        OR: uniqAgentIds.map((aid) => ({
-          OR: [{ agent_id: aid }, { agent_assignments: { some: { agent_id: aid } } }]
-        }))
-      });
-    }
-    if (uniqVisitDays.length > 0) {
-      const clientIdSet = new Set<number>();
-      for (const day of uniqVisitDays) {
-        const ids = await clientIdsWithVisitWeekday(tenantId, day);
-        ids.forEach((id) => clientIdSet.add(id));
-      }
-      if (clientIdSet.size === 0) return null;
-      andList.push({ id: { in: [...clientIdSet] } });
-    }
   }
 
   const innQ = q.inn?.trim();
@@ -394,22 +363,6 @@ export async function buildClientListWhereInput(
     andList.push({
       OR: [{ latitude: null }, { longitude: null }]
     });
-  }
-
-  if (q.tag_id != null && q.tag_id > 0) {
-    andList.push({
-      tag_links: { some: { tag_id: q.tag_id } }
-    });
-  }
-
-  if (q.price_type?.trim()) {
-    andList.push({ price_type: q.price_type.trim() });
-  }
-
-  if (q.allow_order_with_debt === true) {
-    andList.push({ allow_order_with_debt: true });
-  } else if (q.allow_order_with_debt === false) {
-    andList.push({ allow_order_with_debt: false });
   }
 
   return { AND: andList };

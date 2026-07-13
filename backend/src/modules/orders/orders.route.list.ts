@@ -1,159 +1,44 @@
 import type { FastifyInstance } from "fastify";
 import {
-  consignmentAutoCandidatesQuerySchema,
-  consignmentAutoConvertBodySchema,
-  consignmentAutoSettingsPatchSchema,
-  consignmentTransfersListQuerySchema,
-  ordersListQuerySchema
+  bulkOrderExpeditorBodySchema,
+  bulkOrderNakladnoyBodySchema,
+  bulkOrderStatusBodySchema,
+  createOrderBodySchema,
+  ordersListQuerySchema,
+  patchOrderLinesBodySchema,
+  patchOrderMetaBodySchema,
+  patchOrderStatusBodySchema
 } from "../../contracts/orders.schemas";
+import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
+import { getErrorCode } from "../../lib/app-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
-import {
-  isDocumentEditPeriodLockedError,
-  sendDocumentEditPeriodLocked
-} from "../../lib/document-edit-lock.http";
-import { assertDocWritableById } from "../../lib/document-edit-lock.request";
-import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   requireIfSkladchikThenAnyEntitlement,
-  SKLADCHIK_ORDER_FLOW_ANY
+  requireRolesOrSkladchikAnyEntitlement,
+  SKLADCHIK_ORDER_FLOW_ANY,
+  SKLADCHIK_ORDER_META_ANY
 } from "../staff/skladchik-access.prehandler";
-import { parseSelectedMastersFromQuery } from "../linkage/linkage.service";
+import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
+import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
+import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
-  convertConsignmentAutoCandidates,
-  getConsignmentAutoSettings,
-  listConsignmentAutoCandidates,
-  listConsignmentTransfers,
-  listConsignmentTransfersForExport,
+  bulkUpdateOrderExpeditor,
+  bulkUpdateOrderStatus,
+  createOrder,
+  getOrderDetail,
   listOrdersPaged,
-  patchConsignmentAutoSettings
+  requestBulkOrderNakladnoy,
+  updateOrderLines,
+  updateOrderMeta,
+  updateOrderStatus
 } from "./orders.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderListRoutes(app: FastifyInstance) {
-  app.get(
-    "/api/:slug/orders/consignment-auto/settings",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const data = await getConsignmentAutoSettings(request.tenant!.id);
-      return reply.send({ data });
-    }
-  );
-
-  app.patch(
-    "/api/:slug/orders/consignment-auto/settings",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const parsed = consignmentAutoSettingsPatchSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      }
-      try {
-        const data = await patchConsignmentAutoSettings(request.tenant!.id, parsed.data);
-        return reply.send({ data });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "BAD_AUTO_DAYS") return sendApiError(reply, request, 400, "BadAutoDays");
-        if (msg === "TENANT_NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        throw e;
-      }
-    }
-  );
-
-  app.get(
-    "/api/:slug/orders/consignment-auto/candidates",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const parsed = consignmentAutoCandidatesQuerySchema.safeParse(request.query);
-      if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      }
-      const data = await listConsignmentAutoCandidates(request.tenant!.id, parsed.data);
-      return reply.send({ data });
-    }
-  );
-
-  app.post(
-    "/api/:slug/orders/consignment-auto/convert",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const parsed = consignmentAutoConvertBodySchema.safeParse(request.body);
-      if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      }
-      const actor = getAccessUser(request);
-      const actorSub = Number.parseInt(actor.sub, 10);
-      const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
-      try {
-        for (const orderId of parsed.data.order_ids) {
-          await assertDocWritableById(request, "orders", orderId);
-        }
-        const result = await convertConsignmentAutoCandidates(
-          request.tenant!.id,
-          parsed.data,
-          actorUserId
-        );
-        return reply.send(result);
-      } catch (e) {
-        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
-        throw e;
-      }
-    }
-  );
-
-  app.get(
-    "/api/:slug/orders/consignment-transfers",
-    { preHandler: [jwtAccessVerify, requireIfSkladchikThenAnyEntitlement(SKLADCHIK_ORDER_FLOW_ANY)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const parsed = consignmentTransfersListQuerySchema.safeParse(request.query);
-      if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      }
-      try {
-        const data = await listConsignmentTransfers(request.tenant!.id, parsed.data);
-        return reply.send({ data });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "BAD_DATE_FROM" || msg === "BAD_DATE_TO" || msg === "BAD_DATE_RANGE") {
-          return sendApiError(reply, request, 400, "BadDateRange");
-        }
-        throw e;
-      }
-    }
-  );
-
-  app.get(
-    "/api/:slug/orders/consignment-transfers/export-rows",
-    { preHandler: [jwtAccessVerify, requireIfSkladchikThenAnyEntitlement(SKLADCHIK_ORDER_FLOW_ANY)] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const parsed = consignmentTransfersListQuerySchema
-        .omit({ page: true, page_size: true })
-        .safeParse(request.query);
-      if (!parsed.success) {
-        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
-      }
-      try {
-        const rows = await listConsignmentTransfersForExport(request.tenant!.id, parsed.data);
-        return reply.send({ data: { rows } });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (msg === "BAD_DATE_FROM" || msg === "BAD_DATE_TO" || msg === "BAD_DATE_RANGE") {
-          return sendApiError(reply, request, 400, "BadDateRange");
-        }
-        throw e;
-      }
-    }
-  );
-
   app.get(
     "/api/:slug/orders",
     { preHandler: [jwtAccessVerify, requireIfSkladchikThenAnyEntitlement(SKLADCHIK_ORDER_FLOW_ANY)] },

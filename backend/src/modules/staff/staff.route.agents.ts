@@ -265,9 +265,6 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "BadEntitlements");
         }
         if (msg === "BAD_BULK_ACTION") return sendApiError(reply, request, 400, "BadBulkAction");
-        if (msg === "BAD_CLOSE_DAY") return sendApiError(reply, request, 400, "BadCloseDay");
-        if (msg === "BAD_CLOSE_HOUR") return sendApiError(reply, request, 400, "BadCloseHour");
-        if (msg === "BAD_CLOSE_MINUTE") return sendApiError(reply, request, 400, "BadCloseMinute");
         if (msg === "BAD_MOBILE_CONFIG_PATCH") return sendApiError(reply, request, 400, "BadMobileConfigPatch");
         if (msg === "BAD_MOBILE_CONFIG_SYNC_WINDOW") {
           return sendApiError(reply, request, 400, "BadMobileConfigSyncWindow");

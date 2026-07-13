@@ -2,7 +2,6 @@
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -712,13 +711,13 @@ export function AddPaymentForm({
               </div>
               <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
                 <Label className="text-xs text-muted-foreground">Сумма</Label>
-                <GroupedNumberInput
+                <Input
                   data-testid={index === 0 ? "new-payment-amount" : undefined}
+                  inputMode="decimal"
                   className="h-10 bg-background"
                   placeholder="0"
-                  maxFractionDigits={2}
                   value={b.amount}
-                  onValueChange={(v) => updateBlock(b.key, { amount: v })}
+                  onChange={(e) => updateBlock(b.key, { amount: e.target.value })}
                   disabled={submitMut.isPending}
                 />
               </div>

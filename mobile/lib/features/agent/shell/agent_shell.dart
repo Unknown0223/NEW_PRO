@@ -1,30 +1,22 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/mobile_config.dart';
 import '../../../core/gps/gps_tracker.dart';
-import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../home/sync_count_provider.dart';
-import '../route/agent_route_provider.dart';
 import 'agent_drawer.dart';
-import 'agent_scaffold_key.dart';
-import 'agent_van_selling_strip.dart';
-import '../clients/client_map_holder.dart';
-import '../sync/manual_sync_provider.dart';
-import '../sync/sync_progress_sheet.dart';
-import '../sync/sync_success_dialog.dart';
-import '../../../core/l10n/app_strings_ru.dart';
-import '../../../core/time/work_region_time.dart';
-import '../orders/held_orders_provider.dart';
 import 'agent_menu_config.dart';
+import 'agent_scaffold_key.dart';
+import '../clients/client_map_holder.dart';
+import '../sync/agent_sync_overlay.dart';
+import '../sync/manual_sync_provider.dart';
+import '../config/van_movement_status_bar.dart';
 
 /// Agent ilova qobig‘i: drawer + shablon pastki navigatsiya.
 class AgentShell extends ConsumerStatefulWidget {
@@ -42,8 +34,6 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(agentLocalPrefsProvider);
-      ref.read(heldOrderSchedulerProvider);
-      preloadClientAgentLedgerBalances(ref);
       final gps = ref.read(sessionProvider).mobileConfig?.gps ?? const GpsConfig();
       if (gps.alwaysOn || gps.trackingEnabled) {
         ref.read(gpsTrackerProvider.notifier).startTracking();
@@ -67,8 +57,8 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
 
   int _tabIndex(String loc) {
     if (loc.startsWith('/visits')) return 1;
-    if (loc.startsWith('/report')) return 3;
-    if (loc.startsWith('/clients')) return 4;
+    if (loc.startsWith('/report')) return 2;
+    if (loc.startsWith('/clients')) return 3;
     return 0;
   }
 
@@ -79,28 +69,13 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     final sync = ref.watch(manualSyncProvider);
     final syncRunning = sync.status == ManualSyncStatus.running;
     final vanSelling = ref.watch(sessionProvider).mobileConfig?.vanSelling;
-    final showVanStrip = vanSelling != null;
-    final routeAsync = ref.watch(realTodayRouteProvider);
-    final session = ref.watch(sessionProvider);
-    final routeName = (routeAsync.valueOrNull?['name'] ??
-            routeAsync.valueOrNull?['title'] ??
-            session.tenantName ??
-            session.user?.name ??
-            '')
-        .toString();
+    final showVanBar = vanSelling?.allowChangeMovementStatus == true;
 
     ref.listen(manualSyncProvider, (prev, next) {
       if (!mounted) return;
-      if (prev?.status == next.status) return;
       if (next.status == ManualSyncStatus.success) {
-        final ts = next.finishedAt ?? DateTime.now();
-        final subtitle =
-            '${formatWorkRegionDateTime(ts.toUtc().toIso8601String())} · ${S.syncRecordsCount(next.recordCount)}';
-        unawaited(SyncSuccessDialog.show(
-          context,
-          subtitle: subtitle,
-          onContinue: () => ref.read(manualSyncProvider.notifier).reset(),
-        ),);
+        showAgentToast(context, 'Данные обновлены', accentColor: AppColors.success);
+        ref.read(manualSyncProvider.notifier).reset();
       } else if (next.status == ManualSyncStatus.error) {
         final msg = next.errorInfo?.summary ??
             next.result?.error ??
@@ -119,22 +94,18 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (showVanStrip) AgentVanSellingStrip(routeName: routeName),
+              if (showVanBar) const VanMovementStatusBar(),
               Expanded(child: ClientMapPreloadHost(child: widget.child)),
             ],
           ),
-          if (syncRunning)
-            ModalBarrier(
-              color: Colors.black.withValues(alpha: 0.35),
-              dismissible: false,
-            ),
-          if (syncRunning) SyncProgressSheet(state: sync),
+          if (syncRunning) const AgentSyncLoadingOverlay(),
         ],
       ),
       bottomNavigationBar: hideNav
           ? null
           : AgentBottomNav(
               selectedIndex: _tabIndex(loc),
+              onMenuCenter: () => agentShellScaffoldKey.currentState?.openDrawer(),
               onTab: (i) {
                 switch (i) {
                   case 0:
@@ -142,10 +113,8 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
                   case 1:
                     context.go('/visits');
                   case 2:
-                    context.go('/home');
-                  case 3:
                     context.go('/report');
-                  case 4:
+                  case 3:
                     context.go('/clients');
                 }
               },

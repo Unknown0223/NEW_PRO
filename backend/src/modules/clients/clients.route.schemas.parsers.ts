@@ -250,13 +250,6 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     if (uniq.length > 0) client_ids = uniq.slice(0, 500);
   }
 
-  const tagIdRaw = q.tag_id != null ? Number.parseInt(String(q.tag_id), 10) : NaN;
-  const tag_id = Number.isFinite(tagIdRaw) && tagIdRaw > 0 ? tagIdRaw : undefined;
-  const price_type = q.price_type?.trim() || undefined;
-  let allow_order_with_debt: boolean | undefined;
-  if (q.allow_order_with_debt === "true" || q.allow_order_with_debt === "1") allow_order_with_debt = true;
-  else if (q.allow_order_with_debt === "false" || q.allow_order_with_debt === "0") allow_order_with_debt = false;
-
   return {
     page: pageNum,
     limit: limitNum,
@@ -296,10 +289,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
     order,
     ...(has_coords ? { has_coords: true } : {}),
     ...(missing_coords ? { missing_coords: true } : {}),
-    ...(client_ids?.length ? { client_ids } : {}),
-    ...(tag_id !== undefined ? { tag_id } : {}),
-    ...(price_type ? { price_type } : {}),
-    ...(allow_order_with_debt !== undefined ? { allow_order_with_debt } : {})
+    ...(client_ids?.length ? { client_ids } : {})
   };
 }
 

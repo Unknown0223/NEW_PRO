@@ -60,10 +60,6 @@ export type UpdateClientInput = {
   agent_assignments?: AgentAssignmentPatch[];
   contact_persons?: ContactPersonSlot[];
   is_active?: boolean;
-  price_type?: string | null;
-  allow_order_with_debt?: boolean;
-  allow_consignment?: boolean;
-  allow_consignment_with_debt?: boolean;
 };
 
 function parseOptionalLatitude(v: string | number | null | undefined): Prisma.Decimal | null {
