@@ -1,1 +1,1 @@
-{"version":3,"file":"RunningTotalProcessor.d.ts","sourceRoot":"","sources":["../../src/core/RunningTotalProcessor.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAGV,WAAW,EACX,SAAS,EAIV,MAAM,yBAAyB,CAAC;AAsFjC;;;GAGG;AACH,wBAAgB,6BAA6B,CAAC,IAAI,EAAE,SAAS,EAAE,MAAM,EAAE,WAAW,GAAG,SAAS,CAqB7F"}
+{"version":3,"file":"RunningTotalProcessor.d.ts","sourceRoot":"","sources":["../../src/core/RunningTotalProcessor.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAGV,WAAW,EACX,SAAS,EAIV,MAAM,yBAAyB,CAAC;AAmGjC;;;GAGG;AACH,wBAAgB,6BAA6B,CAAC,IAAI,EAAE,SAAS,EAAE,MAAM,EAAE,WAAW,GAAG,SAAS,CAkC7F"}

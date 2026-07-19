@@ -33,4 +33,27 @@ describe("conditionalFormat", () => {
     ]);
     expect(style).toBeUndefined();
   });
+
+  it("between — inkluziv min/max", () => {
+    const mid: PivotCell = { ...cell, rawValue: 50, value: 50 };
+    const style = getConditionalFormatStyle(mid, [
+      { type: "between", threshold: 10, thresholdMax: 100, backgroundColor: "#dbeafe" }
+    ]);
+    expect(style?.backgroundColor).toBe("#dbeafe");
+
+    const outside: PivotCell = { ...cell, rawValue: 5, value: 5 };
+    expect(
+      getConditionalFormatStyle(outside, [
+        { type: "between", threshold: 10, thresholdMax: 100, backgroundColor: "#dbeafe" }
+      ])
+    ).toBeUndefined();
+  });
+
+  it("between — min/max tartibi almashgan", () => {
+    const mid: PivotCell = { ...cell, rawValue: 50, value: 50 };
+    const style = getConditionalFormatStyle(mid, [
+      { type: "between", threshold: 100, thresholdMax: 10, backgroundColor: "#fef3c7" }
+    ]);
+    expect(style?.backgroundColor).toBe("#fef3c7");
+  });
 });

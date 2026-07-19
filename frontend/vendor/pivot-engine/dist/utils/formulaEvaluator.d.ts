@@ -1,6 +1,7 @@
 /**
  * Xavfsiz formula baholovchi — eval() ishlatilmaydi.
- * Qo'llab-quvvatlanadi: fieldId + fieldId, fieldId * 0.12, fieldId / fieldId
+ * Qo'llab-quvvatlanadi: +, -, *, /, ^, qavs, taqqoslash, AND/OR,
+ * IF / ABS / MIN / MAX, maydon id va sonlar.
  */
 /** Formula matnini xavfsiz AST orqali baholash funksiyasiga aylantiradi. */
 export declare function compileFormula(formula: string, allowedFieldIds: string[]): (row: Record<string, unknown>) => number | null;

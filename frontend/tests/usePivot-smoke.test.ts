@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { usePivot } from "@/hooks/pivot/usePivot";
 import type { PivotField } from "@salec/pivot-engine";
 
@@ -36,5 +36,27 @@ describe("usePivot smoke", () => {
 
     result.current.reorderFields("rows", ["region"]);
     expect(result.current.config.rows).toEqual(["region"]);
+  });
+
+  it("expands and collapses every nested row", async () => {
+    const { result } = renderHook(() =>
+      usePivot(ROWS, FIELDS, {
+        useWorker: false,
+        initialConfig: {
+          rows: ["region", "product"],
+          values: [{ fieldId: "amount", aggregation: "SUM" }]
+        }
+      })
+    );
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+
+    act(() => result.current.expandAll());
+    expect(result.current.expandedRows).toEqual(
+      new Set(result.current.pivotData?.rows.map((row) => row.key))
+    );
+
+    act(() => result.current.collapseAll());
+    expect(result.current.expandedRows).toEqual(new Set());
   });
 });

@@ -50,3 +50,16 @@ backend/scripts/lib/gorod-xlsx-import.ts
 
 backend/src/modules/orders/order-bonus-qty.ts
 
+
+backend/scripts/test-system-migration-roundtrip.ts
+backend/src/modules/system-migration/system-migration.import.references.ts
+
+backend/scripts/audit-overgrant-one-by-one.ts
+
+backend/src/modules/mobile/mobile-agent-kpi.service.ts
+
+backend/src/modules/client-balances/client-balances.report.main.ts
+
+backend/src/modules/client-balances/client-debt-by-agent.ts
+
+backend/prisma/models/group-03.prisma

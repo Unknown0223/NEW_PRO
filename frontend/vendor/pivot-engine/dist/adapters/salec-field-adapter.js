@@ -1,8 +1,9 @@
 /** Backend `report-builder.field-registry` dagi qo'shimcha metrikalar. */
 const EXTRA_METRIC_FIELDS = {
     price: { label: "Narx", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
-    bonus_line_total: { label: "Bonus (qator)", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
-    order_bonus_sum: { label: "Bonus (buyurtma)", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
+    bonus_line_total: { label: "Bonus summa (qator)", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
+    order_bonus_sum: { label: "Bonuslar summa (buyurtma)", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
+    bonus_qty: { label: "Bonuslar", dataType: "number", format: { type: "number", decimals: 3 } },
     discount_sum: { label: "Chegirma", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
     client_balance: { label: "Balans", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
     order_debt: { label: "Qarz", dataType: "currency", format: { type: "currency", currency: "UZS", decimals: 0 } },
@@ -32,11 +33,22 @@ const METRIC_FIELD_ID_MAP = {
  * SALEC `/report-builder/metadata` javobini PivotField[] ga aylantiradi.
  */
 export function salecFieldsToPivotFields(fields, metrics = []) {
-    const dimensionFields = fields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        dataType: inferDimensionDataType(field.id)
-    }));
+    const seen = new Set();
+    const dimensionFields = [];
+    for (const field of fields) {
+        const id = field.id === "order_bonuses_display" ? "bonus_qty" : field.id;
+        if (seen.has(id))
+            continue;
+        seen.add(id);
+        const dataType = id === "bonus_qty" || id === "block_qty"
+            ? "number"
+            : inferDimensionDataType(id);
+        dimensionFields.push({
+            id,
+            label: field.id === "order_bonuses_display" ? field.label || "Бонусы" : field.label,
+            dataType
+        });
+    }
     const metricFields = metrics.map((metric) => {
         const resolvedId = METRIC_FIELD_ID_MAP[metric.id] ?? metric.id;
         const extra = EXTRA_METRIC_FIELDS[resolvedId];
@@ -102,6 +114,8 @@ function isNumericFieldKey(key) {
     if (key.includes("amount") || key.includes("sum") || key.includes("balance") || key.includes("debt")) {
         return true;
     }
+    if (key === "bonus_qty" || key === "block_qty" || /(^|_)qty$/i.test(key))
+        return true;
     return false;
 }
 function inferDimensionDataType(fieldId) {
@@ -111,6 +125,9 @@ function inferDimensionDataType(fieldId) {
         return "date";
     if (fieldId.includes("amount") || fieldId.includes("sum") || fieldId.includes("balance"))
         return "currency";
+    /** Bonus dona / blok miqdorlari — Значения (Σ). */
+    if (fieldId === "bonus_qty" || fieldId === "block_qty" || /(^|_)qty$/i.test(fieldId))
+        return "number";
     if (fieldId.endsWith("_id") && !fieldId.includes("client"))
         return "number";
     return "string";

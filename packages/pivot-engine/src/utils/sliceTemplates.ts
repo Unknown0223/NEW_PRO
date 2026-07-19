@@ -1,6 +1,7 @@
 import type { PivotConfig, PivotField } from "../types/pivot.types.js";
-import { DEFAULT_PIVOT_CONFIG } from "../core/PivotEngine.js";
+import { DEFAULT_PIVOT_CONFIG } from "../core/defaults.js";
 import { getPivotStrings } from "../i18n/index.js";
+import { hydratePivotValueLabels } from "./valueLabels.js";
 
 const TEMPLATE_CONFIGS: Record<string, Partial<PivotConfig>> = {
   agent_kpi: {
@@ -16,6 +17,49 @@ const TEMPLATE_CONFIGS: Record<string, Partial<PivotConfig>> = {
     rows: ["agent_name"],
     columns: [],
     values: [{ fieldId: "volume", aggregation: "SUM" }]
+  },
+  flat_sales_detail: {
+    rows: [
+      "agent_branch",
+      "brand_name",
+      "product_group_name",
+      "agent_name",
+      "client_address",
+      "product_article",
+      "order_number",
+      "client_code",
+      "product_sku",
+      "volume",
+      "block_qty",
+      "delivered_date",
+      "order_date",
+      "shipped_date"
+    ],
+    columns: [],
+    values: [],
+    reportFilters: [],
+    options: {
+      ...DEFAULT_PIVOT_CONFIG.options,
+      layoutForm: "flat",
+      compactMode: false,
+      showGrandTotal: false,
+      showSubtotals: false,
+      showColumnTotals: false
+    }
+  },
+  classic_branch_brand: {
+    rows: ["agent_branch", "brand_name", "product_sku"],
+    columns: [],
+    reportFilters: ["order_status"],
+    values: [
+      { fieldId: "volume", aggregation: "SUM" },
+      { fieldId: "amount", aggregation: "SUM" }
+    ],
+    options: {
+      ...DEFAULT_PIVOT_CONFIG.options,
+      layoutForm: "classic",
+      compactMode: false
+    }
   }
 };
 
@@ -49,16 +93,38 @@ export function applyPivotSliceTemplate(
   const fieldIds = new Set(fields.map((f) => f.id));
   const partial = template.config;
 
-  const values = (partial.values ?? []).filter((v) => fieldIds.has(v.fieldId));
-  if (!values.length) return null;
+  const values = hydratePivotValueLabels(
+    (partial.values ?? []).filter((v) => fieldIds.has(v.fieldId)),
+    fields
+  );
+  const rows = filterKnownFieldIds(partial.rows, fieldIds);
+  const columns = filterKnownFieldIds(partial.columns, fieldIds);
+  const reportFilters = filterKnownFieldIds(partial.reportFilters, fieldIds);
+  const isFlat = partial.options?.layoutForm === "flat" || base.options.layoutForm === "flat";
+
+  // Flat shablon: values shart emas — faqat ustunlar.
+  if (!values.length && !isFlat && !rows.length) return null;
 
   return {
     ...base,
-    rows: filterKnownFieldIds(partial.rows, fieldIds),
-    columns: filterKnownFieldIds(partial.columns, fieldIds),
-    reportFilters: filterKnownFieldIds(partial.reportFilters, fieldIds),
-    values,
+    rows,
+    columns,
+    reportFilters,
+    values: isFlat ? [] : values,
     filters: [],
-    calculatedMeasures: partial.calculatedMeasures
+    calculatedMeasures: partial.calculatedMeasures,
+    options: {
+      ...base.options,
+      ...(partial.options ?? {}),
+      ...(isFlat
+        ? {
+            layoutForm: "flat" as const,
+            compactMode: false,
+            showGrandTotal: false,
+            showSubtotals: false,
+            showColumnTotals: false
+          }
+        : {})
+    }
   };
 }

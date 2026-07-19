@@ -7,7 +7,7 @@ import type {
   PivotTotalRow,
   PivotValue
 } from "../types/pivot.types.js";
-import { formatValue } from "../utils/formatters.js";
+import { formatValue, shouldShowCurrencySuffix } from "../utils/formatters.js";
 
 function valueFieldIdFromColumnKey(columnKey: string, config: PivotConfig): string | null {
   if (config.columns.length > 0) {
@@ -30,12 +30,17 @@ function walkRows(rows: PivotRow[], visit: (row: PivotRow) => void): void {
   }
 }
 
-function toRunningTotalCell(cell: PivotCell, cumulative: number, valueDef: PivotValue): PivotCell {
+function toRunningTotalCell(
+  cell: PivotCell,
+  cumulative: number,
+  valueDef: PivotValue,
+  showCurrency: boolean
+): PivotCell {
   return {
     ...cell,
     value: cumulative,
     rawValue: cumulative,
-    formatted: formatValue(cumulative, valueDef.format),
+    formatted: formatValue(cumulative, valueDef.format, { showCurrency }),
     isEmpty: false
   };
 }
@@ -44,7 +49,8 @@ function applyRunningTotalToRows(
   rows: PivotRow[],
   config: PivotConfig,
   valueDefMap: Map<string, PivotValue>,
-  columnRunning: Map<string, number>
+  columnRunning: Map<string, number>,
+  showCurrency: boolean
 ): void {
   walkRows(rows, (row) => {
     row.cells = row.cells.map((cell) => {
@@ -60,11 +66,17 @@ function applyRunningTotalToRows(
       const prev = columnRunning.get(cell.columnKey) ?? 0;
       const cumulative = prev + base;
       columnRunning.set(cell.columnKey, cumulative);
-      return toRunningTotalCell(cell, cumulative, valueDef);
+      return toRunningTotalCell(cell, cumulative, valueDef, showCurrency);
     });
 
     if (row.subtotal) {
-      row.subtotal = applyRunningTotalToTotalRow(row.subtotal, config, valueDefMap, columnRunning);
+      row.subtotal = applyRunningTotalToTotalRow(
+        row.subtotal,
+        config,
+        valueDefMap,
+        columnRunning,
+        showCurrency
+      );
     }
   });
 }
@@ -73,7 +85,8 @@ function applyRunningTotalToTotalRow(
   total: PivotTotalRow,
   config: PivotConfig,
   valueDefMap: Map<string, PivotValue>,
-  columnRunning: Map<string, number>
+  columnRunning: Map<string, number>,
+  showCurrency: boolean
 ): PivotTotalRow {
   return {
     ...total,
@@ -87,7 +100,7 @@ function applyRunningTotalToTotalRow(
       if (!valueDef) return cell;
 
       const cumulative = columnRunning.get(cell.columnKey) ?? cell.rawValue ?? 0;
-      return toRunningTotalCell(cell, cumulative, valueDef);
+      return toRunningTotalCell(cell, cumulative, valueDef, showCurrency);
     })
   };
 }
@@ -100,20 +113,33 @@ export function applyRunningTotalAggregations(data: PivotData, config: PivotConf
   const hasRunning = config.values.some((v) => v.aggregation === "RUNNING_TOTAL");
   if (!hasRunning) return data;
 
+  const showCurrency = shouldShowCurrencySuffix(config);
   const valueDefMap = new Map(config.values.map((v) => [v.fieldId, v]));
   const columnRunning = new Map<string, number>();
 
   const rows = data.rows.map((row) => ({ ...row, cells: [...row.cells] }));
-  applyRunningTotalToRows(rows, config, valueDefMap, columnRunning);
+  applyRunningTotalToRows(rows, config, valueDefMap, columnRunning, showCurrency);
 
   let columnTotals = data.columnTotals;
   if (columnTotals) {
-    columnTotals = applyRunningTotalToTotalRow(columnTotals, config, valueDefMap, columnRunning);
+    columnTotals = applyRunningTotalToTotalRow(
+      columnTotals,
+      config,
+      valueDefMap,
+      columnRunning,
+      showCurrency
+    );
   }
 
   let grandTotal = data.grandTotal;
   if (grandTotal) {
-    grandTotal = applyRunningTotalToTotalRow(grandTotal, config, valueDefMap, columnRunning);
+    grandTotal = applyRunningTotalToTotalRow(
+      grandTotal,
+      config,
+      valueDefMap,
+      columnRunning,
+      showCurrency
+    );
   }
 
   return { ...data, rows, columnTotals, grandTotal };

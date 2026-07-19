@@ -17,7 +17,7 @@ export type PivotChartData = {
     series: ChartSeries[];
     meta: PivotChartMeta;
 };
-export type PivotChartType = "bar" | "line";
+export type PivotChartType = "bar" | "line" | "pie";
 /**
  * PivotData → Recharts / boshqa chart kutubxonalari uchun qatorlar × ustunlar matritsasi.
  */

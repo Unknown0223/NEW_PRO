@@ -2,4 +2,5 @@ export { buildHeaderMatrix, buildPivotWorkbook, buildPivotWorksheet, exportPivot
 export { countPdfExportRows, exportPivotToPdf, pivotDataToPdfTable } from "./ExportPdf.js";
 export { exportPivotToHtml, pivotDataToHtml } from "./ExportHtml.js";
 export { exportRawRecordsToCsv, exportRawRecordsToExcel } from "./exportRawRecords.js";
+export { exportPivotToCsv } from "./ExportCsv.js";
 export { EXPORT_CHUNK_SIZE, EXPORT_LARGE_DATASET_THRESHOLD, countPivotExportRows, formatExportProgressLabel, getExportWarnings, shouldConfirmLargeExport, yieldToMain } from "./exportUtils.js";

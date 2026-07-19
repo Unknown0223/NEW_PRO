@@ -32,6 +32,21 @@ export interface FieldFormat {
   currency?: "UZS" | "USD" | "EUR";
   decimals?: number;
   dateFormat?: string;
+  /**
+   * true — har doim valyuta matni (soʻm/UZS…);
+   * omit/false — odatda yashirin; pivotda 2+ valyuta bo‘lsa engine yoqadi.
+   */
+  showCurrency?: boolean;
+  /** Minglik ajratuvchi (bo‘sh joy / vergul / nuqta) */
+  thousandsSep?: "space" | "," | ".";
+  /** O‘nlik ajratuvchi */
+  decimalSep?: "." | ",";
+  /** Manfiy son ko‘rinishi: -1 yoki (1) */
+  negativeFormat?: "minus" | "parens";
+  /** null/undefined uchun matn (default: —) */
+  nullDisplay?: string;
+  /** Excel-uslubidagi shablon (#,##0.00) — asosan UI xotirasi */
+  numberPattern?: string;
 }
 
 export interface PivotValue {
@@ -48,6 +63,12 @@ export interface CalculatedMeasure {
   label: string;
   formula: string;
   format?: FieldFormat;
+  /**
+   * WDR «Calculate individual values» — formulani har bir qator uchun
+   * (aggregatsiyadan oldin) hisoblash. Hozircha flag saqlanadi; apply path
+   * allaqachon qator darajasida ishlaydi.
+   */
+  individual?: boolean;
 }
 
 export interface PivotConfig {
@@ -81,14 +102,18 @@ export type ConditionalFormatRuleType =
   | "lt"
   | "eq"
   | "gte"
-  | "lte";
+  | "lte"
+  | "between";
 
 export interface ConditionalFormatRule {
   id?: string;
   /** Metrika maydoni; berilmasa barcha qiymat kataklariga */
   fieldId?: string;
   type: ConditionalFormatRuleType;
+  /** gt/lt/eq/gte/lte — chegara; between — pastki chegara (min) */
   threshold?: number;
+  /** between — yuqori chegara (max), inkluziv */
+  thresholdMax?: number;
   backgroundColor?: string;
   textColor?: string;
 }
@@ -102,17 +127,54 @@ export interface PivotTableSizes {
   columnWidths?: Record<string, number>;
 }
 
+/** WDR grid.type ekvivalenti: compact | classic | flat */
+export type PivotLayoutForm = "compact" | "classic" | "flat";
+
+/**
+ * WDR virtual «Σ Values» / «Measures» axis:
+ * - columns — metrikalar yonma-yon ustun sarlavhalari (klassik)
+ * - rows — metrikalar qator darajasi sifatida (stacked)
+ */
+export type PivotValuesPosition = "rows" | "columns";
+
 export interface PivotOptions {
   showSubtotals: boolean;
   showGrandTotal: boolean;
   showColumnTotals: boolean;
+  /** @deprecated Prefer `layoutForm`. `true` ≈ compact. */
   compactMode: boolean;
+  /** Jadval sxemasi: kompakt / klassik / tekis (raw) */
+  layoutForm?: PivotLayoutForm;
+  /**
+   * WDR «Σ Values» o‘qi: metrikalar qatorlarda yoki ustunlarda.
+   * Default: `"columns"`.
+   */
+  valuesPosition?: PivotValuesPosition;
+  /**
+   * WDR virtual «Σ Values» chip index within the active axis zone (`rows` or `columns`).
+   * `0` = before first field, `fieldIds.length` = after last field. Default: end.
+   */
+  valuesAxisIndex?: number;
   sortBy?: { fieldId: string; direction: "asc" | "desc" };
   drillDown: boolean;
+  /**
+   * true — qiymat katakchasiga ikki marta bosish «Исходные записи» ochadi.
+   * Default: false (tasodifiy ochilishni oldini olish).
+   */
+  drillThrough?: boolean;
   maxRows?: number;
   conditionalFormats?: ConditionalFormatRule[];
   /** Jadval o'lchamlari (WDR Table Sizes ekvivalenti) */
   tableSizes?: PivotTableSizes;
+  /**
+   * WDR «Формат даты»:
+   * by_columns — Yil/Oy/Kun qismlari; date — sana matni; datetime — sana+vaqt.
+   */
+  dateDisplayMode?: "by_columns" | "date" | "datetime";
+  /** date rejimi pattern (masalan `dd.MM.yyyy`) */
+  datePattern?: string;
+  /** datetime rejimi pattern (masalan `dd.MM.yyyy HH:mm:ss`) */
+  dateTimePattern?: string;
 }
 
 export interface CustomizeCellStyle {

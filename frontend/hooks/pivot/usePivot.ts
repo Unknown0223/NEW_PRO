@@ -10,8 +10,12 @@ import {
   calculatedMeasuresToFields,
   collectExpandableRowKeys,
   createDefaultPivotConfig,
+  hydratePivotValueLabels,
   isEmptyPivotConfig,
   RETROBONUS_TIER_PRESETS,
+  getPivotStrings,
+  valuesOnRows,
+  yieldToMain,
   type AggregationType,
   type CalculatedMeasure,
   type PivotCell,
@@ -21,8 +25,16 @@ import {
   type PivotFilter,
   type PivotWorkerClient
 } from "@salec/pivot-engine";
+import { buildFlatPivotData, buildFlatPivotDataAsync } from "@/lib/build-flat-pivot-data";
+import { createNextWorkerFactory } from "@/lib/create-pivot-worker";
+import { hasFlatSlice, resolveLayoutForm } from "@/lib/pivot-layout-form";
 
 export { DEFAULT_PIVOT_CONFIG };
+
+/** Klassikda avtomatik expand — shu dan ortiq guruh bo‘lsa faqat 1-daraja. */
+const CLASSIC_AUTO_EXPAND_MAX_KEYS = 250;
+/** Shundan katta flat dataset — async batch. */
+const FLAT_ASYNC_THRESHOLD = 2_000;
 
 type BuilderZone = "rows" | "columns" | "values" | "reportFilters";
 
@@ -31,11 +43,14 @@ type UsePivotOptions = {
   onConfigChange?: (config: PivotConfig) => void;
   workerThreshold?: number;
   useWorker?: boolean;
+  /** Fields modal ochiq — og‘ir pivot hisobini to‘xtatish. */
+  suspendCompute?: boolean;
 };
 
-function createFrontendPivotWorker(): Worker {
-  return new Worker(new URL("../../workers/pivot.worker.ts", import.meta.url), { type: "module" });
-}
+/** Next/SALEC drop-in — same shape as `@salec/pivot-ui` createNextWorkerFactory. */
+const createFrontendPivotWorker = createNextWorkerFactory(
+  new URL("../../workers/pivot.worker.ts", import.meta.url)
+);
 
 export function usePivot(
   rawData: Record<string, unknown>[],
@@ -52,7 +67,9 @@ export function usePivot(
 
   const [pivotData, setPivotData] = useState<PivotData | null>(null);
   const [isComputing, setIsComputing] = useState(false);
+  const [computeError, setComputeError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const classicSeededExpandRef = useRef(false);
   const [drillOpen, setDrillOpen] = useState(false);
   const [drillRecords, setDrillRecords] = useState<Record<string, unknown>[]>([]);
   const [drillCell, setDrillCell] = useState<PivotCell | null>(null);
@@ -60,7 +77,13 @@ export function usePivot(
   const useWorker = options.useWorker !== false;
 
   useEffect(() => {
+    // Vendor pivot-engine yangilanganda eski instance / worker keshini tashla.
+    engineRef.current = new PivotEngine();
+  }, []);
+
+  useEffect(() => {
     if (!useWorker || typeof Worker === "undefined") return;
+    workerRef.current?.terminate();
     workerRef.current = createPivotWorkerClient({
       threshold: options.workerThreshold ?? DEFAULT_WORKER_THRESHOLD,
       workerFactory: createFrontendPivotWorker
@@ -81,33 +104,102 @@ export function usePivot(
     });
   }, [fields, options.initialConfig?.rows?.length, options.initialConfig?.values?.length]);
 
+  /** Backfill measure captions from field catalog (Поля labels) for legacy/template configs. */
   useEffect(() => {
-    if (!rawData.length || !config.values.length) {
+    if (!fields.length) return;
+    setConfig((prev) => {
+      if (!prev.values.length) return prev;
+      const values = hydratePivotValueLabels(prev.values, fields);
+      if (values.every((v, i) => v.label === prev.values[i]?.label)) return prev;
+      return { ...prev, values };
+    });
+  }, [fields]);
+
+  useEffect(() => {
+    if (options.suspendCompute) {
+      setIsComputing(false);
+      return;
+    }
+    if (!rawData.length) {
       setPivotData(null);
       setIsComputing(false);
+      setComputeError(null);
+      return;
+    }
+
+    const layoutForm = resolveLayoutForm(config.options);
+    const canCompute =
+      layoutForm === "flat" ? hasFlatSlice(config) : config.values.length > 0;
+
+    if (!canCompute) {
+      setPivotData(null);
+      setIsComputing(false);
+      setComputeError(null);
       return;
     }
 
     let cancelled = false;
     setIsComputing(true);
+    setComputeError(null);
 
     const compute = async () => {
       try {
+        // Spinner chizilishi uchun UI ga nafas berish
+        await yieldToMain();
+        if (cancelled) return;
+
+        if (layoutForm === "flat") {
+          const result =
+            rawData.length >= FLAT_ASYNC_THRESHOLD
+              ? await buildFlatPivotDataAsync(rawData, fields, config)
+              : buildFlatPivotData(rawData, fields, config);
+          if (!cancelled) {
+            setPivotData(result);
+            setExpandedRows(new Set());
+            setComputeError(null);
+          }
+          return;
+        }
+
         const client = workerRef.current;
         const viaWorker = client?.shouldUseWorker(rawData.length);
+        if (!viaWorker && rawData.length >= FLAT_ASYNC_THRESHOLD) {
+          await yieldToMain();
+        }
         const result =
           viaWorker && client
             ? await client.compute(rawData, fields, config)
             : engineRef.current.compute(rawData, fields, config);
-        if (!cancelled) setPivotData(result);
+        if (!cancelled) {
+          setPivotData(result);
+          setComputeError(null);
+        }
       } catch (error) {
         console.error("Pivot hisoblash xatosi:", error);
-        if (!cancelled) {
-          try {
-            setPivotData(engineRef.current.compute(rawData, fields, config));
-          } catch {
-            setPivotData(null);
-          }
+        if (cancelled) return;
+        const detail =
+          error instanceof Error
+            ? error.message.slice(0, 180)
+            : typeof error === "string"
+              ? error.slice(0, 180)
+              : undefined;
+        try {
+          await yieldToMain();
+          const fallback =
+            layoutForm === "flat"
+              ? await buildFlatPivotDataAsync(rawData, fields, config)
+              : engineRef.current.compute(rawData, fields, config);
+          setPivotData(fallback);
+          if (layoutForm === "flat") setExpandedRows(new Set());
+          setComputeError(
+            getPivotStrings().reportBuilder.computeFailed(
+              detail ? `${detail} (показан запасной расчёт)` : "показан запасной расчёт"
+            )
+          );
+        } catch (fallbackErr) {
+          console.error("Pivot fallback xatosi:", fallbackErr);
+          setPivotData(null);
+          setComputeError(getPivotStrings().reportBuilder.computeFailed(detail));
         }
       } finally {
         if (!cancelled) setIsComputing(false);
@@ -118,12 +210,18 @@ export function usePivot(
     return () => {
       cancelled = true;
     };
-  }, [rawData, fields, config]);
+  }, [rawData, fields, config, options.suspendCompute]);
 
   const updateConfig = useCallback(
     (updates: Partial<PivotConfig>) => {
       setConfig((prev) => {
-        const next = { ...prev, ...updates };
+        const next: PivotConfig = {
+          ...prev,
+          ...updates,
+          options: updates.options
+            ? { ...prev.options, ...updates.options }
+            : prev.options
+        };
         options.onConfigChange?.(next);
         return next;
       });
@@ -136,9 +234,10 @@ export function usePivot(
       setConfig((prev) => {
         if (zone === "values") {
           if (prev.values.some((v) => v.fieldId === fieldId)) return prev;
+          const label = fields.find((f) => f.id === fieldId)?.label;
           return {
             ...prev,
-            values: [...prev.values, { fieldId, aggregation }]
+            values: [...prev.values, { fieldId, aggregation, ...(label ? { label } : {}) }]
           };
         }
         if (zone === "reportFilters") {
@@ -149,7 +248,7 @@ export function usePivot(
         return { ...prev, [zone]: [...prev[zone], fieldId] };
       });
     },
-    []
+    [fields]
   );
 
   const removeField = useCallback((zone: BuilderZone, fieldId: string) => {
@@ -178,6 +277,26 @@ export function usePivot(
     },
     []
   );
+
+  /** Flat forma: ustun tartibi faqat `rows` da saqlanadi. */
+  const setFlatColumnOrder = useCallback((fieldIds: string[]) => {
+    setConfig((prev) => ({
+      ...prev,
+      rows: fieldIds,
+      columns: [],
+      values: []
+    }));
+  }, []);
+
+  /** Value ustunlarini sudrab almashtirish (klassik/kompakt). */
+  const reorderValueFields = useCallback((fieldIds: string[]) => {
+    setConfig((prev) => {
+      const byId = new Map(prev.values.map((v) => [v.fieldId, v]));
+      const next = fieldIds.map((id) => byId.get(id)).filter(Boolean) as typeof prev.values;
+      if (next.length !== prev.values.length) return prev;
+      return { ...prev, values: next };
+    });
+  }, []);
 
   const updateValueAggregation = useCallback((fieldId: string, aggregation: AggregationType) => {
     setConfig((prev) => ({
@@ -242,6 +361,60 @@ export function usePivot(
   const collapseAll = useCallback(() => {
     setExpandedRows(new Set());
   }, []);
+
+  // Klassik: birinchi ochilishda expand (katta daraxtlarda faqat 1-daraja).
+  // Data rebuild da eskirgan keylarni tozalaymiz.
+  useEffect(() => {
+    if (resolveLayoutForm(config.options) !== "classic") {
+      classicSeededExpandRef.current = false;
+      return;
+    }
+    if (!pivotData?.rows.length || isComputing) return;
+    const keys = collectExpandableRowKeys(pivotData.rows);
+    if (!keys.length) return;
+    const seedKeys =
+      keys.length > CLASSIC_AUTO_EXPAND_MAX_KEYS
+        ? keys.filter((k) => !k.includes(" | "))
+        : keys;
+    const seedSet = seedKeys.length ? seedKeys : keys.slice(0, CLASSIC_AUTO_EXPAND_MAX_KEYS);
+    const keySet = new Set(keys);
+    setExpandedRows((prev) => {
+      if (prev.size === 0) {
+        if (!classicSeededExpandRef.current) {
+          classicSeededExpandRef.current = true;
+          return new Set(seedSet);
+        }
+        return prev;
+      }
+      classicSeededExpandRef.current = true;
+      let changed = false;
+      const next = new Set<string>();
+      for (const k of prev) {
+        if (keySet.has(k)) next.add(k);
+        else changed = true;
+      }
+      if (next.size === 0) return new Set(seedSet);
+      return changed ? next : prev;
+    });
+  }, [config.options, config.rows, pivotData, isComputing]);
+
+  /** WDR «Σ Values in Rows»: drill-down daraxtida ota qatorlar ochiq bo‘lishi kerak. */
+  useEffect(() => {
+    if (resolveLayoutForm(config.options) === "flat") return;
+    if (!valuesOnRows(config.options)) return;
+    if (!pivotData?.rows.length || isComputing) return;
+
+    const keys = collectExpandableRowKeys(pivotData.rows);
+    if (!keys.length) return;
+
+    setExpandedRows((prev) => {
+      const all = new Set(keys);
+      if (all.size === prev.size && keys.every((k) => prev.has(k))) return prev;
+      return all;
+    });
+  }, [config.options.valuesPosition, config.options, pivotData, isComputing]);
+
+  const clearComputeError = useCallback(() => setComputeError(null), []);
 
   const resetConfig = useCallback(() => {
     setConfig({ ...DEFAULT_PIVOT_CONFIG, ...options.initialConfig });
@@ -312,6 +485,21 @@ export function usePivot(
     }));
   }, []);
 
+  const updateCalculatedMeasure = useCallback(
+    (id: string, patch: Partial<Omit<CalculatedMeasure, "id">>) => {
+      setConfig((prev) => ({
+        ...prev,
+        calculatedMeasures: (prev.calculatedMeasures ?? []).map((m) =>
+          m.id === id ? { ...m, ...patch, id: m.id } : m
+        ),
+        values: prev.values.map((v) =>
+          v.fieldId === id && patch.label ? { ...v, label: patch.label } : v
+        )
+      }));
+    },
+    []
+  );
+
   const toggleColumnTotals = useCallback(() => {
     setConfig((prev) => ({
       ...prev,
@@ -332,6 +520,8 @@ export function usePivot(
     config,
     pivotData,
     isComputing,
+    computeError,
+    clearComputeError,
     usingWorker,
     expandedRows,
     drillOpen,
@@ -341,6 +531,8 @@ export function usePivot(
     addField,
     removeField,
     reorderFields,
+    setFlatColumnOrder,
+    reorderValueFields,
     updateValueAggregation,
     toggleRow,
     setFilter,
@@ -355,6 +547,7 @@ export function usePivot(
     addCalculatedMeasure,
     addCalculatedPreset,
     removeCalculatedMeasure,
+    updateCalculatedMeasure,
     toggleColumnTotals,
     hasData: Boolean(pivotData?.rows.length),
     activeFilterCount,

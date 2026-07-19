@@ -6,11 +6,17 @@ export type FlatPivotRowItem = {
     expanded: boolean;
     hasChildren: boolean;
     rowKey: string;
+    /**
+     * Row field yo‘li: har ustun / daraja yorliqlari (CLIENT | AGENT | …).
+     * Compact va Classic — ota yorliqlari bolada takrorlanadi.
+     */
+    pathLabels?: string[];
 } | {
     type: "subtotal";
     subtotal: PivotTotalRow;
     depth: number;
     parentKey: string;
+    pathLabels?: string[];
 } | {
     type: "columnTotal";
     total: PivotTotalRow;
@@ -18,6 +24,10 @@ export type FlatPivotRowItem = {
     type: "grandTotal";
     total: PivotTotalRow;
 };
-/** Virtualizatsiya uchun ko'rinadigan qatorlarni tekis ro'yxatga aylantiradi. */
-export declare function flattenPivotDisplayRows(rows: PivotRow[], expandedRows: Set<string>, grandTotal?: PivotTotalRow, columnTotals?: PivotTotalRow): FlatPivotRowItem[];
+/**
+ * Compact: ota qatori + ochilganda bolalar (daraxt); pathLabels — har field alohida ustun.
+ * Classic: ochilganda ota alohida qator emas — bola bilan bir xil horizontal
+ *          pathLabels (Client | Agent bir qatorda).
+ */
+export declare function flattenPivotDisplayRows(rows: PivotRow[], expandedRows: Set<string>, grandTotal?: PivotTotalRow, columnTotals?: PivotTotalRow, mode?: "compact" | "classic"): FlatPivotRowItem[];
 //# sourceMappingURL=flattenPivotRows.d.ts.map

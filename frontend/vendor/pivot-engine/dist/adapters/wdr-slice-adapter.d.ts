@@ -25,6 +25,7 @@ export declare function parseWdrFieldId(uniqueName?: string): string;
 /**
  * WDR `slice` JSON → `PivotConfig`.
  * `reportFilters` va slice ichidagi `filter.members` qo'llab-quvvatlanadi.
+ * Virtual `Measures` → `options.valuesPosition`.
  */
 export declare function wdrSliceToPivotConfig(slice: WdrSliceJson, base?: Partial<PivotConfig>): PivotConfig;
 /** Saqlangan WDR report (slice + ixtiyoriy dataset filtrlari). */

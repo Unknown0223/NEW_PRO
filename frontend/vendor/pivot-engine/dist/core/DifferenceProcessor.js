@@ -1,6 +1,6 @@
-import { formatValue } from "../utils/formatters.js";
+import { formatValue, shouldShowCurrencySuffix } from "../utils/formatters.js";
 import { aggregationForColumn, valueFieldIdFromColumnKey } from "./aggregationColumnUtils.js";
-function applyDifferenceToCells(cells, config, valueDefMap) {
+function applyDifferenceToCells(cells, config, valueDefMap, showCurrency) {
     const prevByField = new Map();
     return cells.map((cell) => {
         if (cell.columnKey === "__row_label__")
@@ -25,25 +25,25 @@ function applyDifferenceToCells(cells, config, valueDefMap) {
             ...cell,
             value: diff,
             rawValue: diff,
-            formatted: formatValue(diff, valueDef.format),
+            formatted: formatValue(diff, valueDef.format, { showCurrency }),
             isEmpty: false
         };
     });
 }
-function processRow(row, config, valueDefMap) {
-    row.cells = applyDifferenceToCells(row.cells, config, valueDefMap);
-    row.children?.forEach((child) => processRow(child, config, valueDefMap));
+function processRow(row, config, valueDefMap, showCurrency) {
+    row.cells = applyDifferenceToCells(row.cells, config, valueDefMap, showCurrency);
+    row.children?.forEach((child) => processRow(child, config, valueDefMap, showCurrency));
     if (row.subtotal) {
         row.subtotal = {
             ...row.subtotal,
-            cells: applyDifferenceToCells(row.subtotal.cells, config, valueDefMap)
+            cells: applyDifferenceToCells(row.subtotal.cells, config, valueDefMap, showCurrency)
         };
     }
 }
-function processTotalRow(total, config, valueDefMap) {
+function processTotalRow(total, config, valueDefMap, showCurrency) {
     return {
         ...total,
-        cells: applyDifferenceToCells(total.cells, config, valueDefMap)
+        cells: applyDifferenceToCells(total.cells, config, valueDefMap, showCurrency)
     };
 }
 /** DIFFERENCE — qator bo'ylab ketma-ket qiymatlar farqi (chapdan o'ngga). */
@@ -51,18 +51,21 @@ export function applyDifferenceAggregations(data, config) {
     const hasDifference = config.values.some((v) => v.aggregation === "DIFFERENCE");
     if (!hasDifference)
         return data;
+    const showCurrency = shouldShowCurrencySuffix(config);
     const valueDefMap = new Map(config.values.map((v) => [v.fieldId, v]));
     const rows = data.rows.map((row) => {
         const copy = { ...row, cells: [...row.cells] };
-        processRow(copy, config, valueDefMap);
+        processRow(copy, config, valueDefMap, showCurrency);
         return copy;
     });
     return {
         ...data,
         rows,
         columnTotals: data.columnTotals
-            ? processTotalRow(data.columnTotals, config, valueDefMap)
+            ? processTotalRow(data.columnTotals, config, valueDefMap, showCurrency)
             : undefined,
-        grandTotal: data.grandTotal ? processTotalRow(data.grandTotal, config, valueDefMap) : undefined
+        grandTotal: data.grandTotal
+            ? processTotalRow(data.grandTotal, config, valueDefMap, showCurrency)
+            : undefined
     };
 }
