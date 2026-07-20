@@ -1,5 +1,4 @@
 @import "tw-animate-css";
-@import "@webdatarocks/webdatarocks/webdatarocks.css";
 @import "shadcn/tailwind.css";
 @import "./theme-palettes.css";
 @tailwind base;
