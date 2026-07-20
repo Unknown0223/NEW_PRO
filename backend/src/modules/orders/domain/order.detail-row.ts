@@ -59,7 +59,7 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     expeditor_display: expeditorDisplay,
     region: cl.region ?? null,
     city: cl.city?.trim() || cl.district?.trim() || null,
-    zone: cl.neighborhood ?? null,
+    zone: cl.zone ?? null,
     consignment: o.agent?.consignment ?? null,
     day: null,
     created_by: null,

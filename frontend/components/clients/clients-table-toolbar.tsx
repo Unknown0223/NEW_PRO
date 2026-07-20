@@ -249,7 +249,9 @@ export function ClientsTableFilters({
                 emptyLabel="Все"
                 className={territorySelectClass}
                 value={d.zoneFilter}
-                onValueChange={(v) => patchDraft(onDraftChange, { zoneFilter: v })}
+                onValueChange={(v) =>
+                  patchDraft(onDraftChange, { zoneFilter: v, regionFilter: "", cityFilter: "" })
+                }
                 options={territoryCascade.zones}
                 closeToken={territorySelectCloseTok}
                 onOpenChange={(open) => {
@@ -264,7 +266,7 @@ export function ClientsTableFilters({
                 emptyLabel="Все"
                 className={territorySelectClass}
                 value={d.regionFilter}
-                onValueChange={(v) => patchDraft(onDraftChange, { regionFilter: v })}
+                onValueChange={(v) => patchDraft(onDraftChange, { regionFilter: v, cityFilter: "" })}
                 options={territoryCascade.regions}
                 closeToken={territorySelectCloseTok}
                 onOpenChange={(open) => {

@@ -73,7 +73,28 @@ export async function listStaff(
     where.branch = { equals: filters.branch.trim(), mode: "insensitive" };
   }
   if (filters?.trade_direction?.trim()) {
-    where.trade_direction = { equals: filters.trade_direction.trim(), mode: "insensitive" };
+    const td = filters.trade_direction.trim();
+    const tdClause: Prisma.UserWhereInput = {
+      OR: [
+        { trade_direction: { equals: td, mode: "insensitive" } },
+        {
+          trade_direction_row: {
+            is: {
+              OR: [
+                { code: { equals: td, mode: "insensitive" } },
+                { name: { equals: td, mode: "insensitive" } }
+              ]
+            }
+          }
+        }
+      ]
+    };
+    if (where.AND) {
+      const existing = Array.isArray(where.AND) ? where.AND : [where.AND];
+      where.AND = [...existing, tdClause];
+    } else {
+      where.AND = [tdClause];
+    }
   }
   if (filters?.position?.trim()) {
     where.position = { equals: filters.position.trim(), mode: "insensitive" };
@@ -90,7 +111,8 @@ export async function listStaff(
     territoryAnd.push({ territory: { contains: filters.territory_city.trim(), mode: "insensitive" } });
   }
   if (territoryAnd.length > 0) {
-    where.AND = territoryAnd;
+    const existing = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+    where.AND = [...existing, ...territoryAnd];
   }
 
   if (

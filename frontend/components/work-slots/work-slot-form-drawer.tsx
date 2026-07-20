@@ -58,7 +58,7 @@ export function WorkSlotFormDrawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 sm:p-6">
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onMouseDown={(e) => {
@@ -72,7 +72,7 @@ export function WorkSlotFormDrawer({
         aria-modal="true"
         aria-labelledby="work-slot-drawer-title"
         className={cn(
-          "animate-add-product-modal relative flex max-h-[min(92vh,920px)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-2xl",
+          "animate-add-product-modal relative my-auto flex max-h-[min(92vh,920px)] w-full flex-col overflow-hidden rounded-2xl bg-card shadow-2xl",
           widthClass
         )}
         onMouseDown={(e) => e.stopPropagation()}

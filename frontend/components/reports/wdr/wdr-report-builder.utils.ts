@@ -7,6 +7,15 @@ import {
   type WdrReportJson
 } from "@/lib/report-builder-wdr-migrate";
 
+const WDR_DIAG =
+  typeof process !== "undefined" && process.env.NEXT_PUBLIC_WDR_DIAG === "1";
+
+function wdrDiag(...args: unknown[]): void {
+  if (!WDR_DIAG) return;
+  // eslint-disable-next-line no-console
+  console.debug(...args);
+}
+
 export const DATASET_ID = "orders_sales_lines" as const;
 
 export type DateMode = "order_date" | "shipped_date" | "delivered_date" | "created_date";
@@ -366,7 +375,7 @@ export function clickWdrToolbarTabByKind(host: HTMLElement, kind: "format" | "op
     const target = (node.closest("a,button,li,[role='tab']") as HTMLElement | null) ?? node;
     try {
       triggerSyntheticClick(target);
-      console.debug("[WDR][DIAG] clickWdrToolbarTabByKind clicked", {
+      wdrDiag("[WDR][DIAG] clickWdrToolbarTabByKind clicked", {
         kind,
         idToken,
         index: i,
@@ -377,7 +386,7 @@ export function clickWdrToolbarTabByKind(host: HTMLElement, kind: "format" | "op
       // noop
     }
   }
-  console.debug("[WDR][DIAG] clickWdrToolbarTabByKind no-click", { kind, idToken, nodesCount: nodes.length });
+  wdrDiag("[WDR][DIAG] clickWdrToolbarTabByKind no-click", { kind, idToken, nodesCount: nodes.length });
   return false;
 }
 
@@ -399,7 +408,7 @@ export function clickWdrMenuItemByLabels(_host: HTMLElement, labels: string[]): 
   const nodes = document.querySelectorAll<HTMLElement>(
     "a,button,li,[role='menuitem'],[class*='wdr-menu'] a,[class*='wdr-menu'] li,[class*='wdr-popup'] a,[class*='wdr-popup'] li"
   );
-  console.debug("[WDR][DIAG] menu scan start", { labels, nodesCount: nodes.length });
+  wdrDiag("[WDR][DIAG] menu scan start", { labels, nodesCount: nodes.length });
   for (let i = 0; i < nodes.length; i += 1) {
     const n = nodes[i];
     const txt = (n.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -420,7 +429,7 @@ export function clickWdrMenuItemByLabels(_host: HTMLElement, labels: string[]): 
     const target = (n.closest("a,button,li,[role='menuitem']") as HTMLElement | null) ?? n;
     try {
       triggerSyntheticClick(target);
-      console.debug("[WDR][DIAG] menu click matched", {
+      wdrDiag("[WDR][DIAG] menu click matched", {
         labels,
         index: i,
         text: txt,
@@ -431,7 +440,7 @@ export function clickWdrMenuItemByLabels(_host: HTMLElement, labels: string[]): 
       // noop
     }
   }
-  console.debug("[WDR][DIAG] menu click no-match", { labels });
+  wdrDiag("[WDR][DIAG] menu click no-match", { labels });
   return false;
 }
 
@@ -483,7 +492,7 @@ export function logWdrPopupDiagnostics(): void {
     });
   }
   // Debug trace for popup visibility/routing issues in custom format controls.
-  console.debug("[WDR][DIAG] popup diagnostics", { total: popupNodes.length, rows });
+  wdrDiag("[WDR][DIAG] popup diagnostics", { total: popupNodes.length, rows });
 }
 
 export function closeOpenWdrPopups(host: HTMLElement): void {
@@ -505,7 +514,7 @@ export function closeOpenWdrPopups(host: HTMLElement): void {
       // noop
     }
   }
-  if (closed > 0) console.debug("[WDR] closed stale popups", { closed });
+  if (closed > 0) wdrDiag("[WDR] closed stale popups", { closed });
 }
 
 export function hasVisibleWdrPopup(host: HTMLElement): boolean {
@@ -534,7 +543,7 @@ export function runWdrExpandCollapseAll(wdr: WdrPivotApi, mode: "expand" | "coll
   if (typeof documentedAction === "function") {
     try {
       documentedAction.call(wdr);
-      console.debug("[WDR][TREE] hierarchy action invoked", { mode, api: `${mode}AllData` });
+      wdrDiag("[WDR][TREE] hierarchy action invoked", { mode, api: `${mode}AllData` });
       return true;
     } catch {
       // Older bundled WDR builds may expose the equivalent short method below.
@@ -545,7 +554,7 @@ export function runWdrExpandCollapseAll(wdr: WdrPivotApi, mode: "expand" | "coll
   if (typeof fallbackAction !== "function") return false;
   try {
     fallbackAction.call(wdr);
-    console.debug("[WDR][TREE] hierarchy fallback invoked", { mode, api: `${mode}All` });
+    wdrDiag("[WDR][TREE] hierarchy fallback invoked", { mode, api: `${mode}All` });
     return true;
   } catch {
     return false;

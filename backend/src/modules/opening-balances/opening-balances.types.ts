@@ -8,6 +8,8 @@ export type OpeningBalanceListQuery = {
   client_ids?: number[];
   payment_type?: string;
   trade_direction?: string;
+  /** Name/code aliases resolved from TradeDirection catalog (list layer). */
+  trade_direction_aliases?: string[];
   agent_id?: number;
   cash_desk_ids?: number[];
   balance_type?: "debt" | "surplus";

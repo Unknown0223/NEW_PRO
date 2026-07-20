@@ -34,8 +34,6 @@ import { CategoryIssueCountBadge } from "../category-issue-badge";
 import { PolkiReturnLinesTable } from "../polki-return-lines-table";
 import { PolkiClientSearchSelect } from "../polki-client-search-select";
 import type { OrderCreateVm } from "../hooks/use-order-create";
-
-import type { OrderCreateVm } from "../hooks/use-order-create";
 import { PolkiShelfReturnView } from "./polki-shelf-return/polki-shelf-return-view";
 import { OrderCreateViewHeader } from "./order-create-view-header";
 import { OrderCreateViewAlerts } from "./order-create-view-alerts";

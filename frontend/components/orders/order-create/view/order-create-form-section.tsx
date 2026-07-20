@@ -37,8 +37,6 @@ import { PolkiReturnLinesTable } from "../polki-return-lines-table";
 import { PolkiClientSearchSelect } from "../polki-client-search-select";
 import type { OrderCreateVm } from "../hooks/use-order-create";
 
-import type { OrderCreateVm } from "../hooks/use-order-create";
-
 export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
   const {
     isPolkiByOrder,

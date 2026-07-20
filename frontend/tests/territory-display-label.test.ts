@@ -29,10 +29,24 @@ describe("cityStoredCodeToDisplayLabel", () => {
 describe("territoryLeafNameOnly", () => {
   it("shows name without code prefix", () => {
     expect(
-      territoryLeafNameOnly({ id: 1, name: "AD ASAKA", code: "AD_ASAKA", is_active: true })
+      territoryLeafNameOnly({
+        id: 1,
+        key: "1",
+        label: "AD ASAKA",
+        name: "AD ASAKA",
+        code: "AD_ASAKA",
+        is_active: true
+      })
     ).toBe("Asaka");
     expect(
-      territoryLeafNameOnly({ id: 2, name: "Asaka", code: "AD_ASAKA", is_active: true })
+      territoryLeafNameOnly({
+        id: 2,
+        key: "2",
+        label: "Asaka",
+        name: "Asaka",
+        code: "AD_ASAKA",
+        is_active: true
+      })
     ).toBe("Asaka");
   });
 });

@@ -107,7 +107,8 @@ export function useAccessWorkspacePart5(ctx: ReturnType<typeof useAccessWorkspac
       cash_desks: "Кассы",
       warehouses: "Склады",
       branches: "Филиалы",
-      payment_methods: "Способы оплаты"
+      payment_methods: "Способы оплаты",
+      trade_directions: "Направления торговли"
     }[tab] ?? "Пользователи";
 
   const allVisibleModalUserIds = useMemo(

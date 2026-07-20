@@ -234,19 +234,22 @@ export async function listOrdersPaged(
   }
   const reg = q.client_region?.trim();
   if (reg) {
-    andClauses.push({ client: { region: reg } });
+    andClauses.push({ client: { region: { equals: reg, mode: "insensitive" } } });
   }
   const cityF = q.client_city?.trim();
   if (cityF) {
     andClauses.push({
       client: {
-        OR: [{ city: cityF }, { district: cityF }]
+        OR: [
+          { city: { equals: cityF, mode: "insensitive" } },
+          { district: { equals: cityF, mode: "insensitive" } }
+        ]
       }
     });
   }
   const zoneF = q.client_zone?.trim();
   if (zoneF) {
-    andClauses.push({ client: { neighborhood: zoneF } });
+    andClauses.push({ client: { zone: { equals: zoneF, mode: "insensitive" } } });
   }
   const tradeDir = q.agent_trade_direction?.trim();
   if (tradeDir) {
@@ -368,7 +371,7 @@ export async function listOrdersPaged(
             region: true,
             city: true,
             district: true,
-            neighborhood: true
+            zone: true
           }
         },
         warehouse: { select: { name: true } },
@@ -526,7 +529,7 @@ export async function listOrdersPaged(
       expeditor_display: expeditorDisplay,
       region: o.client.region ?? null,
       city: o.client.city ?? o.client.district ?? null,
-      zone: o.client.neighborhood ?? null,
+      zone: o.client.zone ?? null,
       consignment: o.agent?.consignment ?? null,
       is_consignment: o.is_consignment ?? false,
       day: null,

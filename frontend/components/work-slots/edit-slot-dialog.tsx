@@ -135,6 +135,7 @@ export function EditSlotDialog({
           territoryOblastList: [],
           territoryCityList: [],
           warehouseId: d.active_warehouse_id,
+          returnWarehouseId: d.return_warehouse_id ?? null,
           cashDeskId: d.active_cash_desk_id
         });
       })
@@ -173,6 +174,7 @@ export function EditSlotDialog({
       territoryOblastList: [],
       territoryCityList: [],
       warehouseId: original.active_warehouse_id,
+      returnWarehouseId: original.return_warehouse_id ?? null,
       cashDeskId: original.active_cash_desk_id
     };
 
@@ -188,6 +190,9 @@ export function EditSlotDialog({
     if (location.warehouseId !== origLoc.warehouseId) {
       changes.warehouse_id = location.warehouseId;
     }
+    if (location.returnWarehouseId !== origLoc.returnWarehouseId) {
+      changes.return_warehouse_id = location.returnWarehouseId;
+    }
     if (location.cashDeskId !== origLoc.cashDeskId) {
       changes.cash_desk_id = location.cashDeskId;
     }
@@ -197,6 +202,7 @@ export function EditSlotDialog({
       changes.territory_oblast !== undefined ||
       changes.territory_city !== undefined ||
       changes.warehouse_id !== undefined ||
+      changes.return_warehouse_id !== undefined ||
       changes.cash_desk_id !== undefined;
 
     if (hasUserAttrs && !original.active_user_id) {
@@ -371,7 +377,7 @@ export function EditSlotDialog({
               values={location}
               onChange={(patch) => setLocation((prev) => ({ ...prev, ...patch }))}
               territoryCascade={territoryCascade}
-              cityTerritoryHints={clientRefs?.city_territory_hints}
+              cityTerritoryHints={clientRefs?.city_territory_hints as Record<string, import("@/lib/city-territory-hint").CityTerritoryHint> | undefined}
               warehouses={warehouses}
               cashDesks={cashDesks}
               disabled={!original?.active_user_id}

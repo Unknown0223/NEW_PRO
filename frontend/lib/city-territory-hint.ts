@@ -46,11 +46,12 @@ export function cityStoredCodeToDisplayLabel(value: string, apiLabel?: string | 
 export type CityTerritoryHint = {
   city_label?: string | null;
   region_stored: string | null;
-  region_label: string | null;
+  /** Optional when API returns stored codes only (group-processing / merge). */
+  region_label?: string | null;
   zone_stored: string | null;
-  zone_label: string | null;
+  zone_label?: string | null;
   district_stored: string | null;
-  district_label: string | null;
+  district_label?: string | null;
 };
 
 export function pickCityTerritoryHint(

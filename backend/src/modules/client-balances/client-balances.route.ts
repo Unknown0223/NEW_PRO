@@ -113,32 +113,6 @@ function parseListQuery(q: Record<string, string | undefined>): ClientBalanceLis
   };
 }
 
-function toNum(value: string | number | null | undefined): number {
-  if (value == null) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const n = Number(String(value).trim().replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function collectPagePaymentStats(
-  rows: Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>
-) {
-  const paymentSums: Record<string, number> = {};
-  let pageBalanceSum = 0;
-  let nonZeroRows = 0;
-  for (const row of rows) {
-    const bal = toNum(row.balance);
-    pageBalanceSum += bal;
-    let rowHasNonZero = bal !== 0;
-    for (const p of row.payment_amounts ?? []) {
-      paymentSums[p.label] = (paymentSums[p.label] ?? 0) + toNum(p.amount);
-      if (toNum(p.amount) !== 0) rowHasNonZero = true;
-    }
-    if (rowHasNonZero) nonZeroRows += 1;
-  }
-  return { pageBalanceSum, nonZeroRows, paymentSums };
-}
-
 export async function registerClientBalanceRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/client-balances/territory-options",
@@ -201,24 +175,6 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
         },
         "client-balances report timing"
       );
-      const pageStats = collectPagePaymentStats(
-        (result.data as Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>) ??
-          []
-      );
-      request.log.info(
-        {
-          tenantId: request.tenant!.id,
-          view: parsed.view,
-          page: parsed.page,
-          limit: parsed.limit,
-          summaryBalance: result.summary.balance,
-          summaryPaymentByType: result.summary.payment_by_type,
-          pageBalanceSum: pageStats.pageBalanceSum,
-          pagePaymentSums: pageStats.paymentSums,
-          pageNonZeroRows: pageStats.nonZeroRows
-        },
-        "client-balances payment debug"
-      );
       return reply.send(result);
     }
   );
@@ -243,23 +199,6 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           elapsedMs: Date.now() - t0
         },
         "consignment-balances report timing"
-      );
-      const pageStats = collectPagePaymentStats(
-        (result.data as Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>) ??
-          []
-      );
-      request.log.info(
-        {
-          tenantId: request.tenant!.id,
-          page: parsed.page,
-          limit: parsed.limit,
-          summaryBalance: result.summary.total_debt,
-          summaryPaymentByType: result.summary.payment_by_type,
-          pageBalanceSum: pageStats.pageBalanceSum,
-          pagePaymentSums: pageStats.paymentSums,
-          pageNonZeroRows: pageStats.nonZeroRows
-        },
-        "consignment-balances payment debug"
       );
       return reply.send(result);
     }

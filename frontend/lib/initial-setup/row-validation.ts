@@ -63,18 +63,15 @@ const HEADER_TO_KEY: Record<string, string> = {
   код_города: "code",
   зона: "zone",
   gorod: "name",
-  город: "name",
   shahar: "name",
   kod_gorod: "code",
-  код_города: "code",
   gorod_kod: "code",
   название_региона: "region",
   регион: "region",
   oblast: "region",
   область: "region",
   viloyat: "region",
-  zona: "zone",
-  зона: "zone"
+  zona: "zone"
 };
 
 export function resolveCellKey(headerOrKey: string, config?: StepTableConfig): string {

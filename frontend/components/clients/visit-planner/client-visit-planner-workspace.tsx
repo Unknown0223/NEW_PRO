@@ -138,7 +138,7 @@ function commonZoneBoundaryForClients(
   clientById: Map<number, ClientRow>,
   boundaries: GeoBoundary[]
 ): GeoBoundary | null {
-  let shared: GeoBoundary | null | undefined;
+  let shared: GeoBoundary | undefined;
   for (const id of clientIds) {
     const c = clientById.get(id);
     if (!c) return null;

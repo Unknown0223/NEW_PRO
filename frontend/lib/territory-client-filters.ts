@@ -6,6 +6,7 @@ import {
   type RefSelectOption
 } from "@/lib/ref-select-options";
 import { collectActiveNamesAtDepth, type TerritoryNode } from "@/lib/territory-tree";
+import { normKeyTerritoryMatch } from "@shared/territory-lalaku-seed";
 
 /** Mijoz kartochkasi / to‘lov filtri: maydonlar (махалля filtri olib tashlangan). */
 export type ClientTerritoryFilterField = "zone" | "region" | "city" | "district";
@@ -150,6 +151,92 @@ function uniqSorted(values: string[]): string[] {
   return Array.from(s).sort((a, b) => a.localeCompare(b, "ru"));
 }
 
+function territoryNamesEqual(a: string, b: string): boolean {
+  const left = trimText(a);
+  const right = trimText(b);
+  if (!left || !right) return false;
+  return normKeyTerritoryMatch(left) === normKeyTerritoryMatch(right);
+}
+
+function allowedNormKeys(names: string[]): Set<string> {
+  const s = new Set<string>();
+  for (const n of names) {
+    const t = trimText(n);
+    if (t) s.add(normKeyTerritoryMatch(t));
+  }
+  return s;
+}
+
+/** Refs/live qiymati daraxt dagi ruxsat etilgan nomlar ostidami (value yoki label orqali). */
+function valueBelongsToAllowedNames(
+  value: string,
+  allowed: Set<string>,
+  options: Array<{ value: string; label: string }> | undefined
+): boolean {
+  const v = trimText(value);
+  if (!v || allowed.size === 0) return false;
+  if (allowed.has(normKeyTerritoryMatch(v))) return true;
+  for (const o of options ?? []) {
+    const ov = trimText(o.value);
+    const ol = trimText(o.label) || ov;
+    if (!ov) continue;
+    if (ov === v || territoryNamesEqual(ov, v) || territoryNamesEqual(ol, v)) {
+      if (allowed.has(normKeyTerritoryMatch(ov)) || allowed.has(normKeyTerritoryMatch(ol))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Parent tanlanganda: daraxt bolalari asosiy; refs/live faqat shu parent ostidagilar.
+ * Parent yo‘q yoki daraxt umuman yo‘q bo‘lsa — to‘liq birlashma.
+ */
+function cascadeChildFallback(
+  parentSelected: boolean,
+  hasTerritoryTree: boolean,
+  treeChildren: string[],
+  refsValues: string[] | undefined,
+  liveValues: string[] | undefined,
+  options: Array<{ value: string; label: string }> | undefined
+): string[] {
+  if (!parentSelected || !hasTerritoryTree) {
+    return uniqSorted([...(refsValues ?? []), ...(liveValues ?? []), ...treeChildren]);
+  }
+  const allowed = allowedNormKeys(treeChildren);
+  const extras = [...(refsValues ?? []), ...(liveValues ?? [])].filter((v) =>
+    valueBelongsToAllowedNames(v, allowed, options)
+  );
+  return uniqSorted([...treeChildren, ...extras]);
+}
+
+/** Parent tanlanganda `region_options` / `city_options` ham filtrlansin (aks holda dilution). */
+function filterRefOptionsForCascade(
+  parentSelected: boolean,
+  hasTerritoryTree: boolean,
+  options: Array<{ value: string; label: string }> | undefined,
+  treeChildren: string[],
+  currentValue: string
+): RefSelectOption[] | undefined {
+  if (!options?.length) return options as RefSelectOption[] | undefined;
+  if (!parentSelected || !hasTerritoryTree) return options as RefSelectOption[] | undefined;
+  const allowed = allowedNormKeys(treeChildren);
+  const cur = trimText(currentValue);
+  const out: RefSelectOption[] = [];
+  for (const o of options) {
+    const v = trimText(o.value);
+    if (!v) continue;
+    if (cur && v === cur) {
+      out.push({ value: v, label: trimText(o.label) || v });
+      continue;
+    }
+    if (valueBelongsToAllowedNames(v, allowed, options)) {
+      out.push({ value: v, label: trimText(o.label) || v });
+    }
+  }
+  return out;
+}
+
 function collectTreeZoneRegionCity(
   nodes: TerritoryNode[] | undefined,
   selectedZone: string,
@@ -173,13 +260,13 @@ function collectTreeZoneRegionCity(
       }
       if (depth === 1) {
         const zoneName = nextPath[0] ?? "";
-        if (!wantZone || zoneName === wantZone) regions.add(name);
+        if (!wantZone || territoryNamesEqual(zoneName, wantZone)) regions.add(name);
       }
       if (depth === 2) {
         const zoneName = nextPath[0] ?? "";
         const regionName = nextPath[1] ?? "";
-        const zoneOk = !wantZone || zoneName === wantZone;
-        const regionOk = !wantRegion || regionName === wantRegion;
+        const zoneOk = !wantZone || territoryNamesEqual(zoneName, wantZone);
+        const regionOk = !wantRegion || territoryNamesEqual(regionName, wantRegion);
         if (zoneOk && regionOk) cities.add(name);
       }
       if (n.children?.length) walk(n.children, depth + 1, nextPath);
@@ -201,7 +288,7 @@ function toSelectOptions(values: string[], currentValue: string): RefSelectOptio
 
 /**
  * Kaskad tanlash: Зона -> Область -> Город.
- * Hammasi nom bo‘yicha (kod emas).
+ * Zona tanlanganda region/city faqat shu zona ostidagi daraxt + mos refs/live.
  */
 export function buildZoneRegionCityCascadeOptions(
   refs: ClientRefsTerritoryBundle | undefined,
@@ -210,24 +297,51 @@ export function buildZoneRegionCityCascadeOptions(
   current: { zone: string; region: string; city: string }
 ): { zones: RefSelectOption[]; regions: RefSelectOption[]; cities: RefSelectOption[] } {
   const tree = collectTreeZoneRegionCity(territoryNodes, current.zone, current.region);
+  const wantZone = trimText(current.zone);
+  const wantRegion = trimText(current.region);
+  const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
 
   const zones = toSelectOptions(
     uniqSorted([...(refs?.zones ?? []), ...(live?.zones ?? []), ...tree.zones]),
     current.zone
   );
 
-  const regionFallback = uniqSorted([
-    ...(refs?.regions ?? []),
-    ...(live?.regions ?? []),
-    ...tree.regions
-  ]);
+  const regionOpts = filterRefOptionsForCascade(
+    Boolean(wantZone),
+    hasTerritoryTree,
+    refs?.region_options as RefSelectOption[] | undefined,
+    tree.regions,
+    current.region
+  );
+  const regionFallback = cascadeChildFallback(
+    Boolean(wantZone),
+    hasTerritoryTree,
+    tree.regions,
+    refs?.regions,
+    live?.regions,
+    refs?.region_options as RefSelectOption[] | undefined
+  );
   const regions = dedupeRefSelectOptionsByTerritoryDisplayName(
-    mergeRefSelectOptions(current.region, refs?.region_options as RefSelectOption[] | undefined, regionFallback)
+    mergeRefSelectOptions(current.region, regionOpts, regionFallback)
   );
 
-  const cityFallback = uniqSorted([...(refs?.cities ?? []), ...(live?.cities ?? []), ...tree.cities]);
+  const cityOpts = filterRefOptionsForCascade(
+    Boolean(wantZone || wantRegion),
+    hasTerritoryTree,
+    refs?.city_options as RefSelectOption[] | undefined,
+    tree.cities,
+    current.city
+  );
+  const cityFallback = cascadeChildFallback(
+    Boolean(wantZone || wantRegion),
+    hasTerritoryTree,
+    tree.cities,
+    refs?.cities,
+    live?.cities,
+    refs?.city_options as RefSelectOption[] | undefined
+  );
   const cities = dedupeRefSelectOptionsByTerritoryDisplayName(
-    mergeRefSelectOptions(current.city, refs?.city_options as RefSelectOption[] | undefined, cityFallback)
+    mergeRefSelectOptions(current.city, cityOpts, cityFallback)
   ).map((o) => ({
     value: o.value,
     label: cityStoredCodeToDisplayLabel(o.value, o.label)

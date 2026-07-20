@@ -14,18 +14,29 @@ import { cn } from "@/lib/utils";
 import type { WorkSlotType } from "@/lib/work-slots-types";
 import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS } from "./work-slots-utils";
 
+type TradeDirectionOpt = { id: number; name: string; code?: string | null };
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tenant: string;
   branchOptions: string[];
+  tradeDirections: TradeDirectionOpt[];
   onCreated: () => void;
 };
 
-export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, onCreated }: Props) {
+export function CreateSlotDialog({
+  open,
+  onOpenChange,
+  tenant,
+  branchOptions,
+  tradeDirections,
+  onCreated
+}: Props) {
   const [slotCode, setSlotCode] = useState("");
   const [label, setLabel] = useState("");
   const [branchCode, setBranchCode] = useState("");
+  const [directionId, setDirectionId] = useState("");
   const [slotType, setSlotType] = useState<WorkSlotType>("agent");
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,6 +64,7 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
     setSlotCode("");
     setLabel("");
     setBranchCode("");
+    setDirectionId("");
     setSlotType("agent");
     setIsActive(true);
     setError(null);
@@ -80,6 +92,7 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
     setSaving(true);
     setError(null);
     try {
+      const dirParsed = directionId.trim() ? Number.parseInt(directionId.trim(), 10) : null;
       await apiFetch(`/api/${tenant}/work-slots`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,6 +100,7 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
           slot_code: slotCode.trim(),
           label: label.trim() || null,
           branch_code: branchCode.trim() || null,
+          direction_id: Number.isFinite(dirParsed) && dirParsed != null && dirParsed > 0 ? dirParsed : null,
           slot_type: slotType,
           is_active: isActive
         })
@@ -105,7 +119,7 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
     <WorkSlotFormDrawer
       open={open}
       title="Новое рабочее место"
-      subtitle="Заполните код, роль и филиал — территорию можно задать после назначения сотрудника"
+      subtitle="Заполните код, роль, филиал и направление — территорию, склад и кассу можно задать после назначения сотрудника"
       onClose={() => {
         reset();
         onOpenChange(false);
@@ -183,23 +197,44 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
           </div>
         </AgentFormSection>
 
-        <AgentFormSection title="Филиал" icon={<Building2 className="h-4 w-4" />}>
-          <AgentFormField label="Филиал">
-            <WorkSlotsMultiSelect
-              variant="form"
-              multiple={false}
-              placeholder="Филиал"
-              items={[
-                { id: "__none__", title: "—" },
-                ...branchOptions.map((b) => ({ id: b, title: b }))
-              ]}
-              selectedValues={branchCode ? [branchCode] : []}
-              onChange={(next) => {
-                const v = next[0] ?? "";
-                setBranchCode(v === "__none__" ? "" : v);
-              }}
-            />
-          </AgentFormField>
+        <AgentFormSection title="Филиал и направление" icon={<Building2 className="h-4 w-4" />}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AgentFormField label="Филиал">
+              <WorkSlotsMultiSelect
+                variant="form"
+                multiple={false}
+                placeholder={branchOptions.length ? "Филиал" : "Нет филиалов в справочнике"}
+                items={[
+                  { id: "__none__", title: "—" },
+                  ...branchOptions.map((b) => ({ id: b, title: b }))
+                ]}
+                selectedValues={branchCode ? [branchCode] : []}
+                onChange={(next) => {
+                  const v = next[0] ?? "";
+                  setBranchCode(v === "__none__" ? "" : v);
+                }}
+              />
+            </AgentFormField>
+            <AgentFormField label="Направление торговли">
+              <WorkSlotsMultiSelect
+                variant="form"
+                multiple={false}
+                placeholder={tradeDirections.length ? "Направление" : "Нет направлений"}
+                items={[
+                  { id: "__none__", title: "—" },
+                  ...tradeDirections.map((t) => ({
+                    id: String(t.id),
+                    title: t.code ? `${t.name} (${t.code})` : t.name
+                  }))
+                ]}
+                selectedValues={directionId ? [directionId] : []}
+                onChange={(next) => {
+                  const v = next[0] ?? "";
+                  setDirectionId(v === "__none__" ? "" : v);
+                }}
+              />
+            </AgentFormField>
+          </div>
         </AgentFormSection>
       </div>
     </WorkSlotFormDrawer>

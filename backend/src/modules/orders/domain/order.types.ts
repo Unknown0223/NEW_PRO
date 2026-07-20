@@ -257,6 +257,7 @@ export const orderDetailInclude: Prisma.OrderInclude = {
       region: true,
       city: true,
       district: true,
+      zone: true,
       neighborhood: true,
       category: true,
       responsible_person: true,
@@ -347,6 +348,7 @@ export type OrderDetailLoaded = {
     region: string | null;
     city: string | null;
     district: string | null;
+    zone: string | null;
     neighborhood: string | null;
     category: string | null;
     responsible_person: string | null;

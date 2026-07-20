@@ -23,13 +23,23 @@ export function pointInPolygon(lat: number, lng: number, vertices: GeoBoundaryPo
 }
 
 export function clientInPolygon(
-  lat: string | null | undefined,
-  lon: string | null | undefined,
+  lat: string | number | null | undefined,
+  lon: string | number | null | undefined,
   polygon: GeoBoundaryPoint[]
 ): boolean {
   if (polygon.length < 3) return false;
-  const la = lat != null && lat !== "" ? parseFloat(lat) : NaN;
-  const lo = lon != null && lon !== "" ? parseFloat(lon) : NaN;
+  const la =
+    typeof lat === "number"
+      ? lat
+      : lat != null && lat !== ""
+        ? parseFloat(lat)
+        : NaN;
+  const lo =
+    typeof lon === "number"
+      ? lon
+      : lon != null && lon !== ""
+        ? parseFloat(lon)
+        : NaN;
   if (!Number.isFinite(la) || !Number.isFinite(lo)) return false;
   if (pointInPolygon(la, lo, polygon)) return true;
   // Ba'zi yozuvlarda lat/lon almashtirilgan (O'zbekiston: lat 37–46, lng 55–73)

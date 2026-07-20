@@ -35,7 +35,7 @@ export function depthToTerritoryLayer(depth: number, levelCount: number, treeDep
   return null;
 }
 
-export function territoryLayerUsesAdminBoundary(layer: TerritoryLayer): boolean {
+export function territoryLayerUsesAdminBoundary(layer: TerritoryLayer): layer is "oblast" | "gorod" {
   return layer === "oblast" || layer === "gorod";
 }
 

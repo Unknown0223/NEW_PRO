@@ -498,7 +498,7 @@ export function collectScopeDimensionModalBulkItems(
 }
 
 export function accessWorkspaceUserPickerModalTitle(
-  usersModalKind: ScopeDimensionTab | "operations",
+  usersModalKind: ScopeDimensionTab | "operations" | "users",
   objectLabel: string | undefined
 ): string {
   const suffix = objectLabel ? `: ${objectLabel}` : "";
@@ -515,6 +515,8 @@ export function accessWorkspaceUserPickerModalTitle(
       return `Прикрепить к способу оплаты${suffix}`;
     case "trade_directions":
       return `Прикрепить к направлению${suffix}`;
+    case "users":
+      return `Прикрепить пользователей${suffix}`;
     default:
       return `Прикрепить пользователей${suffix}`;
   }

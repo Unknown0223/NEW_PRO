@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ShieldOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 type AccessDeniedBannerProps = {
@@ -71,13 +71,13 @@ export function AccessDeniedBanner({
           </p>
           {!compact ? (
             <div className="flex flex-wrap gap-2 pt-2">
-              <Button asChild size="sm" className="min-w-[9rem]">
-                <Link href={primaryHref}>{primaryLabel}</Link>
-              </Button>
+              <Link href={primaryHref} className={cn(buttonVariants({ size: "sm" }), "min-w-[9rem]")}>
+                {primaryLabel}
+              </Link>
               {secondaryHref && secondaryLabel ? (
-                <Button asChild size="sm" variant="outline">
-                  <Link href={secondaryHref}>{secondaryLabel}</Link>
-                </Button>
+                <Link href={secondaryHref} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  {secondaryLabel}
+                </Link>
               ) : null}
             </div>
           ) : null}

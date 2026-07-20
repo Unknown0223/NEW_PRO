@@ -39,7 +39,7 @@ export function VirtualPivotDateFormatDialog({ open, onOpenChange, initial, onAp
 
   useEffect(() => {
     if (!showPatterns) return;
-    if (!patterns.includes(pattern)) {
+    if (!(patterns as readonly string[]).includes(pattern)) {
       setPattern(patterns[0]!);
     }
   }, [mode, showPatterns, patterns, pattern]);

@@ -12,7 +12,8 @@ export function tradeDirectionFilterLabels(rows: TradeDirectionCatalogRow[] | nu
   const out: string[] = [];
   for (const r of rows ?? []) {
     if (r.is_active === false) continue;
-    const label = (r.code?.trim() || r.name?.trim() || "").trim();
+    /** Filtrda ko‘rinadigan yorliq — nom; backend code yoki name qabul qiladi. */
+    const label = (r.name?.trim() || r.code?.trim() || "").trim();
     if (!label || seen.has(label)) continue;
     seen.add(label);
     out.push(label);

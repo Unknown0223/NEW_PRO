@@ -77,7 +77,8 @@ import {
 import {
   defaultDatasetFilters,
   migrateLegacyReportBuilderConfigToWdrReport,
-  type DatasetFiltersPayload
+  type DatasetFiltersPayload,
+  type ReportBuilderDateMode
 } from "@/lib/report-builder-wdr-migrate";
 import {
   calculatedMeasuresToFields,
@@ -941,7 +942,7 @@ export function VirtualPivotReportBuilder() {
         filters={filters}
         onFiltersChange={setFilters}
         filterOptions={filtersQ.data}
-        dateModes={metaQ.data?.dateModes}
+        dateModes={metaQ.data?.dateModes as Array<{ id: ReportBuilderDateMode; label: string }> | undefined}
         profileData={profileQ.data}
         title={rb.datasetFilters}
         actions={
@@ -1612,6 +1613,7 @@ export function VirtualPivotReportBuilder() {
           onValuesAxisLayoutChange={(layout) => {
             updateConfig({
               options: {
+                ...config.options,
                 valuesPosition: layout.position,
                 valuesAxisIndex: layout.valuesAxisIndex
               }

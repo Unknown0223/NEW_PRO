@@ -731,36 +731,6 @@ export function ConsignmentBalancesWorkspace() {
     if (!valid) setDraft((d) => ({ ...d, expeditor_user_id: "" }));
   }, [filteredExpeditors, draft.expeditor_user_id]);
 
-  useEffect(() => {
-    console.info("[consignment-balances filters] cascade", {
-      territoryScope: consignmentTerritoryScope || null,
-      branches: draft.branch_ids.size,
-      supervisor: draft.supervisor_user_id || null,
-      agent: draft.agent_id || null,
-      expeditor: draft.expeditor_user_id || null,
-      tradeDirection: draft.trade_direction || null,
-      filteredAgents: filteredAgents.length,
-      filteredSupervisors: filteredSupervisors.length,
-      filteredExpeditors: filteredExpeditors.length,
-      territoryZones: territoryCascade.zones.length,
-      territoryRegions: territoryCascade.regions.length,
-      territoryCities: territoryCascade.cities.length
-    });
-  }, [
-    consignmentTerritoryScope,
-    draft.branch_ids,
-    draft.supervisor_user_id,
-    draft.agent_id,
-    draft.expeditor_user_id,
-    draft.trade_direction,
-    filteredAgents.length,
-    filteredSupervisors.length,
-    filteredExpeditors.length,
-    territoryCascade.zones.length,
-    territoryCascade.regions.length,
-    territoryCascade.cities.length
-  ]);
-
   const runExcelExport = useCallback(async () => {
     if (!tenantSlug) return;
     setExcelBusy(true);
@@ -779,34 +749,6 @@ export function ConsignmentBalancesWorkspace() {
   const rows = listQ.data?.data ?? [];
   const summary = listQ.data?.summary;
   const paymentColumnLabels = (summary?.payment_by_type ?? []).map((x) => x.label);
-
-  useEffect(() => {
-    if (!listQ.data) return;
-    let pageBalance = 0;
-    const pagePayment: Record<string, number> = {};
-    let nonZeroRows = 0;
-    for (const row of listQ.data.data) {
-      const rowBalance = parseAmount(row.balance);
-      pageBalance += rowBalance;
-      let rowNonZero = rowBalance !== 0;
-      for (const p of row.payment_amounts ?? []) {
-        const n = parseAmount(p.amount);
-        pagePayment[p.label] = (pagePayment[p.label] ?? 0) + n;
-        if (n !== 0) rowNonZero = true;
-      }
-      if (rowNonZero) nonZeroRows += 1;
-    }
-    console.info("[consignment-balances table debug]", {
-      page: listQ.data.page,
-      limit: listQ.data.limit,
-      total: listQ.data.total,
-      summaryBalance: listQ.data.summary.total_debt,
-      summaryPaymentByType: listQ.data.summary.payment_by_type,
-      pageBalance,
-      pagePayment,
-      pageNonZeroRows: nonZeroRows
-    });
-  }, [listQ.data]);
 
   return (
     <PageShell>

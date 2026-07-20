@@ -1922,11 +1922,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           const batchRes = await api.post<{
             returns?: Array<{ discount_debt_amount?: string | null; discount_debt_note?: string | null }>;
           }>(`/api/${tenantSlug}/returns/period-batch`, body);
-          const discDebt = (batchRes.returns ?? []).reduce((a, r) => {
+          const batchData = batchRes.data;
+          const discDebt = (batchData.returns ?? []).reduce((a, r) => {
             const n = Number.parseFloat(String(r.discount_debt_amount ?? "").replace(/\s/g, ""));
             return a + (Number.isFinite(n) && n > 0 ? n : 0);
           }, 0);
-          const discNote = (batchRes.returns ?? [])
+          const discNote = (batchData.returns ?? [])
             .map((r) => r.discount_debt_note)
             .find((n) => n && String(n).trim());
           return {
@@ -1970,13 +1971,14 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           discount_debt_amount?: string | null;
           discount_debt_note?: string | null;
         }>(`/api/${tenantSlug}/returns/period`, body);
+        const periodData = periodRes.data;
         const discOne = Number.parseFloat(
-          String(periodRes.discount_debt_amount ?? "").replace(/\s/g, "")
+          String(periodData.discount_debt_amount ?? "").replace(/\s/g, "")
         );
         return {
           bonusDebtApplied: submitBonusDebt,
           discountDebtApplied: Number.isFinite(discOne) && discOne > 0 ? discOne : 0,
-          discountDebtNote: periodRes.discount_debt_note ?? null
+          discountDebtNote: periodData.discount_debt_note ?? null
         };
       }
 

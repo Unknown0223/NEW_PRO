@@ -28,6 +28,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { apiFetch, useTenantReady } from "@/lib/api-client";
+import { activeBranchNamesFromProfile, type BranchRefRow } from "@/lib/branch-options";
 import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
@@ -116,6 +117,7 @@ export function WorkSlotsWorkspace() {
   const [directions, setDirections] = useState<PickerOpt[]>([]);
   const [warehouses, setWarehouses] = useState<PickerOpt[]>([]);
   const [cashDesks, setCashDesks] = useState<PickerOpt[]>([]);
+  const [profileBranches, setProfileBranches] = useState<string[]>([]);
   const [territoryNodes, setTerritoryNodes] = useState<TerritoryNode[]>([]);
   const [clientRefs, setClientRefs] = useState<{
     zones?: string[];
@@ -147,15 +149,15 @@ export function WorkSlotsWorkspace() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const branchOptions = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(profileBranches);
     for (const r of rows) {
       if (r.branch_code?.trim()) set.add(r.branch_code.trim());
     }
     for (const b of filterApplied.branchList) {
       if (b?.trim()) set.add(b.trim());
     }
-    return [...set].sort();
-  }, [rows, filterApplied.branchList]);
+    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [profileBranches, rows, filterApplied.branchList]);
 
   const resolveTerritoryDisplay = useMemo(
     () =>
@@ -220,14 +222,15 @@ export function WorkSlotsWorkspace() {
           city_options?: { value: string; label: string }[];
           city_territory_hints?: Record<string, { city_label?: string | null }>;
         }>(`/api/${tenant}/clients/references`),
-        apiFetch<{ references?: { territory_nodes?: TerritoryNode[] } }>(
-          `/api/${tenant}/settings/profile`
-        ).catch(() => ({ references: undefined }))
+        apiFetch<{
+          references?: { territory_nodes?: TerritoryNode[]; branches?: BranchRefRow[] };
+        }>(`/api/${tenant}/settings/profile`).catch(() => ({ references: undefined }))
       ]);
       setDirections((dirs.data ?? []).map((d) => ({ id: d.id, name: d.name })));
       setWarehouses((whTable.data ?? []).map((w) => ({ id: w.id, name: w.name })));
       setCashDesks((cash.data ?? []).map((c) => ({ id: c.id, name: c.name })));
       setClientRefs(refs);
+      setProfileBranches(activeBranchNamesFromProfile(profile.references?.branches));
       setTerritoryNodes(profile.references?.territory_nodes ?? []);
     } catch (e) {
       console.error("work-slots pickers", e);
@@ -809,6 +812,7 @@ export function WorkSlotsWorkspace() {
         onOpenChange={setCreateOpen}
         tenant={tenant}
         branchOptions={branchOptions}
+        tradeDirections={directions.map((d) => ({ id: d.id, name: d.name, code: null }))}
         onCreated={() => {
           setToast("Slot yaratildi");
           void load();

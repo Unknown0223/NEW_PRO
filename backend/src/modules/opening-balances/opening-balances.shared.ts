@@ -90,7 +90,18 @@ export function buildWhere(
     andParts.push({ payment_type: q.payment_type.trim() });
   }
   if (q.trade_direction?.trim()) {
-    andParts.push({ trade_direction: q.trade_direction.trim() });
+    const td = q.trade_direction.trim();
+    const aliases = (q.trade_direction_aliases ?? [])
+      .map((v) => v.trim())
+      .filter(Boolean);
+    const values = [...new Set([td, ...aliases])];
+    if (values.length === 1) {
+      andParts.push({ trade_direction: { equals: values[0]!, mode: "insensitive" } });
+    } else {
+      andParts.push({
+        OR: values.map((v) => ({ trade_direction: { equals: v, mode: "insensitive" as const } }))
+      });
+    }
   }
   const agentScope = actor
     ? intersectRequestedAgentIds(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : undefined, actor)

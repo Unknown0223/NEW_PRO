@@ -193,20 +193,6 @@ export default function ClientsPage() {
   const clientsPrefsMigrated = useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      if (localStorage.getItem("salesdoc.clients.filterDebug") === "1") return;
-      if (sessionStorage.getItem("salesdoc.clients.filterHint") === "1") return;
-      sessionStorage.setItem("salesdoc.clients.filterHint", "1");
-    } catch {
-      /* ignore */
-    }
-    console.info(
-      '[clients/filters] Diagnostika: localStorage.setItem("salesdoc.clients.filterDebug","1") keyin sahifani yangilang — har bir so‘rov konsolga chiqadi.'
-    );
-  }, []);
-
-  useEffect(() => {
     if (authHydrated) {
       setShowSessionLoadingHint(false);
       return;
@@ -352,8 +338,9 @@ export default function ClientsPage() {
     return `${summary}${statPart}${errPart}`;
   };
 
-  /** Brauzer konsolida importni tahlil qilish: barcha qatorlar nima uchun qo‘shilmaganini ko‘rish. */
+  /** Brauzer konsolida importni tahlil qilish (faqat filterDebug yoqilganda). */
   const logClientImport = (phase: string, payload?: unknown) => {
+    if (!clientsFilterDebugEnabled()) return;
     console.info(`[clients import] ${phase}`, payload ?? "");
   };
 

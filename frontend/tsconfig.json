@@ -27,5 +27,12 @@
     ".next/types/**/*.ts",
     ".next-bench/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "vitest.config.ts", "components/reports/wdr/**", "vendor/pivot-ui"]
+  "exclude": [
+    "node_modules",
+    "vitest.config.ts",
+    "components/reports/wdr/**",
+    "vendor/pivot-ui",
+    "vendor/pivot-engine/tests",
+    "vendor/pivot-engine/scripts"
+  ]
 }

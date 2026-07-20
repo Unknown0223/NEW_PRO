@@ -38,7 +38,7 @@ function shiftMonth(month: number, year: number, delta: number): { month: number
 }
 
 function monthPeriodLabel(month: number, year: number): string {
-  const name = PLANNING_MONTHS.find((m) => m.value === month)?.label ?? String(month);
+  const name = PLANNING_MONTHS[month - 1] ?? String(month);
   return `${name} ${year}`;
 }
 
