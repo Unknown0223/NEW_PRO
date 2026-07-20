@@ -23,6 +23,7 @@ import {
   getSlotHistory,
   getWorkSlotDetail,
   listPendingAssignments,
+  listSlotDebtCollectors,
   listWorkSlots,
   patchAssignmentLock,
   patchWorkSlot,
@@ -99,7 +100,7 @@ export async function registerWorkSlotDetailRoutes(app: FastifyInstance) {
       const row = await patchWorkSlot(
         request.tenant!.id,
         p.data.id,
-        parsed.data,
+        parsed.data as Parameters<typeof patchWorkSlot>[2],
         actorUserIdOrNull(request)
       );
       if (!row) return sendApiError(reply, request, 404, "NotFound");
@@ -159,6 +160,18 @@ export async function registerWorkSlotDetailRoutes(app: FastifyInstance) {
         q.limit ? parseInt(q.limit, 10) : 50
       );
       return reply.send(data);
+    } catch (e) {
+      return mapAssignError(reply, request, e);
+    }
+  });
+
+  app.get("/api/:slug/work-slots/:id/debt-collectors", { preHandler: preRead }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const p = idParams.safeParse(request.params);
+    if (!p.success) return sendApiError(reply, request, 400, "ValidationError");
+    try {
+      const data = await listSlotDebtCollectors(request.tenant!.id, p.data.id);
+      return reply.send({ data });
     } catch (e) {
       return mapAssignError(reply, request, e);
     }

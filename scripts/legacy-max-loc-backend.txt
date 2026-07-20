@@ -63,3 +63,5 @@ backend/src/modules/client-balances/client-balances.report.main.ts
 backend/src/modules/client-balances/client-debt-by-agent.ts
 
 backend/prisma/models/group-03.prisma
+
+backend/src/modules/work-slots/work-slots.service.ts

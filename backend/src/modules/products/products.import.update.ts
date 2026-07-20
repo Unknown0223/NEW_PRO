@@ -8,13 +8,12 @@ import { updateProduct } from "./products.crud";
 import {
   cellText,
   formatCategoryImportError,
-  headerToTemplateCol,
+  mapTemplateHeaderRow,
   parseNumLoose,
   resolveBrandIdByCode,
   resolveCatalogGroupIdByCode,
   resolveCategoryIdForImport,
-  resolveSegmentIdByCode,
-  type TemplateCol
+  resolveSegmentIdByCode
 } from "./products.import.helpers";
 import { decOpt, productListInclude } from "./products.shared";
 
@@ -60,13 +59,11 @@ export async function importProductsCatalogUpdateOnlyXlsx(
   }
 
   const headerRow = sheet.getRow(1);
-  const colByField: Partial<Record<TemplateCol, number>> = {};
-  headerRow.eachCell((cell, colNumber) => {
-    const raw = String(cell.text ?? "").trim();
-    if (!raw) return;
-    const key = headerToTemplateCol(raw);
-    if (key) colByField[key] = colNumber;
+  const headerCells: { col: number; text: string }[] = [];
+  headerRow.eachCell({ includeEmpty: true }, (_cell, colNumber) => {
+    headerCells.push({ col: colNumber, text: cellText(headerRow, colNumber) });
   });
+  const colByField = mapTemplateHeaderRow(headerCells);
 
   if (!colByField.code) {
     return {
@@ -77,14 +74,14 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       errors: ["«Код» (SKU) ustuni majburiy — eksport faylidan foydalaning."]
     };
   }
-  if (!colByField.name || !colByField.categoryName || !colByField.unitCode) {
+  if (!colByField.name || !colByField.categoryName || !colByField.unitName) {
     return {
       updated: 0,
       skipped_empty: 0,
       skipped_unknown_sku: 0,
       skipped_no_change: 0,
       errors: [
-        "Нужны колонки: Название, Категория, Единица измерения(код), Код — как в шаблоне/экспорте."
+        "Нужны колонки: Название, Категория, Единица измерения (название), Код — как в шаблоне/экспорте."
       ]
     };
   }
@@ -119,7 +116,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
     let name = cellText(row, colByField.name).trim();
     if (!name) name = existing.name;
 
-    let unit = cellText(row, colByField.unitCode).trim();
+    let unit = cellText(row, colByField.unitName).trim();
     if (!unit) unit = existing.unit;
 
     let category_id = existing.category_id;
@@ -276,6 +273,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
     const sameHt = decEq(existing.height_cm, height_cm);
     const sameDimU = (existing.dimension_unit ?? "") === (dimension_unit ?? "");
     const sameVol = decEq(existing.volume_m3, volume_m3);
+    const sameActive = existing.is_active === true;
 
     if (
       sameName &&
@@ -293,7 +291,8 @@ export async function importProductsCatalogUpdateOnlyXlsx(
       sameWid &&
       sameHt &&
       sameDimU &&
-      sameVol
+      sameVol &&
+      sameActive
     ) {
       skipped_no_change += 1;
       continue;
@@ -307,6 +306,7 @@ export async function importProductsCatalogUpdateOnlyXlsx(
           name,
           unit,
           category_id,
+          is_active: true,
           product_group_id,
           segment_id,
           brand_id,

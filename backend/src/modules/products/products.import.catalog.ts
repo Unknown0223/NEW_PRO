@@ -11,14 +11,18 @@ import {
   allocateUniqueSku,
   cellText,
   formatCategoryImportError,
-  headerToTemplateCol,
+  mapTemplateHeaderRow,
   parseNumLoose,
   resolveBrandIdByCode,
   resolveCatalogGroupIdByCode,
   resolveCategoryIdForImport,
-  resolveSegmentIdByCode,
-  type TemplateCol
+  resolveSegmentIdByCode
 } from "./products.import.helpers";
+import {
+  findProductBySkuCi,
+  normalizeProductDupKey,
+  resolveExistingProductForImport
+} from "./products.duplicates";
 export async function importProductsFromCatalogTemplateXlsx(
   tenantId: number,
   buffer: Buffer | Uint8Array,
@@ -32,20 +36,18 @@ export async function importProductsFromCatalogTemplateXlsx(
   }
 
   const headerRow = sheet.getRow(1);
-  const colByField: Partial<Record<TemplateCol, number>> = {};
-  headerRow.eachCell((cell, colNumber) => {
-    const raw = String(cell.text ?? "").trim();
-    if (!raw) return;
-    const key = headerToTemplateCol(raw);
-    if (key) colByField[key] = colNumber;
+  const headerCells: { col: number; text: string }[] = [];
+  headerRow.eachCell({ includeEmpty: true }, (_cell, colNumber) => {
+    headerCells.push({ col: colNumber, text: cellText(headerRow, colNumber) });
   });
+  const colByField = mapTemplateHeaderRow(headerCells);
 
-  if (!colByField.name || !colByField.categoryName || !colByField.unitCode) {
+  if (!colByField.name || !colByField.categoryName || !colByField.unitName) {
     return {
       created: 0,
       updated: 0,
       errors: [
-        "Шаблон: нужны колонки «Название», «Категория», «Единица измерения(код)». Скачайте шаблон с сервера."
+        "Шаблон: нужны колонки «Название», «Категория», «Единица измерения (название)». Скачайте шаблон с сервера."
       ]
     };
   }
@@ -53,6 +55,9 @@ export async function importProductsFromCatalogTemplateXlsx(
   let created = 0;
   let updated = 0;
   const errors: string[] = [];
+  const seenSku = new Set<string>();
+  const seenName = new Set<string>();
+  const seenBarcode = new Set<string>();
 
   for (let r = 2; r <= sheet.rowCount; r++) {
     const row = sheet.getRow(r);
@@ -60,14 +65,39 @@ export async function importProductsFromCatalogTemplateXlsx(
     if (!name) continue;
 
     const categoryName = cellText(row, colByField.categoryName);
-    const unitCode = cellText(row, colByField.unitCode);
+    const unitName = cellText(row, colByField.unitName);
     if (!categoryName) {
       errors.push(`Строка ${r}: категория обязательна`);
       continue;
     }
-    if (!unitCode) {
-      errors.push(`Строка ${r}: «Единица измерения(код)» обязательна`);
+    if (!unitName) {
+      errors.push(`Строка ${r}: «Единица измерения (название)» обязательна`);
       continue;
+    }
+
+    const nameKey = normalizeProductDupKey(name);
+    if (seenName.has(nameKey)) {
+      errors.push(`Строка ${r}: дубликат названия в файле «${name}»`);
+      continue;
+    }
+
+    const codeVal = colByField.code ? cellText(row, colByField.code).trim() : "";
+    if (codeVal) {
+      const skuKey = normalizeProductDupKey(codeVal);
+      if (seenSku.has(skuKey)) {
+        errors.push(`Строка ${r}: дубликат кода (SKU) в файле «${codeVal}»`);
+        continue;
+      }
+    }
+
+    const barcodeRaw = colByField.barcode ? cellText(row, colByField.barcode) || null : null;
+    const barcode = barcodeRaw?.trim() || null;
+    if (barcode) {
+      const bcKey = normalizeProductDupKey(barcode);
+      if (seenBarcode.has(bcKey)) {
+        errors.push(`Строка ${r}: дубликат штрихкода в файле «${barcode}»`);
+        continue;
+      }
     }
 
     const categoryResolved = await resolveCategoryIdForImport(tenantId, categoryName);
@@ -77,13 +107,33 @@ export async function importProductsFromCatalogTemplateXlsx(
     }
     const categoryId = categoryResolved.id;
 
-    let codeVal = colByField.code ? cellText(row, colByField.code) : "";
-    let sku = codeVal.trim();
-    if (!sku) {
+    const existing = await resolveExistingProductForImport(tenantId, codeVal, name);
+    let sku = codeVal;
+    if (existing) {
+      if (
+        codeVal &&
+        normalizeProductDupKey(codeVal) !== normalizeProductDupKey(existing.sku)
+      ) {
+        const skuOwner = await findProductBySkuCi(tenantId, codeVal);
+        if (skuOwner && skuOwner.id !== existing.id) {
+          errors.push(
+            `Строка ${r}: код «${codeVal}» уже у другого товара, а название «${name}» уже существует`
+          );
+          continue;
+        }
+        sku = codeVal;
+      } else {
+        sku = existing.sku;
+      }
+    } else if (!sku) {
       sku = await allocateUniqueSku(tenantId, `IMP-${tenantId}-${r}-${Date.now().toString(36)}`);
     }
 
-    const barcode = colByField.barcode ? cellText(row, colByField.barcode) || null : null;
+    seenName.add(nameKey);
+    if (codeVal) seenSku.add(normalizeProductDupKey(codeVal));
+    if (barcode) seenBarcode.add(normalizeProductDupKey(barcode));
+    seenSku.add(normalizeProductDupKey(sku));
+
     const hsRaw = colByField.hsCode ? cellText(row, colByField.hsCode) : "";
     const hs_code = hsRaw.trim().slice(0, 32) || null;
 
@@ -163,7 +213,7 @@ export async function importProductsFromCatalogTemplateXlsx(
     const input: CreateProductInput = {
       sku,
       name,
-      unit: unitCode.trim(),
+      unit: unitName.trim(),
       barcode,
       category_id: categoryId,
       is_active: true,
@@ -182,18 +232,18 @@ export async function importProductsFromCatalogTemplateXlsx(
     };
 
     try {
-      const existing = await prisma.product.findUnique({
-        where: { tenant_id_sku: { tenant_id: tenantId, sku } }
-      });
       if (existing) {
         await updateProduct(
           tenantId,
           existing.id,
           {
+            sku: sku !== existing.sku ? sku : undefined,
             name: input.name,
             unit: input.unit,
             barcode: input.barcode,
             category_id: input.category_id,
+            // Katalog import — qayta yuklanganda neaktiv tovarni aktiv ro‘yxatga qaytaradi
+            is_active: true,
             product_group_id: input.product_group_id,
             brand_id: input.brand_id,
             segment_id: input.segment_id,
@@ -215,7 +265,16 @@ export async function importProductsFromCatalogTemplateXlsx(
         created += 1;
       }
     } catch (e) {
-      errors.push(`Строка ${r}: ${e instanceof Error ? e.message : "ошибка сохранения"}`);
+      const msg = e instanceof Error ? e.message : "ошибка сохранения";
+      if (msg === "NAME_EXISTS") {
+        errors.push(`Строка ${r}: товар с названием «${name}» уже существует`);
+      } else if (msg === "SKU_EXISTS") {
+        errors.push(`Строка ${r}: код (SKU) «${sku}» уже существует`);
+      } else if (msg === "BARCODE_EXISTS") {
+        errors.push(`Строка ${r}: штрихкод «${barcode ?? ""}» уже существует`);
+      } else {
+        errors.push(`Строка ${r}: ${msg}`);
+      }
     }
   }
 

@@ -19,7 +19,7 @@ export const CATALOG_IMPORT_TEMPLATE_HEADERS = [
   "Название *",
   "Код",
   "Категория *",
-  "Единица измерения(код) *",
+  "Единица измерения (название) *",
   "Группа(код)",
   "Сегмент(код)",
   "Штрих код",
@@ -37,7 +37,7 @@ export type TemplateCol =
   | "name"
   | "code"
   | "categoryName"
-  | "unitCode"
+  | "unitName"
   | "groupCode"
   | "segmentCode"
   | "barcode"
@@ -63,8 +63,10 @@ export function headerToTemplateCol(raw: string): TemplateCol | null {
   const h = normalizeTemplateHeader(raw);
   if (!h) return null;
   if (h.includes("категория")) return "categoryName";
-  if (h.includes("название")) return "name";
-  if (h.includes("единица") && h.includes("измер")) return "unitCode";
+  // «Единица измерения (название)» / «…(код)» — unitName, hech qachon name emas
+  if (h.includes("единица") && h.includes("измер")) return "unitName";
+  // Faqat mahsulot nomi ustuni («Название»), «…(название)» ichidagi so‘z emas
+  if (h === "название" || h.startsWith("название ")) return "name";
   if (h.includes("группа") && h.includes("код")) return "groupCode";
   if (h.includes("сегмент")) return "segmentCode";
   if (h.includes("штрих") || h.replace(/\s/g, "").includes("штрихкод")) return "barcode";
@@ -78,6 +80,21 @@ export function headerToTemplateCol(raw: string): TemplateCol | null {
   if (h.includes("толщина")) return "thicknessM";
   if (h === "код") return "code";
   return null;
+}
+
+/** Header map: birinchi mos kelgan ustun qoladi (preview rebuild dublikatlariga chidamli). */
+export function mapTemplateHeaderRow(
+  headers: Iterable<{ col: number; text: string }>
+): Partial<Record<TemplateCol, number>> {
+  const colByField: Partial<Record<TemplateCol, number>> = {};
+  for (const { col, text } of headers) {
+    if (!text) continue;
+    const key = headerToTemplateCol(text);
+    if (!key) continue;
+    if (colByField[key] != null) continue;
+    colByField[key] = col;
+  }
+  return colByField;
 }
 
 export function cellText(row: ExcelJS.Row, col: number | undefined): string {
