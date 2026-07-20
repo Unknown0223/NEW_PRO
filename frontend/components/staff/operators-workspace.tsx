@@ -6,10 +6,8 @@ import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { formatGroupedInteger } from "@/lib/format-numbers";
-import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -20,17 +18,25 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { WebOperatorCreateWorkspace } from "@/components/staff/web-operator-create-workspace";
-import { KeyRound, ListOrdered, MonitorSmartphone, Pencil, RefreshCw, UserRoundCheck, UserRoundX } from "lucide-react";
+import { KeyRound, MonitorSmartphone, Pencil, UserRoundCheck, UserRoundX } from "lucide-react";
 import Link from "next/link";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
-import { TableSearchField } from "@/components/ui/table-search-field";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { WEB_ACCESS_ROLE_LABELS } from "@/lib/distribution-roles";
 import { StaffFioCell } from "@/components/staff/staff-fio-cell";
 import { formatPersonDisplayName } from "@/lib/person-display";
+import { AgentIconButton } from "@/components/staff/agent-workspace-template-ui";
+import {
+  StaffFilterSelect,
+  StaffWorkspaceFilterPanel,
+  StaffWorkspaceHeader,
+  StaffWorkspaceLayout,
+  StaffWorkspaceTable
+} from "@/components/staff/staff-workspace-shell";
+import { filterSelectClassName } from "@/components/ui/filter-select";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
@@ -68,7 +74,6 @@ const OPERATOR_COLUMN_IDS = [
   "position",
   "kind",
   "phone",
-  "branch",
   "active_sessions",
   "max_sessions",
   "app_access",
@@ -79,21 +84,22 @@ const OPERATOR_COLUMNS = OPERATOR_COLUMN_IDS.map((id) => ({
   id,
   label:
     {
-      fio: "F.I.Sh",
-      login: "Login",
-      code: "Kod",
-      pinfl: "PINFL",
+      fio: "Ф.И.О.",
+      login: "Логин",
+      code: "Код",
+      pinfl: "ПИНФЛ",
       email: "Email",
-      position: "Lavozim",
-      kind: "Tizim roli",
-      phone: "Telefon",
-      branch: "Filial",
-      active_sessions: "Faol sessiyalar",
-      max_sessions: "Maks. sessiya",
-      app_access: "Mobil ilova",
-      can_authorize: "Kirish"
+      position: "Должность",
+      kind: "Системная роль",
+      phone: "Телефон",
+      active_sessions: "Активных сессий",
+      max_sessions: "Макс. сессий",
+      app_access: "Доступ к приложению",
+      can_authorize: "Авторизоваться"
     }[id] ?? id
 }));
+
+const OPERATOR_COLUMN_LABEL_BY_ID = new Map(OPERATOR_COLUMNS.map((c) => [c.id, c.label]));
 
 function operatorExportCellString(r: WebStaffRow, colId: string): string {
   switch (colId) {
@@ -113,16 +119,14 @@ function operatorExportCellString(r: WebStaffRow, colId: string): string {
       return WEB_ACCESS_ROLE_LABELS[r.kind] ?? r.kind;
     case "phone":
       return r.phone ?? "";
-    case "branch":
-      return r.branch ?? "";
     case "active_sessions":
       return String(r.active_session_count);
     case "max_sessions":
       return String(r.max_sessions);
     case "app_access":
-      return r.app_access ? "Ha" : "Yo‘q";
+      return r.app_access ? "Да" : "Нет";
     case "can_authorize":
-      return r.can_authorize ? "Ha" : "Yo‘q";
+      return r.can_authorize ? "Да" : "Нет";
     default:
       return "";
   }
@@ -155,16 +159,14 @@ function renderOperatorDataCell(colId: string, r: WebStaffRow) {
       );
     case "phone":
       return <span className="text-xs">{r.phone ?? "—"}</span>;
-    case "branch":
-      return <span className="text-xs">{r.branch ?? "—"}</span>;
     case "max_sessions":
       return (
         <span className="text-xs tabular-nums">{formatGroupedInteger(r.max_sessions)}</span>
       );
     case "app_access":
-      return <span className="text-xs">{r.app_access ? "Ha" : "Yo‘q"}</span>;
+      return <span className="text-xs">{r.app_access ? "Да" : "Нет"}</span>;
     case "can_authorize":
-      return <span className="text-xs">{r.can_authorize ? "Ha" : "Yo‘q"}</span>;
+      return <span className="text-xs">{r.can_authorize ? "Да" : "Нет"}</span>;
     default:
       return "—";
   }
@@ -175,10 +177,9 @@ type Props = { tenantSlug: string };
 export function OperatorsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [filterBranch, setFilterBranch] = useState("");
   const [filterPosition, setFilterPosition] = useState("");
-  const [appliedBranch, setAppliedBranch] = useState("");
   const [appliedPosition, setAppliedPosition] = useState("");
 
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -217,14 +218,13 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
   });
 
   const listQ = useQuery({
-    queryKey: ["operators", tenantSlug, tab, appliedBranch, appliedPosition],
+    queryKey: ["operators", tenantSlug, tab, appliedPosition],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.live,
     refetchInterval: 45_000,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("is_active", tab === "active" ? "true" : "false");
-      if (appliedBranch.trim()) params.set("branch", appliedBranch.trim());
       if (appliedPosition.trim()) params.set("position", appliedPosition.trim());
       const { data } = await api.get<{ data: WebStaffRow[] }>(
         `/api/${tenantSlug}/operators?${params.toString()}`
@@ -283,11 +283,19 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
     );
   }, [listQ.data, search]);
 
-  const pageRows = useMemo(() => rows.slice(0, pageSize), [rows, pageSize]);
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [rows, safePage, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedBranch, appliedPosition]);
+    setPage(1);
+  }, [tab, appliedPosition, search]);
 
   /** Guruh amali: tanlov bo‘lsa faqat tanlanganlar, aks holda joriy jadvaldagi hammasi */
   function computeBulkTargets(): WebStaffRow[] {
@@ -297,29 +305,20 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
 
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
-  function toggleAllOnPage() {
-    if (allOnPageSelected) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        for (const r of pageRows) next.delete(r.id);
-        return next;
-      });
-    } else {
+  function toggleAllOnPage(checked: boolean) {
+    if (checked) {
       setSelected((prev) => {
         const next = new Set(prev);
         for (const r of pageRows) next.add(r.id);
         return next;
       });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const r of pageRows) next.delete(r.id);
+        return next;
+      });
     }
-  }
-
-  function toggleOne(id: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   function openBulkLimits() {
@@ -370,106 +369,126 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
     });
   }
 
+  function resetFilters() {
+    setFilterPosition("");
+    setAppliedPosition("");
+    setPage(1);
+  }
+
+  function applyFilters() {
+    setAppliedPosition(filterPosition);
+    setPage(1);
+  }
+
   return (
-    <div className="space-y-4">
+    <StaffWorkspaceLayout>
       {rows.length > 0 ? (
-        <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-foreground/90">
-          <span className="font-medium text-foreground">Guruh amallari qamrovi: </span>
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-slate-700">
+          <span className="font-medium text-slate-900">Групповая обработка: </span>
           {selected.size > 0 ? (
             <>
-              <strong>{selected.size}</strong> ta xodim tanlangan — sessiya yopish / limitlar{" "}
-              <strong>faqat shu tanlanganlarga</strong> qo‘llanadi.
+              выбрано <strong>{selected.size}</strong> — закрытие сессий и лимиты применяются{" "}
+              <strong>только к выбранным</strong>.
             </>
           ) : (
             <>
-              Hech qanday qator belgilanmagan — sessiya yopish yoki limit o‘zgartirish{" "}
-              <strong>joriy jadvaldagi barcha {rows.length} ta</strong> xodimga qo‘llanadi (yuqoridagi filtr
-              «Qo‘llash» va qidiruv natijasidagi qatorlar).
+              ничего не выбрано — действие применится ко{" "}
+              <strong>всем {rows.length} сотрудникам</strong> текущего списка (с учётом фильтров и
+              поиска).
             </>
           )}
         </div>
       ) : null}
 
-      <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
-        <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="space-y-3 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex gap-1 border-b border-border pb-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1 text-xs font-medium text-foreground",
-                      tab === "active" ? "border-b-2 border-primary" : "text-foreground/65"
-                    )}
-                    onClick={() => setTab("active")}
-                  >
-                    Faol
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded px-2 py-1 text-xs font-medium text-foreground",
-                      tab === "inactive" ? "border-b-2 border-primary" : "text-foreground/65"
-                    )}
-                    onClick={() => setTab("inactive")}
-                  >
-                    Nofaol
-                  </button>
-                </div>
-                <label className="grid gap-0.5 text-xs font-medium text-foreground/88">
-                  <span className="sr-only">Filial</span>
-                  <FilterSelect
-                    aria-label="Filial"
-                    emptyLabel="Filial"
-                    value={filterBranch}
-                    onChange={(e) => setFilterBranch(e.target.value)}
-                  >
-                    {(filterOptsQ.data?.branches ?? []).map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </label>
-                <label className="grid gap-0.5 text-xs font-medium text-foreground/88">
-                  <span className="sr-only">Lavozim</span>
-                  <FilterSelect
-                    aria-label="Lavozim"
-                    emptyLabel="Lavozim"
-                    value={filterPosition}
-                    onChange={(e) => setFilterPosition(e.target.value)}
-                  >
-                    {(filterOptsQ.data?.positions ?? []).map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </FilterSelect>
-                </label>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="shrink-0 bg-teal-700 text-white hover:bg-teal-800"
-                onClick={() => {
-                  setAppliedBranch(filterBranch);
-                  setAppliedPosition(filterPosition);
-                }}
-              >
-                Qo‘llash
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <StaffWorkspaceHeader
+        title="Сотрудники"
+        subtitle="Веб-пользователи: логин, доступ, сессии и должность"
+        addLabel="Добавить сотрудника"
+        onAdd={() => {
+          setCreateOperatorFormKey((k) => k + 1);
+          setCreateOperatorOpen(true);
+        }}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+      />
+
+      <StaffWorkspaceFilterPanel
+        filters={
+          <>
+            <StaffFilterSelect
+              label="Должность"
+              value={filterPosition}
+              onChange={setFilterPosition}
+              emptyLabel="Все должности"
+            >
+              {(filterOptsQ.data?.positions ?? []).map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </StaffFilterSelect>
+          </>
+        }
+        onReset={resetFilters}
+        onApply={applyFilters}
+        tab={tab}
+        onTabChange={setTab}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => {
+          tablePrefs.setPageSize(n);
+          setPage(1);
+        }}
+        allOnPageSelected={allOnPageSelected}
+        onToggleAllOnPage={toggleAllOnPage}
+        onColumnSettings={() => setColumnDialogOpen(true)}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск по ФИО, логину, телефону…"
+        onExport={() => {
+          const order = tablePrefs.visibleColumnOrder;
+          const headers = order.map(
+            (id) => OPERATOR_COLUMN_LABEL_BY_ID.get(id as (typeof OPERATOR_COLUMN_IDS)[number]) ?? id
+          );
+          const dataRows = rows.map((r) =>
+            order.map((colId) =>
+              operatorExportCellString(r, colId as (typeof OPERATOR_COLUMN_IDS)[number])
+            )
+          );
+          downloadXlsxSheet(
+            `sotrudniki_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+            "Сотрудники",
+            headers,
+            dataRows
+          );
+        }}
+        onRefresh={() => void listQ.refetch()}
+        isFetching={listQ.isFetching}
+        bulkMenu={
+          <select
+            aria-label="Групповая обработка"
+            className={cn(filterSelectClassName, "min-w-[11rem] max-w-[14rem]")}
+            value=""
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "revoke" && rows.length > 0) openBulkRevoke();
+              if (v === "limits" && rows.length > 0) openBulkLimits();
+              e.target.value = "";
+            }}
+          >
+            <option value="">Групповая обработка…</option>
+            <option value="revoke" disabled={rows.length === 0}>
+              Закрыть сессии
+            </option>
+            <option value="limits" disabled={rows.length === 0}>
+              Лимиты сессий
+            </option>
+          </select>
+        }
+      />
 
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlar boshqaruvi"
-        description="Ko‘rinadigan ustunlar va tartib akkauntingizga saqlanadi."
+        title="Управление столбцами"
+        description="Выберите видимые столбцы и порядок. Сохраняется для вашей учётной записи."
         columns={OPERATOR_COLUMNS}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -478,270 +497,86 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
         onReset={() => tablePrefs.resetColumnLayout()}
       />
 
-      <div className="orders-hub-section orders-hub-section--table mt-4">
-        <Card className="overflow-hidden rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
-          <CardContent className="p-0">
-            <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
-              <label className="grid shrink-0 gap-1 text-xs font-medium text-foreground/85">
-                <span className="whitespace-nowrap leading-none">Qator</span>
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                  value={pageSize}
-                  onChange={(e) => tablePrefs.setPageSize(Number.parseInt(e.target.value, 10))}
-                >
-                  {DEFAULT_TABLE_PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button
+      <StaffWorkspaceTable
+        columnOrder={tablePrefs.visibleColumnOrder}
+        columnLabelById={OPERATOR_COLUMN_LABEL_BY_ID}
+        pageRows={pageRows}
+        filteredTotal={total}
+        entityLabel="сотрудников"
+        page={safePage}
+        totalPages={pageCount}
+        onPageChange={setPage}
+        isLoading={listQ.isLoading}
+        selectedIds={selected}
+        onToggleSelection={(id, checked) => {
+          if (checked) {
+            setSelected((prev) => new Set(prev).add(id));
+          } else {
+            setSelected((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }
+        }}
+        renderCell={(colId, row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          if (colId === "active_sessions") {
+            return (
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1 px-2 text-xs"
-                title="Ustunlar va tartib"
-                onClick={() => setColumnDialogOpen(true)}
+                className="text-xs font-medium text-teal-700 tabular-nums underline-offset-2 hover:underline"
+                onClick={() => setSessionRow(r)}
               >
-                <ListOrdered className="size-3.5" />
-                Ustunlar
-              </Button>
-              <TableSearchField
-                className="max-w-[240px] flex-none"
-                placeholder="Qidiruv"
-                onSearch={setSearch}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-9 shrink-0"
-                onClick={() => {
-                  const order = tablePrefs.visibleColumnOrder;
-                  const headers = order.map((id) => OPERATOR_COLUMNS.find((c) => c.id === id)?.label ?? id);
-                  const dataRows = rows.map((r) => order.map((colId) => operatorExportCellString(r, colId)));
-                  downloadXlsxSheet(
-                    `veb_xodimlar_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-                    "Veb xodimlar",
-                    headers,
-                    dataRows
-                  );
-                }}
-              >
-                Excel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-9 w-9 shrink-0 p-0"
-                title="Ro‘yxat va faol sessiyalar sonini yangilash"
-                disabled={listQ.isFetching}
-                onClick={() => void listQ.refetch()}
-              >
-                <RefreshCw className={cn("mx-auto size-3.5", listQ.isFetching && "animate-spin")} />
-              </Button>
-              <div className="shrink-0">
-                <select
-                  aria-label="Guruh ishlovi"
-                  className={cn(filterSelectClassName, "min-w-[10rem] max-w-[14rem]")}
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "revoke" && rows.length > 0) openBulkRevoke();
-                    if (v === "limits" && rows.length > 0) openBulkLimits();
-                    e.target.value = "";
+                {r.active_session_count}
+              </button>
+            );
+          }
+          return renderOperatorDataCell(colId as (typeof OPERATOR_COLUMN_IDS)[number], r);
+        }}
+        renderActions={(row) => {
+          const r = pageRows.find((x) => x.id === row.id)!;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Активные сессии" onClick={() => setSessionRow(r)}>
+                <MonitorSmartphone className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Сменить пароль" onClick={() => setPasswordRow(r)}>
+                <KeyRound className="h-4 w-4" />
+              </AgentIconButton>
+              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                <Pencil className="h-4 w-4 text-amber-600" />
+              </AgentIconButton>
+              {tab === "active" ? (
+                <AgentIconButton
+                  title="Деактивировать"
+                  onClick={() => {
+                    if (window.confirm(`${r.fio} — деактивировать пользователя?`)) {
+                      deactivateMut.mutate(r);
+                    }
                   }}
                 >
-                  <option value="">Guruh ishlovi…</option>
-                  <option value="revoke" disabled={rows.length === 0}>
-                    Sessiyalarni yopish
-                  </option>
-                  <option value="limits" disabled={rows.length === 0}>
-                    Sessiya limitlari
-                  </option>
-                </select>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-9 shrink-0"
-                onClick={() => {
-                  setCreateOperatorFormKey((k) => k + 1);
-                  setCreateOperatorOpen(true);
-                }}
-              >
-                + Qoʻshish
-              </Button>
+                  <UserRoundX className="h-4 w-4 text-rose-600" />
+                </AgentIconButton>
+              ) : (
+                <AgentIconButton title="Активировать" onClick={() => deactivateMut.mutate(r)}>
+                  <UserRoundCheck className="h-4 w-4 text-teal-600" />
+                </AgentIconButton>
+              )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
-          <thead className="app-table-thead text-left text-xs">
-            <tr>
-              <th className="w-10 px-2 py-2">
-                <input
-                  type="checkbox"
-                  className="size-4 rounded border-input"
-                  checked={allOnPageSelected}
-                  onChange={toggleAllOnPage}
-                  aria-label="Barchasini tanlash"
-                />
-              </th>
-              {tablePrefs.visibleColumnOrder.map((colId) => {
-                const meta = OPERATOR_COLUMNS.find((c) => c.id === colId);
-                return (
-                  <th key={colId} className="px-2 py-2">
-                    {meta?.label ?? colId}
-                  </th>
-                );
-              })}
-              <th className="px-2 py-2 text-right">Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listQ.isLoading ? (
-              <tr>
-                <td
-                  colSpan={2 + tablePrefs.visibleColumnOrder.length}
-                  className="px-3 py-6 text-center text-muted-foreground"
-                >
-                  Загрузка…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={2 + tablePrefs.visibleColumnOrder.length}
-                  className="px-3 py-8 text-center text-muted-foreground"
-                >
-                  Bo‘sh
-                </td>
-              </tr>
-            ) : (
-              pageRows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="px-2 py-1.5">
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input"
-                      checked={selected.has(r.id)}
-                      onChange={() => toggleOne(r.id)}
-                      aria-label={`Tanlash ${r.login}`}
-                    />
-                  </td>
-                  {tablePrefs.visibleColumnOrder.map((colId) => (
-                    <td key={colId} className="px-2 py-1.5">
-                      {colId === "active_sessions" ? (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-primary tabular-nums underline-offset-2 hover:underline"
-                          onClick={() => setSessionRow(r)}
-                        >
-                          {r.active_session_count}
-                        </button>
-                      ) : (
-                        renderOperatorDataCell(colId, r)
-                      )}
-                    </td>
-                  ))}
-                  <td className="px-2 py-1.5 text-right">
-                    <TableRowActionGroup className="justify-end" ariaLabel="Operator">
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Faol sessiyalar"
-                        aria-label="Faol sessiyalar"
-                        onClick={() => setSessionRow(r)}
-                      >
-                        <MonitorSmartphone className="size-3.5" aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Parolni o‘zgartirish"
-                        aria-label="Parolni o‘zgartirish"
-                        onClick={() => setPasswordRow(r)}
-                      >
-                        <KeyRound className="size-3.5" aria-hidden />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-foreground"
-                        title="Maʼlumotlarni tahrirlash"
-                        aria-label="Tahrirlash"
-                        onClick={() => setEditRow(r)}
-                      >
-                        <Pencil className="size-3.5" aria-hidden />
-                      </Button>
-                      {tab === "active" ? (
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          title="Nofaol qilish"
-                          aria-label="Nofaol qilish"
-                          disabled={deactivateMut.isPending}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `${r.fio} foydalanuvchini nofaol qilasizmi?`
-                              )
-                            ) {
-                              deactivateMut.mutate(r);
-                            }
-                          }}
-                        >
-                          <UserRoundX className="size-3.5" aria-hidden />
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="ghost"
-                          className="text-primary hover:bg-primary/10"
-                          title="Faollashtirish"
-                          aria-label="Faollashtirish"
-                          disabled={deactivateMut.isPending}
-                          onClick={() => deactivateMut.mutate(r)}
-                        >
-                          <UserRoundCheck className="size-3.5" aria-hidden />
-                        </Button>
-                      )}
-                    </TableRowActionGroup>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-              </table>
-            </div>
-            {rows.length > 0 ? (
-              <div className="table-content-footer border-t border-border/80 bg-muted/25 px-3 py-2 text-xs text-muted-foreground sm:px-4">
-                Ko‘rsatilmoqda {pageRows.length} / {rows.length}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+          );
+        }}
+      />
 
-      <p className="text-xs text-muted-foreground">
-        <strong className="text-foreground">Tizim roli</strong> hozircha faqat{" "}
-        <code className="text-foreground">operator</code> (JWT).         <strong className="text-foreground">Lavozim</strong> maydoni — tashkiliy nomlar (masalan, kassir, menejer).
-        Shablonlar ro‘yxati:{" "}
-        <Link href="/settings/web-staff-position-presets" className="text-primary underline">
-          Sozlamalar → Veb xodim lavozimlari
+      <p className="text-xs text-slate-500">
+        <strong className="text-slate-700">Системная роль</strong> сейчас только{" "}
+        <code className="text-slate-700">operator</code> (JWT).{" "}
+        <strong className="text-slate-700">Должность</strong> — организационное название (кассир,
+        менеджер и т.д.). Шаблоны:{" "}
+        <Link href="/settings/web-staff-position-presets" className="text-teal-700 underline">
+          Настройки → Должности веб-сотрудников
         </Link>
-        . Kelajakda yangi veb-rol qo‘shish uchun backend{" "}
-        <code className="text-foreground">WEB_PANEL_STAFF_ROLES</code> bilan moslang. Faol sessiyalar soni jadvalda{" "}
-        <code className="text-foreground">~45 s</code> da avtomatik yangilanadi yoki yangilash tugmasi bilan.
+        . Счётчик активных сессий обновляется каждые ~45 с или по кнопке обновления.
       </p>
 
       <Dialog open={createOperatorOpen} onOpenChange={setCreateOperatorOpen}>
@@ -752,7 +587,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           <DialogHeader>
             <DialogTitle>Yangi veb xodim</DialogTitle>
             <DialogDescription>
-              Login va parol noyob bo‘lishi kerak. Filial va lavozim ro‘yxatdan tanlanadi.
+              Login va parol noyob bo‘lishi kerak. Lavozim ro‘yxatdan tanlanadi.
             </DialogDescription>
           </DialogHeader>
           <WebOperatorCreateWorkspace
@@ -958,7 +793,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </StaffWorkspaceLayout>
   );
 }
 
@@ -1036,7 +871,6 @@ function WebStaffEditDialog({
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
   const [max_sessions, setMaxS] = useState("1");
   const [app_access, setAppAccess] = useState(false);
@@ -1051,7 +885,6 @@ function WebStaffEditDialog({
     setEmail(row.email ?? "");
     setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
     setMaxS(String(row.max_sessions));
     setAppAccess(row.app_access);
@@ -1070,7 +903,6 @@ function WebStaffEditDialog({
         email: email.trim() || null,
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
-        branch: branch.trim() || null,
         position: position.trim() || null,
         max_sessions: Number.isFinite(ms) ? ms : row.max_sessions,
         app_access,
@@ -1088,6 +920,7 @@ function WebStaffEditDialog({
         <DialogHeader>
           <DialogTitle>Tahrirlash — {row.login}</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice />
         <div className="grid gap-2 text-sm">
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Ism *</span>
@@ -1116,19 +949,6 @@ function WebStaffEditDialog({
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">PINFL</span>
             <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Filial</span>
-            <Input
-              list="webstaff-branches-edit"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            />
-            <datalist id="webstaff-branches-edit">
-              {(filterOptions?.branches ?? []).map((b) => (
-                <option key={b} value={b} />
-              ))}
-            </datalist>
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>

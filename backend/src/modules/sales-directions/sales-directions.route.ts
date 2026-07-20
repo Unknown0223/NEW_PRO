@@ -4,7 +4,11 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import {
+  mergeDirectoryAllowedIds,
+  resolveActorTradeDirectionDirectoryIds
+} from "../access/access-directory-scope";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   createKpiGroup,
   createSalesChannelRef,
@@ -73,15 +77,23 @@ export async function registerSalesDirectionRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
+      const tenantId = request.tenant!.id;
       const q = request.query as Record<string, string | undefined>;
       const is_active = boolQuery.safeParse(q.is_active).data;
       const useProp = boolQuery.safeParse(q.use_in_order_proposal).data;
       const search = q.search?.trim() || q.q?.trim();
       try {
-        const data = await listTradeDirections(request.tenant!.id, {
+        const viewer = getAccessUser(request);
+        const actorIds = await resolveActorTradeDirectionDirectoryIds(tenantId, {
+          userId: actorUserIdOrNull(request),
+          role: viewer.role
+        });
+        const allowed_ids = mergeDirectoryAllowedIds(actorIds, undefined);
+        const data = await listTradeDirections(tenantId, {
           is_active,
           search,
-          use_in_order_proposal: useProp === true ? true : undefined
+          use_in_order_proposal: useProp === true ? true : undefined,
+          ...(allowed_ids !== undefined ? { allowed_ids } : {})
         });
         return reply.send({ data });
       } catch (e) {

@@ -33,20 +33,23 @@ type Props = {
 };
 
 export function DropZone({ zone, children, className }: Props) {
-  const { setNodeRef, isOver } = useDroppable({ id: `${zone}-zone` });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${zone}-zone`,
+    data: { zone, type: "zone" }
+  });
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[72px] rounded-md border-2 border-dashed p-2 transition-colors",
+        "flex min-h-[72px] max-h-[160px] flex-col overflow-hidden rounded-md border-2 border-dashed p-2 transition-colors",
         ZONE_COLORS[zone],
         isOver && "border-primary/60 ring-1 ring-primary/30",
         className
       )}
     >
-      <div className="mb-1 text-xs font-semibold">{getZoneLabels()[zone]}</div>
-      {children}
+      <div className="mb-1 shrink-0 text-xs font-semibold">{getZoneLabels()[zone]}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
     </div>
   );
 }

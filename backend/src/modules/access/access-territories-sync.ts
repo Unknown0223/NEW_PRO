@@ -136,7 +136,8 @@ export function invalidateAccessTerritorySyncCache(tenantId: number): void {
 }
 
 /**
- * Upsert строк `territories` по payload. При совпадении digest с недавним sync — без транзакции.
+ * Upsert строк `territories` по payload. При совпадении digest с недавним sync — без транзакции,
+ * но только если в БД уже есть активные строки (иначе digest-кэш мог «пропустить» пустую таблицу).
  */
 export async function syncTerritoriesFromPayload(
   tenantId: number,
@@ -151,7 +152,11 @@ export async function syncTerritoriesFromPayload(
   const now = Date.now();
   const cached = territorySyncDigestCache.get(tenantId);
   if (cached && cached.digest === digest && now - cached.at < TERRITORY_SYNC_SKIP_MS) {
-    return;
+    const existing = await prisma.territory.count({
+      where: { tenant_id: tenantId, deleted_at: null }
+    });
+    if (existing > 0) return;
+    territorySyncDigestCache.delete(tenantId);
   }
 
   const UPSERT_CHUNK = 40;

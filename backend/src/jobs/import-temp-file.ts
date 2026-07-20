@@ -47,3 +47,12 @@ export async function writeProductImportTempFile(buf: Buffer): Promise<string> {
 export async function writePriceImportTempFile(buf: Buffer): Promise<string> {
   return writeTempXlsx(buf, "prc");
 }
+
+export async function writeMigrationImportTempFile(buf: Buffer): Promise<string> {
+  const dir = importsBaseDir();
+  await mkdir(dir, { recursive: true });
+  const name = `mig-${Date.now()}-${randomBytes(8).toString("hex")}.salec-backup.zip`;
+  const full = path.join(dir, name);
+  await writeFile(full, buf, { mode: 0o600 });
+  return full;
+}

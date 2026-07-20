@@ -17,6 +17,7 @@ import {
   normalizeWarehouseStaffEntitlementsRow,
   toPrismaJsonEntitlements
 } from "./skladchik-entitlements";
+import { onAppAccessChanged } from "../auth/app-access.service";
 import type { DistributionWebStaffRole } from "../../lib/tenant-user-roles";
 import {
   ADMIN_AND_OPERATOR_LIKE_ROLES,
@@ -129,6 +130,10 @@ export async function patchOperator(
       data
     });
 
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, operatorId, input.app_access);
+    }
+
     await appendTenantAuditEvent({
       tenantId,
       actorUserId,
@@ -231,6 +236,9 @@ export async function patchSkladchik(
       where: { id: skladchikId },
       data
     });
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, skladchikId, input.app_access);
+    }
   }
 
   if (touchWarehouseLinks) {

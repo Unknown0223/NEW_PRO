@@ -5,6 +5,7 @@ import {
   type DeliveryDebtInfo,
   type UnpaidDeliveredOrderRow
 } from "./client-balances.delivery";
+import type { ClientDebtSplit } from "./client-debt-by-agent";
 import { paymentAmountsForOrderDebtByMethod } from "./client-balances.payments.util";
 import type { ClientBalancePaymentTypeSummary, ClientBalanceRow } from "./client-balances.types";
 import {
@@ -31,7 +32,8 @@ export function mapClientRow(
   balanceOverride: Prisma.Decimal | null,
   deliveryOverride: DeliveryDebtInfo | null,
   /** «По клиентам»: yetkazilgan, lekin zakaz bo‘yicha to‘lanmagan — balans ustiga */
-  unpaidDeliveredBlend?: DeliveryDebtInfo | null
+  unpaidDeliveredBlend?: DeliveryDebtInfo | null,
+  debtSplit?: ClientDebtSplit | null
 ): ClientBalanceRow {
   const ledgerBal = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
   let bal: Prisma.Decimal;
@@ -100,6 +102,10 @@ export function mapClientRow(
     last_payment_at: lastPay?.toISOString() ?? null,
     days_since_payment: daysSincePay,
     balance: balStr,
+    legacy_debt: debtSplit ? debtSplit.legacy_debt.toString() : null,
+    current_debt: debtSplit ? debtSplit.current_debt.toString() : null,
+    legacy_agent_names: debtSplit?.legacy_agent_names ?? null,
+    current_agent_name: debtSplit?.current_agent_name ?? null,
     payment_amounts: paymentAmounts
   };
 }

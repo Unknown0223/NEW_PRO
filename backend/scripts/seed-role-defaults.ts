@@ -10,12 +10,14 @@
 import { prisma } from "../src/config/database";
 import { syncDefaultPermissionMetadata } from "../src/modules/access/permission-catalog.service";
 import { ensureRoleByKey, ensureTenantRolesForRoleDefaults } from "../src/modules/access/rbac.roles";
-import { setRolePermissions } from "../src/modules/access/rbac.permissions";
+import { setRolePermissions, stripGrantDelegationKeysFromRoles } from "../src/modules/access/rbac.permissions";
 import { buildRoleDefaultKeys, rolesWithPresets } from "../src/modules/access/role-permission-presets";
 
 async function seedTenant(tenantId: number, slug: string, force: boolean) {
   await syncDefaultPermissionMetadata(tenantId);
   await ensureTenantRolesForRoleDefaults(tenantId);
+  const stripped = await stripGrantDelegationKeysFromRoles(tenantId);
+  if (stripped > 0) console.log(`  • stripped access.grant.* from roles: ${stripped}`);
 
   let touched = 0;
   for (const roleKey of rolesWithPresets()) {

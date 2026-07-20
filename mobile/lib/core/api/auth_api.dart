@@ -64,25 +64,48 @@ class AuthApi {
     final code = e.response?.statusCode ?? 0;
     final data = e.response?.data;
     final errCode = data is Map ? data['error']?.toString() ?? '' : '';
+    final apiMessage = data is Map ? data['message']?.toString() : null;
+
     if (code == 403 && errCode == 'APP_ACCESS_DENIED') {
       return const AppAccessDeniedException();
     }
+    if (code == 403 && errCode == 'USER_NOT_ON_SLOT') {
+      return UserNotOnSlotException(
+        message: (apiMessage != null && apiMessage.isNotEmpty)
+            ? apiMessage
+            : 'Не назначен на рабочее место. Обратитесь к администратору.',
+      );
+    }
     if (code == 401 && errCode == 'SESSION_REVOKED') {
-      return const UnauthorizedException(message: 'Sessiya tugatildi. Qayta kiring.');
+      return SessionRevokedException(
+        message: (apiMessage != null && apiMessage.isNotEmpty)
+            ? apiMessage
+            : 'Сессия завершена. Войдите снова.',
+      );
+    }
+    if (code == 401 && errCode == 'INVALID_CREDENTIALS') {
+      return InvalidCredentialsException(
+        message: (apiMessage != null && apiMessage.isNotEmpty)
+            ? apiMessage
+            : 'Неверный логин или пароль',
+      );
     }
     if (code == 403 && errCode == 'SESSION_LIMIT') {
-      final msg = (data is Map ? data['message']?.toString() : null);
-      return UnauthorizedException(
-        message: (msg != null && msg.isNotEmpty)
-            ? msg
-            : 'Превышен лимит активных сессий. Завершите сессию на другом устройстве.',
+      return SessionLimitException(
+        message: (apiMessage != null && apiMessage.isNotEmpty)
+            ? apiMessage
+            : 'Лимит активных сессий исчерпан. Завершите вход на другом устройстве или обратитесь к администратору.',
       );
     }
     return mapDioException(e, extraCodes: const {
       'TENANT_NOT_FOUND': 'Неверный код компании',
       'TenantNotFound': 'Неверный код компании',
       'INVALID_CREDENTIALS': 'Неверный логин или пароль',
-      'SESSION_LIMIT': 'Превышен лимит активных сессий. Завершите сессию на другом устройстве.',
+      'USER_NOT_ON_SLOT':
+          'Не назначен на рабочее место. Обратитесь к администратору.',
+      'SESSION_LIMIT':
+          'Лимит активных сессий исчерпан. Завершите вход на другом устройстве или обратитесь к администратору.',
+      'SESSION_REVOKED': 'Сессия завершена. Войдите снова.',
     },);
   }
 }

@@ -4,9 +4,12 @@ import { Input } from "@/components/ui/input";
 import type { SettingsItem } from "@/lib/settings-structure";
 import {
   filterSettingsSectionsByRole,
+  findSettingsItemRequiringRolesForPath,
+  isSettingsItemAllowedForRole,
   resolveSettingsItemHref,
   settingsSections
 } from "@/lib/settings-structure";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { useEffectiveRole } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -148,11 +151,31 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       .filter((s) => s.items.length > 0);
   }, [search, roleFilteredSections]);
 
+  const settingsRoleGate = useMemo(() => {
+    const item = findSettingsItemRequiringRolesForPath(pathname);
+    if (!item) return null;
+    if (isSettingsItemAllowedForRole(item, role)) return null;
+    return item;
+  }, [pathname, role]);
+
+  const gatedChildren = settingsRoleGate ? (
+    <div className="flex flex-1 items-start justify-center py-8">
+      <AccessDeniedBanner
+        title="Нет доступа / Ruxsat yo‘q"
+        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли. / Bu sozlama bo‘limi sizning rolingiz uchun yopiq.`}
+        primaryHref="/settings"
+        primaryLabel="К настройкам / Sozlamalar"
+      />
+    </div>
+  ) : (
+    children
+  );
+
   if (hideSettingsAside) {
     return (
       <div className="min-w-0">
         <main className={cn("min-w-0", isGeoBoundariesPage ? "p-0" : "px-3 py-4 md:px-4 md:py-5")}>
-          {children}
+          {gatedChildren}
         </main>
       </div>
     );
@@ -287,7 +310,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-4 md:py-5">
-        {children}
+        {gatedChildren}
       </main>
     </div>
   );

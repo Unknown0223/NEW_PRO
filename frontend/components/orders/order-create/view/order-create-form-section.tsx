@@ -20,7 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarDays, Check, Gift, Search } from "lucide-react";
 import { ExchangeOrderCreatePanel } from "@/components/orders/exchange-order-create-panel";
 import { OrderCreateAgentLockHint } from "@/components/orders/order-create-agent-lock-hint";
-import { fieldClass, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS, POLKI_PRICE_TYPE_LABEL_RU } from "../constants";
+import { fieldClass, POLKI_TRADE_DIRECTION_OPTS, POLKI_SKIDKA_OPTS } from "../constants";
+import { buildPriceTypeLabelMap, priceTypeDisplayLabel } from "@/lib/price-type-label";
+import { useMemo } from "react";
 import {
   parseStockQty,
   parsePriceAmount,
@@ -130,6 +132,15 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     useSplitOrderCatalog,
     warehouses,
   } = vm;
+
+  // «Тип цены» kaliti (kod) → spravochnikdagi nom
+  const priceTypeLabels = useMemo(
+    () =>
+      buildPriceTypeLabelMap(
+        createCtxQ.data?.settings_profile?.references?.price_type_entries ?? []
+      ),
+    [createCtxQ.data?.settings_profile?.references?.price_type_entries]
+  );
 
   return (
     <>
@@ -359,7 +370,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                           mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor
                         }
                       />
-                      <span className="font-medium capitalize">{t}</span>
+                      <span className="font-medium capitalize">{priceTypeDisplayLabel(t, priceTypeLabels)}</span>
                     </label>
                   ))}
                 </div>
@@ -596,7 +607,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                           onChange={() => setPriceType(t)}
                           disabled={mutation.isPending || createCtxQ.isPending}
                         />
-                        <span>{POLKI_PRICE_TYPE_LABEL_RU[t] ?? t}</span>
+                        <span>{priceTypeDisplayLabel(t, priceTypeLabels)}</span>
                       </label>
                     ))}
                   </div>

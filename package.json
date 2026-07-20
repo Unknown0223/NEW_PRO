@@ -8,7 +8,9 @@
   "scripts": {
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
     "build:pivot-engine": "npm run build --workspace=@salec/pivot-engine",
+    "build:pivot-ui": "npm run build --workspace=@salec/pivot-ui",
     "test:pivot-engine": "npm run test --workspace=@salec/pivot-engine",
+    "bench:pivot": "npm run build:pivot-engine && node packages/pivot-engine/scripts/benchmark-smoke.mjs",
     "pivot-demo": "npm run build:pivot-engine && npm run dev --workspace=@salec/pivot-demo",
     "ports:free": "node scripts/free-dev-ports.cjs 18080 3000 3001 3002 3003",
     "repair:next": "node scripts/free-dev-ports.cjs 3000 3001 3002 3003 && npm run clean --prefix frontend",

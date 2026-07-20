@@ -18,6 +18,7 @@ import {
 } from "./dashboard.expeditors.service";
 import { sendApiError } from "../../lib/api-error";
 import {
+  applyAccessAgentIdsScope,
   applySupervisorSelfScope,
   dashboardSupervisorPreHandler
 } from "./dashboard.routes.shared";
@@ -31,6 +32,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const parsed = parseSupervisorDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSupervisorSummary(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -52,6 +54,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const parsed = parseSupervisorDashboardFilters(q);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "50", 10);
       const t0 = Date.now();
@@ -74,6 +77,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const parsed = parseSupervisorDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSupervisorProducts(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -95,6 +99,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const parsed = parseSupervisorDashboardFilters(q);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const agentId = Number.parseInt(q.agent_id ?? "", 10);
       if (!Number.isFinite(agentId) || agentId <= 0) {
         return sendApiError(reply, request, 400, "ValidationError", "agent_id is required");
@@ -176,6 +181,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       const parsed = parseSupervisorDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSupervisorDashboardSnapshot(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {

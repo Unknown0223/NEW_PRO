@@ -151,6 +151,69 @@ describe("buildQtyEligibleRowsFromPeeks", () => {
     expect(purchased.get(1)).toBe(23);
     expect(purchased.get(2)).toBe(32);
   });
+
+  it("pick_product: bonus_product_ids peekdan tashqari ham gift_products ga kiradi", () => {
+    const rule = qtyRule({
+      product_ids: [1],
+      bonus_product_ids: [101, 102],
+      product_category_ids: [5],
+      scope_restrict_assortment: false,
+      scope_restrict_category: true
+    });
+    const peeks: QtyBonusPeek[] = [{ rule, purchasedPid: 1, giftPid: 101, bonusQty: 2 }];
+    const productMap = new Map([
+      [1, { id: 1, name: "Trigger", category: null }],
+      [101, { id: 101, name: "Gift A", category: null }],
+      [102, { id: 102, name: "Gift B", category: null }]
+    ]);
+    const available = new Map<number, number>([
+      [1, 50],
+      [101, 20],
+      [102, 30]
+    ]);
+    const qtyByProduct = new Map<number, number>([[1, 10]]);
+
+    const rows = buildQtyEligibleRowsFromPeeks(peeks, productMap, available, qtyByProduct);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.gift_selection_kind).toBe("pick_product");
+    expect(rows[0]!.allow_gift_swap).toBe(true);
+    expect(rows[0]!.gift_products.map((g) => g.product_id).sort()).toEqual([101, 102]);
+  });
+
+  it("category_stock: allowedGiftsByRuleId to‘liq havzani beradi va swap yoqadi", () => {
+    const rule = qtyRule({
+      product_ids: [],
+      bonus_product_ids: [],
+      product_category_ids: [5],
+      scope_restrict_assortment: false,
+      scope_restrict_category: true
+    });
+    const peeks: QtyBonusPeek[] = [{ rule, purchasedPid: 1, giftPid: 201, bonusQty: 3 }];
+    const productMap = new Map([
+      [201, { id: 201, name: "Cat A", category: { name: "Cat" } }],
+      [202, { id: 202, name: "Cat B", category: { name: "Cat" } }],
+      [203, { id: 203, name: "Cat C", category: { name: "Cat" } }]
+    ]);
+    const available = new Map<number, number>([
+      [201, 40],
+      [202, 10],
+      [203, 5]
+    ]);
+    const qtyByProduct = new Map<number, number>([[1, 15]]);
+    const allowed = new Map<number, number[]>([[rule.id, [201, 202, 203]]]);
+
+    const rows = buildQtyEligibleRowsFromPeeks(
+      peeks,
+      productMap,
+      available,
+      qtyByProduct,
+      allowed
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.gift_selection_kind).toBe("category_stock");
+    expect(rows[0]!.allow_gift_swap).toBe(true);
+    expect(rows[0]!.gift_products.map((g) => g.product_id).sort()).toEqual([201, 202, 203]);
+  });
 });
 
 describe("filterEligibleBonusesForPreview", () => {

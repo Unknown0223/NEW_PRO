@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import {
+  isDirectoryIdAllowed,
+  mergeDirectoryAllowedIds,
+  resolveActorWarehouseDirectoryIds
+} from "../access/access-directory-scope";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   requireRolesOrSkladchikAnyEntitlement,
   SKLADCHIK_ALL_ENTITLEMENT_KEYS
@@ -21,6 +26,16 @@ import {
   updateWarehouseRow
 } from "./reference.service";
 
+async function warehouseDirectoryIdsForRequest(
+  request: Parameters<typeof getAccessUser>[0],
+  tenantId: number
+) {
+  const viewer = getAccessUser(request);
+  return resolveActorWarehouseDirectoryIds(tenantId, {
+    userId: actorUserIdOrNull(request),
+    role: viewer.role
+  });
+}
 
 export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
   app.get(
@@ -28,12 +43,18 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
+      const tenantId = request.tenant!.id;
       const q = request.query as Record<string, string | undefined>;
       const selected = parseSelectedMastersFromQuery(q);
-      const scope = await resolveConstraintScope(request.tenant!.id, selected);
+      const scope = await resolveConstraintScope(tenantId, selected);
+      const actorIds = await warehouseDirectoryIdsForRequest(request, tenantId);
+      const allowed_ids = mergeDirectoryAllowedIds(
+        actorIds,
+        scope.constrained ? scope.warehouse_ids : undefined
+      );
       const data = await listWarehousesForTenant(
-        request.tenant!.id,
-        scope.constrained ? { allowed_ids: scope.warehouse_ids } : undefined
+        tenantId,
+        allowed_ids !== undefined ? { allowed_ids } : undefined
       );
       return reply.send({ data });
     }
@@ -44,6 +65,7 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
+      const tenantId = request.tenant!.id;
       const q = request.query as Record<string, string | undefined>;
       const archive = q.archive === "true" || q.archive === "1";
       const is_active =
@@ -51,12 +73,14 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
       const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
       const limit = Math.min(100, Math.max(1, Number.parseInt(q.limit ?? "10", 10) || 10));
       const search = (q.q ?? "").trim();
-      const result = await listWarehousesTable(request.tenant!.id, {
+      const actorIds = await warehouseDirectoryIdsForRequest(request, tenantId);
+      const result = await listWarehousesTable(tenantId, {
         is_active,
         archive,
         q: search || undefined,
         page,
-        limit
+        limit,
+        allowed_ids: mergeDirectoryAllowedIds(actorIds, undefined)
       });
       return reply.send(result);
     }
@@ -67,7 +91,11 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const data = await listWarehousePickers(request.tenant!.id);
+      const viewer = getAccessUser(request);
+      const data = await listWarehousePickers(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
       return reply.send({ data });
     }
   );
@@ -77,11 +105,16 @@ export async function registerReferenceWarehouseRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ALL_ENTITLEMENT_KEYS)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
+      const tenantId = request.tenant!.id;
       const id = Number.parseInt((request.params as { warehouseId: string }).warehouseId, 10);
       if (Number.isNaN(id)) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
-      const row = await getWarehouseDetail(request.tenant!.id, id);
+      const actorIds = await warehouseDirectoryIdsForRequest(request, tenantId);
+      if (!isDirectoryIdAllowed(actorIds, id)) {
+        return sendApiError(reply, request, 404, "NotFound");
+      }
+      const row = await getWarehouseDetail(tenantId, id);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     }

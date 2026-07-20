@@ -4,6 +4,8 @@ import { prisma } from "../../config/database";
 
 
 import type { RetailStockListQuery } from "./retail-stock.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
+import { intersectRequestedAgentIds } from "../access/access-agent-scope";
 
 export function parseDateOnly(s: string | undefined): Date | null {
   if (!s) return null;
@@ -59,7 +61,11 @@ export function toDecimal(v: string | number | Prisma.Decimal | null | undefined
   return new Prisma.Decimal(v);
 }
 
-export function buildWhere(tenantId: number, q: RetailStockListQuery): Prisma.RetailOutletStockWhereInput {
+export function buildWhere(
+  tenantId: number,
+  q: RetailStockListQuery,
+  actor?: ScopedReportActor
+): Prisma.RetailOutletStockWhereInput {
   const where: Prisma.RetailOutletStockWhereInput = { tenant_id: tenantId };
   const dateFrom = parseDateOnly(q.date_from);
   const dateTo = parseDateOnly(q.date_to);
@@ -69,7 +75,19 @@ export function buildWhere(tenantId: number, q: RetailStockListQuery): Prisma.Re
       ...(dateTo ? { lte: dateTo } : {})
     };
   }
-  if (q.agent_id && q.agent_id > 0) where.agent_id = q.agent_id;
+  const agentScope = actor
+    ? intersectRequestedAgentIds(q.agent_id && q.agent_id > 0 ? [q.agent_id] : undefined, actor)
+    : {
+        agentIds: q.agent_id && q.agent_id > 0 ? [q.agent_id] : [],
+        restricted: false
+      };
+  if (agentScope.restricted) {
+    where.agent_id = { in: agentScope.agentIds };
+  } else if (agentScope.agentIds.length === 1) {
+    where.agent_id = agentScope.agentIds[0];
+  } else if (agentScope.agentIds.length > 1) {
+    where.agent_id = { in: agentScope.agentIds };
+  }
   if (q.product_id && q.product_id > 0) where.product_id = q.product_id;
   if (q.price_type?.trim()) where.price_type = q.price_type.trim();
   if (q.territory_1?.trim()) where.territory_1 = q.territory_1.trim();

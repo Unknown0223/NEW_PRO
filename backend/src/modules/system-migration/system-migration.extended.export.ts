@@ -39,7 +39,17 @@ async function exportExtendedTable(tenantId: number, spec: ExtendedTableSpec): P
   ];
   if (!delegate?.findMany) return [];
   const where = exportWhere(tenantId, spec.scope ?? "tenant");
-  return delegate.findMany({ where });
+  try {
+    return await delegate.findMany({ where });
+  } catch (e) {
+    const code =
+      e !== null && typeof e === "object" && "code" in e ? String((e as { code?: unknown }).code) : "";
+    if (code === "P2021" || code === "P2022") {
+      console.warn(`[system-migration.extended.export] skip ${spec.file}: ${code}`);
+      return [];
+    }
+    throw e;
+  }
 }
 
 export async function loadExtendedTables(tenantId: number): Promise<Record<string, unknown[]>> {

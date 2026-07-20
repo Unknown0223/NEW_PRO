@@ -227,7 +227,11 @@ class SyncConfig {
         blockSync: j['block_sync'] ?? false,
         allowedWindowFrom: _optHm(j['allowed_window_from']),
         allowedWindowTo: _optHm(j['allowed_window_to']),
-        postOrderDelayMinutes: (j['post_order_delay_minutes'] as num?)?.toInt() ?? 0,
+        postOrderDelayMinutes: () {
+          final raw = (j['post_order_delay_minutes'] as num?)?.toInt() ?? 0;
+          if (raw <= 0) return 0;
+          return raw > 59 ? 59 : raw;
+        }(),
       );
 }
 

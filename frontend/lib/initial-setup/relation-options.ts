@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { flattenTerritoryNodes } from "@/lib/initial-setup/profile-to-preview";
+import { PRODUCT_UNIT_CUSTOM, PRODUCT_UNIT_OPTIONS } from "@/lib/product-units";
 
 export type RelationOption = { value: string; label: string };
 
@@ -10,6 +11,8 @@ export type RelationSource =
   | "territory-code"
   | "currency-code"
   | "unit-code"
+  | "unit-name"
+  | "payment-method"
   | "price-type"
   | "branch-code"
   | "warehouse-name"
@@ -26,7 +29,9 @@ export const RELATION_SOURCE_LABEL: Record<RelationSource, string> = {
   "territory-parent": "Родитель (территория)",
   "territory-code": "Город / зона (код)",
   "currency-code": "Валюта",
-  "unit-code": "Единица",
+  "unit-code": "Единица (код)",
+  "unit-name": "Единица (название)",
+  "payment-method": "Способ оплаты",
   "price-type": "Тип цены",
   "branch-code": "Филиал",
   "warehouse-name": "Склад",
@@ -111,6 +116,8 @@ export async function loadRelationOptions(
     need.has("territory-code") ||
     need.has("currency-code") ||
     need.has("unit-code") ||
+    need.has("unit-name") ||
+    need.has("payment-method") ||
     need.has("price-type") ||
     need.has("branch-code") ||
     need.has("client-format-code") ||
@@ -154,10 +161,51 @@ export async function loadRelationOptions(
       return name ? `${name} (${code})` : code;
     });
   }
+  if (need.has("unit-name")) {
+    const fromRefs = asRecords(profileRefs?.unit_measures).flatMap((r) => {
+      const title = String(r.title ?? "").trim();
+      const name = String(r.name ?? "").trim();
+      const opts: Array<RelationOption | null> = [];
+      if (title) opts.push(opt(title));
+      if (name && name.toLowerCase() !== title.toLowerCase()) opts.push(opt(name));
+      return opts;
+    });
+    const fromStandard = PRODUCT_UNIT_OPTIONS.filter((o) => o.value !== PRODUCT_UNIT_CUSTOM).map(
+      (o) => opt(o.value, o.label)
+    );
+    out["unit-name"] = uniqueOptions([...fromRefs, ...fromStandard]);
+  }
+  if (need.has("payment-method")) {
+    const active = asRecords(profileRefs?.payment_method_entries).filter(
+      (r) => r.active !== false
+    );
+    out["payment-method"] = uniqueOptions(
+      active.flatMap((r) => {
+        const name = String(r.name ?? "").trim();
+        const code = String(r.code ?? "").trim();
+        const label = name || code;
+        const opts: Array<RelationOption | null> = [];
+        // value: kod yoki nom (import moslashuvi); label: faqat nom
+        if (code) opts.push(opt(code, label));
+        if (name) opts.push(opt(name, label));
+        return opts;
+      })
+    );
+  }
   if (need.has("price-type")) {
-    const byCode = fromRefEntries(profileRefs, "price_type_entries", "code");
-    const byName = fromRefEntries(profileRefs, "price_type_entries", "name");
-    out["price-type"] = uniqueOptions([...byCode, ...byName].map((o) => o));
+    // value: kod/nom; label: faqat nom (kod qo‘shib ko‘rsatilmasin)
+    const entries = asRecords(profileRefs?.price_type_entries).filter((r) => r.active !== false);
+    out["price-type"] = uniqueOptions(
+      entries.flatMap((r) => {
+        const name = String(r.name ?? "").trim();
+        const code = String(r.code ?? "").trim();
+        const label = name || code;
+        const opts: Array<RelationOption | null> = [];
+        if (code) opts.push(opt(code, label));
+        if (name) opts.push(opt(name, label));
+        return opts;
+      })
+    );
   }
   if (need.has("branch-code")) {
     out["branch-code"] = fromRefEntries(profileRefs, "branches", "code", (r) => {

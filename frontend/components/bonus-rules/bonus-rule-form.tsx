@@ -26,6 +26,7 @@ import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -221,8 +222,10 @@ export function BonusRuleForm({
     staleTime: STALE.reference,
     enabled: Boolean(tenantSlug),
     queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types`);
-      return data.data;
+      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
+        `/api/${tenantSlug}/price-types`
+      );
+      return priceTypeOptionsFromResponse(data);
     }
   });
 
@@ -922,8 +925,8 @@ export function BonusRuleForm({
           >
             <option value="">Все</option>
             {(priceTypesQ.data ?? []).map((t) => (
-              <option key={t} value={t}>
-                {t}
+              <option key={t.id} value={t.id}>
+                {t.label}
               </option>
             ))}
           </BonusRuleFloatingSelect>

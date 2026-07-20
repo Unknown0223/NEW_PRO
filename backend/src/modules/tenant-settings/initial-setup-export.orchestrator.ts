@@ -154,11 +154,22 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
   if (paySheet) byId.set("payment-methods", paySheet);
 
   const priceTypes = (refs.price_type_entries as PriceTypeEntryDto[] | undefined) ?? [];
+  // Excel «Способ оплаты» — inson o‘qiydigan nom (kod alohida «Код» ustunida)
+  const payById = new Map(
+    payMethods.map((p) => [p.id, (p.name.trim() || (p.code ?? "").trim()) as string] as const)
+  );
+  const priceTypeRows = priceTypes.map((pt) => ({
+    name: pt.name,
+    code: pt.code,
+    payment_method: payById.get(pt.payment_method_id) ?? pt.payment_method_id,
+    kind: pt.kind ?? "sale",
+    sort_order: pt.sort_order
+  }));
   const ptSheet = sheetFromRefEntries(
     "price-types",
-    ["Название", "Код", "Сортировка"],
-    ["name", "code", "sort_order"],
-    priceTypes as unknown as Record<string, unknown>[]
+    ["Название", "Код", "Способ оплаты (название/код)", "Вид (sale/purchase)", "Сортировка"],
+    ["name", "code", "payment_method", "kind", "sort_order"],
+    priceTypeRows as unknown as Record<string, unknown>[]
   );
   if (ptSheet) byId.set("price-types", ptSheet);
 
@@ -171,21 +182,28 @@ async function collectExportSheets(tenantId: number): Promise<ExportSheet[]> {
   );
   if (brSheet) byId.set("branches", brSheet);
 
-  // Territory tree → flat rows
+  // Territory tree → flat Город | Код города | Название региона | Зона
   type TerrNode = { name?: string; code?: string | null; comment?: string | null; children?: TerrNode[] };
   const terrRoots = (refs.territory_nodes as TerrNode[] | undefined) ?? [];
   if (terrRoots.length) {
-    const terrRows: string[][] = [["Название", "Уровень", "Родитель", "Код"]];
-    const walk = (nodes: TerrNode[], parent: string, depth: number) => {
-      const level = depth === 0 ? "зона" : depth === 1 ? "регион" : "город";
+    const terrRows: string[][] = [["Город", "Код города", "Название региона", "Зона"]];
+    const walk = (nodes: TerrNode[], zone: string, region: string, depth: number) => {
       for (const n of nodes) {
         const name = String(n.name ?? "").trim();
         if (!name) continue;
-        terrRows.push([name, n.comment || level, parent, String(n.code ?? "")]);
-        if (Array.isArray(n.children) && n.children.length) walk(n.children, name, depth + 1);
+        const children = Array.isArray(n.children) ? n.children : [];
+        if (depth === 0) {
+          if (children.length) walk(children, name, region, 1);
+        } else if (depth === 1) {
+          if (children.length) walk(children, zone, name, 2);
+        } else if (!children.length && zone && region) {
+          terrRows.push([name, String(n.code ?? ""), region, zone]);
+        } else if (children.length) {
+          walk(children, zone, region, depth + 1);
+        }
       }
     };
-    walk(terrRoots, "", 0);
+    walk(terrRoots, "", "", 0);
     if (terrRows.length > 1) byId.set("territory", { sheetName: "territory", rows: terrRows });
   }
 

@@ -6,7 +6,8 @@ String? roleGuard(String role, String location) {
     '/home', '/profile', '/clients', '/clients/new', '/orders', '/visits',
     '/report', '/warehouse-stock', '/sync-success', '/manual-sync', '/debtors',
     '/debtors-by-orders', '/route', '/map', '/search', '/settings',
-    '/draft', '/orders/create', '/client-location',
+    '/draft', '/notifications', '/tabel', '/kpi', '/kpi/calc', '/orders/create',
+    '/client-location',
   };
   const expeditorRoutes = {
     '/home', '/profile', '/visits', '/debtors', '/invoices',
@@ -25,6 +26,7 @@ String? roleGuard(String role, String location) {
 
   if (location == '/home' || location == '/profile') return null;
   if (role == 'agent' && location.startsWith('/clients/')) return null;
+  if (role == 'agent' && location.startsWith('/kpi')) return null;
   if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
   if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;
@@ -62,6 +64,15 @@ void main() {
 
     test('agent cannot access expeditor deliveries', () {
       expect(roleGuard('agent', '/deliveries'), '/home');
+    });
+
+    test('agent can access notifications', () {
+      expect(roleGuard('agent', '/notifications'), isNull);
+    });
+
+    test('agent can access kpi', () {
+      expect(roleGuard('agent', '/kpi'), isNull);
+      expect(roleGuard('agent', '/kpi/calc'), isNull);
     });
   });
 }

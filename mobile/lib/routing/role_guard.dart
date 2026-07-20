@@ -21,6 +21,10 @@ class _RoleRoutes {
     '/search',
     '/settings',
     '/draft',
+    '/notifications',
+    '/tabel',
+    '/kpi',
+    '/kpi/calc',
     '/orders/create',
     '/client-location',
   };
@@ -66,6 +70,7 @@ class _RoleRoutes {
     if (role == 'agent' && location.startsWith('/clients/')) return null;
     if (role == 'agent' && location.startsWith('/visits/')) return null;
     if (role == 'agent' && location.startsWith('/orders/')) return null;
+    if (role == 'agent' && location.startsWith('/kpi')) return null;
     if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
     if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
     if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;

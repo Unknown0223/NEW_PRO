@@ -9,6 +9,7 @@ import '../../features/agent/home/home_visit_metrics_provider.dart';
 import '../../features/agent/home/sync_count_provider.dart';
 import '../../features/agent/orders/orders_providers.dart';
 import '../../features/agent/route/agent_route_provider.dart';
+import '../../features/agent/kpi/kpi_provider.dart';
 
 typedef ProviderInvalidator = void Function(ProviderOrFamily provider);
 
@@ -24,6 +25,7 @@ void _invalidateAll(ProviderInvalidator invalidate) {
   invalidate(filteredClientsProvider);
   invalidate(agentStaleClientCatalogProvider);
   invalidate(ordersListProvider);
+  invalidate(agentKpiProvider);
 }
 
 /// Sinxron tugagach barcha bog‘liq ekranlarni yangilash (`Ref` yoki `WidgetRef`).

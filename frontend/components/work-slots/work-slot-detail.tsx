@@ -20,6 +20,7 @@ import type { TerritoryNode } from "@/lib/territory-tree";
 import type { SlotHistoryItem, WorkSlotListItem } from "@/lib/work-slots-types";
 import { AssignUserDialog } from "./assign-user-dialog";
 import { EditSlotDialog } from "./edit-slot-dialog";
+import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
 import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
 
@@ -27,8 +28,18 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
   const { tenant, ready, hydrated } = useTenantReady();
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
   const [history, setHistory] = useState<SlotHistoryItem[]>([]);
+  const [debtCollectors, setDebtCollectors] = useState<
+    Array<{
+      user_id: number;
+      name: string;
+      is_active: boolean;
+      on_active_slot: boolean;
+      unpaid: string;
+    }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -42,14 +53,26 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     city_territory_hints?: Record<string, { city_label?: string | null }>;
   }>({});
   const [territoryNodes, setTerritoryNodes] = useState<TerritoryNode[]>([]);
+  const [tradeDirections, setTradeDirections] = useState<
+    Array<{ id: number; name: string; code: string | null }>
+  >([]);
 
   const load = useCallback(async () => {
     if (!tenant) return;
     setLoading(true);
     try {
-      const [detail, hist, list, whTable, cash, refs, profile] = await Promise.all([
+      const [detail, hist, debtCol, list, whTable, cash, refs, profile, tradeDirs] = await Promise.all([
         apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${slotId}`),
         apiFetch<{ data: SlotHistoryItem[] }>(`/api/${tenant}/work-slots/${slotId}/history?limit=30`),
+        apiFetch<{
+          data: Array<{
+            user_id: number;
+            name: string;
+            is_active: boolean;
+            on_active_slot: boolean;
+            unpaid: string;
+          }>;
+        }>(`/api/${tenant}/work-slots/${slotId}/debt-collectors`).catch(() => ({ data: [] })),
         apiFetch<{ data: WorkSlotListItem[] }>(`/api/${tenant}/work-slots?limit=100`),
         apiFetch<{ data: { id: number; name: string }[] }>(
           `/api/${tenant}/warehouses/table?is_active=true&page=1&limit=200`
@@ -67,14 +90,19 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         }>(`/api/${tenant}/clients/references`),
         apiFetch<{ references?: { territory_nodes?: TerritoryNode[] } }>(
           `/api/${tenant}/settings/profile`
-        ).catch(() => ({ references: undefined }))
+        ).catch(() => ({ references: undefined })),
+        apiFetch<{ data: Array<{ id: number; name: string; code: string | null }> }>(
+          `/api/${tenant}/trade-directions?is_active=true`
+        ).catch(() => ({ data: [] }))
       ]);
       setWarehouses((whTable.data ?? []).map((w) => ({ id: w.id, name: w.name })));
       setCashDesks((cash.data ?? []).map((c) => ({ id: c.id, name: c.name })));
       setClientRefs(refs);
       setTerritoryNodes(profile.references?.territory_nodes ?? []);
+      setTradeDirections(tradeDirs.data ?? []);
       setSlot(detail.data);
       setHistory(hist.data ?? []);
+      setDebtCollectors(debtCol.data ?? []);
       const branches = new Set<string>();
       for (const r of list.data ?? []) {
         if (r.branch_code?.trim()) branches.add(r.branch_code.trim());
@@ -131,6 +159,9 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             Tahrirlash
           </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+            Конфигурация места
+          </Button>
           <Button type="button" size="sm" onClick={() => setAssignOpen(true)}>
             Almashtirish
           </Button>
@@ -155,6 +186,22 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           </p>
           <p>
             <span className="text-muted-foreground">Filial:</span> {slot.branch_code ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Направление:</span> {slot.direction_name ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Склад:</span> {slot.active_warehouse_name ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Склад возврата:</span>{" "}
+            {slot.return_warehouse_name ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Тип цены:</span> {slot.price_type ?? "—"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Консигнация:</span> {slot.consignment ? "Да" : "Нет"}
           </p>
           <p>
             <span className="text-muted-foreground">Tur:</span> {slotTypeLabel(slot.slot_type)}
@@ -188,6 +235,56 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           <p className="text-xs text-muted-foreground">
             Mijoz qulflashi — mijoz kartasida (slot 1). Zakazlar shartnoma qulfiga bo‘ysunadi.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Qarz yig‘ishdagi agentlar (shu slot)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Slotda ishlagan agentlar: hali to‘lanmagan yetkazilgan buyurtma qarzi. Nom bilan ko‘rsatiladi (mijoz
+            boshqa agentga o‘tgan bo‘lsa ham).
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Агент</TableHead>
+                <TableHead>Статус</TableHead>
+                <TableHead>Слот</TableHead>
+                <TableHead className="text-right">Долг по заказам</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {debtCollectors.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    Qarzli sobiq/hozirgi agent yo‘q
+                  </TableCell>
+                </TableRow>
+              ) : (
+                debtCollectors.map((d) => (
+                  <TableRow key={d.user_id}>
+                    <TableCell className="font-medium">{d.name}</TableCell>
+                    <TableCell>
+                      {d.is_active ? (
+                        <Badge variant="secondary">Активен</Badge>
+                      ) : (
+                        <Badge variant="outline">Архив</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {d.on_active_slot ? "Faol slotda" : "Slotsiz"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {Number(d.unpaid).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -239,10 +336,19 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         tenant={tenant}
         slotId={slotId}
         branchOptions={branchOptions}
+        tradeDirections={tradeDirections}
         warehouses={warehouses}
         cashDesks={cashDesks}
         clientRefs={clientRefs}
         territoryNodes={territoryNodes}
+        onSaved={() => void load()}
+      />
+      <SlotWorkplaceConfigDialog
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+        tenant={tenant}
+        slotId={slotId}
+        warehouses={warehouses}
         onSaved={() => void load()}
       />
       <AssignUserDialog

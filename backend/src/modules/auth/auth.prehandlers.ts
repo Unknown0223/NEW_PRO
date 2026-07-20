@@ -1,7 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { prisma } from "../../config/database";
 import { OPERATOR_LIKE_WEB_ROLES } from "../../lib/tenant-user-roles";
 import { sendApiError } from "../../lib/api-error";
 import { resolveUserPermissionKeys } from "../access/rbac.service";
+import {
+  APP_ACCESS_DENIED_MESSAGE,
+  isAppAccessEnforcedRole
+} from "./app-access.constants";
 
 export type AccessJwtUser = {
   sub: string;
@@ -18,12 +23,33 @@ export function getAccessUser(request: FastifyRequest): AccessJwtUser {
   return request.user as AccessJwtUser;
 }
 
+/**
+ * JWT tekshiruvi + (kerak bo‘lsa) `app_access` kill-switch.
+ * Barcha himoyalangan marshrutlar shu preHandler orqali o‘tadi — to‘g‘ridan-to‘g‘ri
+ * URL / eski token bilan ham `APP_ACCESS_DENIED` qaytadi.
+ */
 export async function jwtAccessVerify(request: FastifyRequest, reply: FastifyReply) {
   try {
     await request.jwtVerify<AccessJwtUser>();
   } catch {
     /** @fastify/jwt ba’zi holatlarda `statusCode`siz tashlaydi — client 500 ko‘radi; doim 401. */
     return sendApiError(reply, request, 401, "Unauthorized", "Invalid or expired access token");
+  }
+
+  const user = getAccessUser(request);
+  if (!isAppAccessEnforcedRole(user.role)) return;
+
+  const userId = Number(user.sub);
+  if (!Number.isFinite(userId) || userId < 1) {
+    return sendApiError(reply, request, 401, "InvalidAccessUser");
+  }
+
+  const row = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { app_access: true, is_active: true }
+  });
+  if (!row?.is_active || row.app_access === false) {
+    return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", APP_ACCESS_DENIED_MESSAGE);
   }
 }
 

@@ -22,6 +22,7 @@ import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
+import { enrichScopedReportActor, assertOrderAgentAllowedForActor } from "../access/access-agent-scope";
 import {
   createPayment,
   confirmPendingPayment,
@@ -60,7 +61,12 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
         query.expeditor_user_ids = scope.expeditor_ids;
         query.warehouse_ids = scope.warehouse_ids;
       }
-      const result = await listPayments(request.tenant!.id, query);
+      const viewer = getAccessUser(request);
+      const actorScope = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const result = await listPayments(request.tenant!.id, query, actorScope);
       return reply.send(result);
     }
   );
@@ -116,11 +122,19 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
             await assertDocWritableByDate(request, "payments", paidAt);
           }
         }
+        const viewer = getAccessUser(request);
+        if (parsed.data.ledger_agent_id != null && parsed.data.ledger_agent_id > 0) {
+          await assertOrderAgentAllowedForActor(request.tenant!.id, parsed.data.ledger_agent_id, {
+            userId: actorUserIdOrNull(request),
+            role: viewer.role ?? ""
+          });
+        }
         const row = await createPayment(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
         return reply.status(201).send(row);
       } catch (e) {
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
+        if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_ORDER") return sendApiError(reply, request, 400, "BadOrder");
         if (msg === "BAD_AMOUNT") return sendApiError(reply, request, 400, "BadAmount");

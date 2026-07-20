@@ -2,9 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   buildRetailStockExportBuffer,
   buildRetailStockTemplateBuffer,
@@ -70,7 +71,12 @@ export async function registerRetailStockRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
     const q = parsed.data;
-    const buf = await buildRetailStockExportBuffer(request.tenant!.id, q);
+    const viewer = getAccessUser(request);
+    const actor = await enrichScopedReportActor(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role ?? ""
+    });
+    const buf = await buildRetailStockExportBuffer(request.tenant!.id, q, actor);
     reply.header(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -87,7 +93,12 @@ export async function registerRetailStockRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
     }
-    const data = await listRetailStock(request.tenant!.id, parsed.data);
+    const viewer = getAccessUser(request);
+    const actor = await enrichScopedReportActor(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role ?? ""
+    });
+    const data = await listRetailStock(request.tenant!.id, parsed.data, actor);
     return reply.send(data);
   });
 }

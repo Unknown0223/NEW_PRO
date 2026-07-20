@@ -22,6 +22,8 @@ type CanProps = {
  *
  *   <Can permission="orders.zakaz.create"><Button>Создать</Button></Can>
  *   <Can anyOf={["clients.klient.update","clients.klient.delete"]}>…</Can>
+ *
+ * `isLoading` faqat birinchi yuklash — fon refetch children ni yechib tashlamaydi.
  */
 export function Can({ permission, anyOf, allOf, fallback = null, showWhileLoading = false, children }: CanProps) {
   const perms = usePermissions();

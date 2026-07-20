@@ -22,7 +22,7 @@ import {
   toClientRefEntryDto
 } from "./tenant-settings.refs";
 import { territoryRegionPickerNames } from "./tenant-settings.territory";
-import { getRedisForApp, tenantSettingsCacheKey } from "../../lib/redis-cache";
+import { invalidateTenantSettingsCache } from "../../lib/redis-cache";
 import { getTenantProfile } from "./tenant-settings.profile.read";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
 import type { ReturnFilterSettings } from "../returns/returns-filter.types";
@@ -203,14 +203,30 @@ export async function patchTenantProfile(
         }
       }
       if (patch.references.territory_nodes != null) {
-        merged.territory_nodes = patch.references.territory_nodes;
+        const incoming = patch.references.territory_nodes;
+        const prevNodes = merged.territory_nodes;
+        const prevLen = Array.isArray(prevNodes) ? prevNodes.length : 0;
+        if (Array.isArray(incoming) && incoming.length === 0 && prevLen > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:territory_nodes");
+        }
+        merged.territory_nodes = incoming;
         merged.regions = territoryRegionPickerNames(merged as Record<string, unknown>);
       }
       if (patch.references.unit_measures != null) {
-        merged.unit_measures = patch.references.unit_measures;
+        const incoming = patch.references.unit_measures;
+        const prev = merged.unit_measures;
+        if (Array.isArray(incoming) && incoming.length === 0 && Array.isArray(prev) && prev.length > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:unit_measures");
+        }
+        merged.unit_measures = incoming;
       }
       if (patch.references.branches != null) {
-        merged.branches = patch.references.branches;
+        const incoming = patch.references.branches;
+        const prev = merged.branches;
+        if (Array.isArray(incoming) && incoming.length === 0 && Array.isArray(prev) && prev.length > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:branches");
+        }
+        merged.branches = incoming;
       }
       if (patch.references.client_format_entries != null) {
         const norm = patch.references.client_format_entries.map(toClientRefEntryDto);
@@ -363,8 +379,7 @@ export async function patchTenantProfile(
   }
 
   try {
-    const redis = await getRedisForApp();
-    await redis.del(tenantSettingsCacheKey(tenantId));
+    await invalidateTenantSettingsCache(tenantId);
   } catch {
     /* ignore */
   }

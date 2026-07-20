@@ -876,7 +876,10 @@ export function AgentConfigurationsDialog({
                   { label: "Сразу", value: 0 },
                   { label: "5 мин", value: 5 },
                   { label: "10 мин", value: 10 },
-                  { label: "15 мин", value: 15 }
+                  { label: "15 мин", value: 15 },
+                  { label: "30 мин", value: 30 },
+                  { label: "45 мин", value: 45 },
+                  { label: "59 мин", value: 59 }
                 ].map((opt) => {
                   const active = (draft.sync?.post_order_delay_minutes ?? 0) === opt.value;
                   return (
@@ -905,17 +908,22 @@ export function AgentConfigurationsDialog({
               </div>
               <ConfigTextField
                 label="Свой интервал (минуты)"
-                hint="0 — без задержки, максимум 120"
+                hint="0 — без задержки, максимум 59 (меньше часа)"
                 type="number"
                 min={0}
-                max={120}
+                max={59}
                 value={draft.sync?.post_order_delay_minutes ?? ""}
                 onChange={(e) =>
                   setDraft((d) =>
-                    setDraftPath(d, "sync", (s) => ({
-                      ...s,
-                      post_order_delay_minutes: e.target.value === "" ? null : Number(e.target.value)
-                    }))
+                    setDraftPath(d, "sync", (s) => {
+                      if (e.target.value === "") {
+                        return { ...s, post_order_delay_minutes: null };
+                      }
+                      const n = Number(e.target.value);
+                      if (!Number.isFinite(n)) return s;
+                      const clamped = Math.min(59, Math.max(0, Math.trunc(n)));
+                      return { ...s, post_order_delay_minutes: clamped };
+                    })
                   )
                 }
               />
@@ -1127,6 +1135,15 @@ export function AgentConfigurationsDialog({
           </DialogTitle>
           {bulkMode && bulkSummary ? (
             <p className="mt-1 text-xs text-muted-foreground">{bulkSummary}</p>
+          ) : null}
+          {!bulkMode && variant !== "supervisor" ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Склад, филиал и территория — в{" "}
+              <a href="/work-slots" className="font-semibold text-teal-700 underline">
+                Рабочее место
+              </a>
+              . Здесь только настройки мобильного приложения.
+            </p>
           ) : null}
           {bulkMode ? (
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

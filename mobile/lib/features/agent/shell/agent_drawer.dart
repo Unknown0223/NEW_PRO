@@ -126,7 +126,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.3,
                                     color: AppColors.textTitle,
@@ -137,8 +137,8 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
                                   height: 1.25,
                                   color: AppColors.textTitle,
                                 ),
@@ -149,7 +149,8 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTypography.bodyMedium.copyWith(
-                                  fontSize: 13,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
                                   color: AppColors.textMuted,
                                 ),
                               ),
@@ -170,10 +171,10 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                           icon: const Icon(Icons.add_rounded, size: 14),
                           label: const Text(
                             'Добавить аккаунт',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                           ),
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 32),
+                            minimumSize: const Size(0, 36),
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                             foregroundColor: AppColors.primaryDark,
                             side: const BorderSide(color: AppColors.primary),
@@ -238,7 +239,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                       textAlign: TextAlign.center,
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textMuted,
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -251,7 +252,11 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                       return Text(
                         'v$v',
                         textAlign: TextAlign.center,
-                        style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted, fontSize: 13),
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       );
                     },
                   ),
@@ -268,11 +273,17 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     if (label.contains('Главная')) return Icons.home_outlined;
     if (label.contains('торговую')) return Icons.add_business_outlined;
     if (label.contains('Заказы')) return Icons.shopping_cart_outlined;
-    if (label.contains('Almashinuv')) return Icons.swap_horiz_outlined;
-    if (label.contains('Polkadan')) return Icons.undo_outlined;
+    if (label.contains('обмен') || label.contains('Almashinuv')) return Icons.swap_horiz_outlined;
+    if (label.contains('полки') || label.contains('Polkadan')) return Icons.undo_outlined;
     if (label == 'KPI') return Icons.insights_outlined;
+    if (label.contains('Дневной план') || label.contains('Диагностика')) {
+      return Icons.calendar_view_day_outlined;
+    }
+    if (label.contains('Отчёт')) return Icons.bar_chart_outlined;
+    if (label.contains('Торговые точки') || label == 'Тор. точки') {
+      return Icons.storefront_outlined;
+    }
     if (label.contains('Зарплата')) return Icons.payments_outlined;
-    if (label.contains('Диагностика')) return Icons.medical_services_outlined;
     if (label.contains('Должники по')) return Icons.person_outline;
     if (label.contains('Должники')) return Icons.people_outline;
     if (label.contains('складе')) return Icons.inventory_2_outlined;

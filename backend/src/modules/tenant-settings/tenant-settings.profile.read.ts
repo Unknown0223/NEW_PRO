@@ -2,7 +2,7 @@ import { prisma } from "../../config/database";
 import { getAppCache, setAppCache, tenantSettingsCacheKey } from "../../lib/redis-cache";
 import { asRecord } from "./tenant-settings.shared";
 import type { BranchDto, TenantProfileDto } from "./tenant-settings.types";
-import type { PaymentMethodEntryDto } from "./finance-refs";
+import type { PaymentMethodEntryDto, PriceTypeEntryDto } from "./finance-refs";
 import {
   defaultCurrencyCodeFromEntries,
   paymentTypeStorageKeysFromMethodEntries,
@@ -51,6 +51,17 @@ export async function loadPaymentMethodEntriesForResolve(tenantId: number): Prom
   const ref = asRecord(st.references);
   const currency_entries = resolveCurrencyEntries(ref);
   return resolvePaymentMethodEntries(ref, currency_entries);
+}
+
+/** Jadval/hisobot: `price_type` kaliti → nom (barcha yozuvlar, jumladan nofaol). */
+export async function loadPriceTypeEntriesForResolve(tenantId: number): Promise<PriceTypeEntryDto[]> {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const st = asRecord(row?.settings);
+  const ref = asRecord(st.references);
+  return priceTypeEntriesFromUnknown(ref.price_type_entries);
 }
 
 /** «Доступ» → филиалы: `tenant.settings.references.branches` (аналог `CashDesk` для касс). */

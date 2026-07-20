@@ -47,8 +47,22 @@ const ADMIN_KEYS = uniq(ALL_KEYS, ["access.manage", "users.manage", "audit.view"
 const PRESET_BUILDERS: Record<string, () => string[]> = {
   admin: () => ADMIN_KEYS,
 
-  // Operator — admin'dan tashqari deyarli barcha veb-operatsiyalar (access.manage'siz)
-  operator: () => ALL_KEYS.filter((k) => k !== "access.upravlenie.view"),
+  /**
+   * Operator — qisman veb-operator (buyurtma/mijoz/dashboard).
+   * Kassir + skladchik + manager kombinatsiyasi EMAS: cash / warehouse / staff /
+   * settings / access / reports to‘liq to‘plami defaultda YO‘Q — Access orqali beriladi.
+   */
+  operator: () =>
+    uniq(
+      mod("dashboard"),
+      secOnly("orders", "zakaz", ["view", "create", "update", "copy", "status", "history"]),
+      secOnly("orders", "vozvrat", ["view", "create"]),
+      secOnly("clients", "klient", ["view", "create", "update"]),
+      sec("clients", "profil"),
+      secOnly("work_slots", "raboche_mesto", ["view"]),
+      secOnly("staff", "konsignatsiya", ["view"]),
+      secOnly("plans", "ustanovka_planov", ["view"])
+    ),
 
   director: () =>
     uniq(
@@ -64,6 +78,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("finance"),
       mod("audit"),
       sec("plans", "ustanovka_planov"),
+      secOnly("work_slots", "raboche_mesto", ["view", "history"]),
       secOnly("staff", "agent", ["activate", "deactivate"]),
       secOnly("staff", "sotrudniki", ["activate", "deactivate"])
     ),
@@ -104,11 +119,37 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   cashier: () => uniq(mod("cash"), modViewOnly("orders"), modViewOnly("clients")),
 
   warehouse_manager: () =>
-    uniq(mod("warehouse"), mod("invoices"), modViewOnly("orders"), modViewOnly("suppliers")),
+    uniq(
+      mod("warehouse"),
+      mod("invoices"),
+      modViewOnly("orders"),
+      modViewOnly("suppliers"),
+      sec("staff", "skladchik")
+    ),
 
-  storekeeper: () => uniq(mod("warehouse"), modViewOnly("invoices")),
+  /**
+   * Ombor operatsiyalari (kirim/transfer/blok) — to‘liq warehouse.* CRUD emas.
+   * sklady create/update/delete berilmaydi (Access orqali qo‘lda).
+   */
+  storekeeper: () =>
+    uniq(
+      modViewOnly("warehouse"),
+      secOnly("warehouse", "postuplenie", ["create", "update", "import", "status", "history"]),
+      secOnly("warehouse", "peremeshchenie", ["create", "update", "transfer", "history"]),
+      secOnly("warehouse", "bloki", ["create", "update"]),
+      secOnly("staff", "skladchik", ["view"]),
+      modViewOnly("invoices")
+    ),
 
-  skladchik: () => uniq(mod("warehouse"), mod("invoices")),
+  skladchik: () =>
+    uniq(
+      modViewOnly("warehouse"),
+      secOnly("warehouse", "postuplenie", ["create", "update", "import", "status", "history"]),
+      secOnly("warehouse", "peremeshchenie", ["create", "update", "transfer", "history"]),
+      secOnly("warehouse", "bloki", ["create", "update"]),
+      secOnly("staff", "skladchik", ["view"]),
+      modViewOnly("invoices")
+    ),
 
   // Agent — buyurtma yaratish, mijoz qo'shish, dashboard
   agent: () =>
@@ -118,7 +159,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("clients", "klient", ["view", "create", "update"]),
       sec("clients", "profil"),
       secOnly("dashboard", "prodazhi", ["view"]),
-      secOnly("plans", "ustanovka_planov", ["view", "update"])
+      secOnly("plans", "ustanovka_planov", ["view", "update"]),
+      secOnly("staff", "kpi", ["view"]),
+      secOnly("staff", "tabel", ["view"])
     ),
 
   // Supervisor — ko'rish + agentlar + buyurtma tasdiqlash zanjirida qatnashish
@@ -129,7 +172,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("clients", "klient", ["activate"]),
       secOnly("staff", "agent", ["view", "activate", "assign"]),
       secOnly("staff", "supervayzer", ["view"]),
+      secOnly("staff", "kpi", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view", "approve"]),
+      secOnly("work_slots", "raboche_mesto", ["view", "create", "update", "assign", "history"]),
       mod("dashboard"),
       sec("gps", "gps")
     ),
@@ -139,7 +184,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("orders", "zakaz", ["view", "status"]),
       secOnly("orders", "vozvrat", ["view", "create", "status"]),
       modViewOnly("invoices"),
-      secOnly("cash", "zayavki_na_oplatu", ["view"])
+      secOnly("cash", "zayavki_na_oplatu", ["view"]),
+      secOnly("cash", "dolgi_ekspeditora", ["view", "copy"])
     ),
 
   auditor: () =>
@@ -164,7 +210,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("clients"),
       mod("reports"),
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
-      secOnly("plans", "nastroyka_utverzhdayushchih", ["view"])
+      secOnly("plans", "nastroyka_utverzhdayushchih", ["view"]),
+      secOnly("work_slots", "raboche_mesto", ["view", "history"]),
+      secOnly("staff", "konsignatsiya", ["view"])
     ),
   partner: () => uniq(modViewOnly("orders"), modViewOnly("clients")),
   storekeeper_view: () => modViewOnly("warehouse")

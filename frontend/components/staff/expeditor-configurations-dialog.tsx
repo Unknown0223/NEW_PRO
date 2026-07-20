@@ -470,47 +470,12 @@ export function ExpeditorConfigurationsDialog({
                     )}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/70 bg-muted/15 shadow-inner">
-                  <div className="border-b border-border/60 bg-muted/25 px-3 py-2">
-                    <span className="text-xs font-medium text-foreground/90">Направление торговли</span>
-                  </div>
-                  <div className="p-3">
-                    {tdItemsAll.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Справочник направлений пуст.</p>
-                    ) : (
-                      <SearchableMultiSelectPanel<number>
-                        label="Направление торговли"
-                        hideOuterLabel
-                        selectAllLabel="Выбрать все"
-                        clearVisibleLabel="Снять на экране"
-                        triggerPlaceholder="Выберите направления"
-                        searchPlaceholder="Поиск"
-                        search={tdSearch}
-                        onSearchChange={setTdSearch}
-                        items={tdItems}
-                        selected={tdSelectedSet}
-                        onSelectedChange={(updater) => {
-                          setDraft((d) => {
-                            const prev = new Set(d.expeditor?.allowed_trade_direction_ids ?? []);
-                            const next = typeof updater === "function" ? updater(prev) : updater;
-                            return setDraftPath(d, "expeditor", (x) => ({
-                              ...x,
-                              allowed_trade_direction_ids: Array.from(next)
-                            }));
-                          });
-                        }}
-                        emptyMessage="Нет строк по фильтру"
-                        triggerClassName="h-10 border-border/80 bg-background text-left text-[13px]"
-                        formatTriggerSummary={(sel) => {
-                          if (sel.size === 0) return "Выберите направления";
-                          return Array.from(sel)
-                            .map((id) => tdItemsAll.find((i) => i.id === id)?.title ?? String(id))
-                            .join(", ");
-                        }}
-                        minPopoverWidth={360}
-                      />
-                    )}
-                  </div>
+                <div className="rounded-lg border border-border/70 bg-muted/15 p-3 text-xs text-muted-foreground">
+                  Направления торговли для экспедитора задаются в{" "}
+                  <a href="/work-slots" className="font-semibold text-teal-700 underline">
+                    Рабочее место
+                  </a>
+                  .
                 </div>
                 <div className="space-y-2">
                   <span className="text-[13px] font-medium text-foreground">

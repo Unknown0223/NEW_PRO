@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import type { OpeningBalanceListQuery, OpeningBalanceListRow } from "./opening-balances.types";
+import {
+  intersectRequestedAgentIds,
+  type ScopedReportActor
+} from "../access/access-agent-scope";
 
 function parseUtcDayStart(isoDate: string | undefined): Date | undefined {
   if (!isoDate?.trim()) return undefined;
@@ -53,7 +57,11 @@ export function mapRow(r: Prisma.ClientOpeningBalanceEntryGetPayload<{ include: 
   };
 }
 
-export function buildWhere(tenantId: number, q: OpeningBalanceListQuery): Prisma.ClientOpeningBalanceEntryWhereInput {
+export function buildWhere(
+  tenantId: number,
+  q: OpeningBalanceListQuery,
+  actor?: ScopedReportActor
+): Prisma.ClientOpeningBalanceEntryWhereInput {
   const andParts: Prisma.ClientOpeningBalanceEntryWhereInput[] = [{ tenant_id: tenantId }];
 
   if (q.archive) {
@@ -84,8 +92,25 @@ export function buildWhere(tenantId: number, q: OpeningBalanceListQuery): Prisma
   if (q.trade_direction?.trim()) {
     andParts.push({ trade_direction: q.trade_direction.trim() });
   }
-  if (q.agent_id != null && q.agent_id > 0) {
-    andParts.push({ client: { agent_id: q.agent_id } });
+  const agentScope = actor
+    ? intersectRequestedAgentIds(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : undefined, actor)
+    : {
+        agentIds: q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : [],
+        restricted: false
+      };
+  if (agentScope.restricted) {
+    if (agentScope.agentIds.length === 0) {
+      andParts.push({ id: { in: [] } });
+    } else {
+      andParts.push({ client: { agent_id: { in: agentScope.agentIds } } });
+    }
+  } else if (agentScope.agentIds.length > 0) {
+    andParts.push({
+      client: {
+        agent_id:
+          agentScope.agentIds.length === 1 ? agentScope.agentIds[0] : { in: agentScope.agentIds }
+      }
+    });
   }
   if (q.cash_desk_ids != null && q.cash_desk_ids.length > 0) {
     andParts.push({ cash_desk_id: { in: q.cash_desk_ids } });

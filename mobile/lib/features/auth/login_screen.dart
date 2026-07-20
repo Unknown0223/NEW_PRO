@@ -24,6 +24,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   late final Animation<double> _logoFade;
   late final Animation<Offset> _cardSlide;
 
+  bool _shownInitialError = false;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +39,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
       CurvedAnimation(parent: _animController, curve: const Interval(0.2, 0.8, curve: Curves.easeOutCubic)),
     );
     _animController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showPendingAuthError());
+  }
+
+  void _presentError(UserFacingError info) {
+    if (info.isLoginAuthSnack) {
+      showAuthBottomToast(context, info.snackbarText, accentColor: AppColors.error);
+      return;
+    }
+    if (info.steps.isNotEmpty) {
+      UserFacingError.showDialog(context, info);
+    } else {
+      showAuthBottomToast(context, info.snackbarText, accentColor: AppColors.error);
+    }
+  }
+
+  /// Sessiya tugaganda login ekraniga o'tganda dialog (listen faqat keyingi o'zgarishni tutadi).
+  void _showPendingAuthError() {
+    if (!mounted || _shownInitialError) return;
+    _shownInitialError = true;
+    final auth = ref.read(authStateProvider);
+    if (auth.error == null) return;
+    final info = auth.errorInfo ?? UserFacingError.tryParseLegacy(auth.error);
+    if (info != null) _presentError(info);
   }
 
   @override
@@ -50,7 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
   void _submit() {
     if (_slug.text.isEmpty || _login.text.isEmpty || _pass.text.isEmpty) {
-      showAgentToast(context, S.fillAllFields, accentColor: AppColors.error);
+      showAuthBottomToast(context, S.fillAllFields, accentColor: AppColors.error);
       return;
     }
     ref.read(authStateProvider.notifier).login(
@@ -68,10 +93,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     ref.listen<AuthState>(authStateProvider, (prev, next) {
       if (next.error == null || prev?.error == next.error) return;
       final info = next.errorInfo ?? UserFacingError.tryParseLegacy(next.error);
-      if (info != null && info.steps.isNotEmpty) {
-        UserFacingError.showDialog(context, info);
+      if (info != null) {
+        _presentError(info);
       } else {
-        showAgentToast(context, next.error!, accentColor: AppColors.error);
+        showAuthBottomToast(context, next.error!, accentColor: AppColors.error);
       }
     });
 

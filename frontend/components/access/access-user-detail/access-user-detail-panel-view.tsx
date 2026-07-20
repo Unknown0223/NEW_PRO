@@ -19,19 +19,26 @@ export function AccessUserDetailPanel({
 }) {
   const vm = useAccessUserDetailPanel({ tenantSlug, userId, onInvalidateUsers, userAccountControls });
 
-  if (vm.detailQ.isError) {
+  if (vm.detailQ.isError && !vm.user) {
     return <p className="px-4 pt-16 text-sm text-destructive">Не удалось загрузить данные доступа</p>;
   }
-  if (vm.detailQ.isLoading || !vm.user) {
-    return <p className="px-4 pt-16 text-sm text-muted-foreground">Загрузка…</p>;
-  }
 
+  /**
+   * Modal holati hook da — body yuklanayotganda ham Dialog mount qolishi kerak.
+   * Aks holda detail refetch / qisqa `!user` Dialog ni yechib `onOpenChange(false)` chaqiradi.
+   */
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
-      <AccessUserDetailToolbar vm={vm} />
-      <div className="min-h-0 flex-1 p-3 flex flex-col overflow-hidden overscroll-contain">
-        <AccessUserDetailOperationsTab vm={vm} />
-      </div>
+      {!vm.user ? (
+        <p className="px-4 pt-16 text-sm text-muted-foreground">Загрузка…</p>
+      ) : (
+        <>
+          <AccessUserDetailToolbar vm={vm} />
+          <div className="min-h-0 flex-1 p-3 flex flex-col overflow-hidden overscroll-contain">
+            <AccessUserDetailOperationsTab vm={vm} />
+          </div>
+        </>
+      )}
       <AccessUserDetailModals vm={vm} />
     </div>
   );

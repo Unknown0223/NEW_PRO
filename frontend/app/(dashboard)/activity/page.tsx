@@ -12,7 +12,7 @@ export default function ActivityPage() {
     return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   }
   if (role !== "admin") {
-    return <p className="text-sm text-destructive">Bu bo&apos;lim faqat administrator uchun.</p>;
+    return <p className="text-sm text-destructive">Этот раздел доступен только администратору.</p>;
   }
   return <ActivityWorkspace tenantSlug={tenantSlug} />;
 }

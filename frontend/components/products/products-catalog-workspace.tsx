@@ -40,6 +40,9 @@ import { CatalogSimpleTab } from "./catalog-simple-tab";
 import { ProductQuickAddDialog } from "./product-quick-add-dialog";
 import { ProductForm } from "./product-form";
 import {
+  ProductsItemsBulkToolbar
+} from "./products-items-bulk-toolbar";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -456,6 +459,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const productsBasePath = pathname.startsWith("/settings/products")
     ? "/settings/products"
     : "/products";
+  const settingsAsidePx = pathname.startsWith("/settings/") ? 300 : 0;
   const qc = useQueryClient();
   const priceFileRef = useRef<HTMLInputElement>(null);
   const [page, setPage] = useState(1);
@@ -468,6 +472,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const [fullProductId, setFullProductId] = useState<number | null>(null);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [voidTarget, setVoidTarget] = useState<ProductRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -488,9 +493,26 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
       const { data } = await api.get<{ data: { id: number; name: string }[] }>(
         `/api/${tenantSlug}/product-categories`
       );
-      return data.data;
+      const rows = data.data ?? [];
+      // Nom bo‘yicha dublikatlarni yashirish (import qoldig‘i)
+      const seen = new Set<string>();
+      const unique: { id: number; name: string }[] = [];
+      for (const row of rows) {
+        const key = row.name.trim().toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(row);
+      }
+      return unique;
     }
   });
+
+  useEffect(() => {
+    if (!categoryId || !categoriesQ.data) return;
+    if (!categoriesQ.data.some((c) => String(c.id) === categoryId)) {
+      setCategoryId("");
+    }
+  }, [categoriesQ.data, categoryId]);
 
   const groupsQ = useQuery({
     queryKey: ["catalog-simple", "catalog/product-groups", tenantSlug, "items-filter"],
@@ -502,6 +524,45 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
         `/api/${tenantSlug}/catalog/product-groups?${params}`
       );
       return data.data;
+    }
+  });
+
+  const brandsQ = useQuery({
+    queryKey: ["catalog-simple", "catalog/brands", tenantSlug, "items-bulk"],
+    enabled: Boolean(tenantSlug) && isAdmin && selectedIds.size > 0,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: "1", limit: "500", is_active: "true" });
+      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
+        `/api/${tenantSlug}/catalog/brands?${params}`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const segmentsQ = useQuery({
+    queryKey: ["catalog-simple", "catalog/segments", tenantSlug, "items-bulk"],
+    enabled: Boolean(tenantSlug) && isAdmin && selectedIds.size > 0,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: "1", limit: "500", is_active: "true" });
+      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
+        `/api/${tenantSlug}/catalog/segments?${params}`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const kpiGroupsQ = useQuery({
+    queryKey: ["kpi-groups", tenantSlug, "items-bulk"],
+    enabled: Boolean(tenantSlug) && isAdmin && selectedIds.size > 0,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const params = new URLSearchParams({ is_active: "true" });
+      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
+        `/api/${tenantSlug}/kpi-groups?${params.toString()}`
+      );
+      return (data.data ?? []).map((g) => ({ id: g.id, name: g.name }));
     }
   });
 
@@ -542,7 +603,12 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [search, statusTab, pageSize, categoryId, productGroupId]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page]);
 
   /** API `DELETE` mahsulotni bazadan olib tashlamaydi — faqat neaktiv qiladi. */
   const deactivateMut = useMutation({
@@ -562,6 +628,51 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     }
+  });
+
+  const bulkPatchMut = useMutation({
+    mutationFn: async ({ ids, patch }: { ids: number[]; patch: Record<string, unknown> }) => {
+      let ok = 0;
+      const errors: string[] = [];
+      for (const id of ids) {
+        try {
+          await api.put(`/api/${tenantSlug}/products/${id}`, patch);
+          ok += 1;
+        } catch (e) {
+          errors.push(getUserFacingError(e, `#${id}`));
+        }
+      }
+      return { ok, errors };
+    },
+    onSuccess: async (res) => {
+      await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
+      if (res.errors.length) {
+        setImportMsg(`Обновлено: ${res.ok}. Ошибки: ${res.errors.slice(0, 2).join("; ")}`);
+      } else {
+        setImportMsg(`Обновлено: ${res.ok} товар(ов)`);
+        setSelectedIds(new Set());
+      }
+    },
+    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "Массовое обновление не удалось"))
+  });
+
+  const bulkKpiGroupMut = useMutation({
+    mutationFn: async ({ ids, kpiGroupId }: { ids: number[]; kpiGroupId: number | null }) => {
+      const { data } = await api.post<{ updated: number }>(
+        `/api/${tenantSlug}/products/bulk-kpi-group`,
+        { product_ids: ids, kpi_group_id: kpiGroupId }
+      );
+      return data;
+    },
+    onSuccess: async (res) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["products", tenantSlug] }),
+        qc.invalidateQueries({ queryKey: ["kpi-groups", tenantSlug] })
+      ]);
+      setImportMsg(`KPI группа: обновлено ${res.updated} товар(ов)`);
+      setSelectedIds(new Set());
+    },
+    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "KPI группу не удалось назначить"))
   });
 
   const priceImportMut = useMutation({
@@ -585,6 +696,38 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const rows = listQ.data?.data ?? [];
   const total = listQ.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const allPageSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
+  const somePageSelected = selectedIds.size > 0 && !allPageSelected;
+
+  function toggleRowSelected(id: number, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function togglePageSelected(checked: boolean) {
+    setSelectedIds(checked ? new Set(rows.map((r) => r.id)) : new Set());
+  }
+
+  function clearBulkSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function applyBulkPatch(patch: Record<string, unknown>) {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    bulkPatchMut.mutate({ ids, patch });
+  }
+
+  function applyBulkKpiGroup(kpiGroupId: number | null) {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    bulkKpiGroupMut.mutate({ ids, kpiGroupId });
+  }
 
   function renderProductCell(colId: string, r: ProductRow): ReactNode {
     switch (colId) {
@@ -853,10 +996,24 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           onRetry={() => void listQ.refetch()}
         />
       ) : (
-        <div className="-mx-3 overflow-x-auto border-t border-border/80 sm:-mx-4">
+        <div className={cn("-mx-3 overflow-x-auto border-t border-border/80 sm:-mx-4", selectedIds.size > 0 && "pb-24")}>
           <table className="w-full min-w-[720px] text-sm">
             <thead className="app-table-thead text-left">
               <tr>
+                {isAdmin ? (
+                  <th className="w-10 px-2 py-2">
+                    <input
+                      type="checkbox"
+                      className="size-3.5 accent-primary"
+                      checked={allPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePageSelected;
+                      }}
+                      aria-label="Выбрать все на странице"
+                      onChange={(e) => togglePageSelected(e.target.checked)}
+                    />
+                  </th>
+                ) : null}
                 {tablePrefs.visibleColumnOrder.map((colId) => {
                   const label = PRODUCT_ITEMS_COLUMNS.find((c) => c.id === colId)?.label ?? colId;
                   return (
@@ -875,7 +1032,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
               {listQ.isLoading ? (
                 <tr>
                   <td
-                    colSpan={tablePrefs.visibleColumnOrder.length + 1}
+                    colSpan={tablePrefs.visibleColumnOrder.length + 1 + (isAdmin ? 1 : 0)}
                     className="px-3 py-6 text-center text-muted-foreground"
                   >
                     Загрузка…
@@ -884,7 +1041,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
               ) : rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={tablePrefs.visibleColumnOrder.length + 1}
+                    colSpan={tablePrefs.visibleColumnOrder.length + 1 + (isAdmin ? 1 : 0)}
                     className="px-3 py-8 text-center text-muted-foreground"
                   >
                     Пусто
@@ -892,7 +1049,21 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="border-t">
+                  <tr
+                    key={r.id}
+                    className={cn("border-t", selectedIds.has(r.id) && "bg-teal-50/60")}
+                  >
+                    {isAdmin ? (
+                      <td className="px-2 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          className="size-3.5 accent-primary"
+                          checked={selectedIds.has(r.id)}
+                          aria-label={`Выбрать ${r.name}`}
+                          onChange={(e) => toggleRowSelected(r.id, e.target.checked)}
+                        />
+                      </td>
+                    ) : null}
                     {tablePrefs.visibleColumnOrder.map((colId) => (
                       <td
                         key={colId}
@@ -962,6 +1133,23 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           </table>
         </div>
       )}
+
+      {isAdmin ? (
+        <ProductsItemsBulkToolbar
+          selectedCount={selectedIds.size}
+          settingsAsidePx={settingsAsidePx}
+          categories={categoriesQ.data ?? []}
+          groups={groupsQ.data ?? []}
+          brands={brandsQ.data ?? []}
+          segments={segmentsQ.data ?? []}
+          kpiGroups={kpiGroupsQ.data ?? []}
+          onApply={applyBulkPatch}
+          onApplyKpiGroup={applyBulkKpiGroup}
+          onClear={clearBulkSelection}
+          busy={bulkPatchMut.isPending || bulkKpiGroupMut.isPending}
+          feedback={importMsg}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>

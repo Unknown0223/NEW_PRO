@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { TableSortButton } from "@/components/ui/table-sort-button";
 import { cn } from "@/lib/utils";
 import { displayAccessDescriptionShort } from "@/lib/access-display";
-import { permissionSourceLabel } from "@/lib/access-user-permission-matrix";
+import { permissionSourceLabel, buildRevokeEffectiveAccessPatch, revokeEffectiveAccessButtonLabel } from "@/lib/access-user-permission-matrix";
 import { shortenPathLabel, type MatrixSortKey } from "./access-user-detail.types";
 import type { PermissionSourceFilter } from "@/lib/access-user-permission-matrix";
 import type { AccessUserDetailVm } from "./hooks/use-access-user-detail-panel";
@@ -29,6 +29,7 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
     setFilterParent,
     setFilterSource,
     parentOptions,
+    grantedMatrixCount,
     bulkFeedback,
     bulkSel,
     setBulkSel,
@@ -54,7 +55,8 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
     toggleRowGrantDelegation,
     selectedDetachableCount,
     bulkApplyFilteredEffective,
-    bulkDetach
+    bulkDetach,
+    detailQ
   } = vm;
 
   if (inner !== "operations") return null;
@@ -219,8 +221,15 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
               {matrixRowGroups.length === 0 ? (
                 <div className="flex min-h-[12rem] flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border/70 bg-muted/15 px-4 py-10 text-center">
                   <p className="max-w-md text-sm text-muted-foreground">
-                    У пользователя пока нет активных операций — только базовые права роли или доступ ещё не назначен.
+                    {detailQ.isLoading || detailQ.isFetching
+                      ? "Загрузка операций…"
+                      : detailQ.isError
+                        ? "Не удалось загрузить операции. Обновите страницу."
+                        : grantedMatrixCount === 0
+                          ? "Нет активных операций у этого пользователя. Права роли сняты запретом («Снять») или не назначены. Счётчик слева считает только активные операции (не «право выдавать доступ»)."
+                          : "Нет операций по текущему фильтру. Сбросьте «Родитель» / «Источник» или очистите поиск — затем снимите доступ кнопкой «Снять» (запрет только для этого пользователя)."}
                   </p>
+                  {!detailQ.isLoading && !detailQ.isError ? (
                   <Button
                     type="button"
                     size="sm"
@@ -230,6 +239,7 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                     <Plus className="h-4 w-4" aria-hidden />
                     Добавить операции
                   </Button>
+                  ) : null}
                 </div>
               ) : (
               <>
@@ -363,6 +373,121 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                         groupSelectableKeys.length > 0 &&
                         groupSelectableKeys.some((k) => bulkSel.has(k)) &&
                         !groupAllSelected;
+
+                      const renderDataRow = (row: (typeof grp.rows)[number]) => {
+                        const rowSelectable = isRowBulkSelectable(row);
+                        return (
+                          <tr key={row.key} className="border-t border-border/50 transition-colors hover:bg-muted/25">
+                            <td className="access-matrix-col-select py-2">
+                              <input
+                                type="checkbox"
+                                className={`h-4 w-4 ${rowSelectable ? "accent-teal-700" : "cursor-not-allowed opacity-45"}`}
+                                checked={rowSelectable ? bulkSel.has(row.key) : false}
+                                disabled={patchMut.isPending || !rowSelectable}
+                                title="Выбрать для массового запрета или открепления личной настройки"
+                                aria-label={
+                                  rowSelectable
+                                    ? `Выбрать строку: ${displayAccessDescriptionShort(row.description, row.key)}`
+                                    : `Массовый выбор недоступен: ${displayAccessDescriptionShort(row.description, row.key)}`
+                                }
+                                onChange={(e) => {
+                                  if (!rowSelectable) return;
+                                  const n = new Set(bulkSel);
+                                  if (e.target.checked) n.add(row.key);
+                                  else n.delete(row.key);
+                                  setBulkSel(n);
+                                }}
+                              />
+                            </td>
+                            <td
+                              className="min-w-0 break-words px-2 py-2 align-middle leading-snug"
+                              title={(row.description && row.description.trim()) || undefined}
+                            >
+                              {displayAccessDescriptionShort(row.description, row.key)}
+                            </td>
+                            <td
+                              className="min-w-0 break-words px-2 py-2 align-middle leading-snug text-muted-foreground"
+                              title={row.parent_path?.trim() || undefined}
+                            >
+                              {row.parent_path?.trim() || "—"}
+                            </td>
+                            <td
+                              className="min-w-0 break-words px-2 py-2 align-middle leading-snug text-muted-foreground"
+                              title={(row.section && row.section.trim()) || undefined}
+                            >
+                              {displayAccessDescriptionShort(row.section, "—")}
+                            </td>
+                            <td className="px-2 py-2 align-middle text-[11px]">
+                              <span
+                                className={cn(
+                                  "inline-flex rounded px-1.5 py-0.5 font-medium",
+                                  row.user_effect === "allow"
+                                    ? "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+                                    : "bg-muted/80 text-muted-foreground"
+                                )}
+                                title={
+                                  row.user_effect === "allow"
+                                    ? "Назначено дополнительно (не только роль)"
+                                    : "Базовое право из роли пользователя"
+                                }
+                              >
+                                {permissionSourceLabel(row)}
+                              </span>
+                            </td>
+                            <td className="w-[10rem] px-2 py-2 text-center align-middle">
+                              <label className="relative mx-auto flex h-6 w-11 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                                <input
+                                  type="checkbox"
+                                  role="switch"
+                                  aria-checked={row.can_grant_others}
+                                  aria-label={`${row.can_grant_others ? "Может выдавать другим" : "Не может выдавать другим"}: ${displayAccessDescriptionShort(row.description, row.key)}`}
+                                  className="peer sr-only"
+                                  checked={row.can_grant_others}
+                                  disabled={patchMut.isPending}
+                                  title={
+                                    row.can_grant_others
+                                      ? "Может выдавать эту операцию другим. Выключить — только право выдачи (сама операция остаётся)"
+                                      : "Разрешить этому аккаунту выдавать эту операцию другим пользователям"
+                                  }
+                                  onChange={(e) => void toggleRowGrantDelegation(row, e.target.checked)}
+                                />
+                                <span
+                                  className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:opacity-50"
+                                  aria-hidden
+                                />
+                                <span
+                                  className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
+                                  aria-hidden
+                                />
+                              </label>
+                            </td>
+                            <td className="w-[8.5rem] px-2 py-2 text-center align-middle">
+                              {row.effective ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 min-w-[6.5rem] border-teal-600/45 px-2 text-[11px] text-teal-950 hover:bg-teal-500/10 dark:text-emerald-100"
+                                  disabled={patchMut.isPending}
+                                  title={
+                                    row.from_role
+                                      ? "Запретить для этого пользователя (роль не меняется)"
+                                      : "Снять личную настройку (дополнительно назначенное)"
+                                  }
+                                  onClick={() => {
+                                    const body = buildRevokeEffectiveAccessPatch(row);
+                                    if (body) void patchMut.mutateAsync(body);
+                                  }}
+                                >
+                                  {revokeEffectiveAccessButtonLabel(row)}
+                                </Button>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      };
+
                       return (
                         <Fragment key={grp.parent}>
                           <tr className="border-t border-border/60 bg-muted/35">
@@ -384,7 +509,7 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                                     e.stopPropagation();
                                     toggleBulkGroup(grp, e.target.checked);
                                   }}
-                                  aria-label={`Массовый выбор группы: ${shortenPathLabel(grp.parent)}`}
+                                  aria-label={`Массовый выбор группы: ${shortenPathLabel(grp.label)}`}
                                 />
                               </div>
                             </td>
@@ -406,134 +531,80 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                                 ) : (
                                   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                                 )}
-                                <span className="min-w-0 truncate" title={grp.parent}>
-                                  {shortenPathLabel(grp.parent)}
+                                <span className="min-w-0 truncate" title={grp.label}>
+                                  {shortenPathLabel(grp.label)}
                                 </span>
                                 <span className="shrink-0 font-normal text-muted-foreground">({grp.rows.length})</span>
                               </div>
                             </td>
                           </tr>
-                          {open
-                            ? grp.rows.map((row) => {
-                                const rowSelectable = isRowBulkSelectable(row);
+                          {open ? (
+                            <>
+                              {grp.directRows.map(renderDataRow)}
+                              {grp.children.map((child) => {
+                                const childKey = child.parent;
+                                const childOpen = matrixGroupExpanded.has(childKey);
+                                const childSelectable = child.rows
+                                  .filter(isRowBulkSelectable)
+                                  .map((r) => r.key);
+                                const childAll =
+                                  childSelectable.length > 0 &&
+                                  childSelectable.every((k) => bulkSel.has(k));
+                                const childSome =
+                                  childSelectable.length > 0 &&
+                                  childSelectable.some((k) => bulkSel.has(k)) &&
+                                  !childAll;
                                 return (
-                                <tr key={row.key} className="border-t border-border/50 transition-colors hover:bg-muted/25">
-                                  <td className="access-matrix-col-select py-2">
-                                    <input
-                                      type="checkbox"
-                                      className={`h-4 w-4 ${rowSelectable ? "accent-teal-700" : "cursor-not-allowed opacity-45"}`}
-                                      checked={rowSelectable ? bulkSel.has(row.key) : false}
-                                      disabled={patchMut.isPending || !rowSelectable}
-                                      title="Выбрать для массового запрета или открепления личной настройки"
-                                      aria-label={
-                                        rowSelectable
-                                          ? `Выбрать строку: ${displayAccessDescriptionShort(row.description, row.key)}`
-                                          : `Массовый выбор недоступен: ${displayAccessDescriptionShort(row.description, row.key)}`
-                                      }
-                                      onChange={(e) => {
-                                        if (!rowSelectable) return;
-                                        const n = new Set(bulkSel);
-                                        if (e.target.checked) n.add(row.key);
-                                        else n.delete(row.key);
-                                        setBulkSel(n);
-                                      }}
-                                    />
-                                  </td>
-                                  <td
-                                    className="min-w-0 break-words px-2 py-2 align-middle leading-snug"
-                                    title={(row.description && row.description.trim()) || undefined}
-                                  >
-                                    {displayAccessDescriptionShort(row.description, row.key)}
-                                  </td>
-                                  <td
-                                    className="min-w-0 break-words px-2 py-2 align-middle leading-snug text-muted-foreground"
-                                    title={row.parent_path?.trim() || undefined}
-                                  >
-                                    {row.parent_path?.trim() || "—"}
-                                  </td>
-                                  <td
-                                    className="min-w-0 break-words px-2 py-2 align-middle leading-snug text-muted-foreground"
-                                    title={(row.section && row.section.trim()) || undefined}
-                                  >
-                                    {displayAccessDescriptionShort(row.section, "—")}
-                                  </td>
-                                  <td className="px-2 py-2 align-middle text-[11px]">
-                                    <span
-                                      className={cn(
-                                        "inline-flex rounded px-1.5 py-0.5 font-medium",
-                                        row.user_effect === "allow"
-                                          ? "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
-                                          : "bg-muted/80 text-muted-foreground"
-                                      )}
-                                      title={
-                                        row.user_effect === "allow"
-                                          ? "Назначено дополнительно (не только роль)"
-                                          : "Базовое право из роли пользователя"
-                                      }
-                                    >
-                                      {permissionSourceLabel(row)}
-                                    </span>
-                                  </td>
-                                  <td className="w-[10rem] px-2 py-2 text-center align-middle">
-                                    <label className="relative mx-auto flex h-6 w-11 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
-                                      <input
-                                        type="checkbox"
-                                        role="switch"
-                                        aria-checked={row.can_grant_others}
-                                        aria-label={`${row.can_grant_others ? "Может выдавать другим" : "Не может выдавать другим"}: ${displayAccessDescriptionShort(row.description, row.key)}`}
-                                        className="peer sr-only"
-                                        checked={row.can_grant_others}
-                                        disabled={patchMut.isPending}
-                                        title={
-                                          row.can_grant_others
-                                            ? "Может выдавать эту операцию другим. Выключить — только право выдачи (сама операция остаётся)"
-                                            : "Разрешить этому аккаунту выдавать эту операцию другим пользователям"
+                                  <Fragment key={child.id}>
+                                    <tr className="border-t border-border/50 bg-muted/20">
+                                      <td className="access-matrix-col-select py-1 align-middle">
+                                        <div className="flex items-center justify-center px-0.5">
+                                          <IndeterminateCheckbox
+                                            checked={childAll}
+                                            indeterminate={childSome}
+                                            disabled={patchMut.isPending || childSelectable.length === 0}
+                                            className="h-3.5 w-3.5"
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                              toggleBulkGroup(child, e.target.checked);
+                                            }}
+                                            aria-label={`Массовый выбор: ${child.label}`}
+                                          />
+                                        </div>
+                                      </td>
+                                      <td
+                                        colSpan={6}
+                                        className="cursor-pointer px-2 py-1 pl-6"
+                                        onClick={() =>
+                                          setMatrixGroupExpanded((prev) => {
+                                            const n = new Set(prev);
+                                            if (n.has(childKey)) n.delete(childKey);
+                                            else n.add(childKey);
+                                            return n;
+                                          })
                                         }
-                                        onChange={(e) => void toggleRowGrantDelegation(row, e.target.checked)}
-                                      />
-                                      <span
-                                        className="pointer-events-none absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-teal-600 peer-disabled:opacity-50"
-                                        aria-hidden
-                                      />
-                                      <span
-                                        className="pointer-events-none absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-card shadow ring-1 ring-black/10 transition-transform duration-200 ease-out peer-checked:translate-x-[1.25rem] peer-disabled:opacity-70"
-                                        aria-hidden
-                                      />
-                                    </label>
-                                  </td>
-                                  <td className="w-[8.5rem] px-2 py-2 text-center align-middle">
-                                    {row.effective ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 min-w-[6.5rem] border-teal-600/45 px-2 text-[11px] text-teal-950 hover:bg-teal-500/10 dark:text-emerald-100"
-                                        disabled={patchMut.isPending}
-                                        title={
-                                          row.user_effect !== "none"
-                                            ? "Снять личную настройку (дополнительно назначенное)"
-                                            : "Запретить для этого пользователя (роль не меняется)"
-                                        }
-                                        onClick={() => {
-                                          if (row.user_effect !== "none") {
-                                            void patchMut.mutateAsync({ remove_permission_keys: [row.key] });
-                                            return;
-                                          }
-                                          void patchMut.mutateAsync({
-                                            merge_permissions: true,
-                                            denied_permissions: [row.key]
-                                          });
-                                        }}
                                       >
-                                        {row.user_effect !== "none" ? "Открепить" : "Снять"}
-                                      </Button>
-                                    ) : (
-                                      <span className="text-muted-foreground">—</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                              })
-                            : null}
+                                        <div className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-[11px] font-medium text-foreground hover:bg-muted/30">
+                                          {childOpen ? (
+                                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                          ) : (
+                                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                          )}
+                                          <span className="min-w-0 truncate" title={child.label}>
+                                            {shortenPathLabel(child.label)}
+                                          </span>
+                                          <span className="shrink-0 font-normal text-muted-foreground">
+                                            ({child.rows.length})
+                                          </span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                    {childOpen ? child.rows.map(renderDataRow) : null}
+                                  </Fragment>
+                                );
+                              })}
+                            </>
+                          ) : null}
                         </Fragment>
                       );
                     })}

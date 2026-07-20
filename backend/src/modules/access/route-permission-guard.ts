@@ -152,6 +152,16 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/system-migration(\/|$)/, "settings.profil_kompanii.view"),
 
   // ─────────── Пользователи (staff) ───────────
+  r(WRITE, /\/skladchik\/.*\/(activate|deactivate|aktivnost)/, "staff.skladchik.activate", "staff.skladchik.deactivate"),
+  r(["POST"], /\/skladchik(\/|$)/, "staff.skladchik.create"),
+  r(["PUT", "PATCH"], /\/skladchik\//, "staff.skladchik.update"),
+  r(["DELETE"], /\/skladchik\//, "staff.skladchik.update"),
+  r(READ, /\/skladchik(\/|$)/, "staff.skladchik.view"),
+  r(WRITE, /\/agents\/.*\/(activate|deactivate|aktivnost)/, "staff.agent.activate", "staff.agent.deactivate"),
+  r(["POST"], /\/agents(\/|$)/, "staff.agent.create"),
+  r(["PUT", "PATCH"], /\/agents\//, "staff.agent.update"),
+  r(["DELETE"], /\/agents\//, "staff.agent.delete"),
+  r(READ, /\/agents(\/|$)/, "staff.agent.view"),
   r(WRITE, /\/staff\/.*\/(activate|deactivate|aktivnost)/, "staff.agent.activate", "staff.agent.deactivate"),
   r(["POST"], /\/staff\//, "staff.agent.create"),
   r(["PUT", "PATCH"], /\/staff\//, "staff.agent.update"),
@@ -161,23 +171,30 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Табель / Рабочее место ───────────
   r(WRITE, /\/timesheet/, "staff.tabel.create", "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
-  r(WRITE, /\/work-slots/, "work_slots.raboche_mesto.create", "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/workdays/, "staff.tabel.create", "staff.tabel.update"),
+  r(READ, /\/workdays/, "staff.tabel.view"),
+  r(READ, /\/tabel-audit/, "staff.tabel.view"),
+  r(WRITE, /\/work-slots\/.*\/(assign|unassign)/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/work-slots/, "work_slots.raboche_mesto.create", "work_slots.raboche_mesto.update", "work_slots.raboche_mesto.assign"),
   r(READ, /\/work-slots/, "work_slots.raboche_mesto.view"),
+  r(WRITE, /\/client-agent-assignments/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
+  r(READ, /\/client-agent-assignments/, "work_slots.raboche_mesto.view"),
 
   // ─────────── Консигнация ───────────
-  r(WRITE, /\/consignment/, "clients.klient.update", "clients.klient.assign"),
-  r(READ, /\/consignment/, "clients.klient.view"),
+  r(WRITE, /\/consignment/, "staff.konsignatsiya.update", "staff.konsignatsiya.create", "clients.klient.update"),
+  r(READ, /\/consignment/, "staff.konsignatsiya.view", "clients.klient.view"),
 
   // ─────────── Планы → Настройка утверждающих ───────────
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
   r(READ, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.view"),
 
-  // ─────────── Планы → Установка планов ───────────
+  // ─────────── Планы → Установка планов / Kunlik KPI ───────────
   r(["POST"], /\/plans\/setup\/confirm$/, "plans.ustanovka_planov.update"),
   r(["POST"], /\/plans\/setup\/approve$/, "plans.ustanovka_planov.approve"),
   r(["POST"], /\/plans\/setup\/return$/, "plans.ustanovka_planov.approve"),
   r(WRITE, /\/plans\/setup/, "plans.ustanovka_planov.update", "plans.ustanovka_planov.create"),
   r(READ, /\/plans\/setup/, "plans.ustanovka_planov.view"),
+  r(READ, /\/plans\/daily-kpi/, "plans.ustanovka_planov.view"),
 
   // ─────────── Dashboard ───────────
   r(READ, /\/dashboard\/sales-monitoring/, "dashboard.prodazhi.view"),
@@ -187,9 +204,17 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
   // ─────────── Отчёты ───────────
-  r(READ, /\/reports\/.*\/export/, "reports.otchety.copy"),
-  r(WRITE, /\/reports\/builder/, "reports.otchety.create", "reports.otchety.update"),
-  r(READ, /\/reports(\/|$)/, "reports.otchety.view"),
+  r(READ, /\/reports\/.*\/export/, "reports.otchety.copy", "reports.konstruktor.copy"),
+  r(
+    WRITE,
+    /\/reports\/builder/,
+    "reports.konstruktor.create",
+    "reports.konstruktor.update",
+    "reports.otchety.create",
+    "reports.otchety.update"
+  ),
+  r(READ, /\/reports\/builder/, "reports.konstruktor.view", "reports.otchety.view", "pivot.otchety.view"),
+  r(READ, /\/reports(\/|$)/, "reports.otchety.view", "reports.konstruktor.view"),
 
   // ─────────── Бонусы и скидки (bonus-rules) ───────────
   r(WRITE, /\/bonus-rules\/bulk$/, "settings.bonusy_i_skidki.update"),
@@ -206,6 +231,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 
   // ─────────── Аудит ───────────
   r(READ, /\/audit-events(\/|$)/, "audit.log.view"),
+
+  // ─────────── Диагностика (xatolik loglari) ───────────
+  r(READ, /\/error-events(\/|$)/, "diagnostics.error_logs.view"),
 
   // ─────────── Доступ (access workspace) ───────────
   r(WRITE, /\/access\/(users|role-defaults|users-bulk)/, "access.upravlenie.update"),

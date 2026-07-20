@@ -251,21 +251,24 @@ export async function previewMobileOrderBonus(
     if (sumPeek) bonusRuleIds.add(sumPeek.rule.id);
 
     const giftProductIds = new Set<number>();
-    for (const p of qtyPeeks) {
-      const ids = await resolveAllowedGiftProductIdsForRule(
-        tenantId,
-        p.rule,
-        p.giftPid > 0 ? p.giftPid : undefined
-      );
+    const allowedGiftsByRuleId = new Map<number, number[]>();
+    const collectGiftIds = async (rule: (typeof qtyPeeks)[number]["rule"], fallbackGiftPid?: number) => {
+      // Preview UI havzasi: fallback bilan toraytirmaymiz (assortment_auto swap yo‘q;
+      // category/pick uchun to‘liq ruxsat etilgan SKU kerak).
+      const ids = await resolveAllowedGiftProductIdsForRule(tenantId, rule);
+      allowedGiftsByRuleId.set(rule.id, ids);
       for (const id of ids) giftProductIds.add(id);
+      // Nomlar uchun productMap to‘liq bo‘lishi: bonus SKU + peek default.
+      for (const id of rule.bonus_product_ids) {
+        if (id > 0) giftProductIds.add(id);
+      }
+      if (fallbackGiftPid != null && fallbackGiftPid > 0) giftProductIds.add(fallbackGiftPid);
+    };
+    for (const p of qtyPeeks) {
+      await collectGiftIds(p.rule, p.giftPid > 0 ? p.giftPid : undefined);
     }
     if (sumPeek) {
-      const ids = await resolveAllowedGiftProductIdsForRule(
-        tenantId,
-        sumPeek.rule,
-        sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined
-      );
-      for (const id of ids) giftProductIds.add(id);
+      await collectGiftIds(sumPeek.rule, sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined);
     }
 
     const giftStockIds = [...giftProductIds].filter((id) => !stockProductIds.has(id));
@@ -298,7 +301,8 @@ export async function previewMobileOrderBonus(
       }),
       productMap,
       availableByProductId,
-      qtyByProduct
+      qtyByProduct,
+      allowedGiftsByRuleId
     );
     eligibleBonuses.push(...qtyEligible);
 
@@ -307,11 +311,8 @@ export async function previewMobileOrderBonus(
       ((sumPeek.rule.clauses?.length ?? 0) > 0 ||
         ruleRelatesToOrderSelection(sumPeek.rule, orderedProductIds, productById))
     ) {
-      const giftIds = await resolveAllowedGiftProductIdsForRule(
-        tenantId,
-        sumPeek.rule,
-        sumPeek.giftPid > 0 ? sumPeek.giftPid : undefined
-      );
+      const giftIds = allowedGiftsByRuleId.get(sumPeek.rule.id) ??
+        (await resolveAllowedGiftProductIdsForRule(tenantId, sumPeek.rule));
       const sumBonusByPid = new Map<number, number>();
       if (sumPeek.giftPid > 0) {
         sumBonusByPid.set(sumPeek.giftPid, sumPeek.units);

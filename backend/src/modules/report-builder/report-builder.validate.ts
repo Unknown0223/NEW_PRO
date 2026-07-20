@@ -235,6 +235,17 @@ export function validateReportBuilderDatasetRequest(
 
   const extra = parseExtraFilters(b);
 
+  const pageLimitRaw = b.pageLimit != null ? Number(b.pageLimit) : undefined;
+  const pageOffsetRaw = b.pageOffset != null ? Number(b.pageOffset) : undefined;
+  const pageLimit =
+    pageLimitRaw != null && Number.isFinite(pageLimitRaw) && pageLimitRaw > 0
+      ? Math.min(Math.floor(pageLimitRaw), 50_000)
+      : undefined;
+  const pageOffset =
+    pageOffsetRaw != null && Number.isFinite(pageOffsetRaw) && pageOffsetRaw >= 0
+      ? Math.floor(pageOffsetRaw)
+      : undefined;
+
   return {
     ok: true,
     filters: {
@@ -245,7 +256,9 @@ export function validateReportBuilderDatasetRequest(
       agentIds,
       statuses,
       orderTypes,
-      ...extra
+      ...extra,
+      ...(pageLimit != null ? { pageLimit } : {}),
+      ...(pageOffset != null ? { pageOffset } : {})
     }
   };
 }

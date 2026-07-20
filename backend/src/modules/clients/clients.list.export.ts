@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { buildClientListWhereInput } from "./clients.list.where";
 import type { ListClientsQuery } from "./clients.types";
 
@@ -13,9 +14,10 @@ function csvEscapeCell(v: string): string {
 
 export async function exportClientsFilteredCsv(
   tenantId: number,
-  q: ListClientsQuery
+  q: ListClientsQuery,
+  actorScope?: ScopedReportActor
 ): Promise<{ csv: string; truncated: boolean; totalMatched: number }> {
-  const where = await buildClientListWhereInput(tenantId, q);
+  const where = await buildClientListWhereInput(tenantId, q, actorScope);
   const headers = [
     "ID",
     "Nomi",

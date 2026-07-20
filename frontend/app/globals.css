@@ -216,6 +216,18 @@
   }
 }
 
+/* ─── Табель / Рабочие дни / Аудит — точный паритет палитры с прототипом TabelERP (ZIP).
+   Внутри этого скоупа --primary = фирменный teal #0e8c7a (brand-600) независимо от
+   выбранной палитры SALEC, поэтому выделение дней, активные чипы 0/0.5/1, кнопки
+   («Применить», «Сохранить», «Выбрать»), пагинация и раскрытая колонка дня совпадают
+   1:1 со скриншотом TabelERP. Статусные цвета ячеек заданы фиксированными hex в
+   timesheet-shared.ts (teal / светлый teal / серый / синий / жёлтый / оранжевый / фиолетовый). */
+.tabel-theme {
+  --primary: #0e8c7a;
+  --primary-foreground: #ffffff;
+  --ring: #17ae95;
+}
+
 /* Panel asosiy kontent — yengil kontrast */
 .app-main-canvas {
   background: linear-gradient(
@@ -1460,6 +1472,17 @@
 
 .animate-spin-slow {
   animation: balance-detail-spin 0.8s linear infinite;
+}
+
+/* Pivot cell text alignment overrides (global class names from customizeCell) */
+.pgAlignLeft {
+  text-align: left !important;
+}
+.pgAlignCenter {
+  text-align: center !important;
+}
+.pgAlignRight {
+  text-align: right !important;
 }
 
 @media print {

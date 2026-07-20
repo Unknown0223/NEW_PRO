@@ -372,3 +372,37 @@ export function findSettingsItem(sectionSlug: string, itemSlug: string): Setting
   }
   return null;
 }
+
+/** Deep-link: pathname bo‘yicha `requiredRoles` bandini topish. */
+export function findSettingsItemRequiringRolesForPath(pathname: string): SettingsItem | null {
+  const path = pathname.split("?")[0] ?? pathname;
+  const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  let best: SettingsItem | null = null;
+  let bestLen = -1;
+
+  const visit = (item: SettingsItem) => {
+    if (!item.requiredRoles?.length) return;
+    const href = resolveSettingsItemHref(item).split("?")[0] ?? "";
+    const hrefNorm = href.length > 1 && href.endsWith("/") ? href.slice(0, -1) : href;
+    if (normalized === hrefNorm || normalized.startsWith(`${hrefNorm}/`)) {
+      if (hrefNorm.length > bestLen) {
+        best = item;
+        bestLen = hrefNorm.length;
+      }
+    }
+  };
+
+  for (const section of settingsSections) {
+    for (const item of section.items) {
+      visit(item);
+      for (const child of item.children ?? []) visit(child);
+    }
+  }
+  return best;
+}
+
+export function isSettingsItemAllowedForRole(item: SettingsItem, role: string | null): boolean {
+  if (!item.requiredRoles?.length) return true;
+  if (role === "admin") return true;
+  return role != null && item.requiredRoles.includes(role);
+}

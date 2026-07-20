@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,9 +21,9 @@ import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
-import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { Eye, Link2, MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { ExpeditorConfigurationsDialog } from "@/components/staff/expeditor-configurations-dialog";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { ExpeditorsFiltersRow } from "@/components/staff/expeditors-filters-row";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
@@ -96,6 +97,8 @@ export type ExpeditorRow = {
   max_sessions: number;
   active_session_count: number;
   kpi_color: string | null;
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
   agent_entitlements: {
     price_types?: string[];
     product_rules?: Array<{ category_id: number; all: boolean; product_ids?: number[] }>;
@@ -290,8 +293,10 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types?kind=sale`);
-      return data.data;
+      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
+        `/api/${tenantSlug}/price-types?kind=sale`
+      );
+      return priceTypeOptionsFromResponse(data);
     }
   });
 
@@ -308,20 +313,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   });
 
   const tradeDirectionRows = useMemo(() => tradeDirectionsQ.data ?? [], [tradeDirectionsQ.data]);
-
-  const agentsPickerQ = useQuery({
-    queryKey: ["agents", tenantSlug, "expeditors-assign"],
-    enabled: Boolean(tenantSlug) && Boolean(assignRow),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.set("is_active", "true");
-      const { data } = await api.get<{ data: { id: number; fio: string; code: string | null }[] }>(
-        `/api/${tenantSlug}/agents?${params.toString()}`
-      );
-      return data.data;
-    }
-  });
 
   const patchMut = useMutation({
     mutationFn: async (vars: { id: number; body: Record<string, unknown> }) => {
@@ -446,21 +437,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     const full = filterOptQ.data?.territories ?? [];
     return Array.from(new Set([...full, ...t])).sort((a, b) => a.localeCompare(b, "ru"));
   }, [filterOptQ.data]);
-
-  const assignmentTerritoryOptions = useMemo(() => {
-    const fromRules = assignRow?.expeditor_assignment_rules?.territories ?? [];
-    return Array.from(new Set([...territoryFilterOptions, ...fromRules])).sort((a, b) =>
-      a.localeCompare(b, "ru")
-    );
-  }, [territoryFilterOptions, assignRow]);
-
-  const assignmentTradeDirections = useMemo(() => {
-    const fromCatalog = tradeDirectionFilterOptions;
-    const fromRules = assignRow?.expeditor_assignment_rules?.trade_directions ?? [];
-    return Array.from(new Set([...fromCatalog, ...fromRules])).sort((a, b) =>
-      a.localeCompare(b, "ru")
-    );
-  }, [tradeDirectionFilterOptions, assignRow]);
 
   const applyFilters = () => {
     setAppliedBranch(draftBranch);
@@ -722,10 +698,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           setAddOpen(o);
           if (!o) setCreateExpeditorError(null);
         }}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionRows}
-        territorySelectOptions={territoryFilterOptions}
+        tenantSlug={tenantSlug}
         loading={createMut.isPending}
         submitError={createExpeditorError}
         onSubmit={(body) => {
@@ -734,16 +707,16 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <AgentInfoDialog row={infoRow} onClose={() => setInfoRow(null)} />
+      <AgentInfoDialog
+        row={infoRow}
+        priceTypeOptions={priceTypesQ.data ?? []}
+        onClose={() => setInfoRow(null)}
+      />
 
       <AgentEditDialog
         row={editRow}
         onClose={() => setEditRow(null)}
         tenantSlug={tenantSlug}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionRows}
-        territorySelectOptions={territoryFilterOptions}
         onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
       />
 
@@ -780,16 +753,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <ExpeditorAssignmentDialog
-        row={assignRow}
-        onClose={() => setAssignRow(null)}
-        warehouses={warehousesQ.data ?? []}
-        priceTypes={priceTypesQ.data ?? []}
-        tradeDirections={assignmentTradeDirections}
-        territoryOptions={assignmentTerritoryOptions}
-        agents={agentsPickerQ.data ?? []}
-        onSave={(id, rules) => patchMut.mutateAsync({ id, body: { expeditor_assignment_rules: rules } })}
-      />
+      <ExpeditorAssignmentDialog row={assignRow} onClose={() => setAssignRow(null)} />
 
       <Dialog open={Boolean(deactivateExpeditor)} onOpenChange={(o) => !o && setDeactivateExpeditor(null)}>
         <DialogContent className="max-w-sm">
@@ -816,8 +780,18 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   );
 }
 
-function AgentInfoDialog({ row, onClose }: { row: ExpeditorRow | null; onClose: () => void }) {
+function AgentInfoDialog({
+  row,
+  priceTypeOptions,
+  onClose
+}: {
+  row: ExpeditorRow | null;
+  priceTypeOptions?: PriceTypeOption[];
+  onClose: () => void;
+}) {
   if (!row) return null;
+  const ptLabel = (k: string) =>
+    priceTypeOptions?.find((o) => o.id === k)?.label ?? k;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg">
@@ -846,7 +820,10 @@ function AgentInfoDialog({ row, onClose }: { row: ExpeditorRow | null; onClose: 
           <dt className="text-muted-foreground">Территория</dt>
           <dd>{row.territory ?? "—"}</dd>
           <dt className="text-muted-foreground">Тип цены</dt>
-          <dd>{(row.price_types ?? []).join(", ") || row.price_type || "—"}</dd>
+          <dd>
+            {(row.price_types ?? []).map(ptLabel).join(", ") ||
+              (row.price_type ? ptLabel(row.price_type) : "—")}
+          </dd>
           <dt className="text-muted-foreground">Сессии</dt>
           <dd>
             {row.active_session_count} / {row.max_sessions}
@@ -871,20 +848,14 @@ function mergeTerritorySelectOptions(current: string, base: string[]): string[] 
 function AgentAddDialog({
   open,
   onOpenChange,
-  warehouses,
-  branchOptions,
-  tradeDirections,
-  territorySelectOptions,
+  tenantSlug,
   loading,
   submitError,
   onSubmit
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  warehouses: { id: number; name: string }[];
-  branchOptions: string[];
-  tradeDirections: Array<{ id: number; name: string; code: string | null }>;
-  territorySelectOptions: string[];
+  tenantSlug: string;
   loading: boolean;
   submitError: string | null;
   onSubmit: (body: Record<string, unknown>) => void;
@@ -894,24 +865,32 @@ function AgentAddDialog({
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [warehouse_id, setWh] = useState("");
-  const [trade_direction_id, setTdId] = useState("");
   const [agent_type, setAgentType] = useState("Экспедитор");
-  const [branch, setBranch] = useState("");
   const [position, setPos] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [consignment, setConsignment] = useState(false);
   const [kpi_color, setKpi] = useState("#ef4444");
-  const [territoryField, setTerritoryField] = useState("");
+  const [work_slot_id, setWorkSlotId] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  const territoryOpts = useMemo(
-    () => mergeTerritorySelectOptions(territoryField, territorySelectOptions),
-    [territoryField, territorySelectOptions]
-  );
+  const slotsQ = useQuery({
+    queryKey: ["work-slots", tenantSlug, "expeditor-create"],
+    enabled: open && Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        data: Array<{
+          id: number;
+          slot_code: string;
+          label: string | null;
+          active_user_name: string | null;
+        }>;
+      }>(`/api/${tenantSlug}/work-slots?slot_type=expeditor&limit=300&is_active=true`);
+      return data.data ?? [];
+    }
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -920,18 +899,14 @@ function AgentAddDialog({
     setMid("");
     setPhone("");
     setEmail("");
-    setWh("");
-    setTdId("");
     setAgentType("Экспедитор");
-    setBranch("");
     setPos("");
     setCode("");
     setPinfl("");
-    setTerritoryField("");
     setLogin("");
     setPassword(randomPassword());
-    setConsignment(false);
     setKpi("#ef4444");
+    setWorkSlotId("");
   }, [open]);
 
   return (
@@ -945,45 +920,32 @@ function AgentAddDialog({
             {submitError}
           </p>
         ) : null}
+        <WorkplaceMovedNotice className="mb-2" />
         <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1">
+          <label className="text-xs text-muted-foreground">
+            Рабочее место *
+            <FilterSelect
+              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
+              emptyLabel="Выберите место"
+              aria-label="Рабочее место"
+              value={work_slot_id}
+              onChange={(e) => setWorkSlotId(e.target.value)}
+            >
+              {(slotsQ.data ?? [])
+                .filter((s) => !s.active_user_name)
+                .map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.slot_code}
+                    {s.label ? ` — ${s.label}` : ""}
+                  </option>
+                ))}
+            </FilterSelect>
+          </label>
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Склад
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Склад"
-              aria-label="Склад"
-              value={warehouse_id}
-              onChange={(e) => setWh(e.target.value)}
-            >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Зона (направление торговли)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Tanlanmagan"
-              aria-label="Зона (направление торговли)"
-              value={trade_direction_id}
-              onChange={(e) => setTdId(e.target.value)}
-            >
-              {tradeDirections.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <label className="text-xs text-muted-foreground">
             Должность (тип)
             <select
@@ -995,39 +957,7 @@ function AgentAddDialog({
               <option value="Водитель">Водитель</option>
             </select>
           </label>
-          <label className="text-xs text-muted-foreground">
-            Филиал
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Филиал"
-              aria-label="Филиал"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              {branchOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Территория (как у клиента: область / туман / зона)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Не выбрано"
-              aria-label="Территория"
-              value={territoryField}
-              onChange={(e) => setTerritoryField(e.target.value)}
-            >
-              {territoryOpts.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
@@ -1046,10 +976,6 @@ function AgentAddDialog({
             </Button>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={consignment} onChange={(e) => setConsignment(e.target.checked)} />
-            Консигнация
-          </label>
-          <label className="flex items-center gap-2 text-sm">
             KPI цвет
             <input type="color" value={kpi_color} onChange={(e) => setKpi(e.target.value)} className="h-8 w-12" />
           </label>
@@ -1058,7 +984,9 @@ function AgentAddDialog({
           <Button
             type="button"
             className="w-full"
-            disabled={loading || !first_name.trim() || !login.trim() || password.length < 6}
+            disabled={
+              loading || !first_name.trim() || !login.trim() || password.length < 6 || !work_slot_id.trim()
+            }
             onClick={() =>
               onSubmit({
                 first_name: first_name.trim(),
@@ -1066,20 +994,14 @@ function AgentAddDialog({
                 middle_name: middle_name.trim() || null,
                 phone: phone.trim() || null,
                 email: email.trim() || null,
-                warehouse_id: warehouse_id ? Number.parseInt(warehouse_id, 10) : null,
-                trade_direction_id: trade_direction_id.trim()
-                  ? Number.parseInt(trade_direction_id.trim(), 10)
-                  : null,
                 agent_type: agent_type.trim() || null,
-                branch: branch.trim() || null,
                 position: position.trim() || null,
-                territory: territoryField.trim() || null,
                 code: code.trim() || null,
                 pinfl: pinfl.trim() || null,
                 login: login.trim().toLowerCase(),
                 password,
-                consignment,
                 kpi_color: kpi_color || null,
+                work_slot_id: Number.parseInt(work_slot_id.trim(), 10),
                 max_sessions: 1,
                 app_access: true,
                 can_authorize: true
@@ -1098,19 +1020,11 @@ function AgentEditDialog({
   row,
   onClose,
   tenantSlug,
-  warehouses,
-  branchOptions,
-  tradeDirections,
-  territorySelectOptions,
   onPatch
 }: {
   row: ExpeditorRow | null;
   onClose: () => void;
   tenantSlug: string;
-  warehouses: { id: number; name: string }[];
-  branchOptions: string[];
-  tradeDirections: Array<{ id: number; name: string; code: string | null }>;
-  territorySelectOptions: string[];
   onPatch: (id: number, body: Record<string, unknown>) => Promise<unknown>;
 }) {
   const detailQ = useQuery({
@@ -1129,25 +1043,15 @@ function AgentEditDialog({
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [warehouse_id, setWh] = useState("");
-  const [trade_direction_id, setTdId] = useState("");
   const [agent_type, setAgentType] = useState("");
-  const [branch, setBranch] = useState("");
   const [position, setPos] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [login, setLogin] = useState("");
-  const [consignment, setConsignment] = useState(false);
   const [kpi_color, setKpi] = useState("#ef4444");
-  const [territory, setTerritory] = useState("");
   const [pwMode, setPwMode] = useState(false);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const territoryOpts = useMemo(
-    () => mergeTerritorySelectOptions(territory, territorySelectOptions),
-    [territory, territorySelectOptions]
-  );
 
   useEffect(() => {
     if (!r) return;
@@ -1157,32 +1061,15 @@ function AgentEditDialog({
     setMid(parts[2] ?? "");
     setPhone(r.phone ?? "");
     setEmail(r.email ?? "");
-    const wh = warehouses.find((w) => w.name === r.warehouse);
-    setWh(wh ? String(wh.id) : "");
-    if (r.trade_direction_id != null && r.trade_direction_id > 0) {
-      setTdId(String(r.trade_direction_id));
-    } else {
-      const legacy = (r.trade_direction ?? "").trim();
-      const match = tradeDirections.find(
-        (d) =>
-          (d.code && d.code.trim() === legacy) ||
-          d.name.trim() === legacy ||
-          legacy === `${d.name} (${d.code})`.trim()
-      );
-      setTdId(match ? String(match.id) : "");
-    }
     setAgentType(r.agent_type ?? "");
-    setBranch(r.branch ?? "");
     setPos(r.position ?? "");
     setCode(r.code ?? "");
     setPinfl(r.pinfl ?? "");
-    setTerritory(r.territory ?? "");
     setLogin(r.login);
-    setConsignment(r.consignment);
     setKpi(r.kpi_color || "#ef4444");
     setPwMode(false);
     setPassword("");
-  }, [r, warehouses, tradeDirections]);
+  }, [r]);
 
   if (!row || !r) return null;
 
@@ -1195,17 +1082,10 @@ function AgentEditDialog({
         middle_name: middle_name.trim() || null,
         phone: phone.trim() || null,
         email: email.trim() || null,
-        warehouse_id: warehouse_id ? Number.parseInt(warehouse_id, 10) : null,
-        trade_direction_id: trade_direction_id.trim()
-          ? Number.parseInt(trade_direction_id.trim(), 10)
-          : null,
         agent_type: agent_type.trim() || null,
-        branch: branch.trim() || null,
         position: position.trim() || null,
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
-        territory: territory.trim() || null,
-        consignment,
         kpi_color: kpi_color || null
       };
       if (pwMode && password.length >= 6) body.password = password;
@@ -1222,81 +1102,20 @@ function AgentEditDialog({
         <DialogHeader>
           <DialogTitle>Редактировать экспедитора</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice
+          className="mb-2"
+          workSlotId={r.work_slot_id ?? undefined}
+        />
         <div className="grid max-h-[calc(92vh-8rem)] gap-3 overflow-y-auto pr-1">
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Склад
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Склад"
-              aria-label="Склад"
-              value={warehouse_id}
-              onChange={(e) => setWh(e.target.value)}
-            >
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
-          <label className="text-xs text-muted-foreground">
-            Зона (направление торговли)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Tanlanmagan"
-              aria-label="Зона (направление торговли)"
-              value={trade_direction_id}
-              onChange={(e) => setTdId(e.target.value)}
-            >
-              {tradeDirections.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Должность / тип" value={agent_type} onChange={(e) => setAgentType(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Филиал
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Филиал"
-              aria-label="Филиал"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            >
-              {branchOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
-          <label className="text-xs text-muted-foreground">
-            Территория (как у клиента)
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Не выбрано"
-              aria-label="Территория"
-              value={territory}
-              onChange={(e) => setTerritory(e.target.value)}
-            >
-              {territoryOpts.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Логин" value={login} onChange={(e) => setLogin(e.target.value)} disabled />
           {!pwMode ? (
             <Button type="button" variant="outline" className="w-full" onClick={() => setPwMode(true)}>
@@ -1311,16 +1130,9 @@ function AgentEditDialog({
             />
           )}
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={consignment} onChange={(e) => setConsignment(e.target.checked)} />
-            Консигнация
-          </label>
-          <label className="flex items-center gap-2 text-sm">
             KPI цвет
             <input type="color" value={kpi_color} onChange={(e) => setKpi(e.target.value)} className="h-8 w-12" />
           </label>
-          <p className="text-xs text-muted-foreground">
-            Условия автопривязки заказов — кнопка «цепочка» в таблице.
-          </p>
         </div>
         <DialogFooter className="flex-col gap-2 border-0 bg-transparent p-0 sm:flex-col">
           <Button
@@ -1337,208 +1149,29 @@ function AgentEditDialog({
   );
 }
 
-const WEEKDAY_LABELS: Record<number, string> = {
-  1: "Пн",
-  2: "Вт",
-  3: "Ср",
-  4: "Чт",
-  5: "Пт",
-  6: "Сб",
-  7: "Вс"
-};
-
 function ExpeditorAssignmentDialog({
   row,
-  onClose,
-  warehouses,
-  priceTypes,
-  tradeDirections,
-  territoryOptions,
-  agents,
-  onSave
+  onClose
 }: {
   row: ExpeditorRow | null;
   onClose: () => void;
-  warehouses: { id: number; name: string }[];
-  priceTypes: string[];
-  tradeDirections: string[];
-  territoryOptions: string[];
-  agents: { id: number; fio: string; code: string | null }[];
-  onSave: (id: number, rules: ExpeditorAssignmentRules) => Promise<unknown>;
 }) {
-  const [ptSel, setPtSel] = useState<Set<string>>(new Set());
-  const [agSel, setAgSel] = useState<Set<number>>(new Set());
-  const [whSel, setWhSel] = useState<Set<number>>(new Set());
-  const [tdSel, setTdSel] = useState<Set<string>>(new Set());
-  const [trSel, setTrSel] = useState<Set<string>>(new Set());
-  const [wdSel, setWdSel] = useState<Set<number>>(new Set());
-  const [s1, setS1] = useState("");
-  const [s2, setS2] = useState("");
-  const [s3, setS3] = useState("");
-  const [s4, setS4] = useState("");
-  const [s5, setS5] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!row) return;
-    const r = row.expeditor_assignment_rules ?? {};
-    setPtSel(new Set(r.price_types ?? []));
-    setAgSel(new Set(r.agent_ids ?? []));
-    setWhSel(new Set(r.warehouse_ids ?? []));
-    setTdSel(new Set(r.trade_directions ?? []));
-    setTrSel(new Set(r.territories ?? []));
-    setWdSel(new Set(r.weekdays ?? []));
-    setS1("");
-    setS2("");
-    setS3("");
-    setS4("");
-    setS5("");
-  }, [row]);
-
-  const filteredPt = useMemo(() => {
-    const q = s1.trim().toLowerCase();
-    return priceTypes.filter((p) => !q || p.toLowerCase().includes(q));
-  }, [priceTypes, s1]);
-
-  const filteredAgents = useMemo(() => {
-    const q = s2.trim().toLowerCase();
-    if (!q) return agents;
-    return agents.filter((a) =>
-      `${a.fio} ${a.code ?? ""} ${a.id}`.toLowerCase().includes(q)
-    );
-  }, [agents, s2]);
-
-  const filteredWh = useMemo(() => {
-    const q = s3.trim().toLowerCase();
-    return warehouses.filter((w) => !q || w.name.toLowerCase().includes(q));
-  }, [warehouses, s3]);
-
-  const filteredTd = useMemo(() => {
-    const q = s4.trim().toLowerCase();
-    return tradeDirections.filter((p) => !q || p.toLowerCase().includes(q));
-  }, [tradeDirections, s4]);
-
-  const filteredTr = useMemo(() => {
-    const q = s5.trim().toLowerCase();
-    return territoryOptions.filter((p) => !q || p.toLowerCase().includes(q));
-  }, [territoryOptions, s5]);
-
-  const weekdayItems = useMemo(
-    () =>
-      ([1, 2, 3, 4, 5, 6, 7] as const).map((d) => ({
-        id: d,
-        title: WEEKDAY_LABELS[d]
-      })),
-    []
-  );
-
   if (!row) return null;
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const rules: ExpeditorAssignmentRules = {
-        price_types: ptSel.size ? Array.from(ptSel) : undefined,
-        agent_ids: agSel.size ? Array.from(agSel) : undefined,
-        warehouse_ids: whSel.size ? Array.from(whSel) : undefined,
-        trade_directions: tdSel.size ? Array.from(tdSel) : undefined,
-        territories: trSel.size ? Array.from(trSel) : undefined,
-        weekdays: wdSel.size ? Array.from(wdSel).sort((a, b) => a - b) : undefined
-      };
-      await onSave(row.id, rules);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Условия привязки к заявке</DialogTitle>
           <p className="text-sm text-muted-foreground">{row.fio}</p>
-          <p className="text-xs text-muted-foreground">
-            Пустые блоки не учитываются. Заказ при создании сопоставляется с клиентом (тип цены = категория / канал /
-            категория товара), агентом заказа, складом, направлением агента, территорией клиента и днём недели.
-          </p>
         </DialogHeader>
-        <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto md:grid-cols-2">
-          <SearchableMultiSelectPanel<string>
-            label="Тип цены"
-            searchPlaceholder="Поиск"
-            search={s1}
-            onSearchChange={setS1}
-            items={filteredPt.map((p) => ({ id: p, title: p }))}
-            selected={ptSel}
-            onSelectedChange={setPtSel}
-            emptyMessage="Нет вариантов"
-          />
-          <SearchableMultiSelectPanel
-            label="Агент"
-            searchPlaceholder="Поиск по ФИО, коду, ID"
-            search={s2}
-            onSearchChange={setS2}
-            items={filteredAgents.map((a) => ({
-              id: a.id,
-              subtitle: a.code != null && String(a.code).trim() !== "" ? String(a.code) : `#${a.id}`,
-              title: a.fio
-            }))}
-            selected={agSel}
-            onSelectedChange={setAgSel}
-            emptyMessage="Нет агентов"
-          />
-          <SearchableMultiSelectPanel
-            label="Склад"
-            searchPlaceholder="Поиск"
-            search={s3}
-            onSearchChange={setS3}
-            items={filteredWh.map((w) => ({ id: w.id, title: w.name }))}
-            selected={whSel}
-            onSelectedChange={setWhSel}
-            emptyMessage="Нет складов"
-          />
-          {tradeDirections.length > 0 ? (
-            <SearchableMultiSelectPanel<string>
-              label="Направление торговли"
-              searchPlaceholder="Поиск"
-              search={s4}
-              onSearchChange={setS4}
-              items={filteredTd.map((p) => ({ id: p, title: p }))}
-              selected={tdSel}
-              onSelectedChange={setTdSel}
-              emptyMessage="Нет вариантов"
-            />
-          ) : (
-            <div className="flex min-h-[5rem] flex-col justify-center rounded-md border p-4 text-sm text-muted-foreground">
-              Нет значений зоны в фильтрах. Направление берётся из поля «Зона» у агента в заказе.
-            </div>
-          )}
-          <SearchableMultiSelectPanel<string>
-            label="Территория"
-            searchPlaceholder="Поиск"
-            search={s5}
-            onSearchChange={setS5}
-            items={filteredTr.map((p) => ({ id: p, title: p }))}
-            selected={trSel}
-            onSelectedChange={setTrSel}
-            emptyMessage="Нет вариантов"
-          />
-          <SearchableMultiSelectPanel
-            label="День недели"
-            searchable={false}
-            items={weekdayItems}
-            selected={wdSel}
-            onSelectedChange={setWdSel}
-            emptyMessage="—"
-          />
-        </div>
+        <WorkplaceMovedNotice workSlotId={row.work_slot_id ?? undefined} />
+        <p className="text-sm text-muted-foreground">
+          Правила автопривязки заказов настраиваются на рабочем месте экспедитора.
+        </p>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button type="button" onClick={() => void save()} disabled={saving}>
-            Сохранить
+          <Button type="button" onClick={onClose}>
+            Закрыть
           </Button>
         </DialogFooter>
       </DialogContent>

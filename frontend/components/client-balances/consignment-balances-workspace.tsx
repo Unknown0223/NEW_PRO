@@ -395,6 +395,7 @@ const filterFieldLabelClass =
 const filterFieldLabelCompactClass =
   "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
+/** @deprecated Use `/client-balances?view=clients_consignment` — tab inside ClientBalancesWorkspace. */
 export function ConsignmentBalancesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();

@@ -28,6 +28,7 @@ import {
   type PriceMatrixImportPreviewRow
 } from "@/lib/price-matrix-import-parse";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,8 +80,10 @@ export function usePriceMatrixPage() {
     enabled: Boolean(tenantSlug) && isAdmin,
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types?kind=${kind}`);
-      return data.data;
+      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
+        `/api/${tenantSlug}/price-types?kind=${kind}`
+      );
+      return priceTypeOptionsFromResponse(data);
     }
   });
 
@@ -152,7 +155,7 @@ export function usePriceMatrixPage() {
 
   useEffect(() => {
     const list = priceTypesQ.data ?? [];
-    if (priceType && list.length > 0 && !list.includes(priceType)) {
+    if (priceType && list.length > 0 && !list.some((o) => o.id === priceType)) {
       setPriceType("");
     }
   }, [priceTypesQ.data, priceType]);

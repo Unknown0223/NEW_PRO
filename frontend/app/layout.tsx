@@ -5,6 +5,8 @@ import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/components/providers";
+import { FaviconHeadLinks } from "@/components/brand/favicon-head-links";
+import { FAVICON_CACHE_BUST } from "@/lib/favicon-version";
 import {
   APP_THEME_ALIASES,
   APP_THEME_IDS,
@@ -22,19 +24,17 @@ const fontMono = JetBrains_Mono({
   subsets: ["latin"]
 });
 
+const v = FAVICON_CACHE_BUST;
+
 export const metadata: Metadata = {
   title: "Sales Arena — панель",
   description: "Веб-панель мультитенантной торговой системы",
+  // Icons: only apple via metadata. Classic ICO/PNG/SVG come from <FaviconHeadLinks />
+  // so Yandex does not get duplicate/conflicting Next-injected <link rel="icon"> tags.
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/brand/favicon/icon_32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" }
-    ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+    apple: [{ url: `/apple-touch-icon.png?v=${v}`, sizes: "180x180", type: "image/png" }]
   },
-  manifest: "/site.webmanifest"
+  manifest: `/site.webmanifest?v=${v}`
 };
 
 export default function RootLayout({
@@ -44,6 +44,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className={cn("font-sans", fontSans.variable)} suppressHydrationWarning>
+      <head>
+        <FaviconHeadLinks />
+      </head>
       <body
         className={`${fontSans.variable} ${fontMono.variable} min-h-dvh antialiased`}
         suppressHydrationWarning

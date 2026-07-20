@@ -6,6 +6,7 @@
 export type ZodFlattenDetails = {
   formErrors: string[];
   fieldErrors: Record<string, string[]>;
+  issues?: Array<{ path: string; message: string }>;
 };
 
 function isNonEmptyStringArray(v: unknown): v is string[] {
@@ -30,8 +31,17 @@ export function parseZodFlattenDetails(details: unknown): ZodFlattenDetails | nu
   const fieldRaw = o.fieldErrors;
   const formErrors = isNonEmptyStringArray(formRaw) ? formRaw : [];
   const fieldErrors = isFieldErrorsRecord(fieldRaw) ? fieldRaw : {};
-  if (formErrors.length === 0 && Object.keys(fieldErrors).length === 0) return null;
-  return { formErrors, fieldErrors };
+  const issuesRaw = o.issues;
+  const issues = Array.isArray(issuesRaw)
+    ? issuesRaw
+        .filter((x): x is { path?: string; message?: string } => x != null && typeof x === "object")
+        .map((x) => ({
+          path: typeof x.path === "string" ? x.path : "",
+          message: typeof x.message === "string" ? x.message : ""
+        }))
+    : undefined;
+  if (formErrors.length === 0 && Object.keys(fieldErrors).length === 0 && !issues?.length) return null;
+  return { formErrors, fieldErrors, ...(issues?.length ? { issues } : {}) };
 }
 
 /** Axios javob tanasi: `error === "ValidationError"` va `details` flatten. */
@@ -52,10 +62,21 @@ export function firstMessagePerField(details: ZodFlattenDetails): Record<string,
   return out;
 }
 
-/** Banner / umumiy xabar: avvalo `formErrors`, keyin istalgan maydon xabari. */
+/** Banner / umumiy xabar: avvalo `formErrors`, keyin issues, keyin istalgan maydon xabari. */
 export function firstValidationUserHint(details: ZodFlattenDetails): string | undefined {
   const fe0 = details.formErrors.find((m) => m.trim() !== "");
   if (fe0) return fe0;
+  const issues = details.issues;
+  if (Array.isArray(issues) && issues.length) {
+    const lines = issues.slice(0, 3).map((i) => {
+      if (i.path?.endsWith("payment_method_id") || i.path === "payment_method_id") {
+        return "Способ оплаты обязателен для каждого типа цены";
+      }
+      return i.path ? `${i.path}: ${i.message ?? ""}` : (i.message ?? "");
+    });
+    const joined = lines.map((s) => s.trim()).filter(Boolean).join("; ");
+    if (joined) return joined;
+  }
   const per = firstMessagePerField(details);
   const vals = Object.values(per);
   return vals.find((m) => m.trim() !== "");

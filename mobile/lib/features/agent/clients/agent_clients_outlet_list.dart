@@ -126,12 +126,7 @@ class _ClientListTile extends ConsumerWidget {
       subtitle: code.isNotEmpty ? code : (phone.isNotEmpty ? phone : '—'),
       grade: category.isNotEmpty ? category : 'B',
       trailing: showBalance ? debt : '',
-      headerTrailing: draft != null
-          ? OrderDraftHeaderBadge(
-              draft: draft,
-              onExpired: () => ref.invalidate(orderDraftsProvider),
-            )
-          : null,
+      headerTrailing: draft != null ? OrderDraftHeaderBadge(draft: draft) : null,
       trailingColor: debtColor,
       onTap: onTap,
     );

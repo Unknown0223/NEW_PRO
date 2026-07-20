@@ -113,7 +113,8 @@ const JOBS_REDACT_FILE_PATH = new Set([
   "import_products_xlsx",
   "import_products_catalog_xlsx",
   "import_products_catalog_update_xlsx",
-  "import_product_prices_xlsx"
+  "import_product_prices_xlsx",
+  "import_system_migration_backup"
 ]);
 
 export type ProductImportJobMode = "basic" | "catalog" | "catalog_update";
@@ -140,6 +141,34 @@ export async function enqueueProductsXlsxImportJob(
       file_path: filePath
     },
     { removeOnComplete: 1000, removeOnFail: 5000 }
+  );
+  return { queue: BACKGROUND_QUEUE_NAME, jobId: String(job.id) };
+}
+
+export async function enqueueSystemMigrationImportJob(
+  tenantId: number,
+  actorUserId: number | null,
+  filePath: string,
+  opts: {
+    force_nonempty?: boolean;
+    mode?: "full" | "profile_only";
+    conflict_policy?: "keep" | "replace";
+    modules?: string[];
+  }
+): Promise<EnqueuePingResult> {
+  const q = getBackgroundQueue();
+  const job = await q.add(
+    "import_system_migration_backup",
+    {
+      tenant_id: tenantId,
+      actor_user_id: actorUserId,
+      file_path: filePath,
+      force_nonempty: opts.force_nonempty ?? false,
+      mode: opts.mode ?? "full",
+      conflict_policy: opts.conflict_policy ?? "keep",
+      modules: opts.modules
+    },
+    { removeOnComplete: 200, removeOnFail: 500 }
   );
   return { queue: BACKGROUND_QUEUE_NAME, jobId: String(job.id) };
 }
@@ -282,12 +311,37 @@ export async function getBackgroundJobForTenant(
   const progress =
     job.name === "import_clients_xlsx"
       ? normalizeClientImportProgress(state, job.progress, job.returnvalue, workersConnected)
-      : {
-          stage: state,
-          percent: state === "completed" || state === "failed" ? 100 : 0,
-          processedRows: 0,
-          totalRows: 0
-        };
+      : job.name === "import_system_migration_backup"
+        ? (() => {
+            const p =
+              job.progress && typeof job.progress === "object"
+                ? (job.progress as {
+                    stage?: string;
+                    percent?: number;
+                    message?: string;
+                  })
+                : null;
+            return {
+              stage: p?.stage ?? state,
+              percent:
+                state === "completed" || state === "failed"
+                  ? 100
+                  : typeof p?.percent === "number"
+                    ? p.percent
+                    : state === "active"
+                      ? 10
+                      : 0,
+              processedRows: 0,
+              totalRows: 0,
+              message: p?.message
+            };
+          })()
+        : {
+            stage: state,
+            percent: state === "completed" || state === "failed" ? 100 : 0,
+            processedRows: 0,
+            totalRows: 0
+          };
   return {
     queue: BACKGROUND_QUEUE_NAME,
     id: String(job.id),

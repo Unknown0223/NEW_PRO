@@ -1,8 +1,8 @@
 "use client";
 
 import type { OrderListRow } from "@/components/orders/order-detail-view";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_VALUES } from "@/lib/order-status";
+import { usePermissions } from "@/lib/use-permissions";
 import { memo } from "react";
 
 export type OrderStatusCellProps = {
@@ -15,12 +15,12 @@ export type OrderStatusCellProps = {
 
 export const OrderStatusCell = memo(function OrderStatusCell({
   order,
-  effectiveRole,
   statusError,
   isPending,
   onStatusChange
 }: OrderStatusCellProps) {
-  const canPatch = isAdminOrOperatorLikeRole(effectiveRole);
+  const { has } = usePermissions();
+  const canPatch = has("orders.zakaz.status") || has("orders.status.status");
   const allowedRaw = order.allowed_next_statuses ?? [];
   const nextOnly = new Set(allowedRaw.filter((s) => s !== order.status));
   const nextStatuses = ORDER_STATUS_VALUES.filter((v) => nextOnly.has(v));

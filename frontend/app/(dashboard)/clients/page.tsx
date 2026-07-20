@@ -27,6 +27,7 @@ import {
 } from "@/lib/client-table-columns";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import {
   appendClientListFilterParams,
   INITIAL_CLIENT_TOOLBAR_FILTERS,
@@ -164,6 +165,8 @@ function sanitizeToolbarForApi(t: ClientToolbarFiltersState): ClientToolbarFilte
 export default function ClientsPage() {
   const router = useRouter();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -668,6 +671,7 @@ export default function ClientsPage() {
     queryKey: [
       "clients",
       tenantSlug,
+      actorUserId,
       page,
       search,
       appliedToolbar,
@@ -906,7 +910,7 @@ export default function ClientsPage() {
   }, [refData]);
 
   const agentsFilterQ = useQuery({
-    queryKey: ["agents", tenantSlug, "clients-toolbar"],
+    queryKey: ["agents", tenantSlug, actorUserId, "clients-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -920,7 +924,7 @@ export default function ClientsPage() {
   });
 
   const expeditorsFilterQ = useQuery({
-    queryKey: ["expeditors", tenantSlug, "clients-toolbar"],
+    queryKey: ["expeditors", tenantSlug, actorUserId, "clients-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {

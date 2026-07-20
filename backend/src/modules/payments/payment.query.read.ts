@@ -15,6 +15,7 @@ import {
   type PaymentAllocationRow
 } from "./payment-allocations.service";
 import type { PaymentDetailPayload, PaymentListQuery, PaymentListRow } from "./payment.query.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import {
   buildPaymentListWhere,
   mapPaymentToListRow,
@@ -103,9 +104,10 @@ function buildPaymentListOrderBy(q: PaymentListQuery): Prisma.PaymentOrderByWith
 
 export async function listPayments(
   tenantId: number,
-  q: PaymentListQuery
+  q: PaymentListQuery,
+  actorScope?: ScopedReportActor
 ): Promise<{ data: PaymentListRow[]; total: number; page: number; limit: number }> {
-  const where = buildPaymentListWhere(tenantId, q);
+  const where = buildPaymentListWhere(tenantId, q, actorScope);
   const inc = paymentListInclude(tenantId);
   const orderBy = buildPaymentListOrderBy(q);
 

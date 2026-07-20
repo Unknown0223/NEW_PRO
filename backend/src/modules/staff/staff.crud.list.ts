@@ -59,7 +59,9 @@ import {
 export async function listStaff(
   tenantId: number,
   kind: StaffKind,
-  filters?: ListStaffFilters
+  filters?: ListStaffFilters,
+  /** Extra Prisma constraints (e.g. Access agent directory scope). Merged via AND. */
+  accessScope?: Prisma.UserWhereInput | null
 ): Promise<StaffRow[]> {
   const roleFilter: Prisma.StringFilter | string =
     kind === "operator" ? { in: [...OPERATOR_LIKE_WEB_ROLES] } : kindRole(kind);
@@ -114,6 +116,11 @@ export async function listStaff(
     } else {
       where.AND = [whClause];
     }
+  }
+
+  if (accessScope) {
+    const existing = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+    where.AND = [...existing, accessScope];
   }
 
   const users = await prisma.user.findMany({

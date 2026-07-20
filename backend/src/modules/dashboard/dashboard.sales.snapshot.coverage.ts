@@ -14,6 +14,7 @@ export async function fetchSalesSnapshotCoverageBlock(ctx: SalesSnapshotQueryCtx
       JOIN users u ON u.id = caa.agent_id
       WHERE caa.tenant_id = ${tenantId}
         ${filters.supervisor_ids.length > 0 ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(filters.supervisor_ids)})` : Prisma.empty}
+        ${filters.agent_ids.length > 0 ? Prisma.sql`AND caa.agent_id IN (${Prisma.join(filters.agent_ids)})` : Prisma.empty}
         ${filters.trade_directions.length > 0 ? Prisma.sql`AND COALESCE(u.trade_direction, '') IN (${Prisma.join(filters.trade_directions)})` : Prisma.empty}
         ${buildSalesTerritoryAliasClause("c", territoryTerms)}
     `,
@@ -42,6 +43,7 @@ export async function fetchSalesSnapshotCoverageBlock(ctx: SalesSnapshotQueryCtx
       JOIN users u ON u.id = caa.agent_id
       WHERE caa.tenant_id = ${tenantId}
         ${filters.supervisor_ids.length > 0 ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(filters.supervisor_ids)})` : Prisma.empty}
+        ${filters.agent_ids.length > 0 ? Prisma.sql`AND caa.agent_id IN (${Prisma.join(filters.agent_ids)})` : Prisma.empty}
         ${filters.trade_directions.length > 0 ? Prisma.sql`AND COALESCE(u.trade_direction, '') IN (${Prisma.join(filters.trade_directions)})` : Prisma.empty}
         ${buildSalesTerritoryAliasClause("c", territoryTerms)}
       GROUP BY 1
@@ -75,6 +77,7 @@ export async function fetchSalesSnapshotCoverageBlock(ctx: SalesSnapshotQueryCtx
       JOIN clients c ON c.id = caa.client_id
       WHERE caa.tenant_id = ${tenantId}
         ${filters.supervisor_ids.length > 0 ? Prisma.sql`AND u.supervisor_user_id IN (${Prisma.join(filters.supervisor_ids)})` : Prisma.empty}
+        ${filters.agent_ids.length > 0 ? Prisma.sql`AND caa.agent_id IN (${Prisma.join(filters.agent_ids)})` : Prisma.empty}
         ${filters.trade_directions.length > 0 ? Prisma.sql`AND COALESCE(u.trade_direction, '') IN (${Prisma.join(filters.trade_directions)})` : Prisma.empty}
         ${buildSalesTerritoryAliasClause("c", territoryTerms)}
       GROUP BY caa.agent_id

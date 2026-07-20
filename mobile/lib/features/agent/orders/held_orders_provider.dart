@@ -4,9 +4,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
+import '../../../core/api/mobile_api.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/notifications/mobile_local_notification_service.dart';
+import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../auth/auth_provider.dart';
 import 'held_order_model.dart';
@@ -42,6 +45,8 @@ class HeldOrderScheduler {
   HeldOrderScheduler(this._ref);
   final Ref _ref;
   final _timers = <int, Timer>{};
+  final _warnTimers = <int, Timer>{};
+  final _warnedIds = <int>{};
   bool _bootstrapped = false;
 
   Future<void> bootstrap() async {
@@ -63,6 +68,8 @@ class HeldOrderScheduler {
 
   void cancelTimer(int heldOrderId) {
     _timers.remove(heldOrderId)?.cancel();
+    _warnTimers.remove(heldOrderId)?.cancel();
+    _warnedIds.remove(heldOrderId);
   }
 
   void _schedule(HeldOrder order, DateTime now) {
@@ -73,16 +80,41 @@ class HeldOrderScheduler {
       return;
     }
     _timers[order.id] = Timer(wait, () => _submit(order.id));
+
+    final warnIn = wait - const Duration(minutes: 1);
+    if (warnIn.inMilliseconds > 0) {
+      _warnTimers[order.id] = Timer(warnIn, () {
+        unawaited(_notifyEndingSoon(order));
+      });
+    } else if (wait.inSeconds <= 60) {
+      unawaited(_notifyEndingSoon(order));
+    }
   }
 
-  Future<void> _submit(int heldOrderId) async {
+  Future<void> _notifyEndingSoon(HeldOrder order) async {
+    if (_warnedIds.contains(order.id)) return;
+    _warnedIds.add(order.id);
+    final remaining = order.remaining();
+    final pendingCount = await _ref.read(heldOrderRepositoryProvider).pendingCount();
+    await MobileLocalNotificationService.instance.notifyHeldOrderEndingSoon(
+      heldOrderId: order.id,
+      clientName: order.clientName,
+      countdown: formatHeldCountdown(remaining),
+      pendingCount: pendingCount,
+    );
+  }
+
+  Future<bool> _submit(int heldOrderId, {bool reportFailure = false}) async {
     cancelTimer(heldOrderId);
     final repo = _ref.read(heldOrderRepositoryProvider);
     final order = await repo.getById(heldOrderId);
-    if (order == null || !order.isPending) return;
+    if (order == null || !order.isPending) return false;
 
     final slug = _ref.read(sessionProvider).tenantSlug ?? '';
-    if (slug.isEmpty) return;
+    if (slug.isEmpty) {
+      if (reportFailure) throw StateError('Нет tenant');
+      return false;
+    }
 
     try {
       final row = await _ref.read(ordersApiProvider).createOrder(
@@ -114,6 +146,19 @@ class HeldOrderScheduler {
         ]);
       }
       await repo.markSubmitted(heldOrderId);
+      await MobileLocalNotificationService.instance.notifyHeldOrderSent(
+        clientName: order.clientName,
+        orderNumber: row['number']?.toString() ?? (orderId?.toString() ?? ''),
+      );
+      // Taymer tugagach ham navbatdagi fotolarni online da yuborish (5 urinishgacha).
+      try {
+        final photoCfg = _ref.read(sessionProvider).mobileConfig?.photo;
+        await PhotoReportQueue.flush(
+          api: _ref.read(mobileApiProvider),
+          slug: slug,
+          photoConfig: photoCfg,
+        );
+      } catch (_) {}
       _ref.invalidate(heldOrdersProvider);
       _ref.invalidate(heldOrderCountProvider);
       _ref.invalidate(ordersListProvider);
@@ -121,8 +166,8 @@ class HeldOrderScheduler {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _ref.read(authStateProvider.notifier).resync();
       });
-    } on ApiException catch (_) {
-      // Keyingi urinish — submit_at ni 30s ga suramiz
+      return true;
+    } on ApiException {
       final retryAt = DateTime.now().add(const Duration(seconds: 30));
       await repo.update(HeldOrder(
         id: order.id,
@@ -141,17 +186,24 @@ class HeldOrderScheduler {
         shipmentDate: order.shipmentDate,
         estimatedTotal: order.estimatedTotal,
         itemCount: order.itemCount,
+        bonusQty: order.bonusQty,
+        discountPct: order.discountPct,
         createdAt: order.createdAt,
         submitAt: retryAt,
+        captureDeadline: order.captureDeadline,
       ));
       _schedule(await repo.getById(heldOrderId) ?? order, DateTime.now());
       _ref.invalidate(heldOrdersProvider);
+      if (reportFailure) rethrow;
+      return false;
     } catch (_) {
       final retryAt = DateTime.now().add(const Duration(seconds: 30));
       await AppDatabase().updateHeldOrder(heldOrderId, {'submit_at': retryAt.toIso8601String()});
       final refreshed = await repo.getById(heldOrderId);
       if (refreshed != null) _schedule(refreshed, DateTime.now());
       _ref.invalidate(heldOrdersProvider);
+      if (reportFailure) rethrow;
+      return false;
     }
   }
 
@@ -162,11 +214,22 @@ class HeldOrderScheduler {
     _ref.invalidate(heldOrderCountProvider);
   }
 
+  /// Darhol serverga yuborish (taymerni kutmasdan).
+  Future<void> submitNow(int heldOrderId) async {
+    final ok = await _submit(heldOrderId, reportFailure: true);
+    if (!ok) throw StateError('Заказ уже отправлен или не найден');
+  }
+
   void dispose() {
     for (final t in _timers.values) {
       t.cancel();
     }
+    for (final t in _warnTimers.values) {
+      t.cancel();
+    }
     _timers.clear();
+    _warnTimers.clear();
+    _warnedIds.clear();
   }
 }
 
@@ -186,13 +249,19 @@ Future<HeldOrder> saveHeldOrder({
   String? consignmentDueDate,
   String? shipmentDate,
   double estimatedTotal = 0,
+  int bonusQty = 0,
+  double discountPct = 0,
   int delayMinutes = 5,
   int? existingId,
 }) async {
   final repo = ref.read(heldOrderRepositoryProvider);
   final now = DateTime.now();
-  final submitAt = now.add(Duration(minutes: delayMinutes));
+  final delay = delayMinutes <= 0 ? 0 : (delayMinutes > 59 ? 59 : delayMinutes);
+  final submitAt = now.add(Duration(minutes: delay));
   final itemCount = items.fold<double>(0, (s, i) => s + i.qty).round();
+  final resolvedBonus = bonusQty > 0
+      ? bonusQty
+      : giftLines.fold<int>(0, (s, g) => s + g.qty);
 
   HeldOrder order;
   if (existingId != null) {
@@ -213,6 +282,8 @@ Future<HeldOrder> saveHeldOrder({
       shipmentDate: shipmentDate,
       estimatedTotal: estimatedTotal,
       itemCount: itemCount,
+      bonusQty: resolvedBonus,
+      discountPct: discountPct,
       createdAt: now,
       submitAt: submitAt,
     );
@@ -235,6 +306,8 @@ Future<HeldOrder> saveHeldOrder({
       shipmentDate: shipmentDate,
       estimatedTotal: estimatedTotal,
       itemCount: itemCount,
+      bonusQty: resolvedBonus,
+      discountPct: discountPct,
       createdAt: now,
       submitAt: submitAt,
     ));

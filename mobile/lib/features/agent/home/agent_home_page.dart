@@ -18,6 +18,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/config/sync_window_countdown.dart';
+import '../misc/agent_notifications_page.dart';
 import '../shell/agent_app_bar.dart';
 import '../sync/sync_bottom_sheet.dart';
 import '../visits/visit_stats_helper.dart';
@@ -168,6 +169,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
         title: S.home,
         titleTrailing: SyncWindowCountdownStrip(syncConfig: syncCfg, inline: true),
         actions: [
+          const AgentNotificationsBell(),
           AgentIconButton(
             icon: Icons.map_outlined,
             onPressed: () => context.go('/map'),

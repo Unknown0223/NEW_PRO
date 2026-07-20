@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { DIRECTORY_READ_ROLES, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import type { BulkAgentsInput, ListStaffFilters } from "./staff.service";
 import {
   ADMIN_AND_OPERATOR_LIKE_ROLES,
@@ -36,6 +36,7 @@ import {
   type StaffKind
 } from "./staff.service";
 import { catalogRoles, adminRoles } from "./staff.route.shared";
+import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
 import {
   agentEntitlementsPayloadSchema,
   agentEntitlementsSchema,
@@ -83,7 +84,12 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const q = request.query as Record<string, string | undefined>;
     const filters = parseAgentListFilters(q);
-    const data = await listStaff(request.tenant!.id, "agent", filters);
+    const actor = getAccessUser(request);
+    const accessScope = await buildScopedAgentDirectoryWhereForActor(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: actor.role ?? ""
+    });
+    const data = await listStaff(request.tenant!.id, "agent", filters, accessScope);
     return reply.send({ data });
   });
 
@@ -175,6 +181,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
       if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
       if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
       if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
+      if (msg === "WORK_SLOT_REQUIRED") {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "WorkSlotRequired",
+          "Рабочее место обязательно — назначьте свободный слот"
+        );
+      }
       if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
       if (msg === "BAD_ENTITLEMENT_CATEGORY" || msg === "BAD_ENTITLEMENT_PRODUCT") {
         return sendApiError(reply, request, 400, "BadEntitlements");

@@ -42,11 +42,18 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
     }
   ],
   [
-    { file: "suppliers", delegate: "supplier", idMap: "supplier", dates: ["created_at", "updated_at"] },
+    {
+      file: "suppliers",
+      delegate: "supplier",
+      idMap: "supplier",
+      naturalKey: ["code"],
+      dates: ["created_at", "updated_at"]
+    },
     {
       file: "territories",
       delegate: "territory",
       idMap: "territory",
+      naturalKey: ["code"],
       fk: { deleted_by_user_id: "user" },
       dates: ["created_at", "updated_at", "deleted_at"]
     },
@@ -54,11 +61,24 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       file: "work_slots",
       delegate: "workSlot",
       idMap: "workSlot",
+      naturalKey: ["slot_code"],
       fk: { direction_id: "tradeDirection" },
       dates: ["created_at", "updated_at"]
     },
-    { file: "roles", delegate: "role", idMap: "role", dates: ["created_at", "updated_at"] },
-    { file: "permissions", delegate: "permission", idMap: "permission", dates: ["created_at", "updated_at"] },
+    {
+      file: "roles",
+      delegate: "role",
+      idMap: "role",
+      naturalKey: ["key"],
+      dates: ["created_at", "updated_at"]
+    },
+    {
+      file: "permissions",
+      delegate: "permission",
+      idMap: "permission",
+      naturalKey: ["key"],
+      dates: ["created_at", "updated_at"]
+    },
     {
       file: "currency_exchange_rates",
       delegate: "currencyExchangeRate",
@@ -91,7 +111,9 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       file: "product_prices",
       delegate: "productPrice",
       idMap: "productPrice",
+      naturalKey: ["product_id", "price_type"],
       fk: { product_id: "product" },
+      requiredFk: ["product_id"],
       decimals: ["price"],
       dates: ["created_at", "updated_at"]
     },
@@ -100,6 +122,7 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       delegate: "productPriceSchedule",
       idMap: "productPriceSchedule",
       fk: { product_id: "product", created_by: "user" },
+      requiredFk: ["product_id"],
       decimals: ["price"],
       dates: ["effective_at", "applied_at", "created_at", "updated_at"]
     },
@@ -109,7 +132,8 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       noId: true,
       hasTenantId: false,
       scope: "group",
-      fk: { group_id: "interchangeableGroup", product_id: "product" }
+      fk: { group_id: "interchangeableGroup", product_id: "product" },
+      requiredFk: ["group_id", "product_id"]
     },
     {
       file: "interchangeable_group_price_types",

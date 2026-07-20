@@ -13,8 +13,8 @@ import type {
 } from "@/lib/client-balance-ledger-types";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -163,8 +163,9 @@ export function ClientBalanceLedgerView({ clientId, embedded = false, pageShellC
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
   const queryClient = useQueryClient();
-  const role = useEffectiveRole();
-  const canEditPayments = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canEditPayments =
+    has("cash.oplaty_klientov.create") || has("cash.oplaty_klientov.update");
 
   const [debtorReportOpen, setDebtorReportOpen] = useState(false);
   const [editPaymentId, setEditPaymentId] = useState<number | null>(null);

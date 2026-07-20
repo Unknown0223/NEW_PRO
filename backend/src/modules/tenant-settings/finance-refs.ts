@@ -282,3 +282,26 @@ export function uniqueSortedPriceTypeKeys(keys: string[]): string[] {
     a.localeCompare(b, "uz")
   );
 }
+
+/**
+ * DB kaliti (`product_prices.price_type`, kod yoki nom) → katalogdagi ko‘rinadigan nom.
+ * Topilmasa kalit o‘zi qaytadi — jadval/filtr «xom» kod ko‘rsatmasin.
+ */
+export function resolvePriceTypeKeyToLabel(
+  rawKey: string | null | undefined,
+  entries: PriceTypeEntryDto[]
+): string | null {
+  const key = (rawKey ?? "").trim();
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  const active = entries.filter((e) => e.active !== false);
+  for (const pool of [active, entries]) {
+    const byKey = pool.find((e) => priceTypeKey(e).trim().toLowerCase() === lower);
+    if (byKey) return byKey.name.trim();
+    const byCode = pool.find((e) => (e.code ?? "").trim().toLowerCase() === lower);
+    if (byCode) return byCode.name.trim();
+    const byName = pool.find((e) => e.name.trim().toLowerCase() === lower);
+    if (byName) return byName.name.trim();
+  }
+  return key;
+}

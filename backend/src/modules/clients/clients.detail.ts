@@ -5,6 +5,7 @@ import {
   loadDeliveryDebtByClient,
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
+import { splitClientDeliveryDebt } from "../client-balances/client-debt-by-agent";
 import type { ClientListRow } from "./clients.types";
 import { parseContactPersonsJson } from "./clients.helpers";
 import {
@@ -28,6 +29,18 @@ export type ClientDetailRow = ClientListRow & {
   open_orders_total: string;
   /** Yetkazilgan savdo zakazlari bo‘yicha to‘lanmagan qoldiq (taqsimlangan to‘lovlardan keyin). */
   delivered_unpaid_total: string;
+  /** Eski agent(lar) unpaid delivered (musbat). */
+  legacy_debt: string;
+  /** Joriy agent unpaid delivered (musbat). */
+  current_debt: string;
+  legacy_agent_names: string | null;
+  current_agent_name: string | null;
+  /**
+   * Kartochka yuqorisida «Долг старого агента» ko‘rsatilsinmi.
+   * Eski agentlarning hech bo‘lmaganda bittasi is_active=true bo‘lsa true;
+   * hammasi arxivlangan bo‘lsa false (faqat «Долг старого агента» ro‘yxatida qoladi).
+   */
+  legacy_debt_show_on_card: boolean;
   updated_at: string;
   /** `client_audit_logs` bo‘yicha birinchi `client.create` */
   created_by_user_label: string | null;
@@ -48,7 +61,7 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
   const cached = await getAppCache<ClientDetailRow>(cacheKey);
   if (cached) return cached;
 
-  const [c, agg, balRow, auditPair, deliveryMap] = await Promise.all([
+  const [c, agg, balRow, auditPair, deliveryMap, debtSplit] = await Promise.all([
     prisma.client.findFirst({
       where: { id, tenant_id: tenantId, merged_into_client_id: null },
       select: {
@@ -139,7 +152,8 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
         include: { user: { select: { login: true, name: true } } }
       })
     ]),
-    loadDeliveryDebtByClient(tenantId, [id])
+    loadDeliveryDebtByClient(tenantId, [id]),
+    splitClientDeliveryDebt(tenantId, id)
   ]);
   const [createLog, lastPatchLog] = auditPair;
   if (!c) {
@@ -158,6 +172,22 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     visitLegacy,
     agent_assignments
   );
+
+  let legacy_debt_show_on_card = false;
+  if (debtSplit.legacy_debt.gt(0.01) && debtSplit.legacy_agent_ids.length > 0) {
+    const activeLegacy = await prisma.user.count({
+      where: {
+        tenant_id: tenantId,
+        id: { in: debtSplit.legacy_agent_ids },
+        is_active: true
+      }
+    });
+    legacy_debt_show_on_card = activeLegacy > 0;
+  } else if (debtSplit.legacy_debt.gt(0.01)) {
+    /** Id yo‘q bo‘lsa ham qarz bor — kartochkada ko‘rsatamiz. */
+    legacy_debt_show_on_card = true;
+  }
+
   const detail: ClientDetailRow = {
     id: c.id,
     name: c.name,
@@ -175,6 +205,11 @@ export async function getClientDetail(tenantId: number, id: number): Promise<Cli
     updated_at: c.updated_at.toISOString(),
     account_balance,
     delivered_unpaid_total,
+    legacy_debt: debtSplit.legacy_debt.toString(),
+    current_debt: debtSplit.current_debt.toString(),
+    legacy_agent_names: debtSplit.legacy_agent_names,
+    current_agent_name: debtSplit.current_agent_name,
+    legacy_debt_show_on_card,
     responsible_person: c.responsible_person,
     landmark: c.landmark,
     inn: c.inn,

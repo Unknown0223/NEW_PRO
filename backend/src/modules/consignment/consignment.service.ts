@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   parseConsignmentMonthCloseDay,
@@ -200,7 +201,8 @@ export async function patchConsignmentSettingsForTenant(
 
 export async function listConsignmentAgents(
   tenantId: number,
-  q: ListConsignmentAgentsQuery
+  q: ListConsignmentAgentsQuery,
+  actor?: { userId: number | null; role: string }
 ): Promise<{ data: ConsignmentAgentRow[]; meta: ConsignmentListMeta }> {
   const { year, month } = parseYearMonth(q.year_month);
   const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
@@ -239,6 +241,8 @@ export async function listConsignmentAgents(
   }
 
   const andExtra: Prisma.UserWhereInput[] = [];
+  const scopeWhere = await buildScopedAgentDirectoryWhereForActor(tenantId, actor);
+  if (scopeWhere) andExtra.push(scopeWhere);
   if (q.trade_direction_id != null && q.trade_direction_id > 0) {
     andExtra.push(await userWhereTradeDirection(tenantId, q.trade_direction_id));
   }

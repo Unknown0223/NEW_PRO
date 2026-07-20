@@ -201,6 +201,36 @@ class MobileApi {
     }
   }
 
+  /// Agent oylik табель (self) — web timesheet moduli bilan bitta manba.
+  /// [month] — `YYYY-MM`; bo‘sh bo‘lsa server joriy oyni qaytaradi.
+  Future<AgentTimesheetResult> getAgentTimesheet(String slug, {String? month}) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/mobile/agent-timesheet',
+        queryParameters:
+            month != null && month.isNotEmpty ? {'month': month} : null,
+      );
+      return AgentTimesheetResult.fromJson(r.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  /// Agent KPI (plan/fact) — web «Установка планов» + timesheet.
+  /// [month] — `YYYY-MM`; bo‘sh bo‘lsa joriy oy.
+  Future<AgentKpiResult> getAgentKpi(String slug, {String? month}) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/mobile/agent-kpi',
+        queryParameters:
+            month != null && month.isNotEmpty ? {'month': month} : null,
+      );
+      return AgentKpiResult.fromJson(r.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   Future<Map<String, dynamic>> createClient(String slug, Map<String, dynamic> body) async {
     try {
       final r = await _dio.post('/api/$slug/mobile/clients', data: body);
@@ -769,6 +799,200 @@ class SyncOrder {
       };
 }
 
+class AgentTimesheetEmployee {
+  final int id;
+  final String fio;
+  final String role;
+  final String login;
+  final String? code;
+
+  const AgentTimesheetEmployee({
+    required this.id,
+    required this.fio,
+    required this.role,
+    required this.login,
+    this.code,
+  });
+
+  factory AgentTimesheetEmployee.fromJson(Map<String, dynamic> j) =>
+      AgentTimesheetEmployee(
+        id: (j['id'] as num?)?.toInt() ?? 0,
+        fio: j['fio']?.toString() ?? '',
+        role: j['role']?.toString() ?? 'agent',
+        login: j['login']?.toString() ?? '',
+        code: j['code']?.toString(),
+      );
+}
+
+class AgentTimesheetDayHistory {
+  final String id;
+  final String? oldValue;
+  final String? newValue;
+  final String? comment;
+  final String changedBy;
+  final String changedAt;
+
+  const AgentTimesheetDayHistory({
+    required this.id,
+    this.oldValue,
+    this.newValue,
+    this.comment,
+    required this.changedBy,
+    required this.changedAt,
+  });
+
+  factory AgentTimesheetDayHistory.fromJson(Map<String, dynamic> j) =>
+      AgentTimesheetDayHistory(
+        id: j['id']?.toString() ?? '',
+        oldValue: j['old_value']?.toString(),
+        newValue: j['new_value']?.toString(),
+        comment: j['comment']?.toString(),
+        changedBy: j['changed_by']?.toString() ?? '',
+        changedAt: j['changed_at']?.toString() ?? '',
+      );
+}
+
+class AgentTimesheetDay {
+  final int day;
+  final String date; // YYYY-MM-DD
+  final int weekday; // 1=Пн … 7=Вс
+  final String status; // backend: worked/half_day/absent/holiday/vacation/sick/trip
+  final String source; // manual/gps/mobile_login/auto
+  final double sales;
+  final int visits;
+  final int workedMinutes;
+  final String? comment;
+  final List<AgentTimesheetDayHistory> history;
+
+  const AgentTimesheetDay({
+    required this.day,
+    required this.date,
+    required this.weekday,
+    required this.status,
+    required this.source,
+    required this.sales,
+    required this.visits,
+    required this.workedMinutes,
+    this.comment,
+    this.history = const [],
+  });
+
+  factory AgentTimesheetDay.fromJson(Map<String, dynamic> j) {
+    final hist = j['history'] as List? ?? [];
+    return AgentTimesheetDay(
+      day: (j['day'] as num?)?.toInt() ?? 0,
+      date: j['date']?.toString() ?? '',
+      weekday: (j['weekday'] as num?)?.toInt() ?? 1,
+      status: j['status']?.toString() ?? 'absent',
+      source: j['source']?.toString() ?? 'auto',
+      sales: _parseMobileNum(j['sales']),
+      visits: (j['visits'] as num?)?.toInt() ?? 0,
+      workedMinutes: (j['worked_minutes'] as num?)?.toInt() ?? 0,
+      comment: j['comment']?.toString(),
+      history: hist
+          .whereType<Map>()
+          .map((e) => AgentTimesheetDayHistory.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+}
+
+class AgentTimesheetTotals {
+  final int daysInMonth;
+  final double workedDays;
+  final int activeDays;
+  final int halfDays;
+  final int absentDays;
+  final int holidayDays;
+  final int vacationDays;
+  final int sickDays;
+  final int tripDays;
+  final double salesTotal;
+  final int visitsTotal;
+  final int workedMinutesTotal;
+
+  const AgentTimesheetTotals({
+    required this.daysInMonth,
+    required this.workedDays,
+    required this.activeDays,
+    required this.halfDays,
+    required this.absentDays,
+    required this.holidayDays,
+    required this.vacationDays,
+    required this.sickDays,
+    required this.tripDays,
+    required this.salesTotal,
+    required this.visitsTotal,
+    required this.workedMinutesTotal,
+  });
+
+  factory AgentTimesheetTotals.empty() => const AgentTimesheetTotals(
+        daysInMonth: 0,
+        workedDays: 0,
+        activeDays: 0,
+        halfDays: 0,
+        absentDays: 0,
+        holidayDays: 0,
+        vacationDays: 0,
+        sickDays: 0,
+        tripDays: 0,
+        salesTotal: 0,
+        visitsTotal: 0,
+        workedMinutesTotal: 0,
+      );
+
+  factory AgentTimesheetTotals.fromJson(Map<String, dynamic> j) =>
+      AgentTimesheetTotals(
+        daysInMonth: (j['days_in_month'] as num?)?.toInt() ?? 0,
+        workedDays: _parseMobileNum(j['worked_days']),
+        activeDays: (j['active_days'] as num?)?.toInt() ?? 0,
+        halfDays: (j['half_days'] as num?)?.toInt() ?? 0,
+        absentDays: (j['absent_days'] as num?)?.toInt() ?? 0,
+        holidayDays: (j['holiday_days'] as num?)?.toInt() ?? 0,
+        vacationDays: (j['vacation_days'] as num?)?.toInt() ?? 0,
+        sickDays: (j['sick_days'] as num?)?.toInt() ?? 0,
+        tripDays: (j['trip_days'] as num?)?.toInt() ?? 0,
+        salesTotal: _parseMobileNum(j['sales_total']),
+        visitsTotal: (j['visits_total'] as num?)?.toInt() ?? 0,
+        workedMinutesTotal: (j['worked_minutes_total'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class AgentTimesheetResult {
+  final String month; // YYYY-MM
+  final AgentTimesheetEmployee employee;
+  final bool locked;
+  final List<AgentTimesheetDay> days;
+  final AgentTimesheetTotals totals;
+
+  const AgentTimesheetResult({
+    required this.month,
+    required this.employee,
+    required this.locked,
+    required this.days,
+    required this.totals,
+  });
+
+  factory AgentTimesheetResult.fromJson(Map<String, dynamic> j) {
+    final list = j['days'] as List? ?? [];
+    final emp = j['employee'];
+    final t = j['totals'];
+    return AgentTimesheetResult(
+      month: j['month']?.toString() ?? '',
+      employee: emp is Map
+          ? AgentTimesheetEmployee.fromJson(Map<String, dynamic>.from(emp))
+          : const AgentTimesheetEmployee(id: 0, fio: '', role: 'agent', login: ''),
+      locked: j['locked'] == true,
+      days: list
+          .map((e) => AgentTimesheetDay.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      totals: t is Map
+          ? AgentTimesheetTotals.fromJson(Map<String, dynamic>.from(t))
+          : AgentTimesheetTotals.empty(),
+    );
+  }
+}
+
 class AgentDailySalesReport {
   final String date;
   final AgentDailySalesTotals totals;
@@ -881,6 +1105,504 @@ class AgentDashboardResult {
   );
 }
 
+class AgentKpiMetricBlock {
+  final double cost;
+  final double count;
+  final double volume;
+  final double acb;
+  final int orderCount;
+
+  const AgentKpiMetricBlock({
+    required this.cost,
+    required this.count,
+    required this.volume,
+    required this.acb,
+    required this.orderCount,
+  });
+
+  factory AgentKpiMetricBlock.fromJson(Map<String, dynamic>? j) {
+    if (j == null) {
+      return const AgentKpiMetricBlock(
+        cost: 0,
+        count: 0,
+        volume: 0,
+        acb: 0,
+        orderCount: 0,
+      );
+    }
+    return AgentKpiMetricBlock(
+      cost: _parseMobileNum(j['cost']),
+      count: _parseMobileNum(j['count']),
+      volume: _parseMobileNum(j['volume']),
+      acb: _parseMobileNum(j['acb']),
+      orderCount: (j['order_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  double primaryValue(String metric) {
+    switch (metric) {
+      case 'count':
+        return count;
+      case 'volume':
+        return volume;
+      case 'acb':
+        return acb;
+      case 'order_count':
+        return orderCount.toDouble();
+      default:
+        return cost;
+    }
+  }
+}
+
+class AgentKpiGroupRow {
+  final int kpiGroupId;
+  final String name;
+  final String? code;
+  /// Settings «Группа KPI» is_active; null = eski API (filtr backendga).
+  final bool? isActive;
+  final String planStatus;
+  final int productCount;
+  final AgentKpiMetricBlock plan;
+  final AgentKpiMetricBlock fact;
+  final String primaryMetric;
+  final double? executionPct;
+  final double? remainingPrimary;
+  final double todayPlanPrimary;
+  final double todayFactPrimary;
+  final double? todayExecutionPct;
+  final double todayRemainingPrimary;
+  final double? weightPct;
+  final double? score;
+  final String? hint;
+
+  const AgentKpiGroupRow({
+    required this.kpiGroupId,
+    required this.name,
+    this.code,
+    this.isActive,
+    required this.planStatus,
+    required this.productCount,
+    required this.plan,
+    required this.fact,
+    required this.primaryMetric,
+    this.executionPct,
+    this.remainingPrimary,
+    this.todayPlanPrimary = 0,
+    this.todayFactPrimary = 0,
+    this.todayExecutionPct,
+    this.todayRemainingPrimary = 0,
+    this.weightPct,
+    this.score,
+    this.hint,
+  });
+
+  factory AgentKpiGroupRow.fromJson(Map<String, dynamic> j) => AgentKpiGroupRow(
+        kpiGroupId: (j['kpi_group_id'] as num?)?.toInt() ?? 0,
+        name: j['name']?.toString() ?? '—',
+        code: j['code']?.toString(),
+        isActive: j['is_active'] is bool ? j['is_active'] as bool : null,
+        planStatus: j['plan_status']?.toString() ?? '',
+        productCount: (j['product_count'] as num?)?.toInt() ?? 0,
+        plan: AgentKpiMetricBlock.fromJson(
+          j['plan'] is Map ? Map<String, dynamic>.from(j['plan'] as Map) : null,
+        ),
+        fact: AgentKpiMetricBlock.fromJson(
+          j['fact'] is Map ? Map<String, dynamic>.from(j['fact'] as Map) : null,
+        ),
+        primaryMetric: j['primary_metric']?.toString() ?? 'cost',
+        executionPct: (j['execution_pct'] as num?)?.toDouble(),
+        remainingPrimary: (j['remaining_primary'] as num?)?.toDouble(),
+        todayPlanPrimary: _parseMobileNum(j['today_plan_primary']),
+        todayFactPrimary: _parseMobileNum(j['today_fact_primary']),
+        todayExecutionPct: (j['today_execution_pct'] as num?)?.toDouble(),
+        todayRemainingPrimary: _parseMobileNum(j['today_remaining_primary']),
+        weightPct: (j['weight_pct'] as num?)?.toDouble(),
+        score: (j['score'] as num?)?.toDouble(),
+        hint: j['hint']?.toString(),
+      );
+}
+
+class AgentKpiWeekDay {
+  final String date;
+  final int weekday;
+  final double salesSum;
+  final double? planSum;
+  final double? executionPct;
+
+  const AgentKpiWeekDay({
+    required this.date,
+    required this.weekday,
+    required this.salesSum,
+    this.planSum,
+    this.executionPct,
+  });
+
+  factory AgentKpiWeekDay.fromJson(Map<String, dynamic> j) => AgentKpiWeekDay(
+        date: j['date']?.toString() ?? '',
+        weekday: (j['weekday'] as num?)?.toInt() ?? 1,
+        salesSum: _parseMobileNum(j['sales_sum']),
+        planSum: j['plan_sum'] != null ? _parseMobileNum(j['plan_sum']) : null,
+        executionPct: (j['execution_pct'] as num?)?.toDouble(),
+      );
+}
+
+class AgentKpiDailyRouteDay {
+  final String date;
+  final bool isWorkingDay;
+  final bool isToday;
+  final bool isFuture;
+  final double planSum;
+  final double factSum;
+  final double? executionPct;
+  final double remainingSum;
+  final double overSum;
+  final double carryIn;
+  final String status;
+
+  const AgentKpiDailyRouteDay({
+    required this.date,
+    required this.isWorkingDay,
+    required this.isToday,
+    required this.isFuture,
+    required this.planSum,
+    required this.factSum,
+    this.executionPct,
+    required this.remainingSum,
+    this.overSum = 0,
+    required this.carryIn,
+    required this.status,
+  });
+
+  factory AgentKpiDailyRouteDay.fromJson(Map<String, dynamic> j) => AgentKpiDailyRouteDay(
+        date: j['date']?.toString() ?? '',
+        isWorkingDay: j['is_working_day'] == true,
+        isToday: j['is_today'] == true,
+        isFuture: j['is_future'] == true,
+        planSum: _parseMobileNum(j['plan_sum']),
+        factSum: _parseMobileNum(j['fact_sum']),
+        executionPct: (j['execution_pct'] as num?)?.toDouble(),
+        remainingSum: _parseMobileNum(j['remaining_sum']),
+        overSum: _parseMobileNum(j['over_sum']),
+        carryIn: _parseMobileNum(j['carry_in']),
+        status: j['status']?.toString() ?? 'pending',
+      );
+}
+
+class AgentKpiDailyRoute {
+  final int workingDaysTotal;
+  final int remainingWorkingDays;
+  final int pastWorkingDays;
+  final double baseDayPlan;
+  final double todayPlanSum;
+  final double factBeforeToday;
+  final double monthRemainingBeforeToday;
+  final double carryForwardSum;
+  final double surplusSum;
+  final double? vsYesterdayPct;
+  final List<AgentKpiDailyRouteDay> days;
+
+  const AgentKpiDailyRoute({
+    required this.workingDaysTotal,
+    required this.remainingWorkingDays,
+    required this.pastWorkingDays,
+    required this.baseDayPlan,
+    required this.todayPlanSum,
+    required this.factBeforeToday,
+    required this.monthRemainingBeforeToday,
+    required this.carryForwardSum,
+    this.surplusSum = 0,
+    this.vsYesterdayPct,
+    required this.days,
+  });
+
+  factory AgentKpiDailyRoute.empty() => const AgentKpiDailyRoute(
+        workingDaysTotal: 0,
+        remainingWorkingDays: 0,
+        pastWorkingDays: 0,
+        baseDayPlan: 0,
+        todayPlanSum: 0,
+        factBeforeToday: 0,
+        monthRemainingBeforeToday: 0,
+        carryForwardSum: 0,
+        surplusSum: 0,
+        days: [],
+      );
+
+  factory AgentKpiDailyRoute.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return AgentKpiDailyRoute.empty();
+    final todayPlan = _parseMobileNum(j['today_plan_sum']);
+    final days = (j['days'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) {
+          final day = AgentKpiDailyRouteDay.fromJson(Map<String, dynamic>.from(e));
+          // Bugun + kelajak: API eski bo‘lsa ham teng ulush (today_plan_sum).
+          if (day.isWorkingDay && (day.isToday || day.isFuture)) {
+            final plan = todayPlan;
+            final rem = day.isFuture
+                ? plan
+                : (plan - day.factSum).clamp(0.0, double.infinity);
+            final over = day.isFuture ? 0.0 : (day.factSum - plan).clamp(0.0, double.infinity);
+            return AgentKpiDailyRouteDay(
+              date: day.date,
+              isWorkingDay: day.isWorkingDay,
+              isToday: day.isToday,
+              isFuture: day.isFuture,
+              planSum: plan,
+              factSum: day.factSum,
+              executionPct: plan > 0 && !day.isFuture
+                  ? (day.factSum / plan) * 100
+                  : (day.isFuture ? null : day.executionPct),
+              remainingSum: rem.toDouble(),
+              overSum: over.toDouble(),
+              carryIn: day.isToday ? day.carryIn : 0,
+              status: day.isFuture
+                  ? 'pending'
+                  : (over > 0
+                      ? 'over'
+                      : (plan > 0 && day.factSum >= plan
+                          ? 'done'
+                          : (day.factSum > 0 ? 'warn' : day.status))),
+            );
+          }
+          return day;
+        })
+        .toList();
+    return AgentKpiDailyRoute(
+      workingDaysTotal: (j['working_days_total'] as num?)?.toInt() ?? 0,
+      remainingWorkingDays: (j['remaining_working_days'] as num?)?.toInt() ?? 0,
+      pastWorkingDays: (j['past_working_days'] as num?)?.toInt() ?? 0,
+      baseDayPlan: _parseMobileNum(j['base_day_plan']),
+      todayPlanSum: todayPlan,
+      factBeforeToday: _parseMobileNum(j['fact_before_today']),
+      monthRemainingBeforeToday: _parseMobileNum(j['month_remaining_before_today']),
+      carryForwardSum: _parseMobileNum(j['carry_forward_sum']),
+      surplusSum: _parseMobileNum(j['surplus_sum']),
+      vsYesterdayPct: (j['vs_yesterday_pct'] as num?)?.toDouble(),
+      days: days,
+    );
+  }
+}
+
+class AgentKpiTimesheetBlock {
+  final double? coefficient;
+  final int activeDays;
+  final int excusedDays;
+  final int inactiveDays;
+  final int offDays;
+  final double workedDays;
+  final double salesTotal;
+  final int visitsTotal;
+
+  const AgentKpiTimesheetBlock({
+    this.coefficient,
+    required this.activeDays,
+    required this.excusedDays,
+    required this.inactiveDays,
+    required this.offDays,
+    required this.workedDays,
+    required this.salesTotal,
+    required this.visitsTotal,
+  });
+
+  factory AgentKpiTimesheetBlock.empty() => const AgentKpiTimesheetBlock(
+        activeDays: 0,
+        excusedDays: 0,
+        inactiveDays: 0,
+        offDays: 0,
+        workedDays: 0,
+        salesTotal: 0,
+        visitsTotal: 0,
+      );
+
+  factory AgentKpiTimesheetBlock.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return AgentKpiTimesheetBlock.empty();
+    return AgentKpiTimesheetBlock(
+      coefficient: (j['coefficient'] as num?)?.toDouble(),
+      activeDays: (j['active_days'] as num?)?.toInt() ?? 0,
+      excusedDays: (j['excused_days'] as num?)?.toInt() ?? 0,
+      inactiveDays: (j['inactive_days'] as num?)?.toInt() ?? 0,
+      offDays: (j['off_days'] as num?)?.toInt() ?? 0,
+      workedDays: _parseMobileNum(j['worked_days']),
+      salesTotal: _parseMobileNum(j['sales_total']),
+      visitsTotal: (j['visits_total'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class AgentKpiResult {
+  final String month;
+  final String today;
+  final int year;
+  final int monthNum;
+  final int daysInMonth;
+  final int dayOfMonth;
+  final int agentId;
+  final String agentName;
+  final String? agentCode;
+  final double todaySalesSum;
+  final double todayPlanDaySum;
+  final double todayBasePlanDaySum;
+  final double? todayExecutionPct;
+  final double todayRemainingSum;
+  final double? todayVsYesterdayPct;
+  final int todayVisits;
+  final int todayOrdersCount;
+  final double todayVolumeQty;
+  final int? skuFocusFact;
+  final int? skuFocusPlan;
+  final String? skuFocusLabel;
+  final double monthPlanSum;
+  final double monthFactSum;
+  final double? monthExecutionPct;
+  final double monthRemainingSum;
+  final double? forecastPct;
+  final bool hasPlans;
+  final AgentKpiDailyRoute dailyRoute;
+  final List<AgentKpiGroupRow> kpiGroups;
+  final List<AgentKpiWeekDay> week;
+  final AgentKpiTimesheetBlock timesheet;
+  final bool bonusAvailable;
+  final String planSource;
+
+  const AgentKpiResult({
+    required this.month,
+    required this.today,
+    required this.year,
+    required this.monthNum,
+    required this.daysInMonth,
+    required this.dayOfMonth,
+    required this.agentId,
+    required this.agentName,
+    this.agentCode,
+    required this.todaySalesSum,
+    required this.todayPlanDaySum,
+    this.todayBasePlanDaySum = 0,
+    this.todayExecutionPct,
+    required this.todayRemainingSum,
+    this.todayVsYesterdayPct,
+    required this.todayVisits,
+    required this.todayOrdersCount,
+    required this.todayVolumeQty,
+    this.skuFocusFact,
+    this.skuFocusPlan,
+    this.skuFocusLabel,
+    required this.monthPlanSum,
+    required this.monthFactSum,
+    this.monthExecutionPct,
+    required this.monthRemainingSum,
+    this.forecastPct,
+    required this.hasPlans,
+    this.dailyRoute = const AgentKpiDailyRoute(
+      workingDaysTotal: 0,
+      remainingWorkingDays: 0,
+      pastWorkingDays: 0,
+      baseDayPlan: 0,
+      todayPlanSum: 0,
+      factBeforeToday: 0,
+      monthRemainingBeforeToday: 0,
+      carryForwardSum: 0,
+      days: [],
+    ),
+    required this.kpiGroups,
+    required this.week,
+    required this.timesheet,
+    required this.bonusAvailable,
+    required this.planSource,
+  });
+
+  factory AgentKpiResult.empty() => const AgentKpiResult(
+        month: '',
+        today: '',
+        year: 0,
+        monthNum: 0,
+        daysInMonth: 0,
+        dayOfMonth: 0,
+        agentId: 0,
+        agentName: '',
+        todaySalesSum: 0,
+        todayPlanDaySum: 0,
+        todayRemainingSum: 0,
+        todayVisits: 0,
+        todayOrdersCount: 0,
+        todayVolumeQty: 0,
+        monthPlanSum: 0,
+        monthFactSum: 0,
+        monthRemainingSum: 0,
+        hasPlans: false,
+        kpiGroups: [],
+        week: [],
+        timesheet: AgentKpiTimesheetBlock(
+          activeDays: 0,
+          excusedDays: 0,
+          inactiveDays: 0,
+          offDays: 0,
+          workedDays: 0,
+          salesTotal: 0,
+          visitsTotal: 0,
+        ),
+        bonusAvailable: false,
+        planSource: '',
+      );
+
+  factory AgentKpiResult.fromJson(Map<String, dynamic> j) {
+    final period = j['period'] is Map ? Map<String, dynamic>.from(j['period'] as Map) : <String, dynamic>{};
+    final agent = j['agent'] is Map ? Map<String, dynamic>.from(j['agent'] as Map) : <String, dynamic>{};
+    final today = j['today'] is Map ? Map<String, dynamic>.from(j['today'] as Map) : <String, dynamic>{};
+    final month = j['month'] is Map ? Map<String, dynamic>.from(j['month'] as Map) : <String, dynamic>{};
+    final notes = j['notes'] is Map ? Map<String, dynamic>.from(j['notes'] as Map) : <String, dynamic>{};
+    final sku = today['sku_focus'];
+    final skuMap = sku is Map ? Map<String, dynamic>.from(sku) : null;
+    final groups = (j['kpi_groups'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => AgentKpiGroupRow.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    final week = (j['week'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => AgentKpiWeekDay.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    return AgentKpiResult(
+      month: period['month']?.toString() ?? '',
+      today: period['today']?.toString() ?? '',
+      year: (period['year'] as num?)?.toInt() ?? 0,
+      monthNum: (period['month_num'] as num?)?.toInt() ?? 0,
+      daysInMonth: (period['days_in_month'] as num?)?.toInt() ?? 0,
+      dayOfMonth: (period['day_of_month'] as num?)?.toInt() ?? 0,
+      agentId: (agent['id'] as num?)?.toInt() ?? 0,
+      agentName: agent['name']?.toString() ?? '',
+      agentCode: agent['code']?.toString(),
+      todaySalesSum: _parseMobileNum(today['sales_sum']),
+      todayPlanDaySum: _parseMobileNum(today['plan_day_sum']),
+      todayBasePlanDaySum: _parseMobileNum(today['base_plan_day_sum']),
+      todayExecutionPct: (today['execution_pct'] as num?)?.toDouble(),
+      todayRemainingSum: _parseMobileNum(today['remaining_sum']),
+      todayVsYesterdayPct: (today['vs_yesterday_pct'] as num?)?.toDouble(),
+      todayVisits: (today['visits'] as num?)?.toInt() ?? 0,
+      todayOrdersCount: (today['orders_count'] as num?)?.toInt() ?? 0,
+      todayVolumeQty: _parseMobileNum(today['volume_qty']),
+      skuFocusFact: (skuMap?['fact'] as num?)?.toInt(),
+      skuFocusPlan: (skuMap?['plan'] as num?)?.toInt(),
+      skuFocusLabel: skuMap?['label']?.toString(),
+      monthPlanSum: _parseMobileNum(month['plan_sum']),
+      monthFactSum: _parseMobileNum(month['fact_sum']),
+      monthExecutionPct: (month['execution_pct'] as num?)?.toDouble(),
+      monthRemainingSum: _parseMobileNum(month['remaining_sum']),
+      forecastPct: (month['forecast_pct'] as num?)?.toDouble(),
+      hasPlans: month['has_plans'] == true,
+      dailyRoute: AgentKpiDailyRoute.fromJson(
+        j['daily_route'] is Map ? Map<String, dynamic>.from(j['daily_route'] as Map) : null,
+      ),
+      kpiGroups: groups,
+      week: week,
+      timesheet: AgentKpiTimesheetBlock.fromJson(
+        j['timesheet'] is Map ? Map<String, dynamic>.from(j['timesheet'] as Map) : null,
+      ),
+      bonusAvailable: notes['bonus_available'] == true,
+      planSource: notes['plan_source']?.toString() ?? '',
+    );
+  }
+}
+
 class DebtorClient {
   final int id;
   final String name;
@@ -888,6 +1610,9 @@ class DebtorClient {
   final String? clientCode;
   final double balance;
   final String? overdueAt;
+  final double legacyDebt;
+  final double currentDebt;
+  final bool debtCollectionOnly;
 
   DebtorClient({
     required this.id,
@@ -896,6 +1621,9 @@ class DebtorClient {
     this.clientCode,
     required this.balance,
     this.overdueAt,
+    this.legacyDebt = 0,
+    this.currentDebt = 0,
+    this.debtCollectionOnly = false,
   });
 
   factory DebtorClient.fromJson(Map<String, dynamic> j) => DebtorClient(
@@ -905,6 +1633,9 @@ class DebtorClient {
         clientCode: j['client_code']?.toString(),
         balance: (j['balance'] as num?)?.toDouble() ?? 0,
         overdueAt: j['overdue_at']?.toString(),
+        legacyDebt: (j['legacy_debt'] as num?)?.toDouble() ?? 0,
+        currentDebt: (j['current_debt'] as num?)?.toDouble() ?? 0,
+        debtCollectionOnly: j['debt_collection_only'] == true,
       );
 }
 
@@ -973,6 +1704,7 @@ class AgentOrderHistoryRow {
   final String? number;
   final String orderType;
   final String status;
+  final int? clientId;
   final String clientName;
   final String? createdAt;
   final double totalSum;
@@ -988,6 +1720,7 @@ class AgentOrderHistoryRow {
     this.number,
     this.orderType = 'order',
     required this.status,
+    this.clientId,
     required this.clientName,
     this.createdAt,
     this.totalSum = 0,
@@ -1006,6 +1739,7 @@ class AgentOrderHistoryRow {
       number: j['number']?.toString(),
       orderType: j['order_type']?.toString() ?? 'order',
       status: j['status']?.toString() ?? 'new',
+      clientId: (j['client_id'] as num?)?.toInt(),
       clientName: j['client_name']?.toString() ?? '',
       createdAt: j['created_at']?.toString(),
       totalSum: (j['total_sum'] as num?)?.toDouble() ?? 0,

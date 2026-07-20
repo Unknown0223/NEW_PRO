@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/price_type_labels.dart';
 import 'api_exceptions.dart';
 import 'dio_client.dart';
 
@@ -360,6 +361,8 @@ class OrderCreateContext {
   final List<Map<String, dynamic>> products;
   final List<Map<String, dynamic>> warehouses;
   final List<String> priceTypes;
+  /// DB kaliti → spravochnikdagi nom (dropdown label).
+  final Map<String, String> priceTypeLabels;
   final OrderClientFinance? clientFinance;
   final int? defaultWarehouseId;
 
@@ -368,9 +371,12 @@ class OrderCreateContext {
     this.products = const [],
     this.warehouses = const [],
     this.priceTypes = const ['default'],
+    this.priceTypeLabels = const {},
     this.clientFinance,
     this.defaultWarehouseId,
   });
+
+  String priceTypeLabel(String key) => priceTypeLabels[key] ?? key;
 
   factory OrderCreateContext.fromJson(Map<String, dynamic> j) {
     List<Map<String, dynamic>> asMaps(dynamic v) {
@@ -384,12 +390,14 @@ class OrderCreateContext {
     final priceTypes = pt is List
         ? pt.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
         : <String>['retail'];
+    final labels = priceTypeLabelsFromOptions(j['price_type_options'] as List?);
     final cf = j['client_finance'];
     return OrderCreateContext(
       clients: asMaps(j['clients']),
       products: asMaps(j['products']),
       warehouses: asMaps(j['warehouses']),
       priceTypes: priceTypes.isEmpty ? const ['retail'] : priceTypes,
+      priceTypeLabels: labels,
       clientFinance: cf is Map
           ? OrderClientFinance.fromJson(Map<String, dynamic>.from(cf))
           : null,

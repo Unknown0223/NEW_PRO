@@ -22,6 +22,7 @@ import '../sync/manual_sync_provider.dart';
 import '../sync/sync_progress_sheet.dart';
 import '../sync/sync_success_dialog.dart';
 import '../../../core/l10n/app_strings_ru.dart';
+import '../../../core/notifications/notifications_day_rollover.dart';
 import '../../../core/time/work_region_time.dart';
 import '../orders/held_orders_provider.dart';
 import 'agent_menu_config.dart';
@@ -43,6 +44,7 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(agentLocalPrefsProvider);
       ref.read(heldOrderSchedulerProvider);
+      unawaited(ref.read(notificationsDayRolloverProvider).checkNow());
       preloadClientAgentLedgerBalances(ref);
       final gps = ref.read(sessionProvider).mobileConfig?.gps ?? const GpsConfig();
       if (gps.alwaysOn || gps.trackingEnabled) {
@@ -62,13 +64,15 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     if (state == AppLifecycleState.resumed) {
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       ref.invalidate(syncCountTodayProvider);
+      unawaited(ref.read(notificationsDayRolloverProvider).checkNow());
     }
   }
 
   int _tabIndex(String loc) {
     if (loc.startsWith('/visits')) return 1;
-    if (loc.startsWith('/report')) return 3;
-    if (loc.startsWith('/clients')) return 4;
+    if (loc.startsWith('/orders')) return 2;
+    if (loc.startsWith('/kpi/route')) return 4;
+    if (loc.startsWith('/kpi')) return 3;
     return 0;
   }
 
@@ -78,6 +82,7 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
     final hideNav = agentShellHidesBottomNav(loc);
     final sync = ref.watch(manualSyncProvider);
     final syncRunning = sync.status == ManualSyncStatus.running;
+    ref.watch(notificationsDayRolloverProvider);
     final vanSelling = ref.watch(sessionProvider).mobileConfig?.vanSelling;
     final showVanStrip = vanSelling != null;
     final routeAsync = ref.watch(realTodayRouteProvider);
@@ -142,11 +147,11 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
                   case 1:
                     context.go('/visits');
                   case 2:
-                    context.go('/home');
+                    context.go('/orders');
                   case 3:
-                    context.go('/report');
+                    context.go('/kpi');
                   case 4:
-                    context.go('/clients');
+                    context.go('/kpi/route');
                 }
               },
             ),

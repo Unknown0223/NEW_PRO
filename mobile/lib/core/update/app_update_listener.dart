@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../features/auth/auth_provider.dart';
+import '../../routing/app_router.dart';
 import 'app_update_dialog.dart';
 
 /// Login/bootstrap va sinхрон tugagach versiya dialogi + bildirishnoma.
@@ -36,6 +38,13 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
   }
 
   void _onNotificationTap(String? payload) {
+    if (MobileLocalNotificationService.isHeldOrdersPayload(payload)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        rootNavigatorKey.currentContext?.go('/notifications');
+      });
+      return;
+    }
     if (!MobileLocalNotificationService.isAppUpdatePayload(payload)) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

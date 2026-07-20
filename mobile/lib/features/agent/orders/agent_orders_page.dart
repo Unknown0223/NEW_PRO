@@ -17,6 +17,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../shell/agent_app_bar.dart';
 import 'held_order_model.dart' show formatHeldCountdown;
 import 'held_orders_provider.dart';
+import 'held_order_sync_sheet.dart';
 import '../orders/order_create_models.dart' show formatMoneyUz, formatDebtMoney;
 import 'order_draft_list.dart';
 import 'order_draft_provider.dart';
@@ -30,8 +31,6 @@ class AgentOrdersPage extends ConsumerStatefulWidget {
 }
 
 class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
-  int? _expandedOrderId;
-
   DateTime _dateFromKey(String key) {
     final parts = key.split('-');
     if (parts.length == 3) {
@@ -54,14 +53,12 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
     );
     if (picked == null) return;
     ref.read(ordersHistoryDateProvider.notifier).state = ordersHistoryDateKey(picked);
-    setState(() => _expandedOrderId = null);
   }
 
   void _selectToday() {
     final now = workRegionNow();
     ref.read(ordersHistoryDateProvider.notifier).state =
         ordersHistoryDateKey(DateTime(now.year, now.month, now.day));
-    setState(() => _expandedOrderId = null);
   }
 
   Future<void> _refresh() async {
@@ -77,9 +74,6 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
     ref.invalidate(orderDraftsProvider);
     ref.invalidate(orderDraftListProvider);
     ref.invalidate(orderDebtsByOrdersProvider);
-    if (_expandedOrderId != null) {
-      ref.invalidate(orderHistoryDetailProvider(_expandedOrderId!));
-    }
     invalidateSyncedData(ref.invalidate);
   }
 
@@ -205,13 +199,70 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                           debtLabel: debtLabel,
                         ),
                       ),
+                      if (heldOrders.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Ожидают отправки (${heldOrders.length}) — ещё не на сервере',
+                            style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
                       for (final h in heldOrders)
                         AgentHeldOrderCard(
                           clientName: h.clientName,
                           countdown: formatHeldCountdown(h.remaining()),
                           sumLabel: formatMoneyUz(h.estimatedTotal),
                           itemCount: h.itemCount,
-                          onTap: () => context.push('/orders/create?held_id=${h.id}'),
+                          onTap: () async {
+                            final delayMin = ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ??
+                                h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
+                            final action = await showHeldOrderSyncSheet(
+                              context,
+                              order: h,
+                              delayMinutes: delayMin,
+                            );
+                            if (!context.mounted) return;
+                            if (action == HeldOrderSyncAction.edit) {
+                              context.push('/orders/create?held_id=${h.id}');
+                            } else if (action == HeldOrderSyncAction.sent) {
+                              showAgentToast(
+                                context,
+                                'Заказ отправлен',
+                                accentColor: AppColors.success,
+                              );
+                            }
+                          },
+                          onCancel: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Отменить заказ?'),
+                                content: const Text(
+                                  'Заказ не будет отправлен на сервер и удалится с устройства.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Нет'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Да, отменить'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+                            await ref.read(heldOrderSchedulerProvider).cancelHeldOrder(h.id);
+                            if (context.mounted) {
+                              showAgentToast(
+                                context,
+                                'Заказ отменён',
+                                accentColor: AppColors.warning,
+                              );
+                            }
+                          },
                         ),
                       const OrderDraftListSection(
                         padding: EdgeInsets.only(bottom: 10),
@@ -262,86 +313,25 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
   }
 
   Widget _orderCard(AgentOrderHistoryRow o, OrderDebtsListResult? debts) {
-    final expanded = _expandedOrderId == o.id;
     final chip = orderStatusChip(o.status, orderType: o.orderType);
     final debtRow = debts?.data.where((d) => d.orderId == o.id).firstOrNull;
     final debtLabel = debtRow != null && debtRow.remainder > 0
         ? formatDebtMoney(debtRow.remainder, currency: debts?.currency ?? 'UZS')
         : null;
 
-    if (!expanded) {
-      return AgentOrderCard(
-        title: _orderTitle(o),
-        statusChip: chip,
-        client: o.clientName.isNotEmpty ? o.clientName : '—',
-        date: _formatOrderDate(o.createdAt),
-        bonus: _formatBonusSummary(o),
-        volume: o.volumeM3 != null && o.volumeM3! > 0 ? o.volumeM3!.toStringAsFixed(2) : '—',
-        count: _formatQty(o.qty),
-        amount: _formatAmount(o),
-        debt: debtLabel,
-        expanded: false,
-        onTap: () => setState(() => _expandedOrderId = o.id),
-      );
-    }
-
-    final detailAsync = ref.watch(orderHistoryDetailProvider(o.id));
-    return detailAsync.when(
-      loading: () => AgentOrderCard(
-        title: _orderTitle(o),
-        statusChip: chip,
-        client: o.clientName,
-        date: _formatOrderDate(o.createdAt),
-        bonus: _formatBonusSummary(o),
-        volume: '—',
-        count: _formatQty(o.qty),
-        amount: _formatAmount(o),
-        debt: debtLabel,
-        expanded: true,
-        onTap: () => setState(() => _expandedOrderId = null),
-      ),
-      error: (_, __) => _orderCardFromRow(o, chip, debtLabel, expanded: true),
-      data: (detail) => _orderCardFromRow(detail, orderStatusChip(detail.status, orderType: detail.orderType), debtLabel, expanded: true),
-    );
-  }
-
-  Widget _orderCardFromRow(
-    AgentOrderHistoryRow o,
-    AgentStatusChip chip,
-    String? debtLabel, {
-    required bool expanded,
-  }) {
     return AgentOrderCard(
       title: _orderTitle(o),
       statusChip: chip,
       client: o.clientName.isNotEmpty ? o.clientName : '—',
       date: _formatOrderDate(o.createdAt),
       bonus: _formatBonusSummary(o),
-      discount: o.discountSum > 0 ? formatMoneyUz(o.discountSum) : null,
       volume: o.volumeM3 != null && o.volumeM3! > 0 ? o.volumeM3!.toStringAsFixed(2) : '—',
       count: _formatQty(o.qty),
       amount: _formatAmount(o),
       debt: debtLabel,
-      expanded: expanded,
-      detailLines: _lineRows(o.items.where((it) => !it.isBonus)),
-      bonusLines: _lineRows(o.items.where((it) => it.isBonus)),
-      onTap: () => setState(() {
-        _expandedOrderId = _expandedOrderId == o.id ? null : o.id;
-      }),
+      expanded: false,
+      onTap: () => context.push('/orders/detail/${o.id}'),
     );
-  }
-
-  List<AgentOrderLineRow> _lineRows(Iterable<AgentOrderHistoryItem> items) {
-    return items
-        .map(
-          (it) => AgentOrderLineRow(
-            name: it.productName.isNotEmpty ? it.productName : '—',
-            qty: _formatQty(it.qty),
-            price: it.isBonus ? '—' : formatMoneyUz(it.price),
-            isBonus: it.isBonus,
-          ),
-        )
-        .toList();
   }
 
   String _orderTitle(AgentOrderHistoryRow o) {

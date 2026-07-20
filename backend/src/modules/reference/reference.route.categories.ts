@@ -68,6 +68,15 @@ export async function registerReferenceCategoryRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_NAME") return sendApiError(reply, request, 400, "EmptyName");
         if (msg === "BAD_PARENT") return sendApiError(reply, request, 400, "BadParent");
         if (msg === "BAD_CODE") return sendApiError(reply, request, 400, "BadCode");
+        if (msg === "DUPLICATE_NAME") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "DuplicateName",
+            "Bu nomdagi kategoriya allaqachon bor"
+          );
+        }
         throw e;
       }
     }

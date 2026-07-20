@@ -11,6 +11,7 @@ import type { InitialSetupStep } from "@/lib/initial-setup/types";
 import {
   BUNDLE_IMPORT_SHEETS_FALLBACK,
   BUNDLE_REFERENCE_SHEETS,
+  PRICE_IMPORT_HEADERS,
   SERVER_IMPORT_TEMPLATE_PATHS,
   type BundleTemplateSheet
 } from "@/lib/initial-setup/bundle-template-sheets";
@@ -77,7 +78,7 @@ export async function parseBundleXlsx(file: File): Promise<BundleParseResult> {
     const preview = await parseXlsxPreview(
       blob,
       step ? requiredColumnKeys(step, config) : undefined,
-      200,
+      5000,
       config,
       sampleRegistry
     );
@@ -157,6 +158,36 @@ export async function downloadStepTemplate(tenantSlug: string, step: InitialSetu
       }
     } catch {
       /* fallback */
+    }
+  }
+
+  // Цены: keng format — ustunlar = tip ceny (nom)
+  if (step.id === "product-prices") {
+    try {
+      const { data: profile } = await api.get<{
+        references?: {
+          price_type_entries?: Array<{ name?: string; code?: string | null; active?: boolean }>;
+        };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      const headers = (profile.references?.price_type_entries ?? [])
+        .filter((p) => p.active !== false)
+        .map((p) => String(p.name ?? "").trim() || String(p.code ?? "").trim())
+        .filter(Boolean);
+      const cols = headers.length ? ["Артикул (SKU)", ...headers] : [...PRICE_IMPORT_HEADERS];
+      const sample = headers.length
+        ? [cols, ["SKU-001", ...headers.map(() => "15000")], ["SKU-002", ...headers.map(() => "12000")]]
+        : [
+            [...PRICE_IMPORT_HEADERS],
+            ["SKU-001", "15000", "15000", "15000"],
+            ["SKU-002", "12000", "12500", "12000"]
+          ];
+      triggerDownload(
+        await buildStyledSingleSheet({ sheetName: "product-prices", rows: sample }),
+        "product-prices-shablon.xlsx"
+      );
+      return;
+    } catch {
+      /* fallback below */
     }
   }
 

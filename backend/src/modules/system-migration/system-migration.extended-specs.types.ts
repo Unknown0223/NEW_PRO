@@ -26,4 +26,11 @@ export type ExtendedTableSpec = {
   noId?: boolean;
   scope?: ExtendedExportScope;
   hasTenantId?: boolean;
+  /** Dublikat skip paytida mavjud qatorni topish (tenant_id + bu maydonlar). */
+  naturalKey?: string[];
+  /**
+   * Majburiy FK maydonlari — remap null bo‘lsa create qilinmasin (Prisma 500 o‘rniga ogohlantirish).
+   * `noId` jadvallarda default: barcha `fk` kalitlari.
+   */
+  requiredFk?: string[];
 };

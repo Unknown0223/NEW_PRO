@@ -2,6 +2,8 @@
 
 import { OrdersFiltersGrid } from "@/components/orders/orders-list/orders-filters-grid";
 import { OrdersFiltersVisibilityMenu } from "@/components/orders/orders-list/orders-filters-visibility-menu";
+import { Can } from "@/components/access/can";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { DateRangePopover, formatDateRangeButton, localYmd } from "@/components/ui/date-range-popover";
@@ -235,15 +237,17 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
                 Применить
               </button>
 
-              <Link
-                className={cn(
-                  buttonVariants({ size: "sm" }),
-                  "h-9 shrink-0 border-0 bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
-                )}
-                href="/orders/new"
-              >
-                + Создать заказ
-              </Link>
+              <Can anyOf={[...NAV_PERM.ordersCreate]}>
+                <Link
+                  className={cn(
+                    buttonVariants({ size: "sm" }),
+                    "h-9 shrink-0 border-0 bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  )}
+                  href="/orders/new"
+                >
+                  + Создать заказ
+                </Link>
+              </Can>
             </div>
           </div>
 

@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/database/app_database.dart';
+import '../home/agent_dashboard_provider.dart';
 import '../home/home_visit_metrics_provider.dart';
+import '../kpi/kpi_provider.dart';
 import 'agent_visits_page.dart';
 
 typedef VisitStatsInvalidator = void Function(ProviderOrFamily provider);
@@ -12,6 +14,8 @@ void refreshVisitStatsProviders(VisitStatsInvalidator invalidate) {
   invalidate(visitsTodayProvider);
   invalidate(visitedTodayClientIdsProvider);
   invalidate(homeVisitMetricsProvider);
+  invalidate(agentDashboardProvider);
+  invalidate(agentKpiProvider);
 }
 
 /// Bugungi mijoz tashrifi — buyurtma yuborilganda yakunlangan deb qayd etiladi.

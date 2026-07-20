@@ -67,6 +67,12 @@ export async function login(app: FastifyInstance, input: LoginInput) {
     throw new Error("APP_ACCESS_DENIED");
   }
 
+  /* Admin mustasno: WorkSlot rollari tenantda slotlar bo‘lsa — faol ishchi o‘rni shart. */
+  {
+    const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+    await assertUserOnWorkSlot(tenantId, user.id, user.role);
+  }
+
   const deviceId = input.device_id?.trim().slice(0, 64) || null;
   const maxSessions = Math.max(1, user.max_sessions ?? 1);
   const sessionWhere = {
@@ -166,6 +172,11 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
 
   if (MOBILE_FIELD_ROLES.has(existing.user.role) && existing.user.app_access === false) {
     throw new Error("APP_ACCESS_DENIED");
+  }
+
+  {
+    const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+    await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
   }
 
   await prisma.refreshToken.update({

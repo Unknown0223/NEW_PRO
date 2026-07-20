@@ -70,7 +70,8 @@ export async function confirmPendingPayment(
     await allocatePaymentInTransaction(tx, tenantId, paymentId, uid, {
       mode: "none",
       agent_id: null,
-      order_ids: []
+      order_ids: [],
+      priority: "legacy_first"
     });
   });
 

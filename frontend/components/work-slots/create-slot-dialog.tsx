@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Building2, Hash, RefreshCw } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  AgentFormField,
+  AgentFormSection,
+  agentModalInputClass
+} from "@/components/staff/agent-workspace-template-ui";
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
+import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { WorkSlotType } from "@/lib/work-slots-types";
@@ -106,48 +102,89 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
   };
 
   return (
-    <Dialog
+    <WorkSlotFormDrawer
       open={open}
-      onOpenChange={(v) => {
-        if (!v) reset();
-        onOpenChange(v);
+      title="Новое рабочее место"
+      subtitle="Заполните код, роль и филиал — территорию можно задать после назначения сотрудника"
+      onClose={() => {
+        reset();
+        onOpenChange(false);
       }}
+      onSubmit={() => void submit()}
+      submitLabel="Создать"
+      submitDisabled={!slotCode.trim() || codeLoading}
+      submitBusy={saving}
+      submitError={error}
     >
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Новое рабочее место</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-1">
-          <div className="space-y-1">
-            <Label>Smart-код *</Label>
-            <div className="flex gap-2">
-              <Input
-                value={slotCode}
-                onChange={(e) => setSlotCode(e.target.value.toUpperCase())}
-                placeholder="A-SERGEli-001"
-                className="font-mono"
-                readOnly={codeLoading}
+      <div className="space-y-5">
+        <AgentFormSection title="Основное" icon={<Hash className="h-4 w-4" />}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AgentFormField label="Smart-код *">
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    value={slotCode}
+                    onChange={(e) => setSlotCode(e.target.value.toUpperCase())}
+                    maxLength={32}
+                    readOnly={false}
+                    placeholder="A-SERGEli-001"
+                    className={`${agentModalInputClass} pr-14 font-mono`}
+                    autoComplete="off"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                    {slotCode.length}/32
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  title="Подставить предложенный код"
+                  disabled={codeLoading}
+                  onClick={() => void fetchSuggestedCode()}
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg border border-border bg-card text-slate-600 transition hover:bg-muted disabled:opacity-50"
+                >
+                  <RefreshCw className={cn("size-4", codeLoading && "animate-spin")} aria-hidden />
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Можно ввести вручную или сгенерировать по роли и филиалу
+              </p>
+            </AgentFormField>
+            <AgentFormField label="Название">
+              <input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className={agentModalInputClass}
+                placeholder="Север — розница"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                title="Сгенерировать код"
-                disabled={codeLoading}
-                onClick={() => void fetchSuggestedCode()}
-              >
-                <RefreshCw className={cn("size-4", codeLoading && "animate-spin")} aria-hidden />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Код создаётся автоматически (роль / филиал)</p>
+            </AgentFormField>
+            <AgentFormField label="Роль *">
+              <WorkSlotsMultiSelect
+                variant="form"
+                multiple={false}
+                placeholder="Роль"
+                items={SLOT_TYPE_OPTIONS.map((o) => ({ id: o.value, title: o.label }))}
+                selectedValues={[slotType]}
+                onChange={(next) => {
+                  const v = next[0];
+                  if (v) setSlotType(v as WorkSlotType);
+                }}
+              />
+            </AgentFormField>
+            <AgentFormField label="Статус места">
+              <WorkSlotsMultiSelect
+                variant="form"
+                multiple={false}
+                placeholder="Статус"
+                items={SLOT_ACTIVE_STATUS_ITEMS}
+                selectedValues={[isActive ? "true" : "false"]}
+                onChange={(next) => setIsActive((next[0] ?? "true") === "true")}
+              />
+            </AgentFormField>
           </div>
-          <div className="space-y-1">
-            <Label>Название</Label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Север — розница" />
-          </div>
-          <div className="space-y-1">
-            <Label>Филиал</Label>
+        </AgentFormSection>
+
+        <AgentFormSection title="Филиал" icon={<Building2 className="h-4 w-4" />}>
+          <AgentFormField label="Филиал">
             <WorkSlotsMultiSelect
               variant="form"
               multiple={false}
@@ -162,43 +199,9 @@ export function CreateSlotDialog({ open, onOpenChange, tenant, branchOptions, on
                 setBranchCode(v === "__none__" ? "" : v);
               }}
             />
-          </div>
-          <div className="space-y-1">
-            <Label>Роль *</Label>
-            <WorkSlotsMultiSelect
-              variant="form"
-              multiple={false}
-              placeholder="Роль"
-              items={SLOT_TYPE_OPTIONS.map((o) => ({ id: o.value, title: o.label }))}
-              selectedValues={[slotType]}
-              onChange={(next) => {
-                const v = next[0];
-                if (v) setSlotType(v as WorkSlotType);
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Статус места</Label>
-            <WorkSlotsMultiSelect
-              variant="form"
-              multiple={false}
-              placeholder="Статус"
-              items={SLOT_ACTIVE_STATUS_ITEMS}
-              selectedValues={[isActive ? "true" : "false"]}
-              onChange={(next) => setIsActive((next[0] ?? "true") === "true")}
-            />
-          </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Отмена
-          </Button>
-          <Button type="button" disabled={saving || codeLoading || !slotCode.trim()} onClick={() => void submit()}>
-            {saving ? "…" : "Создать"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AgentFormField>
+        </AgentFormSection>
+      </div>
+    </WorkSlotFormDrawer>
   );
 }

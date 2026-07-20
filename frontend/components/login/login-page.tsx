@@ -302,6 +302,12 @@ export function LoginPage() {
           setError("Доступ к приложению отключён. Обратитесь к администратору.");
           return;
         }
+        if (st === 403 && body?.error === "USER_NOT_ON_SLOT") {
+          setError(
+            "Пользователь не назначен на рабочее место. Обратитесь к администратору (Пользователи → Рабочее место)."
+          );
+          return;
+        }
         if (body?.message && typeof body.message === "string") {
           setError(getUserFacingError(err, body.message));
           return;

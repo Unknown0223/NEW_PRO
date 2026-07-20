@@ -1,0 +1,770 @@
+/**
+ * Virtual Pivot grid chrome — visual parity with WebDataRocks default theme.
+ * Tokens sourced from @webdatarocks/webdatarocks webdatarocks.css (.wdr-grid-layout).
+ * Do not embed proprietary WDR JS; CSS values only.
+ */
+
+.host {
+  /* From #wdr-pivot-view .wdr-grid-layout (+ table-style gallery overrides) */
+  --pg-border: #dbdbdb;
+  --pg-gutter-bg: #f1f1f1;
+  --pg-gutter-fg: #999;
+  --pg-header-bg: #f1f1f1;
+  --pg-header-fg: #111;
+  --pg-flat-header-bg: #dbdbdb;
+  --pg-body-bg: #fff;
+  --pg-text: #111;
+  --pg-row-band: #fff;
+  --pg-total-bg: #f6f6f6;
+  --pg-col-total-bg: #eeeeee;
+  --pg-grand-total-bg: #e8e8e8;
+  --pg-hover-bg: #fafafa;
+  --pg-select-bg: rgba(66, 133, 244, 0.18);
+  --pg-select-border: #4285f4;
+  --pg-select-focus-bg: rgba(66, 133, 244, 0.28);
+  --pg-select-hover-bg: rgba(66, 133, 244, 0.22);
+  --pg-filter-icon: #999;
+  --pg-stats-bg: #888;
+  --pg-row-height: 30px;
+  --pg-gutter-w: 25px;
+  --pg-col-gutter-h: 25px;
+  /* Sheet fill for empty/buffer cells — rows override for banding / totals. */
+  --pg-sheet-fill: var(--pg-body-bg);
+
+  color-scheme: light;
+  display: flex;
+  flex-direction: column;
+  /* Bound to parent; .scroll owns overflow so many cols/rows can scroll. */
+  overflow: hidden;
+  border: 1px solid #d5d5d5;
+  background: var(--pg-body-bg);
+  color: var(--pg-text);
+  font-family: Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.scroll {
+  flex: 1;
+  /* Allow shrinking inside flex parents so overflow-x produces a scrollbar
+     instead of expanding the host and getting clipped. */
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  background: var(--pg-body-bg);
+  /* Sticky/smear oldini olish — bitta scroll konteksti */
+  isolation: isolate;
+}
+
+.table {
+  /* Pixel width/minWidth come from inline styles (content or stretch fill).
+     Never use width:100% — table-layout:fixed would then crush col widths. */
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 12px;
+  line-height: normal;
+  color: var(--pg-text);
+  background: var(--pg-body-bg);
+  box-sizing: border-box;
+}
+
+/* WDR .wdr-grid-row — fixed standard row height; content ellipsizes, never grows. */
+.table tbody tr {
+  height: var(--pg-row-height, 30px);
+}
+
+.table tbody tr > td {
+  height: var(--pg-row-height, 30px);
+  max-height: var(--pg-row-height, 30px);
+}
+
+.thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/* .wdr-header — grey sheet headers (compact/classic) */
+.th {
+  box-sizing: border-box;
+  background: var(--pg-header-bg);
+  color: var(--pg-header-fg);
+  font-weight: 400;
+  font-size: 12px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 7px 4px;
+  user-select: none;
+}
+
+/* Flat view field headers: darker + bold + uppercase (.wdr-flat-view .wdr-header) */
+.hostFlat .th {
+  background: var(--pg-flat-header-bg);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.thInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  position: relative;
+  padding-right: 16px;
+}
+
+.thLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+/* .wdr-filter-icon stand-in — funnel, #999; clickable member filter */
+.thFilter {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 1;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+}
+
+.thFilter::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin: 2px;
+  background-color: var(--pg-header-fg);
+  opacity: 0.55;
+  clip-path: polygon(0 0, 100% 0, 62% 45%, 62% 100%, 38% 100%, 38% 45%);
+}
+
+.thFilterActive::before {
+  background-color: #4285f4;
+  opacity: 1;
+}
+
+.thFilter:hover::before {
+  opacity: 0.85;
+}
+
+.thFilterActive:hover::before {
+  background-color: #3367d6;
+  opacity: 1;
+}
+
+/* Demo/WDR: filter dialog centered on viewport with dim backdrop */
+.filterPopoverHost {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.filterPopoverPanel {
+  position: relative;
+  max-height: min(90vh, 640px);
+  overflow: auto;
+}
+
+.contextMenuSep {
+  height: 1px;
+  margin: 4px 0;
+  background: #e5e5e5;
+}
+
+.contextMenuItem:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.thRowDim {
+  text-align: left;
+  background: var(--pg-header-bg);
+}
+
+.thRowDimSticky {
+  position: sticky;
+  z-index: 22;
+  background: var(--pg-header-bg);
+  background-clip: padding-box;
+}
+
+/* Faqat oxirgi sticky ustunda soyа — oraliq shadow smear bermasin */
+.thRowDimStickyLast {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.08);
+}
+
+.hostFlat .thRowDim,
+.hostFlat .thRowDimSticky {
+  background: var(--pg-flat-header-bg);
+}
+
+.thMeasure {
+  font-weight: 400;
+  color: var(--pg-header-fg);
+  text-align: right;
+}
+
+/* Keep measure title with right-aligned values (avoids void between header & numbers). */
+.thMeasure .thInner {
+  justify-content: flex-end;
+}
+
+.thMeasure .thLabel {
+  /* Do not shrink — otherwise «Сумма» ellipsizes inside an already-fitted col. */
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.hostFlat .thMeasure {
+  font-weight: 700;
+}
+
+.thSortable {
+  cursor: pointer;
+}
+
+.thSortable:hover {
+  filter: brightness(0.92);
+}
+
+.thDraggable {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-drag: element;
+}
+
+.thDraggable:active {
+  cursor: grabbing;
+}
+
+.thDragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.thDragOver {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.thSortMark {
+  margin-left: 3px;
+  font-size: 9px;
+  color: var(--pg-header-fg);
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+/* .wdr-cell */
+.td {
+  box-sizing: border-box;
+  background: var(--pg-body-bg);
+  color: var(--pg-text);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 7px 4px;
+}
+
+/* #wdr-data-sheet .wdr-cell → right-aligned numbers */
+.tdNumeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-weight: 400;
+  /* Never show «11 057 20… so…» — width fitter must fit; clip without ellipsis if off-by-1. */
+  text-overflow: clip;
+}
+
+.tdLabel {
+  text-align: left;
+  font-weight: 400;
+}
+
+.tdRowDim {
+  font-weight: 400;
+  text-align: left;
+  background: var(--pg-body-bg);
+  background-clip: padding-box;
+}
+
+.tdRowDimSticky {
+  position: sticky;
+  z-index: 5;
+  background: var(--pg-body-bg);
+  background-clip: padding-box;
+}
+
+.tdRowDimStickyLast {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Excel-like banded rows (absolute sheet-row index via .trBanded). */
+.trBanded {
+  --pg-sheet-fill: var(--pg-row-band);
+}
+
+.trBanded > .td,
+.trBanded > .tdRowDim,
+.trBanded > .tdRowDimSticky {
+  background: var(--pg-row-band);
+}
+
+.trHover:hover {
+  --pg-sheet-fill: var(--pg-hover-bg);
+}
+
+.trHover:hover > .td,
+.trHover:hover > .tdRowDim,
+.trHover:hover > .tdRowDimSticky {
+  background: var(--pg-hover-bg);
+}
+
+/*
+ * Selection fill on cells / buffer strips. Outer perimeter is a single
+ * .selectionRangeOverlay box (Excel-like) so sticky thead never eats the top edge.
+ */
+.tdSelected,
+.tdSelectedRowDim {
+  background-color: var(--pg-select-bg) !important;
+  z-index: 6;
+}
+
+.tdSelectedRowDim {
+  z-index: 8;
+  box-shadow: 1px 0 0 var(--pg-border);
+}
+
+.tdSelFocus {
+  background-color: var(--pg-select-focus-bg) !important;
+}
+
+/* Positions range overlay in table coordinates (scrolls with sheet content). */
+.tableWrap {
+  position: relative;
+  width: max-content;
+  min-width: max-content;
+}
+
+/*
+ * Continuous outer outline for the whole selection bbox.
+ * z-index below sticky thead (20) so header stays on top when scrolling,
+ * but above body cells so all four edges stay visible after mouseup.
+ */
+.selectionRangeOverlay {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 18;
+  border: 2px solid var(--pg-select-border);
+  background: transparent;
+}
+
+.trHover:hover > .tdSelected,
+.trHover:hover > .tdSelectedRowDim {
+  background-color: var(--pg-select-hover-bg) !important;
+}
+
+.trHover:hover > .tdSelFocus {
+  background-color: var(--pg-select-focus-bg) !important;
+}
+
+/* .wdr-sheet-header — row/col index gutters (WDR live: 25×25 corner, 25×30 row nums) */
+.thGutterCorner,
+.thRowGutter,
+.thColGutter,
+.tdRowGutter {
+  box-sizing: border-box;
+  background: var(--pg-gutter-bg);
+  color: var(--pg-gutter-fg);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 23px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.thGutterCorner {
+  position: sticky;
+  left: 0;
+  z-index: 40;
+  width: 25px;
+  min-width: 25px;
+  max-width: 25px;
+  height: 25px;
+  max-height: 25px;
+  padding: 0;
+  box-shadow: 1px 0 0 var(--pg-border);
+}
+
+/* Numbered gutter on field-header band rows (height follows thead row). */
+.thRowGutter {
+  position: sticky;
+  left: 0;
+  z-index: 40;
+  width: 25px;
+  min-width: 25px;
+  max-width: 25px;
+  padding: 0;
+  box-shadow: 1px 0 0 var(--pg-border);
+}
+
+.thColGutter {
+  height: 25px;
+  max-height: 25px;
+  padding: 0;
+  line-height: 23px;
+  font-size: 12px;
+}
+
+.tdRowGutter {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  width: 25px;
+  min-width: 25px;
+  max-width: 25px;
+  padding: 0;
+  background: var(--pg-gutter-bg);
+  box-shadow: 1px 0 0 var(--pg-border);
+  line-height: 23px;
+}
+
+.trHover:hover > .tdRowGutter {
+  background: #e8e8e8;
+}
+
+.trSubtotal > .tdRowGutter,
+.trColumnTotal > .tdRowGutter,
+.trGrandTotal > .tdRowGutter {
+  background: var(--pg-gutter-bg);
+  font-style: normal;
+  font-weight: 400;
+  border-top: none;
+}
+
+/* .wdr-auto-calculation-bar */
+.selectionStats {
+  position: absolute;
+  right: 12px;
+  bottom: 28px;
+  z-index: 50;
+  display: flex;
+  gap: 10px;
+  height: 17px;
+  align-items: center;
+  padding: 0 5px;
+  border: none;
+  border-radius: 0;
+  background: var(--pg-stats-bg);
+  color: #fff;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 17px;
+  text-transform: uppercase;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.selectionStats span {
+  white-space: nowrap;
+}
+
+.selecting,
+.selecting * {
+  user-select: none !important;
+  cursor: default;
+}
+
+.headerReordering,
+.headerReordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 100;
+  min-width: 140px;
+  padding: 4px 0;
+  border: 1px solid #d5d5d5;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #111;
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.contextMenuItem:hover {
+  background: #e8f0fe;
+}
+
+.tdEmpty {
+  color: #999;
+}
+
+.tdNegative {
+  color: #c0392b;
+}
+
+.tdDrillable {
+  cursor: pointer;
+}
+
+.tdDrillable:hover {
+  text-decoration: underline;
+  text-decoration-color: #888;
+}
+
+/* .wdr-total / .wdr-grand-total */
+.trSubtotal {
+  --pg-sheet-fill: var(--pg-total-bg);
+}
+
+.trSubtotal > .td,
+.trSubtotal > .tdRowDim,
+.trSubtotal > .tdRowDimSticky {
+  background: var(--pg-total-bg);
+  font-style: italic;
+  font-weight: 700;
+}
+
+.trColumnTotal {
+  --pg-sheet-fill: var(--pg-col-total-bg);
+}
+
+.trColumnTotal > .td,
+.trColumnTotal > .tdRowDim,
+.trColumnTotal > .tdRowDimSticky {
+  background: var(--pg-col-total-bg);
+  font-weight: 700;
+  border-top: 1px solid var(--pg-border);
+}
+
+.trGrandTotal {
+  --pg-sheet-fill: var(--pg-grand-total-bg);
+}
+
+.trGrandTotal > .td,
+.trGrandTotal > .tdRowDim,
+.trGrandTotal > .tdRowDimSticky {
+  background: var(--pg-grand-total-bg);
+  font-weight: 700;
+  border-top: 2px solid var(--pg-border);
+}
+
+.cellInner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cellText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/*
+ * Expand/collapse — approximate .wdr-collapsed-icon / .wdr-expanded-icon
+ * (WDR uses icon font; we use compact boxed +/-).
+ */
+.expandBtn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 12px;
+  margin: 0 2px 0 0;
+  padding: 0;
+  border: 1px solid #999;
+  border-radius: 0;
+  background: #fff;
+  color: #666;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.expandBtn:hover {
+  background: #f0f0f0;
+  border-color: #666;
+  color: #111;
+}
+
+.expandSpacer {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 11px;
+  height: 12px;
+  margin-right: 2px;
+}
+
+.footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--pg-border);
+  background: #f1f1f1;
+  color: #777;
+  font-size: 10px;
+  padding: 4px 8px;
+  line-height: 1.4;
+}
+
+.padRow td {
+  border: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/*
+ * Empty sheet buffer (Excel/WDR): beyond data, ~100 cols / ~100 rows.
+ * Body uses one colspan cell + CSS vertical lines so we avoid 100×N heavy <td>s.
+ * Fill follows --pg-sheet-fill so banding / totals continue into buffer cells.
+ */
+.tdSheetEmpty {
+  box-sizing: border-box;
+  position: relative;
+  background-color: var(--pg-sheet-fill);
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 0;
+}
+
+.tdSheetBuffer,
+.thSheetBuffer {
+  box-sizing: border-box;
+  position: relative;
+  --pg-empty-col-w: 100px;
+  background-color: var(--pg-sheet-fill);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) var(--pg-empty-col-w)
+  );
+  border-right: 1px solid var(--pg-border);
+  border-bottom: 1px solid var(--pg-border);
+  padding: 0;
+}
+
+/* Header gutters stay non-interactive; body buffer is selectable. */
+.thSheetBuffer {
+  pointer-events: none;
+  background-color: var(--pg-header-bg);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) var(--pg-empty-col-w)
+  );
+}
+
+.hostFlat .thSheetBuffer {
+  background-color: var(--pg-flat-header-bg);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) calc(var(--pg-empty-col-w) - 1px),
+    var(--pg-border) var(--pg-empty-col-w)
+  );
+}
+
+/* Soft fill for colspan buffer / empty-data — perimeter comes from .selectionRangeOverlay. */
+.bufferSelOverlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--pg-select-bg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bufferSelOverlayFocus {
+  background: var(--pg-select-focus-bg);
+}
+
+/* Mobile: keep horizontal scroll + compact chrome */
+@media (max-width: 900px) {
+  .host {
+    font-size: 11px;
+  }
+
+  .scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .th,
+  .td {
+    padding: 5px 3px;
+    font-size: 11px;
+  }
+
+  .footer {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+}

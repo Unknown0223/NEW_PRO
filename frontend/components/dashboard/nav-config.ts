@@ -1,3 +1,5 @@
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
+
 export type NavItem = {
   href: string;
   label: string;
@@ -18,11 +20,31 @@ export type NavGroup = { title: string; items: NavItem[] };
 export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Дашборды",
   items: [
-    { href: "/dashboard", label: "Супервайзер" },
-    { href: "/dashboard/expeditors", label: "Доставщики" },
-    { href: "/dashboard/finance", label: "Финансы" },
-    { href: "/dashboard/sales", label: "Дашборд продаж" },
-    { href: "/dashboard/sales-monitoring", label: "Мониторинг продаж и планов" }
+    {
+      href: "/dashboard",
+      label: "Супервайзер",
+      showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
+    },
+    {
+      href: "/dashboard/expeditors",
+      label: "Доставщики",
+      showIfAnyPermission: ["dashboard.supervayzer.view", "dashboard.supervayzer"]
+    },
+    {
+      href: "/dashboard/finance",
+      label: "Финансы",
+      showIfAnyPermission: ["dashboard.finansy.view", "dashboard.finansy"]
+    },
+    {
+      href: "/dashboard/sales",
+      label: "Дашборд продаж",
+      showIfAnyPermission: ["dashboard.prodazhi.view", "dashboard.prodazhi"]
+    },
+    {
+      href: "/dashboard/sales-monitoring",
+      label: "Мониторинг продаж и планов",
+      showIfAnyPermission: ["dashboard.plan_fakt.view", "dashboard.plan_fakt"]
+    }
   ]
 };
 
@@ -30,16 +52,25 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
 export const dashboardStockNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Склад",
   items: [
-    { href: "/stock/warehouses", label: "Склад" },
-    { href: "/stock/blocks", label: "Блок склада" },
-    { href: "/stock/balances", label: "Остатки товаров" },
-    { href: "/stock/recommended", label: "Остатки товара на складе (рекомендованный запас)" },
-    { href: "/stock/by-date", label: "Остатки на определенную дату" },
-    { href: "/stock/receipts", label: "Поступление" },
-    { href: "/stock/receipts-report", label: "Отчёт по приходам" },
-    { href: "/stock/transfers", label: "Перемещение товара" },
-    { href: "/stock/correction", label: "Корректировка склада", roles: ["admin"] },
-    { href: "/stock/material-report", label: "Материальный отчёт" },
+    { href: "/stock/warehouses", label: "Склад", showIfAnyPermission: [...NAV_PERM.stockWarehouses] },
+    { href: "/stock/blocks", label: "Блок склада", showIfAnyPermission: [...NAV_PERM.stockBlocks] },
+    { href: "/stock/balances", label: "Остатки товаров", showIfAnyPermission: [...NAV_PERM.stockBalances] },
+    {
+      href: "/stock/recommended",
+      label: "Остатки товара на складе (рекомендованный запас)",
+      showIfAnyPermission: [...NAV_PERM.stockRecommended]
+    },
+    { href: "/stock/by-date", label: "Остатки на определенную дату", showIfAnyPermission: [...NAV_PERM.stockByDate] },
+    { href: "/stock/receipts", label: "Поступление", showIfAnyPermission: [...NAV_PERM.stockReceipts] },
+    { href: "/stock/receipts-report", label: "Отчёт по приходам", showIfAnyPermission: [...NAV_PERM.stockReceipts] },
+    { href: "/stock/transfers", label: "Перемещение товара", showIfAnyPermission: [...NAV_PERM.stockTransfers] },
+    {
+      href: "/stock/correction",
+      label: "Корректировка склада",
+      roles: ["admin"],
+      showIfAnyPermission: [...NAV_PERM.stockCorrection]
+    },
+    { href: "/stock/material-report", label: "Материальный отчёт", showIfAnyPermission: [...NAV_PERM.stockMaterial] },
     { href: "#", label: "Списание", placeholder: true }
   ]
 };
@@ -54,18 +85,30 @@ export const dashboardOrdersNav: {
     {
       title: "ДЕЙСТВИЯ",
       items: [
-        { href: "/orders/new?type=order", label: "Создать заказ" },
-        { href: "/orders/new?type=return", label: "Создать возврат с полки" },
-        { href: "/orders/new?type=return_by_order", label: "Создать возврат с полки по заказу" },
-        { href: "/orders/new?type=exchange", label: "Создать обмен" }
+        { href: "/orders/new?type=order", label: "Создать заказ", showIfAnyPermission: [...NAV_PERM.ordersCreate] },
+        {
+          href: "/orders/new?type=return",
+          label: "Создать возврат с полки",
+          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+        },
+        {
+          href: "/orders/new?type=return_by_order",
+          label: "Создать возврат с полки по заказу",
+          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+        },
+        {
+          href: "/orders/new?type=exchange",
+          label: "Создать обмен",
+          showIfAnyPermission: [...NAV_PERM.exchangeCreate]
+        }
       ]
     },
     {
       title: "УПРАВЛЕНИЕ ЗАКАЗАМИ",
       items: [
-        { href: "/orders", label: "Заявки" },
-        { href: "/orders/refusals", label: "Отказы" },
-        { href: "/orders/automation", label: "Автоматизация заявок" }
+        { href: "/orders", label: "Заявки", showIfAnyPermission: [...NAV_PERM.ordersView] },
+        { href: "/orders/refusals", label: "Отказы", showIfAnyPermission: [...NAV_PERM.exchangeView] },
+        { href: "/orders/automation", label: "Автоматизация заявок", showIfAnyPermission: [...NAV_PERM.automation] }
       ]
     }
   ]
@@ -78,9 +121,21 @@ export const dashboardInvoicesNav: {
 } = {
   sectionTitle: "Накладные",
   items: [
-    { href: "/invoices/assembly", label: "Сборочные накладные" },
-    { href: "/invoices/shipment", label: "Отгрузочные накладные" },
-    { href: "/invoices/returns", label: "Возвратные накладные" },
+    {
+      href: "/invoices/assembly",
+      label: "Сборочные накладные",
+      showIfAnyPermission: [...NAV_PERM.invoicesAssembly]
+    },
+    {
+      href: "/invoices/shipment",
+      label: "Отгрузочные накладные",
+      showIfAnyPermission: [...NAV_PERM.invoicesShipment]
+    },
+    {
+      href: "/invoices/returns",
+      label: "Возвратные накладные",
+      showIfAnyPermission: [...NAV_PERM.invoicesReturns]
+    },
     { href: "#", label: "Списания накладные", placeholder: true }
   ]
 };
@@ -102,30 +157,57 @@ export const dashboardKassaNav: {
     {
       title: "РАСЧЕТЫ С КЛИЕНТАМИ",
       items: [
-        { href: "/payments", label: "Оплаты клиентов" },
-        { href: "/client-expenses", label: "Расходы клиента" },
-        { href: "/initial-client-balances", label: "Начальные балансы клиентов" },
-        { href: "/client-balances", label: "Балансы клиентов (оплата и долги)" },
-        { href: "/client-balances/consignment", label: "Балансы клиентов по консигнации" }
+        { href: "/payments", label: "Оплаты клиентов", showIfAnyPermission: [...NAV_PERM.cashPayments] },
+        {
+          href: "/client-expenses",
+          label: "Расходы клиента",
+          showIfAnyPermission: [...NAV_PERM.cashClientExpenses]
+        },
+        {
+          href: "/initial-client-balances",
+          label: "Начальные балансы клиентов",
+          showIfAnyPermission: [...NAV_PERM.cashOpeningBalances]
+        },
+        {
+          href: "/client-balances",
+          label: "Балансы клиентов (оплата и долги)",
+          showIfAnyPermission: [...NAV_PERM.cashClientBalances]
+        }
       ]
     },
     {
       title: "ОТЧЁТЫ",
       items: [
-        { href: "/reports", label: "Отчёт по приходам" },
-        { href: "/reports/cash-flow", label: "Движение денежных средств" },
-        { href: "/reports/client-reconciliation", label: "Акт сверки" },
-        { href: "/reports/order-debts", label: "Долги по заказам" }
+        { href: "/reports", label: "Отчёт по приходам", showIfAnyPermission: [...NAV_PERM.cashReports] },
+        {
+          href: "/reports/cash-flow",
+          label: "Движение денежных средств",
+          showIfAnyPermission: [...NAV_PERM.cashReports]
+        },
+        {
+          href: "/reports/client-reconciliation",
+          label: "Акт сверки",
+          showIfAnyPermission: [...NAV_PERM.cashReports]
+        },
+        {
+          href: "/reports/order-debts",
+          label: "Долги по заказам",
+          showIfAnyPermission: [...NAV_PERM.cashReports]
+        }
       ]
     },
     {
       title: "ПРОЧИЕ",
       items: [
-        { href: "/settings/cash-desks", label: "Касса" },
-        { href: "/currency-rates", label: "Курс валют" },
+        { href: "/settings/cash-desks", label: "Касса", showIfAnyPermission: [...NAV_PERM.cashDesks] },
+        { href: "/currency-rates", label: "Курс валют", showIfAnyPermission: [...NAV_PERM.cashCurrency] },
         { href: "#", label: "Приходы", placeholder: true },
-        { href: "/expenses", label: "Расходы" },
-        { href: "/expeditor-payment-requests", label: "Заявки на оплату" },
+        { href: "/expenses", label: "Расходы", showIfAnyPermission: [...NAV_PERM.cashExpenses] },
+        {
+          href: "/expeditor-payment-requests",
+          label: "Заявки на оплату",
+          showIfAnyPermission: [...NAV_PERM.cashPaymentRequests]
+        },
         { href: "#", label: "Долги экспедитора", placeholder: true }
       ]
     }
@@ -149,30 +231,67 @@ export const dashboardUsersNav: {
     {
       title: "КОМАНДА",
       items: [
-        { href: "/settings/spravochnik/agents", label: "Агент" },
+        {
+          href: "/settings/spravochnik/agents",
+          label: "Агент",
+          showIfAnyPermission: [...NAV_PERM.staffAgent]
+        },
         {
           href: "/work-slots",
           label: "Рабочее место",
-          roles: ["admin", "operator", "supervisor", "director", "sales_director", "regional_manager", "accountant"]
+          showIfAnyPermission: [...NAV_PERM.workSlots]
         },
-        { href: "/settings/spravochnik/expeditors", label: "Экспедиторы" },
-        { href: "/settings/spravochnik/supervisors", label: "Супервайзер" },
-        { href: "/settings/spravochnik/skladchik", label: "Складчик" },
-        { href: "/settings/spravochnik/collectors", label: "Инкассатор" },
-        { href: "/settings/spravochnik/auditors", label: "Аудиторы" }
+        {
+          href: "/settings/spravochnik/expeditors",
+          label: "Экспедиторы",
+          showIfAnyPermission: [...NAV_PERM.staffExpeditor]
+        },
+        {
+          href: "/settings/spravochnik/supervisors",
+          label: "Супервайзер",
+          showIfAnyPermission: [...NAV_PERM.staffSupervisor]
+        },
+        {
+          href: "/settings/spravochnik/skladchik",
+          label: "Складчик",
+          showIfAnyPermission: [...NAV_PERM.staffSkladchik]
+        },
+        {
+          href: "/settings/spravochnik/collectors",
+          label: "Инкассатор",
+          showIfAnyPermission: [...NAV_PERM.staffCollector]
+        },
+        {
+          href: "/settings/spravochnik/auditors",
+          label: "Аудиторы",
+          showIfAnyPermission: [...NAV_PERM.staffAuditor]
+        }
       ]
     },
     {
       title: "ПРОЧИЕ",
       items: [
-        { href: "/settings/spravochnik/operators", label: "Сотрудники", roles: ["admin"] },
+        {
+          href: "/settings/spravochnik/operators",
+          label: "Сотрудники",
+          roles: ["admin"],
+          showIfAnyPermission: [...NAV_PERM.staffEmployees]
+        },
         { href: "#", label: "Партнёры", placeholder: true },
-        { href: "/settings/spravochnik/consignment", label: "Консигнация" },
+        {
+          href: "/settings/spravochnik/consignment",
+          label: "Консигнация",
+          showIfAnyPermission: [...NAV_PERM.staffConsignment]
+        },
         { href: "#", label: "Настройки бонусов и зарплат", placeholder: true },
-        { href: "/settings/payroll", label: "Зарплата" },
-        { href: "#", label: "Рабочие дни", placeholder: true },
-        { href: "/users/timesheet", label: "Табель" },
-        { href: "/settings/reasons/task-types", label: "Задачи" }
+        { href: "/settings/payroll", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
+        { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
+        {
+          href: "/settings/reasons/task-types",
+          label: "Задачи",
+          showIfAnyPermission: [...NAV_PERM.staffTasks]
+        }
       ]
     }
   ]
@@ -186,12 +305,20 @@ export function dashboardUsersNavFlatItems(): NavItem[] {
 export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Клиенты",
   items: [
-    { href: "/clients", label: "Клиенты" },
-    { href: "/clients/map", label: "Клиенты на карте" },
-    { href: "/clients/visit-planner", label: "Назначение визитов на карте" },
-    { href: "/clients/merge", label: "Объединение клиентов" },
-    { href: "/clients/equipment", label: "Оборудования" },
-    { href: "/clients/retail-stock", label: "Остатки в торговых точках" },
+    { href: "/clients", label: "Клиенты", showIfAnyPermission: [...NAV_PERM.clients] },
+    { href: "/clients/map", label: "Клиенты на карте", showIfAnyPermission: [...NAV_PERM.clientsMap] },
+    {
+      href: "/clients/visit-planner",
+      label: "Назначение визитов на карте",
+      showIfAnyPermission: [...NAV_PERM.visitPlanner]
+    },
+    { href: "/clients/merge", label: "Объединение клиентов", showIfAnyPermission: [...NAV_PERM.clientsMerge] },
+    { href: "/clients/equipment", label: "Оборудования", showIfAnyPermission: [...NAV_PERM.clientsEquipment] },
+    {
+      href: "/clients/retail-stock",
+      label: "Остатки в торговых точках",
+      showIfAnyPermission: [...NAV_PERM.clientsRetailStock]
+    },
     { href: "#", label: "Отчёт по таре", placeholder: true }
   ]
 };
@@ -202,10 +329,22 @@ export const dashboardClientsNav: { sectionTitle: string; items: NavItem[] } = {
 export const dashboardSuppliersNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Поставщики",
   items: [
-    { href: "/suppliers", label: "Поставщики" },
-    { href: "/suppliers/payments", label: "Оплаты поставщикам" },
-    { href: "/suppliers/balances", label: "Начальные балансы с поставщиком" },
-    { href: "/suppliers/reconciliation", label: "Акт сверки с поставщиком" },
+    { href: "/suppliers", label: "Поставщики", showIfAnyPermission: [...NAV_PERM.suppliers] },
+    {
+      href: "/suppliers/payments",
+      label: "Оплаты поставщикам",
+      showIfAnyPermission: [...NAV_PERM.suppliersPayments]
+    },
+    {
+      href: "/suppliers/balances",
+      label: "Начальные балансы с поставщиком",
+      showIfAnyPermission: [...NAV_PERM.suppliersBalances]
+    },
+    {
+      href: "/suppliers/reconciliation",
+      label: "Акт сверки с поставщиком",
+      showIfAnyPermission: [...NAV_PERM.suppliersReconciliation]
+    },
     { href: "#", label: "План", placeholder: true },
     { href: "#", label: "Баланс за период", placeholder: true }
   ]
@@ -222,27 +361,41 @@ const pivotEngineNavEnabled = true;
 export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
   sectionTitle: "Отчёт",
   items: [
-    { href: "/reports/agent-orders", label: "Заказы по агентам" },
-    { href: "/reports/gps", label: "Отчёт по GPS" },
-    { href: "/reports/client-sales-2", label: "Продажи по клиентам 2" },
-    { href: "/reports/client-sales-4", label: "Продажи по клиентам 4" },
-    { href: "/reports/product-sales", label: "Продажи по товарам" },
-    { href: "/reports/expeditor-returns", label: "Возврат экспедитора" },
-    { href: "/reports/visits-2", label: "По визитам 2.0" },
-    { href: "/reports/visit-totals", label: "Итоги визитов" },
+    { href: "/reports/agent-orders", label: "Заказы по агентам", showIfAnyPermission: [...NAV_PERM.reports] },
+    {
+      href: "/reports/gps",
+      label: "Отчёт по GPS",
+      showIfAnyPermission: [...NAV_PERM.reports, "gps.gps.view"]
+    },
+    {
+      href: "/reports/client-sales-2",
+      label: "Продажи по клиентам 2",
+      showIfAnyPermission: [...NAV_PERM.reports]
+    },
+    {
+      href: "/reports/client-sales-4",
+      label: "Продажи по клиентам 4",
+      showIfAnyPermission: [...NAV_PERM.reports]
+    },
+    { href: "/reports/product-sales", label: "Продажи по товарам", showIfAnyPermission: [...NAV_PERM.reports] },
+    {
+      href: "/reports/expeditor-returns",
+      label: "Возврат экспедитора",
+      showIfAnyPermission: [...NAV_PERM.reports]
+    },
+    { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reports] },
+    { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reports] },
     {
       href: "/reports/builder",
       label: pivotEngineNavEnabled
-        ? "Конструктор отчётов"
-        : "Конструктор отчетов (WebDataRocks)"
+        ? "Конструктор сводной таблицы"
+        : "Конструктор отчетов (WebDataRocks)",
+      showIfAnyPermission: [...NAV_PERM.reportBuilder]
     },
     ...(pivotEngineNavEnabled
-      ? [
-          { href: "/reports/builder/pivot", label: "Virtual Pivot (основной)" } satisfies NavItem,
-          { href: "/reports/builder/wdr", label: "WebDataRocks (rollback)" } satisfies NavItem
-        ]
+      ? []
       : []),
-    { href: "/reports/settings", label: "Настройки отчетов" }
+    { href: "/reports/settings", label: "Настройки отчетов", showIfAnyPermission: [...NAV_PERM.reports] }
   ]
 };
 
@@ -257,6 +410,11 @@ export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
     {
       href: "/plans/setup",
       label: "Установка планов",
+      showIfAnyPermission: ["plans.ustanovka_planov.view"]
+    },
+    {
+      href: "/plans/daily",
+      label: "Дневные KPI планы",
       showIfAnyPermission: ["plans.ustanovka_planov.view"]
     },
     {
@@ -292,7 +450,7 @@ export type SidebarLayoutEntry =
 /**
  * Referens UI tartibi:
  * Дашборды → Заявки → Клиенты → Накладные → Касса → Склад → Поставщики →
- * Планы → Отчёт → Pivot отчёты → Пользователи → Аудит → Доступ → Настройки.
+ * Планы → Отчёт → Пользователи → Аудит → Доступ → Настройки.
  * «placeholder» bo‘limlar loyihada hali yo‘q — sariq label sifatida ko‘rinadi.
  */
 export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
@@ -305,42 +463,74 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
   { kind: "suppliers" },
   { kind: "plans" },
   { kind: "reports" },
-  { kind: "placeholder", label: "Pivot отчёты", icon: "pivot" },
   { kind: "users" },
-  { kind: "placeholder", label: "Аудит", icon: "audit" },
+  {
+    kind: "link",
+    item: {
+      href: "/audit",
+      label: "Аудит",
+      showIfAnyPermission: [...NAV_PERM.audit]
+    }
+  },
   { kind: "link", item: { href: "/activity", label: "Активность и история", roles: ["admin"] } },
-  { kind: "link", item: { href: "/access", label: "Доступ", roles: ["admin"], showIfAnyPermission: ["access.upravlenie.view"] } },
-  { kind: "link", item: { href: "/settings", label: "Настройки" } }
+  {
+    kind: "link",
+    item: {
+      href: "/diagnostics/errors",
+      label: "Журнал ошибок",
+      roles: ["admin"],
+      showIfAnyPermission: ["diagnostics.error_logs.view"]
+    }
+  },
+  {
+    kind: "link",
+    item: {
+      href: "/access",
+      label: "Доступ",
+      roles: ["admin"],
+      showIfAnyPermission: ["access.upravlenie.view"]
+    }
+  },
+  {
+    kind: "link",
+    item: { href: "/settings", label: "Настройки", showIfAnyPermission: [...NAV_PERM.settings] }
+  }
 ];
 
 /** Mobil menyu — barcha havolalar (ixtiyoriy tartibsiz) */
 export function flattenMobileNavItems(): NavItem[] {
   const out: NavItem[] = [];
+  const seen = new Set<string>();
+  const pushUnique = (item: NavItem) => {
+    if (item.disabled || item.href === "#") return;
+    const path = item.href.split("?")[0] ?? item.href;
+    if (seen.has(path)) return;
+    seen.add(path);
+    out.push(item);
+  };
   for (const e of dashboardSidebarLayout) {
     if (e.kind === "dashboard") {
-      out.push(...dashboardHomeNav.items);
+      for (const item of dashboardHomeNav.items) pushUnique(item);
     } else if (e.kind === "clients") {
-      out.push(...dashboardClientsNav.items.filter((i) => !i.disabled && i.href !== "#"));
+      for (const item of dashboardClientsNav.items.filter((i) => !i.disabled && i.href !== "#")) pushUnique(item);
     } else if (e.kind === "link") {
-      if (!e.item.disabled && e.item.href !== "#") {
-        out.push(e.item);
-      }
+      pushUnique(e.item);
     } else if (e.kind === "orders") {
-      out.push(...dashboardOrdersNavFlatItems());
+      for (const item of dashboardOrdersNavFlatItems()) pushUnique(item);
     } else if (e.kind === "invoices") {
-      out.push(...dashboardInvoicesNav.items.filter((i) => !i.disabled && i.href !== "#"));
+      for (const item of dashboardInvoicesNav.items.filter((i) => !i.disabled && i.href !== "#")) pushUnique(item);
     } else if (e.kind === "stock") {
-      out.push(...dashboardStockNav.items.filter((i) => !i.disabled && i.href !== "#"));
+      for (const item of dashboardStockNav.items.filter((i) => !i.disabled && i.href !== "#")) pushUnique(item);
     } else if (e.kind === "suppliers") {
-      out.push(...dashboardSuppliersNavFlatItems());
+      for (const item of dashboardSuppliersNavFlatItems()) pushUnique(item);
     } else if (e.kind === "reports") {
-      out.push(...dashboardReportsNavFlatItems());
+      for (const item of dashboardReportsNavFlatItems()) pushUnique(item);
     } else if (e.kind === "plans") {
-      out.push(...dashboardPlansNavFlatItems());
+      for (const item of dashboardPlansNavFlatItems()) pushUnique(item);
     } else if (e.kind === "kassa") {
-      out.push(...dashboardKassaNavFlatItems());
+      for (const item of dashboardKassaNavFlatItems()) pushUnique(item);
     } else if (e.kind === "users") {
-      out.push(...dashboardUsersNavFlatItems());
+      for (const item of dashboardUsersNavFlatItems()) pushUnique(item);
     }
   }
   return out;
@@ -371,6 +561,9 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
   push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
   push(null, [
+    { href: "/audit", label: "Аудит" },
+    { href: "/activity", label: "Активность и история" },
+    { href: "/diagnostics/errors", label: "Журнал ошибок" },
     { href: "/access", label: "Доступ" },
     { href: "/settings", label: "Настройки" }
   ]);

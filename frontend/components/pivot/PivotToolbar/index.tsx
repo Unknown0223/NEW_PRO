@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsDownUp, ChevronsUpDown, FileCode, FileImage, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, RotateCcw } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Copy, FileCode, FileImage, FileSpreadsheet, FileText, Loader2, Maximize2, Minimize2, RotateCcw } from "lucide-react";
 import { getPivotStrings } from "@salec/pivot-engine";
 import { Button } from "@/components/ui/button";
 import type { PivotExportFormat } from "@/hooks/pivot/usePivotExport";
@@ -13,6 +13,8 @@ type Props = {
   onExportPdf?: () => void;
   onExportHtml?: () => void;
   onExportChartPng?: () => void;
+  onCopySelection?: () => void;
+  copyDisabled?: boolean;
   exportDisabled?: boolean;
   chartExportDisabled?: boolean;
   isExporting?: boolean;
@@ -36,6 +38,8 @@ export function PivotToolbar({
   onExportPdf,
   onExportHtml,
   onExportChartPng,
+  onCopySelection,
+  copyDisabled = false,
   exportDisabled = false,
   chartExportDisabled = false,
   isExporting = false,
@@ -82,6 +86,20 @@ export function PivotToolbar({
             {t.chart}
           </Button>
         </div>
+      )}
+      {onCopySelection && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 text-xs"
+          onClick={onCopySelection}
+          disabled={copyDisabled}
+          title="Копировать"
+        >
+          <Copy className="h-3.5 w-3.5" />
+          Копировать
+        </Button>
       )}
       {onExportExcel && (
         <Button

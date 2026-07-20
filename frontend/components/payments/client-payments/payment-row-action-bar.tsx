@@ -51,7 +51,7 @@ export function PaymentRowActionBar({
   const canHistory =
     selectedCount === 1 &&
     historyPaymentId != null &&
-    (has("cash.oplaty_klientov.history") || has("cash.oplaty_klientov.view"));
+    has("cash.oplaty_klientov.history");
 
   useEffect(() => {
     setMounted(true);

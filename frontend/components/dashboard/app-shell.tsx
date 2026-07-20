@@ -18,6 +18,7 @@ import {
   resolvePageBreadcrumb,
   type NavItem
 } from "@/components/dashboard/nav-config";
+import { isNavItemAllowed } from "@/lib/nav-route-access";
 import { Button } from "@/components/ui/button";
 import { ClientLucideIcon } from "@/components/ui/client-lucide-icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +26,13 @@ import { Input } from "@/components/ui/input";
 import { decodeAccessTokenTenantSlug, useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
+import {
+  ME_PERMISSIONS_REFETCH_INTERVAL_MS,
+  ME_PERMISSIONS_STALE_MS,
+  mePermissionKeySet,
+  mePermissionsQueryKey,
+  normalizeMePermissionKeys
+} from "@/lib/me-permissions";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { isFullHeightWorkspaceRoute } from "@/lib/full-height-workspace-routes";
@@ -109,21 +117,28 @@ function orderNavItemActive(pathname: string, searchParams: URLSearchParams, hre
   return pathname === pathPart || pathname.startsWith(`${pathPart}/`);
 }
 
-/** Bir xil queryKey uchun eski keshda `string[]` bo‘lishi mumkin — faqat `Set` bilan ishlaymiz. */
+/** Bir xil queryKey uchun eski keshda `Set` ham bo‘lishi mumkin — `string[]` / `Set` → `Set`. */
 function permissionKeysFromQueryData(data: unknown): Set<string> | null {
   if (data === undefined) return null;
-  if (data instanceof Set) return data as Set<string>;
-  if (Array.isArray(data)) return new Set(data);
-  return new Set();
+  return mePermissionKeySet(data);
 }
 
 function navItemVisible(item: NavItem, role: string | null, permissionKeys: Set<string> | null): boolean {
-  if (role === "admin") return true;
-  if (item.showIfAnyPermission?.length && permissionKeys && item.showIfAnyPermission.some((k) => permissionKeys.has(k))) {
-    return true;
-  }
-  if (!item.roles?.length) return true;
-  return role != null && item.roles.includes(role);
+  return isNavItemAllowed(item, role, permissionKeys);
+}
+
+function navItemsSomeVisible(
+  items: NavItem[],
+  role: string | null,
+  permissionKeys: Set<string> | null
+): boolean {
+  return items.some(
+    (item) =>
+      !item.placeholder &&
+      !item.disabled &&
+      item.href !== "#" &&
+      navItemVisible(item, role, permissionKeys)
+  );
 }
 
 function usersNavChildActive(pathname: string): boolean {
@@ -215,6 +230,7 @@ function MutedNavLeaf({ item, withDot = false }: { item: NavItem; withDot?: bool
 function linkIcon(href: string) {
   const path = href.split("?")[0] ?? href;
   if (path === "/dashboard") return LayoutDashboard;
+  if (path === "/audit") return ShieldCheck;
   if (path.startsWith("/clients")) return Users;
   if (path.startsWith("/settings/cash-desks")) return Wallet;
   if (path === "/payments") return Wallet;
@@ -263,13 +279,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrated, accessToken]);
 
   const mePermsQ = useQuery({
-    queryKey: ["me", "access-permissions", tenantSlug],
+    queryKey: mePermissionsQueryKey(tenantSlug),
     enabled: Boolean(tenantSlug),
-    staleTime: 60_000,
+    staleTime: ME_PERMISSIONS_STALE_MS,
+    refetchOnWindowFocus: true,
+    refetchInterval: tenantSlug ? ME_PERMISSIONS_REFETCH_INTERVAL_MS : false,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data } = await api.get<{ data: { keys: string[] } }>(`/api/${tenantSlug}/access/me-permissions`);
-      return new Set(data.data?.keys ?? []);
-    }
+      return normalizeMePermissionKeys(data.data?.keys ?? []);
+    },
+    placeholderData: (prev) => prev
   });
   const permissionKeySet = permissionKeysFromQueryData(mePermsQ.data);
   const [openSection, setOpenSection] = useState<
@@ -349,6 +369,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
     }
     clearSession();
+    qc.clear();
+    try {
+      window.localStorage.removeItem("salec:rq:v1");
+    } catch {
+      /* ignore */
+    }
     router.replace("/login");
     router.refresh();
   }
@@ -466,6 +492,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden p-2 overscroll-contain">
           {dashboardSidebarLayout.map((entry, idx) => {
             if (entry.kind === "link") {
+              if (!navItemVisible(entry.item, effectiveRole, permissionKeySet)) return null;
               const { href, label, disabled } = entry.item;
               const active = !disabled && href !== "#" && isNavActive(pathname, href);
               const Icon = linkIcon(href);
@@ -512,6 +539,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "orders") {
+              if (
+                !navItemsSomeVisible(
+                  dashboardOrdersNav.groups.flatMap((g) => g.items),
+                  effectiveRole,
+                  permissionKeySet
+                )
+              ) {
+                return null;
+              }
               return (
                 <div key="orders" className="flex flex-col gap-0.5">
                   <button
@@ -535,15 +571,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {ordersOpen && (
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardOrdersNav.groups.map((group) => (
+                      {dashboardOrdersNav.groups.map((group) => {
+                        const visibleItems = group.items.filter((item) =>
+                          navItemVisible(item, effectiveRole, permissionKeySet)
+                        );
+                        if (visibleItems.length === 0) return null;
+                        return (
                         <div key={group.title}>
                           <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-sidebar-foreground/55">
                             {group.title}
                           </p>
                           <ul className="flex flex-col gap-0.5">
-                            {group.items
-                              .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
-                              .map((item) => {
+                            {visibleItems.map((item) => {
                                 if (item.placeholder || item.disabled || item.href === "#") {
                                   return (
                                     <li key={`${group.title}-${item.label}-${item.href}`}>
@@ -570,7 +609,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                               })}
                           </ul>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -578,6 +618,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "invoices") {
+              if (!navItemsSomeVisible(dashboardInvoicesNav.items, effectiveRole, permissionKeySet)) {
+                return null;
+              }
               return (
                 <div key="invoices" className="flex flex-col gap-0.5">
                   <button
@@ -640,6 +683,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "clients") {
+              if (!navItemsSomeVisible(dashboardClientsNav.items, effectiveRole, permissionKeySet)) {
+                return null;
+              }
               return (
                 <div key="clients" className="flex flex-col gap-0.5">
                   <button
@@ -663,7 +709,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {clientsOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardClientsNav.items.map((item) => {
+                      {dashboardClientsNav.items
+                        .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
+                        .map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
                         return (
@@ -710,6 +758,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "dashboard") {
+              const dashboardItems = dashboardHomeNav.items.filter((item) =>
+                navItemVisible(item, effectiveRole, permissionKeySet)
+              );
+              if (dashboardItems.length === 0) return null;
               return (
                 <div key="dashboard" className="flex flex-col gap-0.5">
                   <button
@@ -733,7 +785,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {dashboardOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardHomeNav.items.map((item) => {
+                      {dashboardItems.map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
                         return (
@@ -763,6 +815,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "stock") {
+              const stockItems = dashboardStockNav.items.filter((item) =>
+                navItemVisible(item, effectiveRole, permissionKeySet)
+              );
+              if (!navItemsSomeVisible(stockItems, effectiveRole, permissionKeySet)) {
+                return null;
+              }
               return (
                 <div key="stock" className="flex flex-col gap-0.5">
                   <button
@@ -786,7 +844,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {stockOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardStockNav.items.map((item) => {
+                      {stockItems.map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
                         return (
@@ -816,6 +874,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "suppliers") {
+              const suppliersItems = dashboardSuppliersNav.items.filter((item) =>
+                navItemVisible(item, effectiveRole, permissionKeySet)
+              );
+              if (!navItemsSomeVisible(suppliersItems, effectiveRole, permissionKeySet)) {
+                return null;
+              }
               return (
                 <div key="suppliers" className="flex flex-col gap-0.5">
                   <button
@@ -839,7 +903,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {suppliersOpen && (
                     <ul className="ml-1 flex flex-col gap-0.5 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardSuppliersNav.items.map((item) => {
+                      {suppliersItems.map((item) => {
                         const muted = Boolean(item.disabled || item.href === "#");
                         const active = !muted && isNavActive(pathname, item.href);
                         return (
@@ -869,6 +933,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "kassa") {
+              if (
+                !navItemsSomeVisible(
+                  dashboardKassaNav.groups.flatMap((g) => g.items),
+                  effectiveRole,
+                  permissionKeySet
+                )
+              ) {
+                return null;
+              }
               const rowClass = (active: boolean, muted: boolean) =>
                 cn(
                   "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors",
@@ -901,7 +974,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {kassaOpen && (
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardKassaNav.groups.map((group) => (
+                      {dashboardKassaNav.groups.map((group) => {
+                        const visibleItems = group.items.filter((item) =>
+                          navItemVisible(item, effectiveRole, permissionKeySet)
+                        );
+                        if (visibleItems.length === 0) return null;
+                        return (
                         <div key={group.title}>
                           <div className="relative py-1">
                             <div className="absolute inset-x-0 top-1/2 border-t border-sidebar-border/50" />
@@ -910,9 +988,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             </p>
                           </div>
                           <ul className="mt-1 flex flex-col gap-0.5">
-                            {group.items
-                              .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
-                              .map((item) => {
+                            {visibleItems.map((item) => {
                               const muted = Boolean(item.disabled || item.href === "#");
                               const active = !muted && isNavActive(pathname, item.href);
                               return (
@@ -936,7 +1012,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             })}
                           </ul>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -944,6 +1021,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "reports") {
+              if (!navItemsSomeVisible(reportMenuItems, effectiveRole, permissionKeySet)) {
+                return null;
+              }
               return (
                 <div key="reports" className="flex flex-col gap-0.5">
                   <button
@@ -1064,6 +1144,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }
 
             if (entry.kind === "users") {
+              if (
+                !navItemsSomeVisible(
+                  dashboardUsersNav.groups.flatMap((g) => g.items),
+                  effectiveRole,
+                  permissionKeySet
+                )
+              ) {
+                return null;
+              }
               const rowClass = (active: boolean, muted: boolean) =>
                 cn(
                   "flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors",
@@ -1096,7 +1185,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                   {usersOpen && (
                     <div className="ml-1 space-y-3 border-l border-sidebar-border/60 py-0.5 pl-2">
-                      {dashboardUsersNav.groups.map((group) => (
+                      {dashboardUsersNav.groups.map((group) => {
+                        const visibleItems = group.items.filter((item) =>
+                          navItemVisible(item, effectiveRole, permissionKeySet)
+                        );
+                        if (visibleItems.length === 0) return null;
+                        return (
                         <div key={group.title}>
                           <div className="relative py-1">
                             <div className="absolute inset-x-0 top-1/2 border-t border-sidebar-border/50" />
@@ -1105,9 +1199,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             </p>
                           </div>
                           <ul className="mt-1 flex flex-col gap-0.5">
-                            {group.items
-                              .filter((item) => navItemVisible(item, effectiveRole, permissionKeySet))
-                              .map((item) => {
+                            {visibleItems.map((item) => {
                                 const muted = Boolean(item.disabled || item.href === "#");
                                 const active = !muted && isNavActive(pathname, item.href);
                                 return (
@@ -1131,7 +1223,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                               })}
                           </ul>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

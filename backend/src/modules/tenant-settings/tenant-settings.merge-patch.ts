@@ -12,6 +12,15 @@ import { asRecord } from "./tenant-settings.shared";
 import { territoryRegionPickerNames } from "./tenant-settings.territory";
 import type { BranchDto, TerritoryNodeDto, UnitMeasureDto } from "./tenant-settings.types";
 
+/** Bo‘sh massiv bilan mavjud spravochnikni o‘chirishni bloklash. */
+function rejectEmptyWipe(field: string, incoming: unknown, previous: unknown): void {
+  if (!Array.isArray(incoming) || incoming.length > 0) return;
+  const prevLen = Array.isArray(previous) ? previous.length : 0;
+  if (prevLen > 0) {
+    throw new Error(`REF_EMPTY_WIPE_REJECTED:${field}`);
+  }
+}
+
 export type ProfileReferencesPatch = {
   payment_types?: string[];
   return_reasons?: string[];
@@ -98,21 +107,66 @@ export function mergeProfilePatchIntoSettings(
     const prevRef = asRecord(nextSettings.references);
     const merged = { ...prevRef };
     const ref = patch.references;
-    if (ref.payment_types != null) merged.payment_types = ref.payment_types;
-    if (ref.return_reasons != null) merged.return_reasons = ref.return_reasons;
-    if (ref.regions != null) merged.regions = ref.regions;
-    if (ref.client_categories != null) merged.client_categories = ref.client_categories;
-    if (ref.client_type_codes != null) merged.client_type_codes = ref.client_type_codes;
-    if (ref.client_formats != null) merged.client_formats = ref.client_formats;
-    if (ref.sales_channels != null) merged.sales_channels = ref.sales_channels;
+    if (ref.payment_types != null) {
+      rejectEmptyWipe("payment_types", ref.payment_types, merged.payment_types);
+      merged.payment_types = ref.payment_types;
+    }
+    if (ref.return_reasons != null) {
+      rejectEmptyWipe("return_reasons", ref.return_reasons, merged.return_reasons);
+      merged.return_reasons = ref.return_reasons;
+    }
+    if (ref.regions != null) {
+      rejectEmptyWipe("regions", ref.regions, merged.regions);
+      merged.regions = ref.regions;
+    }
+    if (ref.client_categories != null) {
+      rejectEmptyWipe("client_categories", ref.client_categories, merged.client_categories);
+      merged.client_categories = ref.client_categories;
+    }
+    if (ref.client_type_codes != null) {
+      rejectEmptyWipe("client_type_codes", ref.client_type_codes, merged.client_type_codes);
+      merged.client_type_codes = ref.client_type_codes;
+    }
+    if (ref.client_formats != null) {
+      rejectEmptyWipe("client_formats", ref.client_formats, merged.client_formats);
+      merged.client_formats = ref.client_formats;
+    }
+    if (ref.sales_channels != null) {
+      rejectEmptyWipe("sales_channels", ref.sales_channels, merged.sales_channels);
+      merged.sales_channels = ref.sales_channels;
+    }
     if (ref.client_product_category_refs != null) {
+      rejectEmptyWipe(
+        "client_product_category_refs",
+        ref.client_product_category_refs,
+        merged.client_product_category_refs
+      );
       merged.client_product_category_refs = ref.client_product_category_refs;
     }
-    if (ref.client_districts != null) merged.client_districts = ref.client_districts;
-    if (ref.client_cities != null) merged.client_cities = ref.client_cities;
-    if (ref.client_neighborhoods != null) merged.client_neighborhoods = ref.client_neighborhoods;
-    if (ref.client_zones != null) merged.client_zones = ref.client_zones;
-    if (ref.client_logistics_services != null) merged.client_logistics_services = ref.client_logistics_services;
+    if (ref.client_districts != null) {
+      rejectEmptyWipe("client_districts", ref.client_districts, merged.client_districts);
+      merged.client_districts = ref.client_districts;
+    }
+    if (ref.client_cities != null) {
+      rejectEmptyWipe("client_cities", ref.client_cities, merged.client_cities);
+      merged.client_cities = ref.client_cities;
+    }
+    if (ref.client_neighborhoods != null) {
+      rejectEmptyWipe("client_neighborhoods", ref.client_neighborhoods, merged.client_neighborhoods);
+      merged.client_neighborhoods = ref.client_neighborhoods;
+    }
+    if (ref.client_zones != null) {
+      rejectEmptyWipe("client_zones", ref.client_zones, merged.client_zones);
+      merged.client_zones = ref.client_zones;
+    }
+    if (ref.client_logistics_services != null) {
+      rejectEmptyWipe(
+        "client_logistics_services",
+        ref.client_logistics_services,
+        merged.client_logistics_services
+      );
+      merged.client_logistics_services = ref.client_logistics_services;
+    }
     if (ref.territory_levels != null) {
       merged.territory_levels = ref.territory_levels;
       const nodesRaw = merged.territory_nodes;
@@ -121,51 +175,73 @@ export function mergeProfilePatchIntoSettings(
       }
     }
     if (ref.territory_nodes != null) {
+      rejectEmptyWipe("territory_nodes", ref.territory_nodes, merged.territory_nodes);
       merged.territory_nodes = ref.territory_nodes;
       merged.regions = territoryRegionPickerNames(merged as Record<string, unknown>);
     }
-    if (ref.unit_measures != null) merged.unit_measures = ref.unit_measures;
-    if (ref.branches != null) merged.branches = ref.branches;
+    if (ref.unit_measures != null) {
+      rejectEmptyWipe("unit_measures", ref.unit_measures, merged.unit_measures);
+      merged.unit_measures = ref.unit_measures;
+    }
+    if (ref.branches != null) {
+      rejectEmptyWipe("branches", ref.branches, merged.branches);
+      merged.branches = ref.branches;
+    }
     if (ref.client_format_entries != null) {
+      rejectEmptyWipe("client_format_entries", ref.client_format_entries, merged.client_format_entries);
       const norm = ref.client_format_entries.map(toClientRefEntryDto);
       merged.client_format_entries = norm;
       merged.client_formats = activeValuesFromClientRefEntries(norm);
     }
     if (ref.client_type_entries != null) {
+      rejectEmptyWipe("client_type_entries", ref.client_type_entries, merged.client_type_entries);
       const norm = ref.client_type_entries.map(toClientRefEntryDto);
       merged.client_type_entries = norm;
       merged.client_type_codes = activeValuesFromClientRefEntries(norm);
     }
     if (ref.client_category_entries != null) {
+      rejectEmptyWipe("client_category_entries", ref.client_category_entries, merged.client_category_entries);
       const norm = ref.client_category_entries.map(toClientRefEntryDto);
       merged.client_category_entries = norm;
       merged.client_categories = activeValuesFromClientRefEntries(norm);
     }
     if (ref.request_type_entries != null) {
+      rejectEmptyWipe("request_type_entries", ref.request_type_entries, merged.request_type_entries);
       merged.request_type_entries = ref.request_type_entries.map(toClientRefEntryDto);
     }
     if (ref.refusal_reason_entries != null) {
+      rejectEmptyWipe("refusal_reason_entries", ref.refusal_reason_entries, merged.refusal_reason_entries);
       const norm = ref.refusal_reason_entries.map(toClientRefEntryDto);
       merged.refusal_reason_entries = norm;
       merged.return_reasons = activeValuesFromClientRefEntries(norm);
     }
     if (ref.cancel_payment_reason_entries != null) {
+      rejectEmptyWipe(
+        "cancel_payment_reason_entries",
+        ref.cancel_payment_reason_entries,
+        merged.cancel_payment_reason_entries
+      );
       merged.cancel_payment_reason_entries = ref.cancel_payment_reason_entries.map(toClientRefEntryDto);
     }
     if (ref.order_note_entries != null) {
+      rejectEmptyWipe("order_note_entries", ref.order_note_entries, merged.order_note_entries);
       merged.order_note_entries = ref.order_note_entries.map(toClientRefEntryDto);
     }
     if (ref.task_type_entries != null) {
+      rejectEmptyWipe("task_type_entries", ref.task_type_entries, merged.task_type_entries);
       merged.task_type_entries = ref.task_type_entries.map(toClientRefEntryDto);
     }
     if (ref.photo_category_entries != null) {
+      rejectEmptyWipe("photo_category_entries", ref.photo_category_entries, merged.photo_category_entries);
       merged.photo_category_entries = ref.photo_category_entries.map(toClientRefEntryDto);
     }
     if (ref.finance_category_entries != null) {
+      rejectEmptyWipe("finance_category_entries", ref.finance_category_entries, merged.finance_category_entries);
       merged.finance_category_entries = ref.finance_category_entries.map(toClientRefEntryDto);
     }
     if (ref.territory_tree != null) merged.territory_tree = ref.territory_tree;
     if (ref.currency_entries != null) {
+      rejectEmptyWipe("currency_entries", ref.currency_entries, merged.currency_entries);
       const asDto: CurrencyEntryDto[] = ref.currency_entries.map((e) => ({
         id: e.id.trim(),
         name: e.name.trim(),
@@ -177,6 +253,7 @@ export function mergeProfilePatchIntoSettings(
       merged.currency_entries = normalizeCurrencyDefaults(asDto);
     }
     if (ref.payment_method_entries != null) {
+      rejectEmptyWipe("payment_method_entries", ref.payment_method_entries, merged.payment_method_entries);
       const cur = resolveCurrencyEntries(merged);
       const asDto: PaymentMethodEntryDto[] = ref.payment_method_entries.map((e) => {
         const codeRaw = e.code?.trim().toLowerCase() ?? "";
@@ -199,6 +276,7 @@ export function mergeProfilePatchIntoSettings(
       merged.payment_types = paymentTypeStorageKeysFromMethodEntries(asDto);
     }
     if (ref.price_type_entries != null) {
+      rejectEmptyWipe("price_type_entries", ref.price_type_entries, merged.price_type_entries);
       merged.price_type_entries = ref.price_type_entries.map((e) => ({
         id: e.id.trim(),
         name: e.name.trim(),

@@ -11,7 +11,18 @@ import { ORDER_STATUSES, ORDER_TYPE_LABELS, ORDER_TYPES } from "../orders/order-
 import { listDistinctPriceTypesForTenant } from "../reference/reference.service";
 import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-settings.service";
 import { activeBranchNamesFromReferences } from "../tenant-settings/tenant-settings.refs";
+import {
+  priceTypeEntriesFromUnknown,
+  resolveCurrencyEntries,
+  resolvePaymentMethodEntries,
+  resolvePaymentMethodRefToLabel,
+  resolvePriceTypeKeyToLabel
+} from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
+import {
+  buildScopedAgentWhereForActor,
+  enrichScopedReportActor
+} from "../access/access-agent-scope";
 import { getReportBuilderMetadata } from "./report-builder.metadata";
 import { runReportBuilderDataset } from "./report-builder.dataset";
 import { buildMatrixView, runReportBuilderPreview } from "./report-builder.query";
@@ -52,12 +63,7 @@ export async function getReportBuilderFilterOptions(
   tenantId: number,
   actor?: ReportActor
 ): Promise<ReportBuilderFilterOptionsResponse> {
-  const whereAgent: Prisma.UserWhereInput =
-    actor?.role === "agent" && actor.userId
-      ? { tenant_id: tenantId, id: actor.userId, is_active: true }
-      : actor?.role === "supervisor" && actor.userId
-        ? { tenant_id: tenantId, role: "agent", supervisor_user_id: actor.userId, is_active: true }
-        : { tenant_id: tenantId, role: "agent", is_active: true };
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
 
   const statuses = ORDER_STATUSES.map((id) => ({
     id,
@@ -193,8 +199,21 @@ export async function getReportBuilderFilterOptions(
     })
   ]);
 
-  const payment_methods = paymentRows.map((r) => ({ id: r.ref, label: r.ref }));
-  const price_types = catalogPriceTypes.map((id) => ({ id, label: id }));
+  // Filtr yozuvi: id — DB dagi xom qiymat, label — spravochnikdagi nom (kod ko‘rsatilmasin)
+  const settingsRefsForLabels = asRecord(asRecord(tenantRow?.settings).references);
+  const pmEntriesForLabels = resolvePaymentMethodEntries(
+    settingsRefsForLabels,
+    resolveCurrencyEntries(settingsRefsForLabels)
+  );
+  const ptEntriesForLabels = priceTypeEntriesFromUnknown(settingsRefsForLabels.price_type_entries);
+  const payment_methods = paymentRows.map((r) => ({
+    id: r.ref,
+    label: resolvePaymentMethodRefToLabel(r.ref, pmEntriesForLabels) ?? r.ref
+  }));
+  const price_types = catalogPriceTypes.map((id) => ({
+    id,
+    label: resolvePriceTypeKeyToLabel(id, ptEntriesForLabels) ?? id
+  }));
   const branchNames = activeBranchNamesFromReferences(asRecord(asRecord(tenantRow?.settings).references));
   const branches = branchNames.map((id) => ({ id, label: id }));
 
@@ -255,7 +274,8 @@ export async function reportBuilderDataset(
   filters: ReportBuilderDatasetRequest,
   actor?: ReportActor
 ): Promise<ReportBuilderDatasetResponse> {
-  const raw = await runReportBuilderDataset(tenantId, filters, actor);
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const raw = await runReportBuilderDataset(tenantId, filters, scopedActor);
   return {
     ...raw,
     rows: serializeRows(raw.rows)
@@ -267,7 +287,8 @@ export async function reportBuilderPreview(
   config: ReportBuilderConfigPayload,
   actor?: ReportActor
 ): Promise<ReportBuilderPreviewResponse> {
-  const raw = await runReportBuilderPreview(tenantId, config, actor, {});
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const raw = await runReportBuilderPreview(tenantId, config, scopedActor, {});
   const matrix = buildMatrixView(config, raw);
   const rows = serializeRows(raw.rows);
   return {
@@ -284,7 +305,8 @@ export async function reportBuilderExportXlsx(
   config: ReportBuilderConfigPayload,
   actor?: ReportActor
 ): Promise<{ buffer: Buffer; truncated: boolean; totalRowCount: number }> {
-  const raw = await runReportBuilderPreview(tenantId, config, actor, { exportMode: true });
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const raw = await runReportBuilderPreview(tenantId, config, scopedActor, { exportMode: true });
   const rows = serializeRows(raw.rows);
   const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{}]);
   const wb = XLSX.utils.book_new();

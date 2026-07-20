@@ -16,7 +16,7 @@ import {
   territoryRegionPickerNames,
   type CityTerritoryHintDto
 } from "../tenant-settings/tenant-settings.territory";
-import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
+import { paymentMethodStorageKey, priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { territoryNodesFromUnknown } from "../tenant-settings/tenant-settings.refs";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
@@ -322,6 +322,15 @@ async function loadMobileTenantReferences(tenantId: number) {
     hints
   });
 
+  const priceTypeOptions = priceTypeEntriesFromUnknown(ref.price_type_entries)
+    .filter((e) => e.active !== false && e.kind === "sale")
+    .map((e) => {
+      const id = priceTypeKey(e).trim();
+      const label = e.name.trim() || id;
+      return { id, label, code: e.code ?? null };
+    })
+    .filter((o) => o.id.length > 0);
+
   return {
     refusal_reason_entries: (ref.refusal_reason_entries ?? []).map((e) => ({
       id: e.id,
@@ -339,6 +348,8 @@ async function loadMobileTenantReferences(tenantId: number) {
       payment_type: paymentMethodStorageKey(e),
       code: e.code ?? null
     })),
+    /** Mobil «Тип цены» dropdown — id=DB kaliti, label=katalog nomi */
+    price_type_options: priceTypeOptions,
     client_categories: ref.client_categories ?? [],
     client_type_codes: ref.client_type_codes ?? [],
     sales_channels: ref.sales_channels ?? [],

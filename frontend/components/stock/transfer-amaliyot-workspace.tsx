@@ -22,8 +22,8 @@ import {
 } from "@/components/ui/table";
 import { apiFetch, useTenant } from "@/lib/api-client";
 import { getUserFacingError } from "@/lib/error-utils";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import Link from "next/link";
@@ -108,8 +108,11 @@ export function TransferAmaliyotWorkspace() {
   const tenant = useTenant();
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
-  const role = useEffectiveRole();
-  const canWrite = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canWrite =
+    has("warehouse.peremeshchenie.create") ||
+    has("warehouse.peremeshchenie.transfer") ||
+    has("warehouse.peremeshchenie.update");
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [, setAgents] = useState<AgentPick[]>([]);

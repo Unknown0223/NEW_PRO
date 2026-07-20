@@ -5,11 +5,12 @@ import { rowStatusPatchError } from "@/components/orders/orders-list/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole, isOperatorLikeWebRole } from "@/lib/distribution-roles";
+import { isOperatorLikeWebRole } from "@/lib/distribution-roles";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { refEntryLabelByStored } from "@/lib/profile-ref-entries";
 import type { ProductRow } from "@/lib/product-types";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios, { type AxiosError } from "axios";
 import { useEffect, useMemo, useState } from "react";
@@ -237,7 +238,7 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
     );
   }
   if (ax.response?.status === 403) {
-    return withApiSupportLine("Tahrirlash huquqi yo‘q (faqat admin / operator).", err);
+    return withApiSupportLine("Tahrirlash huquqi yo‘q (orders.zakaz.update / status).", err);
   }
   return null;
 }
@@ -245,7 +246,9 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
 export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: Props) {
   const qc = useQueryClient();
   const role = useEffectiveRole();
-  const canOperate = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canOperate =
+    has("orders.zakaz.update") || has("orders.zakaz.status") || has("orders.status.status");
   const [editingLines, setEditingLines] = useState(false);
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const [editError, setEditError] = useState<string | null>(null);

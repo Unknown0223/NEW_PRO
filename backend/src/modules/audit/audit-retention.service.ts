@@ -8,6 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { env } from "../../config/env";
 import { prisma } from "../../config/database";
 import { purgeOldActivityEvents } from "../activity/activity.service";
+import { purgeOldErrorEvents } from "../../lib/error-event";
 
 export const DEFAULT_AUDIT_RETENTION_DAYS = 730;
 
@@ -20,14 +21,17 @@ export type AuditRetentionCounts = {
   slot_audit_entries: number;
   client_merge_logs: number;
   user_activity_events: number;
+  error_events: number;
 };
 
 export type AuditRetentionResult = {
   default_audit_days: number;
   activity_days: number;
+  error_event_days: number;
   cutoff_audit_iso: string;
   cutoff_activity_iso: string;
-  by_tenant: Array<{ tenant_id: number; days: number; counts: Omit<AuditRetentionCounts, "user_activity_events"> }>;
+  cutoff_error_events_iso: string;
+  by_tenant: Array<{ tenant_id: number; days: number; counts: Omit<AuditRetentionCounts, "user_activity_events" | "error_events"> }>;
   totals: AuditRetentionCounts;
 };
 
@@ -62,7 +66,7 @@ function cutoffFromDays(days: number): Date {
 async function purgeTenantAuditStores(
   tenantId: number,
   cutoff: Date
-): Promise<Omit<AuditRetentionCounts, "user_activity_events">> {
+): Promise<Omit<AuditRetentionCounts, "user_activity_events" | "error_events">> {
   const [
     tenant_audit_events,
     client_audit_logs,
@@ -111,7 +115,7 @@ async function purgeTenantAuditStores(
   };
 }
 
-function emptyStoreCounts(): Omit<AuditRetentionCounts, "user_activity_events"> {
+function emptyStoreCounts(): Omit<AuditRetentionCounts, "user_activity_events" | "error_events"> {
   return {
     tenant_audit_events: 0,
     client_audit_logs: 0,
@@ -124,9 +128,9 @@ function emptyStoreCounts(): Omit<AuditRetentionCounts, "user_activity_events"> 
 }
 
 function addCounts(
-  a: Omit<AuditRetentionCounts, "user_activity_events">,
-  b: Omit<AuditRetentionCounts, "user_activity_events">
-): Omit<AuditRetentionCounts, "user_activity_events"> {
+  a: Omit<AuditRetentionCounts, "user_activity_events" | "error_events">,
+  b: Omit<AuditRetentionCounts, "user_activity_events" | "error_events">
+): Omit<AuditRetentionCounts, "user_activity_events" | "error_events"> {
   return {
     tenant_audit_events: a.tenant_audit_events + b.tenant_audit_events,
     client_audit_logs: a.client_audit_logs + b.client_audit_logs,
@@ -145,15 +149,22 @@ function addCounts(
 export async function runAuditRetentionPurge(opts?: {
   auditDays?: number;
   activityDays?: number;
+  errorEventDays?: number;
   /** Faqat shu tenant (ops / test). */
   tenantId?: number;
   /** Activity purge ni o‘tkazib yuborish. */
   skipActivity?: boolean;
+  skipErrorEvents?: boolean;
 }): Promise<AuditRetentionResult> {
   const defaultAuditDays = Math.max(1, Math.floor(opts?.auditDays ?? env.AUDIT_RETENTION_DAYS));
   const activityDays = Math.max(1, Math.floor(opts?.activityDays ?? env.ACTIVITY_RETENTION_DAYS));
+  const errorEventDays = Math.max(
+    1,
+    Math.floor(opts?.errorEventDays ?? env.ERROR_EVENT_RETENTION_DAYS)
+  );
   const auditCutoff = cutoffFromDays(defaultAuditDays);
   const activityCutoff = cutoffFromDays(activityDays);
+  const errorEventsCutoff = cutoffFromDays(errorEventDays);
 
   const tenants = await prisma.tenant.findMany({
     where: opts?.tenantId != null ? { id: opts.tenantId } : undefined,
@@ -176,13 +187,20 @@ export async function runAuditRetentionPurge(opts?: {
     user_activity_events = await purgeOldActivityEvents(activityDays);
   }
 
+  let error_events = 0;
+  if (!opts?.skipErrorEvents) {
+    error_events = await purgeOldErrorEvents(errorEventDays);
+  }
+
   return {
     default_audit_days: defaultAuditDays,
     activity_days: activityDays,
+    error_event_days: errorEventDays,
     cutoff_audit_iso: auditCutoff.toISOString(),
     cutoff_activity_iso: activityCutoff.toISOString(),
+    cutoff_error_events_iso: errorEventsCutoff.toISOString(),
     by_tenant,
-    totals: { ...totalsStores, user_activity_events }
+    totals: { ...totalsStores, user_activity_events, error_events }
   };
 }
 

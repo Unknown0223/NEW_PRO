@@ -4,17 +4,19 @@ import {
   exportPivotToExcel,
   exportPivotToHtml,
   exportPivotToPdf,
+  exportPivotToCsv,
   formatExportProgressLabel,
   getPivotStrings,
   type ExportChartPngOptions,
   type ExportExcelOptions,
   type ExportHtmlOptions,
   type ExportPdfOptions,
+  type ExportCsvOptions,
   type ExportProgress,
   type PivotData
 } from "@salec/pivot-engine";
 
-export type PivotExportFormat = "excel" | "pdf" | "html" | "chartPng";
+export type PivotExportFormat = "excel" | "pdf" | "html" | "chartPng" | "csv";
 
 type ExportOptions = ExportExcelOptions & {
   expandedRows?: Set<string>;
@@ -36,6 +38,7 @@ export function usePivotExport() {
     if (exportFormat === "excel") return exportProgressLabel ?? t.exportingExcel;
     if (exportFormat === "pdf") return exportProgressLabel ?? t.exportingPdf;
     if (exportFormat === "html") return exportProgressLabel ?? t.exportingHtml;
+    if (exportFormat === "csv") return exportProgressLabel ?? "CSV…";
     return getPivotStrings().chart.exporting;
   }, [exportFormat, exportProgressLabel, isExporting]);
 
@@ -111,11 +114,35 @@ export function usePivotExport() {
     [isExporting]
   );
 
+  const exportCsv = useCallback(
+    async (data: PivotData | null, options?: ExportCsvOptions) => {
+      if (!data?.rows.length || isExporting) return false;
+      setIsExporting(true);
+      setExportFormat("csv");
+      setExportProgress(null);
+      try {
+        await exportPivotToCsv(data, {
+          ...options,
+          onProgress: (progress) => setExportProgress(progress)
+        });
+        return true;
+      } catch {
+        return false;
+      } finally {
+        setIsExporting(false);
+        setExportFormat(null);
+        setExportProgress(null);
+      }
+    },
+    [isExporting]
+  );
+
   return {
     exportExcel,
     exportPdf,
     exportHtml,
     exportChartPng,
+    exportCsv,
     isExporting,
     exportFormat,
     exportProgress,

@@ -240,9 +240,9 @@ class AgentBottomNav extends StatelessWidget {
   static const _tabs = [
     (Icons.home_outlined, Icons.home, S.navHome),
     (Icons.location_on_outlined, Icons.location_on, S.navVisits),
+    (Icons.shopping_cart_outlined, Icons.shopping_cart, S.navOrders),
     (Icons.adjust_outlined, Icons.adjust, S.navKpi),
-    (Icons.bar_chart_outlined, Icons.bar_chart, S.navReports),
-    (Icons.storefront_outlined, Icons.storefront, S.navPoints),
+    (Icons.calendar_view_day_outlined, Icons.calendar_view_day, S.navDailyPlan),
   ];
 
   @override
@@ -668,8 +668,9 @@ class AgentMenuTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelStyle = TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w600,
+      fontSize: 17,
+      fontWeight: FontWeight.w700,
+      height: 1.25,
       color: destructive ? AppColors.error : AppColors.textMenu,
     );
 
@@ -679,19 +680,19 @@ class AgentMenuTile extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: SizedBox(
-            height: 52,
+            height: 58,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary),
+                    child: Icon(icon, size: 22, color: iconColor ?? AppColors.textSecondary),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -705,7 +706,7 @@ class AgentMenuTile extends StatelessWidget {
                   if (badge != null)
                     Container(
                       margin: const EdgeInsets.only(left: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF7ED),
                         borderRadius: BorderRadius.circular(6),
@@ -714,8 +715,8 @@ class AgentMenuTile extends StatelessWidget {
                       child: Text(
                         badge!,
                         style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
                           color: Color(0xFF9A4D00),
                         ),
                       ),
@@ -758,7 +759,7 @@ class AgentRoleBadge extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: FontWeight.w800,
           color: Color(0xFF066E69),
           height: 1.2,
@@ -1095,42 +1096,104 @@ void showAgentToast(
       behavior: SnackBarBehavior.floating,
       dismissDirection: DismissDirection.up,
       duration: const Duration(seconds: 5),
-      content: Container(
+      content: _AgentSnackContent(
+        message: message,
+        accentColor: accentColor,
+        onDismiss: () {
+          messenger.hideCurrentSnackBar();
+          onDismiss?.call();
+        },
+      ),
+    ),
+  );
+}
+
+/// Login / sessiya xatolari — ekran **pastida** (rasmdagi qorong‘i bar + chap qizil chiziq).
+void showAuthBottomToast(
+  BuildContext context,
+  String message, {
+  Color accentColor = AppColors.error,
+  Duration duration = const Duration(seconds: 5),
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  final bottomPad = MediaQuery.paddingOf(context).bottom;
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      padding: EdgeInsets.zero,
+      margin: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomPad),
+      behavior: SnackBarBehavior.floating,
+      dismissDirection: DismissDirection.down,
+      duration: duration,
+      content: _AgentSnackContent(
+        message: message,
+        accentColor: accentColor,
+        showClose: false,
+        onDismiss: () => messenger.hideCurrentSnackBar(),
+      ),
+    ),
+  );
+}
+
+class _AgentSnackContent extends StatelessWidget {
+  final String message;
+  final Color accentColor;
+  final VoidCallback onDismiss;
+  final bool showClose;
+
+  const _AgentSnackContent({
+    required this.message,
+    required this.accentColor,
+    required this.onDismiss,
+    this.showClose = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
         decoration: BoxDecoration(
           color: AppColors.toastDark,
           borderRadius: BorderRadius.circular(10),
           boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 4,
-              constraints: const BoxConstraints(minHeight: 48),
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: Text(
-                  message,
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, height: 1.35),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
                 ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Color(0xFFCBD5E1), size: 20),
-              onPressed: () {
-                messenger.hideCurrentSnackBar();
-                onDismiss?.call();
-              },
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(14, 14, showClose ? 4 : 14, 14),
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+              if (showClose)
+                IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFFCBD5E1), size: 20),
+                  onPressed: onDismiss,
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

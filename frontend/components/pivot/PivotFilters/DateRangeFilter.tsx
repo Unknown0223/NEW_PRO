@@ -3,8 +3,9 @@
 import { useState } from "react";
 import type { PivotFilter } from "@salec/pivot-engine";
 import { getPivotStrings } from "@salec/pivot-engine";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DemoApplyButton, DemoCancelButton } from "@/components/reports/demo-dialog-actions";
+import { FILTER_PANEL as C } from "./filter-panel-chrome";
 
 type Props = {
   fieldLabel: string;
@@ -42,23 +43,43 @@ export function DateRangeFilter({ fieldLabel, fieldId, filter, onApply, onClose 
   }
 
   return (
-    <div className="w-56 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
-      <div className="text-xs font-semibold">{fieldLabel}</div>
-      <label className="block space-y-1">
-        <span className="text-[10px] text-muted-foreground">{f.from}</span>
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 text-xs" />
-      </label>
-      <label className="block space-y-1">
-        <span className="text-[10px] text-muted-foreground">{f.to}</span>
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 text-xs" />
-      </label>
-      <div className="flex justify-end gap-1 border-t border-border pt-2">
-        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onClose}>
-          {f.cancel}
-        </Button>
-        <Button type="button" size="sm" className="h-7 text-xs" onClick={handleApply}>
-          {f.apply}
-        </Button>
+    <div
+      className="w-[280px] overflow-hidden rounded-sm shadow-xl"
+      style={{ background: C.bg, color: C.text, border: `1px solid ${C.border}` }}
+    >
+      <div
+        className="flex items-center gap-2 px-3 py-2.5"
+        style={{ borderBottom: `1px solid ${C.border}`, background: C.headerBg }}
+      >
+        <div className="min-w-0 flex-1 truncate text-sm font-semibold">{fieldLabel}</div>
+        <DemoApplyButton onClick={handleApply}>{f.apply}</DemoApplyButton>
+        <DemoCancelButton onClick={onClose}>{f.cancel}</DemoCancelButton>
+      </div>
+      <div className="space-y-2.5 px-3 py-3" style={{ background: C.bg }}>
+        <label className="block space-y-1">
+          <span className="text-[11px]" style={{ color: C.muted }}>
+            {f.from}
+          </span>
+          <Input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="h-8 rounded-sm text-xs"
+            style={{ borderColor: C.border, background: C.bg, color: C.text }}
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-[11px]" style={{ color: C.muted }}>
+            {f.to}
+          </span>
+          <Input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="h-8 rounded-sm text-xs"
+            style={{ borderColor: C.border, background: C.bg, color: C.text }}
+          />
+        </label>
       </div>
     </div>
   );

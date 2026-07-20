@@ -8,7 +8,7 @@ import {
 } from "./dashboard.service";
 import { getFinanceDashboardSummary } from "./dashboard.finance.snapshot.partials";
 import { getFinanceDashboardDebts } from "./dashboard.finance.debts";
-import { applySupervisorSelfScope, dashboardFinancePreHandler } from "./dashboard.routes.shared";
+import { applyAccessAgentIdsScope, applySupervisorSelfScope, dashboardFinancePreHandler } from "./dashboard.routes.shared";
 
 export function registerDashboardFinanceRoutes(app: FastifyInstance) {
   app.get(
@@ -19,6 +19,7 @@ export function registerDashboardFinanceRoutes(app: FastifyInstance) {
       const parsed = parseFinanceDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getFinanceDashboardSummary(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -40,6 +41,7 @@ export function registerDashboardFinanceRoutes(app: FastifyInstance) {
       const parsed = parseFinanceDashboardFilters(q);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "50", 10);
       const t0 = Date.now();
@@ -62,6 +64,7 @@ export function registerDashboardFinanceRoutes(app: FastifyInstance) {
       const parsed = parseFinanceDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getFinanceDashboardSnapshot(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {

@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Calendar, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import {
+  Search,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  ChevronDown,
+  ExternalLink
+} from "lucide-react";
 import { PLANNING_MONTHS } from "./planning-utils";
 
 interface PlanningTopBarProps {
@@ -14,6 +23,7 @@ interface PlanningTopBarProps {
   onSearch: (query: string) => void;
   onRefresh: () => void;
   loading?: boolean;
+  directionId?: number | null;
 }
 
 export function PlanningTopBar({
@@ -25,10 +35,22 @@ export function PlanningTopBar({
   onTradeDirectionChange,
   onSearch,
   onRefresh,
-  loading = false
+  loading = false,
+  directionId = null
 }: PlanningTopBarProps) {
   const [search, setSearch] = useState("");
   const [tdOpen, setTdOpen] = useState(false);
+
+  const dailyHref = (() => {
+    const qs = new URLSearchParams({ month: String(month), year: String(year) });
+    if (directionId != null) qs.set("direction_id", String(directionId));
+    const today = new Date();
+    const wr = new Date(today.getTime() + 5 * 3_600_000);
+    const ymd = wr.toISOString().slice(0, 10);
+    if (ymd.startsWith(`${year}-${String(month).padStart(2, "0")}`)) qs.set("day", ymd);
+    else qs.set("day", `${year}-${String(month).padStart(2, "0")}-01`);
+    return `/plans/daily?${qs.toString()}`;
+  })();
 
   const changeMonth = (delta: number) => {
     let newMonth = month + delta;
@@ -45,7 +67,16 @@ export function PlanningTopBar({
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white px-5 py-3 shadow-sm">
-      <h1 className="text-lg font-semibold text-slate-800">Установка планов</h1>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h1 className="text-lg font-semibold text-slate-800">Установка планов</h1>
+        <Link
+          href={dailyHref}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800"
+        >
+          Дневные KPI планы
+          <ExternalLink className="h-3 w-3 opacity-60" />
+        </Link>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="relative">

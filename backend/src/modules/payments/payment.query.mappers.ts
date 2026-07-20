@@ -14,6 +14,8 @@ import {
   type AllocationMode,
   type PaymentAllocationRow
 } from "./payment-allocations.service";
+import type { ScopedReportActor } from "../access/access-agent-scope";
+import { intersectRequestedAgentIds } from "../access/access-agent-scope";
 import type { PaymentListQuery, PaymentListRow } from "./payment.query.types";
 
 export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
@@ -138,7 +140,11 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
   };
 }
 
-export function buildPaymentListWhere(tenantId: number, q: PaymentListQuery): Prisma.PaymentWhereInput {
+export function buildPaymentListWhere(
+  tenantId: number,
+  q: PaymentListQuery,
+  actorScope?: ScopedReportActor
+): Prisma.PaymentWhereInput {
   const andParts: Prisma.PaymentWhereInput[] = [{ tenant_id: tenantId }];
 
   if (q.payment_status === "deleted") {
@@ -205,10 +211,27 @@ export function buildPaymentListWhere(tenantId: number, q: PaymentListQuery): Pr
 
   const clientAnd: Prisma.ClientWhereInput[] = [];
 
-  if (q.agent_ids != null && q.agent_ids.length > 0) {
-    clientAnd.push({ agent_id: { in: q.agent_ids } });
-  } else if (q.agent_id != null && q.agent_id > 0) {
-    clientAnd.push({ agent_id: q.agent_id });
+  const requestedAgentIds = [
+    ...(q.agent_ids ?? []).filter((n) => Number.isFinite(n) && n > 0),
+    ...(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : [])
+  ];
+  let scopedAgentIds = [...new Set(requestedAgentIds)];
+  if (actorScope) {
+    const hit = intersectRequestedAgentIds(scopedAgentIds, actorScope);
+    if (hit.restricted) {
+      scopedAgentIds = hit.agentIds;
+      if (scopedAgentIds.length === 0) {
+        andParts.push({ id: { in: [] } });
+      }
+    }
+  }
+  if (scopedAgentIds.length > 0) {
+    clientAnd.push({
+      OR: [
+        { agent_id: { in: scopedAgentIds } },
+        { agent_assignments: { some: { agent_id: { in: scopedAgentIds } } } }
+      ]
+    });
   }
 
   if (q.trade_direction != null && q.trade_direction.trim() !== "" && q.trade_direction !== "__all__") {

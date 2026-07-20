@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import {
+  buildScopedAgentWhere,
+  intersectRequestedAgentIds,
+  type ScopedReportActor
+} from "../access/access-agent-scope";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.profile.read";
 import type {
   ClientRefusalFilterOptions,
@@ -33,7 +38,8 @@ function reasonLabelMap(tenantId: number): Promise<Map<string, string>> {
 
 export async function listClientRefusals(
   tenantId: number,
-  q: ListClientRefusalsQuery
+  q: ListClientRefusalsQuery,
+  actor?: ScopedReportActor
 ): Promise<{
   data: ClientRefusalListRow[];
   total: number;
@@ -55,8 +61,20 @@ export async function listClientRefusals(
     const to = parseYmdEnd(q.date_to);
     if (to) conditions.push(Prisma.sql`cr.created_at <= ${to}`);
   }
-  if (q.agent_id != null && q.agent_id > 0) {
-    conditions.push(Prisma.sql`cr.agent_id = ${q.agent_id}`);
+  const agentScope = actor
+    ? intersectRequestedAgentIds(q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : undefined, actor)
+    : {
+        agentIds: q.agent_id != null && q.agent_id > 0 ? [q.agent_id] : [],
+        restricted: false
+      };
+  if (agentScope.restricted) {
+    if (agentScope.agentIds.length === 0) {
+      conditions.push(Prisma.sql`FALSE`);
+    } else {
+      conditions.push(Prisma.sql`cr.agent_id IN (${Prisma.join(agentScope.agentIds)})`);
+    }
+  } else if (agentScope.agentIds.length > 0) {
+    conditions.push(Prisma.sql`cr.agent_id IN (${Prisma.join(agentScope.agentIds)})`);
   }
   if (q.refusal_reason_ref?.trim()) {
     conditions.push(Prisma.sql`cr.refusal_reason_ref = ${q.refusal_reason_ref.trim()}`);
@@ -179,12 +197,14 @@ export async function listClientRefusals(
 }
 
 export async function getClientRefusalFilterOptions(
-  tenantId: number
+  tenantId: number,
+  actor?: ScopedReportActor
 ): Promise<ClientRefusalFilterOptions> {
+  const whereAgent = buildScopedAgentWhere(tenantId, actor);
   const [refs, agents, catRows, zoneRows, regionRows, cityRows] = await Promise.all([
     getTenantProfile(tenantId),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: "agent", is_active: true },
+      where: whereAgent,
       select: { id: true, code: true, name: true },
       orderBy: { name: "asc" },
       take: 500

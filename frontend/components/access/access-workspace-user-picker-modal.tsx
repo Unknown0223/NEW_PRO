@@ -16,9 +16,13 @@ import { IndeterminateCheckbox } from "./access-workspace.shared-ui";
 import type { UseAccessWorkspaceReturn } from "./use-access-workspace";
 
 export function AccessWorkspaceUserPickerModal({ ws }: { ws: UseAccessWorkspaceReturn }) {
+  /** Кассы / Склады — `AccessEntityRoleLinkModal` (тот же UX, что Доступ → Сотрудники). */
+  const useAccordionPicker =
+    ws.usersModalKind !== "cash_desks" && ws.usersModalKind !== "warehouses";
+
   return (
       <Dialog
-        open={ws.opUsersModalOpen}
+        open={ws.opUsersModalOpen && useAccordionPicker}
         onOpenChange={(open) => {
           ws.setOpUsersModalOpen(open);
           if (!open) {

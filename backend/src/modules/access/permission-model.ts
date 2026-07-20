@@ -102,10 +102,11 @@ export const PERMISSION_MODULE_LABEL_RU: Record<string, string> = {
   automation: "Автоматизация",
   audit: "Аудит",
   finance: "Финансы",
-  pivot: "Pivot отчёты",
+  pivot: "Сводные отчёты",
   access: "Доступ",
   users: "Пользователи",
-  work_slots: "Рабочее место"
+  work_slots: "Рабочее место",
+  diagnostics: "Диагностика"
 };
 
 export type PermissionSectionDef = {
@@ -178,7 +179,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "warehouse", section: "ostatki", labelRu: "Остатки товаров", actions: VIEW_COPY },
   { module: "warehouse", section: "rekomendovannyy_zapas", labelRu: "Рекомендованный запас", actions: ["view", "update"] },
   { module: "warehouse", section: "ostatki_na_datu", labelRu: "Остатки на дату", actions: VIEW_COPY },
-  { module: "warehouse", section: "postuplenie", labelRu: "Поступление склада", actions: ["view", "create", "update", "delete", "void", "restore", "copy", "history"] },
+  { module: "warehouse", section: "postuplenie", labelRu: "Поступление склада", actions: ["view", "create", "update", "delete", "void", "restore", "copy", "import", "status", "history"] },
   { module: "warehouse", section: "peremeshchenie", labelRu: "Перемещение товара", actions: ["view", "create", "update", "transfer", "history"] },
   { module: "warehouse", section: "korrektirovka", labelRu: "Корректировка склада", actions: ["view", "create", "update", "history"] },
   { module: "warehouse", section: "materialnyy_otchet", labelRu: "Материальный отчёт", actions: VIEW_COPY },
@@ -193,8 +194,14 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "plans", section: "nastroyka_utverzhdayushchih", labelRu: "Настройка утверждающих", actions: ["view", "update"] },
   { module: "plans", section: "ustanovka_planov", labelRu: "Установка планов", actions: ["view", "create", "update", "status", "approve"] },
 
-  // ── Reports (Отчёт) ────────────────────────────────────────
+  // ── Reports (Отчёт) — foydalanish bo‘yicha: ro‘yxat vs konstruktor ─
   { module: "reports", section: "otchety", labelRu: "Отчеты", actions: VIEW_COPY },
+  {
+    module: "reports",
+    section: "konstruktor",
+    labelRu: "Конструктор отчётов",
+    actions: ["view", "create", "update", "copy"]
+  },
 
   // ── Staff (Пользователи) ───────────────────────────────────
   { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "copy", "assign", "activate", "deactivate", "history"] },
@@ -202,6 +209,8 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "supervayzer", labelRu: "Супервайзер", actions: ["view", "create", "update", "delete", "assign", "activate", "deactivate", "history"] },
   { module: "staff", section: "inkassator", labelRu: "Инкассатор", actions: ["view", "create", "update", "assign", "activate", "deactivate", "history"] },
   { module: "staff", section: "auditor", labelRu: "Аудитор", actions: ["view", "create", "update", "assign", "activate", "deactivate", "history"] },
+  { module: "staff", section: "skladchik", labelRu: "Складчик", actions: ["view", "create", "update", "assign", "activate", "deactivate", "history"] },
+  { module: "staff", section: "konsignatsiya", labelRu: "Консигнация", actions: ["view", "create", "update"] },
   { module: "staff", section: "nastroyki_audita", labelRu: "Настройки аудита", actions: CRUD },
   { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate"] },
   { module: "staff", section: "partnery", labelRu: "Партнёры", actions: VIEW_ONLY },
@@ -217,9 +226,9 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "routes", section: "trek", labelRu: "Трек", actions: VIEW_ONLY },
 
   // ── Settings (Настройки) ───────────────────────────────────
-  { module: "settings", section: "tovar", labelRu: "Товар", actions: ["view", "create", "update", "delete", "activate", "deactivate", "import", "history"] },
+  { module: "settings", section: "tovar", labelRu: "Товар", actions: ["view", "create", "update", "delete", "activate", "deactivate", "import", "copy", "history"] },
   { module: "settings", section: "kategoriya_tovara", labelRu: "Категория товара", actions: [...CRUD, "activate", "deactivate"] },
-  { module: "settings", section: "tsena", labelRu: "Цена", actions: ["view", "create", "update", "history"] },
+  { module: "settings", section: "tsena", labelRu: "Цена", actions: ["view", "create", "update", "import", "history"] },
   { module: "settings", section: "tip_tseny", labelRu: "Тип цены", actions: [...CRUD, "activate", "deactivate"] },
   { module: "settings", section: "territoriya", labelRu: "Территория", actions: CRUD_VOID },
   { module: "settings", section: "sposob_oplaty", labelRu: "Способ оплаты", actions: [...CRUD, "activate", "deactivate"] },
@@ -255,11 +264,14 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // ── Finance — yangi ────────────────────────────────────────
   { module: "finance", section: "obzor", labelRu: "Финансы", actions: ["view", "approve", "copy"] },
 
-  // ── Pivot — yangi ──────────────────────────────────────────
-  { module: "pivot", section: "otchety", labelRu: "Pivot отчёты", actions: VIEW_COPY },
+  // ── Pivot — konstruktor oilasi (nav: Конструктор сводной таблицы) ─
+  { module: "pivot", section: "otchety", labelRu: "Конструктор отчётов", actions: VIEW_COPY },
 
   // ── Work slots (Рабочее место) — yangi ─────────────────────
-  { module: "work_slots", section: "raboche_mesto", labelRu: "Рабочее место", actions: ["view", "create", "update", "void", "restore", "history"] },
+  { module: "work_slots", section: "raboche_mesto", labelRu: "Рабочее место", actions: ["view", "create", "update", "assign", "void", "restore", "history"] },
+
+  // ── Diagnostics (Диагностика) — yangi ──────────────────────
+  { module: "diagnostics", section: "error_logs", labelRu: "Журнал ошибок", actions: ["view", "copy"] },
 
   // ── Access (Доступ) ────────────────────────────────────────
   { module: "access", section: "upravlenie", labelRu: "Доступ", actions: ["view", "update", "void", "restore", "history"] }

@@ -29,3 +29,26 @@ export function matchesPermissionSourceFilter(row: AccessMatrixRowLike, filter: 
 export function isMatrixRowBulkSelectable(row: AccessMatrixRowLike): boolean {
   return row.effective;
 }
+
+/**
+ * Снять эффективный доступ у пользователя.
+ * Важно: личный allow поверх роли нельзя «открепить» remove — иначе роль снова даёт доступ,
+ * а UI мог скрыть строку через suppress. Для from_role всегда явный deny.
+ */
+export function buildRevokeEffectiveAccessPatch(row: AccessMatrixRowLike): Record<string, unknown> | null {
+  const key = (row.key ?? "").trim();
+  if (!key || !row.effective) return null;
+  if (row.from_role) {
+    return { merge_permissions: true, denied_permissions: [key] };
+  }
+  if (row.user_effect === "allow") {
+    return { remove_permission_keys: [key] };
+  }
+  return null;
+}
+
+/** Подпись кнопки: роль (в т.ч. allow поверх роли) → «Снять»; только личный allow → «Открепить». */
+export function revokeEffectiveAccessButtonLabel(row: AccessMatrixRowLike): "Снять" | "Открепить" {
+  if (row.from_role) return "Снять";
+  return "Открепить";
+}

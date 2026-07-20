@@ -109,6 +109,7 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["kpi-groups", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     }
   });
 
@@ -118,6 +119,7 @@ export function KpiGroupsWorkspace({ tenantSlug }: Props) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["kpi-groups", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     }
   });
 
@@ -399,14 +401,31 @@ function KpiFormDialog({
   const [prodSel, setProdSel] = useState<Set<number>>(new Set());
   const [agSel, setAgSel] = useState<Set<number>>(new Set());
   const [agSearch, setAgSearch] = useState("");
+  /** Accordion: bir vaqtda faqat bitta panel ochiq */
+  const [openPicker, setOpenPicker] = useState<"products" | "agents" | null>(null);
   const [serverFieldErrs, setServerFieldErrs] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
+
+  /** Boshqa panel ochilganda «yopish» signalini e'tiborsiz qoldirish (mousedown race) */
+  const setProductsOpen = (o: boolean) => {
+    setOpenPicker((prev) => {
+      if (o) return "products";
+      return prev === "products" ? null : prev;
+    });
+  };
+  const setAgentsOpen = (o: boolean) => {
+    setOpenPicker((prev) => {
+      if (o) return "agents";
+      return prev === "agents" ? null : prev;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
     setServerFieldErrs({});
     setMsg(null);
     setAgSearch("");
+    setOpenPicker(null);
     if (mode === "add") {
       setName("");
       setCode("");
@@ -501,6 +520,8 @@ function KpiFormDialog({
               tenantSlug={tenantSlug}
               selected={prodSel}
               onSelectedChange={setProdSel}
+              open={openPicker === "products"}
+              onOpenChange={setProductsOpen}
             />
             {pickZodLeaf(serverFieldErrs, "product_ids") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "product_ids")}</p>
@@ -513,7 +534,7 @@ function KpiFormDialog({
               items={filteredAgents.map((a) => ({
                 id: a.id,
                 subtitle: a.code != null && String(a.code).trim() !== "" ? String(a.code) : `#${a.id}`,
-                title: a.fio
+                title: formatPersonDisplayName({ fio: a.fio })
               }))}
               selected={agSel}
               onSelectedChange={setAgSel}
@@ -522,6 +543,9 @@ function KpiFormDialog({
               maxListHeightClass="max-h-52"
               selectAllLabel="Выбрать все на экране"
               clearVisibleLabel="Снять на экране"
+              inline
+              open={openPicker === "agents"}
+              onOpenChange={setAgentsOpen}
             />
             {pickZodLeaf(serverFieldErrs, "agent_user_ids") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "agent_user_ids")}</p>

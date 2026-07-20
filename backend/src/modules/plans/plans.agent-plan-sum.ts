@@ -3,7 +3,10 @@ import { userMatchesTradeDirection } from "./plans.setup.direction";
 
 import { WORKING_KPI_PLAN_STATUSES } from "./plans.monitoring-aggregates";
 
-/** Agentning joriy oy/yil/yo'nalish bo'yicha KPI reja summasi (cost). */
+/**
+ * Agentning joriy oy/yil/yo'nalish bo'yicha KPI reja summasi (cost).
+ * Yo‘nalish: user FK → legacy matn → faol work-slot `direction_id`.
+ */
 export async function getAgentMonthlyPlanCostSum(
   tenantId: number,
   agentUserId: number,
@@ -20,20 +23,34 @@ export async function getAgentMonthlyPlanCostSum(
   let directionId = agent.trade_direction_id;
   if (directionId == null) {
     const raw = (agent.trade_direction ?? "").trim();
-    if (!raw) return 0;
-    const dir = await prisma.tradeDirection.findFirst({
+    if (raw) {
+      const dir = await prisma.tradeDirection.findFirst({
+        where: {
+          tenant_id: tenantId,
+          is_active: true,
+          OR: [
+            { code: { equals: raw, mode: "insensitive" } },
+            { name: { equals: raw, mode: "insensitive" } }
+          ]
+        },
+        select: { id: true, name: true, code: true }
+      });
+      if (dir && userMatchesTradeDirection(agent, dir)) directionId = dir.id;
+    }
+  }
+
+  if (directionId == null) {
+    const link = await prisma.slotUserLink.findFirst({
       where: {
         tenant_id: tenantId,
-        is_active: true,
-        OR: [
-          { code: { equals: raw, mode: "insensitive" } },
-          { name: { equals: raw, mode: "insensitive" } }
-        ]
+        user_id: agentUserId,
+        ended_at: null,
+        slot: { tenant_id: tenantId, slot_type: "agent", deleted_at: null }
       },
-      select: { id: true, name: true, code: true }
+      select: { slot: { select: { direction_id: true } } },
+      orderBy: { started_at: "desc" }
     });
-    if (!dir || !userMatchesTradeDirection(agent, dir)) return 0;
-    directionId = dir.id;
+    directionId = link?.slot.direction_id ?? null;
   }
 
   const agg = await prisma.salesKpiPlanTarget.aggregate({
@@ -44,8 +61,9 @@ export async function getAgentMonthlyPlanCostSum(
         tenant_id: tenantId,
         month,
         year,
-        trade_direction_id: directionId,
-        status: { in: [...statuses] }
+        status: { in: [...statuses] },
+        kpi_group: { is_active: true },
+        ...(directionId != null ? { trade_direction_id: directionId } : {})
       }
     },
     _sum: { cost: true }

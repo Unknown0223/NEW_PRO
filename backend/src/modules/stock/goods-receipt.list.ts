@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { resolvePriceTypeKeyToLabel } from "../tenant-settings/finance-refs";
+import { loadPriceTypeEntriesForResolve } from "../tenant-settings/tenant-settings.service";
 import type { GoodsReceiptListRow } from "./goods-receipt.types";
 
 export async function listGoodsReceipts(
@@ -61,6 +63,9 @@ export async function listGoodsReceipts(
     })
   ]);
 
+  // «Тип цены» ustuni: kalit (kod) o‘rniga spravochnikdagi nom
+  const ptEntries = await loadPriceTypeEntriesForResolve(tenantId);
+
   const data: GoodsReceiptListRow[] = rows.map((r) => {
     const dbid = r.deleted_by_user_id ?? null;
     return {
@@ -74,7 +79,7 @@ export async function listGoodsReceipts(
       total_volume_m3: r.total_volume_m3.toString(),
       total_weight_kg: r.total_weight_kg.toString(),
       comment: r.comment,
-      price_type: r.price_type,
+      price_type: resolvePriceTypeKeyToLabel(r.price_type, ptEntries) ?? r.price_type,
       external_ref: r.external_ref,
       warehouse_id: r.warehouse_id,
       warehouse_name: r.warehouse.name,

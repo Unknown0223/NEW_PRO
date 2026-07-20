@@ -527,25 +527,29 @@ export function hasVisibleWdrPopup(host: HTMLElement): boolean {
 }
 
 export function runWdrExpandCollapseAll(wdr: WdrPivotApi, mode: "expand" | "collapse"): boolean {
-  const fnCandidates =
-    mode === "expand" ? [wdr.expandAllData, wdr.expandAll] : [wdr.collapseAllData, wdr.collapseAll];
-  const argCandidates: unknown[][] = [[], [true], [false], ["rows"], ["columns"], ["all"]];
-
-  for (let i = 0; i < fnCandidates.length; i += 1) {
-    const fn = fnCandidates[i];
-    if (typeof fn !== "function") continue;
-    for (let j = 0; j < argCandidates.length; j += 1) {
-      const args = argCandidates[j];
-      try {
-        fn(...args);
-        console.debug("[WDR][TREE] action invoked", { mode, fnIndex: i, args });
-        return true;
-      } catch {
-        // try next signature
-      }
+  // WebDataRocks documents these as table-hierarchy actions, unrelated to the
+  // browser Fullscreen API. Keep the method call attached to `wdr`: its methods
+  // use the pivot instance as `this` in some WDR builds.
+  const documentedAction = mode === "expand" ? wdr.expandAllData : wdr.collapseAllData;
+  if (typeof documentedAction === "function") {
+    try {
+      documentedAction.call(wdr);
+      console.debug("[WDR][TREE] hierarchy action invoked", { mode, api: `${mode}AllData` });
+      return true;
+    } catch {
+      // Older bundled WDR builds may expose the equivalent short method below.
     }
   }
-  return false;
+
+  const fallbackAction = mode === "expand" ? wdr.expandAll : wdr.collapseAll;
+  if (typeof fallbackAction !== "function") return false;
+  try {
+    fallbackAction.call(wdr);
+    console.debug("[WDR][TREE] hierarchy fallback invoked", { mode, api: `${mode}All` });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function parseLooseNumber(raw: string): number | null {

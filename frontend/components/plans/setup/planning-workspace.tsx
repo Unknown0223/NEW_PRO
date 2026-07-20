@@ -171,6 +171,7 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
         year={year}
         tradeDirection={selectedDirection?.name ?? "—"}
         tradeDirections={tradeDirectionNames}
+        directionId={directionId}
         onMonthChange={(m, y) => {
           setMonth(m);
           setYear(y);

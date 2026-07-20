@@ -3,6 +3,7 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import { displayAccessDescriptionShort } from "@/lib/access-display";
+import { cityStoredCodeToDisplayLabel, looksLikeTerritoryStoredCode } from "@/lib/city-territory-hint";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 
 export type MatrixRow = {
@@ -30,7 +31,14 @@ export function userMessageAfterAccessPatchFailure(err: unknown, fallback: strin
 
 export type MatrixSortKey = "description" | "parent" | "section";
 
-export type ModalPickRow = { key: string; label: string; sub: string };
+export type ModalPickRow = {
+  key: string;
+  label: string;
+  /** Ikkinchi qator: operatsiyada texnik kalit; kassa/ombor da son. */
+  sub: string;
+  /** Operatsiya modalida guruhlash (parent_path); bo‘lmasa `sub` ishlatiladi. */
+  groupKey?: string;
+};
 
 export const matrixCollator = new Intl.Collator("ru", { sensitivity: "base", numeric: true });
 
@@ -162,9 +170,19 @@ export function flattenTerritoryTreeIdStrings(nodes: AccessTerritoryTreeNode[]):
   return nodes.flatMap(collectSubtreeTerritoryIdStrings);
 }
 
+export function territoryTreeNodeDisplayName(node: AccessTerritoryTreeNode): string {
+  const name = (node.name ?? "").trim();
+  const code = (node.code ?? "").trim();
+  if (name && !looksLikeTerritoryStoredCode(name)) return name;
+  return cityStoredCodeToDisplayLabel(code || name, name || undefined);
+}
+
 export function sortedTerritoryTreeLevel(nodes: AccessTerritoryTreeNode[]): AccessTerritoryTreeNode[] {
   return [...nodes].sort((a, b) =>
-    (a.name || "").localeCompare(b.name || "", "ru", { sensitivity: "base", numeric: true })
+    territoryTreeNodeDisplayName(a).localeCompare(territoryTreeNodeDisplayName(b), "ru", {
+      sensitivity: "base",
+      numeric: true
+    })
   );
 }
 
@@ -245,7 +263,12 @@ export function buildTerritoryGroups(rows: TerritoryApiRow[]): { group: string; 
   const entries = Array.from(map.entries());
   for (let i = 0; i < entries.length; i++) {
     const pair = entries[i]!;
-    pair[1].sort((a: TerritoryApiRow, b: TerritoryApiRow) => a.name.localeCompare(b.name, "ru"));
+    pair[1].sort((a: TerritoryApiRow, b: TerritoryApiRow) =>
+      territoryLeafNameOnly(a).localeCompare(territoryLeafNameOnly(b), "ru", {
+        sensitivity: "base",
+        numeric: true
+      })
+    );
   }
   return entries
     .sort((a, b) => a[0].localeCompare(b[0], "ru"))
@@ -265,7 +288,12 @@ export function buildTerritoryHierarchy(rows: TerritoryApiRow[]): TerritoryGroup
     }
     const subgroups: TerritorySubgroupNode[] = [];
     for (const [key, its] of subMap.entries()) {
-      its.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+      its.sort((a, b) =>
+        territoryLeafNameOnly(a).localeCompare(territoryLeafNameOnly(b), "ru", {
+          sensitivity: "base",
+          numeric: true
+        })
+      );
       const label = key === "__direct__" ? "" : humanizeHierarchyLabel(key);
       subgroups.push({ key, label, items: its });
     }
@@ -278,16 +306,20 @@ export function buildTerritoryHierarchy(rows: TerritoryApiRow[]): TerritoryGroup
   });
 }
 
-/** Только название города/узла (из справочника); код не показываем — в крайнем случае смягчённый разбор поля кода. */
+/** Только название города/узла; код (`AD_ASAKA` / `AD ASAKA`) UI da ko‘rinmaydi. */
 export function territoryLeafNameOnly(r: TerritoryApiRow): string {
   const name = (r.name ?? "").trim();
-  if (name) return name;
   const lb = (r.label ?? "").trim();
-  const i = lb.lastIndexOf("(");
-  if (i > 0) return lb.slice(0, i).trim();
-  if (lb) return lb;
-  const c = (r.code ?? "").trim();
-  return c ? humanizeHierarchyLabel(c) : "—";
+  const code = (r.code ?? "").trim();
+
+  if (name && !looksLikeTerritoryStoredCode(name)) return name;
+
+  if (lb) {
+    const withoutParen = lb.lastIndexOf("(") > 0 ? lb.slice(0, lb.lastIndexOf("(")).trim() : lb;
+    if (withoutParen && !looksLikeTerritoryStoredCode(withoutParen)) return withoutParen;
+  }
+
+  return cityStoredCodeToDisplayLabel(code || name || lb, name || lb || undefined);
 }
 
 export function formatTerritoryAssigneeSubtitle(u: DetailResponse["user"]): string {
@@ -359,8 +391,10 @@ export function buildBulkEffectivePatchBody(rows: MatrixRow[], wantEffective: bo
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       if (!row.effective) continue;
-      /** Всегда явный deny у пользователя — чтобы «Открепить» оставался и снимал override (как при снятии с роли). */
-      denied_permissions.push(row.key);
+      /** Роль → deny; только личный allow → remove (иначе remove поверх роли снова откроет доступ). */
+      if (row.from_role) denied_permissions.push(row.key);
+      else if (row.user_effect === "allow") remove_permission_keys.push(row.key);
+      else denied_permissions.push(row.key);
     }
   }
   const uniq = (a: string[]) => [...new Set(a)];

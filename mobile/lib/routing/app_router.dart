@@ -19,6 +19,7 @@ import '../features/agent/misc/agent_map_page.dart';
 import '../features/agent/misc/agent_search_page.dart';
 import '../features/agent/misc/agent_settings_page.dart';
 import '../features/agent/orders/agent_orders_page.dart';
+import '../features/agent/orders/agent_order_detail_page.dart';
 import '../features/agent/orders/agent_misc_orders_page.dart';
 import '../features/agent/orders/create_order_screen.dart';
 import '../features/agent/visits/agent_visits_page.dart';
@@ -29,8 +30,14 @@ import '../features/agent/sync/manual_sync_screen.dart';
 import '../features/agent/sync/sync_success_screen.dart';
 import '../features/agent/warehouse/agent_warehouse_stock_page.dart';
 import '../features/agent/report/agent_report_page.dart';
+import '../features/agent/tabel/agent_tabel_page.dart';
+import '../features/agent/kpi/agent_kpi_page.dart';
+import '../features/agent/kpi/agent_kpi_calc_page.dart';
+import '../features/agent/kpi/agent_kpi_route_page.dart';
+import '../features/agent/kpi/agent_kpi_diagnostics_days_page.dart';
 import '../features/agent/clients/agent_debtors_page.dart';
 import '../features/agent/misc/agent_draft_page.dart';
+import '../features/agent/misc/agent_notifications_page.dart';
 import '../features/agent/route/agent_route_page.dart';
 import '../features/expeditor/home/expeditor_home_page.dart';
 import '../features/expeditor/sync/expeditor_manual_sync_screen.dart';
@@ -219,6 +226,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/orders/detail/:orderId',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['orderId'] ?? '') ?? 0;
+          return AgentOrderDetailPage(orderId: id);
+        },
+      ),
+      GoRoute(
+        path: '/kpi/route/days',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentKpiDiagnosticsDaysPage(),
+      ),
+      GoRoute(
         path: '/clients/new',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const NewClientPage(),
@@ -293,6 +313,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentSettingsPage(),
+      ),
+      GoRoute(
+        path: '/tabel',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentTabelPage(),
       ),
       GoRoute(
         path: '/deliveries/:id',
@@ -468,7 +493,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(path: '/orders', builder: (_, __) => const AgentOrdersPage()),
+          GoRoute(path: '/notifications', builder: (_, __) => const AgentNotificationsPage()),
           GoRoute(path: '/visits', builder: (_, __) => const _VisitsPage()),
+          GoRoute(
+            path: '/kpi',
+            builder: (_, __) => const AgentKpiPage(),
+            routes: [
+              GoRoute(
+                path: 'calc',
+                parentNavigatorKey: rootNavigatorKey,
+                builder: (_, __) => const AgentKpiCalcPage(),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/kpi/route',
+            builder: (_, __) => const AgentKpiRoutePage(),
+          ),
           GoRoute(path: '/report', builder: (_, __) => const AgentReportPage()),
           GoRoute(
               path: '/warehouse-stock',

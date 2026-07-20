@@ -154,6 +154,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Агент не на рабочем месте — новый заказ запрещён"
+          );
+        }
         if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
         if (msg === "BAD_QTY") return sendApiError(reply, request, 400, "BadQty");
         if (msg === "EMPTY_ITEMS") return sendApiError(reply, request, 400, "EmptyItems");

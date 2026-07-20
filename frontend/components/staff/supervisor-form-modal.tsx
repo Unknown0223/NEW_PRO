@@ -237,7 +237,7 @@ export function SupervisorFormModal({
       phone: phone.trim() || null,
       code: code.trim() || null,
       pinfl: pinfl.trim() || null,
-      branch: branch.trim() || null,
+      branch: null,
       position: position.trim() || null,
       kpi_color: kpi_color || null,
       is_active,
@@ -362,15 +362,6 @@ export function SupervisorFormModal({
               onChange={(e) => setPinfl(e.target.value)}
               className={agentModalInputClass}
               placeholder="ПИНФЛ"
-            />
-          </AgentFormField>
-
-          <AgentFormField label="Филиал">
-            <AgentFormSelect
-              value={branch}
-              onChange={setBranch}
-              emptyLabel="Филиал"
-              options={branchOptions.map((b) => ({ value: b, label: b }))}
             />
           </AgentFormField>
 

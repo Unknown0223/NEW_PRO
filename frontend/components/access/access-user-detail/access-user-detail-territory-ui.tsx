@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import {
   type AccessTerritoryTreeNode,
   collectSubtreeTerritoryIdStrings,
-  sortedTerritoryTreeLevel
+  sortedTerritoryTreeLevel,
+  territoryTreeNodeDisplayName
 } from "./access-user-detail.types";
 
 export function IndeterminateCheckbox({
@@ -117,10 +118,10 @@ export function TerritoryReferenceTreeRows({
                   }}
                 />
                 <span
-                  className="min-w-0 text-sm font-semibold uppercase tracking-wide text-foreground [overflow-wrap:anywhere] sm:truncate"
-                  title={node.code ? `${node.name} · ${node.code}` : node.name}
+                  className="min-w-0 text-sm font-medium tracking-tight text-foreground [overflow-wrap:anywhere] sm:truncate"
+                  title={territoryTreeNodeDisplayName(node)}
                 >
-                  {(node.name || "—").trim()}
+                  {territoryTreeNodeDisplayName(node)}
                 </span>
               </label>
             </div>

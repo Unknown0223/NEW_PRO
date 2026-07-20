@@ -254,6 +254,9 @@ export async function patchCollector(
       data.name = [last, first, mid].filter((x) => x && String(x).trim().length > 0).join(" ").trim() || existing.name;
     }
     await prisma.user.update({ where: { id: collectorId }, data });
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, collectorId, input.app_access);
+    }
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };
     await appendTenantAuditEvent({
@@ -331,6 +334,9 @@ export async function patchAuditor(
       data.name = [last, first, mid].filter((x) => x && String(x).trim().length > 0).join(" ").trim() || existing.name;
     }
     await prisma.user.update({ where: { id: auditorId }, data });
+    if (input.app_access !== undefined) {
+      await onAppAccessChanged(tenantId, auditorId, input.app_access);
+    }
     await appendTenantAuditEvent({
       tenantId,
       actorUserId,

@@ -1089,6 +1089,9 @@ class AgentDebtorCard extends StatelessWidget {
   final String balance;
   final double? balanceAmount;
   final String? overdue;
+  final String? legacyDebt;
+  final String? currentDebt;
+  final bool debtCollectionOnly;
   final VoidCallback? onTap;
 
   const AgentDebtorCard({
@@ -1097,11 +1100,16 @@ class AgentDebtorCard extends StatelessWidget {
     required this.balance,
     this.balanceAmount,
     this.overdue,
+    this.legacyDebt,
+    this.currentDebt,
+    this.debtCollectionOnly = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final showSplit = (legacyDebt != null && legacyDebt!.isNotEmpty) ||
+        (currentDebt != null && currentDebt!.isNotEmpty);
     return AgentSurfaceCard(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1139,6 +1147,34 @@ class AgentDebtorCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (debtCollectionOnly) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Только сбор долга',
+                      style: AppTypography.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                  if (showSplit) ...[
+                    const SizedBox(height: 6),
+                    if (legacyDebt != null && legacyDebt!.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Долг старого агента:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(legacyDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    if (currentDebt != null && currentDebt!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Долг текущего агента:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(currentDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ],
+                  ],
                   if (overdue != null && overdue!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -2262,6 +2298,7 @@ class AgentHeldOrderCard extends StatelessWidget {
   final String sumLabel;
   final int itemCount;
   final VoidCallback? onTap;
+  final VoidCallback? onCancel;
 
   const AgentHeldOrderCard({
     super.key,
@@ -2270,6 +2307,7 @@ class AgentHeldOrderCard extends StatelessWidget {
     required this.sumLabel,
     required this.itemCount,
     this.onTap,
+    this.onCancel,
   });
 
   @override
@@ -2277,53 +2315,70 @@ class AgentHeldOrderCard extends StatelessWidget {
     return AgentSurfaceCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.warningSoft,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(Icons.timer_outlined, color: AppColors.warning, size: 22),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const Text('Ожидание', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          countdown,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.warning),
-                        ),
-                      ),
-                    ],
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.warningSoft,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.timer_outlined, color: AppColors.warning, size: 22),
                   ),
-                  const SizedBox(height: 4),
-                  Text(clientName, style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700)),
-                  Text('$itemCount поз. · $sumLabel', style: AppTypography.caption.copyWith(color: AppColors.textMuted)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Ожидает синхр.', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                countdown,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.warning),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(clientName, style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700)),
+                        Text(
+                          '$itemCount поз. · $sumLabel · нажмите, чтобы изменить',
+                          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.edit_outlined, color: AppColors.textMuted, size: 20),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ),
+          if (onCancel != null) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Отменить заказ',
+              onPressed: onCancel,
+              icon: const Icon(Icons.close, color: AppColors.error, size: 22),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

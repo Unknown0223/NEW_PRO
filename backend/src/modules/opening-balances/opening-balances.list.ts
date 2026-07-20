@@ -1,13 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { OpeningBalanceListQuery, OpeningBalanceListRow } from "./opening-balances.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { buildWhere, listInclude, mapRow } from "./opening-balances.shared";
 
 export async function listOpeningBalances(
   tenantId: number,
-  q: OpeningBalanceListQuery
+  q: OpeningBalanceListQuery,
+  actor?: ScopedReportActor
 ): Promise<{ data: OpeningBalanceListRow[]; total: number; page: number; limit: number }> {
-  const where = buildWhere(tenantId, q);
+  const where = buildWhere(tenantId, q, actor);
   const [total, rows] = await prisma.$transaction([
     prisma.clientOpeningBalanceEntry.count({ where }),
     prisma.clientOpeningBalanceEntry.findMany({

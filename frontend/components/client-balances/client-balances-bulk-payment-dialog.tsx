@@ -451,7 +451,7 @@ export function ClientBalancesBulkPaymentDialog({
                   {paymentColumnLabels.map((lab) => (
                     <th
                       key={lab}
-                      className="min-w-[6.5rem] whitespace-normal px-2 py-2 text-right text-xs leading-tight"
+                      className="min-w-[6.5rem] truncate whitespace-nowrap px-2 py-2 text-right text-xs"
                       title={lab}
                     >
                       <div className="flex flex-col gap-1">
@@ -503,10 +503,10 @@ export function ClientBalancesBulkPaymentDialog({
                     (row?.agent_tags?.length ? row.agent_tags.join(", ") : "—");
                   return (
                     <tr key={d.client_id} className="border-b border-border/80">
-                      <td className="sticky left-0 z-10 max-w-[12rem] border-r border-border bg-card px-2 py-2 align-top">
+                      <td className="sticky left-0 z-10 max-w-[12rem] truncate whitespace-nowrap border-r border-border bg-card px-2 py-2 align-middle" title={row?.name ?? undefined}>
                         <span className="font-medium">{row?.name ?? `#${d.client_id}`}</span>
                       </td>
-                      <td className="max-w-[9rem] px-2 py-2 align-top text-xs text-muted-foreground">
+                      <td className="max-w-[9rem] truncate whitespace-nowrap px-2 py-2 align-middle text-xs text-muted-foreground" title={agentLabel}>
                         {agentLabel}
                       </td>
                       <td className="px-2 py-2 align-top">

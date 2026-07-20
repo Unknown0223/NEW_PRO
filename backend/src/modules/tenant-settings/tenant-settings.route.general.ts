@@ -11,7 +11,7 @@ import {
   MOBILE_APK_MAX_BYTES,
   saveMobileApkStream
 } from "../mobile/mobile-apk.service";
-import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { sendApiError, zodValidationExtras, zodValidationSummary } from "../../lib/api-error";
 import { env } from "../../config/env";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
@@ -84,7 +84,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
           request,
           400,
           "ValidationError",
-          "Request validation failed",
+          zodValidationSummary(parsed.error),
           zodValidationExtras(parsed.error)
         );
       }
@@ -98,6 +98,25 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "TERRITORY_NODES_EMPTY_REJECTED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "TerritoryNodesEmptyRejected",
+            "Bo‘sh territoriya daraxti saqlanmaydi — mavjud ma’lumot o‘chib ketmasin."
+          );
+        }
+        if (e instanceof Error && e.message.startsWith("REF_EMPTY_WIPE_REJECTED:")) {
+          const field = e.message.split(":")[1] ?? "references";
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "RefEmptyWipeRejected",
+            `Bo‘sh «${field}» saqlanmaydi — mavjud spravochnik o‘chib ketmasin.`
+          );
         }
         if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
           return sendApiError(reply, request, 400, "InvalidBranchCashDesk");

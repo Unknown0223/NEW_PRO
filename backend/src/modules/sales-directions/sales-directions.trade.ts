@@ -16,9 +16,17 @@ export type TradeDirectionRow = {
 
 export async function listTradeDirections(
   tenantId: number,
-  q: { is_active?: boolean; search?: string; use_in_order_proposal?: boolean }
+  q: {
+    is_active?: boolean;
+    search?: string;
+    use_in_order_proposal?: boolean;
+    allowed_ids?: number[];
+  }
 ): Promise<TradeDirectionRow[]> {
   const where: Prisma.TradeDirectionWhereInput = { tenant_id: tenantId };
+  if (q.allowed_ids !== undefined) {
+    where.id = { in: q.allowed_ids };
+  }
   if (q.is_active !== undefined) where.is_active = q.is_active;
   if (q.use_in_order_proposal === true) where.use_in_order_proposal = true;
   const s = q.search?.trim();

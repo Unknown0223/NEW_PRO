@@ -12,6 +12,7 @@ import {
 import type { ReportActor } from "./client-sales-4-report.service";
 import type { ProductSalesReportFilters } from "./product-sales.types";
 import { parseDate, parseDateEnd, sqlInStrings, strList } from "./product-sales.helpers";
+import { buildScopedAgentExistsSql, type ScopedReportActor } from "../access/access-agent-scope";
 
 export function productFilterSql(f: ProductSalesReportFilters): Prisma.Sql {
   const parts: Prisma.Sql[] = [];
@@ -40,7 +41,7 @@ export function productFilterSql(f: ProductSalesReportFilters): Prisma.Sql {
 export function buildOrderWhereSql(
   tenantId: number,
   f: ProductSalesReportFilters,
-  actor?: ReportActor
+  actor?: ReportActor | ScopedReportActor
 ): Prisma.Sql {
   const parts: Prisma.Sql[] = [Prisma.sql`o.tenant_id = ${tenantId}`];
 
@@ -196,17 +197,8 @@ export function buildOrderWhereSql(
     }
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
-    parts.push(
-      Prisma.sql`EXISTS (
-        SELECT 1 FROM users su
-        WHERE su.id = COALESCE(o.agent_id, c.agent_id)
-          AND su.tenant_id = ${tenantId}
-          AND su.supervisor_user_id = ${actor.userId}
-      )`
-    );
+  if (actor) {
+    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`COALESCE(o.agent_id, c.agent_id)`, actor));
   }
 
   return Prisma.join(parts, " AND ");

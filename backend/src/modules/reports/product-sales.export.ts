@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { rowToDto, runProductAggCore } from "./product-sales.agg";
 import { parseProductSalesReportQuery } from "./product-sales.parse";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 export const EXPORT_MAX = 10_000;
 
@@ -11,7 +12,8 @@ export async function exportProductSalesReportXlsx(
   actor?: ReportActor
 ) {
   const f = parseProductSalesReportQuery(q);
-  const { rows, total } = await runProductAggCore(tenantId, f, actor, { offset: 0, limit: EXPORT_MAX });
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const { rows, total } = await runProductAggCore(tenantId, f, scopedActor, { offset: 0, limit: EXPORT_MAX });
   const truncated = Number(total) > EXPORT_MAX;
 
   const paymentKeys = new Set<string>();

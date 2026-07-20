@@ -22,6 +22,10 @@ import { formatNumberGrouped, normalizeNumericInput } from "@/lib/format-numbers
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { pickFirstExcelFile } from "@/lib/excel-file-pick";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+
+/** Лимиты и расписание консигнации редактируются только на рабочем месте. */
+const CONSIGNMENT_CONFIG_READONLY = true;
 
 type ConsignmentAgentApi = {
   id: number;
@@ -599,17 +603,16 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Консигнация</h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            Расписание закрытия (день/час) задаётся в{" "}
-            <Link
-              href="/settings/spravochnik/agents"
-              className="text-primary underline-offset-2 hover:underline"
-            >
-              Агент
+            Лимиты, расписание закрытия и включение консигнации настраиваются в{" "}
+            <Link href="/work-slots" className="text-primary underline-offset-2 hover:underline">
+              Рабочее место
             </Link>
-            : карточка или групповое редактирование выбранных.
+            . На этой странице — просмотр долгов и лимитов (зеркало с места).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!CONSIGNMENT_CONFIG_READONLY ? (
+            <>
           <Button
             type="button"
             variant="outline"
@@ -659,8 +662,28 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
             <FileSpreadsheet className="size-4" />
             Excel
           </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => void exportExcel()}
+              disabled={!directionSelected || rows.length === 0}
+            >
+              <FileSpreadsheet className="size-4" />
+              Excel
+            </Button>
+          )}
         </div>
       </div>
+
+      {CONSIGNMENT_CONFIG_READONLY ? (
+        <div className="mb-4">
+          <WorkplaceMovedNotice />
+        </div>
+      ) : null}
 
       {toast ? (
         <p
@@ -767,6 +790,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-end gap-3 border-border/50 pt-1 md:border-l md:pl-6 md:pt-0">
+                {!CONSIGNMENT_CONFIG_READONLY ? (
                 <Button
                   type="button"
                   variant="default"
@@ -777,6 +801,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 >
                   Сохранить всё
                 </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
@@ -836,7 +861,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           const ignSome = ignEligible.some((r) => rowIgnoreDebt(r));
           const ignMixed = ignSome && !ignAllOn;
           const dirty = groupHasDirty(visible);
-          const groupEditing = editingGroups.has(groupTitle);
+          const groupEditing = !CONSIGNMENT_CONFIG_READONLY && editingGroups.has(groupTitle);
           const sumEstablished = parseSum(visible.map((r) => r.consignment_limit_amount));
           const sumCurrent = parseSum(visible.map((r) => r.remaining_limit));
           const groupClearedAt = groupDebtClearedAt(visible);
@@ -875,42 +900,44 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     />
                   </div>
                   <div className="flex shrink-0 flex-row flex-nowrap items-center gap-2">
-                    {!groupEditing ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 gap-1.5"
-                        disabled={visible.length === 0 || savingGroupKey != null || savingAll}
-                        onClick={() => enterGroupEdit(groupTitle)}
-                      >
-                        <Pencil className="size-3.5" />
-                        Изменить
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
-                          disabled={!dirty || savingGroupKey === groupTitle || savingAll}
-                          onClick={() => void saveGroupDrafts(groupTitle, visible)}
-                        >
-                          Сохранить
-                        </Button>
+                    {!CONSIGNMENT_CONFIG_READONLY ? (
+                      !groupEditing ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-8"
-                          disabled={savingGroupKey === groupTitle || savingAll}
-                          onClick={() => exitGroupEdit(groupTitle, visible)}
+                          className="h-8 gap-1.5"
+                          disabled={visible.length === 0 || savingGroupKey != null || savingAll}
+                          onClick={() => enterGroupEdit(groupTitle)}
                         >
-                          Отменить
+                          <Pencil className="size-3.5" />
+                          Изменить
                         </Button>
-                      </>
-                    )}
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="default"
+                            className="h-8 bg-emerald-600 text-white hover:bg-emerald-700"
+                            disabled={!dirty || savingGroupKey === groupTitle || savingAll}
+                            onClick={() => void saveGroupDrafts(groupTitle, visible)}
+                          >
+                            Сохранить
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            disabled={savingGroupKey === groupTitle || savingAll}
+                            onClick={() => exitGroupEdit(groupTitle, visible)}
+                          >
+                            Отменить
+                          </Button>
+                        </>
+                      )
+                    ) : null}
                   </div>
                 </div>
               </div>

@@ -37,7 +37,12 @@ export function buildApp() {
   app.register(helmet, helmetOptions);
   app.register(multipart, {
     limits: {
-      fileSize: Math.max(env.MULTIPART_MAX_FILE_BYTES, env.MULTIPART_APK_MAX_BYTES)
+      // Zaxira ZIP (foto URI) APK dan ham katta bo‘lishi mumkin — 256 MB.
+      fileSize: Math.max(
+        env.MULTIPART_MAX_FILE_BYTES,
+        env.MULTIPART_APK_MAX_BYTES,
+        256 * 1024 * 1024
+      )
     }
   });
   app.register(sentryPlugin);

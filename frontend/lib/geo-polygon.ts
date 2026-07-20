@@ -4,10 +4,8 @@ import type {
   GeoBoundaryOverlapConflict,
   GeoBoundaryPoint
 } from "./geo-boundaries-types";
-import * as polygonClipping from "polygon-clipping";
-
-type Ring = polygonClipping.Ring;
-type MultiPolygon = polygonClipping.MultiPolygon;
+import polygonClipping from "polygon-clipping";
+import type { MultiPolygon, Ring } from "polygon-clipping";
 
 export function pointInPolygon(lat: number, lng: number, vertices: GeoBoundaryPoint[]): boolean {
   let inside = false;

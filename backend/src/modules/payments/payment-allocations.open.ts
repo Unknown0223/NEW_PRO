@@ -24,6 +24,7 @@ export type AllocationCandidateOrder = {
   created_at: Date;
   consignment_due_date: Date | null;
   is_consignment: boolean;
+  agent_id: number | null;
 };
 
 
@@ -139,7 +140,8 @@ export async function getCandidateOrdersForAllocation(
       applied_auto_bonus_rule_ids: true,
       created_at: true,
       consignment_due_date: true,
-      is_consignment: true
+      is_consignment: true,
+      agent_id: true
     }
   });
 
@@ -197,4 +199,30 @@ export async function getCandidateOrdersForAllocation(
   }
 
   return out;
+}
+
+/** Legacy (boshqa agent) buyurtmalar birinchi, keyin joriy agent — har guruh ichida FIFO. */
+export function sortCandidatesLegacyFirst(
+  orders: AllocationCandidateOrder[],
+  currentAgentId: number | null | undefined
+): AllocationCandidateOrder[] {
+  const cur =
+    currentAgentId != null && Number.isFinite(currentAgentId) && currentAgentId > 0
+      ? Number(currentAgentId)
+      : null;
+  if (cur == null) return orders;
+
+  const isCurrent = (o: AllocationCandidateOrder) => o.agent_id === cur;
+  const fifoCmp = (a: AllocationCandidateOrder, b: AllocationCandidateOrder) => {
+    const d = dueSortTime(a) - dueSortTime(b);
+    if (d !== 0) return d;
+    if (a.created_at.getTime() !== b.created_at.getTime()) {
+      return a.created_at.getTime() - b.created_at.getTime();
+    }
+    return a.id - b.id;
+  };
+
+  const legacy = orders.filter((o) => !isCurrent(o)).sort(fifoCmp);
+  const current = orders.filter((o) => isCurrent(o)).sort(fifoCmp);
+  return [...legacy, ...current];
 }

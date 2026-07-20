@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -12,8 +12,9 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 
-type Kind = "agent" | "expeditor" | "supervisor" | "collector" | "auditor";
+type Kind = "agent" | "expeditor" | "supervisor" | "collector" | "auditor" | "skladchik";
 
 type Props = {
   kind: Kind;
@@ -54,8 +55,18 @@ const emptyForm = {
   return_warehouse_id: "",
   can_authorize: true,
   app_access: true,
-  consignment: false
+  consignment: false,
+  work_slot_id: ""
 };
+
+const KINDS_WITH_WORK_SLOT = new Set<Kind>(["agent", "expeditor", "collector", "skladchik"]);
+
+function slotTypeForKind(kind: Kind): string {
+  if (kind === "skladchik") return "skladchik";
+  if (kind === "collector") return "collector";
+  if (kind === "expeditor") return "expeditor";
+  return "agent";
+}
 
 type StaffCreateFormState = typeof emptyForm;
 
@@ -97,9 +108,18 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  /** Склад, филиал, направление — только в Рабочее место */
+  const workplaceOnWorkSlots =
+    kind === "agent" ||
+    kind === "expeditor" ||
+    kind === "collector" ||
+    kind === "skladchik" ||
+    kind === "auditor";
+  const showWorkSlotPicker = KINDS_WITH_WORK_SLOT.has(kind);
+
   const warehousesQ = useQuery({
     queryKey: ["warehouses", tenantSlug, "staff-create"],
-    enabled: kind !== "supervisor",
+    enabled: kind !== "supervisor" && !workplaceOnWorkSlots,
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: { id: number; name: string }[] }>(`/api/${tenantSlug}/warehouses`);
@@ -109,7 +129,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
 
   const branchesQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "staff-create-branches"],
-    enabled: Boolean(tenantSlug) && kind !== "supervisor",
+    enabled: Boolean(tenantSlug) && kind !== "supervisor" && !workplaceOnWorkSlots,
     staleTime: STALE.profile,
     queryFn: async () => {
       const { data } = await api.get<TenantProfile>(`/api/${tenantSlug}/settings/profile`);
@@ -117,25 +137,22 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
     }
   });
 
-  const priceTypesQ = useQuery({
-    queryKey: ["price-types", tenantSlug, "staff-create"],
-    enabled: Boolean(tenantSlug) && kind === "agent",
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types?kind=sale`);
-      return data.data;
-    }
-  });
-
-  const tradeDirectionsQ = useQuery({
-    queryKey: ["trade-directions", tenantSlug, "staff-create"],
-    enabled: Boolean(tenantSlug) && (kind === "agent" || kind === "expeditor"),
+  const workSlotsQ = useQuery({
+    queryKey: ["work-slots", tenantSlug, kind, "staff-create"],
+    enabled: Boolean(tenantSlug) && showWorkSlotPicker,
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{
-        data: Array<{ id: number; name: string; code: string | null }>;
-      }>(`/api/${tenantSlug}/trade-directions?is_active=true`);
-      return data.data;
+        data: Array<{
+          id: number;
+          slot_code: string;
+          label: string | null;
+          active_user_name: string | null;
+        }>;
+      }>(
+        `/api/${tenantSlug}/work-slots?slot_type=${slotTypeForKind(kind)}&limit=300&is_active=true`
+      );
+      return data.data ?? [];
     }
   });
 
@@ -156,33 +173,43 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
         last_name: form.last_name.trim() || null,
         middle_name: form.middle_name.trim() || null,
         phone: form.phone.trim() || null,
-        territory: kind === "supervisor" ? null : form.territory.trim() || null,
+        territory:
+          kind === "supervisor" || workplaceOnWorkSlots ? null : form.territory.trim() || null,
         code: kind === "supervisor" ? null : form.code.trim() || null,
         pinfl: kind === "supervisor" ? null : form.pinfl.trim() || null,
-        branch: kind === "supervisor" ? null : form.branch.trim() || null,
+        branch:
+          kind === "supervisor" || workplaceOnWorkSlots ? null : form.branch.trim() || null,
         position: kind === "supervisor" ? null : form.position.trim() || null,
         login: form.login.trim(),
         password: form.password,
         product: kind === "supervisor" ? null : form.product || null,
         agent_type: kind === "supervisor" ? null : form.agent_type || null,
-        price_type: kind === "supervisor" ? null : form.price_type || null,
+        price_type: kind === "supervisor" || kind === "agent" ? null : form.price_type || null,
         trade_direction_id:
-          kind === "supervisor"
+          kind === "supervisor" || workplaceOnWorkSlots
             ? null
             : form.trade_direction_id.trim()
               ? Number.parseInt(form.trade_direction_id.trim(), 10)
               : null,
         warehouse_id:
-          kind === "supervisor" ? null : form.warehouse_id ? Number.parseInt(form.warehouse_id, 10) : null,
+          kind === "supervisor" || workplaceOnWorkSlots
+            ? null
+            : form.warehouse_id
+              ? Number.parseInt(form.warehouse_id, 10)
+              : null,
         return_warehouse_id:
-          kind === "supervisor"
+          kind === "supervisor" || workplaceOnWorkSlots
             ? null
             : form.return_warehouse_id
               ? Number.parseInt(form.return_warehouse_id, 10)
               : null,
         can_authorize: form.can_authorize,
         app_access: kind === "supervisor" ? true : form.app_access,
-        consignment: kind === "supervisor" ? false : form.consignment
+        consignment: kind === "supervisor" || workplaceOnWorkSlots ? false : form.consignment,
+        work_slot_id:
+          showWorkSlotPicker && form.work_slot_id.trim()
+            ? Number.parseInt(form.work_slot_id.trim(), 10)
+            : null
       });
     },
     onSuccess: async () => {
@@ -360,6 +387,30 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
         </p>
       ) : null}
 
+      {workplaceOnWorkSlots ? <WorkplaceMovedNotice /> : null}
+
+      {showWorkSlotPicker ? (
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <FilterSelect
+            className="h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-2 text-sm"
+            emptyLabel="Рабочее место *"
+            aria-label="Рабочее место"
+            value={form.work_slot_id}
+            onChange={(e) => setForm((p) => ({ ...p, work_slot_id: e.target.value }))}
+          >
+            {(workSlotsQ.data ?? [])
+              .filter((s) => !s.active_user_name)
+              .map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.slot_code}
+                  {s.label ? ` — ${s.label}` : ""}
+                </option>
+              ))}
+          </FilterSelect>
+          <FieldHint name="work_slot_id" errors={fieldErrors} />
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
           <Input
@@ -385,29 +436,33 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           <Input placeholder="Телефон" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
           <FieldHint name="phone" errors={fieldErrors} />
         </div>
-        <div className="flex flex-col gap-1">
-          <Input
-            placeholder="Территория"
-            value={form.territory}
-            onChange={(e) => setForm((p) => ({ ...p, territory: e.target.value }))}
-          />
-          <FieldHint name="territory" errors={fieldErrors} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <select
-            className="h-9 rounded-md border px-2 text-sm"
-            value={form.warehouse_id}
-            onChange={(e) => setForm((p) => ({ ...p, warehouse_id: e.target.value }))}
-          >
-            <option value="">Склад</option>
-            {(warehousesQ.data ?? []).map((w) => (
-              <option key={w.id} value={String(w.id)}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-          <FieldHint name="warehouse_id" errors={fieldErrors} />
-        </div>
+        {!workplaceOnWorkSlots ? (
+          <div className="flex flex-col gap-1">
+            <Input
+              placeholder="Территория"
+              value={form.territory}
+              onChange={(e) => setForm((p) => ({ ...p, territory: e.target.value }))}
+            />
+            <FieldHint name="territory" errors={fieldErrors} />
+          </div>
+        ) : null}
+        {!workplaceOnWorkSlots ? (
+          <div className="flex flex-col gap-1">
+            <select
+              className="h-9 rounded-md border px-2 text-sm"
+              value={form.warehouse_id}
+              onChange={(e) => setForm((p) => ({ ...p, warehouse_id: e.target.value }))}
+            >
+              <option value="">Склад</option>
+              {(warehousesQ.data ?? []).map((w) => (
+                <option key={w.id} value={String(w.id)}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+            <FieldHint name="warehouse_id" errors={fieldErrors} />
+          </div>
+        ) : null}
         <div className="flex flex-col gap-1">
           <Input placeholder="Код" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} />
           <FieldHint name="code" errors={fieldErrors} />
@@ -416,21 +471,23 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           <Input placeholder="ПИНФЛ" value={form.pinfl} onChange={(e) => setForm((p) => ({ ...p, pinfl: e.target.value }))} />
           <FieldHint name="pinfl" errors={fieldErrors} />
         </div>
-        <div className="flex flex-col gap-1">
-          <select
-            className="h-9 rounded-md border px-2 text-sm"
-            value={form.branch}
-            onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value }))}
-          >
-            <option value="">Филиал</option>
-            {(branchesQ.data ?? []).map((b) => (
-              <option key={b.id} value={b.name}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <FieldHint name="branch" errors={fieldErrors} />
-        </div>
+        {!workplaceOnWorkSlots ? (
+          <div className="flex flex-col gap-1">
+            <select
+              className="h-9 rounded-md border px-2 text-sm"
+              value={form.branch}
+              onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value }))}
+            >
+              <option value="">Филиал</option>
+              {(branchesQ.data ?? []).map((b) => (
+                <option key={b.id} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            <FieldHint name="branch" errors={fieldErrors} />
+          </div>
+        ) : null}
         <div className="flex flex-col gap-1">
           <Input
             placeholder="Должность"
@@ -439,25 +496,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           />
           <FieldHint name="position" errors={fieldErrors} />
         </div>
-        {kind === "agent" || kind === "expeditor" ? (
-          <div className="flex flex-col gap-1 sm:col-span-2">
-            <FilterSelect
-              className="h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-2 text-sm"
-              emptyLabel="Savdo yo‘nalishi (spravochnik)"
-              aria-label="Savdo yo‘nalishi"
-              value={form.trade_direction_id}
-              onChange={(e) => setForm((p) => ({ ...p, trade_direction_id: e.target.value }))}
-            >
-              {(tradeDirectionsQ.data ?? []).map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.name}
-                  {t.code ? ` (${t.code})` : ""}
-                </option>
-              ))}
-            </FilterSelect>
-            <FieldHint name="trade_direction_id" errors={fieldErrors} />
-          </div>
-        ) : null}
         <div className="flex flex-col gap-1">
           <Input placeholder="Логин" value={form.login} onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))} />
           <FieldHint name="login" errors={fieldErrors} />
@@ -489,22 +527,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               />
               <FieldHint name="agent_type" errors={fieldErrors} />
             </div>
-            <div className="flex flex-col gap-1">
-              <FilterSelect
-                className="h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-2 text-sm"
-                emptyLabel="Тип цены"
-                aria-label="Тип цены"
-                value={form.price_type}
-                onChange={(e) => setForm((p) => ({ ...p, price_type: e.target.value }))}
-              >
-                {(priceTypesQ.data ?? []).map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </FilterSelect>
-              <FieldHint name="price_type" errors={fieldErrors} />
-            </div>
           </>
         ) : null}
         <div className="flex items-center justify-between text-xs sm:col-span-2">
@@ -525,16 +547,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             Доступ к приложение
           </label>
         </div>
-        {kind === "agent" ? (
-          <label className="inline-flex items-center gap-2 text-xs sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={form.consignment}
-              onChange={(e) => setForm((p) => ({ ...p, consignment: e.target.checked }))}
-            />
-            Консигнация
-          </label>
-        ) : null}
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4 sm:col-span-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Bekor

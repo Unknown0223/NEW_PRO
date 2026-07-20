@@ -11,12 +11,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
 import {
   buildXlsxBlobFromPreview,
   previewHasBlockingErrors,
   updatePreviewCell
 } from "@/lib/initial-setup/preview-xlsx";
+import { runImportStep } from "@/lib/initial-setup/import-async";
 import type { InitialSetupPreviewState, InitialSetupStep } from "@/lib/initial-setup/types";
 import { getStepTableConfig } from "@/lib/initial-setup/ref-table-config";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -60,21 +60,14 @@ export function InitialSetupPreviewDialog({
     setMsg(null);
     try {
       const blob = buildXlsxBlobFromPreview(preview, tableConfig);
-      const fd = new FormData();
-      fd.append("file", blob, preview.fileName.endsWith(".xlsx") ? preview.fileName : "import.xlsx");
-      const { data } = await api.post<Record<string, unknown>>(
-        `/api/${tenantSlug}${step.importApi.importPath}`,
-        fd
+      const message = await runImportStep(
+        tenantSlug,
+        step.importApi.importPath,
+        step.importApi.importAsyncPath,
+        blob,
+        preview.fileName
       );
-      const parts: string[] = [];
-      for (const [k, v] of Object.entries(data)) {
-        if (k === "errors" && Array.isArray(v) && v.length) {
-          parts.push(`Xatolar: ${v.slice(0, 3).join("; ")}`);
-        } else if (typeof v === "number") {
-          parts.push(`${k}: ${v}`);
-        }
-      }
-      onApplied(parts.length ? parts.join(" · ") : "Import muvaffaqiyatli");
+      onApplied(message);
       onOpenChange(false);
     } catch (e) {
       setMsg(getUserFacingError(e, "Import xatosi"));

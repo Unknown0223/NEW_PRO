@@ -10,6 +10,7 @@ function toNumber(v: unknown): number {
 }
 import { prisma } from "../../config/database";
 import type { ReportActor } from "../reports/client-sales-4-report.service";
+import { buildScopedAgentExistsSql, type ScopedReportActor } from "../access/access-agent-scope";
 import {
   REPORT_BUILDER_EXPORT_ROW_CAP,
   REPORT_BUILDER_PREVIEW_ROW_CAP
@@ -46,7 +47,7 @@ function sqlInStrings(values: string[]): Prisma.Sql {
 export function buildReportBuilderWhereSql(
   tenantId: number,
   c: ReportBuilderConfigPayload,
-  actor?: ReportActor
+  actor?: ReportActor | ScopedReportActor
 ): Prisma.Sql {
   const parts: Prisma.Sql[] = [Prisma.sql`o.tenant_id = ${tenantId}`];
 
@@ -72,16 +73,9 @@ export function buildReportBuilderWhereSql(
     parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) IN (${Prisma.join(c.agentIds)})`);
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
+  if (actor) {
     parts.push(
-      Prisma.sql`EXISTS (
-        SELECT 1 FROM users su
-        WHERE su.id = COALESCE(o.agent_id, c.agent_id)
-          AND su.tenant_id = ${tenantId}
-          AND su.supervisor_user_id = ${actor.userId}
-      )`
+      buildScopedAgentExistsSql(tenantId, Prisma.sql`COALESCE(o.agent_id, c.agent_id)`, actor)
     );
   }
 

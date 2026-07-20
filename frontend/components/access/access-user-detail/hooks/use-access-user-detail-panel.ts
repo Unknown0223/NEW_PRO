@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import { api } from "@/lib/api";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import {
   normalizeAccessGrantPermissions,
   buildGrantDelegationPatchBody,
@@ -19,8 +20,15 @@ import {
   grantDelegationKeysNeedingChange,
   applyGrantDelegationDetailCache
 } from "@/components/access/access-workspace.shared";
-import { displayAccessDescriptionShort } from "@/lib/access-display";
+import { displayAccessDescriptionShort, splitPermissionPath } from "@/lib/access-display";
 import {
+  buildOpAttachTree,
+  collectOpAttachExpandableIds,
+  collectOpAttachLeafKeys,
+  type OpAttachTreeNode
+} from "@/lib/access-op-attach-tree";
+import {
+  buildRevokeEffectiveAccessPatch,
   isGrantedMatrixRow,
   isMatrixRowBulkSelectable,
   matchesPermissionSourceFilter,
@@ -143,6 +151,10 @@ export function useAccessUserDetailPanel({
     }
   });
 
+  /** После refetch серверные effective/role строки не должны оставаться скрытыми optimistic suppress. */
+  useEffect(() => {
+    setSuppressedMatrixKeys(new Set());
+  }, [detailQ.dataUpdatedAt]);
   const catalogQ = useQuery({
     queryKey: ["access-permission-catalog", tenantSlug],
     queryFn: async () => {
@@ -160,20 +172,22 @@ export function useAccessUserDetailPanel({
   const territoriesQ = useQuery({
     queryKey: ["access-territories", tenantSlug],
     queryFn: async (): Promise<AccessTerritoriesCatalog> => {
-      const { data } = await api.get<{ data: TerritoryApiRow[]; tree?: AccessTerritoryTreeNode[] }>(
+      const { data } = await api.get<{ data?: TerritoryApiRow[]; tree?: AccessTerritoryTreeNode[] }>(
         `/api/${tenantSlug}/access/territories`
       );
-      return {
-        flat: data.data,
-        tree: Array.isArray(data.tree) ? data.tree : []
-      };
+      const flat = Array.isArray(data.data) ? data.data : [];
+      const tree = Array.isArray(data.tree) ? data.tree : [];
+      return { flat, tree };
     },
     enabled: Boolean(tenantSlug) && modal === "territory",
-    /** Каталог редко меняется; сервер тоже кеширует ответ по digest. */
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    placeholderData: (prev) => prev
+    /**
+     * Settings → Территория saqlangach ham shu ro‘yxat yangilansin.
+     * Uzoq staleTime bo‘sh (yoki eski) keshni «Нет доступных территорий» qilib qoldirardi.
+     */
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true
   });
 
   /** Список сотрудников по тенанту: подгружаем при открытой карточке доступа, чтобы модалка открывалась без ожидания. */
@@ -271,8 +285,13 @@ export function useAccessUserDetailPanel({
         }
       }
       void qc.invalidateQueries({ queryKey: ["access-user-detail", tenantSlug, userId] });
+      // Agar admin o‘zi yoki boshqa tabdagi operator — menyu yangilansin.
+      invalidateMePermissionsQueries(qc, tenantSlug, { userId });
       if (body.supervisee_user_ids != null) {
         void qc.invalidateQueries({ queryKey: ["access-users-supervisor-pick", tenantSlug] });
+        // Operator/SVR agent doirasi o‘zgardi — buyurtmalar va agent filtrlari yangilansin.
+        void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+        void qc.invalidateQueries({ queryKey: ["agents", tenantSlug] });
       }
       if (patchTouchesUserDirectory(body)) onInvalidateUsers();
     }
@@ -301,8 +320,10 @@ export function useAccessUserDetailPanel({
   const parentOptions = useMemo(() => {
     const s = new Set<string>();
     for (const row of grantedMatrix) {
-      const v = row.parent_path?.trim();
-      if (v) s.add(v);
+      const path = row.parent_path?.trim();
+      if (!path) continue;
+      const parts = splitPermissionPath(path);
+      if (parts[0]) s.add(parts[0]);
     }
     return [...s].sort((a, b) => a.localeCompare(b, "ru"));
   }, [grantedMatrix]);
@@ -311,7 +332,11 @@ export function useAccessUserDetailPanel({
     const p = filterParent.trim();
     const q = tableSearch.trim().toLowerCase();
     return grantedMatrix.filter((row) => {
-      if (p && row.parent_path !== p) return false;
+      if (p) {
+        const path = row.parent_path?.trim() || "";
+        const parts = splitPermissionPath(path);
+        if (parts[0] !== p && path !== p) return false;
+      }
       if (!matchesPermissionSourceFilter(row, filterSource)) return false;
       if (q) {
         const hay = `${row.key} ${row.description ?? ""} ${row.parent_path} ${row.section ?? ""} ${permissionSourceLabel(row)}`.toLowerCase();
@@ -332,21 +357,64 @@ export function useAccessUserDetailPanel({
   }, [tableMatrix, matrixSort]);
 
   const matrixRowGroups = useMemo(() => {
-    const m = new Map<string, MatrixRow[]>();
+    /** L1 = modul (Заявки), L2 = bo‘lim (Возврат) — eski tekis «Заявки · Возврат» o‘rniga. */
+    type L2 = { id: string; label: string; parent: string; rows: MatrixRow[] };
+    type L1 = { id: string; label: string; parent: string; rows: MatrixRow[]; children: L2[] };
+    const roots = new Map<string, { label: string; id: string; rows: MatrixRow[]; children: Map<string, L2> }>();
+
     for (const row of sortedFilteredMatrix) {
-      const k = row.parent_path?.trim() || "—";
-      const arr = m.get(k) ?? [];
-      arr.push(row);
-      m.set(k, arr);
+      const path = row.parent_path?.trim() || "—";
+      const parts = splitPermissionPath(path);
+      const l1Label = parts[0] ?? "—";
+      let root = roots.get(l1Label);
+      if (!root) {
+        root = { label: l1Label, id: l1Label, rows: [], children: new Map() };
+        roots.set(l1Label, root);
+      }
+      if (parts.length <= 1) {
+        root.rows.push(row);
+        continue;
+      }
+      const l2Label = parts.slice(1).join(" · ");
+      const l2Id = `${l1Label}\u0001${l2Label}`;
+      let child = root.children.get(l2Label);
+      if (!child) {
+        child = { id: l2Id, label: l2Label, parent: l2Id, rows: [] };
+        root.children.set(l2Label, child);
+      }
+      child.rows.push(row);
     }
-    const keys = [...m.keys()].sort((a, b) => matrixCollator.compare(a, b));
+
+    const keys = [...roots.keys()].sort((a, b) => matrixCollator.compare(a, b));
     return keys
-      .map((parent) => ({ parent, rows: m.get(parent)! }))
+      .map((k) => {
+        const r = roots.get(k)!;
+        const children = [...r.children.values()].sort((a, b) => matrixCollator.compare(a.label, b.label));
+        const allRows = [...r.rows, ...children.flatMap((c) => c.rows)];
+        return {
+          id: r.id,
+          label: r.label,
+          parent: r.id,
+          rows: allRows,
+          directRows: r.rows,
+          children
+        } satisfies {
+          id: string;
+          label: string;
+          parent: string;
+          rows: MatrixRow[];
+          directRows: MatrixRow[];
+          children: L2[];
+        };
+      })
       .filter((g) => g.rows.length > 0);
   }, [sortedFilteredMatrix]);
 
   const matrixParentKeysSig = useMemo(
-    () => JSON.stringify(matrixRowGroups.map((g) => g.parent)),
+    () =>
+      JSON.stringify(
+        matrixRowGroups.flatMap((g) => [g.parent, ...g.children.map((c) => c.parent)])
+      ),
     [matrixRowGroups]
   );
   /** По умолчанию все группы свёрнуты; «Развернуть» в фильтре или шеврон у группы. */
@@ -354,20 +422,25 @@ export function useAccessUserDetailPanel({
     setMatrixGroupExpanded(new Set());
   }, [userId, matrixParentKeysSig]);
 
+  const matrixExpandableKeys = useMemo(
+    () => matrixRowGroups.flatMap((g) => [g.parent, ...g.children.map((c) => c.parent)]),
+    [matrixRowGroups]
+  );
+
   const matrixGroupsAllExpanded = useMemo(
-    () => matrixRowGroups.length > 0 && matrixRowGroups.every((g) => matrixGroupExpanded.has(g.parent)),
-    [matrixRowGroups, matrixGroupExpanded]
+    () =>
+      matrixExpandableKeys.length > 0 && matrixExpandableKeys.every((k) => matrixGroupExpanded.has(k)),
+    [matrixExpandableKeys, matrixGroupExpanded]
   );
 
   const toggleMatrixGroupsExpandCollapse = useCallback(() => {
-    const allKeys = matrixRowGroups.map((g) => g.parent);
-    if (allKeys.length === 0) return;
+    if (matrixExpandableKeys.length === 0) return;
     setMatrixGroupExpanded((prev) => {
-      const allOpen = allKeys.every((k) => prev.has(k));
+      const allOpen = matrixExpandableKeys.every((k) => prev.has(k));
       if (allOpen) return new Set<string>();
-      return new Set(allKeys);
+      return new Set(matrixExpandableKeys);
     });
-  }, [matrixRowGroups]);
+  }, [matrixExpandableKeys]);
 
   const toggleMatrixSort = (key: MatrixSortKey) => {
     setMatrixSort((prev) => {
@@ -587,15 +660,19 @@ export function useAccessUserDetailPanel({
     const remove_permission_keys: string[] = [];
     const denied_permissions: string[] = [];
     for (const row of rows) {
-      if (row.user_effect !== "none") remove_permission_keys.push(row.key);
-      else denied_permissions.push(row.key);
+      const patch = buildRevokeEffectiveAccessPatch(row);
+      if (!patch) continue;
+      const rm = patch.remove_permission_keys as string[] | undefined;
+      const den = patch.denied_permissions as string[] | undefined;
+      if (rm?.length) remove_permission_keys.push(...rm);
+      if (den?.length) denied_permissions.push(...den);
     }
 
     const body: Record<string, unknown> = {};
-    if (remove_permission_keys.length) body.remove_permission_keys = remove_permission_keys;
+    if (remove_permission_keys.length) body.remove_permission_keys = [...new Set(remove_permission_keys)];
     if (denied_permissions.length) {
       body.merge_permissions = true;
-      body.denied_permissions = denied_permissions;
+      body.denied_permissions = [...new Set(denied_permissions)];
     }
     if (!body.remove_permission_keys && !body.merge_permissions) return;
 
@@ -684,17 +761,32 @@ export function useAccessUserDetailPanel({
     if (modal !== "operations") return [];
     return (catalogQ.data?.flat ?? [])
       .filter((r) => !matrixByKey.get(r.key)?.effective)
-      .map((r) => ({
-        key: r.key,
-        label: displayAccessDescriptionShort(r.description, r.key),
-        sub: r.parent_path
-      }));
+      .map((r) => {
+        const parent = (r.parent_path ?? "").trim();
+        const fullLabel = displayAccessDescriptionShort(r.description, r.key);
+        // Guruh allaqachon parent ko‘rsatadi — qatorda bo‘lim·amal (yoki to‘liq yo‘l).
+        let label = fullLabel;
+        if (parent && fullLabel.startsWith(`${parent} · `)) {
+          label = fullLabel.slice(parent.length + 3).trim() || fullLabel;
+        }
+        return {
+          key: r.key,
+          label,
+          /** Qidiruv uchun; UI da ko‘rsatilmaydi. */
+          sub: r.key,
+          groupKey: parent || "—"
+        };
+      });
   }, [modal, catalogQ.data, matrixByKey]);
 
   const filteredAttachModalItems = useMemo((): ModalPickRow[] => {
     const q = modalSearch.trim().toLowerCase();
     let rows = attachModalBaseItems;
-    if (q) rows = rows.filter((x) => `${x.key} ${x.label} ${x.sub}`.toLowerCase().includes(q));
+    if (q) {
+      rows = rows.filter((x) =>
+        `${x.key} ${x.label} ${x.sub} ${x.groupKey ?? ""}`.toLowerCase().includes(q)
+      );
+    }
     if (showSelOnly) rows = rows.filter((x) => modalSel.has(x.key));
     return rows;
   }, [attachModalBaseItems, modalSearch, showSelOnly, modalSel]);
@@ -719,22 +811,25 @@ export function useAccessUserDetailPanel({
   const dimPickSomeSelected =
     visibleDimPickKeys.length > 0 && visibleDimPickKeys.some((k) => modalSel.has(k)) && !dimPickAllSelected;
 
-  const opAttachGroups = useMemo(() => {
-    if (modal !== "operations") return [] as { parent: string; items: ModalPickRow[] }[];
-    const m = new Map<string, ModalPickRow[]>();
-    for (const it of filteredAttachModalItems) {
-      const k = (it.sub ?? "").trim() || "—";
-      const arr = m.get(k) ?? [];
-      arr.push(it);
-      m.set(k, arr);
-    }
-    const keys = [...m.keys()].sort((a, b) => matrixCollator.compare(a, b));
-    return keys.map((parent) => ({ parent, items: m.get(parent)! }));
+  const opAttachGroups = useMemo((): OpAttachTreeNode[] => {
+    if (modal !== "operations") return [];
+    return buildOpAttachTree(filteredAttachModalItems);
   }, [modal, filteredAttachModalItems]);
 
-  const opAttachGroupKeys = useMemo(() => opAttachGroups.map((g) => g.parent), [opAttachGroups]);
+  const opAttachGroupKeys = useMemo(() => collectOpAttachExpandableIds(opAttachGroups), [opAttachGroups]);
   const allOpAttachGroupsExpanded =
     opAttachGroupKeys.length > 0 && opAttachGroupKeys.every((k) => opAttachGroupExpanded.has(k));
+
+  const opAttachVisibleKeys = useMemo(
+    () => filteredAttachModalItems.map((x) => x.key),
+    [filteredAttachModalItems]
+  );
+  const opAttachAllSelected =
+    opAttachVisibleKeys.length > 0 && opAttachVisibleKeys.every((k) => modalSel.has(k));
+  const opAttachSomeSelected =
+    opAttachVisibleKeys.length > 0 &&
+    opAttachVisibleKeys.some((k) => modalSel.has(k)) &&
+    !opAttachAllSelected;
 
   useEffect(() => {
     if (modal !== "operations") return;
@@ -750,6 +845,26 @@ export function useAccessUserDetailPanel({
       }
       return next;
     });
+  }, []);
+
+  const toggleOpAttachTreeNode = useCallback((node: OpAttachTreeNode, checked: boolean) => {
+    const keys = collectOpAttachLeafKeys(node);
+    setModalSel((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (checked) next.add(k);
+        else next.delete(k);
+      }
+      return next;
+    });
+  }, []);
+
+  const selectAllOpAttachVisible = useCallback(() => {
+    setModalSel(new Set(opAttachVisibleKeys));
+  }, [opAttachVisibleKeys]);
+
+  const clearOpAttachSelection = useCallback(() => {
+    setModalSel(new Set());
   }, []);
 
   const saveModal = async () => {
@@ -894,6 +1009,7 @@ export function useAccessUserDetailPanel({
     matrixGroupsAllExpanded,
     toggleMatrixGroupsExpandCollapse,
     parentOptions,
+    grantedMatrixCount: grantedMatrix.length,
     bulkFeedback,
     bulkSel,
     setBulkSel,
@@ -932,6 +1048,12 @@ export function useAccessUserDetailPanel({
     opAttachGroupExpanded,
     setOpAttachGroupExpanded,
     toggleOpAttachGroup,
+    toggleOpAttachTreeNode,
+    selectAllOpAttachVisible,
+    clearOpAttachSelection,
+    opAttachAllSelected,
+    opAttachSomeSelected,
+    opAttachVisibleKeys,
     territoryCatalog,
     visibleTerritoryLeafKeys,
     useReferenceTerritoryTree,

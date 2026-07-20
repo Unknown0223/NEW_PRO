@@ -2330,6 +2330,13 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         setLocalError("Savdo zakazi uchun agent majburiy.");
         return;
       }
+      if (code === "AgentNotOnSlot") {
+        setLocalError(
+          d?.message?.trim() ||
+            "Agent ish joyiga biriktirilmagan — yangi zakaz taqiqlangan (faqat qarz yig‘ish)."
+        );
+        return;
+      }
       if (code === "OrderRequiresWarehouse") {
         setLocalError("Savdo zakazi uchun ombor majburiy.");
         return;

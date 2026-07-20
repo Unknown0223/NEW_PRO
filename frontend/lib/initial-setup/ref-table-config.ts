@@ -34,6 +34,12 @@ export type StepTableConfig = {
   columns: StepTableColumn[];
   /** Bundle Excel varaq nomi (step id bilan bir xil) */
   sheetName: string;
+  /**
+   * Fayl/preview ichida unique bo‘lishi kerak bo‘lgan kalit guruhlari.
+   * Masalan: [["name"], ["code"]] yoki [["sku", "price_type"]].
+   * Bo‘sh qiymatlar o‘tkazib yuboriladi.
+   */
+  duplicateKeyGroups?: string[][];
 };
 
 const REF_COLS: StepTableColumn[] = [
@@ -59,6 +65,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     mode: "profile",
     profileRefKey: "unit_measures",
     sheetName: "units",
+    duplicateKeyGroups: [["name"], ["code"]],
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
@@ -71,6 +78,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     mode: "profile",
     profileRefKey: "currency_entries",
     sheetName: "currencies",
+    duplicateKeyGroups: [["name"], ["code"]],
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
@@ -98,6 +106,12 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     columns: [
       { key: "name", header: "Название", required: true },
       { key: "code", header: "Код", required: true },
+      {
+        key: "payment_method",
+        header: "Способ оплаты",
+        relation: "payment-method"
+      },
+      { key: "kind", header: "Вид (продажа/закупка)" },
       { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 }
     ]
   },
@@ -178,10 +192,10 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     profileRefKey: "territory_nodes",
     sheetName: "territory",
     columns: [
-      { key: "name", header: "Название", required: true },
-      { key: "level", header: "Уровень", relation: "territory-level" },
-      { key: "parent", header: "Родитель", relation: "territory-parent" },
-      { key: "code", header: "Код" }
+      { key: "name", header: "Город", required: true },
+      { key: "code", header: "Код города", required: true },
+      { key: "region", header: "Название региона", required: true },
+      { key: "zone", header: "Зона", required: true }
     ]
   },
   {
@@ -210,17 +224,19 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     stepId: "products-catalog",
     mode: "import",
     sheetName: "products-catalog",
+    duplicateKeyGroups: [["name"], ["code"]],
     columns: [
       { key: "name", header: "Название *", required: true },
       { key: "code", header: "Код" },
       { key: "category_name", header: "Категория *", required: true, relation: "product-category-name" },
-      { key: "unit_code", header: "Единица измерения(код) *", required: true, relation: "unit-code" }
+      { key: "unit_name", header: "Единица измерения (название) *", required: true, relation: "unit-name" }
     ]
   },
   {
     stepId: "product-prices",
     mode: "import",
     sheetName: "product-prices",
+    duplicateKeyGroups: [["sku", "price_type"]],
     columns: [
       { key: "sku", header: "Артикул (SKU)", required: true, relation: "product-sku" },
       { key: "price_type", header: "Тип цены", relation: "price-type" },
@@ -231,6 +247,7 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     stepId: "clients",
     mode: "import",
     sheetName: "clients",
+    duplicateKeyGroups: [["inn"], ["phone"], ["name"]],
     columns: [
       { key: "name", header: "Наименование", required: true },
       { key: "legal_name", header: "Юридическое название" },
@@ -253,20 +270,22 @@ export const STEP_TABLE_CONFIGS: StepTableConfig[] = [
     stepId: "work-slots",
     mode: "import",
     sheetName: "work-slots",
+    duplicateKeyGroups: [["slot_code"]],
     columns: [
-      { key: "slot_code", header: "slot_code", required: true },
-      { key: "label", header: "label" },
-      { key: "branch_code", header: "branch_code", relation: "branch-code" },
-      { key: "slot_type", header: "slot_type" },
-      { key: "is_active", header: "is_active" },
-      { key: "sort_order", header: "sort_order", numeric: true, maxFractionDigits: 0 },
-      { key: "assign_login", header: "assign_login" }
+      { key: "slot_code", header: "Код слота", required: true },
+      { key: "label", header: "Название" },
+      { key: "branch_code", header: "Код филиала", relation: "branch-code" },
+      { key: "slot_type", header: "Тип слота" },
+      { key: "is_active", header: "Активен (да/нет)" },
+      { key: "sort_order", header: "Сортировка", numeric: true, maxFractionDigits: 0 },
+      { key: "assign_login", header: "Логин агента" }
     ]
   },
   {
     stepId: "stock-receipts",
     mode: "import",
     sheetName: "stock-receipts",
+    duplicateKeyGroups: [["warehouse", "sku"]],
     columns: [
       { key: "row_no", header: "№" },
       { key: "warehouse", header: "Склад", required: true, relation: "warehouse-name" },

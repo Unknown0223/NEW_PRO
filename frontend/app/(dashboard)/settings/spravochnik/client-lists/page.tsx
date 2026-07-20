@@ -90,13 +90,19 @@ export default function ClientListsSpravochnikPage() {
       if (!tenantSlug) throw new Error("no");
       const { data: body } = await api.patch<TenantProfile>(`/api/${tenantSlug}/settings/profile`, {
         references: {
-          sales_channels: splitLines(sales),
-          client_product_category_refs: splitLines(prodCat),
-          client_cities: splitLines(cities),
-          client_districts: splitLines(districts),
-          client_neighborhoods: splitLines(neighborhoods),
-          client_zones: splitLines(zones),
-          client_logistics_services: splitLines(logisticsSvcs)
+          ...(splitLines(sales).length > 0 ? { sales_channels: splitLines(sales) } : {}),
+          ...(splitLines(prodCat).length > 0
+            ? { client_product_category_refs: splitLines(prodCat) }
+            : {}),
+          ...(splitLines(cities).length > 0 ? { client_cities: splitLines(cities) } : {}),
+          ...(splitLines(districts).length > 0 ? { client_districts: splitLines(districts) } : {}),
+          ...(splitLines(neighborhoods).length > 0
+            ? { client_neighborhoods: splitLines(neighborhoods) }
+            : {}),
+          ...(splitLines(zones).length > 0 ? { client_zones: splitLines(zones) } : {}),
+          ...(splitLines(logisticsSvcs).length > 0
+            ? { client_logistics_services: splitLines(logisticsSvcs) }
+            : {})
         }
       });
       return body;

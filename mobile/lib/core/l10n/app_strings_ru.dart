@@ -2,7 +2,9 @@
 abstract final class S {
   static const navHome = 'Главная';
   static const navVisits = 'Визиты';
+  static const navOrders = 'Заказы';
   static const navKpi = 'KPI';
+  static const navDailyPlan = 'Дневной план';
   static const navReports = 'Отчёты';
   static const navPoints = 'Тор. точки';
   static const outlets = 'Торговые точки';

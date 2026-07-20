@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import {
   ACCESS_DIM_TABLE_ROW_ESTIMATE_PX,
   ACCESS_MANAGE_KEY,
@@ -63,8 +64,21 @@ export function useAccessWorkspacePart5(ctx: ReturnType<typeof useAccessWorkspac
 
   useEffect(() => {
     if (!selectedKey) return;
+    /** Ro‘yxat hali kelmagan / refetch bo‘sh — tanlovni o‘chirmaslik (modal yopilmasin). */
+    const listPending = tab === "users" ? usersQ.isPending : dimensionsQ.isPending;
+    const listFetching = tab === "users" ? usersQ.isFetching : dimensionsQ.isFetching;
+    if (listPending) return;
+    if (filteredSideRows.length === 0 && listFetching) return;
     if (!filteredSideRows.some((r) => r.key === selectedKey)) setSelectedKey(null);
-  }, [filteredSideRows, selectedKey]);
+  }, [
+    filteredSideRows,
+    selectedKey,
+    tab,
+    usersQ.isPending,
+    usersQ.isFetching,
+    dimensionsQ.isPending,
+    dimensionsQ.isFetching
+  ]);
 
   useEffect(() => {
     if (!(tab === "users" || tab === "operations")) return;
@@ -149,6 +163,7 @@ export function useAccessWorkspacePart5(ctx: ReturnType<typeof useAccessWorkspac
       setAccessBulkSavePending(true);
       try {
         await api.post(`/api/${tenantSlug}/access/users-bulk-patch`, { items });
+        invalidateMePermissionsQueries(qc, tenantSlug);
       } finally {
         setAccessBulkSavePending(false);
       }

@@ -12,7 +12,8 @@ import {
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   createOpeningBalance,
   deleteOpeningBalance,
@@ -117,7 +118,12 @@ export async function registerOpeningBalanceRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
-      const result = await listOpeningBalances(request.tenant!.id, parseListQuery(q));
+      const viewer = getAccessUser(request);
+      const actor = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const result = await listOpeningBalances(request.tenant!.id, parseListQuery(q), actor);
       return reply.send(result);
     }
   );

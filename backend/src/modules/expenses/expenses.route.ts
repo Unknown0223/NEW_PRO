@@ -11,6 +11,10 @@ import {
 } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
+import {
+  assertOrderAgentAllowedForActor,
+  enrichScopedReportActor
+} from "../access/access-agent-scope";
 import { jwtAccessVerify, getAccessUser } from "../auth/auth.prehandlers";
 import {
   listExpenses,
@@ -43,17 +47,26 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
     const q = request.query as Record<string, string | undefined>;
     const archiveRaw = q.archive?.trim().toLowerCase();
     const archive = archiveRaw === "true" || archiveRaw === "1" || archiveRaw === "yes";
-    const data = await listExpenses(request.tenant!.id, {
-      page: q.page ? parseInt(q.page) : 1,
-      limit: q.limit ? parseInt(q.limit) : 20,
-      status: q.status,
-      expense_type: q.type,
-      agent_id: q.agentId ? parseInt(q.agentId) : undefined,
-      warehouse_id: q.warehouseId ? parseInt(q.warehouseId) : undefined,
-      from: q.from,
-      to: q.to,
-      archive
+    const jwtUser = getAccessUser(request);
+    const actor = await enrichScopedReportActor(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: jwtUser.role ?? ""
     });
+    const data = await listExpenses(
+      request.tenant!.id,
+      {
+        page: q.page ? parseInt(q.page) : 1,
+        limit: q.limit ? parseInt(q.limit) : 20,
+        status: q.status,
+        expense_type: q.type,
+        agent_id: q.agentId ? parseInt(q.agentId) : undefined,
+        warehouse_id: q.warehouseId ? parseInt(q.warehouseId) : undefined,
+        from: q.from,
+        to: q.to,
+        archive
+      },
+      actor
+    );
     return reply.send(data);
   });
 
@@ -72,10 +85,24 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       if (expenseDate) {
         await assertDocWritableByDate(request, "expenses", expenseDate);
       }
+      const agentId =
+        typeof body?.agent_id === "number" && body.agent_id > 0
+          ? body.agent_id
+          : typeof body?.agentId === "number" && body.agentId > 0
+            ? body.agentId
+            : null;
+      if (agentId != null) {
+        await assertOrderAgentAllowedForActor(request.tenant!.id, agentId, {
+          userId: actorUserIdOrNull(request),
+          role: jwtUser.role ?? ""
+        });
+      }
       const data = await createExpense(request.tenant!.id, body as any, Number(jwtUser.sub));
       return reply.status(201).send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
       throw e;
     }
   });
@@ -84,12 +111,27 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
     if (!ensureTenantContext(request, reply)) return;
     const jwtUser = getAccessUser(request);
     const id = parseInt((request.params as any).id);
+    const body = request.body as Record<string, unknown>;
     try {
       await assertDocWritableById(request, "expenses", id);
-      const data = await updateExpense(request.tenant!.id, id, request.body as any, Number(jwtUser.sub));
+      const agentId =
+        typeof body?.agent_id === "number" && body.agent_id > 0
+          ? body.agent_id
+          : typeof body?.agentId === "number" && body.agentId > 0
+            ? body.agentId
+            : null;
+      if (agentId != null) {
+        await assertOrderAgentAllowedForActor(request.tenant!.id, agentId, {
+          userId: actorUserIdOrNull(request),
+          role: jwtUser.role ?? ""
+        });
+      }
+      const data = await updateExpense(request.tenant!.id, id, body as any, Number(jwtUser.sub));
       return reply.send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
       throw e;
     }
   });

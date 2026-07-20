@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import { registerAccessRoutes } from "./modules/access/access.route";
 import { registerActivityRoutes } from "./modules/activity/activity.route";
+import { registerErrorEventRoutes } from "./modules/error-events/error-events.route";
 import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
 import { registerAuthRoutes } from "./modules/auth/auth.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
@@ -46,6 +47,7 @@ import { registerTenantSettingsRoutes } from "./modules/tenant-settings/tenant-s
 import { registerDocumentEditLockRoutes } from "./modules/document-edit-lock/document-edit-lock.route";
 import { registerTerritoryRoutes } from "./modules/territory/territory.route";
 import { registerTimesheetRoutes } from "./modules/timesheet/timesheet.route";
+import { registerTabelRoutes } from "./modules/tabel/tabel.route";
 import { registerUserUiRoutes } from "./modules/users/user-ui.route";
 import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
 
@@ -77,6 +79,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerDocumentEditLockRoutes,
   registerAuditEventRoutes,
   registerActivityRoutes,
+  registerErrorEventRoutes,
   registerStockRoutes,
   registerRetailStockRoutes,
   registerWarehouseBlockRoutes,
@@ -103,6 +106,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerLinkageRoutes,
   registerJobRoutes,
   registerTimesheetRoutes,
+  registerTabelRoutes,
   registerWorkSlotRoutes,
   registerPlansRoutes,
   registerSystemMigrationRoutes

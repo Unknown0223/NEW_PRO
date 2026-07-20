@@ -21,12 +21,12 @@ import {
   firstValidationUserHint,
   getZodFlattenFromApiErrorBody
 } from "@/lib/api-validation-details";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError, type AxiosError } from "axios";
@@ -121,8 +121,9 @@ function saveErrorFields(e: unknown): Record<string, string> {
 export function CurrencyRatesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const canWrite = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canWrite =
+    has("cash.kurs_valyuty.create") || has("cash.kurs_valyuty.update");
   const qc = useQueryClient();
   const init = useMemo(() => monthRange(), []);
   const [from, setFrom] = useState(init.from);

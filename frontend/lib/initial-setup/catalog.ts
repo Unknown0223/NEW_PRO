@@ -18,7 +18,7 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
     id: "territory",
     title: "Территория (зоны, регионы, города)",
     description:
-      "Дерево территорий для клиентов, визитов и слотов. Можно загрузить образец Lalaku или заполнить вручную.",
+      "Зоны, регионы и города. Excel: Gorod | kod Gorod | Название региона | Zona (как «Данные Город»).",
     dependsOn: [],
     dependencyHint: "Клиенты и слоты привязываются к городам/зонам из этого справочника.",
     kind: "manual",
@@ -66,7 +66,8 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
     id: "price-types",
     title: "Типы цен",
     description: "Опт, розница, дилер — для прайс-листа и заказов.",
-    dependsOn: ["currencies"],
+    dependsOn: ["payment-methods"],
+    dependencyHint: "Каждый тип цены привязан к способу оплаты.",
     kind: "manual",
     settingsHref: "/settings/price-types",
     order: 70
@@ -140,9 +141,9 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
     id: "products-catalog",
     title: "Каталог продуктов (Excel)",
     description:
-      "Полный импорт: название, категория (название), единица (код), SKU, штрихкод, бренд и др.",
+      "Полный импорт: название, категория (название), единица (название, напр. dona), SKU, штрихкод, бренд и др.",
     dependsOn: ["units", "product-categories"],
-    dependencyHint: "Категория — по названию из справочника; единица — по коду.",
+    dependencyHint: "Категория — по названию из справочника; единица — по названию (dona, kg, litr и т.д.).",
     kind: "excel-import",
     settingsHref: "/settings/products/excel",
     importApi: {
@@ -151,13 +152,13 @@ export const INITIAL_SETUP_STEPS: InitialSetupStep[] = [
       importPath: "/products/import-catalog",
       importAsyncPath: "/products/import-catalog/async"
     },
-    requiredColumns: ["name", "sku"],
+    requiredColumns: ["name", "category_name", "unit_name"],
     order: 210
   },
   {
     id: "product-prices",
     title: "Цены продуктов (Excel)",
-    description: "Прайс по SKU и типу цены. Продукты должны уже существовать.",
+    description: "Прайс по SKU: колонки типов цен (Наличные, Терминал…). Продукты должны уже существовать.",
     dependsOn: ["products-catalog", "price-types"],
     kind: "excel-import",
     settingsHref: "/settings/prices/price-list",

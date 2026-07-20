@@ -94,7 +94,9 @@ export function buildQtyEligibleRowsFromPeeks(
   qtyPeeks: QtyBonusPeek[],
   productMap: Map<number, { id: number; name: string; category: { name: string } | null }>,
   availableByProductId: Map<number, number>,
-  qtyByProduct: ReadonlyMap<number, number>
+  qtyByProduct: ReadonlyMap<number, number>,
+  /** Qoida bo‘yicha ruxsat etilgan sovg‘a SKU (bonus_product_ids / kategoriya havzasi). */
+  allowedGiftsByRuleId?: ReadonlyMap<number, readonly number[]>
 ): EligibleBonusRow[] {
   const groups = new Map<number, { rule: BonusRuleRow; peeks: QtyBonusPeek[] }>();
   for (const peek of qtyPeeks) {
@@ -121,8 +123,27 @@ export function buildQtyEligibleRowsFromPeeks(
         if (defaultGiftPid == null && p.bonusQty > 0) defaultGiftPid = p.giftPid;
       }
     }
-    for (const pid of rule.product_ids) {
+    // Aniq belgilangan bonus SKU’lar — peek/auto tanlovdan tashqari ham UI havzasiga.
+    for (const pid of rule.bonus_product_ids) {
       if (pid > 0) giftPidSet.add(pid);
+    }
+    for (const pid of allowedGiftsByRuleId?.get(rule.id) ?? []) {
+      if (pid > 0) giftPidSet.add(pid);
+    }
+    const metaProbe = bonusGiftSelectionMeta(
+      rule,
+      Math.max(
+        giftPidSet.size,
+        rule.bonus_product_ids.length,
+        rule.product_ids.length,
+        allowedGiftsByRuleId?.get(rule.id)?.length ?? 0
+      )
+    );
+    // Assortiment: trigger = sovg‘a. pick/category da faqat ruxsat etilgan bonus SKU.
+    if (metaProbe.kind === "assortment_auto") {
+      for (const pid of rule.product_ids) {
+        if (pid > 0) giftPidSet.add(pid);
+      }
     }
 
     const giftIds = [...giftPidSet];
@@ -149,8 +170,9 @@ export function buildQtyEligibleRowsFromPeeks(
       default_gift_product_id: defaultGiftPid ?? giftIds[0] ?? null,
       gift_selection_kind: meta.kind,
       allow_gift_swap: meta.allow_gift_swap,
-      step_qty: primary?.step_qty ?? null,
-      bonus_step_qty: primary?.bonus_qty ?? null,
+      // JSON da number bo‘lishi shart (Decimal/string mobil `as num` ni sindiradi).
+      step_qty: primary?.step_qty != null ? Number(primary.step_qty) : null,
+      bonus_step_qty: primary?.bonus_qty != null ? Number(primary.bonus_qty) : null,
       trigger_product_ids: [...rule.product_ids],
       gift_products
     });

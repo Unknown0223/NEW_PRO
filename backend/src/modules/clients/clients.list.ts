@@ -11,6 +11,7 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import type { ClientListRow, ListClientsQuery } from "./clients.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { parseContactPersonsJson } from "./clients.helpers";
 import {
   agentAssignmentSelectFields,
@@ -103,9 +104,10 @@ export async function bulkPatchClients(
 
 export async function listClientsForTenantPaged(
   tenantId: number,
-  q: ListClientsQuery
+  q: ListClientsQuery,
+  actorScope?: ScopedReportActor
 ): Promise<{ data: ClientListRow[]; total: number; page: number; limit: number }> {
-  const whereInput = await buildClientListWhereInput(tenantId, q);
+  const whereInput = await buildClientListWhereInput(tenantId, q, actorScope);
   if (whereInput === null) {
     return { data: [], total: 0, page: q.page, limit: q.limit };
   }

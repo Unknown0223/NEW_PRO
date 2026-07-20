@@ -47,6 +47,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "warehouse_user_links",
       delegate: "warehouseUserLink",
       idMap: "warehouseUserLink",
+      naturalKey: ["warehouse_id", "user_id"],
       hasTenantId: false,
       scope: "warehouse",
       fk: { warehouse_id: "warehouse", user_id: "user" },
@@ -166,6 +167,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       hasTenantId: false,
       scope: "correction",
       fk: { document_id: "warehouseCorrection", product_id: "product" },
+      requiredFk: ["document_id", "product_id"],
       decimals: ["qty_before", "qty_delta", "price_unit", "line_amount", "volume_m3"]
     },
     {
@@ -182,6 +184,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       hasTenantId: false,
       scope: "stock_take",
       fk: { stock_take_id: "stockTake", product_id: "product" },
+      requiredFk: ["stock_take_id", "product_id"],
       decimals: ["system_qty", "counted_qty"]
     },
     {
@@ -226,6 +229,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       delegate: "retailOutletStock",
       idMap: "retailOutletStock",
       fk: { client_id: "client", product_id: "product", agent_id: "user" },
+      requiredFk: ["client_id", "product_id"],
       decimals: ["quantity", "sold_quantity", "amount"],
       dates: ["stock_date", "created_at", "updated_at"]
     },

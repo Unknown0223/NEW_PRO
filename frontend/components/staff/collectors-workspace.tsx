@@ -8,6 +8,7 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -610,6 +611,7 @@ function CollectorEditDialog({
         <DialogHeader>
           <DialogTitle>Редактировать</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice className="mb-2" />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input placeholder="Имя" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
@@ -617,9 +619,7 @@ function CollectorEditDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Филиал" value={branch} onChange={(e) => setBranch(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
-          <Input className="sm:col-span-2" placeholder="Территория" value={territory} onChange={(e) => setTerritory(e.target.value)} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -638,9 +638,7 @@ function CollectorEditDialog({
                   phone: phone.trim() || null,
                   code: code.trim() || null,
                   pinfl: pinfl.trim() || null,
-                  branch: branch.trim() || null,
-                  position: position.trim() || null,
-                  territory: territory.trim() || null
+                  position: position.trim() || null
                 });
                 onClose();
               } finally {
@@ -709,6 +707,7 @@ function CollectorAddDialog({
         <DialogHeader>
           <DialogTitle>Добавить инкассатора</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice className="mb-2" />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
@@ -716,9 +715,7 @@ function CollectorAddDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Филиал" value={branch} onChange={(e) => setBranch(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
-          <Input className="sm:col-span-2" placeholder="Территория" value={territory} onChange={(e) => setTerritory(e.target.value)} />
           <Input className="sm:col-span-2 font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
           <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">
@@ -745,9 +742,7 @@ function CollectorAddDialog({
                 phone: phone.trim() || null,
                 code: code.trim() || null,
                 pinfl: pinfl.trim() || null,
-                branch: branch.trim() || null,
                 position: position.trim() || null,
-                territory: territory.trim() || null,
                 login: login.trim(),
                 password,
                 can_authorize,

@@ -10,7 +10,12 @@ import {
 import { ORDER_STATUSES } from "../orders/order-status";
 import type { DayMetricRow, VisitTotalsFilters, VisitTotalsRow } from "./visit-totals.types";
 import { EXPORT_CAP, MAX_RANGE_DAYS, VISIT_TOTALS_ORDER_STATUS_IDS } from "./visit-totals.types";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  buildScopedAgentExistsSql,
+  buildScopedAgentWhereForActor,
+  intersectRequestedAgentIds,
+  type ScopedReportActor
+} from "../access/access-agent-scope";
 
 export function intList(v?: string): number[] {
   return (v ?? "")
@@ -42,7 +47,11 @@ export function rangeDayCount(from: string, to: string): number {
   return eachUtcYmdInclusive(from, to).length;
 }
 
-export function toDashboardFilters(dayYmd: string, vf: VisitTotalsFilters, actor?: ReportActor): SupervisorDashboardFilters {
+export function toDashboardFilters(
+  dayYmd: string,
+  vf: VisitTotalsFilters,
+  actor?: ReportActor | ScopedReportActor
+): SupervisorDashboardFilters {
   if (actor?.role === "agent" && actor.userId) {
     return {
       date: dayYmd,
@@ -56,9 +65,11 @@ export function toDashboardFilters(dayYmd: string, vf: VisitTotalsFilters, actor
       territory_3_list: []
     };
   }
-  const agent_ids = [...(vf.agent_ids ?? [])];
+  const hit = actor
+    ? intersectRequestedAgentIds(vf.agent_ids, actor as ScopedReportActor)
+    : { agentIds: [...(vf.agent_ids ?? [])], restricted: false };
   const supervisor_ids: number[] = [];
-  if (actor?.role === "supervisor" && actor.userId) {
+  if (actor?.role === "supervisor" && actor.userId && !hit.restricted) {
     supervisor_ids.push(actor.userId);
   }
   const order_statuses =
@@ -69,7 +80,7 @@ export function toDashboardFilters(dayYmd: string, vf: VisitTotalsFilters, actor
   return {
     date: dayYmd,
     payment_types: [],
-    agent_ids: [...new Set(agent_ids)],
+    agent_ids: [...new Set(hit.agentIds)],
     supervisor_ids,
     trade_directions: [],
     client_categories: [],
@@ -80,22 +91,19 @@ export function toDashboardFilters(dayYmd: string, vf: VisitTotalsFilters, actor
   };
 }
 
-export function activityAgentPredicate(tenantId: number, agentColumnSql: string, vf: VisitTotalsFilters, actor?: ReportActor): Prisma.Sql {
+export function activityAgentPredicate(
+  tenantId: number,
+  agentColumnSql: string,
+  vf: VisitTotalsFilters,
+  actor?: ReportActor | ScopedReportActor
+): Prisma.Sql {
+  const col = Prisma.raw(agentColumnSql);
   const parts: Prisma.Sql[] = [];
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`${Prisma.raw(agentColumnSql)} = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
-    parts.push(
-      Prisma.sql`EXISTS (
-        SELECT 1 FROM users u_act
-        WHERE u_act.id = ${Prisma.raw(agentColumnSql)}
-          AND u_act.tenant_id = ${tenantId}
-          AND u_act.supervisor_user_id = ${actor.userId}
-      )`
-    );
+  if (actor) {
+    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`${col}`, actor));
   }
   if (vf.agent_ids && vf.agent_ids.length > 0) {
-    parts.push(Prisma.sql`${Prisma.raw(agentColumnSql)} IN (${Prisma.join(vf.agent_ids)})`);
+    parts.push(Prisma.sql`${col} IN (${Prisma.join(vf.agent_ids)})`);
   }
   if (parts.length === 0) return Prisma.sql`TRUE`;
   return Prisma.join(parts, " AND ");
@@ -164,9 +172,12 @@ export function zeroDayRow(ag: { id: number; name: string; code: string | null; 
 export async function listAgentsForGrid(
   tenantId: number,
   vf: VisitTotalsFilters,
-  actor?: ReportActor
+  actor?: ReportActor | ScopedReportActor
 ): Promise<Array<{ id: number; name: string; code: string | null; is_active: boolean }>> {
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+  const whereAgent = await buildScopedAgentWhereForActor(
+    tenantId,
+    actor ? { userId: actor.userId ?? null, role: actor.role } : undefined
+  );
 
   const list = await prisma.user.findMany({
     where: whereAgent,

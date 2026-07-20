@@ -2,10 +2,19 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError } from "../../lib/api-error";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
-import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import {
+  isDirectoryIdAllowed,
+  mergeDirectoryAllowedIds,
+  resolveActorCashDeskDirectoryIds
+} from "../access/access-directory-scope";
+import {
+  getAccessUser,
+  jwtAccessVerify,
+  requireAnyPermission
+} from "../auth/auth.prehandlers";
 import { getCashDeskAvailableCash } from "../stock/supplier-payment-cash.service";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { createCashDesk, getCashDesk, listCashDesks, listCashDeskPickers, patchCashDesk } from "./cash-desks.service";
@@ -16,7 +25,22 @@ import {
   openShift
 } from "./cash-desk-shifts.service";
 
-const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
+/** Rol emas — Access kalitlari (operator lean default da cash yo‘q). */
+const cashDeskView = requireAnyPermission([
+  "cash.kassa.view",
+  "cash.view",
+  /** To‘lov / ish joyi pickerlari ham shu listni ishlatadi */
+  "cash.oplaty_klientov.view",
+  "cash.oplaty_klientov.create",
+  "work_slots.raboche_mesto.view",
+  "work_slots.raboche_mesto.create",
+  "work_slots.raboche_mesto.update",
+  "access.upravlenie.view",
+  "access.manage"
+]);
+const cashDeskWrite = requireAnyPermission(["cash.kassa.create"]);
+const cashDeskStatus = requireAnyPermission(["cash.kassa.status", "cash.kassa.create"]);
+const cashDeskHistory = requireAnyPermission(["cash.kassa.history", "cash.kassa.view"]);
 
 const linkSchema = z.object({
   user_id: z.number().int().positive(),
@@ -50,16 +74,20 @@ const patchBodySchema = createBodySchema.partial();
 
 export async function registerCashDeskRoutes(app: FastifyInstance) {
   app.get("/api/:slug/cash-desks/pickers", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskView]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
-    const data = await listCashDeskPickers(tenantId);
+    const viewer = getAccessUser(request);
+    const data = await listCashDeskPickers(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role ?? ""
+    });
     return reply.send({ data });
   });
 
   app.get("/api/:slug/cash-desks", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskView]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -80,10 +108,18 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
       request.query as Record<string, string | undefined>
     );
     const scope = await resolveConstraintScope(tenantId, selected);
+    const viewer = getAccessUser(request);
+    const actorIds = await resolveActorCashDeskDirectoryIds(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role
+    });
     const result = await listCashDesks(tenantId, {
       is_active,
       q: q.q,
-      allowed_ids: scope.constrained ? scope.cash_desk_ids : undefined,
+      allowed_ids: mergeDirectoryAllowedIds(
+        actorIds,
+        scope.constrained ? scope.cash_desk_ids : undefined
+      ),
       page: q.page ?? 1,
       limit: q.limit ?? 10
     });
@@ -91,11 +127,19 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/:slug/cash-desks/:id", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskView]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
+    const viewer = getAccessUser(request);
+    const actorIds = await resolveActorCashDeskDirectoryIds(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role
+    });
+    if (!isDirectoryIdAllowed(actorIds, id)) {
+      return sendApiError(reply, request, 404, "NotFound");
+    }
     const row = await getCashDesk(tenantId, id);
     if (!row) return sendApiError(reply, request, 404, "NotFound");
     return reply.send({ data: row });
@@ -103,11 +147,19 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
 
   /** Mijoz kirimlari − rasxod − ta'minotchiga to'lovlar (stornosiz) — supplier payment dialog uchun */
   app.get("/api/:slug/cash-desks/:id/available-cash", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskView]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
+    const viewer = getAccessUser(request);
+    const actorIds = await resolveActorCashDeskDirectoryIds(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role
+    });
+    if (!isDirectoryIdAllowed(actorIds, id)) {
+      return sendApiError(reply, request, 404, "NotFound");
+    }
     const row = await getCashDesk(tenantId, id);
     if (!row) return sendApiError(reply, request, 404, "NotFound");
     const available = await getCashDeskAvailableCash(prisma, tenantId, id);
@@ -115,7 +167,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/:slug/cash-desks", {
-    preHandler: [jwtAccessVerify, requireRoles(...writeRoles)]
+    preHandler: [jwtAccessVerify, cashDeskWrite]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -150,11 +202,19 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/:slug/cash-desks/:id/shifts", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskHistory]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
+    const viewer = getAccessUser(request);
+    const actorIds = await resolveActorCashDeskDirectoryIds(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role
+    });
+    if (!isDirectoryIdAllowed(actorIds, id)) {
+      return sendApiError(reply, request, 404, "NotFound");
+    }
     const q = z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).parse(request.query);
     const rows = await listShiftsForDesk(tenantId, id, q.limit ?? 30);
     if (rows === null) return sendApiError(reply, request, 404, "NotFound");
@@ -162,11 +222,19 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/:slug/cash-desks/:id/shifts/open", {
-    preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)]
+    preHandler: [jwtAccessVerify, cashDeskHistory]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
+    const viewer = getAccessUser(request);
+    const actorIds = await resolveActorCashDeskDirectoryIds(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role
+    });
+    if (!isDirectoryIdAllowed(actorIds, id)) {
+      return sendApiError(reply, request, 404, "NotFound");
+    }
     const desk = await getCashDesk(tenantId, id);
     if (!desk) return sendApiError(reply, request, 404, "NotFound");
     const open = await getOpenShift(tenantId, id);
@@ -179,7 +247,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/:slug/cash-desks/:id/shifts/open", {
-    preHandler: [jwtAccessVerify, requireRoles(...writeRoles)]
+    preHandler: [jwtAccessVerify, cashDeskStatus]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -214,7 +282,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/:slug/cash-desks/:id/shifts/:shiftId/close", {
-    preHandler: [jwtAccessVerify, requireRoles(...writeRoles)]
+    preHandler: [jwtAccessVerify, cashDeskStatus]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;
@@ -245,7 +313,7 @@ export async function registerCashDeskRoutes(app: FastifyInstance) {
   });
 
   app.patch("/api/:slug/cash-desks/:id", {
-    preHandler: [jwtAccessVerify, requireRoles(...writeRoles)]
+    preHandler: [jwtAccessVerify, cashDeskWrite]
   }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const tenantId = request.tenant!.id;

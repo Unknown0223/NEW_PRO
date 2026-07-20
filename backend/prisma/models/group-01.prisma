@@ -49,6 +49,7 @@ model Tenant {
   supplier_payments              SupplierPayment[]
   tenant_audit_events            TenantAuditEvent[]
   activity_events                UserActivityEvent[]
+  error_events                   ErrorEvent[]
   access_logs                    AccessLog[]
   tenant_tasks                   TenantTask[]
   trade_directions               TradeDirection[]
@@ -184,6 +185,7 @@ model User {
   stock_takes_created        StockTake[]             @relation("StockTakeCreator")
   tenant_audit_events        TenantAuditEvent[]      @relation("TenantAuditEventActor")
   activity_events            UserActivityEvent[]     @relation("UserActivityEventActor")
+  error_events               ErrorEvent[]            @relation("ErrorEventUser")
   tenant_tasks_assigned      TenantTask[]            @relation("TenantTaskAssignee")
   tenant_tasks_created       TenantTask[]            @relation("TenantTaskCreator")
   return_warehouse           Warehouse?              @relation("UserReturnWarehouse", fields: [return_warehouse_id], references: [id])
@@ -206,6 +208,7 @@ model User {
   client_photo_reports_created  ClientPhotoReport[]   @relation("ClientPhotoReportCreator")
   client_photo_reports_voided   ClientPhotoReport[]   @relation("ClientPhotoReportVoidedBy")
   work_slots_voided              WorkSlot[]            @relation("WorkSlotVoidedBy")
+  work_slots_supervised          WorkSlot[]            @relation("WorkSlotSupervisor")
   order_restriction_rules_voided OrderRestrictionRule[] @relation("OrderRestrictionRuleVoidedBy")
   order_auto_confirm_rules_voided OrderAutoConfirmRule[] @relation("OrderAutoConfirmRuleVoidedBy")
   currency_rates_voided          CurrencyExchangeRate[] @relation("CurrencyExchangeRateVoidedBy")

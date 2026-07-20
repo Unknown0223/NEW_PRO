@@ -26,13 +26,19 @@ export function StaffWorkspaceHeader({
   subtitle,
   addLabel,
   onAdd,
-  onColumnSettings
+  onColumnSettings,
+  extraActions,
+  canAdd = true
 }: {
   title: string;
   subtitle: string;
   addLabel: string;
   onAdd: () => void;
   onColumnSettings?: () => void;
+  /** Qatorning o‘ng tomonida (ko‘rinish, eksport va h.k.) */
+  extraActions?: ReactNode;
+  /** false bo‘lsa «Добавить» yashirinadi */
+  canAdd?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200">
@@ -40,15 +46,18 @@ export function StaffWorkspaceHeader({
         <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
-        >
-          <Plus className="h-4 w-4" />
-          {addLabel}
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        {canAdd ? (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+          >
+            <Plus className="h-4 w-4" />
+            {addLabel}
+          </button>
+        ) : null}
+        {extraActions}
         {onColumnSettings ? (
           <button
             type="button"
@@ -99,8 +108,8 @@ export function StaffWorkspaceFilterPanel({
   onRefresh: () => void;
   isFetching?: boolean;
   bulkMenu?: ReactNode;
-  /** Klientlar sahifasi kabi bitta qator grid */
-  filtersLayout?: "default" | "clients-row";
+  /** Klientlar sahifasi kabi bitta qator grid; stacked — filtrlar ustida, tugmalar pastda */
+  filtersLayout?: "default" | "clients-row" | "stacked";
 }) {
   const panelClass =
     filtersLayout === "clients-row"
@@ -152,6 +161,11 @@ export function StaffWorkspaceFilterPanel({
         <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
           {filters}
           {filterActionsClientsRow}
+        </div>
+      ) : filtersLayout === "stacked" ? (
+        <div className="space-y-2">
+          {filters}
+          <div className="flex justify-end border-t border-border/60 pt-2">{filterActionsDefault}</div>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-3">

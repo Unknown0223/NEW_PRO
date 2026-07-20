@@ -205,6 +205,7 @@ model CashDesk {
   updated_at DateTime           @updatedAt
   shifts                      CashDeskShift[]
   links                       CashDeskUserLink[]
+  work_slots                  WorkSlot[]         @relation("WorkSlotCashDesk")
   payments                    Payment[]
   opening_balance_entries     ClientOpeningBalanceEntry[]
   supplier_payments           SupplierPayment[]

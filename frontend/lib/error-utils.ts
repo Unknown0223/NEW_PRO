@@ -1,4 +1,8 @@
 import { formatApiSupportReference, getRequestIdFromApiError } from "@/lib/api";
+import {
+  firstValidationUserHint,
+  getZodFlattenFromApiErrorBody
+} from "@/lib/api-validation-details";
 import { isAxiosError } from "axios";
 
 /** Brauzerda server o‘chiq / noto‘g‘ri port — odatda `response` bo‘lmaydi */
@@ -43,19 +47,55 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
   let base: string;
   if (isAxiosError(error)) {
     const status = error.response?.status;
-    const data = error.response?.data as { message?: string; error?: string } | undefined;
-    if (data?.message && data.message.trim()) base = data.message.trim();
-    else if (status === 401) base = "Сессия истекла, войдите снова.";
+    const data = error.response?.data as {
+      message?: string;
+      error?: string;
+      details?: unknown;
+    } | undefined;
+    const zodHint = (() => {
+      if (status !== 400 && status !== 422) return undefined;
+      const flat = getZodFlattenFromApiErrorBody(data);
+      if (!flat) return undefined;
+      return firstValidationUserHint(flat);
+    })();
+    const msg = data?.message?.trim() ?? "";
+    if (zodHint && (!msg || msg === "Request validation failed")) base = zodHint;
+    else if (msg) base = msg;
+    else if (status === 401) base = "Sessiya tugadi. Qayta kiring (Сессия истекла).";
     else if (
       status === 403 &&
       (data?.error === "DOCUMENT_EDIT_PERIOD_LOCKED" || data?.error === "DocumentEditPeriodLocked")
     ) {
       base = data?.message?.trim() || "Davr yopilgan. Admin ochishi kerak.";
     }
+    else if (status === 403 && data?.error === "APP_ACCESS_DENIED") {
+      base =
+        data?.message?.trim() ||
+        "Доступ к приложению отключён / Ilova kirish o‘chirilgan. Обратитесь к администратору.";
+    }
+    else if (status === 403 && data?.error === "USER_NOT_ON_SLOT") {
+      base =
+        data?.message?.trim() ||
+        "Пользователь не назначен на рабочее место. Обратитесь к администратору.";
+    }
     else if (status === 403) base = "Недостаточно прав для этого действия.";
     else if (status === 404) base = "Данные не найдены.";
     else if (status === 409 && data?.error === "RuleLocked") {
       base = "Правило уже применялось в заказах — изменения ограничены.";
+    }
+    else if (
+      status === 409 &&
+      (data?.error === "DuplicateName" || data?.error === "NameExists")
+    ) {
+      base =
+        data?.message?.trim() ||
+        "Bu nomdagi mahsulot allaqachon mavjud (SKU dan mustaqil).";
+    }
+    else if (status === 409 && data?.error === "SkuExists") {
+      base = data?.message?.trim() || "Bu SKU allaqachon mavjud.";
+    }
+    else if (status === 409 && data?.error === "BarcodeExists") {
+      base = data?.message?.trim() || "Bu shtrixkod allaqachon band.";
     }
     else if (status === 409) base = "Данные были изменены. Обновите страницу и повторите.";
     else if (status === 503) base = "Сервис временно недоступен. Попробуйте позже.";

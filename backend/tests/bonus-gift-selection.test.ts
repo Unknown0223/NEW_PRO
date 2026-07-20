@@ -92,11 +92,19 @@ describe("bonusGiftSelectionMeta", () => {
     expect(meta).toEqual({ kind: "assortment_auto", allow_gift_swap: false });
   });
 
-  it("faqat kategoriya, aniq sovg‘a SKU yo‘q — ombor ustuvorligi (category_stock), almashtirib bo‘lmaydi", () => {
+  it("faqat kategoriya, aniq sovg‘a SKU yo‘q, 1 nomzod — category_stock, swap yo‘q", () => {
     const meta = bonusGiftSelectionMeta(
       rule({ product_ids: [], product_category_ids: [5], bonus_product_ids: [] }),
-      0
+      1
     );
     expect(meta).toEqual({ kind: "category_stock", allow_gift_swap: false });
+  });
+
+  it("faqat kategoriya, 2+ nomzod — category_stock, swap ruxsat", () => {
+    const meta = bonusGiftSelectionMeta(
+      rule({ product_ids: [], product_category_ids: [5], bonus_product_ids: [] }),
+      3
+    );
+    expect(meta).toEqual({ kind: "category_stock", allow_gift_swap: true });
   });
 });

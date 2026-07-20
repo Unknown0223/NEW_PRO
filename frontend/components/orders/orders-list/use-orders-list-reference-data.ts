@@ -24,7 +24,8 @@ import type { OrdersUrlFilters } from "./types";
 export function useOrdersListReferenceData(
   tenantSlug: string | null,
   effectiveRole: string | null | undefined,
-  filterDraft: OrdersUrlFilters
+  filterDraft: OrdersUrlFilters,
+  actorUserId: number | null = null
 ) {
   const canBulkCatalog = isAdminOrOperatorLikeRole(effectiveRole);
 
@@ -41,7 +42,7 @@ export function useOrdersListReferenceData(
   });
 
   const agentsQ = useQuery({
-    queryKey: ["agents", tenantSlug, "orders-toolbar"],
+    queryKey: ["agents", tenantSlug, actorUserId, "orders-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -53,7 +54,7 @@ export function useOrdersListReferenceData(
   });
 
   const expeditorsQ = useQuery({
-    queryKey: ["expeditors", tenantSlug, "orders-toolbar"],
+    queryKey: ["expeditors", tenantSlug, actorUserId, "orders-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -151,16 +152,25 @@ export function useOrdersListReferenceData(
   const paymentTypeFilterOpts = useMemo(() => {
     const raw = ordersProfileRefsQ.data?.payment_types;
     if (!Array.isArray(raw) || raw.length === 0) return [];
+    // Saqlash kaliti (kod) → spravochnikdagi nom; topilmasa kalit o‘zi
+    const entries = ordersProfileRefsQ.data?.payment_method_entries ?? [];
+    const labelByKey = new Map<string, string>();
+    for (const e of entries) {
+      const name = e?.name?.trim();
+      if (!name) continue;
+      const key = (e.code?.trim() || name).slice(0, 64);
+      if (!labelByKey.has(key)) labelByKey.set(key, name);
+    }
     const seen = new Set<string>();
     const out: { value: string; label: string }[] = [];
     for (const x of raw) {
       const t = String(x).trim().slice(0, 64);
       if (!t || seen.has(t)) continue;
       seen.add(t);
-      out.push({ value: t, label: t });
+      out.push({ value: t, label: labelByKey.get(t) ?? t });
     }
     return out.sort((a, b) => a.label.localeCompare(b.label, "ru"));
-  }, [ordersProfileRefsQ.data?.payment_types]);
+  }, [ordersProfileRefsQ.data?.payment_types, ordersProfileRefsQ.data?.payment_method_entries]);
 
   const clientCategoryFilterOpts = useMemo(() => {
     const raw = ordersProfileRefsQ.data?.client_categories;

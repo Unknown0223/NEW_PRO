@@ -22,6 +22,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { assertOrderAgentAllowedForActor } from "../access/access-agent-scope";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import {
   createPayment,
@@ -68,11 +69,19 @@ export async function registerPaymentWriteRoutes(app: FastifyInstance) {
       }
       try {
         await assertDocWritableById(request, "payments", id);
+        if (parsed.data.ledger_agent_id != null && parsed.data.ledger_agent_id > 0) {
+          const viewer = getAccessUser(request);
+          await assertOrderAgentAllowedForActor(request.tenant!.id, parsed.data.ledger_agent_id, {
+            userId: actorUserIdOrNull(request),
+            role: viewer.role ?? ""
+          });
+        }
         const payload = await updatePayment(tenantId, id, parsed.data, actorUserIdOrNull(request));
         return reply.send(payload);
       } catch (e) {
         if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = e instanceof Error ? e.message : "";
+        if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "PAYMENT_VOIDED") return sendApiError(reply, request, 409, "PaymentVoided");
         if (msg === "EMPTY_PATCH") return sendApiError(reply, request, 400, "ValidationError", "Empty patch");

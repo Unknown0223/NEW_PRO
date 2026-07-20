@@ -13,14 +13,16 @@ import type { ReportActor } from "./client-sales-4-report.service";
 import type { ProductSalesReportFilters } from "./product-sales.types";
 import { decStr, rowToDto, runProductAggCore, STATUS_CTE } from "./product-sales.agg";
 import { buildOrderWhereSql, productFilterSql } from "./product-sales.where";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 export async function getProductSalesReport(
   tenantId: number,
   f: ProductSalesReportFilters,
   actor?: ReportActor
 ) {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const offset = (f.page - 1) * f.limit;
-  const { rows, total } = await runProductAggCore(tenantId, f, actor, { offset, limit: f.limit });
+  const { rows, total } = await runProductAggCore(tenantId, f, scopedActor, { offset, limit: f.limit });
 
   const totalsRow = await prisma.$queryRaw<
     Array<{
@@ -58,7 +60,7 @@ export async function getProductSalesReport(
       JOIN products p ON p.id = oi.product_id AND p.tenant_id = ${tenantId}
       LEFT JOIN product_categories pc ON pc.id = p.category_id
       LEFT JOIN warehouse_blocks wb ON wb.id = o.warehouse_block_id
-      WHERE ${buildOrderWhereSql(tenantId, f, actor)}
+      WHERE ${buildOrderWhereSql(tenantId, f, scopedActor)}
         ${productFilterSql(f)}
     ),
     line_w AS (

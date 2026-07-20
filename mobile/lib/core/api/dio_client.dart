@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/session_expired.dart';
 import '../time/server_clock.dart';
 import '../config/app_env.dart';
+import '../errors/error_reporter.dart';
 import 'api_base_url.dart';
 
 export 'api_base_url.dart' show configureApiHostForAndroidEmulator, resolveApiBaseUrl;
@@ -22,6 +23,8 @@ final dioProvider = Provider<Dio>((ref) {
   final dio = _plainDio();
   dio.interceptors.add(ServerTimeInterceptor());
   dio.interceptors.add(AuthInterceptor(ref));
+  dio.interceptors.add(ErrorReportInterceptor(ref));
+  ErrorReporter.bind(ref);
   return dio;
 });
 

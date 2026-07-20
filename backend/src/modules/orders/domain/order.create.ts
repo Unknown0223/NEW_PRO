@@ -73,6 +73,7 @@ import {
   type OrderDetailRow
 } from "./order.types";
 import { runCreateOrderTransaction } from "./order.create-tx";
+import { assertOrderAgentAllowedForActor } from "../../access/access-agent-scope";
 
 export type OrderViewerContext = {
   role?: string;
@@ -99,6 +100,13 @@ export async function createOrder(
     ) {
       throw new Error("EXCHANGE_PAYLOAD_REQUIRED");
     }
+  }
+
+  if (viewerRole && viewerCtx.userId) {
+    await assertOrderAgentAllowedForActor(tenantId, input.agent_id ?? null, {
+      userId: viewerCtx.userId,
+      role: viewerRole
+    });
   }
 
   const client = await prisma.client.findFirst({
@@ -190,11 +198,19 @@ export async function createOrder(
     if (input.agent_id == null || !Number.isFinite(input.agent_id) || input.agent_id < 1) {
       throw new Error("ORDER_REQUIRES_AGENT");
     }
+    const { assertAgentCanTakeNewWork } = await import(
+      "../../work-slots/work-slots.agent-gate"
+    );
+    await assertAgentCanTakeNewWork(tenantId, input.agent_id);
   }
   if (orderType === "exchange") {
     if (input.agent_id == null || !Number.isFinite(input.agent_id) || input.agent_id < 1) {
       throw new Error("EXCHANGE_REQUIRES_AGENT");
     }
+    const { assertAgentCanTakeNewWork } = await import(
+      "../../work-slots/work-slots.agent-gate"
+    );
+    await assertAgentCanTakeNewWork(tenantId, input.agent_id);
   }
 
   const tenantRow = await prisma.tenant.findUnique({

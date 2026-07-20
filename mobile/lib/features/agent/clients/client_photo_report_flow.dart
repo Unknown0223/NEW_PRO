@@ -237,6 +237,17 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   int? orderId,
   String? category,
 }) async {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+    if (context.mounted) {
+      showAgentToast(
+        context,
+        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        accentColor: AppColors.warning,
+      );
+    }
+    return null;
+  }
+
   final caption = category ?? await pickPhotoReportCategory(context, ref);
   if (caption == null || !context.mounted) return null;
 
@@ -306,15 +317,28 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Foto oflayn saqlandi — internet paydo bo‘lganda yuboriladi'
-            : 'Internet yo‘q — fotoni saqlab bo‘lmadi',
+            ? 'Foto oflayn saqlandi — internet paydo bo‘lganda (5 martagacha) yuboriladi'
+            : 'Sync vaqti tugagan yoki fotoni saqlab bo‘lmadi',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
     }
     return null;
   } catch (e) {
+    // Server xatosi — navbatga qo‘yib online da qayta urinish.
+    final queued = await PhotoReportQueue.enqueue(
+      clientId: clientId,
+      imagePath: photo.filePath,
+      caption: caption,
+      orderId: orderId,
+    );
     if (context.mounted) {
-      showAgentToast(context, 'Foto yuklanmadi: $e');
+      showAgentToast(
+        context,
+        queued
+            ? 'Foto saqlandi — online bo‘lganda qayta yuboriladi'
+            : 'Foto yuklanmadi: $e',
+        accentColor: queued ? AppColors.warning : AppColors.error,
+      );
     }
     return null;
   }
@@ -327,6 +351,17 @@ Future<ClientPhotoReport?> replacePhotoReport({
   required int clientId,
   required ClientPhotoReport existing,
 }) async {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+    if (context.mounted) {
+      showAgentToast(
+        context,
+        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        accentColor: AppColors.warning,
+      );
+    }
+    return null;
+  }
+
   final caption = (existing.caption ?? '').trim();
   if (caption.isEmpty) {
     if (context.mounted) {

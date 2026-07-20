@@ -1,10 +1,29 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { applyAccessResetToRoleDefaultTx } from "../access/access.reset.service";
 import { SLOT_TYPE_TO_USER_ROLE, isWorkSlotType } from "./work-slots.constants";
 import {
   linkAgentAssignmentsToWorkSlot,
   migrateClientsOnAgentSlotSwap
 } from "./work-slots.client-sync";
+import {
+  clearWorkplaceFieldsOnUser,
+  mirrorSlotConfigToUser
+} from "./work-slots.config-mirror";
+
+/** Slotdan chiqarilganda shaxsiy ekstra ruxsatlar olib tashlanadi — rol standarti qoladi. */
+async function resetLeavingUserAccess(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  userId: number
+): Promise<void> {
+  const user = await tx.user.findFirst({
+    where: { id: userId, tenant_id: tenantId },
+    select: { role: true }
+  });
+  if (!user?.role?.trim()) return;
+  await applyAccessResetToRoleDefaultTx(tx, tenantId, userId, user.role.trim());
+}
 
 export function assertUserMatchesSlotType(userRole: string, slotType: string): void {
   if (!isWorkSlotType(slotType)) throw new Error("BAD_SLOT_TYPE");
@@ -48,6 +67,8 @@ export async function assignUserToSlot(
         where: { id: current.id },
         data: { ended_at: new Date(), ended_by: actorId }
       });
+      await clearWorkplaceFieldsOnUser(tx, tenantId, current.user_id);
+      await resetLeavingUserAccess(tx, tenantId, current.user_id);
     }
 
     const link = await tx.slotUserLink.create({
@@ -58,6 +79,10 @@ export async function assignUserToSlot(
         note: note?.trim() || null
       }
     });
+
+    // Yangi xodim: shaxsiy ekstra ruxsatlar o‘tkazilmaydi — rol standarti + slot config mirror.
+    await resetLeavingUserAccess(tx, tenantId, newUserId);
+    await mirrorSlotConfigToUser(tx, tenantId, slotId, newUserId);
 
     await tx.slotAuditEntry.create({
       data: {
@@ -106,6 +131,9 @@ export async function unassignUserFromSlot(
       where: { id: current.id },
       data: { ended_at: new Date(), ended_by: actorId }
     });
+
+    await clearWorkplaceFieldsOnUser(tx, tenantId, current.user_id);
+    await resetLeavingUserAccess(tx, tenantId, current.user_id);
 
     await tx.slotAuditEntry.create({
       data: {

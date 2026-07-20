@@ -241,10 +241,18 @@ export async function upsertAgentRouteDay(
 
 export async function listAgentRouteDays(
   tenantId: number,
-  opts: { agent_id?: number; from?: string; to?: string; page: number; limit: number }
+  opts: {
+    agent_id?: number;
+    agent_ids?: number[];
+    from?: string;
+    to?: string;
+    page: number;
+    limit: number;
+  }
 ) {
   const where: Prisma.AgentRouteDayWhereInput = { tenant_id: tenantId };
   if (opts.agent_id) where.agent_id = opts.agent_id;
+  else if (opts.agent_ids) where.agent_id = { in: opts.agent_ids };
   if (opts.from || opts.to) {
     where.route_date = {};
     if (opts.from) {

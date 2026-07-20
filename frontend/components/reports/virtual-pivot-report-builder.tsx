@@ -54,7 +54,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DemoApplyCancelBar } from "@/components/reports/demo-dialog-actions";
 import { cn } from "@/lib/utils";
 import { usePivot } from "@/hooks/pivot/usePivot";
 import { usePivotExport } from "@/hooks/pivot/usePivotExport";
@@ -140,7 +139,7 @@ function ToolbarButton({
   );
 }
 
-/** «Опции схемы» — radio groups, Arena Universal demo look. */
+/** WebDataRocks / Arena «Настройки разметки» — pixel-close radio column. */
 function OptionGroup({
   title,
   name,
@@ -155,31 +154,74 @@ function OptionGroup({
   items: readonly (readonly [string, string])[];
 }) {
   return (
-    <div className="min-w-0">
-      <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#2b2b2b]">{title}</p>
-      <div className="flex flex-col gap-2.5">
+    <div className="min-w-0" style={{ verticalAlign: "top" }}>
+      <div
+        style={{
+          color: "#999",
+          fontSize: 14,
+          textTransform: "uppercase",
+          marginBottom: 25,
+          fontFamily: "Arial, Helvetica, sans-serif",
+          letterSpacing: 0
+        }}
+      >
+        {title}
+      </div>
+      <ul className="m-0 list-none p-0">
         {items.map(([itemValue, label]) => {
           const checked = value === itemValue;
           return (
-            <label
-              key={itemValue}
-              className={cn(
-                "flex cursor-pointer items-start gap-2.5 text-[13px] leading-[1.35] text-[#2b2b2b]",
-                checked && "font-medium"
-              )}
-            >
-              <input
-                type="radio"
-                name={name}
-                checked={checked}
-                onChange={() => onChange(itemValue)}
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#555]"
-              />
-              <span>{label}</span>
-            </label>
+            <li key={itemValue} style={{ marginBottom: 12 }}>
+              <div className="relative">
+                <input
+                  id={`${name}-${itemValue}`}
+                  type="radio"
+                  name={name}
+                  checked={checked}
+                  onChange={() => onChange(itemValue)}
+                  className="peer absolute opacity-0"
+                  style={{ width: 0, height: 0 }}
+                />
+                <label
+                  htmlFor={`${name}-${itemValue}`}
+                  className="relative inline-block cursor-pointer"
+                  style={{
+                    color: "#111",
+                    fontSize: 14,
+                    padding: "4px 0 4px 35px",
+                    lineHeight: 1.2,
+                    fontFamily: "Arial, Helvetica, sans-serif",
+                    fontWeight: checked ? 700 : 400
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1/2 block -translate-y-1/2 rounded-full bg-white"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      border: "1px solid #d5d5d5"
+                    }}
+                  />
+                  {checked ? (
+                    <span
+                      aria-hidden
+                      className="absolute top-1/2 block -translate-y-1/2 rounded-full"
+                      style={{
+                        width: 14,
+                        height: 14,
+                        left: 5,
+                        background: "#555"
+                      }}
+                    />
+                  ) : null}
+                  {label}
+                </label>
+              </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -240,7 +282,6 @@ export function VirtualPivotReportBuilder() {
   const [grandTotals, setGrandTotals] = useState<"none" | "both" | "rows" | "columns">("both");
   const [subtotals, setSubtotals] = useState<"none" | "both" | "rows" | "columns">("both");
   const [schema, setSchema] = useState<PivotLayoutForm>("flat");
-  const [draftDrillThrough, setDraftDrillThrough] = useState(false);
   const [formatCellsOpen, setFormatCellsOpen] = useState(false);
   const [dateFormatOpen, setDateFormatOpen] = useState(false);
   const [dateFormat, setDateFormat] = useState<PivotDateFormatState>(DEFAULT_PIVOT_DATE_FORMAT);
@@ -805,7 +846,6 @@ export function VirtualPivotReportBuilder() {
         : "both"
     );
     setSchema(layout);
-    setDraftDrillThrough(config.options.drillThrough === true);
     setOptionsOpen(true);
   }, [config]);
 
@@ -819,8 +859,7 @@ export function VirtualPivotReportBuilder() {
         showColumnTotals: grandTotals === "both" || grandTotals === "columns",
         showSubtotals: subtotals === "both" || subtotals === "rows",
         layoutForm: nextLayout,
-        compactMode: nextLayout === "compact",
-        drillThrough: draftDrillThrough
+        compactMode: nextLayout === "compact"
       }
     };
     if (nextLayout === "flat") {
@@ -834,7 +873,7 @@ export function VirtualPivotReportBuilder() {
       }, 0);
     }
     setOptionsOpen(false);
-  }, [collapseAll, config, draftDrillThrough, expandAll, expandableRowKeys.length, grandTotals, schema, subtotals, updateConfig]);
+  }, [collapseAll, config, expandAll, expandableRowKeys.length, grandTotals, schema, subtotals, updateConfig]);
 
   const openFields = useCallback(() => {
     setFieldsInitialConfig(config);
@@ -1437,28 +1476,96 @@ export function VirtualPivotReportBuilder() {
         <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
           <DialogContent
             showCloseButton={false}
-            overlayClassName="bg-black/35"
+            overlayClassName="bg-black/25"
             className={cn(
-              "gap-0 overflow-hidden rounded-sm border border-[#d4d4d4] bg-white p-0 text-[#2b2b2b] shadow-xl",
-              "w-[720px] max-w-[calc(100%-2rem)]",
-              /* Markaz — demodak (inset + margin, transform yo‘q) */
+              "gap-0 overflow-visible rounded-none border border-[#d5d5d5] bg-white p-0 shadow-[0_4px_16px_rgba(0,0,0,0.25)]",
               "!inset-0 !left-0 !right-0 !top-0 !bottom-0 !m-auto !h-fit",
               "!translate-x-0 !translate-y-0 !transform-none",
-              "data-open:!animate-none data-closed:!animate-none !duration-0"
+              "data-open:!animate-none data-closed:!animate-none !duration-0 !ring-0",
+              "w-[620px] max-w-[calc(100%-2rem)] sm:max-w-[620px]"
             )}
-            style={{ transform: "none" }}
+            style={{
+              transform: "none",
+              padding: "22px 28px 28px",
+              boxSizing: "border-box",
+              fontFamily: "Arial, Helvetica, sans-serif"
+            }}
           >
-            <div
-              className="flex items-center justify-between gap-3 px-4 py-3"
-              style={{ borderBottom: "1px solid #e2e2e2", background: "#ffffff" }}
-            >
-              <DialogTitle className="text-[15px] font-semibold leading-none text-[#2b2b2b]">
+            {/* Header — Arena original */}
+            <div className="relative" style={{ minHeight: 40, marginBottom: 28 }}>
+              <DialogTitle
+                className="m-0 block p-0"
+                style={{
+                  color: "#111",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  padding: "6px 0",
+                  lineHeight: 1.2,
+                  paddingRight: 210
+                }}
+              >
                 Настройки разметки
               </DialogTitle>
-              <DemoApplyCancelBar onApply={applyOptions} onCancel={() => setOptionsOpen(false)} />
+              <div
+                className="absolute right-0 top-0 flex"
+                style={{ fontSize: 0 }}
+              >
+                <button
+                  type="button"
+                  onClick={applyOptions}
+                  className="inline-block cursor-pointer text-center uppercase outline-none"
+                  style={{
+                    height: 38,
+                    minWidth: 90,
+                    marginRight: 20,
+                    padding: "10px 12px",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    color: "#fff",
+                    background: "#555",
+                    border: "none",
+                    borderRadius: 4,
+                    fontFamily: "Arial, Helvetica, sans-serif"
+                  }}
+                >
+                  Применить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOptionsOpen(false)}
+                  className="inline-block cursor-pointer text-center uppercase outline-none"
+                  style={{
+                    height: 38,
+                    minWidth: 90,
+                    padding: "10px 12px",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    color: "#555",
+                    background: "#DBDBDB",
+                    border: "none",
+                    borderRadius: 4,
+                    fontFamily: "Arial, Helvetica, sans-serif"
+                  }}
+                >
+                  Отмена
+                </button>
+              </div>
             </div>
-            <div className="px-5 pb-6 pt-5" style={{ background: "#ffffff" }}>
-              <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
+
+            {/* Body — Arena original: 2 ustun + Разметки chap pastda */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gridTemplateRows: "auto auto",
+                columnGap: 40,
+                rowGap: 36,
+                fontSize: 14
+              }}
+            >
+              <div style={{ gridColumn: 1, gridRow: 1 }}>
                 <OptionGroup
                   title="Общий итог"
                   name="grand-totals"
@@ -1466,6 +1573,8 @@ export function VirtualPivotReportBuilder() {
                   onChange={(v) => setGrandTotals(v as typeof grandTotals)}
                   items={GRAND_TOTAL_OPTIONS}
                 />
+              </div>
+              <div style={{ gridColumn: 2, gridRow: 1 }}>
                 <OptionGroup
                   title="Промежуточный итог"
                   name="subtotals"
@@ -1473,6 +1582,8 @@ export function VirtualPivotReportBuilder() {
                   onChange={(v) => setSubtotals(v as typeof subtotals)}
                   items={SUBTOTAL_OPTIONS}
                 />
+              </div>
+              <div style={{ gridColumn: 1, gridRow: 2 }}>
                 <OptionGroup
                   title="Разметки"
                   name="schema"
@@ -1481,20 +1592,6 @@ export function VirtualPivotReportBuilder() {
                   items={LAYOUT_FORM_OPTIONS}
                 />
               </div>
-              <label className="mt-5 flex cursor-pointer items-start gap-2 text-sm text-[#2b2b2b]">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={draftDrillThrough}
-                  onChange={(e) => setDraftDrillThrough(e.target.checked)}
-                />
-                <span>
-                  <span className="font-medium">Исходные записи</span>
-                  <span className="mt-0.5 block text-xs text-[#666]">
-                    Двойной щелчок по значению открывает детализацию (по умолчанию выкл.)
-                  </span>
-                </span>
-              </label>
             </div>
           </DialogContent>
         </Dialog>

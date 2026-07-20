@@ -29,7 +29,7 @@ const VARIANT_PRESETS: Record<
     minPopoverWidth: 280,
     maxListHeightClass: "max-h-64",
     hidePopoverHeader: false,
-    triggerClass: cn(filterSelectClassName, "h-8 w-full min-w-0 text-xs font-normal shadow-sm")
+    triggerClass: cn(filterSelectClassName, "h-8 w-full min-w-0 max-w-none text-xs font-normal shadow-sm")
   },
   bulk: {
     minPopoverWidth: 380,

@@ -12,6 +12,10 @@ import { cursorPagination, decodeCursor } from "../../../lib/pagination";
 import { getAppCache, invalidateDashboard, invalidateStock, ordersListCacheKey, setAppCache } from "../../../lib/redis-cache";
 import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
+import {
+  buildOrderAgentScopeWhere,
+  enrichScopedReportActor
+} from "../../access/access-agent-scope";
 import { clientIdsWithVisitWeekday } from "../../clients/clients.list.where";
 import { isDiscountAlertCode } from "../order-discount-alert";
 import { isBonusAlertCode } from "../order-bonus-stock-cap";
@@ -51,8 +55,14 @@ import {
   loadDeliveryDebtByClient,
   mergeLedgerWithUnpaidDelivered
 } from "../../client-balances/client-balances.service";
-import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
-import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
+import {
+  resolvePaymentMethodRefToLabel,
+  resolvePriceTypeKeyToLabel
+} from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import { prepareExchangeOrderLines } from "../exchange-order-create";
 
 import {
@@ -149,6 +159,15 @@ export async function listOrdersPaged(
   }
 
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
+
+  const scopedActor = await enrichScopedReportActor(tenantId, {
+    userId: viewerUserId ?? null,
+    role: viewerRole
+  });
+  const agentScopeWhere = buildOrderAgentScopeWhere(scopedActor);
+  if (agentScopeWhere) {
+    andClauses.push(agentScopeWhere);
+  }
 
   if (q.status?.trim()) {
     andClauses.push({ status: q.status.trim() });
@@ -405,6 +424,18 @@ export async function listOrdersPaged(
     }))
   );
 
+  // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
+  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  const priceTypeDisplayLabel = (refRaw: string | null): string | null => {
+    if (!refRaw) return null;
+    const viaPm = resolvePaymentMethodRefToLabel(refRaw, pmEntriesForLabel);
+    if (viaPm != null && viaPm !== refRaw) return viaPm;
+    return resolvePriceTypeKeyToLabel(refRaw, ptEntriesForLabel);
+  };
+
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
     rows.map((o) => ({
@@ -523,7 +554,7 @@ export async function listOrdersPaged(
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
-      price_type: o.payment_method_ref?.trim() || null,
+      price_type: priceTypeDisplayLabel(o.payment_method_ref?.trim() || null),
       comment: (o as { comment?: string | null }).comment ?? null,
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
       payment_method_ref: o.payment_method_ref?.trim() || null,

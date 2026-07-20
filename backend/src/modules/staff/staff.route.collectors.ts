@@ -170,6 +170,15 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
+        if (msg === "WORK_SLOT_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "WorkSlotRequired",
+            "Рабочее место обязательно — назначьте свободный слот"
+          );
+        }
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
         if (msg === "BAD_MAX_SESSIONS") return sendApiError(reply, request, 400, "BadMaxSessions");
@@ -202,6 +211,15 @@ export async function registerStaffCollectorRoutes(app: FastifyInstance) {
         if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
+        if (msg === "WORK_SLOT_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "WorkSlotRequired",
+            "Рабочее место обязательно — назначьте свободный слот"
+          );
+        }
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_ENTITLEMENT_CATEGORY" || msg === "BAD_ENTITLEMENT_PRODUCT") {
           return sendApiError(reply, request, 400, "BadEntitlements");

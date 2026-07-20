@@ -66,6 +66,11 @@ class AppColors {
   static const Color teal700 = Color(0xFF0F766E);
   static const Color teal600 = Color(0xFF0D9488);
 
+  // KPI oylik hisobot (Screen 35) — qorong‘i hero
+  static const Color darkSurface = Color(0xFF0B2538);
+  static const Color darkSurface2 = Color(0xFF0F4544);
+  static const Color kpiChartGreen = Color(0xFF86EFAC);
+
   // Bonus / Discount (shablon #29 — BONUS & DISCOUNT LADDER)
   static const Color bonusBg = Color(0xFFFEF9C3);
   static const Color bonusBg2 = Color(0xFFFEF08A);

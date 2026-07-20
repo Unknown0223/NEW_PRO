@@ -18,7 +18,7 @@ class AppDatabase {
     final path = p.join(dbPath, 'salesdoc.db');
     return openDatabase(
       path,
-      version: 15,
+      version: 17,
       onOpen: (db) async {
         // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
         try {
@@ -26,6 +26,8 @@ class AppDatabase {
           await db.rawQuery('PRAGMA synchronous=NORMAL');
         } catch (_) {}
         await _ensureClientColumns(db);
+        await _ensureHeldOrderSummaryColumns(db);
+        await _ensurePhotoRetryColumn(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -146,7 +148,8 @@ class AppDatabase {
             caption TEXT NOT NULL,
             order_id INTEGER,
             created_at TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending'
+            status TEXT NOT NULL DEFAULT 'pending',
+            retry_count INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -167,8 +170,11 @@ class AppDatabase {
             shipment_date TEXT,
             estimated_total REAL NOT NULL DEFAULT 0,
             item_count INTEGER NOT NULL DEFAULT 0,
+            bonus_qty INTEGER NOT NULL DEFAULT 0,
+            discount_pct REAL NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             submit_at TEXT NOT NULL,
+            capture_deadline TEXT,
             status TEXT NOT NULL DEFAULT 'pending'
           )
         ''');
@@ -261,11 +267,19 @@ class AppDatabase {
               shipment_date TEXT,
               estimated_total REAL NOT NULL DEFAULT 0,
               item_count INTEGER NOT NULL DEFAULT 0,
+              bonus_qty INTEGER NOT NULL DEFAULT 0,
+              discount_pct REAL NOT NULL DEFAULT 0,
               created_at TEXT NOT NULL,
               submit_at TEXT NOT NULL,
               status TEXT NOT NULL DEFAULT 'pending'
             )
           ''');
+        }
+        if (oldVersion < 16) {
+          await _ensureHeldOrderSummaryColumns(db);
+        }
+        if (oldVersion < 17) {
+          await _ensurePhotoRetryColumn(db);
         }
         if (oldVersion < 5) {
           await db.execute('''
@@ -287,6 +301,31 @@ class AppDatabase {
         }
       },
     );
+  }
+
+  static Future<void> _ensureHeldOrderSummaryColumns(Database db) async {
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN bonus_qty INTEGER NOT NULL DEFAULT 0');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+    } catch (_) {}
+  }
+
+  static Future<void> _ensurePhotoRetryColumn(Database db) async {
+    try {
+      await db.execute(
+        'ALTER TABLE pending_photo_reports ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN capture_deadline TEXT');
+    } catch (_) {}
+    try {
+      await db.execute(
+        "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
+      );
+    } catch (_) {}
   }
 
   static Future<void> _ensureClientColumns(Database db) async {
@@ -809,8 +848,26 @@ class AppDatabase {
     final db = await database;
     return db.query(
       'pending_photo_reports',
-      where: "status = 'pending'",
+      where: "status = 'pending' AND retry_count < 5",
       orderBy: 'created_at ASC',
+    );
+  }
+
+  Future<void> bumpPendingPhotoRetry(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE pending_photo_reports SET retry_count = retry_count + 1 WHERE id = ?',
+      [id],
+    );
+  }
+
+  Future<void> markPendingPhotoFailed(int id) async {
+    final db = await database;
+    await db.update(
+      'pending_photo_reports',
+      {'status': 'failed'},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
@@ -822,9 +879,19 @@ class AppDatabase {
   Future<int> pendingPhotoReportCount() async {
     final db = await database;
     final r = await db.rawQuery(
-      "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending'",
+      "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending' AND retry_count < 5",
     );
     return r.first['cnt'] as int? ?? 0;
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingHeldOrdersForClient(int clientId) async {
+    final db = await database;
+    return db.query(
+      'held_orders',
+      where: "status = 'pending' AND client_id = ?",
+      whereArgs: [clientId],
+      orderBy: 'submit_at ASC',
+    );
   }
 
   Future<void> setLastSyncAt(String value) async {
@@ -872,10 +939,34 @@ class AppDatabase {
     return r.first['cnt'] as int? ?? 0;
   }
 
+  /// Chernovik TTL — [OrderDraft.ttl] bilan bir xil (1 kun saved_at dan).
+  static const _orderDraftTtl = Duration(days: 1);
+
   Future<void> purgeExpiredOrderDrafts() async {
     final db = await database;
-    final now = DateTime.now().toIso8601String();
-    await db.delete('order_drafts', where: 'expires_at <= ?', whereArgs: [now]);
+    final rows = await db.query('order_drafts', columns: ['client_id', 'saved_at', 'expires_at']);
+    final now = DateTime.now();
+    for (final row in rows) {
+      final clientId = (row['client_id'] as num?)?.toInt();
+      if (clientId == null) continue;
+      final savedAt = DateTime.tryParse(row['saved_at']?.toString() ?? '') ?? now;
+      final expiresAt = savedAt.add(_orderDraftTtl);
+      if (!now.isBefore(expiresAt)) {
+        await db.delete('order_drafts', where: 'client_id = ?', whereArgs: [clientId]);
+        continue;
+      }
+      // Migrate legacy short expires_at (e.g. 1h) to 1-day TTL.
+      final stored = row['expires_at']?.toString();
+      final iso = expiresAt.toIso8601String();
+      if (stored != iso) {
+        await db.update(
+          'order_drafts',
+          {'expires_at': iso},
+          where: 'client_id = ?',
+          whereArgs: [clientId],
+        );
+      }
+    }
   }
 
   Future<void> upsertOrderDraft(Map<String, dynamic> row) async {

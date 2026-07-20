@@ -20,6 +20,7 @@ import { PaymentsTemplateFiltersPanel } from "@/components/payments/payments-tem
 import { PaymentsTemplateListToolbar } from "@/components/payments/payments-template-list-toolbar";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
@@ -215,6 +216,8 @@ function isCashPaymentType(code: string, label: string): boolean {
 export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: ClientPaymentsWorkspaceVariant }) {
   const isExpenses = variant === "client_expenses";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const canVoidPayments = effectiveRole === "admin";
@@ -249,7 +252,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   }, [queryString]);
 
   const listQ = useQuery({
-    queryKey: ["payments", tenantSlug, variant, queryString],
+    queryKey: ["payments", tenantSlug, actorUserId, variant, queryString],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.list,
     queryFn: async () => {
@@ -261,7 +264,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   useEffect(() => setFilterVis(loadPaymentFilterVisibility()), []);
 
   const agentsQ = useQuery({
-    queryKey: ["agents", tenantSlug, "payments-filters"],
+    queryKey: ["agents", tenantSlug, actorUserId, "payments-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -271,7 +274,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   });
 
   const expeditorsQ = useQuery({
-    queryKey: ["expeditors", tenantSlug, "payments-filters"],
+    queryKey: ["expeditors", tenantSlug, actorUserId, "payments-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {

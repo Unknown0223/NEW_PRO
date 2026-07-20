@@ -51,7 +51,13 @@ export async function registerOrderDetailRoutes(app: FastifyInstance) {
       const { id } = parsedParams.data;
       try {
         const viewer = getAccessUser(request);
-        const row = await getOrderDetail(request.tenant!.id, id, viewer.role);
+        const viewerId = Number.parseInt(String(viewer.sub ?? ""), 10);
+        const row = await getOrderDetail(
+          request.tenant!.id,
+          id,
+          viewer.role,
+          Number.isFinite(viewerId) && viewerId > 0 ? viewerId : null
+        );
         return reply.send(row);
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {

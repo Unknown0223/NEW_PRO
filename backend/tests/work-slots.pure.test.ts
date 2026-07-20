@@ -46,6 +46,22 @@ describe("work-slots.assign", () => {
   });
 });
 
+describe("work-slots.config-territory", () => {
+  it("patches territory parts onto existing string", async () => {
+    const { applyTerritoryFieldPatch, buildUserTerritory } = await import(
+      "../src/modules/work-slots/work-slots.config-territory"
+    );
+    expect(buildUserTerritory({ zone: "A", oblast: "B", city: null })).toBe("A / B");
+    expect(applyTerritoryFieldPatch("X / Y / Z", { territory_zone: "N" })).toBe("N / Y / Z");
+  });
+
+  it("hasSlotConfigPatch detects workplace fields", async () => {
+    const { hasSlotConfigPatch } = await import("../src/modules/work-slots/work-slots.config-mirror");
+    expect(hasSlotConfigPatch({})).toBe(false);
+    expect(hasSlotConfigPatch({ cash_desk_id: 1 })).toBe(true);
+  });
+});
+
 describe("work-slots.schema", () => {
   it("createWorkSlotBodySchema normalizes required slot_code", () => {
     const parsed = createWorkSlotBodySchema.parse({
@@ -96,6 +112,10 @@ describe("work-slots.schema", () => {
       warehouse_id: 3
     });
     expect(loc.success).toBe(true);
+    const labelOk = bulkWorkSlotsBodySchema.safeParse({ slot_ids: [1], label: "Test" });
+    expect(labelOk.success).toBe(true);
+    const retWh = bulkWorkSlotsBodySchema.safeParse({ slot_ids: [1], return_warehouse_id: 5 });
+    expect(retWh.success).toBe(true);
     const multi = bulkWorkSlotsBodySchema.safeParse({
       slot_ids: [1, 2, 3],
       branch_codes: ["A", "B"],
@@ -156,5 +176,67 @@ describe("work-slots.kpi", () => {
         date_to: new Date("2026-05-01")
       })
     ).rejects.toThrow("BAD_DATE_RANGE");
+  });
+});
+
+describe("work-slots.plan-policy", () => {
+  it("starter keeps full share; incoming gets prorata under default policy", async () => {
+    const {
+      resolveSlotPlanShare,
+      applyPlanShare,
+      DEFAULT_SLOT_PLAN_POLICY
+    } = await import("../src/modules/work-slots/work-slots.plan-policy");
+    const monthStart = new Date("2026-07-01T00:00:00.000Z");
+    const monthEnd = new Date("2026-08-01T00:00:00.000Z");
+    const working = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04"];
+
+    const starter = resolveSlotPlanShare({
+      policy: DEFAULT_SLOT_PLAN_POLICY,
+      monthStart,
+      monthEnd,
+      workingDayKeys: working,
+      segments: [{ started_at: new Date("2026-06-01T00:00:00.000Z"), ended_at: new Date("2026-07-02T12:00:00.000Z") }]
+    });
+    expect(starter.role).toBe("starter");
+    expect(starter.share).toBe(1);
+    expect(applyPlanShare(1000, starter.share)).toBe(1000);
+
+    const incoming = resolveSlotPlanShare({
+      policy: DEFAULT_SLOT_PLAN_POLICY,
+      monthStart,
+      monthEnd,
+      workingDayKeys: working,
+      segments: [{ started_at: new Date("2026-07-03T00:00:00.000Z"), ended_at: null }]
+    });
+    expect(incoming.role).toBe("incoming");
+    expect(incoming.share).toBe(0.5);
+    expect(applyPlanShare(1000, incoming.share)).toBe(500);
+    expect(incoming.working_days_for_route).toEqual(["2026-07-03", "2026-07-04"]);
+  });
+
+  it("prorata_both scales both; full_both keeps 1", async () => {
+    const { resolveSlotPlanShare } = await import("../src/modules/work-slots/work-slots.plan-policy");
+    const monthStart = new Date("2026-07-01T00:00:00.000Z");
+    const monthEnd = new Date("2026-08-01T00:00:00.000Z");
+    const working = ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04"];
+    const segs = [{ started_at: new Date("2026-07-03T00:00:00.000Z"), ended_at: null }];
+
+    const both = resolveSlotPlanShare({
+      policy: "prorata_both",
+      monthStart,
+      monthEnd,
+      workingDayKeys: working,
+      segments: segs
+    });
+    expect(both.share).toBe(0.5);
+
+    const full = resolveSlotPlanShare({
+      policy: "full_both",
+      monthStart,
+      monthEnd,
+      workingDayKeys: working,
+      segments: segs
+    });
+    expect(full.share).toBe(1);
   });
 });

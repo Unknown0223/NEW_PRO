@@ -49,6 +49,7 @@ import {
   SkipForward,
   Upload
 } from "lucide-react";
+import { importMessageIndicatesSuccess, isImportFailureMessage } from "@/lib/initial-setup/import-result";
 import {
   AdaptiveCardGrid,
   ViewModeToggle,
@@ -187,7 +188,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
     setToast(null);
     try {
       const config = getStepTableConfig(step.id);
-      const preview = await parseXlsxPreview(file, requiredColumnKeys(step, config), 200, config);
+      const preview = await parseXlsxPreview(file, requiredColumnKeys(step, config), 5000, config);
       if (!preview.rows.length) {
         setToast("В файле только примеры — измените или добавьте свои строки");
         return;
@@ -409,6 +410,10 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                 effectiveDoneIds={effectiveDone}
                 externalPreview={draftByStep[step.id] ?? null}
                 onApplied={(message) => {
+                  if (!importMessageIndicatesSuccess(message)) {
+                    setToast(message || "Импорт не сохранил данные");
+                    return;
+                  }
                   mark(step.id, "done");
                   setToast(message);
                   void readinessQ.refetch();
@@ -419,6 +424,9 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                   });
                   const next = getNextReadyStep(new Set([...doneIds, step.id]), systemDoneIds);
                   if (next) setExpandedStepId(next.id);
+                }}
+                onFailed={(message) => {
+                  setToast(message);
                 }}
               />
             ) : null}
@@ -521,7 +529,15 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
       </Card>
 
       {toast ? (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-900">
+        <p
+          className={cn(
+            "sticky top-2 z-20 rounded-xl px-3.5 py-2.5 text-sm font-medium shadow-sm",
+            isImportFailureMessage(toast)
+              ? "border border-destructive/40 bg-destructive/10 text-destructive"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-900"
+          )}
+          role="alert"
+        >
           {toast}
         </p>
       ) : null}

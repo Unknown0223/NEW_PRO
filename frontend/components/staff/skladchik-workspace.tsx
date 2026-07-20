@@ -28,7 +28,7 @@ import {
   UserRoundX
 } from "lucide-react";
 import Link from "next/link";
-import { SKLADCHIK_ENTITLEMENT_GROUPS, flattenEntitlementKeys } from "@/lib/skladchik-entitlements-ui";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
@@ -712,15 +712,10 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
       />
 
       <SkladchikConfigModal
-        tenantSlug={tenantSlug}
         row={configRow}
         open={configRow != null}
         onOpenChange={(o) => {
           if (!o) setConfigRow(null);
-        }}
-        onSaved={async () => {
-          await qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
-          setConfigRow(null);
         }}
       />
 
@@ -959,14 +954,12 @@ function SkladchikCreateModal({
         email: form.email.trim() || null,
         code: form.code.trim() || null,
         pinfl: form.pinfl.trim() || null,
-        branch: form.branch.trim() || null,
         position: form.position.trim() || null,
         max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
         app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true
       };
-      if (warehouseIds.length > 0) body.warehouse_ids = warehouseIds;
       await api.post(`/api/${tenantSlug}/skladchik`, body);
     },
     onSuccess: async () => {
@@ -1061,23 +1054,6 @@ function SkladchikCreateModal({
             <FieldHint name="pinfl" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Filial</span>
-            <FilterSelect
-              className={cn(filterSelectClassName, "h-9 w-full max-w-none")}
-              emptyLabel="—"
-              aria-label="Filial"
-              value={form.branch}
-              onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
-            >
-              {branches.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-            <FieldHint name="branch" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>
             <FilterSelect
               className={cn(filterSelectClassName, "h-9 w-full max-w-none")}
@@ -1094,30 +1070,7 @@ function SkladchikCreateModal({
             </FilterSelect>
             <FieldHint name="position" errors={fieldErrors} />
           </label>
-          <div className="rounded-md border border-border/80 p-2">
-            <span className="text-xs font-medium text-muted-foreground">Omborlar</span>
-            <div className="scrollbar-none mt-1 max-h-32 space-y-1 overflow-y-auto text-xs">
-              {warehouses.length === 0 ? (
-                <span className="text-muted-foreground">Ro‘yxat yuklanmoqda…</span>
-              ) : (
-                warehouses.map((w) => (
-                  <label key={w.id} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={warehouseIds.includes(w.id)}
-                      onChange={() =>
-                        setWarehouseIds((prev) =>
-                          prev.includes(w.id) ? prev.filter((x) => x !== w.id) : [...prev, w.id]
-                        )
-                      }
-                    />
-                    {w.name}
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-          <FieldHint name="warehouse_ids" errors={fieldErrors} />
+          <WorkplaceMovedNotice />
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Maks. sessiya</span>
             <Input
@@ -1166,192 +1119,30 @@ function SkladchikCreateModal({
 }
 
 function SkladchikConfigModal({
-  tenantSlug,
   row,
   open,
-  onOpenChange,
-  onSaved
+  onOpenChange
 }: {
-  tenantSlug: string;
   row: WebStaffRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSaved: () => void | Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Record<string, boolean>>({});
-  const allKeys = useMemo(() => flattenEntitlementKeys(), []);
-
-  useEffect(() => {
-    if (!row) return;
-    setDraft({ ...row.warehouse_staff_entitlements });
-  }, [row]);
-
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      if (!row) return;
-      await api.patch(`/api/${tenantSlug}/skladchik/${row.id}`, {
-        warehouse_staff_entitlements: draft
-      });
-    },
-    onSuccess: async () => {
-      await onSaved();
-    }
-  });
-
-  const selectedTotal = useMemo(
-    () => allKeys.filter((k) => draft[k] === true).length,
-    [allKeys, draft]
-  );
-
   if (!row) return null;
-
-  function toggle(key: string) {
-    setDraft((d) => ({ ...d, [key]: !d[key] }));
-  }
-
-  function selectAllInGroup(keys: string[], value: boolean) {
-    setDraft((d) => {
-      const next = { ...d };
-      for (const k of keys) next[k] = value;
-      return next;
-    });
-  }
-
-  function clearAllEntitlements() {
-    setDraft(Object.fromEntries(allKeys.map((k) => [k, false])) as Record<string, boolean>);
-  }
-
-  function selectAllEntitlements() {
-    setDraft(Object.fromEntries(allKeys.map((k) => [k, true])) as Record<string, boolean>);
-  }
-
-  const tealPrimaryLocal =
-    "bg-teal-600 text-white shadow-sm hover:bg-teal-700 focus-visible:ring-teal-600/40 disabled:opacity-60";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="flex max-h-[88vh] max-w-2xl flex-col gap-0 overflow-hidden border border-teal-800/25 p-0 shadow-xl sm:max-w-2xl"
-        showCloseButton
-      >
-        <DialogHeader className="space-y-2 border-b border-teal-800/20 bg-teal-950/[0.03] px-4 py-3 dark:bg-teal-400/[0.04] sm:px-5">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <DialogTitle className="text-base font-semibold">Конфигурации</DialogTitle>
-              <p className="truncate text-xs font-normal text-muted-foreground">{row.fio}</p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] font-medium">
-              <button
-                type="button"
-                className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
-                onClick={selectAllEntitlements}
-              >
-                Выбрать все
-              </button>
-              <span className="text-border" aria-hidden>
-                |
-              </span>
-              <button
-                type="button"
-                className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={clearAllEntitlements}
-              >
-                Снять все
-              </button>
-            </div>
-          </div>
-          <div
-            className="flex flex-wrap items-center gap-2 rounded-md border border-teal-800/20 bg-background/80 px-2.5 py-2 text-[11px] text-muted-foreground dark:border-teal-600/25"
-            role="status"
-          >
-            <span className="font-medium text-foreground/90">Активных разрешений</span>
-            <span className="rounded bg-teal-600/12 px-1.5 py-0.5 font-semibold tabular-nums text-teal-900 dark:bg-teal-400/15 dark:text-teal-100">
-              {selectedTotal}
-            </span>
-            <span className="tabular-nums text-muted-foreground/90">/ {allKeys.length}</span>
-            <span className="hidden h-3 w-px bg-border sm:inline" aria-hidden />
-            <span className="text-[10px] leading-snug sm:ml-0">
-              Граница модуля — рамка секции; включённые пункты подсвечены.
-            </span>
-          </div>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Конфигурации</DialogTitle>
+          <p className="text-sm text-muted-foreground">{row.fio}</p>
         </DialogHeader>
-        <div className="scrollbar-none min-h-0 flex-1 space-y-3 overflow-y-auto bg-muted/10 px-4 py-3 sm:space-y-3.5 sm:px-5">
-          {SKLADCHIK_ENTITLEMENT_GROUPS.map((group, groupIdx) => {
-            const keys = group.items.map((i) => i.key);
-            const allOn = keys.every((k) => draft[k] === true);
-            const groupOn = keys.filter((k) => draft[k] === true).length;
-            const groupHeadingId = `sklad-ent-gr-${groupIdx}`;
-            return (
-              <section
-                key={group.title}
-                className="overflow-hidden rounded-lg border-2 border-teal-900/12 bg-card shadow-sm dark:border-teal-600/20"
-                aria-labelledby={groupHeadingId}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-teal-900/10 bg-muted/50 px-3 py-2 dark:border-teal-800/30 dark:bg-muted/40">
-                  <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-                    <h3
-                      id={groupHeadingId}
-                      className="text-xs font-semibold uppercase tracking-wide text-teal-900 dark:text-teal-200"
-                    >
-                      {group.title}
-                    </h3>
-                    <span
-                      className="shrink-0 rounded border border-teal-700/25 bg-background/90 px-1.5 py-px text-[10px] font-medium tabular-nums text-teal-800 dark:border-teal-500/30 dark:text-teal-200"
-                      title="Включено в этой секции"
-                    >
-                      {groupOn}/{keys.length}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="shrink-0 text-[11px] font-medium text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
-                    onClick={() => selectAllInGroup(keys, !allOn)}
-                  >
-                    {allOn ? "Снять все" : "Выбрать все"}
-                  </button>
-                </div>
-                <ul className="divide-y divide-border/60 p-2 sm:p-2.5">
-                  {group.items.map((item) => {
-                    const on = draft[item.key] === true;
-                    return (
-                      <li key={item.key}>
-                        <label
-                          className={cn(
-                            "flex cursor-pointer items-start gap-3 rounded-md border px-2.5 py-2 text-sm transition-colors",
-                            on
-                              ? "border-teal-600/40 border-l-4 border-l-teal-600 bg-teal-50 text-teal-950 dark:border-teal-500/35 dark:border-l-teal-400 dark:bg-teal-950/50 dark:text-teal-50"
-                              : "border-transparent bg-muted/20 text-foreground/90 hover:border-border/80 hover:bg-muted/35"
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 size-4 shrink-0 rounded border-input accent-teal-600"
-                            checked={on}
-                            onChange={() => toggle(item.key)}
-                          />
-                          <span className={cn("min-w-0 flex-1 leading-snug", on && "font-medium")}>
-                            {item.label}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
-        <DialogFooter className="!mx-0 !mb-0 flex !flex-row flex-wrap items-center justify-end gap-3 border-t border-teal-800/15 bg-muted/20 px-4 py-3 sm:px-5">
-          <Button type="button" variant="outline" className="min-w-[5.5rem] shrink-0" onClick={() => onOpenChange(false)}>
-            Bekor
-          </Button>
-          <Button
-            type="button"
-            className={cn(tealPrimaryLocal, "min-w-[5.5rem] shrink-0")}
-            disabled={saveMut.isPending}
-            onClick={() => saveMut.mutate()}
-          >
-            {saveMut.isPending ? "…" : "Сохранить"}
+        <WorkplaceMovedNotice />
+        <p className="text-sm text-muted-foreground">
+          Разрешения панели складчика настраиваются на рабочем месте типа «skladchik».
+        </p>
+        <DialogFooter>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Закрыть
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1515,12 +1306,10 @@ function WebStaffEditDialog({
         email: email.trim() || null,
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
-        branch: branch.trim() || null,
         position: position.trim() || null,
         max_sessions: Number.isFinite(ms) ? ms : row.max_sessions,
         app_access,
-        can_authorize,
-        warehouse_ids: warehouseIds
+        can_authorize
       });
     },
     onMutate: () => {
@@ -1595,20 +1384,6 @@ function WebStaffEditDialog({
             <FieldHint name="pinfl" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Filial</span>
-            <Input
-              list="webstaff-branches-edit"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-            />
-            <datalist id="webstaff-branches-edit">
-              {(filterOptions?.branches ?? []).map((b) => (
-                <option key={b} value={b} />
-              ))}
-            </datalist>
-            <FieldHint name="branch" errors={patchFieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>
             <Input
               list="webstaff-positions-edit"
@@ -1632,30 +1407,7 @@ function WebStaffEditDialog({
             </span>
             <FieldHint name="position" errors={patchFieldErrors} />
           </label>
-          <div className="grid gap-1 rounded-md border border-border/80 p-2">
-            <span className="text-xs font-medium text-muted-foreground">Omborlar</span>
-            <div className="scrollbar-none max-h-40 space-y-1 overflow-y-auto text-xs">
-              {(warehousesForEditQ.data ?? []).length === 0 ? (
-                <span className="text-muted-foreground">Yuklanmoqda yoki ro‘yxat bo‘sh…</span>
-              ) : (
-                (warehousesForEditQ.data ?? []).map((w) => (
-                  <label key={w.id} className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={warehouseIds.includes(w.id)}
-                      onChange={() => {
-                        setWarehouseIds((prev) =>
-                          prev.includes(w.id) ? prev.filter((x) => x !== w.id) : [...prev, w.id]
-                        );
-                      }}
-                    />
-                    <span>{w.name}</span>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-          <FieldHint name="warehouse_ids" errors={patchFieldErrors} />
+          <WorkplaceMovedNotice />
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Maks. veb-sessiyalar</span>
             <Input

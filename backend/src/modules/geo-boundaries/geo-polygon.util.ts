@@ -1,8 +1,6 @@
 import type { GeoBoundaryPoint } from "./geo-boundaries.types";
-import * as polygonClipping from "polygon-clipping";
-
-type Ring = polygonClipping.Ring;
-type MultiPolygon = polygonClipping.MultiPolygon;
+import polygonClipping from "polygon-clipping";
+import type { MultiPolygon, Ring } from "polygon-clipping";
 
 export function validatePolygonPoints(polygon: unknown): GeoBoundaryPoint[] {
   if (!Array.isArray(polygon) || polygon.length < 3) {

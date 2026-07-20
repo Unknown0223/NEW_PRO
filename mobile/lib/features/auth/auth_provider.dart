@@ -384,6 +384,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
       state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+    } on UserNotOnSlotException {
+      await _wipeLocalAuth();
+      state = const AuthState(
+        status: AuthStatus.error,
+        error: 'Не назначен на рабочее место',
+      );
     } on NetworkException {
       if (_session.state.bootstrapped) {
         _resumeAfterRestore();
@@ -467,6 +473,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _wipeLocalAuth();
           state = AuthState(status: AuthStatus.error, error: e.message);
           return;
+        } on UserNotOnSlotException catch (e) {
+          await _wipeLocalAuth();
+          state = AuthState(status: AuthStatus.error, error: e.message);
+          return;
         } on NetworkException {
           // Oflayn — saqlangan sessiya bilan davom etamiz
         } catch (_) {}
@@ -510,6 +520,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         login: login,
         password: password,
         deviceName: device['device_name'],
+        deviceId: device['device_id'],
         userAgent: device['user_agent'],
         apkVersion: device['apk_version'],
       );
@@ -542,19 +553,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _bootstrap();
     } on NetworkException {
       _setError(UserFacingError.serverUnreachable(context: 'Не удалось войти в систему.'));
-    } on UnauthorizedException {
+    } on InvalidCredentialsException {
       await _wipeLocalAuth();
-      _setError(const UserFacingError(
-        title: 'Неверный логин или пароль',
-        message: 'Проверьте код компании, логин и пароль.',
-        steps: ['Убедитесь, что Caps Lock выключен', 'Обратитесь к администратору, если забыли пароль'],
-      ),);
+      _setError(UserFacingError.invalidCredentials);
+    } on SessionLimitException {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionLimitReached);
+    } on SessionRevokedException {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionExpiredOrRevoked);
+    } on UnauthorizedException {
+      // Noma'lum 401 — login/parol deb ko'rsatmaslik (tarmoq/server xabari).
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionExpiredOrRevoked);
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
       _setError(const UserFacingError(
         title: 'Доступ к приложению отключён',
         message: 'Администратор запретил вход с этого аккаунта.',
         steps: ['Обратитесь к администратору для включения доступа'],
+      ),);
+    } on UserNotOnSlotException {
+      await _wipeLocalAuth();
+      _setError(const UserFacingError(
+        title: 'Нет рабочего места',
+        message:
+            'Аккаунт не назначен на рабочее место по вашей роли. Без назначения вход в систему запрещён.',
+        steps: [
+          'Попросите администратора: Пользователи → Рабочее место',
+          'После назначения войдите снова',
+        ],
       ),);
     } on ApiException catch (e) {
       _setError(UserFacingError.fromApi(e));
@@ -857,6 +885,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
     } on AppAccessDeniedException catch (e) {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.fromApi(e));
+    } on UserNotOnSlotException catch (e) {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
     } on NetworkException {
@@ -1341,6 +1372,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await sessionExpired();
     } on AppAccessDeniedException {
       await appAccessRevoked();
+    } on UserNotOnSlotException {
+      await workSlotRevoked();
     } on NetworkException {
       // Oflayn — mahalliy kesh bilan davom
     } catch (_) {}
@@ -1352,6 +1385,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _session.state = const SessionState();
     await _wipeLocalAuth();
     state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+  }
+
+  /// Ishchi o‘rnidan yechilganda — login ekraniga.
+  Future<void> workSlotRevoked() async {
+    const msg = 'Не назначен на рабочее место';
+    state = const AuthState(status: AuthStatus.error, error: msg);
+    _session.state = const SessionState();
+    await _wipeLocalAuth();
+    state = const AuthState(status: AuthStatus.error, error: msg);
   }
 
   /// JWT/refresh tugagan — login ekraniga (PIN qulfi emas).
@@ -1369,10 +1411,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
     }
-    state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
     _session.state = const SessionState();
     await _wipeLocalAuth();
-    state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
+    _setError(UserFacingError.sessionExpiredOrRevoked);
   }
 }
 

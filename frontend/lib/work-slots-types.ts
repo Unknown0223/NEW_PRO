@@ -11,6 +11,13 @@ export const WORK_SLOT_TYPES = [
 
 export type WorkSlotType = (typeof WORK_SLOT_TYPES)[number];
 
+export type WorkSlotEntitlements = {
+  price_types?: string[];
+  product_rules?: Array<{ category_id: number; all: boolean; product_ids?: number[] }>;
+  mobile_config?: unknown;
+  [key: string]: unknown;
+};
+
 export type WorkSlotListItem = {
   id: number;
   slot_code: string;
@@ -29,8 +36,21 @@ export type WorkSlotListItem = {
   active_territory_city: string | null;
   active_warehouse_id: number | null;
   active_warehouse_name: string | null;
+  return_warehouse_id: number | null;
+  return_warehouse_name: string | null;
   active_cash_desk_id: number | null;
   active_cash_desk_names: string | null;
+  price_type: string | null;
+  price_types: string[];
+  entitlements: WorkSlotEntitlements;
+  consignment: boolean;
+  consignment_limit_amount: string | null;
+  consignment_ignore_previous_months_debt: boolean;
+  consignment_close_day: number;
+  consignment_close_hour: number;
+  consignment_close_minute: number;
+  warehouse_staff_entitlements: Record<string, boolean>;
+  expeditor_assignment_rules: Record<string, unknown>;
   active_since: string | null;
   created_at: string;
   updated_at: string;

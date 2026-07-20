@@ -25,6 +25,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
     setModalSel,
     user,
     patchMut,
+    detailQ,
     catalogQ,
     territoriesQ,
     dimQ,
@@ -39,7 +40,10 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
     allOpAttachGroupsExpanded,
     opAttachGroupExpanded,
     setOpAttachGroupExpanded,
-    toggleOpAttachGroup,
+    toggleOpAttachTreeNode,
+    selectAllOpAttachVisible,
+    clearOpAttachSelection,
+    opAttachVisibleKeys,
     territoryCatalog,
     visibleTerritoryLeafKeys,
     useReferenceTerritoryTree,
@@ -91,7 +95,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                   {modal === "territory" ? (
                     <>Прикрепить территории: {formatTerritoryAssigneeSubtitle(user!)}</>
                   ) : modal === "staff" ? (
-                    <>Прикрепить пользователи: {formatTerritoryAssigneeSubtitle(user!)}</>
+                    <>Прикрепить сотрудников: {formatTerritoryAssigneeSubtitle(user!)}</>
                   ) : modal === "cash" ? (
                     <>Прикрепить кассу: {formatTerritoryAssigneeSubtitle(user!)}</>
                   ) : modal === "warehouse" ? (
@@ -102,8 +106,16 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                     <>Прикрепить способ оплаты: {formatTerritoryAssigneeSubtitle(user!)}</>
                   )}
                 </DialogTitle>
-                <span className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
-                  Выделено: {modalSel.size}
+                <span className="shrink-0 pt-0.5 text-right text-xs tabular-nums text-muted-foreground">
+                  {modal === "staff" ? (
+                    <>
+                      Сохранено: {detailQ.data?.supervisees?.length ?? 0}
+                      <span className="mx-1.5 text-border">·</span>
+                      Выделено: {modalSel.size}
+                    </>
+                  ) : (
+                    <>Выделено: {modalSel.size}</>
+                  )}
                 </span>
               </div>
             </DialogHeader>
@@ -126,8 +138,14 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                     <Loader2 className="h-8 w-8 animate-spin text-teal-700" aria-hidden />
                     <span>Загрузка территорий…</span>
                   </div>
-                ) : !(territoryCatalog?.flat?.length ?? 0) ? (
-                  <p className="py-10 text-center text-sm text-muted-foreground">Нет доступных территорий</p>
+                ) : territoriesQ.isError ? (
+                  <p className="py-10 text-center text-sm text-destructive">
+                    Не удалось загрузить территории. Обновите страницу или проверьте права доступа.
+                  </p>
+                ) : !(territoryCatalog?.flat?.length || territoryCatalog?.tree?.length) ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Нет доступных территорий. Добавьте дерево в Настройки → Территория и сохраните.
+                  </p>
                 ) : (
                   <>
                     <label className="flex cursor-pointer items-center gap-2 border-b border-border/60 px-1 py-2">
@@ -251,11 +269,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                             className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
                                             disabled={patchMut.isPending || territoriesQ.isLoading}
                                             checked={modalSel.has(String(r.id))}
-                                            title={
-                                              r.code
-                                                ? `${territoryLeafNameOnly(r)} · ${r.code}`
-                                                : territoryLeafNameOnly(r)
-                                            }
+                                            title={territoryLeafNameOnly(r)}
                                             onChange={(e) => {
                                               const n = new Set(modalSel);
                                               const k = String(r.id);
@@ -388,7 +402,7 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                       setModalSel(n);
                     }}
                   />
-                  Выбрать все
+                  Выбрать все видимые
                 </label>
               </div>
               <div className="max-h-[min(52vh,440px)] min-h-[220px] overflow-auto rounded-lg border border-border/60 bg-muted/15 p-2">
@@ -507,6 +521,28 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                 >
                   {allOpAttachGroupsExpanded ? "Свернуть все" : "Развернуть все"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 text-xs"
+                  disabled={patchMut.isPending || opAttachVisibleKeys.length === 0 || (
+                    opAttachVisibleKeys.length > 0 && opAttachVisibleKeys.every((k) => modalSel.has(k))
+                  )}
+                  onClick={() => selectAllOpAttachVisible()}
+                >
+                  Выбрать все
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 text-xs"
+                  disabled={patchMut.isPending || modalSel.size === 0}
+                  onClick={() => clearOpAttachSelection()}
+                >
+                  Снять все
+                </Button>
                 <div className="relative min-w-[10rem] flex-1">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -532,50 +568,128 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                   </p>
                 ) : (
                   opAttachGroups.map((grp) => {
-                  const expanded = opAttachGroupExpanded.has(grp.parent);
-                  const groupKeys = grp.items.map((item) => item.key);
-                  const groupAllSelected =
-                    groupKeys.length > 0 && groupKeys.every((k) => modalSel.has(k));
-                  const groupSomeSelected =
-                    groupKeys.length > 0 && groupKeys.some((k) => modalSel.has(k)) && !groupAllSelected;
-                  return (
-                    <div key={grp.parent} className="border-b border-border/40 py-1 last:border-b-0">
-                      <div className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-semibold"
-                          onClick={() =>
-                            setOpAttachGroupExpanded((prev) => {
-                              const n = new Set(prev);
-                              if (n.has(grp.parent)) n.delete(grp.parent);
-                              else n.add(grp.parent);
-                              return n;
-                            })
-                          }
-                        >
-                          {expanded ? (
-                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                          )}
-                          <span className="min-w-0 truncate" title={grp.parent}>
-                            {shortenPathLabel(grp.parent)}
-                          </span>
-                          <span className="shrink-0 font-normal text-muted-foreground">({grp.items.length})</span>
-                        </button>
-                        <IndeterminateCheckbox
-                          checked={groupAllSelected}
-                          indeterminate={groupSomeSelected}
-                          disabled={patchMut.isPending || groupKeys.length === 0}
-                          className="h-4 w-4 shrink-0 accent-teal-700"
-                          title={`Выбрать все операции категории «${shortenPathLabel(grp.parent)}»`}
-                          aria-label={`Выбрать все операции категории: ${shortenPathLabel(grp.parent)}`}
-                          onChange={(e) => toggleOpAttachGroup(grp.items, e.target.checked)}
-                        />
-                      </div>
-                      {expanded ? (
-                        <div className="mt-0.5 space-y-0 border-l border-border/45 pl-2">
-                          {grp.items.map((item) => (
+                    const expanded = opAttachGroupExpanded.has(grp.id);
+                    const leafKeys = (() => {
+                      const keys = grp.items.map((i) => i.key);
+                      for (const c of grp.children) keys.push(...c.items.map((i) => i.key));
+                      return keys;
+                    })();
+                    const groupAllSelected =
+                      leafKeys.length > 0 && leafKeys.every((k) => modalSel.has(k));
+                    const groupSomeSelected =
+                      leafKeys.length > 0 && leafKeys.some((k) => modalSel.has(k)) && !groupAllSelected;
+                    return (
+                      <div key={grp.id} className="border-b border-border/40 py-1 last:border-b-0">
+                        <div className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-semibold"
+                            onClick={() =>
+                              setOpAttachGroupExpanded((prev) => {
+                                const n = new Set(prev);
+                                if (n.has(grp.id)) n.delete(grp.id);
+                                else n.add(grp.id);
+                                return n;
+                              })
+                            }
+                          >
+                            {expanded ? (
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                            )}
+                            <span className="min-w-0 truncate" title={grp.label}>
+                              {shortenPathLabel(grp.label)}
+                            </span>
+                            <span className="shrink-0 font-normal text-muted-foreground">({grp.leafCount})</span>
+                          </button>
+                          <IndeterminateCheckbox
+                            checked={groupAllSelected}
+                            indeterminate={groupSomeSelected}
+                            disabled={patchMut.isPending || leafKeys.length === 0}
+                            className="h-4 w-4 shrink-0 accent-teal-700"
+                            title={`Выбрать все операции раздела «${grp.label}»`}
+                            aria-label={`Выбрать все операции раздела: ${grp.label}`}
+                            onChange={(e) => toggleOpAttachTreeNode(grp, e.target.checked)}
+                          />
+                        </div>
+                        {expanded ? (
+                          <div className="mt-0.5 space-y-0 border-l border-border/45 pl-2">
+                            {grp.children.map((child) => {
+                              const childExpanded = opAttachGroupExpanded.has(child.id);
+                              const childKeys = child.items.map((i) => i.key);
+                              const childAll =
+                                childKeys.length > 0 && childKeys.every((k) => modalSel.has(k));
+                              const childSome =
+                                childKeys.length > 0 &&
+                                childKeys.some((k) => modalSel.has(k)) &&
+                                !childAll;
+                              return (
+                                <div key={child.id} className="border-b border-border/30 py-0.5 last:border-b-0">
+                                  <div className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/40">
+                                    <button
+                                      type="button"
+                                      className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium"
+                                      onClick={() =>
+                                        setOpAttachGroupExpanded((prev) => {
+                                          const n = new Set(prev);
+                                          if (n.has(child.id)) n.delete(child.id);
+                                          else n.add(child.id);
+                                          return n;
+                                        })
+                                      }
+                                    >
+                                      {childExpanded ? (
+                                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                      ) : (
+                                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                      )}
+                                      <span className="min-w-0 truncate" title={child.label}>
+                                        {shortenPathLabel(child.label)}
+                                      </span>
+                                      <span className="shrink-0 font-normal text-muted-foreground">
+                                        ({child.leafCount})
+                                      </span>
+                                    </button>
+                                    <IndeterminateCheckbox
+                                      checked={childAll}
+                                      indeterminate={childSome}
+                                      disabled={patchMut.isPending || childKeys.length === 0}
+                                      className="h-4 w-4 shrink-0 accent-teal-700"
+                                      title={`Выбрать все операции «${child.label}»`}
+                                      aria-label={`Выбрать все операции: ${child.label}`}
+                                      onChange={(e) => toggleOpAttachTreeNode(child, e.target.checked)}
+                                    />
+                                  </div>
+                                  {childExpanded ? (
+                                    <div className="mt-0.5 space-y-0 border-l border-border/40 pl-2">
+                                      {child.items.map((item) => (
+                                        <label
+                                          key={item.key}
+                                          className="flex cursor-pointer items-start gap-2 border-b border-border/25 py-1.5 last:border-b-0"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="mt-0.5 h-4 w-4 accent-teal-700"
+                                            disabled={patchMut.isPending}
+                                            checked={modalSel.has(item.key)}
+                                            title="Дополнительная операция только для этого пользователя"
+                                            onChange={(e) => {
+                                              const n = new Set(modalSel);
+                                              if (e.target.checked) n.add(item.key);
+                                              else n.delete(item.key);
+                                              setModalSel(n);
+                                            }}
+                                          />
+                                          <span className="min-w-0 text-xs font-medium leading-snug">{item.label}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                            {grp.items.map((item) => (
                               <label
                                 key={item.key}
                                 className="flex cursor-pointer items-start gap-2 border-b border-border/30 py-1.5 last:border-b-0"
@@ -593,20 +707,13 @@ export function AccessUserDetailModals({ vm }: { vm: AccessUserDetailVm }) {
                                     setModalSel(n);
                                   }}
                                 />
-                                <span className="text-xs">
-                                  <span className="font-medium">{item.label}</span>
-                                  {item.sub ? (
-                                    <span className="ml-2 block text-muted-foreground">
-                                      <span className="font-medium text-foreground/80">Родитель:</span> {item.sub}
-                                    </span>
-                                  ) : null}
-                                </span>
+                                <span className="min-w-0 text-xs font-medium leading-snug">{item.label}</span>
                               </label>
                             ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
+                          </div>
+                        ) : null}
+                      </div>
+                    );
                   })
                 )}
               </div>

@@ -3,6 +3,7 @@
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import {
   DEFAULT_NAKLADNOY_EXPORT_PREFS,
   loadNakladnoyExportPrefs,
@@ -47,6 +48,8 @@ export function useOrdersListPagePart1() {
   const clientIdFromUrl = filters.client_id;
 
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const qc = useQueryClient();
@@ -128,7 +131,7 @@ export function useOrdersListPagePart1() {
     paymentMethodFilterOpts,
     paymentTypeFilterOpts,
     nakladnoyTypeFilterOpts
-  } = useOrdersListReferenceData(tenantSlug, effectiveRole, filterDraft);
+  } = useOrdersListReferenceData(tenantSlug, effectiveRole, filterDraft, actorUserId);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -229,6 +232,7 @@ export function useOrdersListPagePart1() {
     queryKey: [
       "orders",
       tenantSlug,
+      actorUserId,
       filters.page,
       filters.search,
       filters.status,

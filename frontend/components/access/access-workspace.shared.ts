@@ -1,5 +1,6 @@
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
+import { localizeAccessSegment } from "@/lib/access-display";
 
 export function formatAccessFilterTriggerSummary<T extends string | number>(
   allLabel: string,
@@ -304,11 +305,7 @@ export type SideRow = {
 };
 
 export function normalizeOperationSegment(value: string): string {
-  const normalized = String(value || "").trim().replace(/\s+/g, " ");
-  if (!normalized) return "";
-  const lower = normalized.toLowerCase();
-  if (lower === "дашбоард" || lower === "дашборд") return "Дашборд";
-  return normalized;
+  return localizeAccessSegment(String(value || "").trim().replace(/\s+/g, " "));
 }
 
 export function parseOperationLabelParts(
@@ -317,28 +314,31 @@ export function parseOperationLabelParts(
 ): { group: string; subgroup: string | null; title: string } {
   const normalized = String(rawLabel || "").trim();
   if (normalized) {
-    const slashParts = normalized
-      .split("/")
-      .map((x) => normalizeOperationSegment(x))
-      .filter(Boolean);
+    const slashParts = normalized.includes(" / ")
+      ? normalized
+          .split(/\s\/\s/)
+          .map((x) => normalizeOperationSegment(x))
+          .filter(Boolean)
+      : [];
     if (slashParts.length >= 3) {
-      const group = slashParts[0] ?? "general";
-      const subgroupRaw = slashParts[1] ?? "common";
+      const group = slashParts[0] ?? "Общее";
+      const subgroupRaw = slashParts[1] ?? "Общее";
       const subgroup = subgroupRaw === group ? null : subgroupRaw;
+      // Chap paneldagi sarlavha: «Остатки товаров · Просмотр» (faqat «Просмотр» emas).
       return {
         group,
         subgroup,
-        title: slashParts[slashParts.length - 1]!
+        title: slashParts.slice(1).join(" · ")
       };
     }
     if (slashParts.length >= 2) {
-      const group = slashParts[0] ?? "general";
+      const group = slashParts[0] ?? "Общее";
       const subgroupRaw = slashParts[1] ?? null;
       const subgroup = subgroupRaw && subgroupRaw !== group ? subgroupRaw : null;
       return {
         group,
         subgroup,
-        title: slashParts[slashParts.length - 1]!
+        title: slashParts.slice(1).join(" · ")
       };
     }
     const colonParts = normalized
@@ -347,7 +347,7 @@ export function parseOperationLabelParts(
       .filter(Boolean);
     if (colonParts.length >= 2) {
       return {
-        group: colonParts[0] ?? "general",
+        group: colonParts[0] ?? "Общее",
         subgroup: null,
         title: colonParts.slice(1).join(": ")
       };
@@ -361,7 +361,10 @@ export function parseOperationLabelParts(
     return {
       group,
       subgroup,
-      title: keyParts[keyParts.length - 1]!
+      title: keyParts
+        .slice(1)
+        .map((p) => normalizeOperationSegment(p))
+        .join(" · ")
     };
   }
   if (keyParts.length >= 2) {
@@ -371,11 +374,14 @@ export function parseOperationLabelParts(
     return {
       group,
       subgroup,
-      title: keyParts[keyParts.length - 1]!
+      title: keyParts
+        .slice(1)
+        .map((p) => normalizeOperationSegment(p))
+        .join(" · ")
     };
   }
   const fallback = normalizeOperationSegment(normalized || fallbackKey || "Операция");
-  return { group: "general", subgroup: null, title: fallback };
+  return { group: "Общее", subgroup: null, title: fallback };
 }
 
 export type ScopeDimensionTab =

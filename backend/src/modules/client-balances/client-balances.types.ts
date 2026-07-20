@@ -1,4 +1,4 @@
-export type ClientBalanceViewMode = "clients" | "agents" | "clients_delivery";
+export type ClientBalanceViewMode = "clients" | "agents" | "clients_delivery" | "clients_legacy";
 
 export type ClientBalanceListQuery = {
   view: ClientBalanceViewMode;
@@ -81,6 +81,14 @@ export type ClientBalanceRow = {
   last_payment_at: string | null;
   days_since_payment: number | null;
   balance: string;
+  /** Eski agent(lar) unpaid delivered qoldig‘i (musbat). */
+  legacy_debt?: string | null;
+  /** Joriy clients.agent_id unpaid delivered qoldig‘i (musbat). */
+  current_debt?: string | null;
+  /** Eski qarz egasi agent(lar) nomi. */
+  legacy_agent_names?: string | null;
+  /** Joriy qarz egasi agent nomi. */
+  current_agent_name?: string | null;
   /** Столбцы как в KPI: только справочник «способы оплаты» тенанта, тот же порядок что summary.payment_by_type */
   payment_amounts: ClientBalancePaymentTypeSummary[];
   /** «По доставке»: bir qator = bitta zakaz */
@@ -96,6 +104,11 @@ export type AgentBalanceRow = {
   agent_code: string | null;
   clients_count: number;
   balance: string;
+  /** Faol eski agentlar qarzi (workplace agent mijozlarida). */
+  legacy_debt: string;
+  /** Joriy ish o‘rni agentining o‘z + bo‘shatilgan agentlar qoldiq qarzi. */
+  current_debt: string;
+  is_active: boolean | null;
   payment_amounts: ClientBalancePaymentTypeSummary[];
 };
 

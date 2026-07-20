@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { CashDesksWorkspace } from "@/components/cash-desks/cash-desks-workspace";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 
 export default function CashDesksSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const canWrite = isAdminOrOperatorLikeRole(role);
+  const { has, isLoading } = usePermissions();
+  /** API PATCH/POST → cash.kassa.create */
+  const canWrite = has("cash.kassa.create");
+  const canHistory = has("cash.kassa.history");
+  const canStatus = has("cash.kassa.status");
+  /** Client-side Excel: create yoki history (view-only emas) */
+  const canExport = canWrite || canHistory;
 
-  if (!hydrated) {
+  if (!hydrated || isLoading) {
     return <p className="text-sm text-muted-foreground">Загрузка сессии…</p>;
   }
   if (!tenantSlug) {
@@ -32,7 +37,13 @@ export default function CashDesksSettingsPage() {
           ← Sozlamalar
         </Link>
       </div>
-      <CashDesksWorkspace tenantSlug={tenantSlug} canWrite={canWrite} />
+      <CashDesksWorkspace
+        tenantSlug={tenantSlug}
+        canWrite={canWrite}
+        canHistory={canHistory}
+        canStatus={canStatus}
+        canExport={canExport}
+      />
     </div>
   );
 }

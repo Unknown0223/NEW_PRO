@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { buildInitialSetupExportBuffer } from "../tenant-settings/initial-setup-export.service";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
@@ -18,17 +19,45 @@ type ExportContext = {
   tenantSlug: string;
 };
 
+function prismaErrorCode(e: unknown): string {
+  if (e !== null && typeof e === "object" && "code" in e) {
+    return String((e as { code?: unknown }).code ?? "");
+  }
+  return "";
+}
+
+/** Prod’da ba’zi jadvallar hali migrate bo‘lmagan bo‘lishi mumkin — eksport to‘liq yiqilmasin. */
+async function safeFindMany<T>(label: string, run: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await run();
+  } catch (e) {
+    const code = prismaErrorCode(e);
+    // `instanceof` ba’zan Prisma package duplicate tufayli ishlamaydi — code bilan tekshiramiz.
+    if (
+      code === "P2021" ||
+      code === "P2022" ||
+      (e instanceof Prisma.PrismaClientKnownRequestError && (e.code === "P2021" || e.code === "P2022"))
+    ) {
+      console.warn(`[system-migration.export] skip ${label}: ${code || "P202x"}`);
+      return [];
+    }
+    throw e;
+  }
+}
+
 async function loadReferenceTables(tenantId: number) {
   const [tradeDirections, salesChannels, warehouses, users, clients, products, cashDesks, stock] =
     await Promise.all([
-      prisma.tradeDirection.findMany({ where: { tenant_id: tenantId } }),
-      prisma.salesChannelRef.findMany({ where: { tenant_id: tenantId } }),
-      prisma.warehouse.findMany({ where: { tenant_id: tenantId } }),
-      prisma.user.findMany({ where: { tenant_id: tenantId } }),
-      prisma.client.findMany({ where: { tenant_id: tenantId } }),
-      prisma.product.findMany({ where: { tenant_id: tenantId } }),
-      prisma.cashDesk.findMany({ where: { tenant_id: tenantId } }),
-      prisma.stock.findMany({ where: { tenant_id: tenantId } })
+      safeFindMany("trade_directions", () => prisma.tradeDirection.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("sales_channel_refs", () =>
+        prisma.salesChannelRef.findMany({ where: { tenant_id: tenantId } })
+      ),
+      safeFindMany("warehouses", () => prisma.warehouse.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("users", () => prisma.user.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("clients", () => prisma.client.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("products", () => prisma.product.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("cash_desks", () => prisma.cashDesk.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("stock", () => prisma.stock.findMany({ where: { tenant_id: tenantId } }))
     ]);
   return {
     trade_directions: tradeDirections,
@@ -43,7 +72,9 @@ async function loadReferenceTables(tenantId: number) {
 }
 
 async function loadTransactionalTables(tenantId: number) {
-  const orders = await prisma.order.findMany({ where: { tenant_id: tenantId } });
+  const orders = await safeFindMany("orders", () =>
+    prisma.order.findMany({ where: { tenant_id: tenantId } })
+  );
   const orderIds = orders.map((o) => o.id);
 
   const [
@@ -57,19 +88,27 @@ async function loadTransactionalTables(tenantId: number) {
     clientAuditLogs
   ] = await Promise.all([
     orderIds.length
-      ? prisma.orderItem.findMany({ where: { order_id: { in: orderIds } } })
+      ? safeFindMany("order_items", () => prisma.orderItem.findMany({ where: { order_id: { in: orderIds } } }))
       : Promise.resolve([]),
     orderIds.length
-      ? prisma.orderStatusLog.findMany({ where: { order_id: { in: orderIds } } })
+      ? safeFindMany("order_status_logs", () =>
+          prisma.orderStatusLog.findMany({ where: { order_id: { in: orderIds } } })
+        )
       : Promise.resolve([]),
     orderIds.length
-      ? prisma.orderChangeLog.findMany({ where: { order_id: { in: orderIds } } })
+      ? safeFindMany("order_change_logs", () =>
+          prisma.orderChangeLog.findMany({ where: { order_id: { in: orderIds } } })
+        )
       : Promise.resolve([]),
-    prisma.payment.findMany({ where: { tenant_id: tenantId } }),
-    prisma.goodsReceipt.findMany({ where: { tenant_id: tenantId } }),
-    prisma.salesReturn.findMany({ where: { tenant_id: tenantId } }),
-    prisma.tenantAuditEvent.findMany({ where: { tenant_id: tenantId } }),
-    prisma.clientAuditLog.findMany({ where: { tenant_id: tenantId } })
+    safeFindMany("payments", () => prisma.payment.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("goods_receipts", () => prisma.goodsReceipt.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("sales_returns", () => prisma.salesReturn.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("tenant_audit_events", () =>
+      prisma.tenantAuditEvent.findMany({ where: { tenant_id: tenantId } })
+    ),
+    safeFindMany("client_audit_logs", () =>
+      prisma.clientAuditLog.findMany({ where: { tenant_id: tenantId } })
+    )
   ]);
 
   const receiptIds = goodsReceipts.map((r) => r.id);
@@ -77,10 +116,14 @@ async function loadTransactionalTables(tenantId: number) {
 
   const [goodsReceiptLines, salesReturnLines] = await Promise.all([
     receiptIds.length
-      ? prisma.goodsReceiptLine.findMany({ where: { receipt_id: { in: receiptIds } } })
+      ? safeFindMany("goods_receipt_lines", () =>
+          prisma.goodsReceiptLine.findMany({ where: { receipt_id: { in: receiptIds } } })
+        )
       : Promise.resolve([]),
     returnIds.length
-      ? prisma.salesReturnLine.findMany({ where: { return_id: { in: returnIds } } })
+      ? safeFindMany("sales_return_lines", () =>
+          prisma.salesReturnLine.findMany({ where: { return_id: { in: returnIds } } })
+        )
       : Promise.resolve([])
   ]);
 
@@ -103,11 +146,17 @@ async function loadTransactionalTables(tenantId: number) {
 async function loadFieldActivityTables(tenantId: number) {
   const [clientRefusals, agentVisits, agentLocationPings, expenses, paymentAllocations] =
     await Promise.all([
-      prisma.clientRefusal.findMany({ where: { tenant_id: tenantId } }),
-      prisma.agentVisit.findMany({ where: { tenant_id: tenantId } }),
-      prisma.agentLocationPing.findMany({ where: { tenant_id: tenantId } }),
-      prisma.expense.findMany({ where: { tenant_id: tenantId } }),
-      prisma.paymentAllocation.findMany({ where: { tenant_id: tenantId } })
+      safeFindMany("client_refusals", () =>
+        prisma.clientRefusal.findMany({ where: { tenant_id: tenantId } })
+      ),
+      safeFindMany("agent_visits", () => prisma.agentVisit.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("agent_location_pings", () =>
+        prisma.agentLocationPing.findMany({ where: { tenant_id: tenantId } })
+      ),
+      safeFindMany("expenses", () => prisma.expense.findMany({ where: { tenant_id: tenantId } })),
+      safeFindMany("payment_allocations", () =>
+        prisma.paymentAllocation.findMany({ where: { tenant_id: tenantId } })
+      )
     ]);
   return {
     client_refusals: clientRefusals,
@@ -119,7 +168,9 @@ async function loadFieldActivityTables(tenantId: number) {
 }
 
 async function loadBonusAndFilesTables(tenantId: number) {
-  const kpiGroups = await prisma.kpiGroup.findMany({ where: { tenant_id: tenantId } });
+  const kpiGroups = await safeFindMany("kpi_groups", () =>
+    prisma.kpiGroup.findMany({ where: { tenant_id: tenantId } })
+  );
   const kpiGroupIds = kpiGroups.map((g) => g.id);
 
   const [
@@ -134,18 +185,28 @@ async function loadBonusAndFilesTables(tenantId: number) {
     clientPhotoReports
   ] = await Promise.all([
     kpiGroupIds.length
-      ? prisma.kpiGroupProduct.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
+      ? safeFindMany("kpi_group_products", () =>
+          prisma.kpiGroupProduct.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
+        )
       : Promise.resolve([]),
     kpiGroupIds.length
-      ? prisma.kpiGroupAgent.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
+      ? safeFindMany("kpi_group_agents", () =>
+          prisma.kpiGroupAgent.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
+        )
       : Promise.resolve([]),
-    prisma.bonusRule.findMany({ where: { tenant_id: tenantId } }),
-    prisma.planApproverConfig.findMany({ where: { tenant_id: tenantId } }),
-    prisma.planApproverLeader.findMany({ where: { tenant_id: tenantId } }),
-    prisma.salesKpiPlan.findMany({ where: { tenant_id: tenantId } }),
-    prisma.kpiResult.findMany({ where: { tenant_id: tenantId } }),
-    prisma.priceMatrix.findMany({ where: { tenant_id: tenantId } }),
-    prisma.clientPhotoReport.findMany({ where: { tenant_id: tenantId } })
+    safeFindMany("bonus_rules", () => prisma.bonusRule.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("plan_approver_configs", () =>
+      prisma.planApproverConfig.findMany({ where: { tenant_id: tenantId } })
+    ),
+    safeFindMany("plan_approver_leaders", () =>
+      prisma.planApproverLeader.findMany({ where: { tenant_id: tenantId } })
+    ),
+    safeFindMany("sales_kpi_plans", () => prisma.salesKpiPlan.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("kpi_results", () => prisma.kpiResult.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("price_matrix", () => prisma.priceMatrix.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("client_photo_reports", () =>
+      prisma.clientPhotoReport.findMany({ where: { tenant_id: tenantId } })
+    )
   ]);
 
   const bonusRuleIds = bonusRules.map((r) => r.id);
@@ -154,13 +215,19 @@ async function loadBonusAndFilesTables(tenantId: number) {
 
   const [bonusRuleConditions, planLevels, planTargets] = await Promise.all([
     bonusRuleIds.length
-      ? prisma.bonusRuleCondition.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
+      ? safeFindMany("bonus_rule_conditions", () =>
+          prisma.bonusRuleCondition.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
+        )
       : Promise.resolve([]),
     configIds.length
-      ? prisma.planApproverLevel.findMany({ where: { config_id: { in: configIds } } })
+      ? safeFindMany("plan_approver_levels", () =>
+          prisma.planApproverLevel.findMany({ where: { config_id: { in: configIds } } })
+        )
       : Promise.resolve([]),
     planIds.length
-      ? prisma.salesKpiPlanTarget.findMany({ where: { plan_id: { in: planIds } } })
+      ? safeFindMany("sales_kpi_plan_targets", () =>
+          prisma.salesKpiPlanTarget.findMany({ where: { plan_id: { in: planIds } } })
+        )
       : Promise.resolve([])
   ]);
 
@@ -295,5 +362,6 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
 
 export function backupDownloadFilename(tenantSlug: string): string {
   const date = new Date().toISOString().slice(0, 10);
-  return `salec-backup-${tenantSlug}-${date}.salec-backup.zip`;
+  // Oddiy .zip — brauzer accept/MIME bilan yaxshi moslashadi (.salec-backup.zip ba’zan rad etilardi).
+  return `salec-backup-${tenantSlug}-${date}.zip`;
 }

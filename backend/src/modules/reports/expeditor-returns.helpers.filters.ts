@@ -7,6 +7,7 @@ import {
   resolvePaymentMethodEntries
 } from "../tenant-settings/finance-refs";
 import type { ReportActor } from "./client-sales-4-report.service";
+import { buildScopedAgentExistsSql, type ScopedReportActor } from "../access/access-agent-scope";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
 import type { ExpeditorReturnsFilters, ExpeditorReturnsUnitMode } from "./expeditor-returns.types";
 
@@ -77,7 +78,11 @@ export function dateFilterExpr(f: ExpeditorReturnsFilters): Prisma.Sql {
   return Prisma.sql`o.created_at`;
 }
 
-export function buildExpeditorOrderWhereSql(tenantId: number, f: ExpeditorReturnsFilters, actor?: ReportActor): Prisma.Sql {
+export function buildExpeditorOrderWhereSql(
+  tenantId: number,
+  f: ExpeditorReturnsFilters,
+  actor?: ReportActor | ScopedReportActor
+): Prisma.Sql {
   const parts: Prisma.Sql[] = [Prisma.sql`o.tenant_id = ${tenantId}`, Prisma.sql`o.order_type = 'order'`];
 
   const from = parseDate(f.from);
@@ -183,17 +188,8 @@ export function buildExpeditorOrderWhereSql(tenantId: number, f: ExpeditorReturn
     }
   }
 
-  if (actor?.userId && actor.role === "agent") {
-    parts.push(Prisma.sql`COALESCE(o.agent_id, c.agent_id) = ${actor.userId}`);
-  } else if (actor?.userId && actor.role === "supervisor") {
-    parts.push(
-      Prisma.sql`EXISTS (
-        SELECT 1 FROM users su
-        WHERE su.id = COALESCE(o.agent_id, c.agent_id)
-          AND su.tenant_id = ${tenantId}
-          AND su.supervisor_user_id = ${actor.userId}
-      )`
-    );
+  if (actor) {
+    parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`COALESCE(o.agent_id, c.agent_id)`, actor));
   }
 
   return Prisma.join(parts, " AND ");

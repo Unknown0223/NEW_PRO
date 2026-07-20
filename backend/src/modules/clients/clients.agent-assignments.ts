@@ -156,6 +156,8 @@ export async function replaceClientAgentAssignments(
         if (!u) {
           throw new Error("AGENT_NOT_FOUND");
         }
+        const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+        await assertAgentCanTakeNewWork(tenantId, uid);
         agent_id = uid;
       }
     }

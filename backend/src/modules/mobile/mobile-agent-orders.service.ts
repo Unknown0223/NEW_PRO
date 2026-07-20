@@ -11,6 +11,10 @@ import { loadAvailableQtyByProductId } from "../orders/order-bonus-context.match
 import { getOrderCreateContextBundle } from "../orders/order-create-context.service";
 import { loadOrderCreateCatalogSlice } from "../orders/order-create-context.catalog";
 import { listWarehousesForTenant } from "../reference/reference.service";
+import {
+  priceTypeEntriesFromUnknown,
+  resolvePriceTypeKeyToLabel
+} from "../tenant-settings/finance-refs";
 import { resolveConstraintScope } from "../linkage/linkage.service";
 import {
   executionPctFromPlanFact,
@@ -104,10 +108,21 @@ export async function getMobileOrderCreateContext(
   );
   const warehouses = sortWarehousesDefaultFirst(bundle.warehouses, defaultWarehouseId);
 
+  // UI: id — product_prices.price_type kaliti (masalan "1"), label — katalog nomi ("Naxt")
+  const ptEntries = priceTypeEntriesFromUnknown(
+    bundle.settings_profile?.references?.price_type_entries
+  );
+  const price_type_options = bundle.price_types.map((id) => {
+    const resolved = resolvePriceTypeKeyToLabel(id, ptEntries);
+    const label = (resolved && resolved.trim()) || id;
+    return { id, label, name: label };
+  });
+
   return {
     warehouses,
     default_warehouse_id: defaultWarehouseId,
     price_types: bundle.price_types,
+    price_type_options,
     products: bundle.products.map((p) => ({
       ...p,
       category_name: p.category?.name ?? null
@@ -190,6 +205,9 @@ export async function createMobileOrder(
   role: string,
   body: z.infer<typeof mobileCreateOrderBodySchema>
 ) {
+  const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+  await assertAgentCanTakeNewWork(tenantId, userId);
+
   const cfg = await loadAgentMobileConfig(tenantId, userId);
   if (cfg) {
     await assertStockSnapshotToday(tenantId, userId, cfg);
@@ -229,6 +247,7 @@ function mapOrderHistoryRow(o: {
   bonus_sum: Prisma.Decimal;
   discount_sum: Prisma.Decimal | null;
   created_at: Date;
+  client_id?: number;
   client: { name: string };
   items: Array<{
     qty: Prisma.Decimal;
@@ -253,6 +272,7 @@ function mapOrderHistoryRow(o: {
     number: o.number,
     order_type: o.order_type,
     status: o.status,
+    client_id: o.client_id ?? null,
     client_name: o.client.name,
     created_at: o.created_at.toISOString(),
     total_sum: Number(o.total_sum),
@@ -333,6 +353,7 @@ export async function getMobileAgentOrderDetail(
       bonus_sum: true,
       discount_sum: true,
       created_at: true,
+      client_id: true,
       client: { select: { name: true } },
       items: {
         select: {
@@ -642,6 +663,70 @@ export async function listMobileAgentClientLedgerBalances(tenantId: number, agen
 }
 
 export async function listMobileAgentDebtors(tenantId: number, userId: number, limit = 100) {
+  const { isAgentDebtCollectionOnly } = await import("../work-slots/work-slots.agent-gate");
+  const debtOnly = await isAgentDebtCollectionOnly(tenantId, userId);
+
+  if (debtOnly) {
+    // Faqat o‘z unpaid delivered qoldig‘i bor mijozlar
+    const { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } = await import("../orders/order-status");
+    const { sqlOrderMerchandiseNetReceivable } = await import("../orders/order-merchandise-net");
+    const rows = await prisma.$queryRaw<
+      Array<{
+        client_id: number;
+        name: string | null;
+        phone: string | null;
+        client_code: string | null;
+        unpaid: Prisma.Decimal;
+        first_del: Date | null;
+      }>
+    >`
+      WITH cand AS (
+        SELECT o.id, o.client_id, o.total_sum, o.discount_sum, o.applied_auto_bonus_rule_ids, o.updated_at
+        FROM orders o
+        WHERE o.tenant_id = ${tenantId}
+          AND o.agent_id = ${userId}
+          AND o.order_type = 'order'
+          AND o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})
+      ),
+      alloc AS (
+        SELECT pa.order_id, SUM(pa.amount)::decimal(15,2) AS allocated
+        FROM payment_allocations pa
+        WHERE pa.tenant_id = ${tenantId}
+          AND pa.order_id IN (SELECT id FROM cand)
+        GROUP BY pa.order_id
+      ),
+      per_client AS (
+        SELECT
+          c.client_id,
+          SUM(GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.allocated, 0), 0))::decimal(15,2) AS unpaid,
+          MIN(c.updated_at) FILTER (
+            WHERE GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.allocated, 0), 0) > 0
+          ) AS first_del
+        FROM cand c
+        LEFT JOIN alloc a ON a.order_id = c.id
+        GROUP BY c.client_id
+        HAVING SUM(GREATEST(${sqlOrderMerchandiseNetReceivable("c")} - COALESCE(a.allocated, 0), 0)) > 0.01
+      )
+      SELECT pc.client_id, cl.name, cl.phone, cl.client_code, pc.unpaid, pc.first_del
+      FROM per_client pc
+      INNER JOIN clients cl ON cl.id = pc.client_id AND cl.tenant_id = ${tenantId}
+      ORDER BY pc.unpaid DESC
+      LIMIT ${Math.min(limit, 200)}
+    `;
+
+    return rows.map((r) => ({
+      id: r.client_id,
+      name: r.name ?? "",
+      phone: r.phone,
+      client_code: r.client_code,
+      balance: -Number(r.unpaid),
+      overdue_at: r.first_del?.toISOString() ?? null,
+      legacy_debt: Number(r.unpaid),
+      current_debt: 0,
+      debt_collection_only: true
+    }));
+  }
+
   const clients = await prisma.client.findMany({
     where: { ...agentScopedClientWhere(tenantId, userId), is_active: true },
     select: {
@@ -649,6 +734,7 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
       name: true,
       phone: true,
       client_code: true,
+      agent_id: true,
       client_balances: { take: 1, select: { balance: true } }
     },
     orderBy: { name: "asc" },
@@ -657,18 +743,24 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
 
   const clientIds = clients.map((c) => c.id);
   const deliveryMap = await loadDeliveryDebtByClient(tenantId, clientIds);
+  const { loadDebtSplitByClient } = await import("../client-balances/client-debt-by-agent");
+  const splitMap = await loadDebtSplitByClient(tenantId, clientIds);
 
   return clients
     .map((c) => {
       const ledger = c.client_balances[0]?.balance ?? new Prisma.Decimal(0);
       const merged = mergeLedgerWithUnpaidDelivered(ledger, deliveryMap.get(c.id));
+      const split = splitMap.get(c.id);
       return {
         id: c.id,
         name: c.name,
         phone: c.phone,
         client_code: c.client_code,
         balance: Number(merged),
-        overdue_at: deliveryMap.get(c.id)?.firstDel?.toISOString() ?? null
+        overdue_at: deliveryMap.get(c.id)?.firstDel?.toISOString() ?? null,
+        legacy_debt: Number(split?.legacy_debt ?? 0),
+        current_debt: Number(split?.current_debt ?? 0),
+        debt_collection_only: false
       };
     })
     .filter((c) => c.balance < -0.01)

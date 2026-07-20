@@ -6,7 +6,8 @@ import { rewardRuleViews } from "./order-bonus-clauses";
  * - `fixed`: bitta qat'iy sovg'a SKU.
  * - `pick_product`: 2+ sovg'a SKU — mijoz/agent tanlaydi (swap ruxsat etilgan).
  * - `assortment_auto`: trigger = sovg'a (assortiment bo'yicha); har trigger-mahsulot o'zining sovg'asiga qulflangan, almashtirib bo'lmaydi.
- * - `category_stock`: faqat kategoriya doirasi, aniq sovg'a SKU tanlanmagan — sovg'a ombordagi eng katta qoldiqli mahsulotdan avtomatik beriladi (almashtirib bo'lmaydi).
+ * - `category_stock`: faqat kategoriya doirasi, aniq sovg'a SKU tanlanmagan — default ombor qoldig'i bo'yicha;
+ *   2+ nomzod bo'lsa agent almashtirishi mumkin (`allow_gift_swap`).
  */
 export type BonusGiftSelectionKind = "fixed" | "pick_product" | "assortment_auto" | "category_stock";
 
@@ -56,11 +57,9 @@ async function resolveAllowedGiftProductIdsForView(
     return triggerIds;
   }
   if (rule.product_category_ids.length > 0) {
-    const cats = await resolveCategoryGiftCandidateIds(tenantId, rule.product_category_ids);
-    if (fallbackGiftPid != null && fallbackGiftPid > 0 && cats.includes(fallbackGiftPid)) {
-      return [fallbackGiftPid];
-    }
-    return cats;
+    // To‘liq kategoriya havzasi — fallback bilan 1 SKU ga toraytirmaymiz
+    // (mobil/web swap va bonus-preview `gift_products` uchun kerak).
+    return resolveCategoryGiftCandidateIds(tenantId, rule.product_category_ids);
   }
   if (fallbackGiftPid != null && fallbackGiftPid > 0) return [fallbackGiftPid];
   return [];
@@ -120,9 +119,9 @@ export function bonusGiftSelectionMeta(
     return { kind: "fixed", allow_gift_swap: false };
   }
 
-  /** Faqat kategoriya (aniq sovg'a SKU yo'q): ombor qoldig'i bo'yicha avtomatik — o'zaro almashtirib bo'lmaydi. */
+  /** Faqat kategoriya (aniq sovg'a SKU yo'q): default ombor ustuvorligi; 2+ nomzod → swap. */
   if (hasCategoryScope && bonusIds.length === 0) {
-    return { kind: "category_stock", allow_gift_swap: false };
+    return { kind: "category_stock", allow_gift_swap: giftProductCount >= 2 };
   }
   /**
    * Aniq sovg'a SKU yo'q (global qty yoki assoriment): sovg'a xarid qilingan

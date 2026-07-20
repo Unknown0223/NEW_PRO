@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/dashboard/app-shell";
+import { RouteAccessGate } from "@/components/access/route-access-gate";
 import { SessionWatcher } from "@/components/dashboard/session-watcher";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { ActivityTrackerProvider } from "@/lib/activity-tracker";
@@ -10,7 +11,9 @@ export default function DashboardGroupLayout({ children }: { children: ReactNode
     <Suspense fallback={<RouteLoadingFallback rootLayout />}>
       <ActivityTrackerProvider>
         <SessionWatcher />
-        <AppShell>{children}</AppShell>
+        <AppShell>
+          <RouteAccessGate>{children}</RouteAccessGate>
+        </AppShell>
       </ActivityTrackerProvider>
     </Suspense>
   );

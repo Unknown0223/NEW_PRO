@@ -96,6 +96,47 @@ class UserFacingError {
     );
   }
 
+  /// Login: noto‘g‘ri login/parol.
+  static const UserFacingError invalidCredentials = UserFacingError(
+    title: 'Неверный логин или пароль',
+    message: 'Неверный логин или пароль. Проверьте код компании, логин и пароль.',
+    steps: [
+      'Убедитесь, что Caps Lock выключен',
+      'Проверьте код компании (slug)',
+      'Если забыли пароль — обратитесь к администратору',
+    ],
+  );
+
+  /// Login: sessiyalar limiti to‘lgan.
+  static const UserFacingError sessionLimitReached = UserFacingError(
+    title: 'Лимит сессий исчерпан',
+    message: 'Количество активных сессий пользователя превысило допустимый лимит',
+    steps: [
+      'Завершите вход на другом телефоне или в веб-панели',
+      'Попросите администратора закрыть лишние сессии',
+      'После этого войдите снова с этого устройства',
+    ],
+  );
+
+  /// Sessiya muddati tugagan yoki admin yopgan.
+  static const UserFacingError sessionExpiredOrRevoked = UserFacingError(
+    title: 'Сессия завершена',
+    message: 'Сессия завершена. Срок действия истёк или вход закрыт администратором. Войдите снова.',
+    steps: [
+      'Введите логин и пароль заново',
+      'Если войти не получается — попросите администратора проверить сессии',
+    ],
+  );
+
+  /// Login ekranida pastki snackbar (dialog emas).
+  bool get isLoginAuthSnack =>
+      title == invalidCredentials.title ||
+      title == sessionLimitReached.title ||
+      title == sessionExpiredOrRevoked.title;
+
+  /// Snackbar matni — qisqa, bitta blok.
+  String get snackbarText => message.trim().isNotEmpty ? message : title;
+
   static UserFacingError from(Object e, {String? context}) {
     if (e is UserFacingError) return e;
     if (e is DatabaseException) {

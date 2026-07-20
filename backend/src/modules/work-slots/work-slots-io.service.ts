@@ -53,8 +53,8 @@ function parseBoolCell(v: unknown): boolean {
   const s = String(v ?? "")
     .trim()
     .toLowerCase();
-  if (s === "yes" || s === "1" || s === "true" || s === "да") return true;
-  if (s === "no" || s === "0" || s === "false" || s === "нет") return false;
+  if (s === "yes" || s === "1" || s === "true" || s === "да" || s === "ha") return true;
+  if (s === "no" || s === "0" || s === "false" || s === "нет" || s === "yoq") return false;
   return true;
 }
 
@@ -79,24 +79,49 @@ export async function importWorkSlotsFromBuffer(
 
   for (let i = 0; i < raw.length; i++) {
     const row = raw[i]!;
-    const code = String(row.slot_code ?? row.Slot_code ?? row["slot code"] ?? "")
+    const pick = (...keys: string[]) => {
+      for (const k of keys) {
+        if (row[k] != null && String(row[k]).trim() !== "") return row[k];
+      }
+      return "";
+    };
+    const code = String(
+      pick("slot_code", "Slot_code", "slot code", "Код слота", "код слота")
+    )
       .trim()
       .toUpperCase();
     if (!code) continue;
 
-    const slotType = String(row.slot_type ?? row.Slot_type ?? "agent")
+    let slotType = String(pick("slot_type", "Slot_type", "Тип слота", "тип слота") || "agent")
       .trim()
       .toLowerCase();
+    const slotTypeMap: Record<string, string> = {
+      агент: "agent",
+      agent: "agent",
+      экспедитор: "expeditor",
+      expeditor: "expeditor",
+      сборщик: "collector",
+      collector: "collector",
+      складчик: "skladchik",
+      skladchik: "skladchik",
+      супервайзер: "supervisor",
+      supervisor: "supervisor",
+      аудитор: "auditor",
+      auditor: "auditor"
+    };
+    slotType = slotTypeMap[slotType] ?? slotType;
     if (!isWorkSlotType(slotType)) {
-      errors.push(`Row ${i + 2}: bad slot_type "${slotType}"`);
+      errors.push(`Строка ${i + 2}: неверный тип слота «${slotType}»`);
       continue;
     }
 
-    const label = String(row.label ?? "").trim() || null;
-    const branch = String(row.branch_code ?? row.branch ?? "").trim() || null;
-    const isActive = parseBoolCell(row.is_active);
-    const sortOrder = Number.parseInt(String(row.sort_order ?? "0"), 10);
-    const assignLogin = String(row.assign_login ?? row.active_user_login ?? "")
+    const label = String(pick("label", "Название", "название")).trim() || null;
+    const branch = String(pick("branch_code", "branch", "Код филиала", "код филиала")).trim() || null;
+    const isActive = parseBoolCell(pick("is_active", "Активен (да/нет)", "Активен"));
+    const sortOrder = Number.parseInt(String(pick("sort_order", "Сортировка") || "0"), 10);
+    const assignLogin = String(
+      pick("assign_login", "active_user_login", "Логин агента", "логин агента")
+    )
       .trim()
       .toLowerCase();
 
@@ -142,15 +167,15 @@ export async function importWorkSlotsFromBuffer(
           select: { id: true }
         });
         if (!user) {
-          errors.push(`Row ${i + 2}: user login not found "${assignLogin}"`);
+          errors.push(`Строка ${i + 2}: логин не найден «${assignLogin}»`);
         } else {
           await assignUserToSlot(tenantId, slotId, user.id, actorUserId, "Excel import");
           assigned += 1;
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "unknown";
-      errors.push(`Row ${i + 2}: ${msg}`);
+      const msg = e instanceof Error ? e.message : "ошибка";
+      errors.push(`Строка ${i + 2}: ${msg}`);
     }
   }
 

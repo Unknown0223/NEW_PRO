@@ -43,6 +43,18 @@ export async function createProductCategoryRow(
   } catch {
     throw new Error("BAD_CODE");
   }
+  const dup = await prisma.productCategory.findFirst({
+    where: {
+      tenant_id: tenantId,
+      parent_id: parentId,
+      name: { equals: trimmed, mode: "insensitive" },
+      is_active: true
+    },
+    select: { id: true }
+  });
+  if (dup) {
+    throw new Error("DUPLICATE_NAME");
+  }
   const row = await prisma.productCategory.create({
     data: {
       tenant_id: tenantId,

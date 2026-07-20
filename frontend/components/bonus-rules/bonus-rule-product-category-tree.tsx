@@ -362,7 +362,9 @@ function CategoryNode({
 
   const subtreeIdsQ = useQuery({
     queryKey: ["category-subtree-product-ids", tenantSlug, node.id, searchTrim, querySuffix],
-    enabled: categoryCheckSelectsProducts && Boolean(tenantSlug) && flatCategories.length > 0,
+    // Faqat ochilgan tugun — yopiqlar uchun parallel N so‘rov yo‘q
+    enabled:
+      categoryCheckSelectsProducts && Boolean(tenantSlug) && flatCategories.length > 0 && isOpen,
     queryFn: () => fetchProductIdsForCategorySubtree(tenantSlug, node.id, flatCategories, searchTrim),
     staleTime: STALE.list
   });
@@ -564,16 +566,62 @@ export function BonusRuleProductCategoryTree({
     return visible;
   }, [restrictToSelection, catsQ.data, categoryScopeIds, lockedProductRows]);
 
+  const searchTrim = search.trim();
+
+  /** Qidiruv: global mahsulot hitlari — faqat tegishli kategoriyalarni ko‘rsatish uchun */
+  const searchHitsQ = useQuery({
+    queryKey: ["bonus-rule-product-search-hits", tenantSlug, searchTrim, querySuffix],
+    enabled: Boolean(tenantSlug) && searchTrim.length > 0,
+    staleTime: STALE.list,
+    queryFn: () =>
+      fetchAllActiveProductsPage(
+        tenantSlug,
+        new URLSearchParams({ is_active: "true", search: searchTrim })
+      )
+  });
+
+  const searchVisibleCategoryIds = useMemo(() => {
+    if (!searchTrim) return null;
+    const flat = catsQ.data ?? [];
+    if (!flat.length) return new Set<number>();
+    const visible = new Set<number>();
+    const q = searchTrim.toLowerCase();
+    for (const c of flat) {
+      if (c.name.toLowerCase().includes(q)) {
+        addCategoryAncestors(c.id, flat, visible);
+        addCategoryDescendants(c.id, flat, visible);
+      }
+    }
+    for (const p of searchHitsQ.data ?? []) {
+      if (p.category_id != null) addCategoryAncestors(p.category_id, flat, visible);
+    }
+    return visible;
+  }, [searchTrim, catsQ.data, searchHitsQ.data]);
+
+  const searchHasUncategorizedHits = useMemo(() => {
+    if (!searchTrim) return false;
+    return (searchHitsQ.data ?? []).some((p) => p.category_id == null);
+  }, [searchTrim, searchHitsQ.data]);
+
   const displayTree = useMemo(() => {
-    if (!restrictToSelection) return tree;
-    if (!visibleCategoryIdsResolved?.size) return [];
-    return filterTreeByVisibleCategories(tree, visibleCategoryIdsResolved);
-  }, [tree, restrictToSelection, visibleCategoryIdsResolved]);
+    if (restrictToSelection) {
+      if (!visibleCategoryIdsResolved?.size) return [];
+      return filterTreeByVisibleCategories(tree, visibleCategoryIdsResolved);
+    }
+    if (searchVisibleCategoryIds) {
+      if (!searchVisibleCategoryIds.size) return [];
+      return filterTreeByVisibleCategories(tree, searchVisibleCategoryIds);
+    }
+    return tree;
+  }, [tree, restrictToSelection, visibleCategoryIdsResolved, searchVisibleCategoryIds]);
 
   const showUncategorizedSection = useMemo(() => {
-    if (!restrictToSelection) return true;
-    return lockedProductRows.some((p) => p.category_id == null);
-  }, [restrictToSelection, lockedProductRows]);
+    if (restrictToSelection) {
+      return lockedProductRows.some((p) => p.category_id == null);
+    }
+    if (searchTrim) return searchHasUncategorizedHits;
+    return true;
+  }, [restrictToSelection, lockedProductRows, searchTrim, searchHasUncategorizedHits]);
 
   useLayoutEffect(() => {
     if (!restrictToSelection || !visibleCategoryIdsResolved?.size) return;
@@ -582,47 +630,43 @@ export function BonusRuleProductCategoryTree({
   }, [restrictToSelection, visibleCategoryIdsResolved, showUncategorizedSection]);
 
   useLayoutEffect(() => {
-    if (!defaultExpandAll) return;
+    if (!defaultExpandAll || searchTrim) return;
     const flat = catsQ.data ?? [];
     if (!flat.length) return;
     const allIds = new Set(flat.map((c) => c.id));
     setExpandedCats(allIds);
     setUncOpen(true);
-  }, [defaultExpandAll, catsQ.data]);
+  }, [defaultExpandAll, catsQ.data, searchTrim]);
 
   /**
-   * Qidiruv bo‘yicha natijani ko‘rish uchun kategoriyalarni ochish.
-   * `tree` ni dependency qilmaslik kerak — har safar yangi referens bo‘lib, effekt qayta ishlab
-   * foydalanuvchi yopgan tugunlarni qayta ochardi (trigger «ishlamayapti» taassuroti).
-   * Bir xil qidiruv uchun faqat bir marta avto-ochamiz; qidiruv o‘zgaganda qayta.
+   * Qidiruv: faqat mos kategoriyalarni ochish (hammasini emas — bo‘sh «mahsulot yo‘q» daraxtlari).
+   * Bir xil qidiruv uchun bir marta; qidiruv o‘zgaganda qayta.
    */
   const lastAutoExpandForSearchRef = useRef<string>("");
   useEffect(() => {
-    const q = search.trim();
-    if (!q) {
+    if (!searchTrim) {
       lastAutoExpandForSearchRef.current = "";
       return;
     }
-    const data = catsQ.data ?? [];
-    if (!data.length) return;
+    if (searchHitsQ.isFetching && !searchHitsQ.data) return;
+    if (lastAutoExpandForSearchRef.current === searchTrim) return;
+    lastAutoExpandForSearchRef.current = searchTrim;
 
-    if (lastAutoExpandForSearchRef.current === q) return;
-    lastAutoExpandForSearchRef.current = q;
-
-    const t = nestCategories(data);
-    setExpandedCats((prev) => {
-      const next = new Set(prev);
-      const walk = (nodes: TreeNode[]) => {
-        for (const n of nodes) {
-          next.add(n.id);
-          if (n.children.length) walk(n.children);
-        }
-      };
-      walk(t);
-      return next;
-    });
-    setUncOpen(true);
-  }, [search, catsQ.data]);
+    const ids = searchVisibleCategoryIds;
+    if (!ids?.size) {
+      setExpandedCats(new Set());
+      setUncOpen(searchHasUncategorizedHits);
+      return;
+    }
+    setExpandedCats(new Set(ids));
+    setUncOpen(searchHasUncategorizedHits);
+  }, [
+    searchTrim,
+    searchVisibleCategoryIds,
+    searchHasUncategorizedHits,
+    searchHitsQ.isFetching,
+    searchHitsQ.data
+  ]);
 
   const toggleExpanded = (id: number) => {
     setExpandedCats((prev) => {
@@ -672,6 +716,18 @@ export function BonusRuleProductCategoryTree({
 
   if (restrictToSelection && filterProductsQ.isLoading && value.length > 0) {
     return <p className="px-1 py-4 text-sm text-muted-foreground">Tanlangan mahsulotlar yuklanmoqda…</p>;
+  }
+
+  if (searchTrim && searchHitsQ.isLoading && !searchHitsQ.data) {
+    return <p className="px-1 py-4 text-sm text-muted-foreground">Qidiruv…</p>;
+  }
+
+  if (searchTrim && !searchHitsQ.isLoading && displayTree.length === 0 && !showUncategorizedSection) {
+    return (
+      <p className="px-1 py-4 text-sm text-muted-foreground">
+        Qidiruv bo‘yicha kategoriya yoki mahsulot topilmadi.
+      </p>
+    );
   }
 
   return (

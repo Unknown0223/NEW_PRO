@@ -45,6 +45,7 @@ import {
   buildAccessTerritorySyncPayload,
   buildAccessTerritoryTreeFromPayload,
   computeAccessTerritoryCatalogDigest,
+  invalidateAccessTerritorySyncCache,
   setTerritoryCatalogResponseCache,
   syncTerritoriesFromPayload,
   tryTerritoryCatalogResponseCache
@@ -79,7 +80,7 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
     const digest = computeAccessTerritoryCatalogDigest(payload);
 
     const cached = tryTerritoryCatalogResponseCache(tenantId, digest);
-    if (cached) {
+    if (cached && (cached.rows.length > 0 || digest === "__empty__")) {
       return reply.send({
         data: cached.rows.map((r) => ({
           id: r.id,
@@ -92,12 +93,24 @@ export async function registerAccessCatalogRoutes(app: FastifyInstance) {
         tree: cached.tree
       });
     }
+    if (cached && cached.rows.length === 0 && digest !== "__empty__") {
+      invalidateAccessTerritorySyncCache(tenantId);
+    }
 
     await syncTerritoriesFromPayload(tenantId, payload);
-    const rows = await prisma.territory.findMany({
+    let rows = await prisma.territory.findMany({
       where: { tenant_id: tenantId, deleted_at: null },
       select: { id: true, name: true, code: true, is_active: true }
     });
+    /** Digest-skip / race: справочник есть, а таблица пуста — ещё раз sync без кэша. */
+    if (rows.length === 0 && payload && payload.items.length > 0) {
+      invalidateAccessTerritorySyncCache(tenantId);
+      await syncTerritoriesFromPayload(tenantId, payload);
+      rows = await prisma.territory.findMany({
+        where: { tenant_id: tenantId, deleted_at: null },
+        select: { id: true, name: true, code: true, is_active: true }
+      });
+    }
     const tree = payload ? buildAccessTerritoryTreeFromPayload(payload.roots, rows) : [];
     setTerritoryCatalogResponseCache(tenantId, digest, rows, tree);
     return reply.send({

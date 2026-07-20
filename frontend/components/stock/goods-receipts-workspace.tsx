@@ -18,8 +18,7 @@ import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import { api } from "@/lib/api";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { STALE } from "@/lib/query-stale";
-import { useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { usePermissions } from "@/lib/use-permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Download, FileSpreadsheet, LayoutGrid, ListFilter, Pencil, RefreshCw, Search, Upload, X } from "lucide-react";
 import Link from "next/link";
@@ -175,8 +174,11 @@ function renderCell(row: GoodsReceiptRow, colId: string): ReactNode {
 type Props = { tenantSlug: string };
 
 export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
-  const role = useEffectiveRole();
-  const canWrite = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canWrite =
+    has("warehouse.postuplenie.create") ||
+    has("warehouse.postuplenie.update") ||
+    has("warehouse.postuplenie.status");
   const qc = useQueryClient();
 
   const [draftWh, setDraftWh] = useState("");

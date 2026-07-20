@@ -8,9 +8,11 @@ import '../camera/photo_service.dart';
 import '../config/mobile_config.dart';
 import '../database/app_database.dart';
 
-/// Foto hisobotlar oflayn navbat — yangilashdan oldin serverga yuboriladi.
+/// Foto hisobotlar oflayn navbat — online bo‘lganda 5 martagacha qayta urinadi.
 class PhotoReportQueue {
   PhotoReportQueue._();
+
+  static const maxRetries = 5;
 
   static Future<String?> persistImage(String tempPath) async {
     final src = File(tempPath);
@@ -25,12 +27,33 @@ class PhotoReportQueue {
     return dest.path;
   }
 
+  /// Sync oynasi tugagan (captureDeadline o‘tgan) mijoz uchun yangi rasm bloklanadi.
+  static Future<bool> isCaptureBlockedForClient(int clientId) async {
+    final rows = await AppDatabase().getPendingHeldOrdersForClient(clientId);
+    if (rows.isEmpty) return false;
+    final now = DateTime.now();
+    for (final row in rows) {
+      final raw = row['capture_deadline']?.toString().isNotEmpty == true
+          ? row['capture_deadline']?.toString()
+          : row['submit_at']?.toString();
+      if (raw == null || raw.isEmpty) continue;
+      final deadline = DateTime.tryParse(raw);
+      if (deadline != null && !now.isBefore(deadline)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static Future<bool> enqueue({
     required int clientId,
     required String imagePath,
     required String caption,
     int? orderId,
   }) async {
+    if (await isCaptureBlockedForClient(clientId)) {
+      return false;
+    }
     final persisted = await persistImage(imagePath);
     if (persisted == null) return false;
     await AppDatabase().enqueuePendingPhotoReport(
@@ -59,6 +82,7 @@ class PhotoReportQueue {
       final imagePath = item['image_path'] as String;
       final caption = item['caption'] as String? ?? '';
       final orderId = item['order_id'] as int?;
+      final retryCount = (item['retry_count'] as int?) ?? 0;
 
       final file = File(imagePath);
       if (!await file.exists()) {
@@ -70,6 +94,7 @@ class PhotoReportQueue {
       try {
         final b64 = await encodeClientPhotoBase64(imagePath, config: photoConfig);
         if (b64 == null) {
+          await _registerFailure(db, id, retryCount);
           failed++;
           continue;
         }
@@ -86,11 +111,21 @@ class PhotoReportQueue {
         } catch (_) {}
         sent++;
       } catch (_) {
+        await _registerFailure(db, id, retryCount);
         failed++;
-        break;
+        // Keyingi fotolarni ham urinish — bitta xato hammasi to‘xtatmasin.
       }
     }
     return PhotoFlushResult(sent: sent, failed: failed);
+  }
+
+  static Future<void> _registerFailure(AppDatabase db, int id, int retryCount) async {
+    final next = retryCount + 1;
+    if (next >= maxRetries) {
+      await db.markPendingPhotoFailed(id);
+    } else {
+      await db.bumpPendingPhotoRetry(id);
+    }
   }
 }
 
