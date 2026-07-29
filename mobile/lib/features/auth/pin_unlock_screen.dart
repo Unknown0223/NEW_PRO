@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +13,7 @@ import '../../core/theme/app_typography.dart';
 import 'auth_provider.dart';
 import 'pin_pad.dart';
 
-/// Mahalliy qulf — biometrik yoqilgan bo‘lsa avval skaner, bekor qilinsa PIN.
+/// Mahalliy qulf — PIN darhol ochadi; biometrik ixtiyoriy (telefon skaneri).
 class PinUnlockScreen extends ConsumerStatefulWidget {
   const PinUnlockScreen({super.key});
 
@@ -25,7 +27,9 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   bool _bioEnabled = false;
   String _bioLabel = S.touchId;
   bool _bioInProgress = false;
+  bool _pinUnlocking = false;
   bool _initialized = false;
+  int _bioGeneration = 0;
 
   @override
   void initState() {
@@ -49,37 +53,60 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
       _initialized = true;
     });
 
+    // Avto-biometrik — foydalanuvchi PIN terayotganda bekor qilinadi.
     if (available) {
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      if (!mounted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (!mounted || _pin.isNotEmpty || _pinUnlocking) return;
       await _tryBiometric(auto: true);
     }
   }
 
   Future<void> _tryBiometric({bool auto = false}) async {
-    if (!_bioEnabled || _bioInProgress) return;
+    if (!_bioEnabled || _bioInProgress || _pinUnlocking) return;
+    if (auto && _pin.isNotEmpty) return;
+    final gen = ++_bioGeneration;
     setState(() => _bioInProgress = true);
     final ok = await ref.read(authStateProvider.notifier).unlockWithBiometric();
-    if (!mounted) return;
+    if (!mounted || gen != _bioGeneration) return;
     setState(() => _bioInProgress = false);
     if (!ok && !auto) {
       setState(() => _pin = '');
     }
   }
 
-  void _onDigit(String d) {
-    if (_pin.length >= _pinLen) return;
-    setState(() => _pin += d);
-    if (_pin.length == _pinLen) {
-      ref.read(authStateProvider.notifier).unlockWithPin(_pin);
-      Future.microtask(() {
-        if (mounted) setState(() => _pin = '');
-      });
+  void _cancelBiometricPrompt() {
+    _bioGeneration++;
+    if (_bioInProgress && mounted) {
+      setState(() => _bioInProgress = false);
+    } else {
+      _bioInProgress = false;
     }
   }
 
+  Future<void> _onDigit(String d) async {
+    if (_pinUnlocking || _pin.length >= _pinLen) return;
+    // PIN kiritilayotganda biometrik kutish PIN padni bloklamasligi kerak.
+    _cancelBiometricPrompt();
+    final next = _pin + d;
+    setState(() => _pin = next);
+    if (next.length != _pinLen) return;
+
+    setState(() => _pinUnlocking = true);
+    await ref.read(authStateProvider.notifier).unlockWithPin(next);
+    if (!mounted) return;
+    final status = ref.read(authStateProvider).status;
+    if (status == AuthStatus.locked) {
+      setState(() {
+        _pin = '';
+        _pinUnlocking = false;
+      });
+    }
+    // ready/loading — ekran almashtiriladi; state tozalash shart emas.
+  }
+
   void _backspace() {
-    if (_pin.isEmpty) return;
+    if (_pinUnlocking || _pin.isEmpty) return;
+    _cancelBiometricPrompt();
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
@@ -105,7 +132,10 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authStateProvider, (prev, next) {
       if (next.status == AuthStatus.locked && next.error != null && prev?.error != next.error) {
-        setState(() => _pin = '');
+        setState(() {
+          _pin = '';
+          _pinUnlocking = false;
+        });
       }
     });
 
@@ -177,21 +207,26 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
                 const SizedBox(height: 248)
               else
                 PinPad(
-                  enabled: !_bioInProgress,
+                  // Biometrik dialog ochiq bo‘lsa ham PIN terish mumkin.
+                  enabled: !_pinUnlocking,
                   variant: PinPadVariant.unlock,
-                  onDigit: _onDigit,
+                  onDigit: (d) {
+                    unawaited(_onDigit(d));
+                  },
                   onBackspace: _backspace,
                 ),
               const SizedBox(height: 22),
               if (_bioEnabled)
                 PinBiometricButton(
                   label: _bioLabel,
-                  loading: _bioInProgress,
-                  onPressed: _tryBiometric,
+                  loading: _bioInProgress && !_pinUnlocking,
+                  onPressed: () => _tryBiometric(),
                 ),
               const Spacer(),
               TextButton(
-                onPressed: () => ref.read(authStateProvider.notifier).logout(),
+                onPressed: _pinUnlocking
+                    ? null
+                    : () => ref.read(authStateProvider.notifier).logout(),
                 child: Text(
                   S.loginOtherAccount,
                   style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),

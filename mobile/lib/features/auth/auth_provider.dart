@@ -35,7 +35,20 @@ import '../../core/l10n/app_strings_ru.dart';
 import '../../core/update/app_update_info.dart';
 import '../../core/update/app_update_installer.dart';
 
-enum AuthStatus { initial, loading, authenticated, pinSetup, bootstrapping, syncComplete, ready, locked, error }
+enum AuthStatus {
+  /// Cold start — sessiya/PIN tekshirilmoqda (splash).
+  initial,
+  /// Akkaunt yo‘q yoki chiqilgan — login formasi.
+  unauthenticated,
+  loading,
+  authenticated,
+  pinSetup,
+  bootstrapping,
+  syncComplete,
+  ready,
+  locked,
+  error,
+}
 
 class BootstrapStep {
   final int idx;
@@ -139,6 +152,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     : super(const AuthState()) {
     _ref.read(sessionExpiredBridgeProvider).register(sessionExpired);
     _ref.read(appAccessDeniedBridgeProvider).register(appAccessRevoked);
+    // Birinchi kadrdan oldin sessiya tekshiruvini boshlash — login miltillamasin.
+    Future.microtask(checkSession);
   }
 
   void _setError(UserFacingError info, {AuthStatus status = AuthStatus.error}) {
@@ -251,17 +266,46 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return true;
   }
 
-  /// Mahalliy qulfdan tez ochish — API chaqiruvlari fonda.
+  /// Mahalliy qulfdan tez ochish — UI darhol ochiladi, API fonda.
   Future<void> _finishLocalUnlock() async {
     if (_session.state.bootstrapped && _session.state.user != null) {
-      await restoreTokens(_ref);
-      _resumeAfterRestore();
+      // PIN/biometric faqat telefonda — server kutmasdan darhol ready.
       state = const AuthState(status: AuthStatus.ready);
-      unawaited(_backgroundAfterUnlock());
+      unawaited(_afterInstantLocalUnlock());
       return;
     }
     state = const AuthState(status: AuthStatus.loading);
     await _unlockSessionAfterLocalAuth();
+  }
+
+  Future<void> _afterInstantLocalUnlock() async {
+    try {
+      await restoreTokens(_ref);
+      _resumeAfterRestore();
+      await _backgroundAfterUnlock();
+      // Sinхron oynasi ochiq bo‘lsa — ma’lumotlarni fonda yangilaymiz (UI allaqachon ochiq).
+      final sync = _session.state.mobileConfig?.sync ?? const SyncConfig();
+      if (evaluateSyncPolicy(sync).allowed) {
+        unawaited(_softPullAfterUnlock());
+      }
+    } catch (_) {
+      // Sessiya allaqachon ochiq; fon xatolari PIN ekraniga qaytarmaydi.
+    }
+  }
+
+  Future<void> _softPullAfterUnlock() async {
+    try {
+      final role = _session.state.user?.role ?? 'agent';
+      if (role == 'expeditor') {
+        await _resyncExpeditor();
+        return;
+      }
+      if (role == 'supervisor') {
+        await _resyncSupervisor();
+        return;
+      }
+      await resync();
+    } catch (_) {}
   }
 
   Future<void> _backgroundAfterUnlock() async {
@@ -326,7 +370,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final refresh = await storage.read(key: 'refresh_token');
       if (refresh == null || refresh.isEmpty) {
         await _wipeLocalAuth();
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
 
@@ -336,7 +380,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
           me = _session.state.user!;
         } else {
           await _wipeLocalAuth();
-          state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
+          state = const AuthState(
+            status: AuthStatus.error,
+            error: 'Sessiya tugadi. Qayta kiring.',
+          );
           return;
         }
       }
@@ -424,7 +471,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> checkSession() async {
-    state = const AuthState(status: AuthStatus.loading);
+    // Status `initial` qoladi → splash (login miltillamasin).
     try {
       await _ref.read(appPinStoreProvider).warmCache();
       final hasTokens = await restoreTokens(_ref);
@@ -438,24 +485,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
             await _wipeLocalAuth();
           }
         }
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
       final restored = await _session.restore();
       if (!restored) {
         await clearAuthTokens(_ref);
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
+
+      // Akkaunt bor — login o‘rniga darhol PIN (yoki pin setup).
+      if (await _canAppLock()) {
+        await _lockForApp();
+        return;
+      }
+      if (await _needsPinSetup()) {
+        state = const AuthState(status: AuthStatus.pinSetup);
+        return;
+      }
+
       if (_session.state.bootstrapped) {
-        if (await _canAppLock()) {
-          await _lockForApp();
-          return;
-        }
-        if (await _needsPinSetup()) {
-          state = const AuthState(status: AuthStatus.pinSetup);
-          return;
-        }
         state = const AuthState(status: AuthStatus.loading);
         try {
           final me = await _authApi.me();
@@ -484,15 +534,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.ready);
         unawaited(_backgroundAfterUnlock());
       } else {
-        if (await _needsPinSetup()) {
-          state = const AuthState(status: AuthStatus.pinSetup);
-          return;
-        }
         await _bootstrap();
       }
     } catch (_) {
       await _wipeLocalAuth();
-      state = const AuthState();
+      state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }
 
@@ -1351,7 +1397,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    state = const AuthState();
+    state = const AuthState(status: AuthStatus.unauthenticated);
     _session.state = const SessionState();
 
     final rt = _ref.read(refreshTokenProvider);
@@ -1360,7 +1406,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {}
 
     await _wipeLocalAuth();
-    state = const AuthState();
+    state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
   /// Web «Завершить все сессии» yoki sessiya muddati — login ekraniga.

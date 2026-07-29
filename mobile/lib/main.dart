@@ -18,7 +18,6 @@ import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
-import 'features/auth/auth_provider.dart';
 import 'features/auth/biometric_setup_listener.dart';
 import 'routing/app_router.dart';
 
@@ -78,7 +77,6 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(dioProvider); // ErrorReporter.bind
-      ref.read(authStateProvider.notifier).checkSession();
       ErrorReporter.instance?.flush();
     });
   }

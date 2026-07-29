@@ -9,6 +9,7 @@ import '../features/auth/pin_setup_screen.dart';
 import '../features/auth/pin_unlock_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/bootstrap_screen.dart';
+import '../features/auth/session_splash_screen.dart';
 import '../features/agent/home/agent_home_page.dart';
 import '../features/agent/clients/agent_clients_page.dart';
 import '../features/agent/clients/new_client_page.dart';
@@ -127,7 +128,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,
     refreshListenable: refresh,
-    initialLocation: '/login',
+    initialLocation: '/splash',
     redirect: (ctx, state) {
       final auth = ref.read(authStateProvider);
       final session = ref.read(sessionProvider);
@@ -135,14 +136,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       final isLogin = loc == '/login';
       final isBoot = loc == '/bootstrap';
+      final isSplash = loc == '/splash';
 
-      if (s == AuthStatus.initial || s == AuthStatus.error) {
+      // Cold start — sessiya tekshiruvi (login formasiz).
+      if (s == AuthStatus.initial) {
+        return isSplash ? null : '/splash';
+      }
+
+      if (s == AuthStatus.unauthenticated || s == AuthStatus.error) {
         // Bootstrap xatosi — foydalanuvchi «Qaytadan urinish» tugmasini ko‘ra olsin
         if (isBoot && auth.error != null) return null;
         return isLogin ? null : '/login';
       }
 
-      if (s == AuthStatus.loading && loc == '/login') {
+      if (s == AuthStatus.loading && isLogin) {
+        return null;
+      }
+
+      // Loading (masalan oflayn me tekshiruvi) — splash/unlock da qolish mumkin.
+      if (s == AuthStatus.loading && (isSplash || loc == '/unlock')) {
         return null;
       }
 
@@ -166,7 +178,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (s == AuthStatus.ready) {
-        if (isLogin || isBoot) return '/home';
+        if (isLogin || isBoot || isSplash || loc == '/unlock' || loc == '/pin-setup') {
+          return '/home';
+        }
 
         final role = session.user?.role ?? 'agent';
         final blocked = roleRedirect(state, role);
@@ -178,6 +192,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/splash', builder: (_, __) => const SessionSplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/pin-setup', builder: (_, __) => const PinSetupScreen()),
       GoRoute(path: '/unlock', builder: (_, __) => const PinUnlockScreen()),
