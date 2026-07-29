@@ -43,6 +43,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
@@ -247,6 +249,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "skladchik");
 
   const filterOptsQ = useQuery({
     queryKey: ["skladchik", tenantSlug, "filter-options"],
@@ -567,6 +570,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
             dataRows
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -596,6 +600,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selected}
         onToggleSelection={toggleOne}
+        onToggleAllOnPage={toggleAllOnPage}
         renderCell={(colId, row) =>
           renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -699,6 +704,22 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         }}
         contentClassName="sm:max-w-2xl"
       />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
+          });
+        }}
+      />
+
 
       <SkladchikCreateModal
         tenantSlug={tenantSlug}
@@ -1252,6 +1273,7 @@ function WebStaffEditDialog({
   const [pinfl, setPinfl] = useState("");
   const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
+  const [login, setLogin] = useState("");
   const [max_sessions, setMaxS] = useState("1");
   const [app_access, setAppAccess] = useState(false);
   const [can_authorize, setCanAuth] = useState(true);
@@ -1288,6 +1310,7 @@ function WebStaffEditDialog({
     setPinfl(row.pinfl ?? "");
     setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
+    setLogin(row.login);
     setMaxS(String(row.max_sessions));
     setAppAccess(row.app_access);
     setCanAuth(row.can_authorize);
@@ -1307,6 +1330,7 @@ function WebStaffEditDialog({
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
         position: position.trim() || null,
+        login: login.trim().toLowerCase(),
         max_sessions: Number.isFinite(ms) ? ms : row.max_sessions,
         app_access,
         can_authorize
@@ -1326,7 +1350,12 @@ function WebStaffEditDialog({
         setPatchBannerError(top ? withApiSupportLine(top, e) : null);
       } else {
         setPatchFieldErrors({});
-        setPatchBannerError(getUserFacingError(e, "Saqlab bo‘lmadi."));
+        const ax = e as AxiosError<{ error?: string; message?: string }>;
+        if (ax.response?.status === 409 && ax.response?.data?.error === "LoginExists") {
+          setPatchBannerError(withApiSupportLine("Этот логин уже занят. Укажите другой логин.", e));
+        } else {
+          setPatchBannerError(getUserFacingError(e, "Saqlab bo‘lmadi."));
+        }
       }
     }
   });
@@ -1362,6 +1391,15 @@ function WebStaffEditDialog({
             <span className="text-xs text-muted-foreground">Otasining ismi</span>
             <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
             <FieldHint name="middle_name" errors={patchFieldErrors} />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs text-muted-foreground">Login *</span>
+            <Input
+              className="font-mono"
+              value={login}
+              onChange={(e) => setLogin(e.target.value.toLowerCase())}
+            />
+            <FieldHint name="login" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Telefon</span>
@@ -1433,7 +1471,7 @@ function WebStaffEditDialog({
           <Button
             type="button"
             className={tealPrimary}
-            disabled={patchMut.isPending}
+            disabled={patchMut.isPending || !login.trim()}
             onClick={() => patchMut.mutate()}
           >
             {patchMut.isPending ? "…" : "Saqlash"}

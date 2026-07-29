@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -54,10 +55,11 @@ final photoServiceProvider = Provider<PhotoService>((ref) => PhotoService());
 
 String _b64FromBytes(List<int> bytes) => base64Encode(bytes);
 
-bool _fitsPhotoUpload(List<int> bytes) {
-  if (bytes.length > clientPhotoMaxFileBytes) return false;
-  // Base64 ~4/3 — bytes limit yetarli, lekin aniq tekshiruv saqlanadi.
-  return _b64FromBytes(bytes).length <= clientPhotoMaxBase64Len;
+/// Taxminiy base64 uzunligi — UI threadda to‘liq encode qilmaslik.
+bool _fitsPhotoUploadBytes(int byteLen) {
+  if (byteLen > clientPhotoMaxFileBytes) return false;
+  final approxB64 = ((byteLen + 2) ~/ 3) * 4;
+  return approxB64 <= clientPhotoMaxBase64Len;
 }
 
 int _encodeQuality(PhotoConfig cfg) =>
@@ -93,6 +95,9 @@ Future<List<int>?> _readRawFile(String filePath) async {
   return file.readAsBytes();
 }
 
+Future<String> _encodeB64Isolate(List<int> bytes) =>
+    compute(_b64FromBytes, bytes);
+
 /// Kamera faylini serverga yuklash uchun base64 — asl sifat saqlanadi, faqat limitdan oshsa siqiladi.
 Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) async {
   final cfg = config ?? const PhotoConfig();
@@ -100,8 +105,8 @@ Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) 
   final targetSide = _encodeMaxSide(cfg);
 
   final rawBytes = await _readRawFile(filePath);
-  if (rawBytes != null && _fitsPhotoUpload(rawBytes)) {
-    return _b64FromBytes(rawBytes);
+  if (rawBytes != null && _fitsPhotoUploadBytes(rawBytes.length)) {
+    return _encodeB64Isolate(rawBytes);
   }
 
   // Avval faqat JPEG sifatini pasaytiramiz, rezolyutsiyani saqlab.
@@ -111,22 +116,22 @@ Future<String?> encodeClientPhotoBase64(String filePath, {PhotoConfig? config}) 
       minSide: _noResizeMinSide,
       quality: quality,
     );
-    if (reencoded != null && _fitsPhotoUpload(reencoded)) {
-      return _b64FromBytes(reencoded);
+    if (reencoded != null && _fitsPhotoUploadBytes(reencoded.length)) {
+      return _encodeB64Isolate(reencoded);
     }
   }
 
   // Hali ham katta — config chegarasigacha kichraytiramiz.
   var compressed = await _compressJpeg(filePath, minSide: targetSide, quality: targetQuality);
-  if (compressed != null && _fitsPhotoUpload(compressed)) {
-    return _b64FromBytes(compressed);
+  if (compressed != null && _fitsPhotoUploadBytes(compressed.length)) {
+    return _encodeB64Isolate(compressed);
   }
 
   for (var side = targetSide; side >= 1920; side -= 512) {
     for (var quality = targetQuality; quality >= 85; quality -= 3) {
       compressed = await _compressJpeg(filePath, minSide: side, quality: quality);
-      if (compressed != null && _fitsPhotoUpload(compressed)) {
-        return _b64FromBytes(compressed);
+      if (compressed != null && _fitsPhotoUploadBytes(compressed.length)) {
+        return _encodeB64Isolate(compressed);
       }
     }
   }

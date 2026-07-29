@@ -70,20 +70,14 @@ $policy = @{
   min_version    = $minVer
   latest_version = $LatestVersion
   force_update   = $force
-  release_notes  = "Production yangilash $LatestVersion"
+  download_url   = "$Api/api/mobile/apk-download?slug=$Slug"
+  release_notes  = "Production yangilash $LatestVersion — serverdan ilova ichida o'rnatish"
 } | ConvertTo-Json
 Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
   -Method PATCH `
   -Headers @{ Authorization = "Bearer $token" } `
   -Body $policy -ContentType "application/json" | Out-Null
 
-$dlUrl = "$Api/api/mobile/apk-download?slug=$Slug"
-$dlPatch = @{ download_url = $dlUrl } | ConvertTo-Json
-Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
-  -Method PATCH `
-  -Headers @{ Authorization = "Bearer $token" } `
-  -Body $dlPatch -ContentType "application/json" | Out-Null
-
 Write-Host "Yuklandi: $($upload.bytes) bayt" -ForegroundColor Green
-Write-Host "download_url: $dlUrl"
+Write-Host "download_url: $Api/api/mobile/apk-download?slug=$Slug"
 Write-Host "Veb: https://sales-arena.up.railway.app/settings/mobile-app"

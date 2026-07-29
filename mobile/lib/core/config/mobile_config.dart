@@ -185,7 +185,7 @@ class MiscConfig {
   final List<String> disallowedPaymentMethodCodes;
 
   const MiscConfig({
-    this.visitStartEndEnabled = false,
+    this.visitStartEndEnabled = true,
     this.requireWithinOutletRadiusM,
     this.requireStockSnapshotForOrder = false,
     this.requireShipmentDate = false,
@@ -194,7 +194,7 @@ class MiscConfig {
   });
 
   factory MiscConfig.fromJson(Map<String, dynamic> j) => MiscConfig(
-        visitStartEndEnabled: j['visit_start_end_enabled'] ?? false,
+        visitStartEndEnabled: j['visit_start_end_enabled'] ?? true,
         requireWithinOutletRadiusM: (j['require_within_outlet_radius_m'] as num?)?.toDouble(),
         requireStockSnapshotForOrder: j['require_stock_snapshot_for_order'] ?? false,
         requireShipmentDate: j['require_shipment_date'] ?? false,

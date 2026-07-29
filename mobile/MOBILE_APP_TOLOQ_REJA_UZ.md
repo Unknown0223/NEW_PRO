@@ -1071,7 +1071,7 @@ Jami taxminiy muddat: **13–17 hafta**
 |--------|-------|
 | Agent MVP (`mobile/lib/features/agent/`) | ✅ E2E checklist bo‘yicha |
 | Ekspeditor / supervayzer | 🟡 API + config enforcement; to‘liq to‘lov workflow yo‘q |
-| Android release APK | ✅ Telegram tarqatish |
+| Android release APK | ✅ Server OTA (`/api/mobile/apk-download`, ilova ichida o‘rnatish) |
 | iOS / Play In-App Update | ❌ FAZA 9.8 |
 
 ---

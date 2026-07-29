@@ -35,6 +35,13 @@ export const createOrderBodySchema = z
     agent_id: z.number().int().positive().nullable().optional(),
     expeditor_user_id: z.number().int().positive().nullable().optional(),
     price_type: z.string().trim().min(1).max(128).optional().nullable(),
+    /** Старые цены: YYYY-MM-DD — qator narxlari shu sana bo‘yicha */
+    price_as_of: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional()
+      .nullable(),
     order_type: z.enum(["order", "return", "exchange", "partial_return", "return_by_order"]).optional(),
     apply_bonus: z.boolean().optional(),
     bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),

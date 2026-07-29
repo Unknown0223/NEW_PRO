@@ -240,6 +240,8 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
+        if (msg === "BAD_LOGIN") return sendApiError(reply, request, 400, "BadLogin");
+        if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_MAX_SESSIONS") return sendApiError(reply, request, 400, "BadMaxSessions");
         if (msg === "BAD_LIMIT") return sendApiError(reply, request, 400, "BadLimit");
         if (msg === "BAD_ENTITLEMENT_CATEGORY" || msg === "BAD_ENTITLEMENT_PRODUCT") {

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { QueryErrorState } from "@/components/common/query-error-state";
+import { availableOrderQty } from "@/components/orders/order-create/utils";
 import { rowStatusPatchError } from "@/components/orders/orders-list/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
@@ -13,7 +14,7 @@ import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios, { type AxiosError } from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OrderBonusSection } from "./order-detail/bonus-section";
 import { ClientInfoCard } from "./order-detail/client-info-card";
 import { OrderInfoCard } from "./order-detail/order-info-card";
@@ -179,6 +180,8 @@ type Props = {
   tenantSlug: string | null;
   orderId: number;
   showPrintView?: boolean;
+  /** URL `?edit=1` — ochilganda to‘lov qatorlarini tahrirlash rejimiga o‘tish. */
+  autoStartEdit?: boolean;
 };
 
 type Line = { key: string; productId: string; qty: string };
@@ -207,11 +210,20 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
     credit_limit?: string;
     outstanding?: string;
     order_total?: string;
+    available?: string;
+    requested?: string;
+    allocated?: string;
   }>;
   const code = ax.response?.data?.error;
   const d = ax.response?.data;
   if (code === "OrderNotEditable") {
     return withApiSupportLine("Bu holatda qatorlarni tahrirlab bo‘lmaydi (faqat «Новый» yoki «Подтверждён»).", err);
+  }
+  if (code === "OrderHeaderLocked") {
+    return withApiSupportLine(
+      "Klient, agent, sklad va to‘lov usuli tahrirda o‘zgarmaydi — faqat qatorlar.",
+      err
+    );
   }
   if (code === "ForbiddenOperatorOrderLinesEdit") {
     return withApiSupportLine("To‘lov qatorlarini tahrirlash faqat admin uchun.", err);
@@ -231,6 +243,22 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
   if (code === "BadQty") return withApiSupportLine("Miqdor noto‘g‘ri.", err);
   if (code === "DuplicateProduct") return withApiSupportLine("Bir xil mahsulotni bir nechta qatorga qo‘shib bo‘lmaydi.", err);
   if (code === "EmptyItems") return withApiSupportLine("Kamida bitta to‘lov qatori kerak.", err);
+  if (code === "InsufficientStock") {
+    const id = d?.product_id;
+    const avail = d?.available;
+    return withApiSupportLine(
+      id != null
+        ? `Omborda qoldiq yetarli emas (mahsulot #${id}${avail != null ? `, mavjud: ${avail}` : ""}).`
+        : "Omborda qoldiq yetarli emas.",
+      err
+    );
+  }
+  if (code === "OrderTotalBelowAllocated") {
+    return withApiSupportLine(
+      `Yangi summa allaqachon taqsimlangan to‘lovlardan (${d?.allocated ?? "—"}) kichik bo‘lib qoladi. Avval to‘lovlarni tuzating.`,
+      err
+    );
+  }
   if (code === "CreditLimitExceeded" && d) {
     return withApiSupportLine(
       `Kredit limiti yetmaydi. Limit: ${d.credit_limit ?? "—"}, boshqa zakazlar: ${d.outstanding ?? "—"}, bu zakaz to‘lovi: ${d.order_total ?? "—"}.`,
@@ -243,7 +271,12 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
   return null;
 }
 
-export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: Props) {
+export function OrderDetailView({
+  tenantSlug,
+  orderId,
+  showPrintView = false,
+  autoStartEdit = false
+}: Props) {
   const qc = useQueryClient();
   const role = useEffectiveRole();
   const { has } = usePermissions();
@@ -255,6 +288,7 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
   const [commentDraft, setCommentDraft] = useState("");
   const [commentSaveError, setCommentSaveError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const autoEditStartedRef = useRef(false);
 
   useEffect(() => {
     setEditingLines(false);
@@ -263,6 +297,7 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
     setCommentDraft("");
     setCommentSaveError(null);
     setStatusError(null);
+    autoEditStartedRef.current = false;
   }, [orderId]);
 
   const enabled = Boolean(tenantSlug) && orderId > 0;
@@ -316,7 +351,18 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
   });
 
   const canEditOrderLines =
-    role === "admin" && data != null && ORDER_LINES_EDITABLE_STATUSES.has(data.status);
+    !isOperatorLikeWebRole(role) &&
+    has("orders.zakaz.update") &&
+    data != null &&
+    ORDER_LINES_EDITABLE_STATUSES.has(data.status);
+
+  useEffect(() => {
+    if (!autoStartEdit || !canEditOrderLines || !data || autoEditStartedRef.current) return;
+    autoEditStartedRef.current = true;
+    setLines(paidItemsToLines(data.items));
+    setEditError(null);
+    setEditingLines(true);
+  }, [autoStartEdit, canEditOrderLines, data]);
 
   const productsQ = useQuery({
     queryKey: ["products", tenantSlug, "order-edit"],
@@ -330,6 +376,63 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
     }
   });
 
+  const stockProductIdsKey = useMemo(() => {
+    if (!editingLines) return "";
+    const ids = new Set<number>();
+    for (const line of lines) {
+      const pid = Number.parseInt(line.productId, 10);
+      if (Number.isFinite(pid) && pid > 0) ids.add(pid);
+    }
+    if (data?.items) {
+      for (const it of data.items) {
+        if (!it.is_bonus) ids.add(it.product_id);
+      }
+    }
+    return [...ids].sort((a, b) => a - b).join(",");
+  }, [editingLines, lines, data?.items]);
+
+  const warehouseIdForStock = data?.warehouse_id ?? null;
+
+  const stockQ = useQuery({
+    queryKey: ["stock", tenantSlug, warehouseIdForStock, "order-edit", stockProductIdsKey],
+    enabled:
+      enabled &&
+      editingLines &&
+      canEditOrderLines &&
+      warehouseIdForStock != null &&
+      warehouseIdForStock > 0 &&
+      Boolean(stockProductIdsKey),
+    staleTime: STALE.detail,
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      qs.set("warehouse_id", String(warehouseIdForStock));
+      qs.set("product_ids", stockProductIdsKey);
+      const { data: body } = await api.get<{
+        data: { product_id: number; qty: string; reserved_qty: string }[];
+      }>(`/api/${tenantSlug}/stock?${qs.toString()}`);
+      return body.data;
+    }
+  });
+
+  const stockByProduct = useMemo(() => {
+    const map = new Map<number, { qty: string; reserved_qty: string }>();
+    for (const s of stockQ.data ?? []) {
+      map.set(s.product_id, { qty: s.qty, reserved_qty: s.reserved_qty });
+    }
+    return map;
+  }, [stockQ.data]);
+
+  const originalQtyByProduct = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!data?.items) return map;
+    for (const it of data.items) {
+      // Bonus ham rezervda — tahrir kreditiga qo‘shamiz
+      const q = parseDec(it.qty);
+      map.set(it.product_id, (map.get(it.product_id) ?? 0) + q);
+    }
+    return map;
+  }, [data?.items]);
+
   const patchLinesMut = useMutation({
     mutationFn: async (items: { product_id: number; qty: number }[]) => {
       const { data: body } = await api.patch<OrderDetailRow>(
@@ -341,6 +444,7 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
     onSuccess: (body) => {
       void qc.setQueryData(["order", tenantSlug, orderId], body);
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["stock", tenantSlug] });
       setEditingLines(false);
       setEditError(null);
     },
@@ -443,6 +547,7 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
     setEditError(null);
     const items: { product_id: number; qty: number }[] = [];
     const selected = new Set<number>();
+    const needByProduct = new Map<number, number>();
     for (const line of lines) {
       const pid = Number.parseInt(line.productId, 10);
       const q = Number.parseFloat(line.qty.replace(",", "."));
@@ -457,10 +562,22 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
         return;
       }
       items.push({ product_id: pid, qty: q });
+      needByProduct.set(pid, (needByProduct.get(pid) ?? 0) + q);
     }
     if (items.length === 0) {
       setEditError("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.");
       return;
+    }
+    for (const [pid, need] of needByProduct) {
+      const free = availableOrderQty(stockByProduct.get(pid));
+      const credit = originalQtyByProduct.get(pid) ?? 0;
+      const maxQ = free + credit;
+      if (need > maxQ + 1e-9) {
+        setEditError(
+          `Mahsulot #${pid}: miqdor ombordagi qoldiqdan oshmasin (maks. ${maxQ}).`
+        );
+        return;
+      }
     }
     patchLinesMut.mutate(items);
   };
@@ -591,6 +708,9 @@ export function OrderDetailView({ tenantSlug, orderId, showPrintView = false }: 
               lines={lines}
               products={products}
               loadingProducts={loadingProducts}
+              stockByProduct={stockByProduct}
+              loadingStock={stockQ.isLoading}
+              originalQtyByProduct={originalQtyByProduct}
               editError={editError}
               patchPending={patchLinesMut.isPending}
               onUpdateLine={updateLine}

@@ -257,56 +257,9 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
     return '$tag $base';
   }
 
-  Widget _buildLimitsPanel() {
-    final f = widget.clientFinance ?? const OrderClientFinance();
-    final cart = widget.cartTotal;
-    final rem = f.creditRemainingAfterOrder(cart);
-    final hint = widget.clientCreditLimitHint?.trim();
-    final limitLabel = f.creditLimit > 0
-        ? formatOrderMoney(f.creditLimit)
-        : (hint != null && hint.isNotEmpty ? hint : formatOrderMoney(0));
-    final debtReason = f.regularOrderBlockReason();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _limitsBox(
-          '${S.creditLimit}: $limitLabel',
-          '${S.limitRemaining}: ${formatOrderMoney(rem)}',
-        ),
-        if (debtReason != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            debtReason,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   bool get _consignmentUiEnabled {
     final f = widget.clientFinance ?? const OrderClientFinance();
     return widget.consignmentCheckboxEnabled && f.consignmentToggleEnabled;
-  }
-
-  Widget _buildRegularDebtBanner() {
-    if (_isConsignment) return const SizedBox.shrink();
-    final reason =
-        (widget.clientFinance ?? const OrderClientFinance()).regularOrderBlockReason();
-    if (reason == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        reason,
-        style: AppTypography.caption.copyWith(
-          color: AppColors.error,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
   }
 
   double? get _consignmentRemainingValue {
@@ -323,118 +276,133 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
         .consignmentLimitExceededBy(widget.cartTotal);
   }
 
-  String? _consignmentRemainingLabel() {
+  /// Limit + «Осталось» chapda, konsignatsiya switch o‘ngda — bitta blok.
+  Widget _buildLimitsAndConsignmentPanel() {
     final f = widget.clientFinance ?? const OrderClientFinance();
-    final lim = f.consignmentLimitAmount;
-    if (lim == null) return null;
-    final rem = _consignmentRemainingValue;
-    if (rem == null) return '${S.limitRemaining}: ${formatMoneyUz(lim)}';
-    return '${S.limitRemaining}: ${formatMoneyUz(rem)}';
-  }
-
-  /// «Консигнация» + qolgan limit + switch (referens pastki varaq).
-  Widget _buildConsignmentRow() {
-    if (!widget.showConsignmentField) return const SizedBox.shrink();
-    final f = widget.clientFinance ?? const OrderClientFinance();
-    final clientBlock = f.consignmentBlockReason();
-    final enabled = _consignmentUiEnabled;
-    final remainingLabel = _consignmentRemainingLabel();
+    final cart = widget.cartTotal;
+    final showToggle = widget.showConsignmentField;
+    final toggleEnabled = _consignmentUiEnabled;
     final exceeded = _consignmentLimitExceeded;
-    final disabledHint = !f.agentConsignmentEnabled
-        ? S.consignmentNotAvailable
-        : (clientBlock ?? S.consignmentNotAvailable);
+    // Konsignatsiya maydoni bor bo‘lsa — shu limit/qoldiq ko‘rsatiladi (switch bilan).
+    final useConsignmentFigures = showToggle && f.consignmentLimitAmount != null;
+
+    late final String limitLine;
+    late final String remainingLine;
+    late final Color remainingColor;
+
+    if (useConsignmentFigures) {
+      final lim = f.consignmentLimitAmount;
+      final rem = _consignmentRemainingValue;
+      limitLine = '${S.consignmentLimit}: ${formatMoneyUz(lim!)}';
+      remainingLine = rem != null
+          ? '${S.limitRemaining}: ${formatMoneyUz(rem)}'
+          : '${S.limitRemaining}: ${formatMoneyUz(lim)}';
+      remainingColor = exceeded
+          ? AppColors.error
+          : (toggleEnabled ? AppColors.agentAccent : AppColors.textMuted);
+    } else {
+      final rem = f.creditRemainingAfterOrder(cart);
+      final hint = widget.clientCreditLimitHint?.trim();
+      final limitLabel = f.creditLimit > 0
+          ? formatOrderMoney(f.creditLimit)
+          : (hint != null && hint.isNotEmpty ? hint : formatOrderMoney(0));
+      limitLine = '${S.creditLimit}: $limitLabel';
+      remainingLine = '${S.limitRemaining}: ${formatOrderMoney(rem)}';
+      remainingColor = AppColors.agentAccent;
+    }
+
+    final debtReason =
+        (_isConsignment && toggleEnabled) ? null : f.regularOrderBlockReason();
+    final clientBlock = f.consignmentBlockReason();
+    final disabledHint = showToggle && !toggleEnabled
+        ? (!f.agentConsignmentEnabled
+            ? S.consignmentNotAvailable
+            : (clientBlock ?? S.consignmentNotAvailable))
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(
-                S.orderConsignment,
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: enabled ? AppColors.textPrimary : AppColors.textMuted,
-                ),
-              ),
-            ),
-            if (remainingLabel != null)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey.shade50,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               Expanded(
-                flex: 3,
-                child: Text(
-                  remainingLabel,
-                  textAlign: TextAlign.end,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: exceeded
-                        ? AppColors.error
-                        : (enabled ? AppColors.agentAccent : AppColors.textMuted),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (showToggle) ...[
+                      Text(
+                        S.orderConsignment,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: toggleEnabled
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Text(limitLine, style: AppTypography.bodySmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      remainingLine,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: remainingColor,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            Switch.adaptive(
-              value: enabled ? _isConsignment : false,
-              activeColor: AppColors.primary,
-              onChanged: enabled ? _onConsignmentChanged : null,
-            ),
-          ],
+              if (showToggle)
+                Switch.adaptive(
+                  value: toggleEnabled ? _isConsignment : false,
+                  activeColor: AppColors.primary,
+                  onChanged: toggleEnabled ? _onConsignmentChanged : null,
+                ),
+            ],
+          ),
         ),
-        if (!enabled)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              disabledHint,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
+        if (disabledHint != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            disabledHint,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        if (exceeded)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              S.consignmentLimitExceeded,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _limitsBox(String line1, String? line2) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey.shade50,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(line1, style: AppTypography.bodySmall),
-          if (line2 != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              line2,
-              style: AppTypography.bodyMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.agentAccent,
-              ),
-            ),
-          ],
         ],
-      ),
+        if (debtReason != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            debtReason,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (exceeded) ...[
+          const SizedBox(height: 8),
+          Text(
+            S.consignmentLimitExceeded,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -486,13 +454,36 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
 
   bool get _canContinue =>
       _safeWarehouseId != null &&
+      widget.warehouses.isNotEmpty &&
       !(widget.photoRequired && !_hasUnlinkedPhoto) &&
       !(widget.showShipmentDateField && _shipmentDate.trim().isEmpty) &&
       !_consignmentLimitExceeded;
 
+  String? get _continueBlockReason {
+    if (widget.warehouses.isEmpty) {
+      return 'Склад не назначен. Обратитесь к администратору или синхронизируйте данные.';
+    }
+    if (_safeWarehouseId == null) return 'Выберите склад';
+    if (widget.photoRequired && !_hasUnlinkedPhoto) {
+      return 'Добавьте фотоотчёт перед заказом';
+    }
+    if (widget.showShipmentDateField && _shipmentDate.trim().isEmpty) {
+      return 'Укажите дату отгрузки';
+    }
+    if (_consignmentLimitExceeded) return 'Превышен лимит консигнации';
+    return null;
+  }
+
   void _submit() {
+    final block = _continueBlockReason;
+    if (block != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(block), backgroundColor: AppColors.error),
+      );
+      return;
+    }
     final wh = _safeWarehouseId;
-    if (wh == null || !_canContinue) return;
+    if (wh == null) return;
     final finance = widget.clientFinance;
     if (finance != null) {
       final gate = _isConsignment
@@ -528,7 +519,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final limitsPanel = _buildLimitsPanel();
+    final limitsPanel = _buildLimitsAndConsignmentPanel();
     final mq = MediaQuery.of(context);
     final bottom = mq.viewInsets.bottom;
     final maxHeight = (mq.size.height * 0.88 - bottom).clamp(280.0, mq.size.height * 0.88);
@@ -579,6 +570,22 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.warehouses.isEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1F0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFFCCC7)),
+                        ),
+                        child: Text(
+                          _continueBlockReason ??
+                              'Склад не назначен. Синхронизируйте или обратитесь к администратору.',
+                          style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+                        ),
+                      ),
+                      const SizedBox(height: 13),
+                    ],
                     if (widget.warehouses.isNotEmpty) ...[
                       _fieldLabel(S.orderWarehouse),
                       _dropdownBox(
@@ -652,12 +659,6 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                       maxLines: 2,
                       decoration: const InputDecoration(hintText: S.orderCommentHint),
                     ),
-                    if (widget.showConsignmentField) ...[
-                      const SizedBox(height: 13),
-                      _buildConsignmentRow(),
-                      const SizedBox(height: 8),
-                      _buildRegularDebtBanner(),
-                    ],
                     if (widget.showShipmentDateField) ...[
                       const SizedBox(height: 13),
                       _fieldLabel(S.orderShipmentDate),
@@ -736,12 +737,14 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                   height: 50,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: _canContinue
+                          ? AppColors.primary
+                          : AppColors.primary.withValues(alpha: 0.45),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: _canContinue ? _submit : null,
+                    onPressed: _submit,
                     child: const Text(
                       S.continueArrow,
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),

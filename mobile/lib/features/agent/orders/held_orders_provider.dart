@@ -12,6 +12,7 @@ import '../../../core/notifications/mobile_local_notification_service.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../auth/auth_provider.dart';
+import '../visits/visit_stats_helper.dart';
 import 'held_order_model.dart';
 import 'held_order_repository.dart';
 import 'order_create_models.dart';
@@ -146,6 +147,10 @@ class HeldOrderScheduler {
         ]);
       }
       await repo.markSubmitted(heldOrderId);
+      await ensureVisitCompletedForClientToday(
+        order.clientId,
+        clientName: order.clientName,
+      );
       await MobileLocalNotificationService.instance.notifyHeldOrderSent(
         clientName: order.clientName,
         orderNumber: row['number']?.toString() ?? (orderId?.toString() ?? ''),
@@ -162,6 +167,7 @@ class HeldOrderScheduler {
       _ref.invalidate(heldOrdersProvider);
       _ref.invalidate(heldOrderCountProvider);
       _ref.invalidate(ordersListProvider);
+      refreshVisitStatsProviders(_ref.invalidate);
       invalidateSyncedData(_ref.invalidate);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _ref.read(authStateProvider.notifier).resync();

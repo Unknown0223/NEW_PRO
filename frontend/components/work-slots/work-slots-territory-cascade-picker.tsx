@@ -1,8 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
 import { MapPin } from "lucide-react";
 import { pickCityTerritoryHint, type CityTerritoryHint } from "@/lib/city-territory-hint";
 import type { RefSelectOption } from "@/lib/ref-select-options";
+import {
+  buildTerritoryTreeOnlyCascade,
+  expandTerritoryTreeDescendants
+} from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import { cn } from "@/lib/utils";
 import {
   WorkSlotsMultiSelect,
@@ -147,14 +153,16 @@ export function WorkSlotsTerritoryCascadePicker({
         </div>
       </div>
       <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
-        Выбор города может автоматически подставить зону и область. Смена зоны сбрасывает область и
-        город.
+        Зона → область → город (дерево территорий). Смена зоны сбрасывает область и город.
       </p>
     </div>
   );
 }
 
-/** Guruhli qayta ishlash: uchta maydon bir qatorda, alohida ko‘p tanlov. */
+/**
+ * Guruhli qayta ishlash: faqat territory_nodes daraxti.
+ * Zona → barcha oblast+gorod; oblast → barcha gorod.
+ */
 export function WorkSlotsTerritoryBulkPicker({
   zoneList,
   regionList,
@@ -162,7 +170,9 @@ export function WorkSlotsTerritoryBulkPicker({
   onZoneListChange,
   onRegionListChange,
   onCityListChange,
+  onCascadeListsChange,
   cascade,
+  territoryNodes,
   disabled
 }: {
   zoneList: string[];
@@ -171,13 +181,70 @@ export function WorkSlotsTerritoryBulkPicker({
   onZoneListChange: (v: string[]) => void;
   onRegionListChange: (v: string[]) => void;
   onCityListChange: (v: string[]) => void;
+  onCascadeListsChange?: (patch: {
+    territoryZoneList?: string[];
+    territoryOblastList?: string[];
+    territoryCityList?: string[];
+  }) => void;
   cascade: {
     zones: RefSelectOption[];
     regions: RefSelectOption[];
     cities: RefSelectOption[];
   };
+  territoryNodes?: TerritoryNode[];
+  cityTerritoryHints?: Record<string, CityTerritoryHint>;
   disabled?: boolean;
 }) {
+  const hasTree = (territoryNodes?.length ?? 0) > 0;
+
+  const liveCascade = useMemo(() => {
+    if (!hasTree) return cascade;
+    return buildTerritoryTreeOnlyCascade(territoryNodes, {
+      zones: zoneList,
+      regions: regionList
+    });
+  }, [hasTree, territoryNodes, zoneList, regionList, cascade]);
+
+  const handleZoneChange = (nextZones: string[]) => {
+    if (!onCascadeListsChange || !hasTree) {
+      onZoneListChange(nextZones);
+      return;
+    }
+    if (nextZones.length === 0) {
+      onCascadeListsChange({
+        territoryZoneList: [],
+        territoryOblastList: [],
+        territoryCityList: []
+      });
+      return;
+    }
+    const expanded = expandTerritoryTreeDescendants(territoryNodes, nextZones, []);
+    onCascadeListsChange({
+      territoryZoneList: nextZones,
+      territoryOblastList: expanded.regions,
+      territoryCityList: expanded.cities
+    });
+  };
+
+  const handleRegionChange = (nextRegions: string[]) => {
+    if (!onCascadeListsChange || !hasTree) {
+      onRegionListChange(nextRegions);
+      return;
+    }
+    if (nextRegions.length === 0) {
+      onCascadeListsChange({
+        territoryOblastList: [],
+        territoryCityList: []
+      });
+      return;
+    }
+    const expanded = expandTerritoryTreeDescendants(territoryNodes, zoneList, nextRegions);
+    onCascadeListsChange({
+      territoryOblastList: nextRegions,
+      territoryCityList: expanded.cities
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
       <div className="min-w-0 space-y-1">
@@ -186,10 +253,10 @@ export function WorkSlotsTerritoryBulkPicker({
         </span>
         <WorkSlotsMultiSelect
           variant="bulk"
-          placeholder="Зона"
-          items={refOptionsToItems(cascade.zones)}
+          placeholder="Зона (FV…)"
+          items={refOptionsToItems(liveCascade.zones)}
           selectedValues={zoneList}
-          onChange={onZoneListChange}
+          onChange={handleZoneChange}
           disabled={disabled}
         />
       </div>
@@ -200,10 +267,10 @@ export function WorkSlotsTerritoryBulkPicker({
         <WorkSlotsMultiSelect
           variant="bulk"
           placeholder="Область"
-          items={refOptionsToItems(cascade.regions)}
+          items={refOptionsToItems(liveCascade.regions)}
           selectedValues={regionList}
-          onChange={onRegionListChange}
-          disabled={disabled}
+          onChange={handleRegionChange}
+          disabled={disabled || (hasTree && zoneList.length === 0)}
         />
       </div>
       <div className="min-w-0 space-y-1">
@@ -212,11 +279,11 @@ export function WorkSlotsTerritoryBulkPicker({
         </span>
         <WorkSlotsMultiSelect
           variant="bulk"
-          placeholder="Город"
-          items={refOptionsToItems(cascade.cities)}
+          placeholder="Город (необязательно)"
+          items={refOptionsToItems(liveCascade.cities)}
           selectedValues={cityList}
           onChange={onCityListChange}
-          disabled={disabled}
+          disabled={disabled || (hasTree && regionList.length === 0 && zoneList.length === 0)}
         />
       </div>
     </div>

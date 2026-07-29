@@ -20,6 +20,8 @@ type Props = {
   onToggleExpand: () => void;
   onEdit: () => void;
   onAssign: () => void;
+  onConfig?: () => void;
+  onRestrictions?: () => void;
 };
 
 function terrLabel(raw: string | null | undefined, resolve?: (s: string) => string) {
@@ -36,7 +38,9 @@ export function WorkSlotCard({
   onToggleSelect,
   onToggleExpand,
   onEdit,
-  onAssign
+  onAssign,
+  onConfig,
+  onRestrictions
 }: Props) {
   return (
     <Card
@@ -149,6 +153,16 @@ export function WorkSlotCard({
         <Button type="button" variant="outline" size="sm" onClick={onEdit}>
           Tahrirlash
         </Button>
+        {onConfig ? (
+          <Button type="button" variant="outline" size="sm" onClick={onConfig}>
+            Конфигурация
+          </Button>
+        ) : null}
+        {onRestrictions ? (
+          <Button type="button" variant="outline" size="sm" onClick={onRestrictions}>
+            Ограничения
+          </Button>
+        ) : null}
         <Button type="button" size="sm" onClick={onAssign}>
           Almashtirish
         </Button>

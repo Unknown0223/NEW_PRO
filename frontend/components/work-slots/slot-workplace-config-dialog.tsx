@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
@@ -24,24 +25,38 @@ import type { AgentEntitlementSavePayload } from "@/components/staff/agent-restr
 import type { ExpeditorAssignmentRules } from "@/components/staff/expeditors-workspace";
 import { api } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { STALE } from "@/lib/query-stale";
-import type { WorkSlotListItem } from "@/lib/work-slots-types";
-import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
+import type { WorkSlotListItem, WorkSlotType } from "@/lib/work-slots-types";
+import {
+  slotWorkplaceConfigTabs,
+  type SlotWorkplaceConfigTabId
+} from "@/components/work-slots/work-slots-utils";
 
 type PickerOpt = { id: number; name: string };
 type TradeDirection = { id: number; name: string; code: string | null };
+
+type ConfigTab = SlotWorkplaceConfigTabId;
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tenant: string;
-  slotId: number | null;
+  slotId?: number | null;
+  bulkMode?: boolean;
+  slotIds?: number[];
+  /** Как у агентов: «Выбрано агентов: N» */
+  bulkSummary?: string;
+  slotType?: WorkSlotType;
   warehouses: PickerOpt[];
   onSaved: () => void;
 };
 
-function parseEntitlements(raw: WorkSlotListItem["entitlements"]): AgentEntitlementSavePayload {
+function parseEntitlements(
+  raw: WorkSlotListItem["entitlements"] | undefined
+): AgentEntitlementSavePayload {
+  if (!raw || typeof raw !== "object") return { price_types: [], product_rules: [] };
   const price_types = Array.isArray(raw.price_types)
     ? raw.price_types.filter((x): x is string => typeof x === "string")
     : [];
@@ -51,35 +66,87 @@ function parseEntitlements(raw: WorkSlotListItem["entitlements"]): AgentEntitlem
   return { price_types, product_rules };
 }
 
+type FormState = {
+  directionId: string;
+  returnWarehouseId: string;
+  priceType: string;
+  priceTypes: string[];
+  consignment: boolean;
+  consignmentLimit: string;
+  consignmentIgnoreDebt: boolean;
+  closeDay: string;
+  closeHour: string;
+  closeMinute: string;
+  entitlements: AgentEntitlementSavePayload;
+  skladchikEntitlements: Record<string, boolean>;
+  expeditorRules: ExpeditorAssignmentRules;
+};
+
+function emptyForm(): FormState {
+  return {
+    directionId: "",
+    returnWarehouseId: "",
+    priceType: "",
+    priceTypes: [],
+    consignment: false,
+    consignmentLimit: "",
+    consignmentIgnoreDebt: false,
+    closeDay: "25",
+    closeHour: "0",
+    closeMinute: "0",
+    entitlements: { price_types: [], product_rules: [] },
+    skladchikEntitlements: {},
+    expeditorRules: {}
+  };
+}
+
+function formFromSlot(d: WorkSlotListItem): FormState {
+  return {
+    directionId: d.direction_id != null ? String(d.direction_id) : "",
+    returnWarehouseId: d.return_warehouse_id != null ? String(d.return_warehouse_id) : "",
+    priceType: d.price_type ?? "",
+    priceTypes: d.price_types ?? [],
+    consignment: d.consignment,
+    consignmentLimit: d.consignment_limit_amount ?? "",
+    consignmentIgnoreDebt: d.consignment_ignore_previous_months_debt,
+    closeDay: String(d.consignment_close_day ?? 25),
+    closeHour: String(d.consignment_close_hour ?? 0),
+    closeMinute: String(d.consignment_close_minute ?? 0),
+    entitlements: parseEntitlements(d.entitlements),
+    skladchikEntitlements: d.warehouse_staff_entitlements ?? {},
+    expeditorRules: parseExpeditorAssignmentRules(d.expeditor_assignment_rules)
+  };
+}
+
 export function SlotWorkplaceConfigDialog({
   open,
   onOpenChange,
   tenant,
-  slotId,
+  slotId = null,
+  bulkMode = false,
+  slotIds = [],
+  bulkSummary,
+  slotType: slotTypeProp,
   warehouses,
   onSaved
 }: Props) {
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
-  const [directionId, setDirectionId] = useState("");
-  const [returnWarehouseId, setReturnWarehouseId] = useState("");
-  const [priceType, setPriceType] = useState("");
-  const [priceTypes, setPriceTypes] = useState<string[]>([]);
-  const [consignment, setConsignment] = useState(false);
-  const [consignmentLimit, setConsignmentLimit] = useState("");
-  const [consignmentIgnoreDebt, setConsignmentIgnoreDebt] = useState(false);
-  const [closeDay, setCloseDay] = useState("25");
-  const [closeHour, setCloseHour] = useState("0");
-  const [closeMinute, setCloseMinute] = useState("0");
-  const [entitlements, setEntitlements] = useState<AgentEntitlementSavePayload>({
-    price_types: [],
-    product_rules: []
-  });
-  const [skladchikEntitlements, setSkladchikEntitlements] = useState<Record<string, boolean>>({});
-  const [expeditorRules, setExpeditorRules] = useState<ExpeditorAssignmentRules>({});
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [baseline, setBaseline] = useState<FormState>(emptyForm);
+  const [tab, setTab] = useState<ConfigTab>("main");
   const [restrictionsOpen, setRestrictionsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveSlotType: WorkSlotType | undefined = bulkMode
+    ? slotTypeProp
+    : (slot?.slot_type as WorkSlotType | undefined);
+
+  const tabs = useMemo(
+    () => slotWorkplaceConfigTabs(effectiveSlotType),
+    [effectiveSlotType]
+  );
 
   const tradeDirectionsQ = useQuery({
     queryKey: ["trade-directions", tenant, "slot-config"],
@@ -110,78 +177,131 @@ export function SlotWorkplaceConfigDialog({
     return (key: string) => map[key] ?? key;
   }, [priceTypesQ.data]);
 
+  const applyForm = useCallback((next: FormState) => {
+    setForm(next);
+    setBaseline(next);
+  }, []);
+
   const load = useCallback(async () => {
-    if (!tenant || !slotId) return;
+    if (!tenant || !slotId || bulkMode) return;
     setLoading(true);
     setError(null);
     try {
       const res = await apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${slotId}`);
       const d = res.data;
       setSlot(d);
-      setDirectionId(d.direction_id != null ? String(d.direction_id) : "");
-      setReturnWarehouseId(d.return_warehouse_id != null ? String(d.return_warehouse_id) : "");
-      setPriceType(d.price_type ?? "");
-      setPriceTypes(d.price_types ?? []);
-      setConsignment(d.consignment);
-      setConsignmentLimit(d.consignment_limit_amount ?? "");
-      setConsignmentIgnoreDebt(d.consignment_ignore_previous_months_debt);
-      setCloseDay(String(d.consignment_close_day ?? 25));
-      setCloseHour(String(d.consignment_close_hour ?? 0));
-      setCloseMinute(String(d.consignment_close_minute ?? 0));
-      setEntitlements(parseEntitlements(d.entitlements));
-      setSkladchikEntitlements(d.warehouse_staff_entitlements ?? {});
-      setExpeditorRules(parseExpeditorAssignmentRules(d.expeditor_assignment_rules));
+      applyForm(formFromSlot(d));
+      setTab("main");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
     }
-  }, [tenant, slotId]);
+  }, [tenant, slotId, bulkMode, applyForm]);
 
   useEffect(() => {
-    if (!open || !slotId) return;
-    void load();
-  }, [open, slotId, load]);
+    if (!open) return;
+    setError(null);
+    setTab("main");
+    if (bulkMode) {
+      setSlot(null);
+      applyForm(emptyForm());
+      setLoading(false);
+      return;
+    }
+    if (slotId) void load();
+  }, [open, bulkMode, slotId, load, applyForm]);
+
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab("main");
+  }, [tabs, tab]);
 
   const togglePriceType = (key: string) => {
-    setPriceTypes((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+    setForm((prev) => ({
+      ...prev,
+      priceTypes: prev.priceTypes.includes(key)
+        ? prev.priceTypes.filter((x) => x !== key)
+        : [...prev.priceTypes, key]
+    }));
+  };
+
+  const dirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(baseline), [form, baseline]);
+
+  const buildConfigBody = (): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      direction_id: form.directionId.trim() ? Number.parseInt(form.directionId.trim(), 10) : null,
+      return_warehouse_id: form.returnWarehouseId.trim()
+        ? Number.parseInt(form.returnWarehouseId.trim(), 10)
+        : null
+    };
+
+    // Agentga xos: narx, mahsulot cheklovi, konsignatsiya — boshqa rollarga yozilmaydi.
+    if (effectiveSlotType === "agent") {
+      body.price_type = form.priceType.trim() || null;
+      body.price_types = form.priceTypes;
+      body.entitlements = {
+        price_types: form.entitlements.price_types,
+        product_rules: form.entitlements.product_rules
+      };
+      body.consignment = form.consignment;
+      body.consignment_limit_amount = form.consignmentLimit.trim()
+        ? form.consignmentLimit.trim()
+        : null;
+      body.consignment_ignore_previous_months_debt = form.consignmentIgnoreDebt;
+      body.consignment_close_day = Number.parseInt(form.closeDay, 10) || 25;
+      body.consignment_close_hour = Number.parseInt(form.closeHour, 10) || 0;
+      body.consignment_close_minute = Number.parseInt(form.closeMinute, 10) || 0;
+    }
+    if (effectiveSlotType === "skladchik") {
+      body.warehouse_staff_entitlements = form.skladchikEntitlements;
+    }
+    if (effectiveSlotType === "expeditor") {
+      body.expeditor_assignment_rules = form.expeditorRules;
+    }
+    return body;
+  };
+
+  const handleReset = () => {
+    setForm(bulkMode ? emptyForm() : { ...baseline });
+    setError(null);
   };
 
   const submit = async () => {
-    if (!slotId || !slot) return;
     setSaving(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = {
-        direction_id: directionId.trim() ? Number.parseInt(directionId.trim(), 10) : null,
-        return_warehouse_id: returnWarehouseId.trim()
-          ? Number.parseInt(returnWarehouseId.trim(), 10)
-          : null,
-        price_type: priceType.trim() || null,
-        price_types: priceTypes,
-        entitlements: {
-          ...slot.entitlements,
-          price_types: entitlements.price_types,
-          product_rules: entitlements.product_rules
-        },
-        consignment,
-        consignment_limit_amount: consignmentLimit.trim() ? consignmentLimit.trim() : null,
-        consignment_ignore_previous_months_debt: consignmentIgnoreDebt,
-        consignment_close_day: Number.parseInt(closeDay, 10) || 25,
-        consignment_close_hour: Number.parseInt(closeHour, 10) || 0,
-        consignment_close_minute: Number.parseInt(closeMinute, 10) || 0
-      };
-      if (slot.slot_type === "skladchik") {
-        body.warehouse_staff_entitlements = skladchikEntitlements;
+      if (bulkMode && !dirty) {
+        setError("Нет изменений для сохранения. Отредактируйте хотя бы одно поле.");
+        return;
       }
-      if (slot.slot_type === "expeditor") {
-        body.expeditor_assignment_rules = expeditorRules;
+      const config = buildConfigBody();
+      if (bulkMode) {
+        if (!slotIds.length) throw new Error("Не выбраны места");
+        await apiFetch(`/api/${tenant}/work-slots/bulk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slot_ids: slotIds, ...config })
+        });
+      } else {
+        if (!slotId) return;
+        const patch = { ...config };
+        if (effectiveSlotType === "agent") {
+          const mergedEnt =
+            slot?.entitlements && typeof slot.entitlements === "object"
+              ? {
+                  ...slot.entitlements,
+                  price_types: form.entitlements.price_types,
+                  product_rules: form.entitlements.product_rules
+                }
+              : config.entitlements;
+          patch.entitlements = mergedEnt;
+        }
+        await apiFetch(`/api/${tenant}/work-slots/${slotId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch)
+        });
       }
-      await apiFetch(`/api/${tenant}/work-slots/${slotId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
       onOpenChange(false);
       onSaved();
     } catch (e) {
@@ -191,163 +311,273 @@ export function SlotWorkplaceConfigDialog({
     }
   };
 
+  const title = bulkMode
+    ? "Групповая конфигурация"
+    : slot
+      ? `Конфигурация: ${slot.slot_code}`
+      : "Конфигурация места";
+
+  const summaryLine = bulkMode
+    ? (bulkSummary ?? `Выбрано мест: ${slotIds.length}`)
+    : slot?.active_user_name
+      ? `Сотрудник: ${slot.active_user_name}`
+      : slot
+        ? "Место свободно"
+        : null;
+
+  const panel = (() => {
+    switch (tab) {
+      case "main":
+        return (
+          <div className="space-y-5 text-[13px]">
+            <div className="space-y-2">
+              <Label>Направление торговли</Label>
+              <FilterSelect
+                className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                emptyLabel="— не задано —"
+                aria-label="Направление торговли"
+                value={form.directionId}
+                onChange={(e) => setForm((p) => ({ ...p, directionId: e.target.value }))}
+              >
+                {(tradeDirectionsQ.data ?? []).map((d) => (
+                  <option key={d.id} value={String(d.id)}>
+                    {d.code ? `${d.name} (${d.code})` : d.name}
+                  </option>
+                ))}
+              </FilterSelect>
+            </div>
+            <div className="space-y-2">
+              <Label>Склад возврата</Label>
+              <FilterSelect
+                className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                emptyLabel="—"
+                aria-label="Склад возврата"
+                value={form.returnWarehouseId}
+                onChange={(e) => setForm((p) => ({ ...p, returnWarehouseId: e.target.value }))}
+              >
+                {warehouses.map((w) => (
+                  <option key={w.id} value={String(w.id)}>
+                    {w.name}
+                  </option>
+                ))}
+              </FilterSelect>
+            </div>
+          </div>
+        );
+      case "prices":
+        return (
+          <div className="space-y-5 text-[13px]">
+            <div className="space-y-2">
+              <Label>Основной тип цены</Label>
+              <FilterSelect
+                className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                emptyLabel="—"
+                aria-label="Основной тип цены"
+                value={form.priceType}
+                onChange={(e) => setForm((p) => ({ ...p, priceType: e.target.value }))}
+              >
+                {(priceTypesQ.data ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </FilterSelect>
+            </div>
+            <div className="space-y-2">
+              <Label>Дополнительные типы цен</Label>
+              <div className="max-h-56 space-y-0 divide-y divide-border/60 overflow-y-auto rounded-lg border border-border/70 bg-card/40">
+                {(priceTypesQ.data ?? []).map((o) => (
+                  <label
+                    key={o.id}
+                    className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-teal-600"
+                      checked={form.priceTypes.includes(o.id)}
+                      onChange={() => togglePriceType(o.id)}
+                    />
+                    {ptLabel(o.id)}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      case "limits":
+        return (
+          <div className="space-y-4 text-[13px]">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Типы цен в entitlements и продуктовые правила — на уровне рабочего места (как раньше
+              «Ограничения» у агента).
+            </p>
+            <div className="rounded-lg border border-border/70 bg-muted/15 p-4">
+              <p className="mb-3 text-sm text-foreground">
+                Выбрано:{" "}
+                <span className="font-semibold text-teal-700">
+                  {form.entitlements.price_types.length}
+                </span>{" "}
+                типов цен ·{" "}
+                <span className="font-semibold text-teal-700">
+                  {form.entitlements.product_rules.length}
+                </span>{" "}
+                правил по продуктам
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setRestrictionsOpen(true)}>
+                Редактировать ограничения
+              </Button>
+            </div>
+          </div>
+        );
+      case "consignment":
+        return (
+          <div className="space-y-4 text-[13px]">
+            <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
+              <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-teal-600"
+                  checked={form.consignment}
+                  onChange={(e) => setForm((p) => ({ ...p, consignment: e.target.checked }))}
+                />
+                Консигнация
+              </label>
+            </div>
+            {form.consignment ? (
+              <div className="space-y-3 rounded-lg border border-border/70 p-3">
+                <div className="space-y-1">
+                  <Label>Лимит консигнации</Label>
+                  <Input
+                    value={form.consignmentLimit}
+                    onChange={(e) => setForm((p) => ({ ...p, consignmentLimit: e.target.value }))}
+                    placeholder="Сумма"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={form.consignmentIgnoreDebt}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, consignmentIgnoreDebt: e.target.checked }))
+                    }
+                  />
+                  Игнорировать долг прошлых месяцев
+                </label>
+                <ConsignmentCloseScheduleFields
+                  closeDay={form.closeDay}
+                  closeHour={form.closeHour}
+                  closeMinute={form.closeMinute}
+                  onCloseDayChange={(v) => setForm((p) => ({ ...p, closeDay: v }))}
+                  onCloseHourChange={(v) => setForm((p) => ({ ...p, closeHour: v }))}
+                  onCloseMinuteChange={(v) => setForm((p) => ({ ...p, closeMinute: v }))}
+                />
+              </div>
+            ) : null}
+          </div>
+        );
+      case "skladchik":
+        return (
+          <SlotSkladchikEntitlementsEditor
+            value={form.skladchikEntitlements}
+            onChange={(v) => setForm((p) => ({ ...p, skladchikEntitlements: v }))}
+          />
+        );
+      case "expeditor":
+        return (
+          <SlotExpeditorRulesEditor
+            tenant={tenant}
+            value={form.expeditorRules}
+            onChange={(v) => setForm((p) => ({ ...p, expeditorRules: v }))}
+          />
+        );
+      default:
+        return null;
+    }
+  })();
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[min(92vh,880px)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b bg-muted/25 px-6 py-4">
-            <DialogTitle>Конфигурация места</DialogTitle>
-            {slot ? (
-              <p className="text-xs text-muted-foreground">
-                {slot.slot_code}
-                {slot.label ? ` — ${slot.label}` : ""}
+        <DialogContent className="max-h-[92vh] max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl">
+          <DialogHeader className="border-b border-border/70 bg-muted/10 px-6 py-3.5 pr-12 sm:px-8">
+            <DialogTitle className="font-sans text-[15px] font-normal leading-snug tracking-tight text-foreground/85 sm:text-base">
+              {title}
+            </DialogTitle>
+            {summaryLine ? (
+              <p className="mt-1 text-xs text-muted-foreground">{summaryLine}</p>
+            ) : null}
+            {bulkMode ? (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Показаны стандартные настройки. При сохранении значения применятся ко всем выбранным
+                рабочим местам.
+                {dirty ? (
+                  <span className="mt-1 block font-medium text-teal-700 dark:text-teal-300">
+                    Есть изменения для применения
+                  </span>
+                ) : null}
               </p>
             ) : null}
+            {error ? (
+              <div
+                role="alert"
+                className="mt-2 rounded-md border border-red-500/40 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800 dark:bg-red-950/40 dark:text-red-200"
+              >
+                {error}
+              </div>
+            ) : null}
+            <DialogDescription className="sr-only">
+              Конфигурация рабочего места: цены, ограничения, консигнация
+            </DialogDescription>
           </DialogHeader>
+
           {loading ? (
-            <p className="px-6 py-4 text-sm text-muted-foreground">Загрузка…</p>
+            <p className="px-8 py-12 text-sm text-muted-foreground">Загрузка…</p>
           ) : (
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-              <div className="space-y-1">
-                <Label>Направление торговли</Label>
-                <FilterSelect
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  emptyLabel="— не задано —"
-                  aria-label="Направление торговли"
-                  value={directionId}
-                  onChange={(e) => setDirectionId(e.target.value)}
-                >
-                  {(tradeDirectionsQ.data ?? []).map((t) => (
-                    <option key={t.id} value={String(t.id)}>
-                      {t.name}
-                      {t.code ? ` (${t.code})` : ""}
-                    </option>
-                  ))}
-                </FilterSelect>
+            <div className="flex min-h-0 max-h-[min(65vh,640px)] gap-0">
+              <nav className="w-[13.5rem] shrink-0 overflow-y-auto border-r border-border/70 bg-muted/90 p-2 dark:bg-muted/40">
+                {tabs.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTab(t.id)}
+                    className={cn(
+                      "mb-0.5 w-full rounded-md px-2.5 py-2 text-left text-[12px] font-medium leading-snug transition-colors",
+                      tab === t.id
+                        ? "bg-teal-600 text-white shadow-sm dark:bg-teal-600"
+                        : "text-foreground/90 hover:bg-card/70 dark:hover:bg-muted/60"
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </nav>
+              <div className="min-h-0 flex-1 overflow-y-auto bg-background px-6 py-4 sm:px-8">
+                {panel}
               </div>
-
-              <div className="space-y-1">
-                <Label>Склад возврата</Label>
-                <WorkSlotsMultiSelect
-                  variant="form"
-                  multiple={false}
-                  placeholder="Склад возврата"
-                  items={[
-                    { id: "__none__", title: "—" },
-                    ...warehouses.map((w) => ({ id: String(w.id), title: w.name }))
-                  ]}
-                  selectedValues={returnWarehouseId ? [returnWarehouseId] : []}
-                  onChange={(next) => {
-                    const v = next[0] ?? "";
-                    setReturnWarehouseId(v === "__none__" ? "" : v);
-                  }}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label>Основной тип цены</Label>
-                <FilterSelect
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  emptyLabel="—"
-                  aria-label="Основной тип цены"
-                  value={priceType}
-                  onChange={(e) => setPriceType(e.target.value)}
-                >
-                  {(priceTypesQ.data ?? []).map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </FilterSelect>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Дополнительные типы цен</Label>
-                <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border/70 p-2">
-                  {(priceTypesQ.data ?? []).map((o) => (
-                    <label key={o.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="accent-teal-600"
-                        checked={priceTypes.includes(o.id)}
-                        onChange={() => togglePriceType(o.id)}
-                      />
-                      {ptLabel(o.id)}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border/70 bg-muted/15 p-3">
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Ограничения по продуктам и entitlements — на уровне места.
-                </p>
-                <Button type="button" variant="outline" size="sm" onClick={() => setRestrictionsOpen(true)}>
-                  Редактировать ограничения ({entitlements.price_types.length} типов ·{" "}
-                  {entitlements.product_rules.length} правил)
-                </Button>
-              </div>
-
-              <div className="space-y-3 rounded-lg border border-border/70 p-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={consignment}
-                    onChange={(e) => setConsignment(e.target.checked)}
-                    className="accent-teal-600"
-                  />
-                  Консигнация
-                </label>
-                {consignment ? (
-                  <>
-                    <div className="space-y-1">
-                      <Label>Лимит консигнации</Label>
-                      <Input
-                        value={consignmentLimit}
-                        onChange={(e) => setConsignmentLimit(e.target.value)}
-                        placeholder="Сумма"
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={consignmentIgnoreDebt}
-                        onChange={(e) => setConsignmentIgnoreDebt(e.target.checked)}
-                      />
-                      Игнорировать долг прошлых месяцев
-                    </label>
-                    <ConsignmentCloseScheduleFields
-                      closeDay={closeDay}
-                      closeHour={closeHour}
-                      closeMinute={closeMinute}
-                      onCloseDayChange={setCloseDay}
-                      onCloseHourChange={setCloseHour}
-                      onCloseMinuteChange={setCloseMinute}
-                    />
-                  </>
-                ) : null}
-              </div>
-
-              {slot?.slot_type === "skladchik" ? (
-                <SlotSkladchikEntitlementsEditor
-                  value={skladchikEntitlements}
-                  onChange={setSkladchikEntitlements}
-                />
-              ) : null}
-
-              {slot?.slot_type === "expeditor" ? (
-                <SlotExpeditorRulesEditor tenant={tenant} value={expeditorRules} onChange={setExpeditorRules} />
-              ) : null}
-
-              {error ? <p className="text-sm text-destructive">{error}</p> : null}
             </div>
           )}
-          <DialogFooter className="mx-0 mb-0 shrink-0 gap-3 border-t bg-muted/25 px-6 py-5 sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Отмена
+
+          <DialogFooter className="mx-0 mb-0 flex flex-row flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-6 py-4 sm:px-8">
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 border-red-500/70 text-red-600 hover:bg-red-50 dark:border-red-400/60 dark:text-red-400 dark:hover:bg-red-950/40"
+              onClick={handleReset}
+              disabled={saving || loading}
+            >
+              Сбросить настройки
             </Button>
-            <Button type="button" disabled={saving || loading} onClick={() => void submit()}>
-              {saving ? "…" : "Сохранить"}
+            <Button
+              type="button"
+              className="shrink-0 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-600 dark:hover:bg-teal-500"
+              disabled={
+                saving ||
+                loading ||
+                (bulkMode ? slotIds.length === 0 || !dirty : !slotId)
+              }
+              onClick={() => void submit()}
+            >
+              {saving ? "…" : bulkMode ? "Применить к выбранным" : "Сохранить"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -356,12 +586,15 @@ export function SlotWorkplaceConfigDialog({
       <SlotEntitlementsEditor
         open={restrictionsOpen}
         tenant={tenant}
-        initial={entitlements}
+        initial={form.entitlements}
         priceTypes={(priceTypesQ.data ?? []).map((o) => o.id)}
         priceTypeLabels={Object.fromEntries((priceTypesQ.data ?? []).map((o) => [o.id, o.label]))}
+        bulkMode={bulkMode}
+        bulkCount={slotIds.length}
+        bulkLabel={bulkSummary}
         onClose={() => setRestrictionsOpen(false)}
         onSave={(next) => {
-          setEntitlements(next);
+          setForm((p) => ({ ...p, entitlements: next, priceTypes: next.price_types }));
           setRestrictionsOpen(false);
         }}
       />

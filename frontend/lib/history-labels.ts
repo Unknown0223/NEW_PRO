@@ -213,6 +213,8 @@ const ACTION_LABEL: Record<string, string> = {
   "order.status": "Изменение статуса заказа",
   "order.cancel": "Заказ отменён",
   "order.meta": "Изменение данных заказа",
+  "order.lines": "Редактирование товаров заказа",
+  lines: "Редактирование товаров / бонус / скидка",
 
   // Рабочее место / гео / отчёты
   "work_slot.create": "Рабочее место создано",
@@ -316,6 +318,13 @@ const PAYLOAD_KEY_LABEL: Record<string, string> = {
   permissions: "права",
   duration_minutes: "длительность (мин)",
   soft: "мягкое удаление",
+  discount_sum: "скидка",
+  bonus_sum: "бонус",
+  total_sum: "сумма",
+  discount_alert: "проблема скидки",
+  bonus_alert: "проблема бонуса",
+  alerts_resolved_at: "проблемы исправлены",
+  paid_lines: "товары",
   schedule: "расписание"
 };
 
@@ -392,6 +401,38 @@ export function summarizePayload(payload: unknown): string {
     const parts: string[] = [];
     if (obj.to_status != null) parts.push(`статус: ${obj.from_status ?? "—"} → ${obj.to_status}`);
     return parts.join(", ");
+  }
+
+  // Zakaz qatorlari tahriri (order_change.lines)
+  if (obj.paid_lines != null || obj.discount_alert != null || obj.bonus_alert != null) {
+    const parts: string[] = [];
+    const fmtDelta = (v: unknown): string | null => {
+      if (v == null || typeof v !== "object") return null;
+      const d = v as { from?: unknown; to?: unknown };
+      if (String(d.from ?? "") === String(d.to ?? "")) return null;
+      return `${d.from ?? "—"} → ${d.to ?? "—"}`;
+    };
+    for (const [key, label] of [
+      ["total_sum", "сумма"],
+      ["discount_sum", "скидка"],
+      ["bonus_sum", "бонус"],
+      ["discount_alert", "скидка-проблема"],
+      ["bonus_alert", "бонус-проблема"]
+    ] as const) {
+      const t = fmtDelta(obj[key]);
+      if (t) parts.push(`${label}: ${t}`);
+    }
+    if (obj.alerts_resolved === true) {
+      const at = typeof obj.alerts_resolved_at === "string" ? obj.alerts_resolved_at : "";
+      parts.push(at ? `проблемы исправлены (${at})` : "проблемы исправлены");
+    }
+    const paid = obj.paid_lines as
+      | { from?: unknown[]; to?: unknown[] }
+      | undefined;
+    if (paid?.from && paid?.to) {
+      parts.push(`товары: ${paid.from.length} → ${paid.to.length} поз.`);
+    }
+    if (parts.length) return parts.join("; ");
   }
 
   // `patch` — qaysi maydonlar o'zgargani

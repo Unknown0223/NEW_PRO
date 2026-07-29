@@ -10,6 +10,10 @@ export type WorkSlotsBulkFloatingBarProps = {
   onBulkEdit: () => void;
   onUnassign: () => void;
   onClearSelection: () => void;
+  /** Как у агентов: групповые ограничения (типы цен + продукты) */
+  onRestrictions?: () => void;
+  /** Как у агентов: групповая конфигурация места (цены, консигнация…) */
+  onConfigurations?: () => void;
 };
 
 /** Agent `StaffBulkFloatingBar` uslubida — joylar uchun guruhli amallar. */
@@ -20,7 +24,9 @@ export function WorkSlotsBulkFloatingBar({
   onToggleActive,
   onBulkEdit,
   onUnassign,
-  onClearSelection
+  onClearSelection,
+  onRestrictions,
+  onConfigurations
 }: WorkSlotsBulkFloatingBarProps) {
   if (count <= 0) return null;
 
@@ -35,6 +41,34 @@ export function WorkSlotsBulkFloatingBar({
         </span>
 
         <span className="mx-1 h-6 w-px bg-slate-200" />
+
+        {onRestrictions ? (
+          <button
+            type="button"
+            onClick={onRestrictions}
+            disabled={busy}
+            title="Ограничения для всех выбранных мест"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          >
+            ⚙
+          </button>
+        ) : null}
+
+        {onConfigurations ? (
+          <button
+            type="button"
+            onClick={onConfigurations}
+            disabled={busy}
+            title="Конфигурация места для всех выбранных"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-violet-600 hover:bg-violet-50 disabled:opacity-50"
+          >
+            🎛
+          </button>
+        ) : null}
+
+        {(onRestrictions || onConfigurations) && (
+          <span className="mx-1 h-6 w-px bg-slate-200" />
+        )}
 
         <button
           type="button"

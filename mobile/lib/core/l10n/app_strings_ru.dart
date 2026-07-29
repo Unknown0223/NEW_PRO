@@ -35,6 +35,7 @@ abstract final class S {
   static const noOrderToday = 'сегодня нет заказа';
   static const photoReport = 'Фотоотчёт';
   static const createOrderAction = 'Создать заказ';
+  static const sendHeldOrderNow = 'Отправить сейчас';
   static const refusalAction = 'Отказ (rad etish)';
   static const supervisionChecklist = 'Чек-лист супервизии';
   static const draftBadge = 'Черновик';
@@ -168,7 +169,7 @@ abstract final class S {
   static const syncDataUpdated = 'Данные обновлены';
   static const syncAllDone = '100% · все 847 записи';
   static const syncProgressHint =
-      'Статус badges pulse · progress never jumps backward';
+      'Данные отправляются на сервер. Не закрывайте приложение до завершения.';
   static const syncOrdersSent = 'Заказы отправлено';
   static const syncPhotosUpload = 'Фото выгрузка';
   static const syncClients = 'Клиенты';

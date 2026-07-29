@@ -83,6 +83,21 @@ export function useOrdersListPagePart1() {
     setFilterDraft(withDefaultOrdersDateRange(filters));
   }, [filters]);
 
+  /** Birinchi kirishda URLda sana bo‘lmasa — bugungi kunni avtomatik qo‘llash (Применить bosmasdan). */
+  const defaultDatesBootstrappedRef = useRef(false);
+  useEffect(() => {
+    if (defaultDatesBootstrappedRef.current) return;
+    if (ordersListQueryReady(filters)) {
+      defaultDatesBootstrappedRef.current = true;
+      return;
+    }
+    defaultDatesBootstrappedRef.current = true;
+    const next = withDefaultOrdersDateRange({ ...filters, page: 1 });
+    setFilterDraft(next);
+    const qs = buildOrdersSearchParams(next).toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [filters, pathname, router]);
+
   useEffect(() => {
     setNakladnoyPrefs(loadNakladnoyExportPrefs());
   }, []);

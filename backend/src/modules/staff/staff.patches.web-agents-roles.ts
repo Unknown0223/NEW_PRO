@@ -13,7 +13,8 @@ import {
   parseEntitlements,
   parsePriceTypesJson,
   validateAgentEntitlements,
-  validateExpeditorAssignmentRules
+  validateExpeditorAssignmentRules,
+  resolveLoginForPatch
 } from "./staff.shared";
 import { applyAgentPatchInDb } from "./staff.patches.field";
 import { listStaff, type PatchAgentInput } from "./staff.crud";
@@ -47,6 +48,9 @@ export async function patchExpeditor(
   }
 
   const data: Prisma.UserUpdateInput = {};
+
+  const nextLogin = await resolveLoginForPatch(tenantId, expeditorId, existing.login, input.login);
+  if (nextLogin !== undefined) data.login = nextLogin;
 
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;
@@ -186,6 +190,8 @@ export async function patchCollector(
   }
 
   const data: Prisma.UserUpdateInput = {};
+  const nextLoginCollector = await resolveLoginForPatch(tenantId, collectorId, existing.login, input.login);
+  if (nextLoginCollector !== undefined) data.login = nextLoginCollector;
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;
   if (input.middle_name !== undefined) data.middle_name = input.middle_name?.trim() || null;
@@ -289,6 +295,8 @@ export async function patchAuditor(
   if (!existing) throw new Error("NOT_FOUND");
 
   const data: Prisma.UserUpdateInput = {};
+  const nextLoginAuditor = await resolveLoginForPatch(tenantId, auditorId, existing.login, input.login);
+  if (nextLoginAuditor !== undefined) data.login = nextLoginAuditor;
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;
   if (input.middle_name !== undefined) data.middle_name = input.middle_name?.trim() || null;

@@ -14,7 +14,11 @@ import type { PickOption } from "@/components/clients/visit-planner/visit-planne
 import type { VisitMapPolygon } from "@/components/clients/visit-planner/visit-planner-yandex-map";
 import { clientInPolygon } from "@/lib/geo-polygon";
 import { resolveBoundaryColor } from "@/lib/geo-boundary-colors";
-import { pickCityTerritoryHint, type CityTerritoryHint } from "@/lib/city-territory-hint";
+import {
+  cityStoredCodeToDisplayLabel,
+  pickCityTerritoryHint,
+  type CityTerritoryHint
+} from "@/lib/city-territory-hint";
 import {
   boundsCenterForAdminTokens,
   buildAdminRegionMapPolygons,
@@ -34,6 +38,33 @@ function clientRegionLabel(
   if (direct) return direct;
   const hint = pickCityTerritoryHint(hints, c.city ?? "");
   return hint?.region_stored?.trim() || hint?.region_label?.trim() || "";
+}
+
+function clientCityStored(c: ClientRow): string {
+  return (c.city ?? "").trim();
+}
+
+function clientMatchesCity(
+  c: ClientRow,
+  tokens: string[],
+  hints: Record<string, CityTerritoryHint> | undefined,
+  cityOpts: { value: string; label: string }[]
+): boolean {
+  if (tokens.length === 0) return true;
+  const stored = clientCityStored(c);
+  if (!stored) return false;
+  const hint = pickCityTerritoryHint(hints, stored);
+  const label =
+    hint?.city_label?.trim() ||
+    cityOpts.find((o) => o.value === stored || o.label === stored)?.label ||
+    cityStoredCodeToDisplayLabel(stored);
+
+  return tokens.some(
+    (t) =>
+      territoryFieldMatches(stored, t) ||
+      territoryFieldMatches(label, t) ||
+      (hint?.city_label != null && territoryFieldMatches(hint.city_label, t))
+  );
 }
 
 function clientMatchesBranch(
@@ -93,11 +124,13 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
 
   const [regionFilter, setRegionFilter] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState<string[]>([]);
   const [adminRegions, setAdminRegions] = useState<UzAdminRegion[]>([]);
   const [adminLoading, setAdminLoading] = useState(true);
 
   const deferredRegionFilter = useDeferredValue(regionFilter);
   const deferredBranchFilter = useDeferredValue(branchFilter);
+  const deferredCityFilter = useDeferredValue(cityFilter);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,10 +150,17 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
     };
   }, []);
 
+  // Filial yoki hudud o‘zgaganda shahar tanlovini tozalash (kaskad)
+  useEffect(() => {
+    setCityFilter([]);
+  }, [regionFilter, branchFilter]);
+
   const refs = profileQ.data?.references;
   const territoryNodes = (refs?.territory_nodes ?? []) as TerritoryNode[];
   const cityHints = (refs as { city_territory_hints?: Record<string, CityTerritoryHint> } | undefined)
     ?.city_territory_hints;
+  const cityRefOpts = (refs as { city_options?: { value: string; label: string }[] } | undefined)
+    ?.city_options ?? [];
 
   const liveTerritory = useMemo(() => {
     const zones = new Set<string>();
@@ -148,7 +188,9 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
     return {
       zones: r?.zones,
       regions: r?.regions,
-      cities: r?.cities
+      cities: r?.cities,
+      city_options: r?.city_options,
+      region_options: r?.region_options
     };
   }, [refs]);
 
@@ -156,10 +198,10 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
     () =>
       buildZoneRegionCityCascadeOptions(refsBundle, liveTerritory as ClientBalanceTerritoryOptions, territoryNodes, {
         zone: "",
-        region: "",
+        region: regionFilter[0] ?? "",
         city: ""
       }),
-    [refsBundle, liveTerritory, territoryNodes]
+    [refsBundle, liveTerritory, territoryNodes, regionFilter]
   );
 
   const branchItems = itemsByKind.branch ?? [];
@@ -189,7 +231,8 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
   const filterReady = regionFilter.length > 0 || branchFilter.length > 0;
   const deferredFilterReady = deferredRegionFilter.length > 0 || deferredBranchFilter.length > 0;
 
-  const filteredClients = useMemo(() => {
+  /** Filial/hudud bo‘yicha (shaharsiz) — shahar dropdown uchun baza. */
+  const clientsAfterTerritory = useMemo(() => {
     if (!deferredFilterReady) return [];
 
     let list = clientsWithGps;
@@ -214,6 +257,76 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
     adminRegions,
     deferredFilterReady
   ]);
+
+  const cityOptions: PickOption[] = useMemo(() => {
+    if (!filterReady) return [];
+
+    const fromCascade = new Map<string, string>();
+    for (const o of cascade.cities) {
+      fromCascade.set(o.value, o.label || o.value);
+    }
+
+    // Multi-region: har bir hudud uchun cascade shaharlarini qo‘shamiz
+    if (regionFilter.length > 1) {
+      for (const reg of regionFilter) {
+        const part = buildZoneRegionCityCascadeOptions(
+          refsBundle,
+          liveTerritory as ClientBalanceTerritoryOptions,
+          territoryNodes,
+          { zone: "", region: reg, city: "" }
+        );
+        for (const o of part.cities) {
+          if (!fromCascade.has(o.value)) fromCascade.set(o.value, o.label || o.value);
+        }
+      }
+    }
+
+    const seen = new Map<string, PickOption>();
+    for (const c of clientsAfterTerritory) {
+      const stored = clientCityStored(c);
+      if (!stored) continue;
+      if (seen.has(stored)) continue;
+      const hint = pickCityTerritoryHint(cityHints, stored);
+      const optLabel =
+        fromCascade.get(stored) ||
+        cityRefOpts.find((o) => o.value === stored)?.label ||
+        hint?.city_label ||
+        cityStoredCodeToDisplayLabel(stored);
+      seen.set(stored, {
+        value: stored,
+        label: optLabel,
+        searchText: `${stored} ${optLabel}`
+      });
+    }
+
+    // Katalogdagi shaharlar (hudud tanlanganda) — GPS bo‘lmasa ham tanlash mumkin
+    for (const [value, label] of fromCascade) {
+      if (!seen.has(value)) {
+        seen.set(value, { value, label, searchText: `${value} ${label}` });
+      }
+    }
+
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, "ru"));
+  }, [
+    filterReady,
+    cascade.cities,
+    regionFilter,
+    refsBundle,
+    liveTerritory,
+    territoryNodes,
+    clientsAfterTerritory,
+    cityHints,
+    cityRefOpts
+  ]);
+
+  const filteredClients = useMemo(() => {
+    if (!deferredFilterReady) return [];
+    let list = clientsAfterTerritory;
+    if (deferredCityFilter.length > 0) {
+      list = list.filter((c) => clientMatchesCity(c, deferredCityFilter, cityHints, cityRefOpts));
+    }
+    return list;
+  }, [clientsAfterTerritory, deferredCityFilter, cityHints, cityRefOpts, deferredFilterReady]);
 
   const mapPolygons: VisitMapPolygon[] = useMemo(() => {
     const polys: VisitMapPolygon[] = [];
@@ -263,15 +376,20 @@ export function useVisitPlannerFilterState(tenantSlug: string | null, clientsWit
   }, [deferredRegionFilter, regionFilter, deferredBranchFilter, branchFilter, adminRegions, boundaries]);
 
   const isFilterPending =
-    regionFilter !== deferredRegionFilter || branchFilter !== deferredBranchFilter;
+    regionFilter !== deferredRegionFilter ||
+    branchFilter !== deferredBranchFilter ||
+    cityFilter !== deferredCityFilter;
 
   return {
     regionFilter,
     setRegionFilter,
     branchFilter,
     setBranchFilter,
+    cityFilter,
+    setCityFilter,
     regionOptions,
     branchOptions,
+    cityOptions,
     filteredClients,
     filterReady,
     mapPolygons,

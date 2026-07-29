@@ -21,6 +21,7 @@ import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/database/app_database.dart';
 import '../visits/visit_stats_helper.dart';
+import '../visits/agent_visits_page.dart' show visitFromRow;
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -32,6 +33,7 @@ import '../shell/agent_app_bar.dart';
 import '../shell/agent_drawer.dart';
 import '../clients/client_photo_report_flow.dart';
 import '../../../core/api/mobile_api.dart';
+import '../../../core/sync/photo_report_queue.dart';
 import 'order_create_models.dart';
 import 'order_create_sheets.dart';
 import 'order_draft_model.dart';
@@ -113,7 +115,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   final _productSearchCtrl = TextEditingController();
   Timer? _productSearchDebounce;
 
-  static const _createContextCacheTtl = Duration(minutes: 2);
+  static const _createContextCacheTtl = Duration(minutes: 5);
   static const _photoStatusCacheTtl = Duration(minutes: 2);
   static const _configRefreshTtl = Duration(minutes: 5);
   static const _mandatoryChecksCacheTtl = Duration(minutes: 10);
@@ -490,6 +492,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         now.difference(_photoStatusFetchedAt!) < _photoStatusCacheTtl) {
       return;
     }
+    // Oflayn navbatdagi foto ham buyurtma uchun hisoblanadi.
+    if (await AppDatabase().hasPendingUnlinkedPhotoReportToday(_selectedClientId)) {
+      if (mounted) {
+        setState(() => _hasUnlinkedPhotoToday = true);
+        _photoStatusFetchedAt = now;
+      }
+      return;
+    }
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
       if (mounted) {
@@ -801,7 +811,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     try {
-      final ctx = await _getCreateContext(warehouseId: whId, forceRefresh: clearCart);
+      final ctx = await _getCreateContext(warehouseId: whId, forceRefresh: false);
       if (ctx == null) {
         if (mounted) {
           setState(() {
@@ -969,6 +979,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final slug = ref.read(sessionProvider).tenantSlug ?? '';
       if (slug.isEmpty) return false;
       try {
+        // Oflayn fotolarni avval serverga yuborish — so‘ng tekshiruv ishlaydi.
+        await PhotoReportQueue.flush(
+          api: ref.read(mobileApiProvider),
+          slug: slug,
+          photoConfig: cfg.photo,
+        );
         if (!_hasUnlinkedPhotoToday) {
           await _refreshPhotoStatus(force: true);
         }
@@ -980,7 +996,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
           _toast('Необходимо добавить фотоотчет', accent: AppColors.warning);
           await _addPhotoReport();
-          await _refreshPhotoStatus();
+          await PhotoReportQueue.flush(
+            api: ref.read(mobileApiProvider),
+            slug: slug,
+            photoConfig: cfg.photo,
+          );
+          await _refreshPhotoStatus(force: true);
           if (!_hasUnlinkedPhotoToday) return false;
         }
       } catch (_) {
@@ -1048,12 +1069,22 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       clientId: _selectedClientId,
       category: category,
     );
-    if (row != null && mounted) {
+    if (!mounted) return false;
+    if (row != null) {
       setState(() {
         _hasUnlinkedPhotoToday = true;
         _photoStatusFetchedAt = DateTime.now();
       });
       _toast('Фотоотчет сохранён', accent: AppColors.success);
+      return true;
+    }
+    // Serverga chiqmagan, lekin oflayn navbatga tushgan bo‘lishi mumkin.
+    if (await AppDatabase().hasPendingUnlinkedPhotoReportToday(_selectedClientId)) {
+      setState(() {
+        _hasUnlinkedPhotoToday = true;
+        _photoStatusFetchedAt = DateTime.now();
+      });
+      _toast('Фотоотчет сохранён (офлайн)', accent: AppColors.success);
       return true;
     }
     return false;
@@ -1212,10 +1243,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           existingId: _heldOrderId,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
+        // Vizit hold oynasida ochiq qoladi — «Отправить сейчас» vizit bo‘limida.
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1232,10 +1260,20 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           if (!mounted) return;
           if (action == HeldOrderSyncAction.edit) {
             context.go('/orders/create?held_id=${held.id}');
-          } else if (action == HeldOrderSyncAction.sent || action == null) {
-            // null = sheet dismiss; sent = yuborildi
-            if (action == HeldOrderSyncAction.sent) {
-              context.go('/orders');
+          } else if (action == HeldOrderSyncAction.sent) {
+            context.go('/orders');
+          } else {
+            // Dismiss — faol vizitga qaytish (yuborish u yerda).
+            final visits = await AppDatabase().getVisitsForDay();
+            final hasActive = visits.any((row) {
+              final v = visitFromRow(row);
+              return v.clientId == _selectedClientId && v.status == 'in_progress';
+            });
+            if (!mounted) return;
+            if (hasActive) {
+              context.go('/visits/active/$_selectedClientId');
+            } else {
+              context.go('/visits');
             }
           }
         }

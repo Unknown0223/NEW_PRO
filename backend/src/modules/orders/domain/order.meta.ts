@@ -6,14 +6,12 @@ import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
-import { normalizeOrderType } from "../order-status";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import { ORDER_LINES_EDITABLE_STATUSES } from "./order.lines";
 import { assertOrderWarehouseBlockAssignment, enrichOrderDetailRow } from "./order.detail-mappers";
 import {
   patchOrderMetaBlockOnly,
-  patchOrderMetaCommentOnly,
-  patchOrderMetaPaymentMethodOnly
+  patchOrderMetaCommentOnly
 } from "./order.meta.simple-patches";
 import {
   orderDetailInclude,
@@ -66,7 +64,20 @@ export async function updateOrderMeta(
   const blockOnly = patchBl && !patchWh && !patchAg && !patchEx && !patchComment && !patchPm;
 
   if (paymentMethodOnly) {
-    return patchOrderMetaPaymentMethodOnly(tenantId, orderId, existing, input, actorUserId, viewerRole);
+    // Способ оплаты / тип цены после создания не меняем.
+    const pmNext =
+      input.payment_method_ref === null
+        ? null
+        : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
+    const pmPrev = (existing as { payment_method_ref?: string | null }).payment_method_ref ?? null;
+    if (String(pmNext ?? "") !== String(pmPrev ?? "")) {
+      throw new Error("ORDER_HEADER_LOCKED");
+    }
+    const row = await prisma.order.findFirstOrThrow({
+      where: { id: orderId, tenant_id: tenantId },
+      include: orderDetailInclude
+    });
+    return enrichOrderDetailRow(tenantId, row as unknown as OrderDetailLoaded, viewerRole);
   }
   if (commentOnly) {
     return patchOrderMetaCommentOnly(tenantId, orderId, existing, input, viewerRole);
@@ -84,22 +95,23 @@ export async function updateOrderMeta(
   const whChanged = nextWarehouseId !== existing.warehouse_id;
   const agChanged = nextAgentId !== existing.agent_id;
 
-  const existingOtMeta = normalizeOrderType(existing.order_type ?? "order");
+  // Клиент / агент / склад / способ оплаты в шапке после создания не меняем.
+  if (whChanged || agChanged) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+
   const nextPaymentMethodRef = patchPm
     ? input.payment_method_ref === null
       ? null
       : (input.payment_method_ref ?? "").trim().slice(0, 64) || null
     : ((existing as { payment_method_ref?: string | null }).payment_method_ref ?? null);
   const pmChanged =
-    patchPm && String(nextPaymentMethodRef ?? "") !== String((existing as { payment_method_ref?: string | null }).payment_method_ref ?? "");
+    patchPm &&
+    String(nextPaymentMethodRef ?? "") !==
+      String((existing as { payment_method_ref?: string | null }).payment_method_ref ?? "");
 
-  if (existingOtMeta === "order") {
-    if (nextWarehouseId == null || nextWarehouseId < 1) {
-      throw new Error("ORDER_REQUIRES_WAREHOUSE");
-    }
-    if (nextAgentId == null || nextAgentId < 1) {
-      throw new Error("ORDER_REQUIRES_AGENT");
-    }
+  if (pmChanged) {
+    throw new Error("ORDER_HEADER_LOCKED");
   }
 
   let commentNext: string | null | undefined;

@@ -246,8 +246,11 @@ export function ClientVisitPlannerWorkspace() {
     setRegionFilter,
     branchFilter,
     setBranchFilter,
+    cityFilter,
+    setCityFilter,
     regionOptions,
     branchOptions,
+    cityOptions,
     filteredClients: territoryFilteredClients,
     filterReady,
     mapPolygons,
@@ -643,9 +646,9 @@ export function ClientVisitPlannerWorkspace() {
   const mapAutoFitKey = useMemo(
     () =>
       filterReady && !isFilterPending
-        ? `b:${branchFilter}|r:${regionFilter.join(",")}|n:${visibleClients.length}`
+        ? `b:${branchFilter}|r:${regionFilter.join(",")}|c:${cityFilter.join(",")}|n:${visibleClients.length}`
         : "",
-    [filterReady, isFilterPending, branchFilter, regionFilter, visibleClients.length]
+    [filterReady, isFilterPending, branchFilter, regionFilter, cityFilter, visibleClients.length]
   );
 
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -814,6 +817,18 @@ export function ClientVisitPlannerWorkspace() {
               onChange={(v) => startTransition(() => setRegionFilter(v))}
               placeholder="Hudud tanlang *"
               searchPlaceholder="Viloyat qidirish…"
+            />
+          </div>
+          <div className="vp-fb-field">
+            <FilterMultiSelect
+              options={cityOptions}
+              selected={cityFilter}
+              onChange={(v) => startTransition(() => setCityFilter(v))}
+              placeholder={
+                filterReady ? "Город / shahar" : "Avval filial yoki hudud"
+              }
+              searchPlaceholder="Shahar qidirish…"
+              disabled={!filterReady || cityOptions.length === 0}
             />
           </div>
           <div className="vp-fb-chips">

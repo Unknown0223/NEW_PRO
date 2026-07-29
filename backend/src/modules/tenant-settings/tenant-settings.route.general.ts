@@ -136,7 +136,23 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       if (!ensureTenantContext(request, reply)) return;
       const policy = await getMobileAppReleasePolicy(request.tenant!.id);
       const outdated = await listOutdatedMobileUsers(request.tenant!.id);
-      return reply.send({ policy, outdated_count: outdated.length, outdated_users: outdated });
+      const { mobileApkReady, buildMobileApkDownloadUrl } = await import("../mobile/mobile-apk.service");
+      const {
+        resolveRequestOrigin
+      } = await import("../mobile/app-release.service");
+      const apk = await mobileApkReady(request.tenant!.slug);
+      const origin = resolveRequestOrigin(request.headers);
+      return reply.send({
+        policy,
+        outdated_count: outdated.length,
+        outdated_users: outdated,
+        apk: {
+          ready: apk.ready,
+          bytes: apk.bytes,
+          mtime_ms: apk.mtime_ms,
+          download_url: buildMobileApkDownloadUrl(origin, request.tenant!.slug)
+        }
+      });
     }
   );
 
@@ -217,13 +233,20 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
         const verFromFilename = filename.match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
         const policy = await patchMobileAppReleasePolicy(request.tenant!.id, {
           download_url: downloadUrl,
-          ...(verFromFilename ? { latest_version: verFromFilename } : {})
+          force_update: true,
+          ...(verFromFilename
+            ? {
+                latest_version: verFromFilename,
+                min_version: verFromFilename.replace(/\.\d+$/, ".0")
+              }
+            : {})
         });
         return reply.send({
           policy,
           download_url: downloadUrl,
           bytes,
-          max_bytes: MOBILE_APK_MAX_BYTES
+          max_bytes: MOBILE_APK_MAX_BYTES,
+          apk: { ready: true, bytes }
         });
       } catch (e) {
         if (e instanceof Error && e.message === "FILE_TOO_LARGE") {

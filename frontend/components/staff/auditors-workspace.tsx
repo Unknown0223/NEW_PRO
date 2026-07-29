@@ -27,6 +27,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
@@ -135,6 +137,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "auditor");
 
   useEffect(() => {
     setSelected(new Set());
@@ -443,6 +446,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -472,6 +476,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selected}
         onToggleSelection={toggleSelection}
+        onToggleAllOnPage={toggleAllOnPage}
         renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
           const r = pageRows.find((x) => x.id === row.id)!;
@@ -570,6 +575,23 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onPatched={() => void qc.invalidateQueries({ queryKey: ["auditors", tenantSlug] })}
       />
 
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["auditors", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["auditors-filter-options", tenantSlug] });
+          });
+        }}
+      />
+
+
       <Dialog open={Boolean(deactivateRow)} onOpenChange={(o) => !o && setDeactivateRow(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -614,6 +636,7 @@ function AuditorEditDialog({
   const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
   const [territory, setTerritory] = useState("");
+  const [login, setLogin] = useState("");
 
   useEffect(() => {
     if (!row) return;
@@ -627,6 +650,7 @@ function AuditorEditDialog({
     setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
     setTerritory(row.territory ?? "");
+    setLogin(row.login);
   }, [row]);
 
   return (
@@ -644,13 +668,19 @@ function AuditorEditDialog({
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <Input
+            className="font-mono sm:col-span-2"
+            placeholder="Логин *"
+            value={login}
+            onChange={(e) => setLogin(e.target.value.toLowerCase())}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Отмена
           </Button>
           <Button
-            disabled={saving || !row}
+            disabled={saving || !row || !login.trim()}
             onClick={async () => {
               if (!row) return;
               setSaving(true);
@@ -662,7 +692,8 @@ function AuditorEditDialog({
                   phone: phone.trim() || null,
                   code: code.trim() || null,
                   pinfl: pinfl.trim() || null,
-                  position: position.trim() || null
+                  position: position.trim() || null,
+                  login: login.trim().toLowerCase()
                 });
                 onClose();
               } finally {

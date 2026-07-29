@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app/app_build_info.dart';
+import '../../core/device/mobile_device_info.dart';
 import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../routing/app_router.dart';
@@ -55,9 +57,11 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        ref.read(authStateProvider.notifier).resumeDeferredAppUpdate();
+        AppBuildInfo.clearCache();
+        MobileDeviceInfo.clearApkCache();
+        await ref.read(authStateProvider.notifier).resumeDeferredAppUpdate();
       });
     }
   }

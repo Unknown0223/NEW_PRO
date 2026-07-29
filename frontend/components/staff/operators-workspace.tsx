@@ -36,6 +36,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { filterSelectClassName } from "@/components/ui/filter-select";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
@@ -204,6 +206,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "operator");
 
   const filterOptsQ = useQuery({
     queryKey: ["operators", tenantSlug, "filter-options"],
@@ -459,6 +462,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
             dataRows
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
         bulkMenu={
@@ -519,6 +523,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
             });
           }
         }}
+        onToggleAllOnPage={toggleAllOnPage}
         renderCell={(colId, row) => {
           const r = pageRows.find((x) => x.id === row.id)!;
           if (colId === "active_sessions") {
@@ -634,6 +639,22 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           void qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
         }}
       />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
+          });
+        }}
+      />
+
 
       <Dialog
         open={bulkRevokeOpen}
@@ -872,6 +893,7 @@ function WebStaffEditDialog({
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [position, setPosition] = useState("");
+  const [login, setLogin] = useState("");
   const [max_sessions, setMaxS] = useState("1");
   const [app_access, setAppAccess] = useState(false);
   const [can_authorize, setCanAuth] = useState(true);
@@ -886,6 +908,7 @@ function WebStaffEditDialog({
     setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
     setPosition(row.position ?? "");
+    setLogin(row.login);
     setMaxS(String(row.max_sessions));
     setAppAccess(row.app_access);
     setCanAuth(row.can_authorize);
@@ -904,6 +927,7 @@ function WebStaffEditDialog({
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
         position: position.trim() || null,
+        login: login.trim().toLowerCase(),
         max_sessions: Number.isFinite(ms) ? ms : row.max_sessions,
         app_access,
         can_authorize
@@ -933,6 +957,14 @@ function WebStaffEditDialog({
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Otasining ismi</span>
             <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs text-muted-foreground">Login *</span>
+            <Input
+              className="font-mono"
+              value={login}
+              onChange={(e) => setLogin(e.target.value.toLowerCase())}
+            />
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Telefon</span>
@@ -994,7 +1026,7 @@ function WebStaffEditDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Bekor
           </Button>
-          <Button type="button" disabled={patchMut.isPending} onClick={() => patchMut.mutate()}>
+          <Button type="button" disabled={patchMut.isPending || !login.trim()} onClick={() => patchMut.mutate()}>
             {patchMut.isPending ? "…" : "Saqlash"}
           </Button>
         </DialogFooter>

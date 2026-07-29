@@ -26,8 +26,10 @@ import {
   bulkSaveTargetsBodySchema,
   confirmPlansBodySchema,
   patchPlanTargetBodySchema,
-  planningCenterQuerySchema
+  planningCenterQuerySchema,
+  plansSetupImportBodySchema
 } from "./plans.setup.schema";
+import { applyPlansSetupImport } from "./plans.setup.import-excel";
 import { PLAN_APPROVER_ROLES, PLAN_SETTER_ROLES } from "./plans.setup.roles";
 import {
   dailyKpiDayMatrixQuerySchema,
@@ -235,6 +237,25 @@ export async function registerPlansRoutes(app: FastifyInstance) {
     }
     try {
       const data = await bulkSavePlanTargets(
+        request.tenant!.id,
+        parsed.data,
+        actorUserIdOrNull(request)
+      );
+      return reply.send({ data });
+    } catch (e) {
+      return mapSetupError(reply, request, e);
+    }
+  });
+
+  /** Excel / virtual preview — smart kod bo‘yicha reja qiymatlarini upsert. */
+  app.post("/api/:slug/plans/setup/import", { preHandler: preWrite }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const parsed = plansSetupImportBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+    }
+    try {
+      const data = await applyPlansSetupImport(
         request.tenant!.id,
         parsed.data,
         actorUserIdOrNull(request)

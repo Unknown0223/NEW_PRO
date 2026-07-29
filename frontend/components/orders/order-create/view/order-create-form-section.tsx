@@ -35,6 +35,7 @@ import {
 import { CategoryIssueCountBadge } from "../category-issue-badge";
 import { PolkiReturnLinesTable } from "../polki-return-lines-table";
 import { PolkiClientSearchSelect } from "../polki-client-search-select";
+import { OldPricesModal } from "./old-prices-modal";
 import type { OrderCreateVm } from "../hooks/use-order-create";
 
 export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
@@ -53,6 +54,12 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     expeditorUserId,
     categoryFilterActive,
     priceType,
+    priceAsOf,
+    oldPrices,
+    oldPricesEnabled,
+    clearOldPrices,
+    errorTarget,
+    localError,
     warehouseId,
     agentId,
     applyBonus,
@@ -158,7 +165,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
+            <div className="space-y-2" data-oc-error="client">
               <Label htmlFor="oc-client">Klient</Label>
               <PolkiClientSearchSelect
                 id="oc-client"
@@ -193,8 +200,8 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 value={orderOpenedAt.toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" })}
               />
               <p className="text-[11px] text-muted-foreground">
-                Eski narxlar rejimi —{" "}
-                <span className="font-medium text-foreground">rejalashtirilmoqda</span> (API yo‘q).
+                Tarixiy narxlar — pastroqdagi{" "}
+                <span className="font-medium text-foreground">«Старые цены»</span> belgisidan.
               </p>
             </div>
           </div>
@@ -203,7 +210,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
             {/* Chap: zakaz maydonlari + narx turi */}
             <div className="space-y-4 xl:col-span-4 xl:border-r xl:border-border/70 xl:pr-5">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Zakaz</p>
-              <div className="space-y-2">
+              <div className="space-y-2" data-oc-error="warehouse">
                 <Label htmlFor="oc-warehouse">
                   {isPolkiSheet ? "Sklad qaytarish (qaytarish ombori)" : "Ombor"}
                 </Label>
@@ -257,7 +264,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   </button>
                 </div>
               ) : null}
-              <div className="space-y-2">
+              <div className="space-y-2" data-oc-error="agent">
                 <Label htmlFor="oc-agent">Agent{requiresAgentAndPayment ? " *" : ""}</Label>
                 <FilterSearchableSelect
                   id="oc-agent"
@@ -287,7 +294,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 ) : null}
               </div>
               {requiresAgentAndPayment && showOrderPaymentMethodSelector ? (
-                <div className="space-y-2">
+                <div className="space-y-2" data-oc-error="payment">
                   <Label htmlFor="oc-pay-method">To‘lov usuli</Label>
                   <FilterSelect
                     id="oc-pay-method"
@@ -340,15 +347,17 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 </div>
               ) : null}
 
-              <div className="space-y-3">
+              <div className="space-y-3" data-oc-error="price">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Narx turi</p>
                 <div
                   className={cn(
                     "max-h-[min(52vh,420px)] space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/10 p-3",
-                    !canPickPricingAndExpeditor && "opacity-60"
+                    !canPickPricingAndExpeditor && "opacity-60",
+                    errorTarget === "price" && localError && "ring-2 ring-destructive/50"
                   )}
                   role="radiogroup"
                   aria-label="Narx turi"
+                  aria-invalid={errorTarget === "price" && Boolean(localError)}
                 >
                   {(createCtxQ.data?.price_types?.length ? createCtxQ.data.price_types : ["retail"]).map((t) => (
                     <label
@@ -363,7 +372,10 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                         name="oc-price-type"
                         className="size-4 border-input"
                         checked={priceType === t}
-                        onChange={() => setPriceType(t)}
+                        onChange={() => {
+                          clearOldPrices();
+                          setPriceType(t);
+                        }}
                         disabled={
                           mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor
                         }
@@ -372,6 +384,25 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     </label>
                   ))}
                 </div>
+                <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 rounded border-input"
+                    checked={oldPricesEnabled}
+                    onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
+                    disabled={mutation.isPending || !canPickPricingAndExpeditor}
+                  />
+                  Старые цены
+                  {oldPricesEnabled && priceAsOf ? (
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-2 hover:underline"
+                      onClick={() => oldPrices.openOldPricesModal()}
+                    >
+                      ({formatRuDateButton(priceAsOf)})
+                    </button>
+                  ) : null}
+                </label>
               </div>
 
               {!isPolkiSheet ? (
@@ -609,15 +640,30 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       </label>
                     ))}
                   </div>
-                  <label className="flex cursor-not-allowed items-center gap-2 text-[11px] text-muted-foreground opacity-60">
-                    <input type="checkbox" disabled className="size-3.5 rounded border-input" />
-                    Старые цены (скоро)
+                  <label className="flex cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="size-3.5 rounded border-input"
+                      checked={oldPricesEnabled}
+                      onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
+                      disabled={mutation.isPending || createCtxQ.isPending}
+                    />
+                    Старые цены
+                    {oldPricesEnabled && priceAsOf ? (
+                      <button
+                        type="button"
+                        className="text-teal-700 underline-offset-2 hover:underline"
+                        onClick={() => oldPrices.openOldPricesModal()}
+                      >
+                        ({formatRuDateButton(priceAsOf)})
+                      </button>
+                    ) : null}
                   </label>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-md border border-border bg-muted/15 p-3 shadow-sm">
+            <div className="rounded-md border border-border bg-muted/15 p-3 shadow-sm" data-oc-error="warehouse">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Параметры возврата
               </p>
@@ -1083,6 +1129,22 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
             </div>
           ) : null}
         </section>
+        <OldPricesModal
+          open={oldPrices.oldPricesOpen}
+          onOpenChange={oldPrices.onOldPricesOpenChange}
+          priceTypes={
+            createCtxQ.data?.price_types?.length ? createCtxQ.data.price_types : ["retail"]
+          }
+          priceTypeLabels={priceTypeLabels}
+          draftAsOf={oldPrices.draftAsOf}
+          draftPriceType={oldPrices.draftPriceType}
+          onDraftAsOfChange={oldPrices.setDraftAsOf}
+          onDraftPriceTypeChange={oldPrices.setDraftPriceType}
+          applying={oldPrices.applyingOldPrices}
+          error={oldPrices.oldPricesApplyError}
+          onConfirm={() => void oldPrices.applyOldPrices()}
+          onRetry={() => void oldPrices.retryOldPrices()}
+        />
     </>
   );
 }

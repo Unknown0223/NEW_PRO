@@ -37,16 +37,8 @@ export async function createFieldStaff(
     if (!wh) throw new Error("BAD_RETURN_WAREHOUSE");
   }
 
-  if (STAFF_KINDS_WITH_WORK_SLOT.has(kind)) {
-    const { tenantUsesWorkSlotsForRole } = await import("../work-slots/work-slots.access-gate");
-    const role = kindRole(kind);
-    if (await tenantUsesWorkSlotsForRole(tenantId, role)) {
-      const slotId = input.work_slot_id;
-      if (slotId == null || !Number.isFinite(slotId) || slotId < 1) {
-        throw new Error("WORK_SLOT_REQUIRED");
-      }
-    }
-  }
+  // work_slot_id ixtiyoriy: xodimni joyga «Рабочее место» dan bog‘lash.
+  // Agar create da berilsa (masalan Excel import) — pastda assign qilinadi.
 
   const passwordHash = await bcrypt.hash(input.password, 10);
   const priceTypesArr = normalizePriceTypes(input.agent_price_types ?? []);

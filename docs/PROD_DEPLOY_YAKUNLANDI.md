@@ -1,19 +1,20 @@
 # SALEC — production deploy va yangilash
 
-**Oxirgi yangilanish:** 2026-07-01 (mobil serverdan yangilash, balans formati, deploy skriptlari)
+**Oxirgi yangilanish:** 2026-07-21 (deploy-prod = veb + API + mobil OTA)
 
 ## Loyiha papkasi (shu nusxa)
 
 ```
-E:\SALEC — копия\
-├── deploy-prod.cmd              ← Veb + API serverga chiqarish (Railway)
-├── deploy-mobile-prod.cmd       ← Mobil APK yig‘ish (telefonlarga qo‘lda)
+D:\SALEC — копия\
+├── deploy-prod.cmd              ← Veb + API + mobil APK (server OTA)
+├── deploy-all.cmd               ← Xuddi shu (to‘liq deploy)
+├── deploy-mobile-prod.cmd       ← Faqat mobil APK (veb o‘zgarmasa)
 ├── start-dev.cmd                ← Lokal ishlab chiqish
 ├── run-mobile.cmd               ← Mobil emulyator (lokal API)
 ├── backend\                     ← API (Dockerfile → Railway servis)
 ├── frontend\                    ← Veb panel (Dockerfile → Railway servis)
 ├── mobile\                      ← Flutter ilova manbasi
-└── scripts\railway\deploy.ps1   ← Asosiy deploy skripti
+└── scripts\railway\deploy-all.ps1
 ```
 
 ## Production URL (hozirgi Railway)
@@ -24,23 +25,34 @@ E:\SALEC — копия\
 | **Backend API** | https://backend-production-3cf2.up.railway.app |
 | **Health** | `GET /health` → `{"status":"ok"}` |
 | **Tizim migratsiyasi** | https://sales-arena.up.railway.app/settings/system-migration |
+| **Mobil OTA** | https://sales-arena.up.railway.app/settings/mobile-app |
 
 ---
 
-## 1. Serverni yangilash (veb + API)
+## 1. Serverni yangilash (veb + API + mobil)
 
 ### Bir buyruq (tavsiya)
 
 ```powershell
-cd "E:\SALEC — копия"
+cd "D:\SALEC — копия"
 .\deploy-prod.cmd
+```
+
+Bu buyruq:
+1. Backend + Frontend → Railway
+2. Mobil release APK yig‘adi
+3. APK ni serverga yuklaydi (`force_update`) — agentlar ilova ichida yangilaydi
+
+Faqat veb (mobilni o‘tkazib yuborish):
+
+```powershell
+.\deploy-prod.cmd -SkipMobile
 ```
 
 Yoki:
 
 ```powershell
-cd "E:\SALEC — копия"
-.\scripts\railway\deploy.ps1 -SkipBootstrap
+npm run deploy:prod
 ```
 
 **Birinchi marta** Railway CLI:
@@ -55,8 +67,10 @@ npx @railway/cli whoami
 1. `backend\` → Railway **backend** servisiga build + deploy  
 2. `frontend\` → Railway **frontend** servisiga build + deploy  
 3. Migratsiyalar Dockerfile ichida (`prisma migrate deploy`) avtomatik ishlaydi  
+4. Mobil release APK yig‘iladi va serverga yuklanadi (OTA)  
 
-`-SkipBootstrap` — mavjud DB va adminni **o‘chirmaydi** (oddiy yangilash uchun).
+`-SkipBootstrap` — mavjud DB va adminni **o‘chirmaydi** (oddiy yangilash uchun).  
+`-SkipMobile` — faqat veb/API (APK yig‘ishni o‘tkazib yuborish).
 
 ### Ma’lumotni boshqa serverga ko‘chirish
 
@@ -67,17 +81,17 @@ Kod deploydan **alohida**:
 
 ---
 
-## 2. Mobil ilovani yangilash (APK + server)
+## 2. Faqat mobil ilovani yangilash (veb o‘zgarmasa)
 
 ```powershell
-cd "E:\SALEC — копия"
+cd "D:\SALEC — копия"
 .\deploy-mobile-prod.cmd
 ```
 
 Bu buyruq:
-1. Production APK yig‘adi (`3.1.0+301`)
-2. Railway API ga **avtomatik yuklaydi**
-3. Versiya siyosatini o‘rnatadi (`force_update`)
+1. Production APK yig‘adi (`pubspec.yaml` versiyasi, masalan `3.1.5+306`)
+2. Railway API ga **avtomatik yuklaydi** (`/api/mobile/apk-download`)
+3. Versiya siyosatini o‘rnatadi (`force_update`) — agentlar **ilova ichida** yangilaydi
 
 Yoki alohida:
 
@@ -95,8 +109,8 @@ Agentlar eski versiyada login qilganda **ilova ichida** yangilash dialogi chiqad
 | Fayl | Yo‘l |
 |------|------|
 | APK (asosiy) | `C:\salesdoc_mobile\build\app\outputs\flutter-apk\app-release.apk` |
-| Nusxa (repo) | `mobile\releases\SalesDoc-3.1.0-release.apk` |
-| Lokal sinov | `mobile\releases\SalesDoc-local-3.0.0-release.apk` (`build-apk-local.cmd`) |
+| Nusxa (repo) | `mobile\releases\SalesDoc-<ver>-release.apk` |
+| Lokal sinov | `mobile\releases\SalesDoc-local-*-release.apk` (`build-apk-local.cmd`) |
 
 Qo‘lda o‘rnatish: `adb install -r` yoki APK faylini telefonga yuborish.
 
@@ -106,12 +120,12 @@ Qo‘lda o‘rnatish: `adb install -r` yoki APK faylini telefonga yuborish.
 
 | Qism | O‘zi yangilanadimi? | Izoh |
 |------|---------------------|------|
-| **Veb panel** (brauzer) | **Ha** — deploy tugagach | `deploy-prod.cmd` yoki Railway dashboard **Deploy**. Foydalanuvchi sahifani yangilasa (F5) yangi versiya keladi. Faylni qo‘lda server papkasiga nusxalash **yetarli emas** — build + restart kerak. |
+| **Veb panel** (brauzer) | **Ha** — deploy tugagach | `deploy-prod.cmd`. Foydalanuvchi sahifani yangilasa (F5) yangi versiya keladi. |
 | **Backend API** | **Ha** — xuddi shu deploy bilan | Mobil va veb yangi API dan foydalanadi. |
-| **Mobil APK** (telefon) | **Qisman** | `deploy-mobile-prod.cmd` APK ni serverga yuklaydi; agentlar ilova ichida yangilaydi. Birinchi o‘rnatish yoki qo‘lda — APK kerak. |
+| **Mobil APK** (telefon) | **Ha (OTA)** | `deploy-prod.cmd` APK ni serverga yuklaydi; agentlar ilova ichida «Обновить» bosadi. Birinchi o‘rnatish — APK kerak. |
 | **Baza ma’lumotlari** | **Yo‘q** | Kod yangilanganda DB o‘zgarmaydi. Migratsiya uchun ZIP eksport/import. |
 
-**Qisqa:** Railway ga `deploy-prod.cmd` bilan chiqarsangiz — **veb va API yangilanadi**. **Telefon ilovasi** alohida yangi APK talab qiladi.
+**Qisqa:** `deploy-prod.cmd` — **veb + API + mobil OTA** birga. Faqat veb kerak bo‘lsa: `-SkipMobile`.
 
 ---
 

@@ -48,7 +48,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderWriteRoutes(app: FastifyInstance) {
   app.patch(
-    "/api/:slug/orders/:id/status",
+    "/api/:slug/orders/:id(\\d+)/status",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -110,7 +110,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
   );
 
   app.patch(
-    "/api/:slug/orders/:id/milestone-at",
+    "/api/:slug/orders/:id(\\d+)/milestone-at",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;

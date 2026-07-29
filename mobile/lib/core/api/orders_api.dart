@@ -1,9 +1,20 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/price_type_labels.dart';
 import 'api_exceptions.dart';
 import 'dio_client.dart';
+
+OrderCreateContext _parseOrderCreateContextJson(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    throw const FormatException('create-context: invalid JSON');
+  }
+  return OrderCreateContext.fromJson(Map<String, dynamic>.from(decoded));
+}
 
 class OrdersApi {
   final Dio _dio;
@@ -18,11 +29,20 @@ class OrdersApi {
       final q = <String, dynamic>{};
       if (clientId != null) q['selected_client_id'] = clientId;
       if (warehouseId != null) q['selected_warehouse_id'] = warehouseId;
-      final r = await _dio.get(
+      final r = await _dio.get<String>(
         '/api/$slug/mobile/orders/create-context',
         queryParameters: q.isEmpty ? null : q,
+        options: Options(responseType: ResponseType.plain),
       );
-      return OrderCreateContext.fromJson(r.data as Map<String, dynamic>);
+      final raw = r.data ?? '';
+      if (raw.isEmpty) {
+        throw StateError('create-context: empty body');
+      }
+      // Katta katalog — UI threadni muzlatmaslik uchun isolate da parse.
+      if (raw.length > 80 * 1024) {
+        return compute(_parseOrderCreateContextJson, raw);
+      }
+      return _parseOrderCreateContextJson(raw);
     } on DioException catch (e) {
       throw mapDioException(e);
     }

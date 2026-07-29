@@ -8,6 +8,7 @@ import { CONTACT_SLOTS } from "./clients.helpers";
 import { agentAssignmentSelectFields } from "./clients.agent-assignments";
 import { buildClientListWhereInput, clientListOrderBy } from "./clients.list";
 import type { ListClientsQuery } from "./clients.types";
+import { getClientReferences } from "./clients.references";
 
 const CLIENT_IMPORT_TEMPLATE_FILE = join(__dirname, "../../../assets/client-import-template.xlsx");
 
@@ -95,7 +96,7 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
     if (h === "Телефон") return "+998901112233";
     if (h === "Город (код)") return "ANDIJON SHAXAR";
     if (h.startsWith("Агент ") && !h.includes("день") && !h.startsWith("Агент 1")) return "---";
-    if (h.includes("день")) return "Пн, Ср";
+    if (h.includes("день")) return "1, 3";
     if (h.startsWith("Экспедитор")) return "---";
     return "---";
   });
@@ -105,23 +106,34 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
   return Buffer.from(buf);
 }
 
-function formatVisitWeekdaysRussian(days: number[]): string {
-  const labelByDay: Record<number, string> = {
-    1: "Пн",
-    2: "Вт",
-    3: "Ср",
-    4: "Чт",
-    5: "Пт",
-    6: "Сб",
-    7: "Вс"
-  };
+function formatVisitWeekdaysNumeric(days: number[]): string {
   return parseVisitWeekdaysJson(days)
-    .map((d) => labelByDay[d] ?? "")
-    .filter(Boolean)
+    .filter((d) => d >= 1 && d <= 7)
     .join(", ");
 }
 
 type ClientUpdateTemplateFilterQuery = Omit<ListClientsQuery, "page" | "limit">;
+
+function labelFromOpts(
+  opts: { value: string; label: string }[],
+  stored: string | null | undefined,
+  hints?: Record<string, { city_label?: string | null }>
+): string {
+  const code = (stored ?? "").trim();
+  if (!code) return "";
+  const hit = opts.find((o) => o.value === code || o.label === code);
+  if (hit?.label?.trim() && hit.label.trim() !== code) return hit.label.trim();
+  const hintLabel = hints?.[code]?.city_label?.trim();
+  if (hintLabel && hintLabel !== code) return hintLabel;
+  // case-insensitive hint lookup
+  if (hints) {
+    const key = Object.keys(hints).find((k) => k.toLowerCase() === code.toLowerCase());
+    const hl = key ? hints[key]?.city_label?.trim() : "";
+    if (hl && hl !== code) return hl;
+  }
+  if (hit?.label?.trim()) return hit.label.trim();
+  return code;
+}
 
 export async function buildClientUpdateImportTemplateBuffer(
   tenantId: number,
@@ -142,6 +154,8 @@ export async function buildClientUpdateImportTemplateBuffer(
       fgColor: { argb: "FFE8F4F8" }
     };
   });
+
+  const refs = await getClientReferences(tenantId);
 
   const where = await buildClientListWhereInput(tenantId, { page: 1, limit: 1, ...q });
   const sortField = q.sort ?? "name";
@@ -197,15 +211,15 @@ export async function buildClientUpdateImportTemplateBuffer(
       c.landmark ?? "",
       c.inn ?? "",
       c.client_pinfl ?? "",
+      labelFromOpts(refs.sales_channel_options, c.sales_channel),
       c.sales_channel ?? "",
-      c.sales_channel ?? "",
+      labelFromOpts(refs.category_options, c.category),
       c.category ?? "",
-      c.category ?? "",
+      labelFromOpts(refs.client_type_options, c.client_type_code),
       c.client_type_code ?? "",
-      c.client_type_code ?? "",
+      labelFromOpts(refs.client_format_options, c.client_format),
       c.client_format ?? "",
-      c.client_format ?? "",
-      c.city ?? "",
+      labelFromOpts(refs.city_options, c.city, refs.city_territory_hints),
       c.city ?? "",
       c.latitude?.toString() ?? "",
       c.longitude?.toString() ?? "",
@@ -215,7 +229,8 @@ export async function buildClientUpdateImportTemplateBuffer(
     for (let slot = 1; slot <= CONTACT_SLOTS; slot++) {
       const item = bySlot.get(slot);
       row.push(item?.agent?.code?.trim() || item?.agent?.name?.trim() || "");
-      row.push(formatVisitWeekdaysRussian(parseVisitWeekdaysJson(item?.visit_weekdays)));
+      // 1=Du … 7=Ya (import raqam va Пн/Вт ni qabul qiladi)
+      row.push(formatVisitWeekdaysNumeric(parseVisitWeekdaysJson(item?.visit_weekdays)));
       row.push(item?.expeditor_user?.name?.trim() || item?.expeditor_phone?.trim() || "");
     }
     ws.addRow(row);

@@ -61,6 +61,7 @@ export const patchStaffMutableBody = z.object({
   first_name: z.string().min(1).optional(),
   last_name: z.string().nullable().optional(),
   middle_name: z.string().nullable().optional(),
+  login: z.string().min(1).max(64).optional(),
   phone: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   product: z.string().nullable().optional(),

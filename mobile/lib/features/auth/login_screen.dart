@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -247,7 +248,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   ),
                 ),
               ),
-              if (!isLocalApiEnv()) ...[
+              // Faqat debug/lokal: production APK da server URL ko‘rinmasin
+              if (kDebugMode || isLocalApiEnv()) ...[
                 const SizedBox(height: 16),
                 Text(
                   apiEnvDisplayLabel(),

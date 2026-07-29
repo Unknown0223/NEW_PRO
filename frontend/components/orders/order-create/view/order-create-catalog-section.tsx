@@ -47,6 +47,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
     categoryFilterActive,
     activeCatalogCategoryId,
     priceType,
+    oldPriceByProductId,
     selectedCategoryIds,
     polkiTotalQty,
     polkiBonusToBalance,
@@ -113,6 +114,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
               : undefined,
             isPolkiSheet && "border-teal-800/15 dark:border-teal-800/30"
           )}
+          data-oc-error="catalog"
         >
           {isPolkiSheet ? (
             <div className="mb-4 border-b border-border/80 pb-3">
@@ -423,7 +425,7 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
                         const reserved = stock?.reserved_qty ?? "0";
                         const availNum = availableOrderQty(stock);
                         const qpb = p.qty_per_block;
-                        const unit = unitPriceForType(p, priceType);
+                        const unit = unitPriceForType(p, priceType, oldPriceByProductId);
                         const lineQtyRaw = qtyByProductId[p.id] ?? "";
                         const lineQ = Number.parseFloat(lineQtyRaw.replace(",", "."));
                         const blockRaw = blockByProductId[p.id] ?? "";

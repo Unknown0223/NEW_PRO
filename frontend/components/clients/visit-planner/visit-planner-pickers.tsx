@@ -136,7 +136,8 @@ export function FilterMultiSelect({
   searchPlaceholder = "Qidirish…",
   minPopoverWidth = 260,
   className,
-  single = false
+  single = false,
+  disabled = false
 }: {
   options: PickOption[];
   selected: string[];
@@ -147,6 +148,7 @@ export function FilterMultiSelect({
   className?: string;
   /** Bir vaqtda faqat bitta qiymat (filial kabi). */
   single?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -157,6 +159,10 @@ export function FilterMultiSelect({
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   const triggerLabel = useMemo(() => {
     if (selected.length === 0) return placeholder;
@@ -253,12 +259,18 @@ export function FilterMultiSelect({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((v) => !v);
+        }}
         aria-expanded={open}
         aria-controls={listId}
+        aria-disabled={disabled}
         className={cn(
           "flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 text-left text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#2563eb]",
           selected.length > 0 && "border-[#2563eb] text-[#1d4ed8]",
+          disabled && "cursor-not-allowed opacity-50 hover:border-[#e2e8f0]",
           className
         )}
       >

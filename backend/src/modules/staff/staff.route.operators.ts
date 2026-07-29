@@ -299,6 +299,8 @@ export async function registerStaffOperatorRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
+        if (msg === "BAD_LOGIN") return sendApiError(reply, request, 400, "BadLogin");
+        if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_MAX_SESSIONS") return sendApiError(reply, request, 400, "BadMaxSessions");
         throw e;
       }

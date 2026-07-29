@@ -8,10 +8,14 @@ import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { STALE } from "@/lib/query-stale";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function OrderDetailPage() {
+function OrderDetailPageInner() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const autoStartEdit =
+    searchParams.get("edit") === "1" || searchParams.get("edit") === "true";
   const raw = params.id;
   const idStr = Array.isArray(raw) ? raw[0] : raw;
   const orderId = Number.parseInt(idStr ?? "", 10);
@@ -50,8 +54,20 @@ export default function OrderDetailPage() {
       ) : invalid ? (
         <p className="text-sm text-destructive">Неверный идентификатор заявки.</p>
       ) : (
-        <OrderDetailView tenantSlug={tenantSlug} orderId={orderId} />
+        <OrderDetailView
+          tenantSlug={tenantSlug}
+          orderId={orderId}
+          autoStartEdit={autoStartEdit}
+        />
       )}
     </PageShell>
+  );
+}
+
+export default function OrderDetailPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Загрузка…</p>}>
+      <OrderDetailPageInner />
+    </Suspense>
   );
 }

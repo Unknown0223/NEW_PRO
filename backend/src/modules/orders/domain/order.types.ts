@@ -27,6 +27,8 @@ export type CreateOrderInput = {
   expeditor_user_id?: number | null;
   /** Bo’sh bo’lsa `retail` */
   price_type?: string | null;
+  /** Старые цены: YYYY-MM-DD */
+  price_as_of?: string | null;
   /** Hujjat tipi: order | return | exchange | partial_return | return_by_order */
   order_type?: string | null;
   apply_bonus?: boolean;

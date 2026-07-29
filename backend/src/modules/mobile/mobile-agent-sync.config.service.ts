@@ -26,13 +26,37 @@ import { mergeMobileCitiesByZoneRegion } from "./mobile-territory-references";
 
 export function agentScopedClientWhere(
   tenantId: number,
-  agentId: number
+  agentId: number,
+  workSlotId?: number | null
 ): Prisma.ClientWhereInput {
+  const or: Prisma.ClientWhereInput[] = [
+    { agent_id: agentId },
+    { agent_assignments: { some: { agent_id: agentId } } }
+  ];
+  // VACANT slot: eski agent_id qolgan, lekin assignment work_slot_id orqali slotga bog‘langan.
+  if (workSlotId != null && workSlotId > 0) {
+    or.push({ agent_assignments: { some: { work_slot_id: workSlotId } } });
+  }
   return {
     tenant_id: tenantId,
     merged_into_client_id: null,
-    OR: [{ agent_id: agentId }, { agent_assignments: { some: { agent_id: agentId } } }]
+    OR: or
   };
+}
+
+/** Agentning joriy work_slot_id (yo‘q bo‘lsa null). */
+export async function resolveAgentWorkSlotId(agentId: number): Promise<number | null> {
+  const slotMap = await loadActiveWorkSlotsByUserIds([agentId]);
+  return slotMap.get(agentId)?.slot_id ?? null;
+}
+
+/** Sync/order scope — VACANT slotni ham hisobga oladi. */
+export async function agentScopedClientWhereForUser(
+  tenantId: number,
+  agentId: number
+): Promise<Prisma.ClientWhereInput> {
+  const workSlotId = await resolveAgentWorkSlotId(agentId);
+  return agentScopedClientWhere(tenantId, agentId, workSlotId);
 }
 
 export function agentScopedOrderWhere(tenantId: number, agentId: number): Prisma.OrderWhereInput {
@@ -81,7 +105,11 @@ export async function assertAgentScopedClient(
   clientId: number
 ): Promise<void> {
   const hit = await prisma.client.findFirst({
-    where: { id: clientId, ...agentScopedClientWhere(tenantId, agentId), is_active: true },
+    where: {
+      id: clientId,
+      ...(await agentScopedClientWhereForUser(tenantId, agentId)),
+      is_active: true
+    },
     select: { id: true }
   });
   if (!hit) throw new Error("BAD_CLIENT");
@@ -167,12 +195,19 @@ export type CompactClientRow = {
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
-  agent_assignments?: { visit_weekdays: unknown; visit_date?: Date | string | null }[];
+  agent_assignments?: {
+    visit_weekdays: unknown;
+    visit_date?: Date | string | null;
+    agent_id?: number | null;
+  }[];
 };
 
 export function compactClient(c: CompactClientRow) {
   const ledger = c.client_balances?.[0]?.balance;
-  const assignment = c.agent_assignments?.[0];
+  const assignments = c.agent_assignments ?? [];
+  // Avvalo kunlari bor assignment (slot rejasi), keyin birinchisi.
+  const withDays = assignments.find((a) => parseVisitWeekdaysJson(a.visit_weekdays).length > 0);
+  const assignment = withDays ?? assignments[0];
   const weekdays =
     parseVisitWeekdaysJson(assignment?.visit_weekdays) ||
     parseVisitWeekdaysJson(c.visit_weekdays);
@@ -242,14 +277,21 @@ export const clientSyncSelectBase = {
   client_balances: { select: { balance: true }, take: 1 }
 } as const;
 
-/** Mobil sync — joriy agentning slotidagi tashrif jadvali (slot:1 emas, agent_id bo‘yicha). */
-export function clientSyncSelectForAgent(agentId: number) {
+/** Mobil sync — joriy agent + slot:1 tashrif jadvali (VACANT/eski agent_id holati uchun). */
+export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | null) {
+  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [
+    { agent_id: agentId },
+    { slot: 1 }
+  ];
+  if (workSlotId != null && workSlotId > 0) {
+    assignmentOr.push({ work_slot_id: workSlotId });
+  }
   return {
     ...clientSyncSelectBase,
     agent_assignments: {
-      where: { agent_id: agentId },
-      select: { visit_weekdays: true, visit_date: true },
-      take: 1
+      where: { OR: assignmentOr },
+      select: { visit_weekdays: true, visit_date: true, agent_id: true },
+      take: 5
     }
   };
 }

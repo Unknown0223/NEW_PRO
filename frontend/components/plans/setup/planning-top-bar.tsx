@@ -9,9 +9,12 @@ import {
   ChevronRight,
   Calendar,
   ChevronDown,
-  ExternalLink
+  ExternalLink,
+  FileSpreadsheet,
+  Upload
 } from "lucide-react";
 import { PLANNING_MONTHS } from "./planning-utils";
+import { cn } from "@/lib/utils";
 
 interface PlanningTopBarProps {
   month: number;
@@ -24,6 +27,10 @@ interface PlanningTopBarProps {
   onRefresh: () => void;
   loading?: boolean;
   directionId?: number | null;
+  canImport?: boolean;
+  onDownloadTemplate?: () => void;
+  onImportFile?: (file: File) => void;
+  importBusy?: boolean;
 }
 
 export function PlanningTopBar({
@@ -36,7 +43,11 @@ export function PlanningTopBar({
   onSearch,
   onRefresh,
   loading = false,
-  directionId = null
+  directionId = null,
+  canImport = false,
+  onDownloadTemplate,
+  onImportFile,
+  importBusy = false
 }: PlanningTopBarProps) {
   const [search, setSearch] = useState("");
   const [tdOpen, setTdOpen] = useState(false);
@@ -100,6 +111,40 @@ export function PlanningTopBar({
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </button>
+          {canImport ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onDownloadTemplate?.()}
+                disabled={importBusy || loading}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                title="Скачать Excel-шаблон"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                Шаблон
+              </button>
+              <label
+                className={cn(
+                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2.5 text-xs font-medium text-teal-800 hover:bg-teal-100",
+                  (importBusy || loading) && "pointer-events-none opacity-50"
+                )}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {importBusy ? "Чтение…" : "Импорт Excel"}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  disabled={importBusy || loading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) onImportFile?.(f);
+                  }}
+                />
+              </label>
+            </>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

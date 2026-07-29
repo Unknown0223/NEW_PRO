@@ -17,7 +17,7 @@ import {
   type MobileClientInput
 } from "../staff/agent-mobile-config.client-mobile";
 import {
-  agentScopedClientWhere,
+  agentScopedClientWhereForUser,
   assertAgentScopedClient,
   clientSyncSelectForAgent,
   compactClient,
@@ -178,7 +178,7 @@ export async function patchMobileAgentClient(
   if (cfg?.client?.can_edit === false) throw new Error("CLIENT_EDIT_FORBIDDEN");
 
   const existing = await prisma.client.findFirst({
-    where: { id: clientId, ...agentScopedClientWhere(tenantId, userId) },
+    where: { id: clientId, ...(await agentScopedClientWhereForUser(tenantId, userId)) },
     select: { id: true }
   });
   if (!existing) throw new Error("NOT_FOUND");

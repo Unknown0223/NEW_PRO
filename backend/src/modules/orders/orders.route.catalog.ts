@@ -24,6 +24,8 @@ import {
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
+import { resolveProductPricesAsOf } from "../products/product-prices.as-of";
+import { getTenantDefaultCurrencyCode } from "../tenant-settings/tenant-settings.service";
 import {
   bulkUpdateOrderExpeditor,
   bulkUpdateOrderStatus,
@@ -73,6 +75,51 @@ export async function registerOrderCatalogRoutes(app: FastifyInstance) {
       const selected = parseSelectedMastersFromQuery(q);
       const bundle = await getOrderCreateCatalogBundle(request.tenant!.id, selected);
       return reply.send(bundle);
+    }
+  );
+
+  /** Старые цены: sana + tip bo‘yicha katalog narxlari (orders.zakaz.* RBAC). */
+  app.get(
+    "/api/:slug/orders/prices-as-of",
+    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikAnyEntitlement(catalogRoles, SKLADCHIK_ORDER_FLOW_ANY)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const q = request.query as Record<string, string | undefined>;
+      const asOf = (q.as_of ?? q.date ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+        return sendApiError(reply, request, 400, "BadQuery", "as_of (YYYY-MM-DD) majburiy");
+      }
+      const priceType = (q.price_type ?? "retail").trim() || "retail";
+      const rawIds = (q.product_ids ?? "").trim();
+      const productIds = rawIds
+        ? rawIds
+            .split(",")
+            .map((s) => Number.parseInt(s.trim(), 10))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      if (productIds.length === 0) {
+        return sendApiError(reply, request, 400, "BadQuery", "product_ids majburiy");
+      }
+      if (productIds.length > 5000) {
+        return sendApiError(reply, request, 400, "BadQuery", "product_ids max 5000");
+      }
+      try {
+        const currency = await getTenantDefaultCurrencyCode(request.tenant!.id);
+        const result = await resolveProductPricesAsOf(
+          request.tenant!.id,
+          priceType,
+          asOf,
+          productIds,
+          currency
+        );
+        return reply.send(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "BAD_AS_OF" || msg === "VALIDATION") {
+          return sendApiError(reply, request, 400, "ValidationError", "as_of yoki price_type noto‘g‘ri");
+        }
+        throw e;
+      }
     }
   );
 

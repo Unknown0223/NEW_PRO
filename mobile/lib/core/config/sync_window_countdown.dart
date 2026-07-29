@@ -154,8 +154,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
   @override
   void initState() {
     super.initState();
-    _refresh();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+    _scheduleRefresh(immediate: true);
   }
 
   @override
@@ -163,7 +162,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.syncConfig.allowedWindowFrom != widget.syncConfig.allowedWindowFrom ||
         oldWidget.syncConfig.allowedWindowTo != widget.syncConfig.allowedWindowTo) {
-      _refresh();
+      _scheduleRefresh(immediate: true);
     }
   }
 
@@ -173,12 +172,28 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     super.dispose();
   }
 
+  void _scheduleRefresh({bool immediate = false}) {
+    _refreshTimer?.cancel();
+    if (immediate) {
+      _refresh();
+      return;
+    }
+    final wait = ServerClock.instance.hasAnchor && _show
+        ? const Duration(seconds: 30)
+        : const Duration(seconds: 1);
+    _refreshTimer = Timer(wait, () {
+      if (!mounted) return;
+      _refresh();
+    });
+  }
+
   void _refresh() {
     // Server bilan vaqt langarlanmaguncha taymerni ko‘rsatmaymiz — qurilma
     // soatiga asoslangan chalg‘ituvchi/aldovchi hisobni oldini olamiz.
     if (!ServerClock.instance.hasAnchor) {
       _show = false;
       if (mounted) setState(() {});
+      _scheduleRefresh();
       return;
     }
     final nowLocal = syncWindowClockNow();
@@ -204,6 +219,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
       _show = false;
     }
     if (mounted) setState(() {});
+    _scheduleRefresh();
   }
 
   @override
@@ -219,7 +235,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
         designPill: widget.designPill,
         isWindowEnd: _isWindowEnd,
         windowKey: _windowKey,
-        onExpired: _refresh,
+        onExpired: () => _scheduleRefresh(immediate: true),
       ),
     );
   }

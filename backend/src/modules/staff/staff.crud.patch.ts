@@ -127,6 +127,7 @@ export type PatchAgentInput = {
   first_name?: string;
   last_name?: string | null;
   middle_name?: string | null;
+  login?: string;
   phone?: string | null;
   email?: string | null;
   product?: string | null;

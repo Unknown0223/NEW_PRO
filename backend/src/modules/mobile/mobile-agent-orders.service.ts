@@ -27,7 +27,7 @@ import {
   validateShipmentDateRequired
 } from "./mobile-order-policy";
 import {
-  agentScopedClientWhere,
+  agentScopedClientWhereForUser,
   agentScopedOrderWhere,
   assertAgentScopedClient,
   assertMobilePhotoReportForClient,
@@ -101,12 +101,43 @@ export async function getMobileOrderCreateContext(
       ? await getMobileOrderClientFinance(tenantId, userId, opts.clientId)
       : null;
 
+  let warehouses = bundle.warehouses;
+  // Mobil: klient×agent kesimi bo‘sh ombor bersa — agent bog‘langan omborlarga qaytamiz
+  // (aks holda «Продолжить» o‘chadi, lekin ostatkalar sahifasi ishlaydi).
+  if (warehouses.length === 0) {
+    const allWh = await listWarehousesForTenant(tenantId);
+    const allowed = await resolveAgentDefaultWarehouseId(tenantId, userId, allWh);
+    const links = await prisma.warehouseUserLink.findMany({
+      where: {
+        user_id: userId,
+        warehouse: { tenant_id: tenantId, is_active: true }
+      },
+      select: { warehouse_id: true }
+    });
+    const linkIds = new Set(links.map((l) => l.warehouse_id));
+    if (linkIds.size > 0) {
+      warehouses = allWh.filter((w) => linkIds.has(w.id));
+    } else if (allowed != null) {
+      warehouses = allWh.filter((w) => w.id === allowed);
+    } else {
+      const user = await prisma.user.findFirst({
+        where: { id: userId, tenant_id: tenantId },
+        select: { warehouse_id: true }
+      });
+      if (user?.warehouse_id != null) {
+        warehouses = allWh.filter((w) => w.id === user.warehouse_id);
+      } else if (allWh.length > 0) {
+        warehouses = allWh;
+      }
+    }
+  }
+
   const defaultWarehouseId = await resolveAgentDefaultWarehouseId(
     tenantId,
     userId,
-    bundle.warehouses
+    warehouses
   );
-  const warehouses = sortWarehousesDefaultFirst(bundle.warehouses, defaultWarehouseId);
+  warehouses = sortWarehousesDefaultFirst(warehouses, defaultWarehouseId);
 
   // UI: id — product_prices.price_type kaliti (masalan "1"), label — katalog nomi ("Naxt")
   const ptEntries = priceTypeEntriesFromUnknown(
@@ -374,10 +405,11 @@ export async function getMobileAgentDashboard(tenantId: number, userId: number) 
   const { start, end } = localTodayRange();
   const month = end.getUTCMonth() + 1;
   const year = end.getUTCFullYear();
+  const clientWhere = await agentScopedClientWhereForUser(tenantId, userId);
 
   const [clientsCount, visitsToday, ordersAgg, pendingOffline, planAgg] = await Promise.all([
     prisma.client.count({
-      where: { ...agentScopedClientWhere(tenantId, userId), is_active: true }
+      where: { ...clientWhere, is_active: true }
     }),
     prisma.agentVisit.count({
       where: {
@@ -727,8 +759,9 @@ export async function listMobileAgentDebtors(tenantId: number, userId: number, l
     }));
   }
 
+  const clientWhere = await agentScopedClientWhereForUser(tenantId, userId);
   const clients = await prisma.client.findMany({
-    where: { ...agentScopedClientWhere(tenantId, userId), is_active: true },
+    where: { ...clientWhere, is_active: true },
     select: {
       id: true,
       name: true,

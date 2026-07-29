@@ -8,7 +8,8 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Upload
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentFilterSelect, AgentTabButton } from "@/components/staff/agent-workspace-template-ui";
@@ -87,6 +88,7 @@ export function StaffWorkspaceFilterPanel({
   onSearch,
   searchPlaceholder = "Поиск…",
   onExport,
+  onImport,
   onRefresh,
   isFetching,
   bulkMenu,
@@ -105,6 +107,8 @@ export function StaffWorkspaceFilterPanel({
   onSearch: (value: string) => void;
   searchPlaceholder?: string;
   onExport?: () => void;
+  /** Открыть диалог импорта Excel */
+  onImport?: () => void;
   onRefresh: () => void;
   isFetching?: boolean;
   bulkMenu?: ReactNode;
@@ -184,15 +188,16 @@ export function StaffWorkspaceFilterPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-border"
+            className="h-4 w-4 rounded border-border accent-primary"
             checked={allOnPageSelected}
             onChange={(e) => onToggleAllOnPage(e.target.checked)}
             aria-label="Выбрать всех на странице"
           />
-        </button>
+          <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все</span>
+        </label>
         <button
           type="button"
           title="Управление столбцами"
@@ -220,6 +225,16 @@ export function StaffWorkspaceFilterPanel({
             className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted"
           >
             <FileSpreadsheet className="h-4 w-4" /> Excel
+          </button>
+        ) : null}
+        {onImport ? (
+          <button
+            type="button"
+            onClick={onImport}
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted"
+            title="Импорт Excel"
+          >
+            <Upload className="h-4 w-4" /> Импорт Excel
           </button>
         ) : null}
         <button
@@ -292,6 +307,7 @@ export function StaffWorkspaceTable({
   renderActions,
   selectedIds,
   onToggleSelection,
+  onToggleAllOnPage,
   rowKey = (id: number) => id
 }: {
   columnOrder: readonly string[];
@@ -307,6 +323,8 @@ export function StaffWorkspaceTable({
   renderActions: (row: { id: number }) => ReactNode;
   selectedIds: Set<number>;
   onToggleSelection: (id: number, checked: boolean) => void;
+  /** Jadval headeridagi «hammasini belgilash» */
+  onToggleAllOnPage?: (checked: boolean) => void;
   rowKey?: (id: number) => number | string;
 }) {
   const paginationPages = (() => {
@@ -317,13 +335,31 @@ export function StaffWorkspaceTable({
     return pages;
   })();
 
+  const allOnPageSelected =
+    pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
+  const someOnPageSelected = pageRows.some((r) => selectedIds.has(r.id));
+
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-slate-200">
       <div className="scrollbar-none overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-muted text-xs uppercase tracking-wider text-slate-500">
             <tr>
-              <th className="w-10 px-3 py-3" />
+              <th className="w-10 px-3 py-3">
+                {onToggleAllOnPage ? (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border accent-primary"
+                    checked={allOnPageSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
+                    }}
+                    onChange={(e) => onToggleAllOnPage(e.target.checked)}
+                    aria-label="Выбрать все на странице"
+                    title="Выбрать все на странице"
+                  />
+                ) : null}
+              </th>
               {columnOrder.map((colId) => (
                 <th key={colId} className="px-3 py-3 text-left font-medium">
                   {columnLabelById.get(colId) ?? colId}

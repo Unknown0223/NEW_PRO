@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/lib/use-permissions";
 import { getUserFacingError } from "@/lib/error-utils";
+import { downloadXlsxAoa } from "@/lib/download-xlsx";
 import {
   approvePlanningPlans,
   confirmPlanningPlans,
@@ -20,6 +21,14 @@ import { filterEmployeesWithAncestors } from "./planning-utils";
 import { PlanningTopBar } from "./planning-top-bar";
 import { PlanningTable } from "./planning-table";
 import { TotalsSection } from "./totals-section";
+import { PlanningImportPreviewDialog } from "./planning-import-preview-dialog";
+import {
+  buildPlanImportTemplateAoa,
+  parsePlanImportMatrix,
+  type PlanImportMetricKey,
+  type PlanImportPreviewRow
+} from "./planning-import-parse";
+import type { PlanningColumnConfig } from "./planning-table";
 
 export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const perms = usePermissions();
@@ -30,6 +39,13 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [directionId, setDirectionId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [banner, setBanner] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<PlanImportPreviewRow[]>([]);
+  const [importMetricsByGroup, setImportMetricsByGroup] = useState<
+    Record<number, PlanImportMetricKey[]>
+  >({});
+  const [importBusy, setImportBusy] = useState(false);
+  const [columnConfigs, setColumnConfigs] = useState<Record<number, PlanningColumnConfig>>({});
 
   const canWrite = perms.has("plans.ustanovka_planov.update");
   const canApprove = perms.has("plans.ustanovka_planov.approve");
@@ -113,6 +129,20 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
     return data.kpi_groups.filter((g) => g.trade_direction_id === directionId);
   }, [data, directionId]);
 
+  useEffect(() => {
+    setColumnConfigs((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of filteredGroups) {
+        if (!next[g.id]) {
+          next[g.id] = { groupId: g.id, metrics: ["Сумма"] };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [filteredGroups]);
+
   const filteredEmployees = useMemo(() => {
     if (!data) return [];
     return filterEmployeesWithAncestors(data.employees, searchQuery);
@@ -143,6 +173,85 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
       void patchMut.mutateAsync({ targetId: target.id, payload: { comment } });
     },
     [canWrite, patchMut]
+  );
+
+  const handleDownloadTemplate = useCallback(async () => {
+    if (!data || directionId == null) return;
+    try {
+      const metricsByGroup: Record<number, string[]> = {};
+      for (const g of filteredGroups) {
+        metricsByGroup[g.id] = columnConfigs[g.id]?.metrics?.length
+          ? columnConfigs[g.id]!.metrics
+          : ["Сумма"];
+      }
+      const { aoa, merges } = buildPlanImportTemplateAoa({
+        kpiGroups: filteredGroups,
+        employees: data.employees,
+        plans: data.plans,
+        targets: data.kpi_targets,
+        metricsByGroup,
+        directionName: selectedDirection?.name,
+        month,
+        year
+      });
+      const dirSlug = (selectedDirection?.name ?? "plan")
+        .replace(/[^\w\-а-яА-ЯёЁ]+/gi, "_")
+        .slice(0, 40);
+      const metricHint = [...new Set(Object.values(metricsByGroup).flat())]
+        .join("-")
+        .replace(/\s+/g, "")
+        .slice(0, 40);
+      await downloadXlsxAoa(
+        `plan-${dirSlug}-${year}-${String(month).padStart(2, "0")}-${metricHint || "summa"}.xlsx`,
+        "Планы",
+        aoa,
+        {
+          merges,
+          colWidths: [
+            22,
+            14,
+            16,
+            18,
+            ...filteredGroups.flatMap((g) =>
+              (metricsByGroup[g.id] ?? ["Сумма"]).map(() => 12)
+            )
+          ]
+        }
+      );
+      setBanner(
+        `Шаблон Excel скачан (${selectedDirection?.name ?? "—"}, ${String(month).padStart(2, "0")}.${year}, колонки как на экране). Заполните и загрузите через «Импорт Excel».`
+      );
+    } catch (e) {
+      setBanner(getUserFacingError(e, "Не удалось скачать шаблон."));
+    }
+  }, [data, directionId, filteredGroups, columnConfigs, selectedDirection?.name, month, year]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      if (!data || directionId == null) return;
+      setImportBusy(true);
+      setBanner(null);
+      try {
+        const XLSX = await import("xlsx");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheetName = wb.SheetNames[0];
+        if (!sheetName) throw new Error("EMPTY_SHEET");
+        const matrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName]!, {
+          header: 1,
+          defval: ""
+        }) as unknown[][];
+        const parsed = parsePlanImportMatrix(matrix, filteredGroups, data.employees);
+        setImportRows(parsed.rows);
+        setImportMetricsByGroup(parsed.metricsByGroup);
+        setImportOpen(true);
+      } catch (e) {
+        setBanner(getUserFacingError(e, "Не удалось прочитать Excel."));
+      } finally {
+        setImportBusy(false);
+      }
+    },
+    [data, directionId, filteredGroups]
   );
 
   const loading = centerQ.isLoading && !data;
@@ -183,6 +292,10 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
         onSearch={setSearchQuery}
         onRefresh={() => void centerQ.refetch()}
         loading={centerQ.isFetching}
+        canImport={canWrite && directionId != null && filteredGroups.length > 0}
+        onDownloadTemplate={() => void handleDownloadTemplate()}
+        onImportFile={(f) => void handleImportFile(f)}
+        importBusy={importBusy}
       />
 
       {banner && (
@@ -197,6 +310,8 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
             kpiTargets={data.kpi_targets}
             plans={data.plans}
             canWrite={canWrite}
+            columnConfigs={columnConfigs}
+            onColumnConfigsChange={setColumnConfigs}
             onUpdateTarget={handleUpdateTarget}
             onUpdateStatus={handleUpdateStatus}
             onUpdateComment={handleUpdateComment}
@@ -251,6 +366,27 @@ export function PlanningWorkspace({ tenantSlug }: { tenantSlug: string }) {
               </>
             ) : null}
           </div>
+
+          <PlanningImportPreviewDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            tenantSlug={tenantSlug}
+            directionId={directionId}
+            initialMonth={month}
+            initialYear={year}
+            kpiGroups={filteredGroups}
+            employees={data.employees}
+            initialRows={importRows}
+            metricsByGroup={importMetricsByGroup}
+            onApplied={(m, y) => {
+              setMonth(m);
+              setYear(y);
+              setBanner(
+                `Импорт принят на ${String(m).padStart(2, "0")}.${y}. Существующие значения обновлены по smart-коду.`
+              );
+              void qc.invalidateQueries({ queryKey: ["plans", "setup", tenantSlug] });
+            }}
+          />
         </>
       )}
     </div>

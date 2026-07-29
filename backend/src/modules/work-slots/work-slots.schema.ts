@@ -88,6 +88,24 @@ function hasActiveUserAttrs(o: z.infer<typeof activeUserAttrsSchema>): boolean {
 
 const territoryCodesListSchema = z.array(z.string().trim().min(1).max(128)).min(1);
 
+function hasSlotConfigFields(o: z.infer<typeof slotConfigPatchSchema>): boolean {
+  return (
+    o.return_warehouse_id !== undefined ||
+    o.price_type !== undefined ||
+    o.price_types !== undefined ||
+    o.entitlements !== undefined ||
+    o.consignment !== undefined ||
+    o.consignment_limit_amount !== undefined ||
+    o.consignment_ignore_previous_months_debt !== undefined ||
+    o.consignment_close_day !== undefined ||
+    o.consignment_close_hour !== undefined ||
+    o.consignment_close_minute !== undefined ||
+    o.supervisor_user_id !== undefined ||
+    o.warehouse_staff_entitlements !== undefined ||
+    o.expeditor_assignment_rules !== undefined
+  );
+}
+
 export const bulkWorkSlotsBodySchema = z
   .object({
     slot_ids: z.array(z.number().int().positive()).min(1).max(500),
@@ -99,12 +117,12 @@ export const bulkWorkSlotsBodySchema = z
     branch_codes: z.array(z.string().trim().min(1).max(120)).min(1).optional(),
     direction_id: z.number().int().positive().nullable().optional(),
     slot_type: slotTypeSchema.optional(),
-    return_warehouse_id: z.number().int().positive().nullable().optional(),
     territory_zones: territoryCodesListSchema.optional(),
     territory_oblasts: territoryCodesListSchema.optional(),
     territory_cities: territoryCodesListSchema.optional()
   })
   .merge(activeUserAttrsSchema)
+  .merge(slotConfigPatchSchema)
   .strict()
   .refine((o) => !(o.branch_code !== undefined && o.branch_codes !== undefined), {
     message: "BranchAmbiguous"
@@ -129,8 +147,8 @@ export const bulkWorkSlotsBodySchema = z
       o.branch_codes !== undefined ||
       o.direction_id !== undefined ||
       o.slot_type !== undefined ||
-      o.return_warehouse_id !== undefined ||
       hasActiveUserAttrs(o) ||
+      hasSlotConfigFields(o) ||
       o.territory_zones !== undefined ||
       o.territory_oblasts !== undefined ||
       o.territory_cities !== undefined,

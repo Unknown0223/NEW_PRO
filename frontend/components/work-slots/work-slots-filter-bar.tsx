@@ -29,6 +29,10 @@ type PickerOpt = { id: number; name: string };
 type Props = {
   draft: WorkSlotsFilterState;
   onDraftChange: (next: WorkSlotsFilterState) => void;
+  /** Rol tab — darhol qo‘llanadi (Применить kutmasdan), Активный/Не активный kabi */
+  onSlotTypeChange?: (slotType: WorkSlotType) => void;
+  /** Qo‘llangan rol (tab highlight); berilmasa `draft.slotType` */
+  appliedSlotType?: WorkSlotType;
   branches: string[];
   directions: PickerOpt[];
   territoryCascade: { zones: RefSelectOption[]; regions: RefSelectOption[]; cities: RefSelectOption[] };
@@ -45,6 +49,8 @@ const compactFilterTrigger = cn(
 export function WorkSlotsFilterBar({
   draft,
   onDraftChange,
+  onSlotTypeChange,
+  appliedSlotType,
   branches,
   directions,
   territoryCascade,
@@ -52,6 +58,7 @@ export function WorkSlotsFilterBar({
   cashDesks
 }: Props) {
   const set = (patch: Partial<WorkSlotsFilterState>) => onDraftChange({ ...draft, ...patch });
+  const activeSlotType = appliedSlotType ?? draft.slotType;
 
   return (
     <div className="space-y-2">
@@ -141,7 +148,7 @@ export function WorkSlotsFilterBar({
           aria-label="Роль"
         >
           {SLOT_TYPE_OPTIONS.map((o) => {
-            const active = draft.slotType === o.value;
+            const active = activeSlotType === o.value;
             return (
               <button
                 key={o.value}
@@ -152,7 +159,10 @@ export function WorkSlotsFilterBar({
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
-                onClick={() => set({ slotType: o.value })}
+                onClick={() => {
+                  if (onSlotTypeChange) onSlotTypeChange(o.value);
+                  else set({ slotType: o.value });
+                }}
               >
                 {o.label}
               </button>

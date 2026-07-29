@@ -3,6 +3,7 @@
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
+import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
@@ -14,7 +15,12 @@ import {
   type OrderAgentBonusContext
 } from "../order-bonus-apply";
 import { capBonusCreatesToStock, mergeOrderAutoComments } from "../order-bonus-stock-cap";
-import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE, normalizeOrderType } from "../order-status";
+import {
+  buildDiscountAlertComment,
+  resolveDiscountAlert,
+  stripDiscountAlertComments
+} from "../order-discount-alert";
+import { normalizeOrderType } from "../order-status";
 
 import {
   bonusGiftMapToJson,
@@ -23,6 +29,8 @@ import {
   roundOrderMoney,
   validateBonusGiftOverrides
 } from "./order.detail-mappers";
+import { assertOrderLinesCreditAndPayments } from "./order.lines-guards";
+import { adjustOutboundStockForOrderLinesEdit } from "./order.lines-stock";
 import {
   orderDetailInclude,
   type OrderDetailLoaded,
@@ -31,6 +39,16 @@ import {
 } from "./order.types";
 
 export const ORDER_LINES_EDITABLE_STATUSES = new Set(["new", "confirmed"]);
+
+function sameNullableId(a: number | null | undefined, b: number | null | undefined): boolean {
+  return (a ?? null) === (b ?? null);
+}
+
+function samePaymentRef(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = (a ?? "").trim() || null;
+  const nb = (b ?? "").trim() || null;
+  return na === nb;
+}
 
 export async function updateOrderLines(
   tenantId: number,
@@ -57,11 +75,28 @@ export async function updateOrderLines(
     throw new Error("FORBIDDEN_OPERATOR_ORDER_LINES_EDIT");
   }
 
-  const prevPaidItems = await prisma.orderItem.findMany({
-    where: { order_id: orderId, is_bonus: false },
+  // Шапка (клиент / агент / склад / способ оплаты) при редактировании строк не меняется.
+  if (input.warehouse_id !== undefined && !sameNullableId(input.warehouse_id, existing.warehouse_id)) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+  if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+  const existingPm =
+    (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
+  if (
+    input.payment_method_ref !== undefined &&
+    !samePaymentRef(input.payment_method_ref, existingPm)
+  ) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+
+  const prevAllItems = await prisma.orderItem.findMany({
+    where: { order_id: orderId },
     orderBy: { id: "asc" },
-    select: { product_id: true, qty: true }
+    select: { product_id: true, qty: true, is_bonus: true, exchange_line_kind: true }
   });
+  const prevPaidItems = prevAllItems.filter((r) => !r.is_bonus);
 
   const logUserId =
     actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? actorUserId : null;
@@ -88,19 +123,10 @@ export async function updateOrderLines(
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
 
-  const warehouseId =
-    input.warehouse_id !== undefined ? input.warehouse_id : existing.warehouse_id;
-  const agentId = input.agent_id !== undefined ? input.agent_id : existing.agent_id;
+  const warehouseId = existing.warehouse_id;
+  const agentId = existing.agent_id;
 
   const existingOrderType = normalizeOrderType(existing.order_type ?? "order");
-  const existingPm =
-    (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
-  const mergedPaymentMethodRef =
-    input.payment_method_ref !== undefined
-      ? input.payment_method_ref === null
-        ? null
-        : input.payment_method_ref.trim().slice(0, 64) || null
-      : existingPm;
 
   if (existingOrderType === "order") {
     if (warehouseId == null || warehouseId < 1) {
@@ -245,7 +271,7 @@ export async function updateOrderLines(
     });
 
     let bonusAlert: string | null = null;
-    let linesComment = existing.comment ?? null;
+    let linesComment = stripDiscountAlertComments(existing.comment ?? null);
     if (applyBonus && bonusCreates.length > 0 && warehouseId != null) {
       const stockCap = await capBonusCreatesToStock(
         tx,
@@ -264,42 +290,85 @@ export async function updateOrderLines(
     const discountSum =
       applyBonus && rawDiscUp.gt(0) ? roundOrderMoney(rawDiscUp) : new Prisma.Decimal(0);
 
-    const creditLimit = client.credit_limit;
-    if (creditLimit.gt(0)) {
-      const balRow = await tx.clientBalance.findUnique({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: client.id } },
-        select: { balance: true }
+    const discountRes = await resolveDiscountAlert(tx, {
+      tenantId,
+      orderType: existingOrderType,
+      applyDiscount: true,
+      warehouseId,
+      client: { id: client.id, category: client.category },
+      orderAgent: orderAgentForBonus,
+      qtyByProduct,
+      productById,
+      orderedProductIds,
+      baseSubtotal: totalSum,
+      giftOverrides: giftSelectionMap,
+      stackPolicy,
+      discountSum,
+      appliedAutoBonusRuleIds,
+      excludeOrderId: orderId,
+      referenceAt: existing.created_at
+    });
+    const prevDiscountAlert =
+      (existing as { discount_alert?: string | null }).discount_alert ?? null;
+    const prevBonusAlert = (existing as { bonus_alert?: string | null }).bonus_alert ?? null;
+
+    let discountAlert = discountRes.alert;
+    // Tahrirlashda soxta «not_applied» qo‘ymaymiz (oldingi alert yo‘q va kutilgan skidka ham yo‘q).
+    if (
+      prevDiscountAlert == null &&
+      discountAlert === "not_applied" &&
+      (discountRes.expectedSum <= 0 || discountRes.discountPct == null)
+    ) {
+      discountAlert = null;
+    }
+
+    if (discountAlert != null) {
+      linesComment = mergeOrderAutoComments(linesComment, [
+        buildDiscountAlertComment(discountAlert, {
+          discountPct: discountRes.discountPct,
+          expectedSum: discountRes.expectedSum,
+          orderLabel: `заказ #${existing.number}`
+        })
+      ]);
+    }
+
+    const alertsClearedAt =
+      (prevDiscountAlert != null && discountAlert == null) ||
+      (prevBonusAlert != null && bonusAlert == null)
+        ? new Date().toISOString()
+        : null;
+
+    await assertOrderLinesCreditAndPayments(tx, {
+      tenantId,
+      orderId,
+      clientId: client.id,
+      creditLimit: client.credit_limit,
+      paidTotal
+    });
+
+    const nextStockLines = [
+      ...paidAfterDisc.map((l) => ({
+        product_id: l.product_id,
+        qty: l.qty,
+        exchange_line_kind: null as string | null
+      })),
+      ...bonusCreates.map((b) => ({
+        product_id: b.product_id,
+        qty: b.qty,
+        exchange_line_kind: null as string | null
+      }))
+    ];
+    if (existingOrderType === "order" && warehouseId != null) {
+      await adjustOutboundStockForOrderLinesEdit(tx, {
+        tenantId,
+        warehouseId,
+        orderStatus: existing.status,
+        prevLines: prevAllItems,
+        nextLines: nextStockLines
       });
-      const accountBalance = balRow?.balance ?? new Prisma.Decimal(0);
-      const headroom = creditLimit.add(accountBalance);
-      const agg = await tx.order.aggregate({
-        where: {
-          tenant_id: tenantId,
-          client_id: client.id,
-          id: { not: orderId },
-          status: { notIn: [...ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE] }
-        },
-        _sum: { total_sum: true }
-      });
-      const outstanding = agg._sum.total_sum ?? new Prisma.Decimal(0);
-      const projected = outstanding.add(paidTotal);
-      if (projected.gt(headroom)) {
-        const err = new Error("CREDIT_LIMIT_EXCEEDED") as Error & {
-          credit_limit: string;
-          outstanding: string;
-          order_total: string;
-        };
-        err.credit_limit = headroom.toString();
-        err.outstanding = outstanding.toString();
-        err.order_total = paidTotal.toString();
-        throw err;
-      }
     }
 
     await tx.orderItem.deleteMany({ where: { order_id: orderId } });
-
-    const warehouseChangedForBlock =
-      input.warehouse_id !== undefined && warehouseId !== existing.warehouse_id;
 
     const bonusSnapshot =
       appliedAutoBonusRuleIds.length > 0
@@ -309,16 +378,11 @@ export async function updateOrderLines(
     await tx.order.update({
       where: { id: orderId },
       data: {
-        warehouse_id: warehouseId,
-        agent_id: agentId,
-        ...(warehouseChangedForBlock ? { warehouse_block_id: null } : {}),
-        ...(input.payment_method_ref !== undefined
-          ? { payment_method_ref: mergedPaymentMethodRef }
-          : {}),
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,
         bonus_alert: bonusAlert,
+        discount_alert: discountAlert,
         comment: linesComment,
         applied_auto_bonus_rule_ids: appliedAutoBonusRuleIds,
         applied_bonus_rules_snapshot: bonusSnapshot as Prisma.InputJsonValue,
@@ -338,8 +402,6 @@ export async function updateOrderLines(
       }
     });
 
-    const prevOrderBlockId =
-      (existing as { warehouse_block_id?: number | null }).warehouse_block_id ?? null;
     const linesPayload: Prisma.InputJsonObject = {
       total_sum: { from: existing.total_sum.toString(), to: paidTotal.toString() },
       bonus_sum: { from: existing.bonus_sum.toString(), to: bonusSum.toString() },
@@ -347,10 +409,13 @@ export async function updateOrderLines(
         from: existing.discount_sum.toString(),
         to: discountSum.toString()
       },
-      warehouse_id: { from: existing.warehouse_id, to: warehouseId },
-      agent_id: { from: existing.agent_id, to: agentId },
-      ...(warehouseChangedForBlock && prevOrderBlockId != null
-        ? { warehouse_block_id: { from: prevOrderBlockId, to: null } }
+      discount_alert: { from: prevDiscountAlert, to: discountAlert },
+      bonus_alert: { from: prevBonusAlert, to: bonusAlert },
+      ...(alertsClearedAt
+        ? {
+            alerts_resolved_at: alertsClearedAt,
+            alerts_resolved: true
+          }
         : {}),
       paid_lines: {
         from: prevPaidItems.map((r) => ({
@@ -383,8 +448,20 @@ export async function updateOrderLines(
   if (warehouseId != null) {
     void invalidateStock(tenantId, warehouseId);
   }
-  if (existing.warehouse_id != null && existing.warehouse_id !== warehouseId) {
-    void invalidateStock(tenantId, existing.warehouse_id);
-  }
+
+  void appendTenantAuditEvent({
+    tenantId,
+    actorUserId: logUserId,
+    entityType: AuditEntityType.order,
+    entityId: String(orderId),
+    action: "order.lines",
+    payload: {
+      order_id: orderId,
+      total_sum: updated.total_sum.toString(),
+      discount_alert: (updated as { discount_alert?: string | null }).discount_alert ?? null,
+      bonus_alert: (updated as { bonus_alert?: string | null }).bonus_alert ?? null
+    }
+  });
+
   return enrichOrderDetailRow(tenantId, updated as unknown as OrderDetailLoaded, viewerRole);
 }

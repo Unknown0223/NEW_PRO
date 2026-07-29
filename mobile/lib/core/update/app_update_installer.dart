@@ -16,7 +16,7 @@ class AppUpdateInstaller {
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(minutes: 10),
     followRedirects: true,
-    validateStatus: (s) => s != null && s < 500,
+    validateStatus: (s) => s != null && s >= 200 && s < 400,
   ),);
 
   static bool canInstallInApp(AppUpdateInfo info) {
@@ -58,7 +58,7 @@ class AppUpdateInstaller {
       } catch (_) {}
     }
 
-    await _downloadDio.download(
+    final resp = await _downloadDio.download(
       url,
       file.path,
       onReceiveProgress: (received, total) {
@@ -67,7 +67,28 @@ class AppUpdateInstaller {
       },
     );
 
-    if (!await file.exists() || await file.length() < 1024) return null;
+    final code = resp.statusCode ?? 0;
+    if (code < 200 || code >= 400) return null;
+    if (!await file.exists() || await file.length() < 1024 * 100) return null;
+
+    // APK = ZIP: local file header "PK\x03\x04"
+    final raf = await file.open();
+    try {
+      final magic = await raf.read(4);
+      if (magic.length < 4 ||
+          magic[0] != 0x50 ||
+          magic[1] != 0x4B ||
+          magic[2] != 0x03 ||
+          magic[3] != 0x04) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        return null;
+      }
+    } finally {
+      await raf.close();
+    }
+
     return file.path;
   }
 

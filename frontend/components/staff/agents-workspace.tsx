@@ -32,6 +32,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import {
   StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
@@ -115,7 +117,6 @@ const COLS = [
   "Код",
   "Продукт",
   "Тип агента",
-  "Рабочее место",
   "Версия APK",
   "ПИНФЛ",
   "Название устройства",
@@ -127,8 +128,8 @@ const COLS = [
   "Максимальное количество сессий"
 ] as const;
 
-/** v3: joy maydonlari (склад/филиал/направление/…) → Рабочее место */
-const AGENT_TABLE_ID = "staff.agents.v3";
+/** v4: Smart-kod / work_slot ustuni olib tashlandi — faqat Рабочее место sahifasida */
+const AGENT_TABLE_ID = "staff.agents.v4";
 const AGENT_COLUMN_IDS = [
   "fio",
   "login",
@@ -136,7 +137,6 @@ const AGENT_COLUMN_IDS = [
   "code",
   "product",
   "agent_type",
-  "work_slot",
   "apk_version",
   "pinfl",
   "device_name",
@@ -166,8 +166,6 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.code ?? "";
     case "pinfl":
       return r.pinfl ?? "";
-    case "work_slot":
-      return r.work_slot_code ?? "";
     case "consignment":
       return r.consignment ? "Да" : "Нет";
     case "apk_version":
@@ -238,6 +236,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "agent");
 
   const [addOpen, setAddOpen] = useState(false);
   const [createAgentError, setCreateAgentError] = useState<string | null>(null);
@@ -510,18 +509,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         );
       case "agent_type":
         return <span className="text-slate-600">{r.agent_type ?? "—"}</span>;
-      case "work_slot":
-        return r.work_slot_code ? (
-          <a
-            href={r.work_slot_id != null ? `/work-slots/${r.work_slot_id}` : "/work-slots"}
-            className="whitespace-nowrap font-mono text-xs font-semibold text-primary hover:underline"
-            title="Открыть рабочее место (склад, филиал, направление — там)"
-          >
-            {r.work_slot_code}
-          </a>
-        ) : (
-          <span className="text-slate-400">—</span>
-        );
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
       case "pinfl":
@@ -606,6 +593,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -635,6 +623,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selectedIds}
         onToggleSelection={toggleAgentSelection}
+        onToggleAllOnPage={toggleAllAgentsOnPage}
         renderCell={(colId, row) =>
           renderAgentDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -734,6 +723,22 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
         onSubmitCreate={(body) => createMut.mutate(body)}
         onSubmitEdit={async () => {}}
+      />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
+          });
+        }}
       />
 
       <AgentFormModal

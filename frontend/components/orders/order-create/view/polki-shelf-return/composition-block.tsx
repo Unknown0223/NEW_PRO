@@ -89,7 +89,7 @@ export const CompositionBlock = memo(function CompositionBlock({
   const showTotals = canShowPolkiGrid && polkiContextQ.isSuccess && !polkiContextQ.isLoading;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-oc-error="polki-lines">
       <div className={cn(polkiCard, "p-5")}>
         <h2 className="text-[15px] font-semibold text-slate-800">Состав заявки</h2>
         <p className="mt-1 text-xs text-slate-500">{compositionHint(vm, polkiRowsAll.length)}</p>

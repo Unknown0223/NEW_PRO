@@ -55,7 +55,8 @@ import {
   tradeDirectionDisplayFromRef,
   tradeDirectionForCreate,
   validateAgentEntitlements,
-  validateExpeditorAssignmentRules
+  validateExpeditorAssignmentRules,
+  resolveLoginForPatch
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 
@@ -63,6 +64,7 @@ export type PatchOperatorInput = {
   first_name?: string;
   last_name?: string | null;
   middle_name?: string | null;
+  login?: string;
   phone?: string | null;
   email?: string | null;
   code?: string | null;
@@ -90,6 +92,9 @@ export async function patchOperator(
   }
 
   const data: Prisma.UserUpdateInput = {};
+
+  const nextLoginOp = await resolveLoginForPatch(tenantId, operatorId, existing.login, input.login);
+  if (nextLoginOp !== undefined) data.login = nextLoginOp;
 
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;
@@ -154,6 +159,7 @@ export type PatchSkladchikInput = {
   first_name?: string;
   last_name?: string | null;
   middle_name?: string | null;
+  login?: string;
   phone?: string | null;
   email?: string | null;
   code?: string | null;
@@ -183,6 +189,9 @@ export async function patchSkladchik(
   }
 
   const data: Prisma.UserUpdateInput = {};
+
+  const nextLoginSk = await resolveLoginForPatch(tenantId, skladchikId, existing.login, input.login);
+  if (nextLoginSk !== undefined) data.login = nextLoginSk;
 
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;

@@ -461,7 +461,6 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       return;
     }
     const headers = [
-      "Смарт-код",
       "Код",
       "Название Т.П.",
       "Валюта",
@@ -476,7 +475,6 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       "Супервайзер"
     ];
     const dataRows = rows.map((r) => [
-      r.work_slot_code ?? "",
       r.code ?? "",
       r.name,
       CURRENCY_LABEL,
@@ -558,7 +556,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       void qc.invalidateQueries({ queryKey: ["consignment"] });
       void qc.invalidateQueries({ queryKey: ["staff", tenantSlug, "agents"] });
     } catch {
-      setToast("Ошибка импорта — проверьте шаблон и смарт-коды агентов");
+      setToast("Ошибка импорта — проверьте шаблон Excel");
     } finally {
       setImporting(false);
     }

@@ -106,14 +106,14 @@ final visitsTodayProvider = FutureProvider<List<VisitRecord>>((ref) async {
   return rows.map(visitFromRow).toList();
 });
 
-/// Vizitlar (shablon Screen 7).
+/// Vizitlar — marshrut/mijozlar ro‘yxati doim; start/end faqat sozlamada yoqilganda.
 class AgentVisitsPage extends ConsumerWidget {
   const AgentVisitsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final config = ref.watch(sessionProvider).mobileConfig;
-    final visitsEnabled = config?.misc.visitStartEndEnabled ?? true;
+    final visitStartEndEnabled = config?.misc.visitStartEndEnabled ?? true;
     final activeVisits = ref.watch(visitsTodayProvider).valueOrNull?.where((v) => v.status == 'in_progress').toList() ?? [];
 
     return Scaffold(
@@ -143,11 +143,11 @@ class AgentVisitsPage extends ConsumerWidget {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!visitsEnabled)
+          if (!visitStartEndEnabled)
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
               child: Text(
-                S.visitsDisabled,
+                'Старт/стоп визита отключён в настройках — точки маршрута доступны',
                 style: AppTypography.caption.copyWith(color: AppColors.textMuted),
               ),
             ),
@@ -169,14 +169,12 @@ class AgentVisitsPage extends ConsumerWidget {
           const SizedBox(height: 12),
           const AgentVisitsWeekTabs(),
           const SizedBox(height: 12),
-          Expanded(
-            child: visitsEnabled
-                ? const AgentClientsOutletList(visitsMode: true)
-                : const SizedBox.shrink(),
+          const Expanded(
+            child: AgentClientsOutletList(visitsMode: true),
           ),
         ],
       ),
-      floatingActionButton: visitsEnabled
+      floatingActionButton: visitStartEndEnabled
           ? GestureDetector(
               onTap: () => context.push('/visits/start'),
               child: Container(

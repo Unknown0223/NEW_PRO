@@ -60,6 +60,35 @@ describe("work-slots.config-territory", () => {
     expect(hasSlotConfigPatch({})).toBe(false);
     expect(hasSlotConfigPatch({ cash_desk_id: 1 })).toBe(true);
   });
+
+  it("mergeSlotEntitlementsPreservingMobileConfig keeps user mobile_config", async () => {
+    const {
+      mergeSlotEntitlementsPreservingMobileConfig,
+      slotEntitlementsFromUserEntitlements
+    } = await import("../src/modules/work-slots/work-slots.config-mirror");
+    const merged = mergeSlotEntitlementsPreservingMobileConfig(
+      { price_types: ["A"], product_rules: [], mobile_config: { schema_version: 1 } },
+      {
+        price_types: ["OLD"],
+        mobile_config: {
+          schema_version: 1,
+          gps: { required_for_order: true }
+        }
+      }
+    );
+    expect(merged.price_types).toEqual(["A"]);
+    expect(merged.mobile_config).toMatchObject({
+      schema_version: 1,
+      gps: { required_for_order: true }
+    });
+
+    const forSlot = slotEntitlementsFromUserEntitlements({
+      price_types: ["B"],
+      mobile_config: { schema_version: 1, sync: { block_sync: true } }
+    });
+    expect(forSlot.price_types).toEqual(["B"]);
+    expect(forSlot.mobile_config).toBeUndefined();
+  });
 });
 
 describe("work-slots.schema", () => {
@@ -128,6 +157,16 @@ describe("work-slots.schema", () => {
       branch_codes: ["B"]
     });
     expect(ambiguous.success).toBe(false);
+    const ent = bulkWorkSlotsBodySchema.safeParse({
+      slot_ids: [1, 2],
+      price_types: ["retail"],
+      entitlements: {
+        price_types: ["retail"],
+        product_rules: [{ category_id: 1, all: true }]
+      },
+      consignment: true
+    });
+    expect(ent.success).toBe(true);
   });
 });
 

@@ -18,7 +18,7 @@ class AppDatabase {
     final path = p.join(dbPath, 'salesdoc.db');
     return openDatabase(
       path,
-      version: 17,
+      version: 18,
       onOpen: (db) async {
         // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
         try {
@@ -28,6 +28,7 @@ class AppDatabase {
         await _ensureClientColumns(db);
         await _ensureHeldOrderSummaryColumns(db);
         await _ensurePhotoRetryColumn(db);
+        await _ensurePerfIndexes(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -178,6 +179,7 @@ class AppDatabase {
             status TEXT NOT NULL DEFAULT 'pending'
           )
         ''');
+        await _ensurePerfIndexes(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -281,6 +283,9 @@ class AppDatabase {
         if (oldVersion < 17) {
           await _ensurePhotoRetryColumn(db);
         }
+        if (oldVersion < 18) {
+          await _ensurePerfIndexes(db);
+        }
         if (oldVersion < 5) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS agent_visits (
@@ -326,6 +331,26 @@ class AppDatabase {
         "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
       );
     } catch (_) {}
+  }
+
+  /// Ro‘yxat/qidiruv/vizit metrikalarini tezlashtirish.
+  static Future<void> _ensurePerfIndexes(Database db) async {
+    const stmts = <String>[
+      'CREATE INDEX IF NOT EXISTS idx_clients_active_name ON clients(is_active, name COLLATE NOCASE)',
+      'CREATE INDEX IF NOT EXISTS idx_clients_code ON clients(client_code)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_day ON agent_visits(visit_day)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_client ON agent_visits(client_id)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_client_status ON agent_visits(client_id, status)',
+      'CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client_id)',
+      'CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_prices_type ON prices(price_type)',
+      'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name COLLATE NOCASE)',
+    ];
+    for (final sql in stmts) {
+      try {
+        await db.execute(sql);
+      } catch (_) {}
+    }
   }
 
   static Future<void> _ensureClientColumns(Database db) async {
@@ -406,7 +431,7 @@ class AppDatabase {
     Transaction txn,
     String table,
     List<Map<String, dynamic>> rows, {
-    int chunkSize = 1000,
+    int chunkSize = 400,
   }) async {
     if (rows.isEmpty) return;
     for (var i = 0; i < rows.length; i += chunkSize) {
@@ -416,9 +441,7 @@ class AppDatabase {
         batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
-      if (i + chunkSize < rows.length) {
-        await Future<void>.delayed(Duration.zero);
-      }
+      await Future<void>.delayed(Duration.zero);
     }
   }
 
@@ -556,18 +579,21 @@ class AppDatabase {
       if (prev == null || d.isAfter(prev)) out[clientId] = d;
     }
 
-    final visits = await db.query(
-      'agent_visits',
-      columns: ['client_id', 'visit_day'],
-      where: "client_id IS NOT NULL AND status IN ('completed', 'in_progress', 'refused')",
+    final visits = await db.rawQuery(
+      "SELECT client_id, MAX(visit_day) AS d FROM agent_visits "
+      "WHERE client_id IS NOT NULL AND status IN ('completed', 'in_progress', 'refused') "
+      "GROUP BY client_id",
     );
     for (final r in visits) {
-      consider((r['client_id'] as num?)?.toInt(), r['visit_day']?.toString());
+      consider((r['client_id'] as num?)?.toInt(), r['d']?.toString());
     }
 
-    final orders = await db.query('orders', columns: ['client_id', 'created_at']);
+    final orders = await db.rawQuery(
+      'SELECT client_id, MAX(created_at) AS d FROM orders '
+      'WHERE client_id IS NOT NULL GROUP BY client_id',
+    );
     for (final r in orders) {
-      consider((r['client_id'] as num?)?.toInt(), r['created_at']?.toString());
+      consider((r['client_id'] as num?)?.toInt(), r['d']?.toString());
     }
 
     return out;
@@ -594,9 +620,9 @@ class AppDatabase {
     await db.update('agent_visits', row, where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Eski mobil katalog (50 ta limit) yoki `visit_weekdays` yo‘q — qayta to‘liq yuklash.
+  /// Eski katalog versiyasi yoki visit_weekdays yo‘q — qayta to‘liq yuklash.
+  /// Eslatma: ≤50 mijoz «stale» deb hisoblanmasin — bu har ochilishda full sync qilardi.
   static const agentClientsCatalogVersion = '6';
-  static const legacyClientCatalogCap = 50;
 
   Future<bool> needsAgentClientCatalogUpgrade() async {
     final db = await database;
@@ -608,9 +634,8 @@ class AppDatabase {
   Future<bool> needsFullClientCatalogResync() async {
     if (await needsAgentClientCatalogUpgrade()) return true;
     final n = await clientCount();
-    if (n > 0 && n <= legacyClientCatalogCap) return true;
     // Delta-sync eski katalog: mijozlar bor, lekin tashrif kunlari SQLite da saqlanmagan.
-    if (n >= 100 && await clientsWithVisitWeekdaysCount() == 0) return true;
+    if (n >= 20 && await clientsWithVisitWeekdaysCount() == 0) return true;
     return false;
   }
 
@@ -851,6 +876,20 @@ class AppDatabase {
       where: "status = 'pending' AND retry_count < 5",
       orderBy: 'created_at ASC',
     );
+  }
+
+  /// Bugun ushbu mijoz uchun oflayn navbatda (hali order_id bog‘lanmagan) foto bormi.
+  Future<bool> hasPendingUnlinkedPhotoReportToday(int clientId) async {
+    final db = await database;
+    final dayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final rows = await db.query(
+      'pending_photo_reports',
+      where:
+          "status = 'pending' AND retry_count < 5 AND client_id = ? AND order_id IS NULL AND created_at >= ?",
+      whereArgs: [clientId, dayStart.toIso8601String()],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   Future<void> bumpPendingPhotoRetry(int id) async {

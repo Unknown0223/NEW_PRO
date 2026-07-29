@@ -81,3 +81,79 @@ export async function migrateClientsOnAgentSlotSwap(
     assignments_updated: assignResult.count
   };
 }
+
+/**
+ * Bo‘sh (VACANT) slotga agent biriktirilganda: oldingi xodim unassign qilingan,
+ * lekin assignmentlar `work_slot_id` bilan qolgan bo‘lishi mumkin.
+ * Ularni yangi agentga o‘tkazamiz — aks holda sync da mijozlar bor, visit_weekdays yo‘q.
+ */
+export async function migrateClientsOnVacantSlotAssign(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  slotId: number,
+  toUserId: number
+): Promise<{ clients_updated: number; assignments_updated: number }> {
+  const slotAssignments = await tx.clientAgentAssignment.findMany({
+    where: {
+      tenant_id: tenantId,
+      work_slot_id: slotId,
+      agent_id: { not: toUserId },
+      lock_type: { notIn: [...LOCK_SKIP] }
+    },
+    select: { client_id: true, agent_id: true }
+  });
+
+  if (slotAssignments.length === 0) {
+    await linkAgentAssignmentsToWorkSlot(tx, tenantId, slotId, toUserId);
+    return { clients_updated: 0, assignments_updated: 0 };
+  }
+
+  const clientIds = [...new Set(slotAssignments.map((r) => r.client_id))];
+  const fromAgentIds = [...new Set(slotAssignments.map((r) => r.agent_id).filter((id): id is number => id != null))];
+
+  const lockedRows =
+    fromAgentIds.length > 0
+      ? await tx.clientAgentAssignment.findMany({
+          where: {
+            tenant_id: tenantId,
+            slot: 1,
+            lock_type: { in: [...LOCK_SKIP] },
+            client_id: { in: clientIds },
+            agent_id: { in: fromAgentIds }
+          },
+          select: { client_id: true }
+        })
+      : [];
+  const skipClientIds = new Set(lockedRows.map((r) => r.client_id));
+  const migrateClientIds = clientIds.filter((id) => !skipClientIds.has(id));
+
+  if (migrateClientIds.length > 0) {
+    await tx.client.updateMany({
+      where: {
+        tenant_id: tenantId,
+        id: { in: migrateClientIds },
+        merged_into_client_id: null,
+        ...(fromAgentIds.length > 0 ? { agent_id: { in: fromAgentIds } } : {})
+      },
+      data: { agent_id: toUserId }
+    });
+  }
+
+  const assignResult = await tx.clientAgentAssignment.updateMany({
+    where: {
+      tenant_id: tenantId,
+      work_slot_id: slotId,
+      agent_id: { not: toUserId },
+      lock_type: { notIn: [...LOCK_SKIP] },
+      ...(skipClientIds.size > 0 ? { client_id: { notIn: [...skipClientIds] } } : {})
+    },
+    data: { agent_id: toUserId, work_slot_id: slotId }
+  });
+
+  await linkAgentAssignmentsToWorkSlot(tx, tenantId, slotId, toUserId);
+
+  return {
+    clients_updated: migrateClientIds.length,
+    assignments_updated: assignResult.count
+  };
+}

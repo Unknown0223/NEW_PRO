@@ -213,11 +213,11 @@ export async function bulkPatchWorkSlots(
     branch_codes?: string[];
     direction_id?: number | null;
     slot_type?: string;
-    return_warehouse_id?: number | null;
     territory_zones?: string[];
     territory_oblasts?: string[];
     territory_cities?: string[];
-  } & ActiveUserAttrsPatch,
+  } & ActiveUserAttrsPatch &
+    SlotConfigPatch,
   actorUserId?: number | null
 ) {
   const ids = [...new Set(body.slot_ids)];
@@ -294,13 +294,40 @@ export async function bulkPatchWorkSlots(
     if (!dir) throw new Error("BAD_DIRECTION");
   }
 
-  if (body.return_warehouse_id != null && body.return_warehouse_id > 0) {
-    const wh = await prisma.warehouse.findFirst({
-      where: { id: body.return_warehouse_id, tenant_id: tenantId },
-      select: { id: true }
-    });
-    if (!wh) throw new Error("BAD_WAREHOUSE");
-  }
+  const configPatch: SlotConfigPatch = {
+    ...(body.return_warehouse_id !== undefined
+      ? { return_warehouse_id: body.return_warehouse_id }
+      : {}),
+    ...(body.price_type !== undefined ? { price_type: body.price_type } : {}),
+    ...(body.price_types !== undefined ? { price_types: body.price_types } : {}),
+    ...(body.entitlements !== undefined ? { entitlements: body.entitlements } : {}),
+    ...(body.consignment !== undefined ? { consignment: body.consignment } : {}),
+    ...(body.consignment_limit_amount !== undefined
+      ? { consignment_limit_amount: body.consignment_limit_amount }
+      : {}),
+    ...(body.consignment_ignore_previous_months_debt !== undefined
+      ? { consignment_ignore_previous_months_debt: body.consignment_ignore_previous_months_debt }
+      : {}),
+    ...(body.consignment_close_day !== undefined
+      ? { consignment_close_day: body.consignment_close_day }
+      : {}),
+    ...(body.consignment_close_hour !== undefined
+      ? { consignment_close_hour: body.consignment_close_hour }
+      : {}),
+    ...(body.consignment_close_minute !== undefined
+      ? { consignment_close_minute: body.consignment_close_minute }
+      : {}),
+    ...(body.supervisor_user_id !== undefined
+      ? { supervisor_user_id: body.supervisor_user_id }
+      : {}),
+    ...(body.warehouse_staff_entitlements !== undefined
+      ? { warehouse_staff_entitlements: body.warehouse_staff_entitlements }
+      : {}),
+    ...(body.expeditor_assignment_rules !== undefined
+      ? { expeditor_assignment_rules: body.expeditor_assignment_rules }
+      : {})
+  };
+  const hasConfigPatch = hasSlotConfigPatch(configPatch);
 
   const data: {
     is_active?: boolean;
@@ -308,13 +335,11 @@ export async function bulkPatchWorkSlots(
     branch_code?: string | null;
     direction_id?: number | null;
     slot_type?: string;
-    return_warehouse_id?: number | null;
   } = {};
   if (body.is_active !== undefined) data.is_active = body.is_active;
   if (body.label !== undefined) data.label = body.label?.trim() || null;
   if (body.slot_type !== undefined) data.slot_type = body.slot_type;
   if (body.direction_id !== undefined) data.direction_id = body.direction_id;
-  if (body.return_warehouse_id !== undefined) data.return_warehouse_id = body.return_warehouse_id;
 
   const branchCodes =
     body.branch_codes?.map((c) => c.trim()).filter((c): c is string => Boolean(c)) ?? [];
@@ -341,7 +366,7 @@ export async function bulkPatchWorkSlots(
     hasActiveUserAttrsPatch(userAttrs) ||
     Object.keys(territoryRoundRobin).length > 0;
 
-  if (!hasSlotDataPatch && !hasUserPatch) {
+  if (!hasSlotDataPatch && !hasUserPatch && !hasConfigPatch) {
     throw new Error("EMPTY_PATCH");
   }
 
@@ -390,9 +415,43 @@ export async function bulkPatchWorkSlots(
     skipped_no_user = r.skipped_no_user;
   }
 
-  if (body.return_warehouse_id !== undefined && !hasUserPatch) {
+  if (hasConfigPatch) {
     for (const slotId of ids) {
       await prisma.$transaction(async (tx) => {
+        const slot = await tx.workSlot.findFirst({
+          where: { id: slotId, tenant_id: tenantId },
+          select: { territory: true, entitlements: true }
+        });
+        if (!slot) return;
+
+        let entitlementsPatch = configPatch.entitlements;
+        if (entitlementsPatch !== undefined) {
+          const prev =
+            slot.entitlements != null &&
+            typeof slot.entitlements === "object" &&
+            !Array.isArray(slot.entitlements)
+              ? { ...(slot.entitlements as Record<string, unknown>) }
+              : {};
+          const next =
+            entitlementsPatch != null &&
+            typeof entitlementsPatch === "object" &&
+            !Array.isArray(entitlementsPatch)
+              ? (entitlementsPatch as Record<string, unknown>)
+              : {};
+          delete prev.mobile_config;
+          const merged = { ...prev, ...next };
+          delete merged.mobile_config;
+          entitlementsPatch = merged;
+        }
+
+        await applySlotConfigPatch(
+          tx,
+          tenantId,
+          slotId,
+          { ...configPatch, entitlements: entitlementsPatch },
+          slot.territory
+        );
+
         const link = await tx.slotUserLink.findFirst({
           where: { tenant_id: tenantId, slot_id: slotId, ended_at: null },
           select: { user_id: true }
@@ -404,6 +463,7 @@ export async function bulkPatchWorkSlots(
           skipped_no_user += 1;
         }
       });
+      updated = Math.max(updated, ids.length);
     }
   }
 

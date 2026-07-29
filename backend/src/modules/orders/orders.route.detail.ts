@@ -40,7 +40,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderDetailRoutes(app: FastifyInstance) {
   app.get(
-    "/api/:slug/orders/:id",
+    "/api/:slug/orders/:id(\\d+)",
     { preHandler: [jwtAccessVerify, requireIfSkladchikThenAnyEntitlement(SKLADCHIK_ORDER_FLOW_ANY)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;

@@ -59,6 +59,62 @@ export function staffApiPath(slotType: string): string {
   }
 }
 
+/** Joy konfiguratsiyasi tab id — rolga xos. */
+export type SlotWorkplaceConfigTabId =
+  | "main"
+  | "prices"
+  | "limits"
+  | "consignment"
+  | "skladchik"
+  | "expeditor";
+
+/**
+ * Har rol o‘ziga xos sozlamalar:
+ * - agent: narx, mahsulot cheklovi, konsignatsiya
+ * - expeditor: yetkazib berish qoidalari
+ * - skladchik: ombor ruxsatlari
+ * - boshqalar: asosiy (yo‘nalish / ombor qaytarish)
+ */
+export function slotWorkplaceConfigTabs(
+  slotType: WorkSlotType | string | undefined
+): { id: SlotWorkplaceConfigTabId; label: string }[] {
+  switch (slotType) {
+    case "agent":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "prices", label: "Типы цен" },
+        { id: "limits", label: "Ограничения" },
+        { id: "consignment", label: "Консигнация" }
+      ];
+    case "expeditor":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "expeditor", label: "Экспедитор" }
+      ];
+    case "skladchik":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "skladchik", label: "Складчик" }
+      ];
+    case "collector":
+    case "supervisor":
+    case "auditor":
+      return [{ id: "main", label: "Основное" }];
+    default:
+      return [{ id: "main", label: "Основное" }];
+  }
+}
+
+/** Narx turlari + mahsulot bog‘lanishi — faqat agent joyi. */
+export function slotSupportsAgentRestrictions(slotType: string | undefined): boolean {
+  return slotType === "agent";
+}
+
+/** Guruhli «конфигурация» — agent / expeditor / skladchik (maxsus tablar). */
+export function slotSupportsRichWorkplaceConfig(slotType: string | undefined): boolean {
+  return slotType === "agent" || slotType === "expeditor" || slotType === "skladchik";
+}
+
 /** `User.territory` qatori: zona / viloyat / shahar (nomlar, kod emas). */
 export function parseUserTerritoryParts(raw: string | null | undefined): {
   zone: string | null;

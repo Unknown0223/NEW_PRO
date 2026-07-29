@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { X, Lock, Palette, Tag, Package, Shield } from "lucide-react";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import {
   AgentFormField,
   AgentFormSection,
@@ -73,11 +74,7 @@ export function AgentFormModal({
   const [kpi_color, setKpi] = useState("#d41c1c");
   const [app_access, setAppAccess] = useState(true);
   const [max_sessions, setMaxSessions] = useState(1);
-  const [work_slot_id, setWorkSlotId] = useState("");
   const [showPasswordField, setShowPasswordField] = useState(false);
-  const [slotOptions, setSlotOptions] = useState<
-    Array<{ id: number; slot_code: string; label: string | null; active_user_name: string | null }>
-  >([]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,30 +88,6 @@ export function AgentFormModal({
       document.body.style.overflow = "";
     };
   }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open || !isNew || !tenantSlug) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { data } = await api.get<{
-          data: Array<{
-            id: number;
-            slot_code: string;
-            label: string | null;
-            active_user_name: string | null;
-          }>;
-        }>(`/api/${tenantSlug}/work-slots?slot_type=agent&limit=300&is_active=true`);
-        if (cancelled) return;
-        setSlotOptions(data.data ?? []);
-      } catch {
-        if (!cancelled) setSlotOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, isNew, tenantSlug]);
 
   useEffect(() => {
     if (!open) return;
@@ -134,7 +107,6 @@ export function AgentFormModal({
       setKpi("#d41c1c");
       setAppAccess(true);
       setMaxSessions(2);
-      setWorkSlotId("");
       setShowPasswordField(true);
       return;
     }
@@ -159,10 +131,6 @@ export function AgentFormModal({
   }, [open, isNew, r]);
 
   const handleSave = async () => {
-    if (isNew && slotOptions.length > 0 && !work_slot_id.trim()) {
-      setFormErr("Рабочее место обязательно — выберите свободный слот");
-      return;
-    }
     setFormErr(null);
 
     const body: Record<string, unknown> = {
@@ -184,15 +152,29 @@ export function AgentFormModal({
         ...body,
         login: login.trim().toLowerCase(),
         password,
-        can_authorize: true,
-        work_slot_id: work_slot_id.trim() ? Number.parseInt(work_slot_id.trim(), 10) : null
+        can_authorize: true
       });
       return;
     }
     if (!r) return;
-    if (password.trim().length >= 6) body.password = password.trim();
-    await onSubmitEdit(r.id, body);
-    onClose();
+    if (!login.trim()) {
+      setFormErr("Логин обязателен.");
+      return;
+    }
+    const pw = password.trim();
+    if (showPasswordField && pw.length > 0 && pw.length < 6) {
+      setFormErr("Пароль — минимум 6 символов. Короткий пароль не сохраняется.");
+      return;
+    }
+    if (pw.length >= 6) body.password = pw;
+    body.login = login.trim().toLowerCase();
+    setFormErr(null);
+    try {
+      await onSubmitEdit(r.id, body);
+      onClose();
+    } catch (e: unknown) {
+      setFormErr(messageFromStaffCreateError(e));
+    }
   };
 
   if (!open) return null;
@@ -278,24 +260,24 @@ export function AgentFormModal({
 
           <AgentFormSection title="Учётная запись и роль" icon={<Package className="h-4 w-4" />}>
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Склад, филиал, территория, направление и типы цен настраиваются в{" "}
+              Склад, филиал, территория и назначение на место — только в{" "}
               <a href="/work-slots" className="font-semibold underline">
                 Рабочее место
               </a>
-              {r?.work_slot_code ? (
+              {r?.work_slot_id != null ? (
                 <>
                   {" "}
-                  (сейчас:{" "}
+                  (
                   <a
-                    href={r.work_slot_id != null ? `/work-slots/${r.work_slot_id}` : "/work-slots"}
-                    className="font-mono font-semibold underline"
+                    href={`/work-slots/${r.work_slot_id}`}
+                    className="font-semibold underline"
                   >
-                    {r.work_slot_code}
+                    открыть место
                   </a>
                   ).
                 </>
               ) : (
-                "."
+                <> — назначьте сотрудника на слот там.</>
               )}
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -331,8 +313,7 @@ export function AgentFormModal({
                     value={login}
                     onChange={(e) => setLogin(e.target.value.toLowerCase())}
                     maxLength={20}
-                    disabled={!isNew}
-                    className={`${agentModalInputClass} pr-14 disabled:bg-muted disabled:text-slate-500`}
+                    className={`${agentModalInputClass} pr-14`}
                     placeholder="tsh3741"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
@@ -348,31 +329,7 @@ export function AgentFormModal({
                   placeholder="Торговый представитель"
                 />
               </AgentFormField>
-              {isNew ? (
-                <AgentFormField
-                  label={
-                    slotOptions.length > 0
-                      ? "Рабочее место *"
-                      : "Рабочее место (пока нет слотов)"
-                  }
-                >
-                  <AgentFormSelect
-                    value={work_slot_id}
-                    onChange={(v) => {
-                      setWorkSlotId(v);
-                      setFormErr(null);
-                    }}
-                    emptyLabel={
-                      slotOptions.length > 0 ? "Выберите рабочее место" : "Слотов нет"
-                    }
-                    options={slotOptions.map((s) => ({
-                      value: String(s.id),
-                      label: `${s.slot_code}${s.label ? ` — ${s.label}` : ""}${s.active_user_name ? ` (сейчас: ${s.active_user_name})` : " (свободен)"}`
-                    }))}
-                  />
-                </AgentFormField>
-              ) : null}
-              {isNew && formErr ? (
+              {formErr ? (
                 <p className="text-xs text-red-600 col-span-full">{formErr}</p>
               ) : null}
             </div>
@@ -463,7 +420,8 @@ export function AgentFormModal({
             disabled={
               loading ||
               !first_name.trim() ||
-              (isNew && (!login.trim() || password.length < 6))
+              !login.trim() ||
+              (isNew && password.length < 6)
             }
             onClick={() => void handleSave()}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"

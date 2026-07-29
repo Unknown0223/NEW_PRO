@@ -1,6 +1,8 @@
 /** Barrel re-export — agent sync domain (Q-09 split). */
 export {
   agentScopedClientWhere,
+  agentScopedClientWhereForUser,
+  resolveAgentWorkSlotId,
   agentScopedOrderWhere,
   assertAgentScopedClient,
   assertMobilePhotoReportForClient,

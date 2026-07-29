@@ -15,7 +15,7 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
-import { MonitorSmartphone, Pencil, UserMinus } from "lucide-react";
+import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
@@ -27,6 +27,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
@@ -126,6 +128,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
   const [editRow, setEditRow] = useState<CollectorRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [sessionRow, setSessionRow] = useState<CollectorRow | null>(null);
+  const [configRow, setConfigRow] = useState<CollectorRow | null>(null);
   const [deactivateRow, setDeactivateRow] = useState<CollectorRow | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -137,6 +140,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "collector");
 
   useEffect(() => {
     setSelected(new Set());
@@ -452,6 +456,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -481,11 +486,15 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selected}
         onToggleSelection={toggleSelection}
+        onToggleAllOnPage={toggleAllOnPage}
         renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
+              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+                <Settings2 className="h-4 w-4" />
+              </AgentIconButton>
               <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
                 <MonitorSmartphone className="h-4 w-4" />
               </AgentIconButton>
@@ -522,6 +531,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
       />
 
       <CollectorEditDialog row={editRow} onClose={() => setEditRow(null)} onPatch={(id, body) => patchMut.mutateAsync({ id, body })} />
+      <CollectorConfigModal row={configRow} open={configRow != null} onOpenChange={(o) => !o && setConfigRow(null)} />
       <CollectorAddDialog
         open={addOpen}
         onOpenChange={(o) => {
@@ -545,6 +555,23 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         maxSessions={sessionRow?.max_sessions ?? 1}
         onPatched={() => void qc.invalidateQueries({ queryKey: ["collectors", tenantSlug] })}
       />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["collectors", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["collectors-filter-options", tenantSlug] });
+          });
+        }}
+      />
+
 
       <Dialog open={Boolean(deactivateRow)} onOpenChange={(o) => !o && setDeactivateRow(null)}>
         <DialogContent className="max-w-sm">
@@ -571,6 +598,37 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
   );
 }
 
+function CollectorConfigModal({
+  row,
+  open,
+  onOpenChange
+}: {
+  row: CollectorRow | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!row) return null;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Конфигурации</DialogTitle>
+          <p className="text-sm text-muted-foreground">{row.fio}</p>
+        </DialogHeader>
+        <WorkplaceMovedNotice />
+        <p className="text-sm text-muted-foreground">
+          Цены, лимиты и привязки инкассатора настраиваются на рабочем месте типа «collector».
+        </p>
+        <DialogFooter>
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            Закрыть
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CollectorEditDialog({
   row,
   onClose,
@@ -590,6 +648,7 @@ function CollectorEditDialog({
   const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
   const [territory, setTerritory] = useState("");
+  const [login, setLogin] = useState("");
 
   useEffect(() => {
     if (!row) return;
@@ -603,6 +662,7 @@ function CollectorEditDialog({
     setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
     setTerritory(row.territory ?? "");
+    setLogin(row.login);
   }, [row]);
 
   return (
@@ -620,13 +680,19 @@ function CollectorEditDialog({
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <Input
+            className="font-mono sm:col-span-2"
+            placeholder="Логин *"
+            value={login}
+            onChange={(e) => setLogin(e.target.value.toLowerCase())}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Отмена
           </Button>
           <Button
-            disabled={saving || !row}
+            disabled={saving || !row || !login.trim()}
             onClick={async () => {
               if (!row) return;
               setSaving(true);
@@ -638,7 +704,8 @@ function CollectorEditDialog({
                   phone: phone.trim() || null,
                   code: code.trim() || null,
                   pinfl: pinfl.trim() || null,
-                  position: position.trim() || null
+                  position: position.trim() || null,
+                  login: login.trim().toLowerCase()
                 });
                 onClose();
               } finally {

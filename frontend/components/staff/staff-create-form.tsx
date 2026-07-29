@@ -9,7 +9,6 @@ import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { FilterSelect } from "@/components/ui/filter-select";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
@@ -55,18 +54,8 @@ const emptyForm = {
   return_warehouse_id: "",
   can_authorize: true,
   app_access: true,
-  consignment: false,
-  work_slot_id: ""
+  consignment: false
 };
-
-const KINDS_WITH_WORK_SLOT = new Set<Kind>(["agent", "expeditor", "collector", "skladchik"]);
-
-function slotTypeForKind(kind: Kind): string {
-  if (kind === "skladchik") return "skladchik";
-  if (kind === "collector") return "collector";
-  if (kind === "expeditor") return "expeditor";
-  return "agent";
-}
 
 type StaffCreateFormState = typeof emptyForm;
 
@@ -115,7 +104,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
     kind === "collector" ||
     kind === "skladchik" ||
     kind === "auditor";
-  const showWorkSlotPicker = KINDS_WITH_WORK_SLOT.has(kind);
 
   const warehousesQ = useQuery({
     queryKey: ["warehouses", tenantSlug, "staff-create"],
@@ -134,25 +122,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
     queryFn: async () => {
       const { data } = await api.get<TenantProfile>(`/api/${tenantSlug}/settings/profile`);
       return (data.references.branches ?? []).filter((b) => b.active !== false);
-    }
-  });
-
-  const workSlotsQ = useQuery({
-    queryKey: ["work-slots", tenantSlug, kind, "staff-create"],
-    enabled: Boolean(tenantSlug) && showWorkSlotPicker,
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: Array<{
-          id: number;
-          slot_code: string;
-          label: string | null;
-          active_user_name: string | null;
-        }>;
-      }>(
-        `/api/${tenantSlug}/work-slots?slot_type=${slotTypeForKind(kind)}&limit=300&is_active=true`
-      );
-      return data.data ?? [];
     }
   });
 
@@ -205,11 +174,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               : null,
         can_authorize: form.can_authorize,
         app_access: kind === "supervisor" ? true : form.app_access,
-        consignment: kind === "supervisor" || workplaceOnWorkSlots ? false : form.consignment,
-        work_slot_id:
-          showWorkSlotPicker && form.work_slot_id.trim()
-            ? Number.parseInt(form.work_slot_id.trim(), 10)
-            : null
+        consignment: kind === "supervisor" || workplaceOnWorkSlots ? false : form.consignment
       });
     },
     onSuccess: async () => {
@@ -388,28 +353,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
       ) : null}
 
       {workplaceOnWorkSlots ? <WorkplaceMovedNotice /> : null}
-
-      {showWorkSlotPicker ? (
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <FilterSelect
-            className="h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-2 text-sm"
-            emptyLabel="Рабочее место *"
-            aria-label="Рабочее место"
-            value={form.work_slot_id}
-            onChange={(e) => setForm((p) => ({ ...p, work_slot_id: e.target.value }))}
-          >
-            {(workSlotsQ.data ?? [])
-              .filter((s) => !s.active_user_name)
-              .map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.slot_code}
-                  {s.label ? ` — ${s.label}` : ""}
-                </option>
-              ))}
-          </FilterSelect>
-          <FieldHint name="work_slot_id" errors={fieldErrors} />
-        </div>
-      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">

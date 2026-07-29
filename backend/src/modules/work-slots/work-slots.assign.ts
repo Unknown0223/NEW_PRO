@@ -4,7 +4,8 @@ import { applyAccessResetToRoleDefaultTx } from "../access/access.reset.service"
 import { SLOT_TYPE_TO_USER_ROLE, isWorkSlotType } from "./work-slots.constants";
 import {
   linkAgentAssignmentsToWorkSlot,
-  migrateClientsOnAgentSlotSwap
+  migrateClientsOnAgentSlotSwap,
+  migrateClientsOnVacantSlotAssign
 } from "./work-slots.client-sync";
 import {
   clearWorkplaceFieldsOnUser,
@@ -106,7 +107,8 @@ export async function assignUserToSlot(
           newUserId
         );
       } else {
-        await linkAgentAssignmentsToWorkSlot(tx, tenantId, slotId, newUserId);
+        // VACANT / birinchi biriktirish: slotdagi eski assignmentlar yangi agentga.
+        await migrateClientsOnVacantSlotAssign(tx, tenantId, slotId, newUserId);
       }
     }
 

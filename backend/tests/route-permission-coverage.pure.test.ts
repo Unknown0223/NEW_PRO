@@ -17,7 +17,10 @@ const COVERED_SAMPLES: Array<{ method: string; path: string; key: string }> = [
   { method: "GET", path: "/api/:slug/field/routes", key: "gps.gps.view" },
   { method: "GET", path: "/api/:slug/notifications", key: "staff.zadachi.view" },
   { method: "GET", path: "/api/:slug/orders/:id/approval", key: "orders.zakaz.view" },
-  { method: "POST", path: "/api/:slug/orders/:id/approval/advance", key: "plans.ustanovka_planov.approve" }
+  { method: "POST", path: "/api/:slug/orders/:id/approval/advance", key: "plans.ustanovka_planov.approve" },
+  { method: "POST", path: "/api/:slug/agents/import.xlsx", key: "staff.agent.create" },
+  { method: "GET", path: "/api/:slug/expeditors/import/template", key: "staff.ekspeditor.view" },
+  { method: "POST", path: "/api/:slug/staff/import.xlsx", key: "staff.agent.create" }
 ];
 
 describe("route-permission-guard coverage", () => {

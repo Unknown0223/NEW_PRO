@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE } from "../orders/order-status";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import {
   agentScopedClientWhere,
   agentScopedOrderWhere,
@@ -21,19 +22,21 @@ export async function fetchSyncClients(
 ): Promise<ReturnType<typeof compactClient>[]> {
   const out: ReturnType<typeof compactClient>[] = [];
   let skip = 0;
+  const slotMap = await loadActiveWorkSlotsByUserIds([agentId]);
+  const workSlotId = slotMap.get(agentId)?.slot_id ?? null;
 
   while (out.length < MOBILE_SYNC_CLIENT_MAX) {
     const take = Math.min(MOBILE_SYNC_CLIENT_BATCH, MOBILE_SYNC_CLIENT_MAX - out.length);
     const rows = await prisma.client.findMany({
       where: {
-        ...agentScopedClientWhere(tenantId, agentId),
+        ...agentScopedClientWhere(tenantId, agentId, workSlotId),
         is_active: true,
         ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
       },
       orderBy: { id: "asc" },
       skip,
       take,
-      select: clientSyncSelectForAgent(agentId)
+      select: clientSyncSelectForAgent(agentId, workSlotId)
     });
     if (rows.length === 0) break;
     out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow)));

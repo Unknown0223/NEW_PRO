@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -25,6 +26,8 @@ import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
 
 export function WorkSlotDetail({ slotId }: { slotId: number }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { tenant, ready, hydrated } = useTenantReady();
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
   const [history, setHistory] = useState<SlotHistoryItem[]>([]);
@@ -119,6 +122,13 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     if (!ready) return;
     void load();
   }, [load, ready]);
+
+  // Экспедитор / агент sahifasidan: /work-slots/:id?openConfig=1
+  useEffect(() => {
+    if (searchParams.get("openConfig") !== "1") return;
+    setConfigOpen(true);
+    router.replace(`/work-slots/${slotId}`, { scroll: false });
+  }, [searchParams, slotId, router]);
 
   const unassign = async () => {
     if (!tenant || !confirm("Hozirgi xodimni ajratishni tasdiqlaysizmi?")) return;
@@ -342,6 +352,10 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         clientRefs={clientRefs}
         territoryNodes={territoryNodes}
         onSaved={() => void load()}
+        onOpenConfig={() => {
+          setEditOpen(false);
+          setConfigOpen(true);
+        }}
       />
       <SlotWorkplaceConfigDialog
         open={configOpen}

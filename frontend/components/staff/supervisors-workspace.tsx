@@ -31,6 +31,8 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
@@ -203,6 +205,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "supervisor");
 
   const [editRow, setEditRow] = useState<SupervisorRow | null>(null);
   const [addOpen, setAddOpen] = useState(initialCreateOpen);
@@ -524,6 +527,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -553,6 +557,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         isLoading={listQ.isLoading}
         selectedIds={selected}
         onToggleSelection={toggleSupervisorSelection}
+        onToggleAllOnPage={toggleAllSupervisorsOnPage}
         renderCell={(colId, row) => renderSupervisorDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
           const r = pageRows.find((x) => x.id === row.id)!;
@@ -686,6 +691,23 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
           void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
         }}
       />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["supervisors", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["supervisors-filter-options", tenantSlug] });
+          });
+        }}
+      />
+
 
       <Dialog open={Boolean(deactivateRow)} onOpenChange={(o) => !o && setDeactivateRow(null)}>
         <DialogContent className="max-w-sm">

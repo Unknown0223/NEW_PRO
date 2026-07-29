@@ -195,6 +195,8 @@ export async function registerStaffExpeditorRoutes(app: FastifyInstance) {
         }
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
+        if (msg === "BAD_LOGIN") return sendApiError(reply, request, 400, "BadLogin");
+        if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_MAX_SESSIONS") return sendApiError(reply, request, 400, "BadMaxSessions");
         if (msg === "BAD_EXPEDITOR_RULE_AGENT") return sendApiError(reply, request, 400, "BadExpeditorRuleAgent");
         if (msg === "BAD_EXPEDITOR_RULE_WAREHOUSE") {

@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { FilterSelect } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -22,6 +21,7 @@ import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { Eye, Link2, MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
+import Link from "next/link";
 import { ExpeditorConfigurationsDialog } from "@/components/staff/expeditor-configurations-dialog";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { ExpeditorsFiltersRow } from "@/components/staff/expeditors-filters-row";
@@ -33,10 +33,14 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { formatPersonDisplayName } from "@/lib/person-display";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { cn } from "@/lib/utils";
 import {
   StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
@@ -196,6 +200,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "expeditor");
 
   const [addOpen, setAddOpen] = useState(false);
   const [createExpeditorError, setCreateExpeditorError] = useState<string | null>(null);
@@ -299,20 +304,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
       return priceTypeOptionsFromResponse(data);
     }
   });
-
-  const tradeDirectionsQ = useQuery({
-    queryKey: ["trade-directions", tenantSlug, "expeditors-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: Array<{ id: number; name: string; code: string | null; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/trade-directions?is_active=true`);
-      return data.data;
-    }
-  });
-
-  const tradeDirectionRows = useMemo(() => tradeDirectionsQ.data ?? [], [tradeDirectionsQ.data]);
 
   const patchMut = useMutation({
     mutationFn: async (vars: { id: number; body: Record<string, unknown> }) => {
@@ -612,6 +603,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -641,6 +633,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selectedIds}
         onToggleSelection={toggleExpeditorSelection}
+        onToggleAllOnPage={toggleAllExpeditorsOnPage}
         renderCell={(colId, row) =>
           renderExpeditorDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -698,7 +691,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           setAddOpen(o);
           if (!o) setCreateExpeditorError(null);
         }}
-        tenantSlug={tenantSlug}
         loading={createMut.isPending}
         submitError={createExpeditorError}
         onSubmit={(body) => {
@@ -726,7 +718,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         onClose={() => setConfigRow(null)}
         saving={configSaving}
         paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        tradeDirections={tradeDirectionRows}
         onSave={async (ent) => {
           if (!configRow) return;
           setConfigSaving(true);
@@ -752,6 +743,23 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           void qc.invalidateQueries({ queryKey: ["expeditors", tenantSlug] });
         }}
       />
+
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["expeditors", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["expeditors-filter-options", tenantSlug] });
+          });
+        }}
+      />
+
 
       <ExpeditorAssignmentDialog row={assignRow} onClose={() => setAssignRow(null)} />
 
@@ -798,6 +806,12 @@ function AgentInfoDialog({
         <DialogHeader>
           <DialogTitle>Экспедитор</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice
+          className="mb-2"
+          variant="expeditor"
+          workSlotId={row.work_slot_id ?? undefined}
+          openConfig
+        />
         <dl className="grid grid-cols-[8rem_1fr] gap-x-2 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Ф.И.О</dt>
           <dd>{row.fio}</dd>
@@ -848,14 +862,12 @@ function mergeTerritorySelectOptions(current: string, base: string[]): string[] 
 function AgentAddDialog({
   open,
   onOpenChange,
-  tenantSlug,
   loading,
   submitError,
   onSubmit
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  tenantSlug: string;
   loading: boolean;
   submitError: string | null;
   onSubmit: (body: Record<string, unknown>) => void;
@@ -872,25 +884,7 @@ function AgentAddDialog({
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [kpi_color, setKpi] = useState("#ef4444");
-  const [work_slot_id, setWorkSlotId] = useState("");
   const [showPw, setShowPw] = useState(false);
-
-  const slotsQ = useQuery({
-    queryKey: ["work-slots", tenantSlug, "expeditor-create"],
-    enabled: open && Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: Array<{
-          id: number;
-          slot_code: string;
-          label: string | null;
-          active_user_name: string | null;
-        }>;
-      }>(`/api/${tenantSlug}/work-slots?slot_type=expeditor&limit=300&is_active=true`);
-      return data.data ?? [];
-    }
-  });
 
   useEffect(() => {
     if (!open) return;
@@ -906,7 +900,6 @@ function AgentAddDialog({
     setLogin("");
     setPassword(randomPassword());
     setKpi("#ef4444");
-    setWorkSlotId("");
   }, [open]);
 
   return (
@@ -920,27 +913,8 @@ function AgentAddDialog({
             {submitError}
           </p>
         ) : null}
-        <WorkplaceMovedNotice className="mb-2" />
+        <WorkplaceMovedNotice className="mb-2" variant="expeditor" />
         <div className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1">
-          <label className="text-xs text-muted-foreground">
-            Рабочее место *
-            <FilterSelect
-              className="mt-1 h-10 w-full min-w-0 max-w-none rounded-md border border-input bg-background p-2 text-sm"
-              emptyLabel="Выберите место"
-              aria-label="Рабочее место"
-              value={work_slot_id}
-              onChange={(e) => setWorkSlotId(e.target.value)}
-            >
-              {(slotsQ.data ?? [])
-                .filter((s) => !s.active_user_name)
-                .map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.slot_code}
-                    {s.label ? ` — ${s.label}` : ""}
-                  </option>
-                ))}
-            </FilterSelect>
-          </label>
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
@@ -984,9 +958,7 @@ function AgentAddDialog({
           <Button
             type="button"
             className="w-full"
-            disabled={
-              loading || !first_name.trim() || !login.trim() || password.length < 6 || !work_slot_id.trim()
-            }
+            disabled={loading || !first_name.trim() || !login.trim() || password.length < 6}
             onClick={() =>
               onSubmit({
                 first_name: first_name.trim(),
@@ -1001,7 +973,6 @@ function AgentAddDialog({
                 login: login.trim().toLowerCase(),
                 password,
                 kpi_color: kpi_color || null,
-                work_slot_id: Number.parseInt(work_slot_id.trim(), 10),
                 max_sessions: 1,
                 app_access: true,
                 can_authorize: true
@@ -1086,7 +1057,8 @@ function AgentEditDialog({
         position: position.trim() || null,
         code: code.trim() || null,
         pinfl: pinfl.trim() || null,
-        kpi_color: kpi_color || null
+        kpi_color: kpi_color || null,
+        login: login.trim().toLowerCase()
       };
       if (pwMode && password.length >= 6) body.password = password;
       await onPatch(r.id, body);
@@ -1104,7 +1076,9 @@ function AgentEditDialog({
         </DialogHeader>
         <WorkplaceMovedNotice
           className="mb-2"
+          variant="expeditor"
           workSlotId={r.work_slot_id ?? undefined}
+          openConfig
         />
         <div className="grid max-h-[calc(92vh-8rem)] gap-3 overflow-y-auto pr-1">
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
@@ -1116,7 +1090,12 @@ function AgentEditDialog({
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
-          <Input placeholder="Логин" value={login} onChange={(e) => setLogin(e.target.value)} disabled />
+          <Input
+            placeholder="Логин *"
+            value={login}
+            onChange={(e) => setLogin(e.target.value.toLowerCase())}
+            className="font-mono"
+          />
           {!pwMode ? (
             <Button type="button" variant="outline" className="w-full" onClick={() => setPwMode(true)}>
               Изменить пароль
@@ -1138,7 +1117,7 @@ function AgentEditDialog({
           <Button
             type="button"
             className="w-full"
-            disabled={saving || !first_name.trim()}
+            disabled={saving || !first_name.trim() || !login.trim()}
             onClick={() => void save()}
           >
             Сохранить
@@ -1158,21 +1137,63 @@ function ExpeditorAssignmentDialog({
 }) {
   if (!row) return null;
 
+  const slotHref =
+    row.work_slot_id != null
+      ? `/work-slots/${row.work_slot_id}?openConfig=1`
+      : "/work-slots";
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Условия привязки к заявке</DialogTitle>
           <p className="text-sm text-muted-foreground">{row.fio}</p>
         </DialogHeader>
-        <WorkplaceMovedNotice workSlotId={row.work_slot_id ?? undefined} />
-        <p className="text-sm text-muted-foreground">
-          Правила автопривязки заказов настраиваются на рабочем месте экспедитора.
-        </p>
-        <DialogFooter>
-          <Button type="button" onClick={onClose}>
+
+        <div className="mb-1 flex items-center gap-2.5 rounded-xl border border-teal-100 bg-gradient-to-r from-teal-50 to-emerald-50/60 px-3.5 py-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm text-white shadow-sm">
+            🚚
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-teal-600">Экспедитор</p>
+            <p className="truncate text-sm font-semibold text-slate-800">
+              {row.work_slot_code ?? "Рабочее место"}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3 text-sm text-slate-700">
+          <p>
+            Типы цен, склады, направления, территории и{" "}
+            <strong>правила автопривязки заказов</strong> привязаны к{" "}
+            <strong>рабочему месту</strong>, а не к сотруднику. При смене экспедитора на месте
+            настройки остаются на слоте.
+          </p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Откройте{" "}
+            <Link href={slotHref} className="font-semibold text-teal-700 underline">
+              Рабочее место
+            </Link>{" "}
+            → «Конфигурация места» → вкладка «Экспедитор».
+          </p>
+          {row.work_slot_id == null ? (
+            <p className="text-xs text-amber-800">
+              У сотрудника ещё нет рабочего места — сначала создайте или назначьте место в списке
+              «Рабочее место» (роль Экспедитор).
+            </p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button type="button" variant="outline" onClick={onClose}>
             Закрыть
           </Button>
+          <Link
+            href={slotHref}
+            className={cn(buttonVariants({ className: "bg-teal-700 hover:bg-teal-800" }))}
+          >
+            Открыть рабочее место
+          </Link>
         </DialogFooter>
       </DialogContent>
     </Dialog>

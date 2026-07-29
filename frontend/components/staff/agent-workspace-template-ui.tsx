@@ -427,6 +427,7 @@ export function AgentRestrictionsPanelShell({
   search,
   onSearchChange,
   searchPlaceholder = "Поиск...",
+  listClassName,
   children
 }: {
   icon: string;
@@ -437,6 +438,8 @@ export function AgentRestrictionsPanelShell({
   search: string;
   onSearchChange: (v: string) => void;
   searchPlaceholder?: string;
+  /** Ro‘yxat scroll zonasi (masalan max-h-64) */
+  listClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -470,7 +473,9 @@ export function AgentRestrictionsPanelShell({
           />
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5">{children}</div>
+      <div className={cn("min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5", listClassName)}>
+        {children}
+      </div>
     </div>
   );
 }

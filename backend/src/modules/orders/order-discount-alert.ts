@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
+import type { BonusStackPolicy } from "./bonus-stack-policy";
+import type { OrderAgentBonusContext } from "./order-bonus-apply";
 import {
   fetchClientUsedAutoBonusRuleIds,
+  fetchClientUsedAutoBonusRuleIdsExcludingOrder,
   findWinningDiscountRuleWithPrereqs,
   loadDiscountRulesForOrder,
   loadAvailableQtyByProductId
@@ -15,6 +18,26 @@ export type DiscountAlertResolution = {
   alert: DiscountAlertCode | null;
   discountPct: number | null;
   expectedSum: number;
+};
+
+export type DiscountAlertEvalInput = {
+  tenantId: number;
+  orderType: string;
+  applyDiscount: boolean;
+  warehouseId: number | null | undefined;
+  client: { id: number; category: string | null };
+  orderAgent: OrderAgentBonusContext | null;
+  qtyByProduct: Map<number, number>;
+  productById: Map<number, { id: number; category_id: number | null }>;
+  orderedProductIds: Set<number>;
+  baseSubtotal: Prisma.Decimal;
+  giftOverrides: Map<number, number>;
+  stackPolicy: BonusStackPolicy;
+  discountSum: Prisma.Decimal;
+  appliedAutoBonusRuleIds: number[];
+  /** Tahrirlashda joriy zakaz qoidalarini «allaqachon ishlatilgan» deb hisoblamaslik. */
+  excludeOrderId?: number | null;
+  referenceAt?: Date;
 };
 
 export function buildDiscountAlertComment(
@@ -40,6 +63,24 @@ export function buildDiscountAlertComment(
   return `Скидка — не применена: ${pctTxt}, сумма ${sumTxt}, ${ordersTxt}`;
 }
 
+/** Avto-skidka / bonus izohlarini olib tashlash (qayta hisoblashdan oldin). */
+export function stripDiscountAlertComments(comment: string | null | undefined): string | null {
+  if (comment == null || !comment.trim()) return null;
+  const kept = comment
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter((l) => {
+      const t = l.trim();
+      if (!t) return true;
+      if (t.startsWith("Скидка —")) return false;
+      if (t.startsWith("Бонус — недостаток")) return false;
+      return true;
+    })
+    .join("\n")
+    .trim();
+  return kept || null;
+}
+
 export function isDiscountAlertCode(v: string): v is DiscountAlertCode {
   return (DISCOUNT_ALERT_CODES as readonly string[]).includes(v);
 }
@@ -53,39 +94,47 @@ export function calcExpectedDiscountSum(
   return Number(raw.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP));
 }
 
-export async function resolveDiscountAlertForCreate(
+export async function resolveDiscountAlert(
   tx: Prisma.TransactionClient,
-  p: CreateOrderTxParams,
-  paid: CreateOrderPaidBundle
+  input: DiscountAlertEvalInput
 ): Promise<DiscountAlertResolution> {
   const empty = { alert: null, discountPct: null, expectedSum: 0 };
-  if (p.orderType !== "order") return empty;
-  if (p.input.apply_discount === false) return empty;
-  if (paid.discountSum.gt(0)) return empty;
+  if (input.orderType !== "order") return empty;
+  if (input.applyDiscount === false) return empty;
+  if (input.discountSum.gt(0)) return empty;
 
-  const discountRules = await loadDiscountRulesForOrder(tx, p.tenantId);
-  const usedRuleIds = await fetchClientUsedAutoBonusRuleIds(tx, p.tenantId, p.client.id);
+  const discountRules = await loadDiscountRulesForOrder(tx, input.tenantId);
+  const usedRuleIds =
+    input.excludeOrderId != null && input.excludeOrderId > 0
+      ? await fetchClientUsedAutoBonusRuleIdsExcludingOrder(
+          tx,
+          input.tenantId,
+          input.client.id,
+          input.excludeOrderId
+        )
+      : await fetchClientUsedAutoBonusRuleIds(tx, input.tenantId, input.client.id);
+
   const stockProductIds = new Set<number>();
-  for (const pid of p.qtyByProduct.keys()) stockProductIds.add(pid);
+  for (const pid of input.qtyByProduct.keys()) stockProductIds.add(pid);
   const availableByProductId = await loadAvailableQtyByProductId(
     tx,
-    p.tenantId,
-    p.input.warehouse_id,
+    input.tenantId,
+    input.warehouseId ?? null,
     stockProductIds
   );
 
   const prereqEnv = {
     tx,
-    tenantId: p.tenantId,
-    client: { id: p.client.id, category: p.client.category },
-    orderAgent: p.orderAgentForBonus,
-    orderedProductIds: p.orderedProductIds,
-    productById: p.productById,
-    baseSubtotalBeforeDiscount: p.totalSum,
-    qtyByProduct: p.qtyByProduct,
+    tenantId: input.tenantId,
+    client: { id: input.client.id, category: input.client.category },
+    orderAgent: input.orderAgent,
+    orderedProductIds: input.orderedProductIds,
+    productById: input.productById,
+    baseSubtotalBeforeDiscount: input.baseSubtotal,
+    qtyByProduct: input.qtyByProduct,
     clientUsedAutoBonusRuleIds: usedRuleIds,
-    giftOverrides: p.validatedGiftOverrides,
-    warehouseId: p.input.warehouse_id,
+    giftOverrides: input.giftOverrides,
+    warehouseId: input.warehouseId ?? null,
     availableByProductId,
     ruleCache: new Map(),
     clientMonthMerchandiseSubtotalExclOrder: new Prisma.Decimal(0),
@@ -95,22 +144,22 @@ export async function resolveDiscountAlertForCreate(
 
   const winning = await findWinningDiscountRuleWithPrereqs(
     discountRules,
-    { id: p.client.id, category: p.client.category },
-    p.orderedProductIds,
-    p.productById,
+    { id: input.client.id, category: input.client.category },
+    input.orderedProductIds,
+    input.productById,
     usedRuleIds,
     prereqEnv,
-    new Date(),
-    { baseSubtotalBeforeDiscount: p.totalSum }
+    input.referenceAt ?? new Date(),
+    { baseSubtotalBeforeDiscount: input.baseSubtotal }
   );
 
   const pct = winning?.discount_pct != null ? Number(winning.discount_pct) : null;
-  const expectedSum = calcExpectedDiscountSum(p.totalSum, pct);
+  const expectedSum = calcExpectedDiscountSum(input.baseSubtotal, pct);
 
   const cashDeskOk =
     (await tx.cashDesk.count({
       where: {
-        tenant_id: p.tenantId,
+        tenant_id: input.tenantId,
         is_active: true,
         accepts_discount_payments: true
       }
@@ -123,13 +172,36 @@ export async function resolveDiscountAlertForCreate(
     return { alert: "not_applied", discountPct: pct, expectedSum };
   }
 
-  const bonusApplied = paid.appliedAutoBonusRuleIds.some((id) => {
+  const bonusApplied = input.appliedAutoBonusRuleIds.some((id) => {
     const rule = discountRules.find((r) => r.id === id);
     return rule?.type !== "discount";
   });
-  if (bonusApplied && p.stackPolicy.mode !== "all") {
+  if (bonusApplied && input.stackPolicy.mode !== "all") {
     return { alert: "bonus_required", discountPct: pct, expectedSum };
   }
 
   return { alert: "not_applied", discountPct: pct, expectedSum };
+}
+
+export async function resolveDiscountAlertForCreate(
+  tx: Prisma.TransactionClient,
+  p: CreateOrderTxParams,
+  paid: CreateOrderPaidBundle
+): Promise<DiscountAlertResolution> {
+  return resolveDiscountAlert(tx, {
+    tenantId: p.tenantId,
+    orderType: p.orderType,
+    applyDiscount: p.input.apply_discount !== false,
+    warehouseId: p.input.warehouse_id,
+    client: { id: p.client.id, category: p.client.category },
+    orderAgent: p.orderAgentForBonus,
+    qtyByProduct: p.qtyByProduct,
+    productById: p.productById,
+    orderedProductIds: p.orderedProductIds,
+    baseSubtotal: p.totalSum,
+    giftOverrides: p.validatedGiftOverrides,
+    stackPolicy: p.stackPolicy,
+    discountSum: paid.discountSum,
+    appliedAutoBonusRuleIds: paid.appliedAutoBonusRuleIds
+  });
 }

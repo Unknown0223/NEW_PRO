@@ -3,6 +3,7 @@
 import { MapPin, Wallet } from "lucide-react";
 import type { CityTerritoryHint } from "@/lib/city-territory-hint";
 import type { RefSelectOption } from "@/lib/ref-select-options";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import {
   WorkSlotsMultiSelect,
   entitiesToItems
@@ -55,6 +56,8 @@ type Props = {
     regions: RefSelectOption[];
     cities: RefSelectOption[];
   };
+  /** Bulk: zona/oblast tanlanganda pastki darajalarni avtomatik belgilash */
+  territoryNodes?: TerritoryNode[];
   cityTerritoryHints?: Record<string, CityTerritoryHint>;
   warehouses: PickerOpt[];
   cashDesks: PickerOpt[];
@@ -145,16 +148,20 @@ export function validateBulkTerritorySet(
   values: WorkSlotsLocationValues,
   modes: WorkSlotsLocationBulkModes
 ): string | null {
-  if (modes.territoryZone === "set" && trimCodes(values.territoryZoneList).length === 0) {
-    return "Зона: выберите хотя бы одно значение";
-  }
-  if (modes.territoryOblast === "set" && trimCodes(values.territoryOblastList).length === 0) {
-    return "Область: выберите хотя бы одно значение";
-  }
-  if (modes.territoryCity === "set" && trimCodes(values.territoryCityList).length === 0) {
-    return "Город: выберите хотя бы одно значение";
-  }
-  return null;
+  const anySet =
+    modes.territoryZone === "set" ||
+    modes.territoryOblast === "set" ||
+    modes.territoryCity === "set";
+  if (!anySet) return null;
+
+  const hasAny =
+    trimCodes(values.territoryZoneList).length > 0 ||
+    trimCodes(values.territoryOblastList).length > 0 ||
+    trimCodes(values.territoryCityList).length > 0;
+
+  // Zona yoki oblast yetarli — shahar hech qachon majburiy emas.
+  if (hasAny) return null;
+  return "Территория: выберите хотя бы зону, область или город";
 }
 
 export function validateBulkBindingsSet(
@@ -218,6 +225,7 @@ export function WorkSlotsLocationFields({
   values,
   onChange,
   territoryCascade,
+  territoryNodes,
   cityTerritoryHints,
   warehouses,
   cashDesks,
@@ -266,11 +274,15 @@ export function WorkSlotsLocationFields({
                 onZoneListChange={(territoryZoneList) => onChange({ territoryZoneList })}
                 onRegionListChange={(territoryOblastList) => onChange({ territoryOblastList })}
                 onCityListChange={(territoryCityList) => onChange({ territoryCityList })}
+                onCascadeListsChange={(patch) => onChange(patch)}
                 cascade={territoryCascade}
+                territoryNodes={territoryNodes}
+                cityTerritoryHints={cityTerritoryHints}
                 disabled={disabled}
               />
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Несколько значений распределяются по выбранным местам по очереди.
+                Зона → область → город из дерева территорий. Выбор зоны отмечает все области и
+                города внутри. Город необязателен.
               </p>
             </WorkSlotsBulkField>
           </section>

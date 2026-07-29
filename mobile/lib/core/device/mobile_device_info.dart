@@ -16,6 +16,10 @@ class MobileDeviceInfo {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   static const String _deviceIdKey = 'device_id';
 
+  static void clearApkCache() {
+    _cachedApk = null;
+  }
+
   /// Faqat versiya (`pubspec.yaml`) — build raqami web panelda ko‘rsatilmaydi.
   static Future<String> get apkVersion async {
     if (_cachedApk != null) return _cachedApk!;

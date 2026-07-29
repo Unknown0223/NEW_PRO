@@ -12,6 +12,8 @@ import { apiFetch } from "@/lib/api-client";
 import { messageFromWorkSlotsBulkError } from "@/lib/work-slots-bulk-errors";
 import type { WorkSlotType } from "@/lib/work-slots-types";
 import type { RefSelectOption } from "@/lib/ref-select-options";
+import type { TerritoryNode } from "@/lib/territory-tree";
+import type { CityTerritoryHint } from "@/lib/city-territory-hint";
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
 import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { WorkSlotsBulkField } from "./work-slots-bulk-field";
@@ -33,6 +35,9 @@ import {
   type WorkSlotsLocationBulkModes,
   type WorkSlotsLocationValues
 } from "./work-slots-location-fields";
+import {
+  expandTerritoryTreeDescendants
+} from "@/lib/territory-client-filters";
 
 export type WorkSlotsBulkResult = {
   updated?: number;
@@ -57,6 +62,8 @@ type Props = {
     regions: RefSelectOption[];
     cities: RefSelectOption[];
   };
+  territoryNodes?: TerritoryNode[];
+  cityTerritoryHints?: Record<string, CityTerritoryHint>;
   warehouses: PickerOpt[];
   cashDesks: PickerOpt[];
   onDone: (result: WorkSlotsBulkResult) => void;
@@ -91,6 +98,8 @@ export function WorkSlotsBulkDialog({
   branchOptions,
   tradeDirections,
   territoryCascade,
+  territoryNodes,
+  cityTerritoryHints,
   warehouses,
   cashDesks,
   onDone
@@ -157,7 +166,44 @@ export function WorkSlotsBulkDialog({
     }
 
     if (!destructive) {
-      const validationError = validateBulkForm(fields, formModes, formValues, location, locationModes);
+      // Zona/oblast tanlangan, shahar bo‘sh — apply oldidan avto to‘ldirish
+      let locationForSubmit = location;
+      const terrSet =
+        locationModes.territoryZone === "set" ||
+        locationModes.territoryOblast === "set" ||
+        locationModes.territoryCity === "set";
+      if (
+        terrSet &&
+        (location.territoryZoneList.length > 0 || location.territoryOblastList.length > 0) &&
+        location.territoryCityList.length === 0
+      ) {
+        const expanded = expandTerritoryTreeDescendants(
+          territoryNodes,
+          location.territoryZoneList,
+          location.territoryOblastList
+        );
+        const nextCities = expanded.cities;
+        const nextRegions =
+          location.territoryOblastList.length > 0
+            ? location.territoryOblastList
+            : expanded.regions;
+        if (nextCities.length > 0 || nextRegions.length > 0) {
+          locationForSubmit = {
+            ...location,
+            territoryOblastList: nextRegions,
+            territoryCityList: nextCities
+          };
+          setLocation(locationForSubmit);
+        }
+      }
+
+      const validationError = validateBulkForm(
+        fields,
+        formModes,
+        formValues,
+        locationForSubmit,
+        locationModes
+      );
       if (validationError) {
         setError(validationError);
         return;
@@ -166,6 +212,33 @@ export function WorkSlotsBulkDialog({
         setError("Выберите хотя бы одно поле для изменения (не «Не менять»)");
         return;
       }
+
+      const body = buildBulkRequestBody(
+        selectedIds,
+        fields,
+        formModes,
+        formValues,
+        locationForSubmit,
+        locationModes,
+        destructive
+      );
+
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await apiFetch<{ data: WorkSlotsBulkResult }>(`/api/${tenant}/work-slots/bulk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        onOpenChange(false);
+        onDone(res.data);
+      } catch (e) {
+        setError(messageFromWorkSlotsBulkError(e));
+      } finally {
+        setSaving(false);
+      }
+      return;
     }
 
     const body = buildBulkRequestBody(
@@ -389,6 +462,8 @@ export function WorkSlotsBulkDialog({
               values={location}
               onChange={(patch) => setLocation((prev) => ({ ...prev, ...patch }))}
               territoryCascade={territoryCascade}
+              territoryNodes={territoryNodes}
+              cityTerritoryHints={cityTerritoryHints}
               warehouses={warehouses}
               cashDesks={cashDesks}
               bulkModes={locationModes}

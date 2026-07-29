@@ -44,7 +44,6 @@ class HeldOrderSyncSheet extends ConsumerStatefulWidget {
 }
 
 class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
-  bool _sending = false;
   bool _didClose = false;
   HeldOrder? _lastOrder;
 
@@ -57,33 +56,14 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     Navigator.pop(context, action);
   }
 
-  Future<void> _sendNow(HeldOrder order) async {
-    if (_sending || _didClose) return;
-    setState(() {
-      _sending = true;
-      _lastOrder = order;
-    });
-    try {
-      await ref.read(heldOrderSchedulerProvider).submitNow(order.id);
-      if (!mounted) return;
-      _closeSheet(HeldOrderSyncAction.sent);
-    } catch (_) {
-      if (!mounted || _didClose) return;
-      setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось отправить заказ')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     ref.watch(heldOrderTickProvider);
 
-    // Timer tugaganda (yoki submitNow) zakaz navbatdan chiqsa — sheet ni yopish.
-    // Build ichida pop qilmaymiz; listen orqali.
+    // Timer tugaganda zakaz navbatdan chiqsa — sheet ni yopish.
+    // «Отправить сейчас» vizit bo‘limida.
     ref.listen<AsyncValue<List<HeldOrder>>>(heldOrdersProvider, (prev, next) {
-      if (_didClose || _sending) return;
+      if (_didClose) return;
       final list = next.valueOrNull;
       if (list == null) return;
       final stillThere = list.any((h) => h.id == widget.orderId);
@@ -119,7 +99,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     final totalWindow = current.submitAt.difference(current.createdAt);
     final totalMs = totalWindow.inMilliseconds <= 0 ? 1 : totalWindow.inMilliseconds;
     final leftMs = remaining.inMilliseconds.clamp(0, totalMs);
-    final progress = _sending ? 0.0 : (leftMs / totalMs).clamp(0.0, 1.0);
+    final progress = (leftMs / totalMs).clamp(0.0, 1.0);
     final delayLabel = '${widget.delayMinutes} мин';
 
     final bottom = MediaQuery.paddingOf(context).bottom;
@@ -192,8 +172,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Визит тугади. Агар товар, бонус ёки скидкада хато бўлса, '
-                      '${widget.delayMinutes} дақиқа ичида тузатинг.',
+                      'Агар товар, бонус ёки скидкада хато бўлса, '
+                      '${widget.delayMinutes} дақиқа ичида тузатинг. '
+                      'Дарҳол юбориш — Визит бўлимида.',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textMuted,
                         height: 1.35,
@@ -276,33 +257,13 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
           AgentPrimaryButton(
             label: 'Редактировать',
             height: 48,
-            onPressed: _sending
-                ? null
-                : () => _closeSheet(HeldOrderSyncAction.edit),
+            onPressed: () => _closeSheet(HeldOrderSyncAction.edit),
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: OutlinedButton(
-              onPressed: _sending ? null : () => _sendNow(current),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: const BorderSide(color: AppColors.primary, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              child: _sending
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : const Text('Отправить сейчас'),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            'Отправить сейчас — в разделе «Визит»',
+            textAlign: TextAlign.center,
+            style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
         ],
       ),

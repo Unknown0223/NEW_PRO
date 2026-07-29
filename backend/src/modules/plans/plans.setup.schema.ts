@@ -53,6 +53,42 @@ export const confirmPlansBodySchema = z
   })
   .strict();
 
+const importMetricValueSchema = z
+  .object({
+    kpi_group_id: z.number().int().positive().optional(),
+    kpi_group_name: z.string().trim().min(1).max(200).optional(),
+    cost: decimalField,
+    count: decimalField,
+    volume: decimalField,
+    acb: decimalField,
+    order_count: intField
+  })
+  .strict()
+  .refine((v) => v.kpi_group_id != null || (v.kpi_group_name != null && v.kpi_group_name.length > 0), {
+    message: "KPI_GROUP_REQUIRED"
+  });
+
+export const plansSetupImportBodySchema = z
+  .object({
+    month: z.coerce.number().int().min(1).max(12),
+    year: z.coerce.number().int().min(2000).max(2100),
+    direction_id: z.coerce.number().int().positive(),
+    rows: z
+      .array(
+        z
+          .object({
+            smart_code: z.string().trim().min(1).max(64),
+            agent_name: z.string().trim().max(200).optional(),
+            values: z.array(importMetricValueSchema).min(1).max(100)
+          })
+          .strict()
+      )
+      .min(1)
+      .max(2000)
+  })
+  .strict();
+
 export type PlanningCenterQuery = z.infer<typeof planningCenterQuerySchema>;
 export type PatchPlanTargetBody = z.infer<typeof patchPlanTargetBodySchema>;
 export type BulkSaveTargetsBody = z.infer<typeof bulkSaveTargetsBodySchema>;
+export type PlansSetupImportBody = z.infer<typeof plansSetupImportBodySchema>;

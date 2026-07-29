@@ -5,6 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import {
+  AgentRestrictionsPanelShell,
   AgentTemplateModal,
   agentModalBtnCancelTemplate,
   agentModalBtnSaveGradient
@@ -29,15 +30,6 @@ function productKey(categoryId: number, productId: number) {
   return `${categoryId}:${productId}`;
 }
 
-function parseProductKey(key: string): { categoryId: number; productId: number } | null {
-  const [catRaw, prodRaw] = key.split(":");
-  const categoryId = Number.parseInt(catRaw ?? "", 10);
-  const productId = Number.parseInt(prodRaw ?? "", 10);
-  if (!Number.isFinite(categoryId) || categoryId <= 0) return null;
-  if (!Number.isFinite(productId) || productId <= 0) return null;
-  return { categoryId, productId };
-}
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -45,7 +37,10 @@ type Props = {
   initial: AgentEntitlementSavePayload;
   priceTypes: string[];
   priceTypeLabels?: Record<string, string>;
-  onSave: (ent: AgentEntitlementSavePayload) => void;
+  bulkMode?: boolean;
+  bulkCount?: number;
+  bulkLabel?: string;
+  onSave: (ent: AgentEntitlementSavePayload) => void | Promise<void>;
 };
 
 /** Редактор entitlements для рабочего места (типы цен + продукты). */
@@ -56,6 +51,9 @@ export function SlotEntitlementsEditor({
   initial,
   priceTypes,
   priceTypeLabels,
+  bulkMode = false,
+  bulkCount = 0,
+  bulkLabel,
   onSave
 }: Props) {
   const [ptSel, setPtSel] = useState<string[]>([]);
@@ -64,6 +62,9 @@ export function SlotEntitlementsEditor({
   const [ptSearch, setPtSearch] = useState("");
   const [prSearch, setPrSearch] = useState("");
   const [expanded, setExpanded] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const wasOpenRef = useRef(false);
 
   const categoriesQ = useQuery({
     queryKey: ["product-categories", tenant, "slot-entitlements"],
@@ -122,11 +123,16 @@ export function SlotEntitlementsEditor({
     setPtSearch("");
     setPrSearch("");
     setExpanded([]);
+    setSaveError(null);
+    setSaving(false);
   }, [initial]);
 
+  // Faqat ochilganda reset — parent har renderda yangi `initial` bersa ham tanlovni o‘chirmaydi.
   useEffect(() => {
-    if (!open) return;
-    resetDraft();
+    if (open && !wasOpenRef.current) {
+      resetDraft();
+    }
+    wasOpenRef.current = open;
   }, [open, resetDraft]);
 
   const ptLabel = useCallback(
@@ -142,6 +148,79 @@ export function SlotEntitlementsEditor({
       }),
     [priceTypes, ptSearch, ptLabel]
   );
+
+  const allPtSelected =
+    filteredPt.length > 0 && filteredPt.every((p) => ptSel.includes(p));
+
+  const toggleAllPriceTypes = () => {
+    if (allPtSelected) {
+      setPtSel((prev) => prev.filter((p) => !filteredPt.includes(p)));
+    } else {
+      setPtSel((prev) => Array.from(new Set([...prev, ...filteredPt])));
+    }
+  };
+
+  const categoryMatchesSearch = useCallback(
+    (c: ProductCategoryRow) => {
+      const q = prSearch.trim().toLowerCase();
+      if (!q) return true;
+      if (c.name.toLowerCase().includes(q)) return true;
+      const items = productsByCategory.get(c.id) ?? [];
+      return items.some((p) => p.name.toLowerCase().includes(q));
+    },
+    [prSearch, productsByCategory]
+  );
+
+  const visibleCategories = useMemo(
+    () => categories.filter(categoryMatchesSearch),
+    [categories, categoryMatchesSearch]
+  );
+
+  const isCategoryFullySelected = useCallback(
+    (c: ProductCategoryRow) => {
+      const items = productsByCategory.get(c.id) ?? [];
+      const sel = items.filter((p) => prodChecked[productKey(c.id, p.id)]).length;
+      return categoryAll.has(c.id) || (items.length > 0 && sel === items.length);
+    },
+    [categoryAll, prodChecked, productsByCategory]
+  );
+
+  const allProductsSelected =
+    visibleCategories.length > 0 && visibleCategories.every(isCategoryFullySelected);
+
+  const toggleAllProducts = () => {
+    if (allProductsSelected) {
+      setCategoryAll((prev) => {
+        const next = new Set(prev);
+        for (const c of visibleCategories) next.delete(c.id);
+        return next;
+      });
+      setProdChecked((prev) => {
+        const next = { ...prev };
+        for (const c of visibleCategories) {
+          for (const p of productsByCategory.get(c.id) ?? []) {
+            delete next[productKey(c.id, p.id)];
+          }
+        }
+        return next;
+      });
+      return;
+    }
+    setCategoryAll((prev) => {
+      const next = new Set(prev);
+      for (const c of visibleCategories) next.add(c.id);
+      return next;
+    });
+    setProdChecked((prev) => {
+      const next = { ...prev };
+      for (const c of visibleCategories) {
+        for (const p of productsByCategory.get(c.id) ?? []) {
+          next[productKey(c.id, p.id)] = true;
+        }
+      }
+      return next;
+    });
+  };
 
   const buildRules = (): AgentEntitlementSavePayload["product_rules"] => {
     const out: AgentEntitlementSavePayload["product_rules"] = [];
@@ -163,30 +242,64 @@ export function SlotEntitlementsEditor({
     return out;
   };
 
-  const save = () => {
-    onSave({ price_types: ptSel, product_rules: buildRules() });
-    onClose();
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await Promise.resolve(onSave({ price_types: ptSel, product_rules: buildRules() }));
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!open) return null;
 
+  const chipCount = bulkMode ? bulkCount : 1;
+  const chipLabel = bulkMode
+    ? (bulkLabel ?? `Выбрано мест: ${bulkCount}`)
+    : "Ограничения рабочего места";
+
+  const ptCountLabel = `${ptSel.filter((p) => priceTypes.includes(p)).length}/${priceTypes.length}`;
+  const prodSelectedCount = categories.filter(isCategoryFullySelected).length;
+  const prodCountLabel = `${prodSelectedCount}/${categories.length}`;
+
   return (
-    <AgentTemplateModal title="Ограничения места" onClose={onClose} width="max-w-3xl">
+    <AgentTemplateModal
+      title={bulkMode ? "Групповые ограничения" : "Ограничения места"}
+      onClose={onClose}
+      width="max-w-3xl"
+    >
+      <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-teal-100 bg-gradient-to-r from-teal-50 to-emerald-50/60 px-3.5 py-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm text-white shadow-sm">
+          {chipCount > 1 ? chipCount : "⚙"}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-teal-600">
+            {bulkMode ? "Рабочие места" : "Место"}
+          </p>
+          <p className="truncate text-sm font-semibold text-slate-800">{chipLabel}</p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-slate-50/70 px-3.5 py-2.5">
-            <h4 className="text-sm font-semibold text-slate-800">Тип цены</h4>
-          </div>
-          <div className="border-b border-slate-100 p-2">
-            <input
-              placeholder="Поиск..."
-              value={ptSearch}
-              onChange={(e) => setPtSearch(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
-            />
-          </div>
-          <div className="max-h-64 flex-1 space-y-0.5 overflow-y-auto p-1.5">
-            {filteredPt.map((item) => (
+        <AgentRestrictionsPanelShell
+          icon="💰"
+          title="Тип цены"
+          countLabel={ptCountLabel}
+          onToggleAll={toggleAllPriceTypes}
+          allSelected={allPtSelected}
+          search={ptSearch}
+          onSearchChange={setPtSearch}
+          listClassName="max-h-64"
+        >
+          {filteredPt.length === 0 ? (
+            <p className="p-3 text-center text-xs text-slate-400">Нет типов цен</p>
+          ) : (
+            filteredPt.map((item) => (
               <label key={item} className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm">
                 <input
                   type="checkbox"
@@ -200,85 +313,99 @@ export function SlotEntitlementsEditor({
                 />
                 {ptLabel(item)}
               </label>
-            ))}
-          </div>
-        </div>
+            ))
+          )}
+        </AgentRestrictionsPanelShell>
 
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-slate-50/70 px-3.5 py-2.5">
-            <h4 className="text-sm font-semibold text-slate-800">Продукт</h4>
-          </div>
-          <div className="border-b border-slate-100 p-2">
-            <input
-              placeholder="Поиск..."
-              value={prSearch}
-              onChange={(e) => setPrSearch(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
-            />
-          </div>
-          <div className="max-h-64 flex-1 space-y-1 overflow-y-auto p-1.5">
-            {categoriesQ.isLoading || productsLoading ? (
-              <p className="p-4 text-center text-xs text-slate-400">Загрузка…</p>
-            ) : (
-              categories.map((c) => (
-                <CategoryRow
-                  key={c.id}
-                  category={c}
-                  products={productsByCategory.get(c.id) ?? []}
-                  prSearch={prSearch}
-                  expanded={expanded}
-                  onToggleExpand={(name) =>
-                    setExpanded((e) => (e.includes(name) ? e.filter((x) => x !== name) : [...e, name]))
-                  }
-                  categoryAll={categoryAll}
-                  prodChecked={prodChecked}
-                  onToggleCategory={() => {
-                    const items = productsByCategory.get(c.id) ?? [];
-                    const sel = items.filter((p) => prodChecked[productKey(c.id, p.id)]).length;
-                    const all = categoryAll.has(c.id) || (items.length > 0 && sel === items.length);
-                    setCategoryAll((prev) => {
-                      const n = new Set(prev);
-                      if (all) n.delete(c.id);
-                      else n.add(c.id);
-                      return n;
-                    });
-                    setProdChecked((prev) => {
-                      const next = { ...prev };
-                      for (const p of items) {
-                        const k = productKey(c.id, p.id);
-                        if (all) delete next[k];
-                        else next[k] = true;
-                      }
-                      return next;
-                    });
-                  }}
-                  onToggleProduct={(productId) => {
-                    const k = productKey(c.id, productId);
-                    setProdChecked((prev) => {
-                      const next = { ...prev };
-                      if (next[k]) delete next[k];
+        <AgentRestrictionsPanelShell
+          icon="📦"
+          title="Продукт"
+          countLabel={prodCountLabel}
+          onToggleAll={toggleAllProducts}
+          allSelected={allProductsSelected}
+          search={prSearch}
+          onSearchChange={setPrSearch}
+          listClassName="max-h-64"
+        >
+          {categoriesQ.isLoading || productsLoading ? (
+            <p className="p-4 text-center text-xs text-slate-400">Загрузка…</p>
+          ) : visibleCategories.length === 0 ? (
+            <p className="p-3 text-center text-xs text-slate-400">Нет категорий</p>
+          ) : (
+            visibleCategories.map((c) => (
+              <CategoryRow
+                key={c.id}
+                category={c}
+                products={productsByCategory.get(c.id) ?? []}
+                prSearch={prSearch}
+                expanded={expanded}
+                onToggleExpand={(name) =>
+                  setExpanded((e) => (e.includes(name) ? e.filter((x) => x !== name) : [...e, name]))
+                }
+                categoryAll={categoryAll}
+                prodChecked={prodChecked}
+                onToggleCategory={() => {
+                  const items = productsByCategory.get(c.id) ?? [];
+                  const sel = items.filter((p) => prodChecked[productKey(c.id, p.id)]).length;
+                  const all = categoryAll.has(c.id) || (items.length > 0 && sel === items.length);
+                  setCategoryAll((prev) => {
+                    const n = new Set(prev);
+                    if (all) n.delete(c.id);
+                    else n.add(c.id);
+                    return n;
+                  });
+                  setProdChecked((prev) => {
+                    const next = { ...prev };
+                    for (const p of items) {
+                      const k = productKey(c.id, p.id);
+                      if (all) delete next[k];
                       else next[k] = true;
-                      return next;
-                    });
-                    setCategoryAll((prev) => {
-                      const n = new Set(prev);
-                      n.delete(c.id);
-                      return n;
-                    });
-                  }}
-                />
-              ))
-            )}
-          </div>
-        </div>
+                    }
+                    return next;
+                  });
+                }}
+                onToggleProduct={(productId) => {
+                  const k = productKey(c.id, productId);
+                  setProdChecked((prev) => {
+                    const next = { ...prev };
+                    if (next[k]) delete next[k];
+                    else next[k] = true;
+                    return next;
+                  });
+                  setCategoryAll((prev) => {
+                    const n = new Set(prev);
+                    n.delete(c.id);
+                    return n;
+                  });
+                }}
+              />
+            ))
+          )}
+        </AgentRestrictionsPanelShell>
       </div>
 
+      {saveError ? (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {saveError}
+        </p>
+      ) : null}
+
       <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
-        <button type="button" onClick={onClose} className={agentModalBtnCancelTemplate}>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          className={agentModalBtnCancelTemplate}
+        >
           Отмена
         </button>
-        <button type="button" onClick={save} className={agentModalBtnSaveGradient}>
-          Применить
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          className={agentModalBtnSaveGradient}
+        >
+          {saving ? "…" : "Применить"}
         </button>
       </div>
     </AgentTemplateModal>
@@ -344,7 +471,10 @@ function CategoryRow({
               <input
                 type="checkbox"
                 className="accent-teal-600"
-                checked={Boolean(prodChecked[productKey(category.id, item.id)])}
+                checked={
+                  categoryAll.has(category.id) ||
+                  Boolean(prodChecked[productKey(category.id, item.id)])
+                }
                 onChange={() => onToggleProduct(item.id)}
               />
               {item.name}
