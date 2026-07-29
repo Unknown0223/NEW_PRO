@@ -1,7 +1,11 @@
 import { prisma } from "../../config/database";
 import { MOBILE_FIELD_ROLE_NAMES } from "../auth/app-access.service";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
-import { buildMobileApkDownloadUrl, mobileApkExists } from "./mobile-apk.service";
+import {
+  buildMobileApkDownloadUrl,
+  ensureMobileApkLocal,
+  mobileApkExists
+} from "./mobile-apk.service";
 
 export type MobileAppReleasePolicy = {
   min_version: string | null;
@@ -187,25 +191,59 @@ export function resolveAppUpdateBlock(
   };
 }
 
-export function resolveApkDownloadUrl(
+/** O‘z serverimizdagi `/api/mobile/apk-download` (noto‘g‘ri host/eski URL bo‘lishi mumkin). */
+export function isOwnApkDownloadUrl(url: string, tenantSlug?: string): boolean {
+  const raw = url.trim();
+  if (!raw) return false;
+  try {
+    const u = new URL(raw, "http://local.invalid");
+    if (!u.pathname.includes("/api/mobile/apk-download")) return false;
+    if (!tenantSlug) return true;
+    const q = (u.searchParams.get("slug") ?? "").trim().toLowerCase();
+    return q.length === 0 || q === tenantSlug.trim().toLowerCase();
+  } catch {
+    return /\/api\/mobile\/apk-download/i.test(raw);
+  }
+}
+
+/**
+ * APK URL: fayl mavjud bo‘lsa (lokal yoki R2 dan tiklangach) o‘z endpoint;
+ * policy dagi tashqi URL saqlanadi; o‘z apk-download lekin fayl yo‘q → null (404 oldini olish).
+ */
+export async function resolveApkDownloadUrl(
   policy: MobileAppReleasePolicy,
   tenantSlug: string,
   origin: string
-): string | null {
-  if (policy.download_url?.trim()) return policy.download_url.trim();
-  if (mobileApkExists(tenantSlug)) return buildMobileApkDownloadUrl(origin, tenantSlug);
+): Promise<string | null> {
+  await ensureMobileApkLocal(tenantSlug);
+  const ready = mobileApkExists(tenantSlug);
+  const ownUrl = buildMobileApkDownloadUrl(origin, tenantSlug);
+  const configured = policy.download_url?.trim() || null;
+
+  if (ready) {
+    if (!configured || isOwnApkDownloadUrl(configured, tenantSlug)) return ownUrl;
+    return configured;
+  }
+
+  // Fayl yo‘q — faqat tashqi (CDN/Telegram) URL qoldiriladi
+  if (configured && !isOwnApkDownloadUrl(configured)) return configured;
   return null;
 }
 
 /** APK serverda yuklangan bo‘lsa, `apk_url` va kerak bo‘lsa `url` ni to‘ldiradi. */
-export function enrichAppUpdateBlockUrl(
+export async function enrichAppUpdateBlockUrl(
   block: AppUpdateBlock,
   policy: MobileAppReleasePolicy,
   tenantSlug: string,
   origin: string
-): AppUpdateBlock {
-  const apkUrl = resolveApkDownloadUrl(policy, tenantSlug, origin);
-  const url = block.url?.trim() || apkUrl;
+): Promise<AppUpdateBlock> {
+  const apkUrl = await resolveApkDownloadUrl(policy, tenantSlug, origin);
+  let url = block.url?.trim() || null;
+  // Store URL saqlanadi; buzilgan o‘z apk-download havolasini olib tashlaymiz
+  if (url && isOwnApkDownloadUrl(url, tenantSlug) && !apkUrl) {
+    url = null;
+  }
+  if (!url) url = apkUrl;
   return { ...block, url, apk_url: apkUrl };
 }
 
@@ -242,7 +280,7 @@ export async function resolveAppUpdateForTenant(
       })
     )?.slug;
   if (slug && opts?.origin) {
-    block = enrichAppUpdateBlockUrl(block, policy, slug, opts.origin);
+    block = await enrichAppUpdateBlockUrl(block, policy, slug, opts.origin);
   }
   return block;
 }

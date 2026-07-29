@@ -1,10 +1,38 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNS } from "@prisma/client";
+import { extractMobileConfigFromEntitlementsUnknown } from "../staff/agent-mobile-config.parse";
 import {
   applyTerritoryFieldPatch,
   buildUserTerritory,
   parseUserTerritoryPartsFromHelpers
 } from "./work-slots.config-territory";
+
+/** Slot entitlements (narx/mahsulot) + userning `mobile_config` (shaxsiy). */
+export function mergeSlotEntitlementsPreservingMobileConfig(
+  slotEntitlements: Prisma.JsonValue | null | undefined,
+  userEntitlements: Prisma.JsonValue | null | undefined
+): Record<string, unknown> {
+  const slotObj =
+    slotEntitlements && typeof slotEntitlements === "object" && !Array.isArray(slotEntitlements)
+      ? { ...(slotEntitlements as Record<string, unknown>) }
+      : {};
+  delete slotObj.mobile_config;
+  const mobile = extractMobileConfigFromEntitlementsUnknown(userEntitlements);
+  if (mobile) slotObj.mobile_config = mobile;
+  return slotObj;
+}
+
+/** User → slot backfill: mobile_config joyga ko‘chirilmasin. */
+export function slotEntitlementsFromUserEntitlements(
+  userEntitlements: Prisma.JsonValue | null | undefined
+): Record<string, unknown> {
+  const obj =
+    userEntitlements && typeof userEntitlements === "object" && !Array.isArray(userEntitlements)
+      ? { ...(userEntitlements as Record<string, unknown>) }
+      : {};
+  delete obj.mobile_config;
+  return obj;
+}
 
 export type Tx = Prisma.TransactionClient;
 
@@ -81,7 +109,7 @@ export async function mirrorSlotConfigToUser(
     }),
     tx.user.findFirst({
       where: { id: userId, tenant_id: tenantId },
-      select: { id: true, role: true }
+      select: { id: true, role: true, agent_entitlements: true }
     })
   ]);
   if (!slot || !user) return;
@@ -96,6 +124,11 @@ export async function mirrorSlotConfigToUser(
         )?.name ?? null
       : null;
 
+  const mergedEntitlements = mergeSlotEntitlementsPreservingMobileConfig(
+    slot.entitlements,
+    user.agent_entitlements
+  );
+
   await tx.user.update({
     where: { id: userId },
     data: {
@@ -104,7 +137,7 @@ export async function mirrorSlotConfigToUser(
       trade_direction: directionName,
       price_type: slot.price_type,
       agent_price_types: slot.price_types ?? [],
-      agent_entitlements: slot.entitlements ?? {},
+      agent_entitlements: mergedEntitlements as Prisma.InputJsonValue,
       consignment: slot.consignment,
       consignment_limit_amount: slot.consignment_limit_amount,
       consignment_ignore_previous_months_debt: slot.consignment_ignore_previous_months_debt,
@@ -168,9 +201,11 @@ export async function clearWorkplaceFieldsOnUser(
 ): Promise<void> {
   const user = await tx.user.findFirst({
     where: { id: userId, tenant_id: tenantId },
-    select: { id: true }
+    select: { id: true, agent_entitlements: true }
   });
   if (!user) return;
+
+  const mobileOnly = mergeSlotEntitlementsPreservingMobileConfig({}, user.agent_entitlements);
 
   await tx.user.update({
     where: { id: userId },
@@ -180,7 +215,7 @@ export async function clearWorkplaceFieldsOnUser(
       trade_direction: null,
       price_type: null,
       agent_price_types: [],
-      agent_entitlements: {},
+      agent_entitlements: mobileOnly as Prisma.InputJsonValue,
       consignment: false,
       consignment_limit_amount: null,
       consignment_ignore_previous_months_debt: false,
@@ -329,45 +364,6 @@ export async function applySlotConfigPatch(
   };
 
   await tx.workSlot.update({ where: { id: slotId }, data });
-}
-
-/** Backfill: user → slot (faqat bo‘sh slot maydonlari). */
-export function buildSlotConfigFromUser(user: {
-  territory: string | null;
-  warehouse_id: number | null;
-  return_warehouse_id: number | null;
-  price_type: string | null;
-  agent_price_types: Prisma.JsonValue;
-  agent_entitlements: Prisma.JsonValue;
-  consignment: boolean;
-  consignment_limit_amount: Prisma.Decimal | null;
-  consignment_ignore_previous_months_debt: boolean;
-  consignment_close_day: number;
-  consignment_close_hour: number;
-  consignment_close_minute: number;
-  supervisor_user_id: number | null;
-  warehouse_staff_entitlements: Prisma.JsonValue;
-  expeditor_assignment_rules: Prisma.JsonValue;
-  cash_desk_id?: number | null;
-}): Prisma.WorkSlotUncheckedUpdateInput {
-  return {
-    territory: user.territory,
-    warehouse_id: user.warehouse_id,
-    return_warehouse_id: user.return_warehouse_id,
-    cash_desk_id: user.cash_desk_id ?? null,
-    price_type: user.price_type,
-    price_types: user.agent_price_types ?? [],
-    entitlements: user.agent_entitlements ?? {},
-    consignment: user.consignment,
-    consignment_limit_amount: user.consignment_limit_amount,
-    consignment_ignore_previous_months_debt: user.consignment_ignore_previous_months_debt,
-    consignment_close_day: user.consignment_close_day,
-    consignment_close_hour: user.consignment_close_hour,
-    consignment_close_minute: user.consignment_close_minute,
-    supervisor_user_id: user.supervisor_user_id,
-    warehouse_staff_entitlements: user.warehouse_staff_entitlements ?? {},
-    expeditor_assignment_rules: user.expeditor_assignment_rules ?? {}
-  };
 }
 
 export { buildUserTerritory, parseUserTerritoryPartsFromHelpers as parseTerritoryParts };

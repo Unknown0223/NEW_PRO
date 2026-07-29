@@ -65,7 +65,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
             backgroundColor: AppColors.warning,
           ),
         );
-        context.pop();
+        if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {

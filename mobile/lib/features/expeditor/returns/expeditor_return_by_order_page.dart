@@ -1793,7 +1793,7 @@ class _ExpeditorReturnByOrderPageState
         parts.join('\n'),
         color: discDebt > 0.0001 ? AppColors.warning : AppColors.success,
       );
-      context.pop();
+      if (context.canPop()) context.pop();
     } on ApiException catch (e) {
       if (mounted) _toast('Ошибка: ${e.message}', color: AppColors.error);
     } catch (e) {

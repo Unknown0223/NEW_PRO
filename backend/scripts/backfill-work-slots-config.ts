@@ -8,7 +8,7 @@
  *   npx.cmd tsx scripts/backfill-work-slots-config.ts --all
  */
 import { PrismaClient } from "@prisma/client";
-import { buildSlotConfigFromUser } from "../src/modules/work-slots/work-slots.config-mirror";
+import { buildSlotConfigFromUser } from "../src/modules/work-slots/work-slots.config-from-user";
 
 const prisma = new PrismaClient();
 

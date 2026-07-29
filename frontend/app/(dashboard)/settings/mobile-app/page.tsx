@@ -9,7 +9,7 @@ import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Smartphone } from "lucide-react";
 import { type AxiosProgressEvent } from "axios";
 
 type MobileAppReleasePolicy = {
@@ -32,11 +32,24 @@ type OutdatedUser = {
   last_sync_at: string | null;
 };
 
+type ApkStatus = {
+  ready: boolean;
+  bytes: number | null;
+  mtime_ms: number | null;
+  download_url: string;
+};
+
 type MobileAppReleaseResponse = {
   policy: MobileAppReleasePolicy;
   outdated_count: number;
   outdated_users: OutdatedUser[];
+  apk?: ApkStatus;
 };
+
+function formatMb(bytes: number | null | undefined): string {
+  if (bytes == null || bytes <= 0) return "—";
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function MobileAppSettingsPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -47,7 +60,7 @@ export default function MobileAppSettingsPage() {
 
   const [minVersion, setMinVersion] = useState("");
   const [latestVersion, setLatestVersion] = useState("");
-  const [forceUpdate, setForceUpdate] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState("");
   const [storeAndroid, setStoreAndroid] = useState("");
   const [storeIos, setStoreIos] = useState("");
@@ -74,7 +87,7 @@ export default function MobileAppSettingsPage() {
     setMinVersion(p.min_version ?? "");
     setLatestVersion(p.latest_version ?? "");
     setForceUpdate(p.force_update);
-    setDownloadUrl(p.download_url ?? "");
+    setDownloadUrl(p.download_url ?? data.apk?.download_url ?? "");
     setStoreAndroid(p.store_url_android ?? "");
     setStoreIos(p.store_url_ios ?? "");
     setReleaseNotes(p.release_notes ?? "");
@@ -97,7 +110,7 @@ export default function MobileAppSettingsPage() {
       return body.policy;
     },
     onSuccess: () => {
-      setMsg("Saqlandi");
+      setMsg("Saqlandi — agentlar ilovani ochganda yangilash dialogi chiqadi");
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     },
     onError: (e) => setMsg(getUserFacingError(e))
@@ -125,14 +138,20 @@ export default function MobileAppSettingsPage() {
       });
       setUploadProgress(100);
       setDownloadUrl(body.download_url);
+      setForceUpdate(true);
       if (body.policy.latest_version) {
-        setLatestVersion(body.policy.latest_version ?? "");
+        setLatestVersion(body.policy.latest_version);
+      }
+      if (body.policy.min_version) {
+        setMinVersion(body.policy.min_version);
+      }
+      if (body.policy.release_notes) {
+        setReleaseNotes(body.policy.release_notes);
+      } else if (body.policy.latest_version) {
+        setReleaseNotes(`Production yangilash ${body.policy.latest_version}`);
       }
       setMsg(
-        `APK yuklandi (${Math.round(body.bytes / (1024 * 1024))} MB).` +
-          (body.policy.latest_version
-            ? ` Oxirgi versiya: ${body.policy.latest_version} — Saqlash ni bosing.`
-            : " Oxirgi versiyani qo'lda kiriting va Saqlash ni bosing.")
+        `APK tayyor (${formatMb(body.bytes)}). Versiya ${body.policy.latest_version ?? "—"} — agentlar ilova ichida yangilanadi.`
       );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     } catch (e) {
@@ -156,7 +175,7 @@ export default function MobileAppSettingsPage() {
       setMsg(
         r.fcm_configured
           ? `Push yuborildi: ${r.tokens_sent} token (${r.users} foydalanuvchi)`
-          : `FCM sozlanmagan — ${r.users} eskirgan foydalanuvchi`
+          : `FCM sozlanmagan — agentlar ilovani ochganda baribir yangilash dialogi chiqadi (${r.users} ta)`
       );
     },
     onError: (e) => setMsg(getUserFacingError(e))
@@ -167,12 +186,17 @@ export default function MobileAppSettingsPage() {
     return <p className="text-sm text-muted-foreground">Faqat administrator uchun.</p>;
   }
 
+  const apkReady = data?.apk?.ready === true;
+  const latest = data?.policy.latest_version ?? latestVersion;
+  const otaActive = Boolean(latest && (downloadUrl || apkReady) && forceUpdate);
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Mobil ilova — versiya siyosati</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Mobil ilova — serverdan yangilash</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Serverdan avtomatik yangilash: APK yuklang, versiya siyosatini sozlang. Foydalanuvchi ma&apos;lumotlari saqlanadi.
+          Yangi APK ni shu yerga yuklang. Agentlar ilovani ochganda yoki sync qilganda{" "}
+          <strong>ilova ichida</strong> yangilanadi — PIN, parol va kesh saqlanadi.
         </p>
       </div>
 
@@ -180,21 +204,59 @@ export default function MobileAppSettingsPage() {
         <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
       ) : (
         <>
+          <div
+            className={`rounded-lg border px-4 py-3 ${
+              otaActive && apkReady
+                ? "border-emerald-500/40 bg-emerald-500/10"
+                : "border-amber-500/40 bg-amber-500/10"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              {otaActive && apkReady ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+              ) : (
+                <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              )}
+              <div className="min-w-0 space-y-1 text-sm">
+                <p className="font-medium">
+                  {otaActive && apkReady
+                    ? `OTA faol — ${latest}`
+                    : apkReady
+                      ? "APK yuklangan — majburiy yangilashni yoqing va Saqlash"
+                      : "Avval APK ni serverga yuklang"}
+                </p>
+                <p className="text-muted-foreground">
+                  Fayl: {apkReady ? formatMb(data?.apk?.bytes) : "yo‘q"} · Eskirgan:{" "}
+                  {data?.outdated_count ?? 0} ta · URL:{" "}
+                  <span className="break-all font-mono text-xs">
+                    {downloadUrl || data?.apk?.download_url || "—"}
+                  </span>
+                </p>
+                {!apkReady && (downloadUrl.includes("apk-download") || !downloadUrl) ? (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    Diqqat: APK fayli serverda yo‘q. Agentlar «Обновить» bosganda 404 oladi.
+                    Pastdan APK yuklang (redeploydan keyin qayta yuklash kerak bo‘lishi mumkin).
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="min_version">Minimal versiya</Label>
               <Input
                 id="min_version"
-                placeholder="3.0.0"
+                placeholder="3.1.0"
                 value={minVersion}
                 onChange={(e) => setMinVersion(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="latest_version">Oxirgi versiya</Label>
+              <Label htmlFor="latest_version">Oxirgi versiya (yangi ilova)</Label>
               <Input
                 id="latest_version"
-                placeholder="3.1.0"
+                placeholder="3.1.5"
                 value={latestVersion}
                 onChange={(e) => setLatestVersion(e.target.value)}
               />
@@ -207,11 +269,11 @@ export default function MobileAppSettingsPage() {
               checked={forceUpdate}
               onChange={(e) => setForceUpdate(e.target.checked)}
             />
-            Majburiy yangilash (oxirgi versiyadan past bo‘lsa bloklash)
+            Majburiy yangilash — oxirgi versiyadan past bo‘lsa login bloklanadi
           </label>
 
           <div className="space-y-2">
-            <Label htmlFor="download_url">APK yuklab olish URL</Label>
+            <Label htmlFor="download_url">Server APK URL</Label>
             <Input
               id="download_url"
               placeholder="https://backend.../api/mobile/apk-download?slug=..."
@@ -237,8 +299,18 @@ export default function MobileAppSettingsPage() {
                 disabled={uploading}
                 onClick={() => document.getElementById("apk_upload")?.click()}
               >
-                {uploading ? "Yuklanmoqda…" : "APK ni serverga yuklash"}
+                {uploading ? "Yuklanmoqda…" : "Yangi APK ni serverga yuklash"}
               </Button>
+              {downloadUrl ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(downloadUrl, "_blank", "noopener,noreferrer")}
+                >
+                  Yuklab olishni sinash
+                </Button>
+              ) : null}
             </div>
             {uploading || uploadProgress != null ? (
               <div className="mt-2 rounded-lg border border-border/80 bg-muted/40 px-4 py-3">
@@ -248,9 +320,6 @@ export default function MobileAppSettingsPage() {
                     <p className="text-sm font-medium">
                       Yuklanmoqda…{" "}
                       {uploadProgress != null ? `${Math.round(uploadProgress)}%` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Ilova ichida yuklab o&apos;rnatiladi — kesh va buyurtmalar saqlanadi
                     </p>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div
@@ -263,26 +332,26 @@ export default function MobileAppSettingsPage() {
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Ilova ichida yuklab o&apos;rnatiladi — kesh va buyurtmalar saqlanadi
+                Yuklangandan keyin agent «Обновить» bosadi — APK ilova ichida o‘rnatiladi
               </p>
             )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="store_android">Google Play havolasi</Label>
+              <Label htmlFor="store_android">Google Play (ixtiyoriy)</Label>
               <Input
                 id="store_android"
-                placeholder="https://play.google.com/..."
+                placeholder="Hozircha bo‘sh qoldiring — server OTA ishlaydi"
                 value={storeAndroid}
                 onChange={(e) => setStoreAndroid(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="store_ios">App Store havolasi</Label>
+              <Label htmlFor="store_ios">App Store (ixtiyoriy)</Label>
               <Input
                 id="store_ios"
-                placeholder="https://apps.apple.com/..."
+                placeholder="iOS uchun keyinroq"
                 value={storeIos}
                 onChange={(e) => setStoreIos(e.target.value)}
               />
@@ -293,7 +362,7 @@ export default function MobileAppSettingsPage() {
             <Label htmlFor="release_notes">Reliz eslatmalari</Label>
             <textarea
               id="release_notes"
-              rows={4}
+              rows={3}
               className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={releaseNotes}
               onChange={(e) => setReleaseNotes(e.target.value)}
@@ -309,7 +378,7 @@ export default function MobileAppSettingsPage() {
               onClick={() => notifyMut.mutate()}
               disabled={notifyMut.isPending || (data?.outdated_count ?? 0) === 0}
             >
-              Eskirganlarga push yuborish ({data?.outdated_count ?? 0})
+              Eskirganlarga eslatma ({data?.outdated_count ?? 0})
             </Button>
           </div>
 
@@ -317,8 +386,12 @@ export default function MobileAppSettingsPage() {
 
           <div className="rounded-lg border">
             <div className="border-b px-4 py-2 text-sm font-medium">
-              Eskirgan mobil foydalanuvchilar ({data?.outdated_users.length ?? 0})
+              Yangilanishi kerak bo‘lgan foydalanuvchilar ({data?.outdated_users.length ?? 0})
             </div>
+            <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+              «Versiya noma’lum» — hali yangi ilova bilan login/sync qilmagan. Ilovani ochganda majburiy
+              yangilash chiqadi.
+            </p>
             <div className="max-h-80 overflow-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -334,14 +407,14 @@ export default function MobileAppSettingsPage() {
                     <tr key={u.id} className="border-b last:border-0">
                       <td className="px-3 py-2">{u.name}</td>
                       <td className="px-3 py-2">{u.role}</td>
-                      <td className="px-3 py-2">{u.apk_version ?? "—"}</td>
+                      <td className="px-3 py-2">{u.apk_version ?? "noma’lum"}</td>
                       <td className="px-3 py-2">{u.device_name ?? "—"}</td>
                     </tr>
                   ))}
                   {(data?.outdated_users.length ?? 0) === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
-                        Barcha foydalanuvchilar siyosatga mos
+                        Barcha foydalanuvchilar {latest || "oxirgi"} versiyada
                       </td>
                     </tr>
                   ) : null}

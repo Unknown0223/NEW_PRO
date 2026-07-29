@@ -512,6 +512,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
       } on NetworkException {
         // Login davom etadi — oflayn rejim
+      } on ApiException {
+        // TenantNotFound / ApkNotFound — login o‘zi tekshiradi; yangilash tekshiruvi loginni to‘xtatmasin
       }
 
       final device = await MobileDeviceInfo.authPayload();

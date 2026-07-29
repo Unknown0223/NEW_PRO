@@ -18,6 +18,7 @@ class ErrorReporter {
   static ErrorReporter? _instance;
   bool _flushing = false;
   DateTime? _lastSentAt;
+  final Map<String, DateTime> _recentKeys = {};
   static const _minInterval = Duration(milliseconds: 400);
   static const _queueFile = 'error_event_queue.jsonl';
   static const _maxQueueLines = 80;
@@ -55,10 +56,28 @@ class ErrorReporter {
       code = data['error']?.toString();
       requestId = data['requestId']?.toString() ?? data['request_id']?.toString();
       final m = data['message']?.toString();
-      if (m != null && m.isNotEmpty) message = m;
-      else if (code != null && code.isNotEmpty) message = code;
+      if (m != null && m.isNotEmpty) {
+        message = m;
+      } else if (code != null && code.isNotEmpty) {
+        message = code;
+      }
     }
     requestId ??= err.response?.headers.value('x-request-id');
+
+    // Bir xil request_id qisqa vaqt ichida qayta yozilmasin (dublikat log)
+    final dedupeKey = requestId?.trim().isNotEmpty == true
+        ? 'rid:$requestId'
+        : 'p:$path:${status ?? 0}:$code';
+    final now = DateTime.now();
+    final prev = _recentKeys[dedupeKey];
+    if (prev != null && now.difference(prev) < const Duration(seconds: 8)) {
+      return;
+    }
+    _recentKeys[dedupeKey] = now;
+    if (_recentKeys.length > 40) {
+      final cutoff = now.subtract(const Duration(seconds: 30));
+      _recentKeys.removeWhere((_, t) => t.isBefore(cutoff));
+    }
 
     enqueue({
       'message': message.length > 500 ? '${message.substring(0, 499)}…' : message,
@@ -120,7 +139,7 @@ class ErrorReporter {
       'device_id': device['device_id'],
     };
     await _appendQueueLine(jsonEncode(enriched));
-    await _flushQueue();
+    await flush();
   }
 
   Future<File> _queueFileHandle() async {

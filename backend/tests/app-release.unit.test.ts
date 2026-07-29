@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { compareSemver, resolveAppUpdateBlock } from "../src/modules/mobile/app-release.service";
+import {
+  compareSemver,
+  isOwnApkDownloadUrl,
+  resolveAppUpdateBlock
+} from "../src/modules/mobile/app-release.service";
 
 describe("app-release.service", () => {
   it("compareSemver orders versions", () => {
     expect(compareSemver("3.0.0", "3.1.0")).toBeLessThan(0);
     expect(compareSemver("3.1.0", "3.0.0")).toBeGreaterThan(0);
     expect(compareSemver("3.0.0", "3.0.0")).toBe(0);
+  });
+
+  it("isOwnApkDownloadUrl detects server OTA links", () => {
+    expect(
+      isOwnApkDownloadUrl("https://api.example.com/api/mobile/apk-download?slug=test1", "test1")
+    ).toBe(true);
+    expect(
+      isOwnApkDownloadUrl("https://api.example.com/api/mobile/apk-download?slug=TEST1", "test1")
+    ).toBe(true);
+    expect(isOwnApkDownloadUrl("https://cdn.example.com/app.apk", "test1")).toBe(false);
   });
 
   it("resolveAppUpdateBlock marks required below min", () => {

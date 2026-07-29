@@ -76,6 +76,22 @@ export async function appendErrorEvent(input: AppendErrorEventInput): Promise<{ 
   if (!message) return null;
   if (input.tenantId < 1) return null;
 
+  const requestId = input.requestId?.trim().slice(0, 64) || null;
+  // Bir xil HTTP so‘rov ikki marta (mobile+backend yoki race) — dublikat yaratilmasin
+  if (requestId) {
+    const since = new Date(Date.now() - 15_000);
+    const existing = await prisma.errorEvent.findFirst({
+      where: {
+        tenant_id: input.tenantId,
+        request_id: requestId,
+        occurred_at: { gte: since }
+      },
+      select: { id: true },
+      orderBy: { id: "desc" }
+    });
+    if (existing) return existing;
+  }
+
   const payload = sanitizePayloadForAudit(input.payload ?? {});
   const row = await prisma.errorEvent.create({
     data: {
@@ -84,7 +100,7 @@ export async function appendErrorEvent(input: AppendErrorEventInput): Promise<{ 
       source: input.source,
       severity: input.severity === "fatal" ? "fatal" : "error",
       occurred_at: input.occurredAt ?? new Date(),
-      request_id: input.requestId?.trim().slice(0, 64) || null,
+      request_id: requestId,
       http_status: input.httpStatus ?? null,
       error_code: input.errorCode?.trim().slice(0, 128) || null,
       message,

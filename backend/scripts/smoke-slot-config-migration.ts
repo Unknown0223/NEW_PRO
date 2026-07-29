@@ -7,7 +7,8 @@ import {
   buildUserTerritory,
   parseUserTerritoryPartsFromHelpers
 } from "../src/modules/work-slots/work-slots.config-territory";
-import { buildSlotConfigFromUser, hasSlotConfigPatch } from "../src/modules/work-slots/work-slots.config-mirror";
+import { hasSlotConfigPatch } from "../src/modules/work-slots/work-slots.config-mirror";
+import { buildSlotConfigFromUser } from "../src/modules/work-slots/work-slots.config-from-user";
 import {
   applyPlanShare,
   DEFAULT_SLOT_PLAN_POLICY,

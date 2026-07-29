@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Hash, MapPinned, UserRound } from "lucide-react";
+import { Building2, Hash, Settings2, UserRound } from "lucide-react";
 import {
   AgentFormField,
   AgentFormSection,
   agentModalInputClass
 } from "@/components/staff/agent-workspace-template-ui";
+import { Button } from "@/components/ui/button";
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
 import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
@@ -43,6 +44,8 @@ type Props = {
   };
   territoryNodes: TerritoryNode[];
   onSaved: () => void;
+  /** Open workplace config (prices, limits, product entitlements). */
+  onOpenConfig?: (slotId: number) => void;
 };
 
 const emptyLocation = (): WorkSlotsLocationValues => ({
@@ -68,7 +71,8 @@ export function EditSlotDialog({
   cashDesks,
   clientRefs,
   territoryNodes,
-  onSaved
+  onSaved,
+  onOpenConfig
 }: Props) {
   const [original, setOriginal] = useState<WorkSlotListItem | null>(null);
   const [slotCode, setSlotCode] = useState("");
@@ -226,6 +230,22 @@ export function EditSlotDialog({
       onOpenChange(false);
       onSaved();
     } catch (e) {
+      if (e instanceof Error && "apiBody" in e) {
+        const apiErr = e as Error & { apiBody?: { error?: string; message?: string } };
+        const code = apiErr.apiBody?.error?.trim();
+        if (code === "CodeTaken") {
+          setError("Этот Smart-код уже занят — укажите другой код");
+          return;
+        }
+        if (apiErr.apiBody?.message?.trim()) {
+          setError(apiErr.apiBody.message.trim());
+          return;
+        }
+        if (code) {
+          setError(code);
+          return;
+        }
+      }
       setError(e instanceof Error ? e.message : "Не удалось сохранить");
     } finally {
       setSaving(false);
@@ -384,11 +404,23 @@ export function EditSlotDialog({
             />
           </AgentFormSection>
 
-          <AgentFormSection title="Подсказка" icon={<MapPinned className="h-4 w-4" />}>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Конфигурация (цены, лимиты, entitlements) настраивается на странице места в разделе{" "}
-              <span className="font-medium text-foreground">Конфигурация</span>.
+          <AgentFormSection title="Конфигурация места" icon={<Settings2 className="h-4 w-4" />}>
+            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+              Цены, лимиты и доступ к товарам (entitlements) настраиваются отдельно от филиала и
+              территории.
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={!slotId || !onOpenConfig}
+              onClick={() => {
+                if (slotId && onOpenConfig) onOpenConfig(slotId);
+              }}
+            >
+              <Settings2 className="mr-2 h-4 w-4" />
+              Открыть конфигурацию
+            </Button>
           </AgentFormSection>
         </div>
       )}

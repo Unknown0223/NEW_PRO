@@ -84,7 +84,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Qaytarish qayd etildi'), backgroundColor: AppColors.warning),
         );
-        context.pop();
+        if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -111,7 +111,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Dogruzka qayd etildi')),
         );
-        context.pop();
+        if (context.canPop()) context.pop();
       }
     } catch (e) {
       if (mounted) {

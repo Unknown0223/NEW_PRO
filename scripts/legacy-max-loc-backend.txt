@@ -66,3 +66,5 @@ backend/prisma/models/group-03.prisma
 
 backend/src/modules/work-slots/work-slots.service.ts
 
+backend/src/modules/orders/domain/order.lines.ts
+
