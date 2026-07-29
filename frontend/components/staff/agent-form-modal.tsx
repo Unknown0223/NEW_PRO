@@ -394,7 +394,14 @@ export function AgentFormModal({
           <AgentFormSection title="KPI" icon={<Palette className="h-4 w-4" />}>
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2">
               <p className="text-xs text-slate-500">
-                Консигнация, типы цен и ограничения продуктов — в{" "}
+                Консигнация и лимит — в{" "}
+                <a
+                  href="/settings/spravochnik/consignment"
+                  className="font-semibold text-teal-700 underline"
+                >
+                  Пользователи → Консигнация
+                </a>
+                ; типы цен и ограничения продуктов — в{" "}
                 <a href="/work-slots" className="font-semibold text-teal-700 underline">
                   Рабочее место
                 </a>

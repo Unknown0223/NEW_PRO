@@ -64,13 +64,12 @@ export type SlotWorkplaceConfigTabId =
   | "main"
   | "prices"
   | "limits"
-  | "consignment"
   | "skladchik"
   | "expeditor";
 
 /**
  * Har rol o‘ziga xos sozlamalar:
- * - agent: narx, mahsulot cheklovi, konsignatsiya
+ * - agent: narx, mahsulot cheklovi (konsignatsiya — /settings/spravochnik/consignment)
  * - expeditor: yetkazib berish qoidalari
  * - skladchik: ombor ruxsatlari
  * - boshqalar: asosiy (yo‘nalish / ombor qaytarish)
@@ -83,8 +82,7 @@ export function slotWorkplaceConfigTabs(
       return [
         { id: "main", label: "Основное" },
         { id: "prices", label: "Типы цен" },
-        { id: "limits", label: "Ограничения" },
-        { id: "consignment", label: "Консигнация" }
+        { id: "limits", label: "Ограничения" }
       ];
     case "expeditor":
       return [

@@ -5,8 +5,7 @@ import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-s
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 import {
   parseConsignmentMonthCloseDay,
-  patchConsignmentSettings,
-  resolveAgentConsignmentCloseSchedule
+  patchConsignmentSettings
 } from "./consignment-settings";
 import { reconcileTenantConsignmentMonthClosures } from "./consignment-month-closure.service";
 import { listAgentConsignmentMonthStatusForMonth } from "./consignment-month-status.repo";
@@ -230,7 +229,13 @@ export async function listConsignmentAgents(
     ])
   );
 
-  const where: Prisma.UserWhereInput = { tenant_id: tenantId, role: "agent", is_active: true };
+  const where: Prisma.UserWhereInput = {
+    tenant_id: tenantId,
+    role: "agent",
+    is_active: true,
+    // Faqat ishchi o‘rniga biriktirilgan agentlar
+    slot_user_links: { some: { ended_at: null } }
+  };
   const c = q.consignment ?? "all";
   if (c === "yes") where.consignment = true;
   else if (c === "no") where.consignment = false;
@@ -270,26 +275,34 @@ export async function listConsignmentAgents(
 
   const rows: ConsignmentAgentRow[] = [];
   for (const u of users) {
-    const ignore = u.consignment_ignore_previous_months_debt;
+    const slot = workSlotByUser.get(u.id);
+    if (!slot) continue;
+    // Manba: ishchi o‘rni (konsignatsiya sahifasi yozadi → slot + user)
+    const consignmentOn = slot.consignment;
+    const ignore = slot.consignment_ignore_previous_months_debt;
     const outstanding = await computeAgentConsignmentOutstanding(prisma, tenantId, u.id, {
       ignorePreviousMonthsDebt: ignore,
       monthStartsAt
     });
-    const limitAmt = u.consignment_limit_amount;
+    const limitAmt = slot.consignment_limit_amount;
     let remaining: string | null = null;
     if (limitAmt != null) {
       const rem = limitAmt.sub(outstanding);
       remaining = (rem.gt(0) ? rem : new Prisma.Decimal(0)).toString();
     }
     const closure = closureByAgent.get(u.id);
-    const closeSchedule = resolveAgentConsignmentCloseSchedule(u, tenantSettings);
+    const closeSchedule = {
+      day: slot.consignment_close_day,
+      hour: slot.consignment_close_hour,
+      minute: slot.consignment_close_minute
+    };
     rows.push({
       id: u.id,
       code: u.code,
-      work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null,
+      work_slot_code: slot.slot_code,
       name: toFio(u),
       is_active: u.is_active,
-      consignment: u.consignment,
+      consignment: consignmentOn,
       consignment_limit_amount: limitAmt?.toString() ?? null,
       consignment_ignore_previous_months_debt: ignore,
       consignment_updated_at: u.consignment_updated_at?.toISOString() ?? null,
@@ -315,6 +328,34 @@ export type BulkPatchConsignmentInput = {
   consignment_ignore_previous_months_debt?: boolean;
 };
 
+/** Konsignatsiya patchini faol ishchi o‘rniga yozadi (manba — Consigment sahifa). */
+async function mirrorConsignmentPatchToActiveSlot(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  userId: number,
+  patch: {
+    consignment?: boolean;
+    consignment_limit_amount?: Prisma.Decimal | null;
+    consignment_ignore_previous_months_debt?: boolean;
+  }
+): Promise<void> {
+  const link = await tx.slotUserLink.findFirst({
+    where: { user_id: userId, ended_at: null, slot: { tenant_id: tenantId } },
+    select: { slot_id: true }
+  });
+  if (!link) throw new Error("NO_WORKPLACE");
+  const data: Prisma.WorkSlotUpdateInput = {};
+  if (patch.consignment !== undefined) data.consignment = patch.consignment;
+  if (patch.consignment_limit_amount !== undefined) {
+    data.consignment_limit_amount = patch.consignment_limit_amount;
+  }
+  if (patch.consignment_ignore_previous_months_debt !== undefined) {
+    data.consignment_ignore_previous_months_debt = patch.consignment_ignore_previous_months_debt;
+  }
+  if (Object.keys(data).length === 0) return;
+  await tx.workSlot.update({ where: { id: link.slot_id }, data });
+}
+
 export async function bulkPatchConsignmentAgents(
   tenantId: number,
   input: BulkPatchConsignmentInput,
@@ -331,14 +372,17 @@ export async function bulkPatchConsignmentAgents(
   if (input.consignment_ignore_previous_months_debt !== undefined) {
     data.consignment_ignore_previous_months_debt = input.consignment_ignore_previous_months_debt;
   }
+  let limitAmt: Prisma.Decimal | null | undefined;
   if (input.consignment_limit_amount !== undefined) {
     if (input.consignment_limit_amount == null || String(input.consignment_limit_amount).trim() === "") {
       data.consignment_limit_amount = null;
       data.consignment_ignore_previous_months_debt = false;
+      limitAmt = null;
     } else {
       const d = new Prisma.Decimal(input.consignment_limit_amount);
       if (d.lt(0)) throw new Error("BAD_LIMIT");
       data.consignment_limit_amount = d;
+      limitAmt = d;
     }
   }
 
@@ -348,9 +392,22 @@ export async function bulkPatchConsignmentAgents(
     input.consignment_ignore_previous_months_debt !== undefined;
   if (!hasField) throw new Error("EMPTY_PATCH");
 
-  const res = await prisma.user.updateMany({
-    where: { tenant_id: tenantId, role: "agent", is_active: true, id: { in: ids } },
-    data
+  await prisma.$transaction(async (tx) => {
+    for (const userId of ids) {
+      const res = await tx.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", is_active: true, id: userId },
+        data
+      });
+      if (res.count !== 1) throw new Error("BAD_AGENT_ROW");
+      await mirrorConsignmentPatchToActiveSlot(tx, tenantId, userId, {
+        consignment: input.consignment,
+        consignment_limit_amount: limitAmt,
+        consignment_ignore_previous_months_debt:
+          input.consignment_limit_amount !== undefined && limitAmt == null
+            ? false
+            : input.consignment_ignore_previous_months_debt
+      });
+    }
   });
 
   await appendTenantAuditEvent({
@@ -362,7 +419,7 @@ export async function bulkPatchConsignmentAgents(
     payload: { user_ids: ids, keys: Object.keys(data).filter((k) => k !== "consignment_updated_at") }
   });
 
-  return { updated: res.count };
+  return { updated: ids.length };
 }
 
 export type ConsignmentAgentRowPatch = {
@@ -418,6 +475,11 @@ export async function bulkPatchConsignmentAgentRows(
         }
       });
       if (res.count !== 1) throw new Error("BAD_AGENT_ROW");
+      await mirrorConsignmentPatchToActiveSlot(tx, tenantId, row.user_id, {
+        consignment: row.consignment,
+        consignment_limit_amount: limitAmt,
+        consignment_ignore_previous_months_debt: ignoreDebt
+      });
     }
   });
 

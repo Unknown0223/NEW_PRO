@@ -171,9 +171,18 @@ export async function listSlotDebtCollectors(
   return out;
 }
 
-export type ActiveWorkSlotInfo = { slot_id: number; slot_code: string };
+export type ActiveWorkSlotInfo = {
+  slot_id: number;
+  slot_code: string;
+  consignment: boolean;
+  consignment_limit_amount: import("@prisma/client").Prisma.Decimal | null;
+  consignment_ignore_previous_months_debt: boolean;
+  consignment_close_day: number;
+  consignment_close_hour: number;
+  consignment_close_minute: number;
+};
 
-/** Faol `slot_user_links` bo‘yicha foydalanuvchi → ishchi o‘rni. */
+/** Faol `slot_user_links` bo‘yicha foydalanuvchi → ishchi o‘rni (+ konsignatsiya maydonlari). */
 export async function loadActiveWorkSlotsByUserIds(
   userIds: number[]
 ): Promise<Map<number, ActiveWorkSlotInfo>> {
@@ -182,12 +191,32 @@ export async function loadActiveWorkSlotsByUserIds(
     where: { user_id: { in: userIds }, ended_at: null },
     select: {
       user_id: true,
-      slot: { select: { id: true, slot_code: true } }
+      slot: {
+        select: {
+          id: true,
+          slot_code: true,
+          consignment: true,
+          consignment_limit_amount: true,
+          consignment_ignore_previous_months_debt: true,
+          consignment_close_day: true,
+          consignment_close_hour: true,
+          consignment_close_minute: true
+        }
+      }
     }
   });
   const map = new Map<number, ActiveWorkSlotInfo>();
   for (const l of links) {
-    map.set(l.user_id, { slot_id: l.slot.id, slot_code: l.slot.slot_code });
+    map.set(l.user_id, {
+      slot_id: l.slot.id,
+      slot_code: l.slot.slot_code,
+      consignment: l.slot.consignment,
+      consignment_limit_amount: l.slot.consignment_limit_amount,
+      consignment_ignore_previous_months_debt: l.slot.consignment_ignore_previous_months_debt,
+      consignment_close_day: l.slot.consignment_close_day,
+      consignment_close_hour: l.slot.consignment_close_hour,
+      consignment_close_minute: l.slot.consignment_close_minute
+    });
   }
   return map;
 }

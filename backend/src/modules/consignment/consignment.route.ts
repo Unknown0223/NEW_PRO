@@ -180,6 +180,16 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
         if (msg === "TOO_MANY_IDS") return sendApiError(reply, request, 400, "TooManyIds");
         if (msg === "EMPTY_PATCH") return sendApiError(reply, request, 400, "EmptyPatch");
         if (msg === "BAD_LIMIT") return sendApiError(reply, request, 400, "BadLimit");
+        if (msg === "NO_WORKPLACE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "NoWorkplace",
+            "Агент не назначен на рабочее место"
+          );
+        }
+        if (msg === "BAD_AGENT_ROW") return sendApiError(reply, request, 400, "BadAgentRow");
         throw e;
       }
     }
@@ -207,6 +217,15 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_ROWS") return sendApiError(reply, request, 400, "EmptyRows");
         if (msg === "TOO_MANY_ROWS") return sendApiError(reply, request, 400, "TooManyRows");
         if (msg === "BAD_LIMIT") return sendApiError(reply, request, 400, "BadLimit");
+        if (msg === "NO_WORKPLACE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "NoWorkplace",
+            "Агент не назначен на рабочее место — сначала назначьте в «Рабочее место»"
+          );
+        }
         if (msg === "BAD_AGENT_ROW") {
           return sendApiError(
             reply,

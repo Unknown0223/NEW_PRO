@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
-import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
 import { SlotEntitlementsEditor } from "@/components/work-slots/slot-entitlements-editor";
 import {
   SlotExpeditorRulesEditor,
@@ -235,7 +234,7 @@ export function SlotWorkplaceConfigDialog({
         : null
     };
 
-    // Agentga xos: narx, mahsulot cheklovi, konsignatsiya — boshqa rollarga yozilmaydi.
+    // Agentga xos: narx, mahsulot cheklovi — konsignatsiya alohida sahifada.
     if (effectiveSlotType === "agent") {
       body.price_type = form.priceType.trim() || null;
       body.price_types = form.priceTypes;
@@ -243,14 +242,6 @@ export function SlotWorkplaceConfigDialog({
         price_types: form.entitlements.price_types,
         product_rules: form.entitlements.product_rules
       };
-      body.consignment = form.consignment;
-      body.consignment_limit_amount = form.consignmentLimit.trim()
-        ? form.consignmentLimit.trim()
-        : null;
-      body.consignment_ignore_previous_months_debt = form.consignmentIgnoreDebt;
-      body.consignment_close_day = Number.parseInt(form.closeDay, 10) || 25;
-      body.consignment_close_hour = Number.parseInt(form.closeHour, 10) || 0;
-      body.consignment_close_minute = Number.parseInt(form.closeMinute, 10) || 0;
     }
     if (effectiveSlotType === "skladchik") {
       body.warehouse_staff_entitlements = form.skladchikEntitlements;
@@ -409,7 +400,11 @@ export function SlotWorkplaceConfigDialog({
           <div className="space-y-4 text-[13px]">
             <p className="text-xs leading-relaxed text-muted-foreground">
               Типы цен в entitlements и продуктовые правила — на уровне рабочего места (как раньше
-              «Ограничения» у агента).
+              «Ограничения» у агента). Консигнация и лимит — в разделе{" "}
+              <a href="/settings/spravochnik/consignment" className="font-medium text-teal-700 underline">
+                Пользователи → Консигнация
+              </a>
+              .
             </p>
             <div className="rounded-lg border border-border/70 bg-muted/15 p-4">
               <p className="mb-3 text-sm text-foreground">
@@ -427,52 +422,6 @@ export function SlotWorkplaceConfigDialog({
                 Редактировать ограничения
               </Button>
             </div>
-          </div>
-        );
-      case "consignment":
-        return (
-          <div className="space-y-4 text-[13px]">
-            <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
-              <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm">
-                <input
-                  type="checkbox"
-                  className="accent-teal-600"
-                  checked={form.consignment}
-                  onChange={(e) => setForm((p) => ({ ...p, consignment: e.target.checked }))}
-                />
-                Консигнация
-              </label>
-            </div>
-            {form.consignment ? (
-              <div className="space-y-3 rounded-lg border border-border/70 p-3">
-                <div className="space-y-1">
-                  <Label>Лимит консигнации</Label>
-                  <Input
-                    value={form.consignmentLimit}
-                    onChange={(e) => setForm((p) => ({ ...p, consignmentLimit: e.target.value }))}
-                    placeholder="Сумма"
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={form.consignmentIgnoreDebt}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, consignmentIgnoreDebt: e.target.checked }))
-                    }
-                  />
-                  Игнорировать долг прошлых месяцев
-                </label>
-                <ConsignmentCloseScheduleFields
-                  closeDay={form.closeDay}
-                  closeHour={form.closeHour}
-                  closeMinute={form.closeMinute}
-                  onCloseDayChange={(v) => setForm((p) => ({ ...p, closeDay: v }))}
-                  onCloseHourChange={(v) => setForm((p) => ({ ...p, closeHour: v }))}
-                  onCloseMinuteChange={(v) => setForm((p) => ({ ...p, closeMinute: v }))}
-                />
-              </div>
-            ) : null}
           </div>
         );
       case "skladchik":

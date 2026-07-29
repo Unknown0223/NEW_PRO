@@ -211,7 +211,17 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             <span className="text-muted-foreground">Тип цены:</span> {slot.price_type ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">Консигнация:</span> {slot.consignment ? "Да" : "Нет"}
+            <span className="text-muted-foreground">Консигнация:</span>{" "}
+            {slot.consignment ? "Да" : "Нет"}
+            {slot.consignment_limit_amount != null && String(slot.consignment_limit_amount).trim()
+              ? ` · лимит ${slot.consignment_limit_amount}`
+              : ""}{" "}
+            <a
+              href="/settings/spravochnik/consignment"
+              className="text-teal-700 underline underline-offset-2"
+            >
+              изменить
+            </a>
           </p>
           <p>
             <span className="text-muted-foreground">Tur:</span> {slotTypeLabel(slot.slot_type)}

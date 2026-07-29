@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -22,10 +21,9 @@ import { formatNumberGrouped, normalizeNumericInput } from "@/lib/format-numbers
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { pickFirstExcelFile } from "@/lib/excel-file-pick";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 
-/** Лимиты и расписание консигнации редактируются только на рабочем месте. */
-const CONSIGNMENT_CONFIG_READONLY = true;
+/** Лимиты и включение консигнации редактируются на этой странице (пишутся в рабочее место + агент). */
+const CONSIGNMENT_CONFIG_READONLY = false;
 
 type ConsignmentAgentApi = {
   id: number;
@@ -601,11 +599,8 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Консигнация</h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            Лимиты, расписание закрытия и включение консигнации настраиваются в{" "}
-            <Link href="/work-slots" className="text-primary underline-offset-2 hover:underline">
-              Рабочее место
-            </Link>
-            . На этой странице — просмотр долгов и лимитов (зеркало с места).
+            Список сотрудников, назначенных на рабочее место. Здесь включается консигнация и задаётся
+            лимит (сохраняется на рабочем месте и у агента). Долги и остаток лимита — за выбранный месяц.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -676,12 +671,6 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           )}
         </div>
       </div>
-
-      {CONSIGNMENT_CONFIG_READONLY ? (
-        <div className="mb-4">
-          <WorkplaceMovedNotice />
-        </div>
-      ) : null}
 
       {toast ? (
         <p
