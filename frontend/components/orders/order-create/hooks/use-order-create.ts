@@ -161,6 +161,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const [polkiTotalQty, setPolkiTotalQty] = useState<Record<string, string>>({});
   const [polkiBonusToBalance, setPolkiBonusToBalance] = useState<Record<string, boolean>>({});
   const [polkiBonusCash, setPolkiBonusCash] = useState<Record<string, string>>({});
+  /** Auto-bonus: tovar (dona) vs to‘lov (dona → summa). */
+  const [polkiBonusGoodsQty, setPolkiBonusGoodsQty] = useState<Record<string, number>>({});
+  const [polkiBonusCashQty, setPolkiBonusCashQty] = useState<Record<string, number>>({});
   const [refusalReasonRefPolki, setRefusalReasonRefPolki] = useState("");
   const [polkiHeaderDate, setPolkiHeaderDate] = useState("");
   const [polkiTradeDirection, setPolkiTradeDirection] = useState("");
@@ -227,6 +230,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     setPolkiTotalQty({});
     setPolkiBonusToBalance({});
     setPolkiBonusCash({});
+    setPolkiBonusGoodsQty({});
+    setPolkiBonusCashQty({});
   }, [isPolkiSheet, polkiDateFrom, polkiDateTo, clientId]);
 
   useEffect(() => {
@@ -540,6 +545,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setPolkiPeresortByPairKey({});
       setPolkiBonusToBalance({});
       setPolkiBonusCash({});
+      setPolkiBonusGoodsQty({});
+      setPolkiBonusCashQty({});
       setSelectionNotice(null);
 
       const order = polkiOrdersForPick.find((o) => o.id === id);
@@ -1434,10 +1441,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const polkiEstimatedSum = useMemo(() => {
     if (!isPolkiSheet) return 0;
-    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals.refund_amount) {
-      return Number.parseFloat(polkiAutoBonusPreviewQ.data.totals.refund_amount) || 0;
-    }
     let t = 0;
+    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals.refund_amount) {
+      t = Number.parseFloat(polkiAutoBonusPreviewQ.data.totals.refund_amount) || 0;
+      // Preview odatda paid refund; bonus-cash qo‘shimcha.
+      for (const r of polkiRowsAll) {
+        const pk = r.pair_key;
+        const cashUnits = Math.max(0, Math.floor(polkiBonusCashQty[pk] ?? 0));
+        if (cashUnits <= 0) continue;
+        const unit = r.unit_price_bonus > 0 ? r.unit_price_bonus : r.unit_price_paid;
+        t += cashUnits * unit;
+      }
+      return t;
+    }
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
       const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
@@ -1454,19 +1470,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             : Math.max(0, (r.max_bonus - bq) * r.unit_price_bonus)
           : 0;
       const cash = r.max_bonus > 0 ? Math.min(parsePriceAmount(polkiBonusCash[pk] ?? ""), maxCash) : 0;
-      t += effPaid * r.unit_price_paid;
-      t += cash;
+      t += effPaid * r.unit_price_paid + cash;
     }
     return t;
   }, [
     isPolkiSheet,
     polkiUsesAutoBonus,
-    polkiAutoBonusPreviewQ.data,
+    polkiAutoBonusPreviewQ.data?.totals.refund_amount,
     polkiAutoBonusExplicitByPairKey,
     polkiRowsAll,
     polkiTotalQty,
     polkiBonusToBalance,
-    polkiBonusCash
+    polkiBonusCash,
+    polkiBonusCashQty
   ]);
 
   const polkiVolumeM3 = useMemo(() => {
@@ -1480,7 +1496,16 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         ? { effPaid: ex.paid, effBonus: ex.bonus }
         : polkiSplitTotal(r, total);
       const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
-      const physBonus = defer ? 0 : effBonus;
+      let physBonus = defer ? 0 : effBonus;
+      if (polkiUsesAutoBonus && !defer) {
+        const autoB = Math.max(0, Math.floor(effBonus));
+        const cashUnits = Math.min(Math.max(0, Math.floor(polkiBonusCashQty[pk] ?? 0)), autoB);
+        const goodsRaw = polkiBonusGoodsQty[pk];
+        physBonus =
+          goodsRaw != null
+            ? Math.min(Math.max(0, Math.floor(goodsRaw)), autoB - cashUnits)
+            : Math.max(0, autoB - cashUnits);
+      }
       const vol = r.volume_m3 != null ? Number.parseFloat(String(r.volume_m3)) : NaN;
       if (Number.isFinite(vol) && effPaid + physBonus > 0) v += (effPaid + physBonus) * vol;
     }
@@ -1491,7 +1516,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiAutoBonusExplicitByPairKey,
     polkiRowsAll,
     polkiTotalQty,
-    polkiBonusToBalance
+    polkiBonusToBalance,
+    polkiBonusCashQty,
+    polkiBonusGoodsQty
   ]);
 
   const catalogProducts = useMemo(() => {
@@ -1861,9 +1888,26 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             : polkiSplitTotal(r, totalParsed);
           const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
           const pq = effPaid;
-          const bq = defer ? 0 : effBonus;
-          let cash = polkiUsesAutoBonus ? 0 : parsePriceAmount(polkiBonusCash[pk] ?? "");
-          if (!polkiUsesAutoBonus) {
+
+          let bq = defer ? 0 : effBonus;
+          let cash = 0;
+          if (polkiUsesAutoBonus) {
+            const autoB = Math.max(0, Math.floor(effBonus));
+            const cashUnitsRaw = polkiBonusCashQty[pk];
+            const goodsUnitsRaw = polkiBonusGoodsQty[pk];
+            const cashUnits =
+              cashUnitsRaw != null
+                ? Math.min(Math.max(0, Math.floor(cashUnitsRaw)), autoB)
+                : 0;
+            const goodsUnits =
+              goodsUnitsRaw != null
+                ? Math.min(Math.max(0, Math.floor(goodsUnitsRaw)), autoB - cashUnits)
+                : Math.max(0, autoB - cashUnits);
+            bq = goodsUnits;
+            const unit = r.unit_price_bonus > 0 ? r.unit_price_bonus : r.unit_price_paid;
+            cash = cashUnits > 0 && unit > 0 ? cashUnits * unit : 0;
+          } else {
+            cash = parsePriceAmount(polkiBonusCash[pk] ?? "");
             const maxCash =
               r.max_bonus > 0
                 ? defer
@@ -2809,6 +2853,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     paymentMethodRef,
     paymentMethodSelectOptions,
     polkiBonusCash,
+    polkiBonusGoodsQty,
+    polkiBonusCashQty,
     polkiBonusToBalance,
     polkiExpandedOrderId,
     setPolkiExpandedOrderId,
@@ -2912,6 +2958,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     setOrderNotePreset,
     setPaymentMethodRef,
     setPolkiBonusCash,
+    setPolkiBonusGoodsQty,
+    setPolkiBonusCashQty,
+    setPolkiBonusSplit: (pairKey: string, next: { goodsQty: number; cashQty: number }) => {
+      setPolkiBonusGoodsQty((prev) => ({ ...prev, [pairKey]: next.goodsQty }));
+      setPolkiBonusCashQty((prev) => ({ ...prev, [pairKey]: next.cashQty }));
+    },
     setPolkiBonusToBalance,
     setPolkiDateFrom,
     setPolkiDateTo,

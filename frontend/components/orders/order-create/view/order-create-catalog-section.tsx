@@ -719,6 +719,9 @@ export function OrderCreateCatalogSection({ vm }: { vm: OrderCreateVm }) {
               setPolkiBonusToBalance={setPolkiBonusToBalance}
               polkiBonusCash={polkiBonusCash}
               setPolkiBonusCash={setPolkiBonusCash}
+              polkiBonusGoodsQty={vm.polkiBonusGoodsQty}
+              polkiBonusCashQty={vm.polkiBonusCashQty}
+              setPolkiBonusSplit={vm.setPolkiBonusSplit}
               mutationPending={mutation.isPending}
               polkiTotalReturnQtySum={polkiTotalReturnQtySum}
               polkiVolumeM3={polkiVolumeM3}

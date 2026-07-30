@@ -83,6 +83,9 @@ export type PolkiLinesTableProps = {
   setPolkiBonusToBalance: Dispatch<SetStateAction<Record<string, boolean>>>;
   polkiBonusCash: Record<string, string>;
   setPolkiBonusCash: Dispatch<SetStateAction<Record<string, string>>>;
+  polkiBonusGoodsQty?: Record<string, number>;
+  polkiBonusCashQty?: Record<string, number>;
+  setPolkiBonusSplit?: (pairKey: string, next: { goodsQty: number; cashQty: number }) => void;
   mutationPending: boolean;
   polkiTotalReturnQtySum: number;
   polkiVolumeM3: number;

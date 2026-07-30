@@ -24,6 +24,9 @@ export function PolkiReturnLinesTable({
   polkiOrderGroups,
   polkiTotalQty,
   setPolkiTotalQty,
+  polkiBonusGoodsQty = {},
+  polkiBonusCashQty = {},
+  setPolkiBonusSplit,
   mutationPending,
   polkiTotalReturnQtySum,
   polkiVolumeM3,
@@ -243,6 +246,10 @@ export function PolkiReturnLinesTable({
                                   previewDebtAmount={polkiAutoBonusDebtByPairKey[pk]}
                                   previewPending={polkiAutoBonusPreviewPending}
                                   previewError={polkiAutoBonusPreviewError}
+                                  bonusGoodsQty={polkiBonusGoodsQty[pk]}
+                                  bonusCashQty={polkiBonusCashQty[pk]}
+                                  onBonusSplitChange={setPolkiBonusSplit}
+                                  disabled={mutationPending}
                                 />
                                 {isPolkiByOrder &&
                                 polkiBonusCalcMode === "manual" &&

@@ -53,6 +53,7 @@ export async function createPolkiMirrorZayavka(
 
   for (const rl of params.retLines) {
     const priceDec = R(rl.price);
+    const cash = (rl as { bonus_cash?: number }).bonus_cash ?? 0;
     if (rl.paid_qty > 0) {
       const q = new Prisma.Decimal(rl.paid_qty);
       creates.push({
@@ -83,7 +84,13 @@ export async function createPolkiMirrorZayavka(
         is_bonus: false
       });
     }
+    void cash;
   }
+
+  const cashTotal = params.retLines.reduce(
+    (a, l) => a + ((l as { bonus_cash?: number }).bonus_cash ?? 0),
+    0
+  );
 
   const bonusSum = params.retLines.reduce(
     (a, l) => a.add(R(l.price).mul(l.bonus_qty)),
@@ -111,6 +118,10 @@ export async function createPolkiMirrorZayavka(
   if (params.discountDebtNote?.trim()) {
     const d = params.discountDebtNote.trim().slice(0, 500);
     comment = comment ? `${comment}\n${d}` : d;
+  }
+  if (cashTotal > 0) {
+    const tag = `Бонус оплатой (сумма): ${cashTotal.toFixed(0)}`;
+    comment = comment ? `${comment}\n${tag}` : tag;
   }
 
   const created = await tx.order.create({

@@ -68,6 +68,9 @@ export const CompositionBlock = memo(function CompositionBlock({
     setPolkiBonusToBalance,
     polkiBonusCash,
     setPolkiBonusCash,
+    polkiBonusGoodsQty,
+    polkiBonusCashQty,
+    setPolkiBonusSplit,
     polkiTotalReturnQtySum,
     polkiVolumeM3,
     polkiEstimatedSum,
@@ -185,6 +188,9 @@ export const CompositionBlock = memo(function CompositionBlock({
                 setPolkiBonusToBalance={setPolkiBonusToBalance}
                 polkiBonusCash={polkiBonusCash}
                 setPolkiBonusCash={setPolkiBonusCash}
+                polkiBonusGoodsQty={polkiBonusGoodsQty}
+                polkiBonusCashQty={polkiBonusCashQty}
+                setPolkiBonusSplit={setPolkiBonusSplit}
                 mutationPending={mutation.isPending}
                 polkiTotalReturnQtySum={polkiTotalReturnQtySum}
                 polkiVolumeM3={polkiVolumeM3}

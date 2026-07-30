@@ -63,7 +63,11 @@ export async function persistPeriodReturnBatch(
                     product_id: rl.product_id,
                     qty: new Prisma.Decimal(rl.qty),
                     paid_qty: new Prisma.Decimal(rl.paid_qty),
-                    bonus_qty: new Prisma.Decimal(rl.bonus_qty)
+                    bonus_qty: new Prisma.Decimal(rl.bonus_qty),
+                    ...((rl as { bonus_cash?: number }).bonus_cash != null &&
+                    (rl as { bonus_cash?: number }).bonus_cash! > 0
+                      ? { bonus_cash: new Prisma.Decimal((rl as { bonus_cash?: number }).bonus_cash!) }
+                      : {})
                   }))
                 }
               }

@@ -174,7 +174,14 @@ export async function createPeriodReturn(
     validateReturnQty(allItems, alreadyRetMap, input.lines as { product_id: number; qty: number }[]);
   }
 
-  let retLines: Array<{ product_id: number; qty: number; paid_qty: number; bonus_qty: number; price: number }>;
+  let retLines: Array<{
+    product_id: number;
+    qty: number;
+    paid_qty: number;
+    bonus_qty: number;
+    price: number;
+    bonus_cash?: number;
+  }>;
   let recalc: {
     original_bonus_qty: number;
     remaining_bonus_qty: number;
@@ -266,7 +273,24 @@ export async function createPeriodReturn(
           : new Prisma.Decimal(0);
     const totalRefund = scaled.refund.add(cashApplied);
 
-    retLines = scaled.lines;
+    retLines = scaled.lines.map((rl) => {
+      const er = explicitRows.find((e) => e.product_id === rl.product_id);
+      return { ...rl, bonus_cash: er?.bonus_cash ?? 0 };
+    });
+    // Faqat summa (bonus_cash) — fizik qator yo‘q mahsulotlar.
+    for (const er of explicitRows) {
+      if (!(er.bonus_cash > 0)) continue;
+      if (retLines.some((l) => l.product_id === er.product_id)) continue;
+      const price = priceMap.get(er.product_id) ?? 0;
+      retLines.push({
+        product_id: er.product_id,
+        qty: 0,
+        paid_qty: 0,
+        bonus_qty: 0,
+        price,
+        bonus_cash: er.bonus_cash
+      });
+    }
     recalc = {
       original_bonus_qty: 0,
       remaining_bonus_qty: 0,
@@ -368,7 +392,10 @@ export async function createPeriodReturn(
                   product_id: rl.product_id,
                   qty: new Prisma.Decimal(rl.qty),
                   paid_qty: new Prisma.Decimal(rl.paid_qty),
-                  bonus_qty: new Prisma.Decimal(rl.bonus_qty)
+                  bonus_qty: new Prisma.Decimal(rl.bonus_qty),
+                  ...(rl.bonus_cash != null && rl.bonus_cash > 0
+                    ? { bonus_cash: new Prisma.Decimal(rl.bonus_cash) }
+                    : {})
                 }))
               }
             }
@@ -459,6 +486,7 @@ export async function createPeriodReturn(
       qty: String(rl.qty),
       paid_qty: String(rl.paid_qty),
       bonus_qty: String(rl.bonus_qty),
+      bonus_cash: String(rl.bonus_cash ?? 0),
       paid_amount: R(rl.price).mul(rl.paid_qty).toString()
     })),
     bonus_recalc: {
