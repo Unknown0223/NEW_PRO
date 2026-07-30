@@ -44,6 +44,8 @@ export const createOrderBodySchema = z
       .nullable(),
     order_type: z.enum(["order", "return", "exchange", "partial_return", "return_by_order"]).optional(),
     apply_bonus: z.boolean().optional(),
+    /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
+    apply_discount: z.boolean().optional(),
     bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
     bonus_gift_lines: z.array(bonusGiftLineSchema).optional(),
     comment: z.string().max(4000).optional().nullable(),
@@ -438,6 +440,8 @@ export const patchOrderLinesBodySchema = z.object({
   agent_id: z.number().int().positive().nullable().optional(),
   payment_method_ref: z.string().trim().max(64).optional().nullable(),
   apply_bonus: z.boolean().optional(),
+  /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
+  apply_discount: z.boolean().optional(),
   bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
   items: z.array(orderLineItemSchema).min(1)
 });

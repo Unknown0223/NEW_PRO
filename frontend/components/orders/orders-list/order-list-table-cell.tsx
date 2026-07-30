@@ -252,6 +252,28 @@ export function renderOrderListCell({
         "—"
       );
     case "bonus_sum": {
+      const sum = parseNumField(order.bonus_sum ?? "0");
+      const qty = parseNumField(order.bonus_qty ?? "0");
+      // Mobil bilan mos: qty bonus bo‘lsa dona ko‘rsatiladi (summa 0 bo‘lishi mumkin).
+      if (qty > 0 && sum <= 0) {
+        const qtyLabel =
+          qty === Math.round(qty) ? String(Math.round(qty)) : formatNumberGrouped(qty, { maxFractionDigits: 3 });
+        return (
+          <span className="inline-flex items-center justify-end gap-1 tabular-nums text-emerald-800 dark:text-emerald-300">
+            <span title="Бонус (шт.)">+{qtyLabel} шт</span>
+          </span>
+        );
+      }
+      if (qty > 0 && sum > 0) {
+        return (
+          <span className="inline-flex flex-col items-end gap-0.5 tabular-nums text-emerald-800 dark:text-emerald-300">
+            <span>{formatNumberGrouped(sum, { maxFractionDigits: 2 })}</span>
+            <span className="text-[10px] font-normal text-muted-foreground">
+              +{qty === Math.round(qty) ? Math.round(qty) : formatNumberGrouped(qty, { maxFractionDigits: 3 })} шт
+            </span>
+          </span>
+        );
+      }
       return (
         <span className="inline-flex items-center justify-end gap-1 tabular-nums text-emerald-800 dark:text-emerald-300">
           <span>{formatNumberGrouped(order.bonus_sum ?? "0", { maxFractionDigits: 2 })}</span>

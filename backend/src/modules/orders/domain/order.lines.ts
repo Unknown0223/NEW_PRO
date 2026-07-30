@@ -218,6 +218,7 @@ export async function updateOrderLines(
 
   const updated = await prisma.$transaction(async (tx) => {
     const applyBonus = input.apply_bonus ?? true;
+    const applyDiscount = input.apply_discount !== false;
     let paidAfterDisc = lineData;
     let paidTotal = totalSum;
     let bonusDrafts: Array<{
@@ -227,7 +228,7 @@ export async function updateOrderLines(
       total: Prisma.Decimal;
     }> = [];
     let appliedAutoBonusRuleIds: number[] = [];
-    if (applyBonus) {
+    if (applyBonus || applyDiscount) {
       const usedRuleIds = await fetchClientUsedAutoBonusRuleIdsExcludingOrder(
         tx,
         tenantId,
@@ -250,11 +251,12 @@ export async function updateOrderLines(
         new Map<number, ReadonlyMap<number, number>>(),
         warehouseId,
         { referenceAt: existing.created_at, excludeOrderId: orderId },
-        orderAgentForBonus
+        orderAgentForBonus,
+        { applyDiscount, applyBonusLines: applyBonus }
       );
       paidAfterDisc = resolved.lines;
       paidTotal = resolved.total;
-      bonusDrafts = resolved.bonusDrafts;
+      bonusDrafts = applyBonus ? resolved.bonusDrafts : [];
       appliedAutoBonusRuleIds = resolved.appliedAutoBonusRuleIds;
     }
 
@@ -288,12 +290,12 @@ export async function updateOrderLines(
 
     const rawDiscUp = totalSum.sub(paidTotal);
     const discountSum =
-      applyBonus && rawDiscUp.gt(0) ? roundOrderMoney(rawDiscUp) : new Prisma.Decimal(0);
+      applyDiscount && rawDiscUp.gt(0) ? roundOrderMoney(rawDiscUp) : new Prisma.Decimal(0);
 
     const discountRes = await resolveDiscountAlert(tx, {
       tenantId,
       orderType: existingOrderType,
-      applyDiscount: true,
+      applyDiscount,
       warehouseId,
       client: { id: client.id, category: client.category },
       orderAgent: orderAgentForBonus,

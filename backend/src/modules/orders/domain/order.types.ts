@@ -60,6 +60,8 @@ export type UpdateOrderLinesInput = {
   /** Savdo zakazida saqlangan to‘lov usulini yangilash (ixtiyoriy) */
   payment_method_ref?: string | null;
   apply_bonus?: boolean;
+  /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
+  apply_discount?: boolean;
   bonus_gift_overrides?: BonusGiftOverrideInput[];
 };
 

@@ -262,8 +262,17 @@ export function orderListExportCell(o: OrderListRow, colId: string): string {
         : "";
     case "total_sum":
       return formatNumberGrouped(orderListDisplayTotalSum(o), { maxFractionDigits: 2 });
-    case "bonus_sum":
+    case "bonus_sum": {
+      const sum = parseOrderMoneyField(o.bonus_sum);
+      const qty = parseOrderMoneyField(o.bonus_qty);
+      if (qty > 0 && sum <= 0) {
+        return `+${qty === Math.round(qty) ? Math.round(qty) : formatNumberGrouped(qty, { maxFractionDigits: 3 })} шт`;
+      }
+      if (qty > 0 && sum > 0) {
+        return `${formatNumberGrouped(sum, { maxFractionDigits: 2 })} (+${qty === Math.round(qty) ? Math.round(qty) : formatNumberGrouped(qty, { maxFractionDigits: 3 })} шт)`;
+      }
       return formatNumberGrouped(o.bonus_sum ?? "0", { maxFractionDigits: 2 });
+    }
     case "cumulative_bonus":
       return o.cumulative_bonus
         ? formatNumberGrouped(o.cumulative_bonus, { maxFractionDigits: 2 })

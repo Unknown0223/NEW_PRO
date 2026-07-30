@@ -341,9 +341,9 @@ export async function materializeQtyPeeks(
   const out: BonusLineDraft[] = [];
   for (const [giftPid, qty] of giftQtyByProduct) {
     if (qty.lte(0)) continue;
+    // Retail yo‘q bo‘lsa ham qator saqlanadi (web `bonus_qty` ko‘rinsin); summa 0.
     const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-    if (priceStr == null) continue;
-    const price = new PrismaClient.Decimal(priceStr);
+    const price = new PrismaClient.Decimal(priceStr ?? "0");
     const total = roundMoney(qty.mul(price));
     out.push({
       product_id: giftPid,
@@ -367,8 +367,7 @@ export async function materializeGiftSplits(
     if (units <= 0) continue;
     const qty = new PrismaClient.Decimal(units);
     const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-    if (priceStr == null) continue;
-    const price = new PrismaClient.Decimal(priceStr);
+    const price = new PrismaClient.Decimal(priceStr ?? "0");
     const total = roundMoney(qty.mul(price));
     out.push({
       product_id: giftPid,

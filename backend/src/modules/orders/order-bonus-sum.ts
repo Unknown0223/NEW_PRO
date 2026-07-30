@@ -153,9 +153,7 @@ export async function buildSumBonusDraft(
   units: number
 ): Promise<BonusLineDraft[]> {
   const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-  if (priceStr == null) return [];
-
-  const price = new PrismaClient.Decimal(priceStr);
+  const price = new PrismaClient.Decimal(priceStr ?? "0");
   const qty = new PrismaClient.Decimal(units);
   const total = roundMoney(qty.mul(price));
   return [{ product_id: giftPid, qty, price, total, is_bonus: true }];

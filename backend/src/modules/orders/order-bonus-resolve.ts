@@ -58,7 +58,7 @@ export async function resolveOrderBonusesForCreate(
   warehouseId?: number | null,
   calendarContext?: { referenceAt: Date; excludeOrderId?: number },
   orderAgent: OrderAgentBonusContext | null = null,
-  opts?: { applyDiscount?: boolean }
+  opts?: { applyDiscount?: boolean; applyBonusLines?: boolean }
 ): Promise<{
   lines: PaidLineDraft[];
   total: PrismaClient.Decimal;
@@ -184,11 +184,14 @@ export async function resolveOrderBonusesForCreate(
   if (discountRule) {
     slots.push({ kind: "discount", priority: discountRule.priority, rule: discountRule });
   }
-  if (sumPeek) {
-    slots.push({ kind: "sum", priority: sumPeek.rule.priority, peek: sumPeek });
-  }
-  for (const qp of qtyPeeks) {
-    slots.push({ kind: "qty", priority: qp.rule.priority, peek: qp });
+  // apply_bonus=false bo‘lsa ham skidka ishlashi kerak — sovg‘a/qty slotlari o‘chiriladi.
+  if (opts?.applyBonusLines !== false) {
+    if (sumPeek) {
+      slots.push({ kind: "sum", priority: sumPeek.rule.priority, peek: sumPeek });
+    }
+    for (const qp of qtyPeeks) {
+      slots.push({ kind: "qty", priority: qp.rule.priority, peek: qp });
+    }
   }
 
   slots.sort((a, b) => {
@@ -210,21 +213,23 @@ export async function resolveOrderBonusesForCreate(
 
   const bonusParts: BonusLineDraft[] = [];
 
-  if (chosen.some((s) => s.kind === "sum") && sumPeek) {
-    bonusParts.push(...(await buildSumBonusDraft(tenantId, sumPeek.giftPid, sumPeek.units)));
-    for (const g of sumPeek.extraGifts ?? []) {
-      bonusParts.push(...(await buildSumBonusDraft(tenantId, g.giftPid, g.units)));
+  if (opts?.applyBonusLines !== false) {
+    if (chosen.some((s) => s.kind === "sum") && sumPeek) {
+      bonusParts.push(...(await buildSumBonusDraft(tenantId, sumPeek.giftPid, sumPeek.units)));
+      for (const g of sumPeek.extraGifts ?? []) {
+        bonusParts.push(...(await buildSumBonusDraft(tenantId, g.giftPid, g.units)));
+      }
     }
-  }
 
-  const chosenQty = chosen.filter((s): s is BonusSlot & { kind: "qty" } => s.kind === "qty");
-  if (chosenQty.length > 0) {
-    for (const s of chosenQty) {
-      const splits = qtyBonusGiftSplits.get(s.peek.rule.id);
-      if (splits && splits.size > 0) {
-        bonusParts.push(...(await materializeGiftSplits(tenantId, splits)));
-      } else {
-        bonusParts.push(...(await materializeQtyPeeks(tenantId, [s.peek])));
+    const chosenQty = chosen.filter((s): s is BonusSlot & { kind: "qty" } => s.kind === "qty");
+    if (chosenQty.length > 0) {
+      for (const s of chosenQty) {
+        const splits = qtyBonusGiftSplits.get(s.peek.rule.id);
+        if (splits && splits.size > 0) {
+          bonusParts.push(...(await materializeGiftSplits(tenantId, splits)));
+        } else {
+          bonusParts.push(...(await materializeQtyPeeks(tenantId, [s.peek])));
+        }
       }
     }
   }
@@ -234,11 +239,13 @@ export async function resolveOrderBonusesForCreate(
   if (chosen.some((s) => s.kind === "discount") && discountRule) {
     appliedRuleIds.push(discountRule.id);
   }
-  if (chosen.some((s) => s.kind === "sum") && sumPeek) {
-    appliedRuleIds.push(sumPeek.rule.id);
-  }
-  for (const s of chosenQty) {
-    appliedRuleIds.push(s.peek.rule.id);
+  if (opts?.applyBonusLines !== false) {
+    if (chosen.some((s) => s.kind === "sum") && sumPeek) {
+      appliedRuleIds.push(sumPeek.rule.id);
+    }
+    for (const s of chosen.filter((x): x is BonusSlot & { kind: "qty" } => x.kind === "qty")) {
+      appliedRuleIds.push(s.peek.rule.id);
+    }
   }
   const uniqueApplied = [...new Set(appliedRuleIds)];
 

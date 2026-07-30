@@ -41,6 +41,9 @@ export async function resolveCreateOrderPaidBundle(
 
   const applyBonus =
     isInboundShelfReturn || orderType === "exchange" ? false : (input.apply_bonus ?? true);
+  const applyDiscount =
+    isInboundShelfReturn || orderType === "exchange" ? false : (input.apply_discount !== false);
+
   let paidAfterDisc = lineData;
   let paidTotal = totalSum;
   let bonusDrafts: Array<{
@@ -50,7 +53,9 @@ export async function resolveCreateOrderPaidBundle(
     total: Prisma.Decimal;
   }> = [];
   let appliedAutoBonusRuleIds: number[] = [];
-  if (applyBonus) {
+
+  // Skidka apply_bonus ga bog‘lanmasin — faqat bitta rejim yoqilgan bo‘lsa ham ishlaydi.
+  if (applyBonus || applyDiscount) {
     const usedRuleIds = await fetchClientUsedAutoBonusRuleIds(tx, tenantId, client.id);
     const resolved = await resolveOrderBonusesForCreate(
       tx,
@@ -69,11 +74,11 @@ export async function resolveCreateOrderPaidBundle(
       input.warehouse_id,
       { referenceAt: new Date() },
       orderAgentForBonus,
-      { applyDiscount: input.apply_discount !== false }
+      { applyDiscount, applyBonusLines: applyBonus }
     );
     paidAfterDisc = resolved.lines;
     paidTotal = resolved.total;
-    bonusDrafts = resolved.bonusDrafts;
+    bonusDrafts = applyBonus ? resolved.bonusDrafts : [];
     appliedAutoBonusRuleIds = resolved.appliedAutoBonusRuleIds;
   }
 
@@ -91,7 +96,7 @@ export async function resolveCreateOrderPaidBundle(
 
   const rawDisc = totalSum.sub(paidTotal);
   const discountSum =
-    applyBonus && rawDisc.gt(0) ? roundOrderMoney(rawDisc) : new Prisma.Decimal(0);
+    applyDiscount && rawDisc.gt(0) ? roundOrderMoney(rawDisc) : new Prisma.Decimal(0);
 
   return {
     paidAfterDisc,
