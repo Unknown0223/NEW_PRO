@@ -35,26 +35,26 @@ if (!otaKeystoreFile.exists()) {
 
 keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 
-val storePassword = keystoreProperties["storePassword"] as String?
+val otaStorePassword = (keystoreProperties["storePassword"] as String?)?.takeIf { it.isNotBlank() }
     ?: failSigning("key.properties: storePassword yo‘q")
-val keyAlias = keystoreProperties["keyAlias"] as String?
+val otaKeyAlias = (keystoreProperties["keyAlias"] as String?)?.takeIf { it.isNotBlank() }
     ?: failSigning("key.properties: keyAlias yo‘q")
-val keyPassword = keystoreProperties["keyPassword"] as String?
+val otaKeyPassword = (keystoreProperties["keyPassword"] as String?)?.takeIf { it.isNotBlank() }
     ?: failSigning("key.properties: keyPassword yo‘q")
-val storeFileProp = keystoreProperties["storeFile"] as String?
+val otaStoreFileProp = (keystoreProperties["storeFile"] as String?)?.takeIf { it.isNotBlank() }
     ?: failSigning("key.properties: storeFile yo‘q")
 
-val configuredStore = rootProject.file(storeFileProp)
-if (!configuredStore.exists()) {
-    failSigning("storeFile topilmadi: ${configuredStore.absolutePath}")
+val otaStoreFile = rootProject.file(otaStoreFileProp)
+if (!otaStoreFile.exists()) {
+    failSigning("storeFile topilmadi: ${otaStoreFile.absolutePath}")
 }
 
 // Fingerprint pin — boshqa PC debug.keystore ga “silib” ketmasin.
 run {
     val ks = KeyStore.getInstance(KeyStore.getDefaultType())
-    configuredStore.inputStream().use { ks.load(it, storePassword.toCharArray()) }
-    val cert = ks.getCertificate(keyAlias)
-        ?: failSigning("Alias topilmadi: $keyAlias")
+    otaStoreFile.inputStream().use { ks.load(it, otaStorePassword.toCharArray()) }
+    val cert = ks.getCertificate(otaKeyAlias)
+        ?: failSigning("Alias topilmadi: $otaKeyAlias")
     val md = MessageDigest.getInstance("SHA-1")
     val sha1 = md.digest(cert.encoded).joinToString("") { "%02X".format(it) }
     if (!sha1.equals(expectedOtaSha1, ignoreCase = true)) {
@@ -93,11 +93,12 @@ android {
     }
 
     signingConfigs {
+        // Nomlar SigningConfig property lari bilan to‘qnashmasin (storePassword shadow).
         create("ota") {
-            storeFile = configuredStore
-            this.storePassword = storePassword
-            this.keyAlias = keyAlias
-            this.keyPassword = keyPassword
+            storeFile = otaStoreFile
+            storePassword = otaStorePassword
+            keyAlias = otaKeyAlias
+            keyPassword = otaKeyPassword
         }
     }
 
