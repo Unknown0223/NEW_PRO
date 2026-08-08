@@ -1,0 +1,5 @@
+# Sales Arena — production OTA imzo kaliti (PC dan MUSTAQIL).
+# SHA-1 (colonless): 21FC3148B49A8928A2C2F04F6EDBA8CF36A8F882
+# Alias: androiddebugkey
+# Bu fayl o‘zgarmasligi kerak. Versiya/kod o‘zgarishi mumkin — kalit YO‘Q.
+21FC3148B49A8928A2C2F04F6EDBA8CF36A8F882
