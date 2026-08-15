@@ -78,7 +78,7 @@ export type ClientToolbarFiltersState = {
 
 export const INITIAL_CLIENT_TOOLBAR_FILTERS: ClientToolbarFiltersState = {
 
-  activeFilter: "all",
+  activeFilter: "true",
 
   categoryFilter: "",
 

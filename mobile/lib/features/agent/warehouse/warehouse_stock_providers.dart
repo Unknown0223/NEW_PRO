@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../orders/order_create_models.dart';
 
 /// Menyudan joriy sahifa qayta tanlanganda yangilash (go_router bir xil route qayta yaratmaydi).
@@ -58,7 +59,6 @@ WarehouseStockView _parseWarehouseStockView(Map<String, dynamic> raw, int? whOve
     for (final item in itemsRaw) {
       if (item is! Map) continue;
       final available = _parseNum(item['available']);
-      if (available <= 0) continue;
       final priceRaw = item['price'];
       String? priceLabel;
       if (priceRaw != null) {
@@ -69,8 +69,11 @@ WarehouseStockView _parseWarehouseStockView(Map<String, dynamic> raw, int? whOve
         }
       }
       lines.add(WarehouseStockLine(
-        name: item['name']?.toString() ?? '—',
-        count: formatStockQty(available),
+        name: productDisplayName({
+          'name': item['name']?.toString() ?? '—',
+          'category_name': item['category_name']?.toString() ?? name,
+        }),
+        count: available <= 0 ? S.outOfStock : formatStockQty(available),
         priceLabel: priceLabel,
       ),);
     }

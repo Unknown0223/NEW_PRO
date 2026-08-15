@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { CalendarDays, Download, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
+import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 
 type ProductRow = { id: number; name: string; sku: string };
 type CategoryRow = { id: number; name: string };
@@ -276,9 +278,27 @@ export function RetailStockWorkspace() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={downloadTemplate}>Скачать шаблон</Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}><Upload className="mr-1 h-3.5 w-3.5" />{uploading ? "Загрузка..." : "Загрузить шаблон"}</Button>
+            <ExcelDropTarget
+              disabled={uploading}
+              onFile={(f) => void uploadFile(f)}
+            >
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                <Upload className="mr-1 h-3.5 w-3.5" />
+                {uploading ? "Загрузка..." : "Загрузить шаблон"}
+              </Button>
+            </ExcelDropTarget>
             <Button variant="outline" onClick={exportExcel}><Download className="mr-1 h-3.5 w-3.5" />Excel</Button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadFile(f); }} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const f = pickFirstExcelFile(e.target.files);
+                e.target.value = "";
+                if (f) void uploadFile(f);
+              }}
+            />
           </div>
         </div>
 

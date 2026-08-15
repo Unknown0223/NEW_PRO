@@ -2,6 +2,7 @@
 
 import type { ClientRow } from "@/lib/client-types";
 import { Button } from "@/components/ui/button";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -450,9 +451,18 @@ type Props = {
   mode?: "edit" | "create";
   onSuccess: (clientId: number) => void;
   onCancel: () => void;
+  /** false bo‘lsa saqlashdan keyin tahrir sahifasida qoladi (kartochkaga o‘tmaydi). */
+  redirectOnSuccess?: boolean;
 };
 
-export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess, onCancel }: Props) {
+export function ClientEditForm({
+  tenantSlug,
+  clientId,
+  mode = "edit",
+  onSuccess,
+  onCancel,
+  redirectOnSuccess = true
+}: Props) {
   const isCreateMode = mode === "create";
   const effectiveClientId = Number.isFinite(clientId) ? Number(clientId) : 0;
   const qc = useQueryClient();
@@ -507,6 +517,9 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
   const [mapSearchPending, setMapSearchPending] = useState(false);
   const [mapSearchNotice, setMapSearchNotice] = useState<string | null>(null);
   const [agentSlots, setAgentSlots] = useState<AgentSlotForm[]>(() => [emptyAgentSlot()]);
+  const [slot1LockType, setSlot1LockType] = useState("none");
+  const [slot1LockReason, setSlot1LockReason] = useState("");
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const clientQ = useQuery({
     queryKey: ["client", tenantSlug, effectiveClientId],
@@ -829,6 +842,9 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
     setLongitude(client.longitude != null ? String(client.longitude) : "");
     setZone(client.zone ?? "");
     setAgentSlots(buildAgentSlots(client));
+    const slot1 = client.agent_assignments.find((a) => a.slot === 1);
+    setSlot1LockType(slot1?.lock_type ?? "none");
+    setSlot1LockReason(slot1?.lock_reason ?? "");
   }, [clientQ.data]);
 
   useEffect(() => {
@@ -846,6 +862,10 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
   const mutation = useMutation({
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("Нет данных");
+      setSaveNotice(null);
+      if (slot1LockType !== "none" && !slot1LockReason.trim()) {
+        throw new Error("Для ручной блокировки или договора укажите причину в поле «Сабаб».");
+      }
       const creditRaw = creditLimit.replace(/\s/g, "").replace(",", ".");
       const credit = creditRaw === "" ? 0 : Number.parseFloat(creditRaw);
       if (!Number.isFinite(credit) || credit < 0) {
@@ -960,16 +980,41 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
         };
         const created = await api.post<{ id: number }>(`/api/${tenantSlug}/clients`, createBody);
         const createdId = created.data.id;
-        await api.patch(`/api/${tenantSlug}/clients/${createdId}`, body);
+        const { data: createdDetail } = await api.patch<ClientDetailApi>(
+          `/api/${tenantSlug}/clients/${createdId}`,
+          body
+        );
+        const slot1 = createdDetail.agent_assignments?.find((a) => a.slot === 1);
+        if (slot1?.id && slot1LockType !== "none") {
+          await api.patch(`/api/${tenantSlug}/client-agent-assignments/${slot1.id}/lock`, {
+            lock_type: slot1LockType,
+            lock_reason: slot1LockReason.trim() || null
+          });
+        }
         return { id: createdId };
       }
 
-      await api.patch(`/api/${tenantSlug}/clients/${effectiveClientId}`, body);
+      const { data: updatedDetail } = await api.patch<ClientDetailApi>(
+        `/api/${tenantSlug}/clients/${effectiveClientId}`,
+        body
+      );
+      const slot1 = updatedDetail.agent_assignments?.find((a) => a.slot === 1);
+      if (slot1?.id) {
+        const savedType = slot1.lock_type ?? "none";
+        const savedReason = slot1.lock_reason ?? "";
+        if (slot1LockType !== savedType || slot1LockReason.trim() !== savedReason.trim()) {
+          await api.patch(`/api/${tenantSlug}/client-agent-assignments/${slot1.id}/lock`, {
+            lock_type: slot1LockType,
+            lock_reason: slot1LockType === "none" ? null : slot1LockReason.trim() || null
+          });
+        }
+      }
       return { id: effectiveClientId };
     },
     onSuccess: async (res) => {
       markSaved();
       setFieldErrors({});
+      setSaveNotice(isCreateMode ? "Клиент создан" : "Изменения сохранены");
       const doneId = typeof res?.id === "number" && Number.isFinite(res.id) ? res.id : effectiveClientId;
       await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
       if (doneId > 0) {
@@ -977,7 +1022,9 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
         await invalidateClientAuditQueries(qc, tenantSlug, doneId);
       }
       await qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
-      onSuccess(doneId);
+      if (redirectOnSuccess) {
+        onSuccess(doneId);
+      }
     },
     onError: (e: unknown) => {
       const navigateToField = (elementId: string, targetTab: "main" | "extra") => {
@@ -1046,6 +1093,8 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
       else if (lower.includes("област") || lower.includes("территор")) navigateToField("ce-region", "main");
       else if (lower.includes("координат")) navigateToField("ce-lat", "main");
       else if (lower.includes("агент") || lower.includes("доставщик")) navigateToField("ce-team-block", "main");
+      else if (lower.includes("сабаб") || lower.includes("блокировк") || lower.includes("договор"))
+        navigateToField("ce-team-block", "main");
     }
   });
 
@@ -1668,24 +1717,17 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
                         ))}
                       </div>
                     </div>
-                    {idx === 0 && clientQ.data ? (() => {
-                      const slot1 = clientQ.data.agent_assignments.find((a) => a.slot === 1);
-                      if (slot1?.id == null) return null;
-                      return (
-                        <div className="mt-3">
-                          <AssignmentLockPanel
-                            assignmentId={slot1.id}
-                            lockType={slot1.lock_type ?? "none"}
-                            lockReason={slot1.lock_reason ?? null}
-                            onUpdated={() => {
-                              void qc.invalidateQueries({
-                                queryKey: ["client", tenantSlug, clientId]
-                              });
-                            }}
-                          />
-                        </div>
-                      );
-                    })() : null}
+                    {idx === 0 && !isCreateMode ? (
+                      <div className="mt-3">
+                        <AssignmentLockPanel
+                          lockType={slot1LockType}
+                          lockReason={slot1LockReason}
+                          onLockTypeChange={setSlot1LockType}
+                          onLockReasonChange={setSlot1LockReason}
+                          disabled={mutation.isPending}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 <Button
@@ -1826,12 +1868,12 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
                     Кредитный лимит (UZS)
                   </Label>
                 </div>
-                <Input
+                <GroupedNumberInput
                   id="ce-credit"
                   className={inputCls}
-                  inputMode="decimal"
+                  maxFractionDigits={2}
                   value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
+                  onValueChange={setCreditLimit}
                   disabled={mutation.isPending}
                 />
                 <FieldHint name="credit_limit" errors={fieldErrors} />
@@ -1895,6 +1937,7 @@ export function ClientEditForm({ tenantSlug, clientId, mode = "edit", onSuccess,
       )}
 
       {localError ? <p className="text-sm text-destructive">{localError}</p> : null}
+      {saveNotice ? <p className="text-sm text-emerald-700 dark:text-emerald-400">{saveNotice}</p> : null}
 
       <div className="flex flex-wrap gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={mutation.isPending}>

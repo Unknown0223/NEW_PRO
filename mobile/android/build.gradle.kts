@@ -19,6 +19,15 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// lintVital Metaspace OOM (pluginlar) — release APK uchun o'chirish
+subprojects {
+    tasks.whenTaskAdded {
+        if (name.contains("lintVital", ignoreCase = true)) {
+            enabled = false
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

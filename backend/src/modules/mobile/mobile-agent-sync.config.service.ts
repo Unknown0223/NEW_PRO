@@ -39,11 +39,23 @@ export function agentScopedOrderWhere(tenantId: number, agentId: number): Prisma
   return { tenant_id: tenantId, agent_id: agentId };
 }
 
-export function localTodayRange(): { start: Date; end: Date } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+/** Ish mintaqasi (UTC+5) — mobil `workRegionNow` bilan bir xil. */
+const WORK_REGION_UTC_OFFSET_HOURS = 5;
+
+export function workRegionTodayKey(d = new Date()): string {
+  const wr = new Date(d.getTime() + WORK_REGION_UTC_OFFSET_HOURS * 3_600_000);
+  return wr.toISOString().slice(0, 10);
+}
+
+export function workRegionDayRange(dateStr: string): { start: Date; end: Date } {
+  const [y, m, d] = dateStr.split("-").map((x) => Number.parseInt(x, 10));
+  const start = new Date(Date.UTC(y, m - 1, d, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m - 1, d, 24 - WORK_REGION_UTC_OFFSET_HOURS - 1, 59, 59, 999));
   return { start, end };
+}
+
+export function localTodayRange(): { start: Date; end: Date } {
+  return workRegionDayRange(workRegionTodayKey());
 }
 
 export function monthUtcRange(d = new Date()): { start: Date; end: Date } {
@@ -91,6 +103,7 @@ export async function assertMobilePhotoReportForClient(
       tenant_id: tenantId,
       client_id: clientId,
       created_by_user_id: userId,
+      deleted_at: null,
       created_at: { gte: start, lte: end }
     },
     select: { id: true }
@@ -154,14 +167,21 @@ export type CompactClientRow = {
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
-  agent_assignments?: { visit_weekdays: unknown }[];
+  agent_assignments?: { visit_weekdays: unknown; visit_date?: Date | string | null }[];
 };
 
 export function compactClient(c: CompactClientRow) {
   const ledger = c.client_balances?.[0]?.balance;
+  const assignment = c.agent_assignments?.[0];
   const weekdays =
-    parseVisitWeekdaysJson(c.visit_weekdays) ||
-    parseVisitWeekdaysJson(c.agent_assignments?.[0]?.visit_weekdays);
+    parseVisitWeekdaysJson(assignment?.visit_weekdays) ||
+    parseVisitWeekdaysJson(c.visit_weekdays);
+  const visitDate =
+    assignment?.visit_date != null
+      ? assignment.visit_date instanceof Date
+        ? assignment.visit_date.toISOString()
+        : String(assignment.visit_date)
+      : c.visit_date ?? null;
   return {
     id: c.id,
     name: c.name,
@@ -186,14 +206,14 @@ export function compactClient(c: CompactClientRow) {
     client_pinfl: c.client_pinfl ?? null,
     contract_number: c.contract_number ?? null,
     notes: c.notes ?? null,
-    visit_date: c.visit_date ?? null,
+    visit_date: visitDate,
     ...(weekdays.length ? { visit_weekdays: weekdays } : {}),
     balance: ledger != null ? Number(ledger) : null,
     credit_limit: c.credit_limit != null ? Number(c.credit_limit) : null
   };
 }
 
-export const clientSyncSelect = {
+export const clientSyncSelectBase = {
   id: true,
   name: true,
   address: true,
@@ -219,10 +239,27 @@ export const clientSyncSelect = {
   notes: true,
   visit_date: true,
   credit_limit: true,
-  client_balances: { select: { balance: true }, take: 1 },
+  client_balances: { select: { balance: true }, take: 1 }
+} as const;
+
+/** Mobil sync — joriy agentning slotidagi tashrif jadvali (slot:1 emas, agent_id bo‘yicha). */
+export function clientSyncSelectForAgent(agentId: number) {
+  return {
+    ...clientSyncSelectBase,
+    agent_assignments: {
+      where: { agent_id: agentId },
+      select: { visit_weekdays: true, visit_date: true },
+      take: 1
+    }
+  };
+}
+
+/** @deprecated Admin/ko‘rish — mobil sync uchun `clientSyncSelectForAgent` ishlating. */
+export const clientSyncSelect = {
+  ...clientSyncSelectBase,
   agent_assignments: {
     where: { slot: 1 },
-    select: { visit_weekdays: true },
+    select: { visit_weekdays: true, visit_date: true },
     take: 1
   }
 } as const;

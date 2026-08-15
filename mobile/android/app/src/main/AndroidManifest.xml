@@ -38,7 +38,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
-        android:label="SalesDoc"
+        android:label="Sales Arena"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
@@ -67,11 +67,15 @@
         <!-- Firebase Messaging default notification channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="salesdoc_notifications" />
+            android:value="sales_arena_notifications" />
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_name"
-            android:value="SalesDoc Bildirishnomalar" />
+            android:value="Sales Arena Bildirishnomalar" />
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_sales_arena" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

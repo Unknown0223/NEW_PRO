@@ -293,6 +293,57 @@ export async function collectBundleExportSheets(tenantSlug: string): Promise<Bun
     if (sheet) byId.set(stepId, sheet);
   }
 
+  // Territory tree
+  type TerrNode = { name?: string; code?: string | null; comment?: string | null; children?: TerrNode[] };
+  const terrRoots = (refs.territory_nodes as TerrNode[] | undefined) ?? [];
+  if (terrRoots.length) {
+    const terrRows: string[][] = [templateHeaders("territory")];
+    const walk = (nodes: TerrNode[], parent: string, depth: number) => {
+      const level = depth === 0 ? "зона" : depth === 1 ? "регион" : "город";
+      for (const n of nodes) {
+        const name = cellStr(n.name);
+        if (!name) continue;
+        terrRows.push([name, cellStr(n.comment) || level, parent, cellStr(n.code)]);
+        if (Array.isArray(n.children) && n.children.length) walk(n.children, name, depth + 1);
+      }
+    };
+    walk(terrRoots, "", 0);
+    if (terrRows.length > 1) byId.set("territory", { sheetName: "territory", rows: terrRows });
+  }
+
+  // Warehouses + product categories
+  try {
+    const { data: whRes } = await api.get<{ data?: Array<{ name: string; code?: string | null; address?: string | null }> }>(
+      `/api/${tenantSlug}/warehouses`
+    );
+    const whItems = (whRes.data ?? []).map((w) => ({
+      name: w.name,
+      code: w.code,
+      address: w.address
+    }));
+    const whSheet = sheetFromObjects("warehouses", whItems);
+    if (whSheet) byId.set("warehouses", whSheet);
+  } catch {
+    /* optional */
+  }
+
+  try {
+    const { data: catRes } = await api.get<{
+      data?: Array<{ id: number; name: string; code?: string | null; parent_id?: number | null }>;
+    }>(`/api/${tenantSlug}/product-categories`);
+    const list = catRes.data ?? [];
+    const byIdCat = new Map(list.map((c) => [c.id, c]));
+    const catItems = list.map((c) => ({
+      name: c.name,
+      code: c.code,
+      parent: c.parent_id != null ? byIdCat.get(c.parent_id)?.name ?? "" : ""
+    }));
+    const catSheet = sheetFromObjects("product-categories", catItems);
+    if (catSheet) byId.set("product-categories", catSheet);
+  } catch {
+    /* optional */
+  }
+
   const tdItems = (tdRes.data.data ?? []).map((r) => ({
     name: r.name,
     code: r.code,

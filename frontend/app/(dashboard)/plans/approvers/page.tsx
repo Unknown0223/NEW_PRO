@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { ApprovalWorkflowWorkspace } from "@/components/plans/approval-workflow-workspace";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
-import { usePermissions } from "@/lib/use-permissions";
+import { PageError } from "@/components/ui/page-error";
 
 function ApproversPageInner() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -20,7 +20,14 @@ function ApproversPageInner() {
     );
   }
   if (!perms.isLoading && !perms.has("plans.nastroyka_utverzhdayushchih.view")) {
-    return <p className="p-6 text-sm text-muted-foreground">Нет доступа к этому разделу.</p>;
+    return (
+      <div className="p-6">
+        <PageError
+          title="Нет доступа"
+          message="У вас нет прав для настройки утверждающих. Обратитесь к администратору."
+        />
+      </div>
+    );
   }
 
   return (

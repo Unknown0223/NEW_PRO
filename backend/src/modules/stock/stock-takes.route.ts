@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
@@ -100,10 +105,12 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
     const body = z.object({ lines: z.array(lineSchema) }).parse(request.body);
     try {
+      await assertDocWritableById(request, "stock", id, "stock_take");
       const row = await setStockTakeLines(tenantId, id, body.lines);
       if (!row) return sendApiError(reply, request, 404, "NotFound");
       return reply.send({ data: row });
     } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
       if (msg === "ProductNotFound") return sendApiError(reply, request, 400, "ProductNotFound");
@@ -118,18 +125,12 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
     try {
-      const row = await postStockTake(tenantId, id);
+      await assertDocWritableById(request, "stock", id, "stock_take");
+      const row = await postStockTake(tenantId, id, actorUserIdOrNull(request));
       if (!row) return sendApiError(reply, request, 404, "NotFound");
-      await appendTenantAuditEvent({
-        tenantId,
-        actorUserId: actorUserIdOrNull(request),
-        entityType: "stock_take",
-        entityId: id,
-        action: "stock_take.post",
-        payload: { id }
-      });
       return reply.send({ data: row });
     } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
       if (msg === "NoLines") return sendApiError(reply, request, 400, "NoLines");
@@ -145,20 +146,25 @@ export async function registerStockTakeRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const id = z.coerce.number().int().positive().parse((request.params as { id: string }).id);
     try {
-      const row = await cancelStockTake(tenantId, id);
+      await assertDocWritableById(request, "stock", id, "stock_take");
+      const row = await cancelStockTake(tenantId, id, actorUserIdOrNull(request));
       if (!row) return sendApiError(reply, request, 404, "NotFound");
-      await appendTenantAuditEvent({
-        tenantId,
-        actorUserId: actorUserIdOrNull(request),
-        entityType: "stock_take",
-        entityId: id,
-        action: "stock_take.cancel",
-        payload: { id }
-      });
       return reply.send({ data: row });
     } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NotDraft") return sendApiError(reply, request, 409, "NotDraft");
+      if (msg === "AlreadyCancelled") return sendApiError(reply, request, 409, "AlreadyCancelled");
+      if (msg === "NotCancellable") return sendApiError(reply, request, 409, "NotCancellable");
+      if (msg === "CANNOT_CANCEL_POSTED_NO_SNAPSHOT") {
+        return sendApiError(
+          reply,
+          request,
+          409,
+          "CannotCancelPostedNoSnapshot",
+          "Нельзя отменить проведённую инвентаризацию: нет снимка остатков до проведения (previous_qty)."
+        );
+      }
       throw e;
     }
   });

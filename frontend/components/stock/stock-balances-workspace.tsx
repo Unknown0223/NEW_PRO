@@ -164,6 +164,14 @@ function formatQty(s: string): string {
   return formatNumberGrouped(s, { maxFractionDigits: 3 });
 }
 
+/** Mahsulot nomi + kategoriya (mobil va veb jadvali bir xil). */
+function formatProductDisplayName(name: string, categoryName: string | null | undefined): string {
+  const n = name.trim();
+  const cat = categoryName?.trim();
+  if (cat && cat.length > 0 && cat !== n) return `${n} · ${cat}`;
+  return n || "—";
+}
+
 function formatMoney(s: string, currency: string): string {
   const cur = /^[A-Z]{3}$/i.test(currency) ? currency.toUpperCase() : "UZS";
   return `${formatNumberGrouped(s, { minFractionDigits: 2, maxFractionDigits: 2 })} ${cur}`;
@@ -282,7 +290,11 @@ function renderByWhDataCell(row: ByWarehouseRow, colId: string): ReactNode {
         <span className="max-w-[140px] text-muted-foreground">{row.category_name ?? "—"}</span>
       );
     case "name":
-      return <span className="max-w-[220px] font-medium">{row.name}</span>;
+      return (
+        <span className="max-w-[280px] font-medium">
+          {formatProductDisplayName(row.name, row.category_name)}
+        </span>
+      );
     case "sku":
       return <span className="text-muted-foreground">{row.sku || "—"}</span>;
     case "qty":

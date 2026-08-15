@@ -1,6 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import {
+  assertDocWritableByDate,
+  assertDocWritableById
+} from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { jwtAccessVerify, getAccessUser } from "../auth/auth.prehandlers";
@@ -16,6 +24,16 @@ import {
   getExpenseSummary,
   getPnlReport
 } from "./expenses.service";
+
+function parseExpenseDate(raw: unknown): Date | null {
+  if (raw == null) return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  if (typeof raw === "string" && raw.trim()) {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
 
 export async function registerExpenseRoutes(app: FastifyInstance) {
   const preHandler = [jwtAccessVerify];
@@ -48,15 +66,32 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
   app.post("/api/:slug/expenses", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const jwtUser = getAccessUser(request);
-    const data = await createExpense(request.tenant!.id, request.body as any, Number(jwtUser.sub));
-    return reply.status(201).send(data);
+    const body = request.body as Record<string, unknown>;
+    try {
+      const expenseDate = parseExpenseDate(body?.expense_date);
+      if (expenseDate) {
+        await assertDocWritableByDate(request, "expenses", expenseDate);
+      }
+      const data = await createExpense(request.tenant!.id, body as any, Number(jwtUser.sub));
+      return reply.status(201).send(data);
+    } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      throw e;
+    }
   });
 
   app.patch("/api/:slug/expenses/:id", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const jwtUser = getAccessUser(request);
-    const data = await updateExpense(request.tenant!.id, parseInt((request.params as any).id), request.body as any, Number(jwtUser.sub));
-    return reply.send(data);
+    const id = parseInt((request.params as any).id);
+    try {
+      await assertDocWritableById(request, "expenses", id);
+      const data = await updateExpense(request.tenant!.id, id, request.body as any, Number(jwtUser.sub));
+      return reply.send(data);
+    } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      throw e;
+    }
   });
 
   app.delete("/api/:slug/expenses/:id", { preHandler }, async (request, reply) => {
@@ -69,6 +104,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       .object({ delete_reason_ref: z.string().max(128).optional() })
       .parse((request.query as Record<string, unknown>) ?? {});
     try {
+      await assertDocWritableById(request, "expenses", id);
       await deleteExpense(
         request.tenant!.id,
         id,
@@ -77,6 +113,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       );
       return reply.status(204).send();
     } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
       if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -92,9 +129,11 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "InvalidId");
     }
     try {
+      await assertDocWritableById(request, "expenses", id);
       await restoreExpense(request.tenant!.id, id, actorUserIdOrNull(request));
       return reply.status(204).send();
     } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
       if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
@@ -106,21 +145,35 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
   app.post("/api/:slug/expenses/:id/approve", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const jwtUser = getAccessUser(request);
-    const data = await approveExpense(request.tenant!.id, parseInt((request.params as any).id), Number(jwtUser.sub));
-    return reply.send(data);
+    const id = parseInt((request.params as any).id);
+    try {
+      await assertDocWritableById(request, "expenses", id);
+      const data = await approveExpense(request.tenant!.id, id, Number(jwtUser.sub));
+      return reply.send(data);
+    } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      throw e;
+    }
   });
 
   app.post("/api/:slug/expenses/:id/reject", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const jwtUser = getAccessUser(request);
     const body = request.body as { note?: string } | undefined;
-    const data = await rejectExpense(
-      request.tenant!.id,
-      parseInt((request.params as any).id),
-      Number(jwtUser.sub),
-      body?.note ?? ""
-    );
-    return reply.send(data);
+    const id = parseInt((request.params as any).id);
+    try {
+      await assertDocWritableById(request, "expenses", id);
+      const data = await rejectExpense(
+        request.tenant!.id,
+        id,
+        Number(jwtUser.sub),
+        body?.note ?? ""
+      );
+      return reply.send(data);
+    } catch (e) {
+      if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      throw e;
+    }
   });
 
   app.get("/api/:slug/expenses/summary", { preHandler }, async (request, reply) => {

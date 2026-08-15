@@ -23,8 +23,18 @@ const fontMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SALESDOC — панель",
-  description: "Веб-панель мультитенантной торговой системы"
+  title: "Sales Arena — панель",
+  description: "Веб-панель мультитенантной торговой системы",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/brand/favicon/icon_32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+  },
+  manifest: "/site.webmanifest"
 };
 
 export default function RootLayout({

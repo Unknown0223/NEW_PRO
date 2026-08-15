@@ -1,5 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import {
+  assertIsVoided,
+  assertNotVoided,
+  softRestoreData,
+  softVoidData,
+  softVoidListFilter
+} from "../../lib/soft-void";
 import { normalizeCurrencyCode, resolveCurrencyEntries } from "../tenant-settings/finance-refs";
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -68,12 +75,16 @@ export type ListCurrencyRatesQuery = {
   to?: string;
   base?: string;
   quote?: string;
+  archive?: boolean;
 };
 
 export async function listCurrencyExchangeRates(tenantId: number, q: ListCurrencyRatesQuery) {
   const page = Math.max(1, q.page);
   const limit = Math.min(200, Math.max(1, q.limit));
-  const where: Prisma.CurrencyExchangeRateWhereInput = { tenant_id: tenantId };
+  const where: Prisma.CurrencyExchangeRateWhereInput = {
+    tenant_id: tenantId,
+    ...softVoidListFilter(q.archive)
+  };
   if (q.from?.trim() || q.to?.trim()) {
     const gte = q.from?.trim() ? parseYmdUtcDate(q.from.trim()) : null;
     const lte = q.to?.trim() ? parseYmdUtcDate(q.to.trim()) : null;
@@ -181,7 +192,7 @@ export async function patchCurrencyExchangeRate(
   _actorUserId: number | null
 ) {
   const existing = await prisma.currencyExchangeRate.findFirst({
-    where: { id, tenant_id: tenantId }
+    where: { id, tenant_id: tenantId, deleted_at: null }
   });
   if (!existing) throw new Error("NOT_FOUND");
 
@@ -238,11 +249,37 @@ export async function patchCurrencyExchangeRate(
   }
 }
 
-export async function deleteCurrencyExchangeRate(tenantId: number, id: number): Promise<void> {
-  const r = await prisma.currencyExchangeRate.deleteMany({
-    where: { id, tenant_id: tenantId }
+export async function deleteCurrencyExchangeRate(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.currencyExchangeRate.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, deleted_at: true }
   });
-  if (r.count === 0) throw new Error("NOT_FOUND");
+  assertNotVoided(existing);
+  await prisma.currencyExchangeRate.update({
+    where: { id },
+    data: softVoidData(actorUserId, null, { includeReason: false })
+  });
+}
+
+export async function restoreCurrencyExchangeRate(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.currencyExchangeRate.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, deleted_at: true }
+  });
+  assertIsVoided(existing);
+  await prisma.currencyExchangeRate.update({
+    where: { id },
+    data: softRestoreData({ includeReason: false })
+  });
+  void actorUserId;
 }
 
 /**
@@ -262,7 +299,8 @@ export async function getLatestExchangeRate(
       tenant_id: tenantId,
       base_currency: base,
       quote_currency: quote,
-      rate_date: { lte: asOfDate }
+      rate_date: { lte: asOfDate },
+      deleted_at: null
     },
     orderBy: { rate_date: "desc" }
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** Jadval ichki scroll uchun aniq balandlik; sahifa cheksiz cho‘zilmasin. */
@@ -1459,8 +1460,18 @@ export function WdrReportBuilder() {
     <div className="max-w-full space-y-4 overflow-x-hidden pb-2">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Универсальный отчет по продажам</h1>
-          <p className="text-xs text-muted-foreground">Фильтры, сводная таблица, экспорт</p>
+          <h1 className="text-lg font-semibold">Конструктор отчетов</h1>
+          <p className="text-xs text-muted-foreground">
+            WebDataRocks — фильтры, сводная таблица, поля, slice, экспорт в Excel
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/reports/builder/pivot"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 text-xs text-muted-foreground")}
+          >
+            Virtual Pivot (основной)
+          </Link>
         </div>
       </div>
 

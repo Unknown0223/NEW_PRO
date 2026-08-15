@@ -113,7 +113,9 @@ export async function importClientsFromXlsx(
 
   const resolveStarted = Date.now();
   const refResolver = await ClientImportRefResolver.load(tenantId);
-  const staffLookup = await loadImportStaffLookup(tenantId);
+  const staffLookup = await loadImportStaffLookup(tenantId, {
+    includeInactive: opts?.importMode === "update"
+  });
   const resolveMs = Date.now() - resolveStarted;
   const duplicateKeyFields = normalizeDuplicateKeyFields(opts?.duplicateKeyFields);
   const updateApplyFields = normalizeUpdateApplyFields(opts?.updateApplyFields);
@@ -207,7 +209,8 @@ export async function importClientsFromXlsx(
       processedRows: 0,
       parseMs: Date.now() - startedAt - resolveMs,
       resolveMs,
-      writeMs: 0
+      writeMs: 0,
+      actorUserId: opts?.actorUserId ?? null
     };
     const isUpdate = Object.prototype.hasOwnProperty.call(manualMap, "client_db_id");
     if (isUpdate) {
@@ -232,7 +235,8 @@ export async function importClientsFromXlsx(
             totalRows: ctx.totalRows,
             processedRows: ctx.processedRows,
             skippedDuplicate: 0,
-            skippedEmpty: r.skippedEmpty
+            skippedEmpty: r.skippedEmpty,
+            unchangedRows: r.unchangedRows
           }
         },
         ctx
@@ -259,7 +263,8 @@ export async function importClientsFromXlsx(
           totalRows: ctx.totalRows,
           processedRows: ctx.processedRows,
           skippedDuplicate: r.skippedDuplicate,
-          skippedEmpty: r.skippedEmpty
+          skippedEmpty: r.skippedEmpty,
+          unchangedRows: 0
         }
       },
       ctx
@@ -304,7 +309,8 @@ export async function importClientsFromXlsx(
     processedRows: 0,
     parseMs: Date.now() - startedAt - resolveMs,
     resolveMs,
-    writeMs: 0
+    writeMs: 0,
+    actorUserId: opts?.actorUserId ?? null
   };
   const isUpdate = Object.prototype.hasOwnProperty.call(colIndexByKey, "client_db_id");
   if (isUpdate) {
@@ -329,7 +335,8 @@ export async function importClientsFromXlsx(
           totalRows: ctx.totalRows,
           processedRows: ctx.processedRows,
           skippedDuplicate: 0,
-          skippedEmpty: r.skippedEmpty
+          skippedEmpty: r.skippedEmpty,
+          unchangedRows: r.unchangedRows
         }
       },
       ctx

@@ -1,23 +1,24 @@
 /**
  * Bir buyruq bilan DB ni to'liq tozalash.
  *
+ * Himoya (majburiy):
+ *   CONFIRM_TRUNCATE=YES
+ *   --confirm-phrase=DELETE_ALL_DATA
+ *   --backup-ok
+ *
  * Ishlatish:
- *   npm run db:wipe:all-once
+ *   CONFIRM_TRUNCATE=YES npm run db:wipe:all-once -- --confirm-phrase=DELETE_ALL_DATA --backup-ok
  */
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
 const backendRoot = path.resolve(__dirname, "..");
+const extraArgs = process.argv.slice(2);
 
-const env = {
-  ...process.env,
-  CONFIRM_DB_WIPE_ALL: process.env.CONFIRM_DB_WIPE_ALL || "yes"
-};
-
-const r = spawnSync("npx", ["tsx", "scripts/db-truncate-all-once.ts"], {
+const r = spawnSync("npx", ["tsx", "scripts/db-truncate-all-once.ts", ...extraArgs], {
   cwd: backendRoot,
   stdio: "inherit",
-  env,
+  env: process.env,
   shell: process.platform === "win32"
 });
 

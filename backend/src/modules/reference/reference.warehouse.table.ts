@@ -4,10 +4,16 @@ import type { WarehouseTableRow } from "./reference.warehouse.types";
 
 export async function listWarehousesTable(
   tenantId: number,
-  opts: { is_active?: boolean; q?: string; page: number; limit: number }
+  opts: { is_active?: boolean; q?: string; page: number; limit: number; archive?: boolean }
 ): Promise<{ data: WarehouseTableRow[]; total: number; page: number; limit: number }> {
   const where: Prisma.WarehouseWhereInput = { tenant_id: tenantId };
-  if (opts.is_active !== undefined) where.is_active = opts.is_active;
+  if (opts.archive) {
+    where.is_active = false;
+  } else if (opts.is_active !== undefined) {
+    where.is_active = opts.is_active;
+  } else {
+    where.is_active = true;
+  }
   const q = (opts.q ?? "").trim();
   if (q) {
     where.OR = [

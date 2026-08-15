@@ -35,6 +35,11 @@ import {
   type ProductLite,
   type QtyGiftResolveContext
 } from "./order-bonus-context";
+import { bonusGiftSelectionMeta, resolveCategoryGiftCandidateIds } from "./bonus-gift-selection";
+import {
+  rewardRuleViews,
+  ruleOrAnyClauseUsesCalendarMonth
+} from "./order-bonus-clauses";
 export type QtyBonusPeek = {
   rule: BonusRuleRow;
   purchasedPid: number;
@@ -110,9 +115,7 @@ export async function findQtyBonusPeeks(
     (r) => !ruleNeedsOrderContext(r) && !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds)
   );
 
-  const needsMonthQty = filtered.some(
-    (r) => r.type === "qty" && (r.sum_threshold_scope ?? "order") === "calendar_month"
-  );
+  const needsMonthQty = filtered.some((r) => ruleOrAnyClauseUsesCalendarMonth(r));
   let monthAgg = 0;
   let monthByProd: ReadonlyMap<number, number> = new Map<number, number>();
   if (needsMonthQty) {
@@ -143,8 +146,12 @@ export async function findQtyBonusPeeks(
   for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
   for (const r of filtered) {
     for (const id of r.bonus_product_ids) stockProductIds.add(id);
+    for (const c of r.clauses ?? []) {
+      for (const id of c.bonus_product_ids) stockProductIds.add(id);
+      for (const id of c.product_ids) stockProductIds.add(id);
+    }
   }
-  const availableByProductId =
+  let availableByProductId =
     engineOpts?.availableByProductId ??
     (await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds));
 
@@ -159,94 +166,157 @@ export async function findQtyBonusPeeks(
     engineOpts?.prereqEnv?.orderAgent ?? engineOpts?.orderAgent ?? null;
 
   for (const rule of filtered) {
-    if (ruleHasPurchaseScope(rule)) continue;
-    if (!ruleMatchesClient(rule, client)) continue;
-    if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
-    if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
-    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
-
-    const effAgg = effectivePurchasedQtyForQtyRule(rule, {
-      orderQty: totalPaidQty,
-      productIdForMonthLookup: null,
-      monthAggregateExclOrder: monthAgg,
-      monthByProductExclOrder: monthByProd
-    });
-    const bonusUnits = computeQtyBonusForRuleRow(rule, effAgg);
-    if (bonusUnits <= 0) continue;
-
-    const ctx: QtyGiftResolveContext = { availableByProductId, minUnits: bonusUnits };
-
-    if (rule.bonus_product_ids.length === 0) {
-      let heroPid = 0;
-      let heroQ = 0;
-      for (const [pid, q] of qtyByProduct) {
-        if (q > heroQ) {
-          heroQ = q;
-          heroPid = pid;
-        }
+    const hasClauses = (rule.clauses?.length ?? 0) > 0;
+    if (!hasClauses && ruleHasPurchaseScope(rule)) continue;
+    if (hasClauses) {
+      // Multi-clause: host primary scope bilan skip qilmaymiz — AND tree + reward views.
+      if (engineOpts?.prereqEnv) {
+        if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
+      } else {
+        if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       }
-      if (heroPid <= 0) continue;
-      const giftPid = resolveQtyGiftProductId(rule, heroPid, giftOverrides, ctx);
-      if (giftPid <= 0) continue;
+    } else {
+      if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
+      if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+      if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
       if (engineOpts?.prereqEnv) {
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       }
+    }
+
+    let anyPeek = false;
+    for (const view of rewardRuleViews(rule)) {
+      if (ruleHasPurchaseScope(view)) continue;
+      const effAgg = effectivePurchasedQtyForQtyRule(view, {
+        orderQty: totalPaidQty,
+        productIdForMonthLookup: null,
+        monthAggregateExclOrder: monthAgg,
+        monthByProductExclOrder: monthByProd
+      });
+      const bonusUnits = computeQtyBonusForRuleRow(view, effAgg);
+      if (bonusUnits <= 0) continue;
+
+      const ctx: QtyGiftResolveContext = { availableByProductId, minUnits: bonusUnits };
+
+      if (view.bonus_product_ids.length === 0) {
+        let heroPid = 0;
+        let heroQ = 0;
+        for (const [pid, q] of qtyByProduct) {
+          if (q > heroQ) {
+            heroQ = q;
+            heroPid = pid;
+          }
+        }
+        if (heroPid <= 0) continue;
+        const giftPid = resolveQtyGiftProductId(view, heroPid, giftOverrides, ctx);
+        if (giftPid <= 0) continue;
+        peeks.push({
+          rule,
+          purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
+          giftPid,
+          bonusQty: bonusUnits
+        });
+        anyPeek = true;
+        continue;
+      }
+
+      const giftPid = resolveQtyGiftProductId(view, QTY_AGGREGATE_PURCHASED_PID, giftOverrides, ctx);
+      if (giftPid <= 0) continue;
       peeks.push({
         rule,
         purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
         giftPid,
         bonusQty: bonusUnits
       });
-      break;
+      anyPeek = true;
     }
-
-    const giftPid = resolveQtyGiftProductId(rule, QTY_AGGREGATE_PURCHASED_PID, giftOverrides, ctx);
-    if (giftPid <= 0) continue;
-    if (engineOpts?.prereqEnv) {
-      if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
-    }
-    peeks.push({
-      rule,
-      purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
-      giftPid,
-      bonusQty: bonusUnits
-    });
-    break;
+    if (anyPeek) break;
   }
 
-  const scopedRules = filtered.filter((r) => ruleHasPurchaseScope(r));
+  const scopedRules = filtered.filter((r) => {
+    if ((r.clauses?.length ?? 0) > 0) {
+      return rewardRuleViews(r).some((v) => ruleHasPurchaseScope(v));
+    }
+    return ruleHasPurchaseScope(r);
+  });
+
+  /**
+   * Faqat kategoriya (aniq sovg‘a SKU yo‘q) qoidalar uchun: nomzod SKU'lar bir marta yuklanadi
+   * va ularning ombor qoldig‘i (agar oldindan yuklanmagan bo‘lsa) qo‘shiladi — stock ustuvorligi
+   * bilan tanlash haqiqiy qoldiqqa asoslanishi uchun.
+   */
+  const categoryCandidatesByKey = new Map<string, number[]>();
+  const missingStockIds = new Set<number>();
+  for (const rule of scopedRules) {
+    for (const view of rewardRuleViews(rule)) {
+      if (bonusGiftSelectionMeta(view, 0).kind !== "category_stock") continue;
+      const key = `${rule.id}:${view.product_category_ids.join(",")}`;
+      if (categoryCandidatesByKey.has(key)) continue;
+      const ids = await resolveCategoryGiftCandidateIds(tenantId, view.product_category_ids);
+      categoryCandidatesByKey.set(key, ids);
+      for (const id of ids) {
+        if (!availableByProductId.has(id)) missingStockIds.add(id);
+      }
+    }
+  }
+  if (missingStockIds.size > 0) {
+    const extraStock = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, missingStockIds);
+    availableByProductId = new Map([...availableByProductId, ...extraStock]);
+  }
 
   for (const rule of scopedRules) {
-    if (!ruleMatchesClient(rule, client)) continue;
-    if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
-    if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
-    if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
-
-    const matchingPids = qtyRuleMatchingProductIds(rule, qtyByProduct, productById);
-    if (matchingPids.length === 0) continue;
-
-    for (const purchasedPid of matchingPids) {
-      const lineQty = qtyByProduct.get(purchasedPid) ?? 0;
-      if (lineQty <= 0) continue;
-
-      const effScoped = effectivePurchasedQtyForQtyRule(rule, {
-        orderQty: lineQty,
-        productIdForMonthLookup: purchasedPid,
-        monthAggregateExclOrder: monthAgg,
-        monthByProductExclOrder: monthByProd
-      });
-      const bonusUnits = computeQtyBonusForRuleRow(rule, effScoped);
-      if (bonusUnits <= 0) continue;
-
-      const giftPid = resolveQtyGiftProductId(rule, purchasedPid, giftOverrides, {
-        availableByProductId,
-        minUnits: bonusUnits
-      });
-      if (giftPid <= 0) continue;
+    const hasClauses = (rule.clauses?.length ?? 0) > 0;
+    if (hasClauses) {
+      if (engineOpts?.prereqEnv) {
+        if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
+      } else {
+        if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
+      }
+    } else {
+      if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
+      if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
+      if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
       if (engineOpts?.prereqEnv) {
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       }
-      peeks.push({ rule, purchasedPid, giftPid, bonusQty: bonusUnits });
+    }
+
+    for (const view of rewardRuleViews(rule)) {
+      if (!ruleHasPurchaseScope(view)) continue;
+      const matchingPids = qtyRuleMatchingProductIds(view, qtyByProduct, productById);
+      if (matchingPids.length === 0) continue;
+
+      const catKey = `${rule.id}:${view.product_category_ids.join(",")}`;
+      const categoryCandidateIds =
+        bonusGiftSelectionMeta(view, 0).kind === "category_stock"
+          ? categoryCandidatesByKey.get(catKey)
+          : undefined;
+
+      for (const purchasedPid of matchingPids) {
+        const lineQty = qtyByProduct.get(purchasedPid) ?? 0;
+        if (lineQty <= 0) continue;
+
+        const effScoped = effectivePurchasedQtyForQtyRule(view, {
+          orderQty: lineQty,
+          productIdForMonthLookup: purchasedPid,
+          monthAggregateExclOrder: monthAgg,
+          monthByProductExclOrder: monthByProd
+        });
+        const bonusUnits = computeQtyBonusForRuleRow(view, effScoped);
+        if (bonusUnits <= 0) continue;
+
+        const giftPid = resolveQtyGiftProductId(view, purchasedPid, giftOverrides, {
+          availableByProductId,
+          minUnits: bonusUnits,
+          categoryCandidateIds
+        });
+        if (giftPid <= 0) continue;
+        peeks.push({ rule, purchasedPid, giftPid, bonusQty: bonusUnits });
+      }
     }
   }
 

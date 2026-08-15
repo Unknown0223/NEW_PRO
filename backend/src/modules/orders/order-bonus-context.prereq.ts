@@ -20,10 +20,10 @@ import {
   sumMatchingOrderQtyForQtyRule,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
-  ruleMatchesProduct,
   type OrderBonusPrereqEnv,
   type QtyGiftResolveContext
 } from "./order-bonus-context.match";
+import { bonusRuleFromClause } from "./order-bonus-clauses";
 
 function ruleActiveAt(rule: BonusRuleRow, now: Date): boolean {
   if (!rule.is_active) return false;
@@ -103,6 +103,36 @@ function qtyRuleWouldProduceAnyPeek(rule: BonusRuleRow, env: OrderBonusPrereqEnv
   return giftPid > 0;
 }
 
+/** Gate clause: miqdor/summa sharti bajarilishi kifoya (sovg‘a SKU shart emas). */
+function qtyClauseGateMet(rule: BonusRuleRow, env: OrderBonusPrereqEnv): boolean {
+  let totalPaidQty = 0;
+  for (const q of env.qtyByProduct.values()) {
+    if (q > 0) totalPaidQty += q;
+  }
+  if (!ruleHasPurchaseScope(rule)) {
+    const eff = effectivePurchasedQtyForQtyRule(rule, {
+      orderQty: totalPaidQty,
+      productIdForMonthLookup: null,
+      monthAggregateExclOrder: env.clientMonthPaidQtyAggregateExclOrder,
+      monthByProductExclOrder: env.clientMonthPaidQtyByProductExclOrder
+    });
+    return computeQtyBonusForRuleRow(rule, eff) > 0;
+  }
+  const { totalQty: scopedQty } = sumMatchingOrderQtyForQtyRule(
+    rule,
+    env.qtyByProduct,
+    env.productById
+  );
+  if (scopedQty <= 0) return false;
+  const eff = effectivePurchasedQtyForQtyRule(rule, {
+    orderQty: scopedQty,
+    productIdForMonthLookup: null,
+    monthAggregateExclOrder: env.clientMonthPaidQtyAggregateExclOrder,
+    monthByProductExclOrder: env.clientMonthPaidQtyByProductExclOrder
+  });
+  return computeQtyBonusForRuleRow(rule, eff) > 0;
+}
+
 function ruleMatchesAsStandaloneAutoBonusForOrder(rule: BonusRuleRow, env: OrderBonusPrereqEnv, now: Date): boolean {
   if (rule.is_manual) return false;
   if (ruleNeedsOrderContext(rule)) return false;
@@ -133,6 +163,40 @@ function ruleMatchesAsStandaloneAutoBonusForOrder(rule: BonusRuleRow, env: Order
   return false;
 }
 
+function clauseMatchesForGiftHost(
+  host: BonusRuleRow,
+  clause: NonNullable<BonusRuleRow["clauses"]>[number],
+  env: OrderBonusPrereqEnv,
+  now: Date
+): boolean {
+  const syn = bonusRuleFromClause(host, clause);
+  if (syn.is_manual) return false;
+  if (ruleNeedsOrderContext(syn)) return false;
+  if (!ruleActiveAt(host, now)) return false;
+  if (clause.once_per_client && env.clientUsedAutoBonusRuleIds.has(host.id)) return false;
+  if (!ruleMatchesClient(syn, env.client)) return false;
+  if (!ruleMatchesOrderAgentScope(syn, env.orderAgent)) return false;
+  if (!ruleMatchesOrderProductScope(syn, env.orderedProductIds, env.productById)) return false;
+
+  if (host.type === "sum") {
+    if (syn.min_sum == null) return false;
+    const effective = effectiveSubtotalForSumMinRule(
+      syn,
+      env.baseSubtotalBeforeDiscount,
+      env.clientMonthMerchandiseSubtotalExclOrder
+    );
+    if (effective.lt(new PrismaClient.Decimal(syn.min_sum))) return false;
+    if (!clause.grants_reward) return true;
+    const giftPid = resolveSumRuleGiftProductId(syn, env.orderedProductIds, env.productById, env.qtyByProduct);
+    return giftPid != null && giftPid > 0;
+  }
+  if (host.type === "qty") {
+    if (!clause.grants_reward) return qtyClauseGateMet(syn, env);
+    return qtyRuleWouldProduceAnyPeek(syn, env);
+  }
+  return false;
+}
+
 export async function ruleTreeSatisfiedForOrder(
   rule: BonusRuleRow,
   env: OrderBonusPrereqEnv,
@@ -142,6 +206,14 @@ export async function ruleTreeSatisfiedForOrder(
   if (stack.has(rule.id)) return false;
   stack.add(rule.id);
   try {
+    const clauses = rule.clauses ?? [];
+    if (clauses.length > 0 && (rule.type === "qty" || rule.type === "sum")) {
+      for (const clause of clauses) {
+        if (!clauseMatchesForGiftHost(rule, clause, env, now)) return false;
+      }
+      return true;
+    }
+
     const ids = rule.prerequisite_rule_ids ?? [];
     for (const pid of ids) {
       const pr = await ensurePrereqRule(env, pid);
@@ -153,4 +225,3 @@ export async function ruleTreeSatisfiedForOrder(
     stack.delete(rule.id);
   }
 }
-

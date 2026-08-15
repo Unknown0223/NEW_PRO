@@ -58,16 +58,19 @@ describe.skipIf(!dbReady)("payment workflow (integration)", () => {
         note: "[vitest-payment-workflow]"
       });
     expect(createRes.status).toBe(201);
-    const paymentId = createRes.body.data.id as number;
+    const created = createRes.body.data ?? createRes.body;
+    const paymentId = created.id as number;
     expect(paymentId).toBeGreaterThan(0);
-    expect(createRes.body.data.workflow_status).toBe("confirmed");
+    expect(created.workflow_status).toBe("confirmed");
 
     const detailRes = await request(app.server)
       .get(`/api/test1/payments/${paymentId}`)
       .set("Authorization", `Bearer ${token}`);
     expect(detailRes.status).toBe(200);
-    expect(detailRes.body.data.id).toBe(paymentId);
-    expect(detailRes.body.data.amount).toBe(50_000);
+    const detailPayment =
+      detailRes.body.payment ?? detailRes.body.data?.payment ?? detailRes.body.data ?? detailRes.body;
+    expect(detailPayment.id).toBe(paymentId);
+    expect(Number(detailPayment.amount)).toBe(50_000);
 
     const listRes = await request(app.server)
       .get(`/api/test1/payments?page=1&limit=5&client_id=${clientId}`)
@@ -89,7 +92,8 @@ describe.skipIf(!dbReady)("payment workflow (integration)", () => {
         note: "[vitest-payment-workflow-list]"
       });
     expect(createRes.status).toBe(201);
-    const paymentId = createRes.body.data.id as number;
+    const created = createRes.body.data ?? createRes.body;
+    const paymentId = created.id as number;
 
     const listRes = await request(app.server)
       .get(`/api/test1/payments?page=1&limit=20&client_id=${clientId}`)

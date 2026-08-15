@@ -50,7 +50,8 @@ export default function ClientEditPage() {
       <ClientEditForm
         tenantSlug={tenantSlug}
         clientId={clientId}
-        onSuccess={(savedId) => router.push(`/clients/${savedId}`)}
+        redirectOnSuccess={false}
+        onSuccess={() => {}}
         onCancel={() => router.back()}
       />
     </PageShell>

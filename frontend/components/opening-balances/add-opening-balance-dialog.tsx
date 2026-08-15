@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { DateTimePickerField } from "@/components/ui/datetime-popover";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -254,13 +255,13 @@ export function AddOpeningBalanceDialog({ open, onOpenChange, tenantSlug, onCrea
               <Label htmlFor="aob-amt" className="text-sm font-medium text-foreground">
                 Сумма
               </Label>
-              <Input
+              <GroupedNumberInput
                 id="aob-amt"
                 className={cn(controlClass, "h-10")}
-                inputMode="decimal"
+                maxFractionDigits={2}
                 placeholder="0"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={setAmount}
                 disabled={submitMut.isPending}
               />
               {fieldErrs.amount ? (

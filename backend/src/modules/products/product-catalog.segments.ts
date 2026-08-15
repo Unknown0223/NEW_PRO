@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { ListCatalogOpts } from "./product-catalog.types";
-import { listWhere, normCode } from "./product-catalog.shared";
+import { catalogDeactivateData, catalogRestoreData, listWhere, normCode } from "./product-catalog.shared";
 
 export async function listProductSegments(tenantId: number, opts: ListCatalogOpts) {
   const where = listWhere(tenantId, opts) as Prisma.ProductSegmentWhereInput;
@@ -19,11 +20,12 @@ export async function listProductSegments(tenantId: number, opts: ListCatalogOpt
 
 export async function createProductSegment(
   tenantId: number,
-  input: { name: string; code?: string | null; sort_order?: number | null; is_active?: boolean }
+  input: { name: string; code?: string | null; sort_order?: number | null; is_active?: boolean },
+  actorUserId: number | null = null
 ) {
   const name = input.name.trim();
   if (!name) throw new Error("VALIDATION");
-  return prisma.productSegment.create({
+  const row = await prisma.productSegment.create({
     data: {
       tenant_id: tenantId,
       name,
@@ -32,12 +34,22 @@ export async function createProductSegment(
       is_active: input.is_active ?? true
     }
   });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product_segment,
+    entityId: row.id,
+    action: "create",
+    payload: { name: row.name, code: row.code }
+  });
+  return row;
 }
 
 export async function updateProductSegment(
   tenantId: number,
   id: number,
-  input: Partial<{ name: string; code: string | null; sort_order: number | null; is_active: boolean }>
+  input: Partial<{ name: string; code: string | null; sort_order: number | null; is_active: boolean }>,
+  actorUserId: number | null = null
 ) {
   const row = await prisma.productSegment.findFirst({ where: { id, tenant_id: tenantId } });
   if (!row) throw new Error("NOT_FOUND");
@@ -46,13 +58,70 @@ export async function updateProductSegment(
   if (input.code !== undefined) data.code = normCode(input.code);
   if (input.sort_order !== undefined) data.sort_order = input.sort_order;
   if (input.is_active !== undefined) data.is_active = input.is_active;
-  return prisma.productSegment.update({ where: { id }, data });
+  const updated = await prisma.productSegment.update({ where: { id }, data });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product_segment,
+    entityId: id,
+    action: "update",
+    payload: data as Record<string, unknown>
+  });
+  return updated;
 }
 
-export async function deleteProductSegment(tenantId: number, id: number) {
+/** Hard delete yo‘q — `is_active: false` + code void suffix. */
+export async function deactivateProductSegment(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
   const row = await prisma.productSegment.findFirst({ where: { id, tenant_id: tenantId } });
   if (!row) throw new Error("NOT_FOUND");
-  const n = await prisma.product.count({ where: { tenant_id: tenantId, segment_id: id } });
-  if (n > 0) throw new Error("IN_USE");
-  await prisma.productSegment.delete({ where: { id } });
+  if (!row.is_active) throw new Error("ALREADY_INACTIVE");
+  const updated = await prisma.productSegment.update({
+    where: { id },
+    data: catalogDeactivateData(row.code, id)
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product_segment,
+    entityId: id,
+    action: "soft_delete",
+    payload: { name: row.name, code: row.code, voided_code: updated.code, is_active: false }
+  });
+  return updated;
+}
+
+/** @deprecated Use deactivateProductSegment */
+export async function deleteProductSegment(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
+  return deactivateProductSegment(tenantId, id, actorUserId);
+}
+
+export async function restoreProductSegment(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
+  const row = await prisma.productSegment.findFirst({ where: { id, tenant_id: tenantId } });
+  if (!row) throw new Error("NOT_FOUND");
+  if (row.is_active) throw new Error("NOT_INACTIVE");
+  const updated = await prisma.productSegment.update({
+    where: { id },
+    data: catalogRestoreData(row.code, id)
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product_segment,
+    entityId: id,
+    action: "reactivate",
+    payload: { name: row.name, code: updated.code, is_active: true }
+  });
+  return updated;
 }

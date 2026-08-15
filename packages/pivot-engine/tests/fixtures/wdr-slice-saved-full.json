@@ -1,0 +1,21 @@
+{
+  "dataSource": { "dataSourceType": "json", "data": [] },
+  "slice": {
+    "rows": [{ "uniqueName": "agent_name" }],
+    "columns": [{ "uniqueName": "order_date_month" }],
+    "measures": [
+      { "uniqueName": "amount.sum" },
+      { "uniqueName": "client_id", "aggregation": "distinctcount" }
+    ],
+    "reportFilters": [{ "uniqueName": "order_status" }]
+  },
+  "savdoDatasetFilters": {
+    "datasetId": "orders_sales_lines",
+    "dateMode": "order_date",
+    "dateFrom": "2026-01-01",
+    "dateTo": "2026-01-31",
+    "agentIds": [42],
+    "statuses": ["delivered"],
+    "orderTypes": []
+  }
+}

@@ -10,8 +10,11 @@ model WorkSlot {
   sort_order         Int                     @default(0)
   created_at         DateTime                @default(now())
   updated_at         DateTime                @updatedAt
+  deleted_at         DateTime?
+  deleted_by_user_id Int?
   tenant             Tenant                  @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   direction          TradeDirection?         @relation(fields: [direction_id], references: [id], onDelete: SetNull)
+  deleted_by         User?                   @relation("WorkSlotVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
   user_links         SlotUserLink[]
   audit_entries      SlotAuditEntry[]
   client_assignments ClientAgentAssignment[]
@@ -19,6 +22,7 @@ model WorkSlot {
   @@unique([tenant_id, slot_code])
   @@index([tenant_id, branch_code])
   @@index([tenant_id, slot_type, is_active])
+  @@index([tenant_id, deleted_at])
   @@map("work_slots")
 }
 

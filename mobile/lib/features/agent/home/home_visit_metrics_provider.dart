@@ -17,10 +17,10 @@ typedef HomeVisitMetrics = ({
   int offRoute,
   int remainingOnRoute,
   int remainingOffRoute,
-  /// Bugungi hafta kuni marshrutida 30 kun ichida tashrifsiz mijozlar.
   int dormantOnWeekday,
-  /// ОКБ dagi noyob mijozlar — 30 kun ichida tashrifsiz.
   int dormantUnique,
+  bool noVisitScheduleConfigured,
+  bool noVisitsPlannedToday,
 });
 
 /// Bosh sahifa «Посещено / Осталось» — bugungi reja (ОКБ) bo‘yicha.
@@ -32,40 +32,22 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
   final todayWeekday = serverTodayWeekday();
   final realTodayRoute = await ref.watch(realTodayRouteProvider.future);
   final allClients = await ref.watch(clientsListProvider.future);
-  final plannedToday = plannedClientIdsForDay(allClients, todayWeekday, todayIso);
-  final planIds = resolveRouteClientIdsForDay(
+  final hasSchedule = tenantHasAnyVisitSchedule(allClients);
+  final planIds = resolveDailyVisitPlanIds(
     route: realTodayRoute,
-    plannedClientIds: plannedToday,
-  );
-
-  var onRoute = 0;
-  var offRoute = 0;
-  for (final id in visitedIds) {
-    if (planIds.contains(id)) {
-      onRoute++;
-    } else {
-      offRoute++;
-    }
-  }
-  final visited = visitedIds.length;
-  final total = planIds.length;
-
-  final visitedIn30d = await AppDatabase().getClientIdsVisitedSince(okbLookbackSince());
-
-  final dormantOnWeekday = countDormantOnTodayWeekday(
-    clients: allClients,
+    allClients: allClients,
     weekday: todayWeekday,
     todayIso: todayIso,
-    routeClientIds: planIds,
-    visitedInLookback: visitedIn30d,
-  );
-  final dormantUnique = countDormantUniqueClients(
-    clients: allClients,
-    visitedInLookback: visitedIn30d,
   );
 
-  final remainingOnRoute = (total - onRoute).clamp(0, 999999);
+  final progress = splitVisitProgress(planIds: planIds, visitedIds: visitedIds);
+  final onRoute = progress.visitedOnPlan;
+  final offRoute = progress.visitedOffPlan;
+  final visited = onRoute;
+  final total = planIds.length;
+  final remainingOnRoute = progress.remainingOnPlan;
 
+  final plannedToday = plannedClientIdsForDay(allClients, todayWeekday, todayIso);
   final offPlanRemaining = <int>{};
   for (final id in plannedToday) {
     if (planIds.contains(id)) continue;
@@ -87,6 +69,22 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
   }
   final remainingOffRoute = offPlanRemaining.length;
 
+  final visitedIn30d = await AppDatabase().getClientIdsVisitedSince(okbLookbackSince());
+
+  final dormantOnWeekday = countDormantOnTodayWeekday(
+    clients: allClients,
+    weekday: todayWeekday,
+    todayIso: todayIso,
+    routeClientIds: planIds,
+    visitedInLookback: visitedIn30d,
+  );
+  final dormantUnique = countDormantUniqueClients(
+    clients: allClients,
+    visitedInLookback: visitedIn30d,
+  );
+
+  final noVisitsPlannedToday = hasSchedule && total == 0 && allClients.isNotEmpty;
+
   if (calendarOn) {
     return (
       visited: visited,
@@ -97,6 +95,8 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
       remainingOffRoute: remainingOffRoute,
       dormantOnWeekday: dormantOnWeekday,
       dormantUnique: dormantUnique,
+      noVisitScheduleConfigured: !hasSchedule,
+      noVisitsPlannedToday: noVisitsPlannedToday,
     );
   }
 
@@ -112,5 +112,7 @@ final homeVisitMetricsProvider = FutureProvider<HomeVisitMetrics>((ref) async {
     remainingOffRoute: remainingOffRoute,
     dormantOnWeekday: dormantOnWeekday,
     dormantUnique: dormantUnique,
+    noVisitScheduleConfigured: !hasSchedule,
+    noVisitsPlannedToday: noVisitsPlannedToday,
   );
 });

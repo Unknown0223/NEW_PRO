@@ -9,7 +9,9 @@ import {
 import { createOrder } from "../orders/domain/order.create";
 import { loadAvailableQtyByProductId } from "../orders/order-bonus-context.match-gifts";
 import { getOrderCreateContextBundle } from "../orders/order-create-context.service";
+import { loadOrderCreateCatalogSlice } from "../orders/order-create-context.catalog";
 import { listWarehousesForTenant } from "../reference/reference.service";
+import { resolveConstraintScope } from "../linkage/linkage.service";
 import {
   executionPctFromPlanFact,
   loadMonitoringPlanAggregates
@@ -27,8 +29,57 @@ import {
   assertMobilePhotoReportForClient,
   loadAgentMobileConfig,
   localTodayRange,
-  monthUtcRange
+  monthUtcRange,
+  workRegionDayRange,
+  workRegionTodayKey
 } from "./mobile-agent-sync.service";
+
+type WarehouseLite = { id: number; name: string; type?: string | null };
+
+/** Agent bog‘langan ombor — zakaz/ostatka uchun default (tarixdagi boshqa ombor emas). */
+async function resolveAgentDefaultWarehouseId(
+  tenantId: number,
+  userId: number,
+  warehouses: WarehouseLite[]
+): Promise<number | null> {
+  if (warehouses.length === 0) return null;
+  const allowed = new Set(warehouses.map((w) => w.id));
+
+  const links = await prisma.warehouseUserLink.findMany({
+    where: {
+      user_id: userId,
+      warehouse_id: { in: [...allowed] },
+      warehouse: { tenant_id: tenantId, is_active: true }
+    },
+    select: { warehouse_id: true, warehouse: { select: { type: true, name: true } } },
+    orderBy: { warehouse_id: "asc" }
+  });
+  if (links.length > 0) {
+    const main = links.find((l) => l.warehouse.type === "main");
+    const pick = main ?? links[0]!;
+    return pick.warehouse_id;
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, tenant_id: tenantId },
+    select: { warehouse_id: true }
+  });
+  if (user?.warehouse_id != null && allowed.has(user.warehouse_id)) {
+    return user.warehouse_id;
+  }
+
+  return warehouses[0]!.id;
+}
+
+function sortWarehousesDefaultFirst<T extends WarehouseLite>(
+  warehouses: T[],
+  defaultId: number | null
+): T[] {
+  if (defaultId == null) return warehouses;
+  const head = warehouses.filter((w) => w.id === defaultId);
+  const tail = warehouses.filter((w) => w.id !== defaultId);
+  return [...head, ...tail];
+}
 
 export async function getMobileOrderCreateContext(
   tenantId: number,
@@ -46,8 +97,16 @@ export async function getMobileOrderCreateContext(
       ? await getMobileOrderClientFinance(tenantId, userId, opts.clientId)
       : null;
 
+  const defaultWarehouseId = await resolveAgentDefaultWarehouseId(
+    tenantId,
+    userId,
+    bundle.warehouses
+  );
+  const warehouses = sortWarehousesDefaultFirst(bundle.warehouses, defaultWarehouseId);
+
   return {
-    warehouses: bundle.warehouses,
+    warehouses,
+    default_warehouse_id: defaultWarehouseId,
     price_types: bundle.price_types,
     products: bundle.products.map((p) => ({
       ...p,
@@ -79,42 +138,34 @@ export async function getMobileWarehouseStockView(
   userId: number,
   warehouseId?: number
 ) {
-  const warehouses = await listWarehousesForTenant(tenantId);
-  const whId = warehouseId ?? warehouses[0]?.id;
+  const bundle = await getOrderCreateContextBundle(tenantId, { selected_agent_id: userId });
+  const defaultWhId = await resolveAgentDefaultWarehouseId(tenantId, userId, bundle.warehouses);
+  const warehouses = sortWarehousesDefaultFirst(bundle.warehouses, defaultWhId);
+  const whId = warehouseId ?? defaultWhId ?? warehouses[0]?.id;
   if (whId == null) {
     return { warehouses, warehouse_id: null, categories: [] };
   }
 
-  const stocks = await prisma.stock.findMany({
-    where: {
-      tenant_id: tenantId,
-      warehouse_id: whId,
-      qty: { gt: 0 }
-    },
-    select: {
-      qty: true,
-      reserved_qty: true,
-      product: {
-        select: {
-          id: true,
-          name: true,
-          category: { select: { id: true, name: true } },
-          prices: { select: { price_type: true, price: true, currency: true }, take: 3 }
-        }
-      }
-    },
-    take: 5000
-  });
+  const scope = await resolveConstraintScope(tenantId, { selected_agent_id: userId });
+  const catalog = await loadOrderCreateCatalogSlice(tenantId, scope);
+  const products = catalog.products.filter((p) => !p.is_blocked);
 
-  const byCategory = new Map<string, Array<{ name: string; available: number; price?: string; currency?: string }>>();
-  for (const s of stocks) {
-    const free = Math.max(0, Number(s.qty) - Math.max(0, Number(s.reserved_qty)));
-    if (free <= 0) continue;
-    const cat = s.product.category?.name ?? "Boshqa";
-    const retail = s.product.prices.find((p) => p.price_type === "retail") ?? s.product.prices[0];
+  const productIds = products.map((p) => p.id);
+  const available = await loadAvailableQtyByProductId(prisma, tenantId, whId, productIds);
+
+  const byCategory = new Map<
+    string,
+    Array<{ name: string; category_name: string; available: number; price?: string; currency?: string }>
+  >();
+
+  for (const p of products) {
+    const cat = p.category?.name ?? "Boshqa";
+    const free = available.get(p.id) ?? 0;
+    const retail = p.prices.find((x) => x.price_type === "retail") ?? p.prices[0];
     const list = byCategory.get(cat) ?? [];
     list.push({
-      name: s.product.name,
+      name: p.name,
+      category_name: cat,
       available: free,
       ...(retail
         ? { price: retail.price.toString(), currency: retail.currency }
@@ -130,7 +181,6 @@ export async function getMobileWarehouseStockView(
       items: items.sort((a, b) => a.name.localeCompare(b.name, "ru"))
     }));
 
-  void userId;
   return { warehouses, warehouse_id: whId, categories };
 }
 
@@ -226,9 +276,8 @@ export async function listMobileAgentOrdersHistory(
   userId: number,
   opts?: { date?: string }
 ) {
-  const dateStr = opts?.date ?? new Date().toISOString().slice(0, 10);
-  const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
-  const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+  const dateStr = opts?.date ?? workRegionTodayKey();
+  const { start: dayStart, end: dayEnd } = workRegionDayRange(dateStr);
 
   const orders = await prisma.order.findMany({
     where: {
@@ -365,6 +414,7 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
 
   const rows = await prisma.$queryRaw<
     Array<{
+      product_name: string | null;
       category_name: string | null;
       parent_name: string | null;
       qty: Prisma.Decimal;
@@ -379,6 +429,7 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
         oi.qty,
         oi.total,
         oi.is_bonus,
+        p.name AS product_name,
         pc.name AS category_name,
         parent.name AS parent_name,
         COALESCE(p.volume_m3, 0)::numeric(14,6) AS volume_unit
@@ -397,6 +448,7 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
     signed AS (
       SELECT
         client_id,
+        CASE WHEN product_name IS NULL OR btrim(product_name) = '' THEN '—' ELSE product_name END AS product_name,
         CASE WHEN category_name IS NULL OR btrim(category_name) = '' THEN 'Boshqa' ELSE category_name END AS category_name,
         parent_name,
         qty,
@@ -405,6 +457,7 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
       FROM lines
     )
     SELECT
+      product_name,
       category_name,
       parent_name,
       COALESCE(SUM(qty), 0)::numeric(15,3) AS qty,
@@ -412,41 +465,98 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
       COALESCE(SUM(total), 0)::numeric(15,2) AS sum,
       COUNT(DISTINCT client_id)::bigint AS akb
     FROM signed
-    GROUP BY category_name, parent_name
-    ORDER BY category_name ASC
+    GROUP BY product_name, category_name, parent_name
+    ORDER BY category_name ASC, product_name ASC
   `;
 
-  const treeRows: Array<{ name: string; qty: number; volume_m3: number; sum: number; depth: number }> = [];
-  const parentMap = new Map<string, { qty: number; volume_m3: number; sum: number; akb: number }>();
+  type Agg = { qty: number; volume_m3: number; sum: number; akb: number };
+  type TreeRow = { name: string; qty: number; volume_m3: number; sum: number; depth: number };
+  const treeRows: TreeRow[] = [];
+  const parentMap = new Map<string, Agg>();
+  const subcatMap = new Map<string, Agg>();
+  const standaloneCatMap = new Map<string, Agg>();
+  const productsBySubcat = new Map<string, TreeRow[]>();
+  const productsByStandalone = new Map<string, TreeRow[]>();
   let totalQty = 0;
   let totalVol = 0;
   let totalSum = 0;
-  const akbSet = new Set<number>();
+
+  const bumpAgg = (map: Map<string, Agg>, key: string, qty: number, vol: number, sum: number, akb: number) => {
+    const prev = map.get(key) ?? { qty: 0, volume_m3: 0, sum: 0, akb: 0 };
+    prev.qty += qty;
+    prev.volume_m3 += vol;
+    prev.sum += sum;
+    prev.akb += akb;
+    map.set(key, prev);
+  };
+
+  const pushProduct = (map: Map<string, TreeRow[]>, key: string, row: TreeRow) => {
+    const list = map.get(key) ?? [];
+    list.push(row);
+    map.set(key, list);
+  };
 
   for (const r of rows) {
     const qty = Number(r.qty);
     const vol = Number(r.volume_m3);
     const sum = Number(r.sum);
+    const catName = r.category_name ?? "Boshqa";
+    const productName = r.product_name ?? "—";
     totalQty += qty;
     totalVol += vol;
     totalSum += sum;
 
     if (r.parent_name) {
-      const key = r.parent_name;
-      const prev = parentMap.get(key) ?? { qty: 0, volume_m3: 0, sum: 0, akb: 0 };
-      prev.qty += qty;
-      prev.volume_m3 += vol;
-      prev.sum += sum;
-      prev.akb += Number(r.akb);
-      parentMap.set(key, prev);
-      treeRows.push({ name: r.category_name ?? "Boshqa", qty, volume_m3: vol, sum, depth: 1 });
+      const parentKey = r.parent_name;
+      const subcatKey = `${parentKey}::${catName}`;
+      bumpAgg(parentMap, parentKey, qty, vol, sum, Number(r.akb));
+      bumpAgg(subcatMap, subcatKey, qty, vol, sum, Number(r.akb));
+      pushProduct(productsBySubcat, subcatKey, {
+        name: productName,
+        qty,
+        volume_m3: vol,
+        sum,
+        depth: 2
+      });
     } else {
-      treeRows.push({ name: r.category_name ?? "Boshqa", qty, volume_m3: vol, sum, depth: 0 });
+      bumpAgg(standaloneCatMap, catName, qty, vol, sum, Number(r.akb));
+      pushProduct(productsByStandalone, catName, {
+        name: productName,
+        qty,
+        volume_m3: vol,
+        sum,
+        depth: 1
+      });
     }
   }
 
-  for (const [name, agg] of parentMap.entries()) {
-    treeRows.unshift({ name, qty: agg.qty, volume_m3: agg.volume_m3, sum: agg.sum, depth: 0 });
+  const parentNames = [...parentMap.keys()].sort((a, b) => a.localeCompare(b, "ru"));
+  for (const parentName of parentNames) {
+    const agg = parentMap.get(parentName)!;
+    treeRows.push({ name: parentName, qty: agg.qty, volume_m3: agg.volume_m3, sum: agg.sum, depth: 0 });
+    const subcatKeys = [...subcatMap.keys()]
+      .filter((k) => k.startsWith(`${parentName}::`))
+      .sort((a, b) => a.localeCompare(b, "ru"));
+    for (const subcatKey of subcatKeys) {
+      const subAgg = subcatMap.get(subcatKey)!;
+      const subName = subcatKey.slice(parentName.length + 2);
+      treeRows.push({ name: subName, qty: subAgg.qty, volume_m3: subAgg.volume_m3, sum: subAgg.sum, depth: 1 });
+      const products = productsBySubcat.get(subcatKey) ?? [];
+      products.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+      treeRows.push(...products);
+    }
+  }
+
+  const parentNameSet = new Set(parentNames);
+  const standaloneNames = [...standaloneCatMap.keys()]
+    .filter((name) => !parentNameSet.has(name))
+    .sort((a, b) => a.localeCompare(b, "ru"));
+  for (const catName of standaloneNames) {
+    const agg = standaloneCatMap.get(catName)!;
+    treeRows.push({ name: catName, qty: agg.qty, volume_m3: agg.volume_m3, sum: agg.sum, depth: 0 });
+    const products = productsByStandalone.get(catName) ?? [];
+    products.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    treeRows.push(...products);
   }
 
   return {
@@ -455,10 +565,80 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
       qty: totalQty,
       volume_m3: totalVol,
       sum: totalSum,
-      akb: akbSet.size || rows.reduce((acc, r) => acc + Number(r.akb), 0)
+      akb: rows.reduce((acc, r) => acc + Number(r.akb), 0)
     },
     rows: treeRows
   };
+}
+
+/** Veb mijoz kartochkasi: joriy agent bo‘yicha «Общий» (to‘lov − dolg, boshqa agentlar emas). */
+export async function listMobileAgentClientLedgerBalances(tenantId: number, agentUserId: number) {
+  const excluded = ["cancelled", "returned"] as const;
+
+  const rows = await prisma.$queryRaw<Array<{ client_id: number; balance: Prisma.Decimal }>>`
+    SELECT u.client_id,
+      (
+        SUM(
+          CASE
+            WHEN u.payment_amount IS NOT NULL AND u.payment_amount > 0 THEN u.payment_amount
+            ELSE 0::decimal(15,2)
+          END
+        )
+        - SUM(
+          CASE
+            WHEN u.debt_amount IS NOT NULL AND u.debt_amount <> 0 THEN ABS(u.debt_amount)
+            ELSE 0::decimal(15,2)
+          END
+        )
+      )::decimal(15,2) AS balance
+    FROM (
+      SELECT
+        o.client_id,
+        o.agent_id AS ledger_agent_id,
+        (-(o.total_sum))::decimal(15,2) AS debt_amount,
+        NULL::decimal(15,2) AS payment_amount
+      FROM orders o
+      JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}
+      WHERE o.tenant_id = ${tenantId}
+        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.order_type = 'order'
+        AND c.is_active = true
+        AND c.merged_into_client_id IS NULL
+        AND (
+          c.agent_id = ${agentUserId}
+          OR EXISTS (
+            SELECT 1 FROM client_agent_assignments caa
+            WHERE caa.client_id = c.id AND caa.agent_id = ${agentUserId}
+          )
+        )
+
+      UNION ALL
+
+      SELECT
+        p.client_id,
+        COALESCE(p.ledger_agent_id, ord.agent_id, c.agent_id) AS ledger_agent_id,
+        CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END AS debt_amount,
+        CASE WHEN p.entry_kind = 'payment' THEN p.amount ELSE NULL END AS payment_amount
+      FROM client_payments p
+      JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
+      LEFT JOIN orders ord ON ord.id = p.order_id AND ord.tenant_id = ${tenantId}
+      WHERE p.tenant_id = ${tenantId}
+        AND p.deleted_at IS NULL
+        AND c.is_active = true
+        AND c.merged_into_client_id IS NULL
+        AND (
+          c.agent_id = ${agentUserId}
+          OR EXISTS (
+            SELECT 1 FROM client_agent_assignments caa
+            WHERE caa.client_id = c.id AND caa.agent_id = ${agentUserId}
+          )
+        )
+    ) u
+    WHERE u.ledger_agent_id = ${agentUserId}
+    GROUP BY u.client_id
+  `;
+
+  return rows.map((r) => ({ id: r.client_id, balance: Number(r.balance) }));
 }
 
 export async function listMobileAgentDebtors(tenantId: number, userId: number, limit = 100) {

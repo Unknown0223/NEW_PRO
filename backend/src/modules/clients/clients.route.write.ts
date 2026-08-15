@@ -98,6 +98,33 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             "Shu nomga o‘xshash klient mavjud."
           );
         }
+        if (e instanceof Error && e.message === "DUPLICATE_AGENT_DIRECTION") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "DuplicateAgentDirection",
+            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+          );
+        }
+        if (e instanceof Error && e.message === "AGENT_NOT_FOUND") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ValidationError",
+            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+          );
+        }
+        if (e instanceof Error && e.message === "EXPEDITOR_NOT_FOUND") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ValidationError",
+            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+          );
+        }
         throw e;
       }
     }
@@ -141,6 +168,33 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "DUPLICATE_AGENT_DIRECTION") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "DuplicateAgentDirection",
+            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+          );
+        }
+        if (msg === "AGENT_NOT_FOUND") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ValidationError",
+            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+          );
+        }
+        if (msg === "EXPEDITOR_NOT_FOUND") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ValidationError",
+            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+          );
+        }
         if (msg === "VALIDATION" || msg === "EMPTY") {
           return sendApiError(
             reply,

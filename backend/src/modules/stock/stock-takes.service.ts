@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { withTransaction } from "../../lib/db-context";
 import { invalidateStock } from "../../lib/redis-cache";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 
 function serializeTake(row: {
   id: number;
@@ -16,6 +18,7 @@ function serializeTake(row: {
     id: number;
     system_qty: Prisma.Decimal;
     counted_qty: Prisma.Decimal | null;
+    previous_qty: Prisma.Decimal | null;
     product: { id: number; sku: string; name: string };
   }[];
 }) {
@@ -33,6 +36,7 @@ function serializeTake(row: {
       id: l.id,
       system_qty: String(l.system_qty),
       counted_qty: l.counted_qty != null ? String(l.counted_qty) : null,
+      previous_qty: l.previous_qty != null ? String(l.previous_qty) : null,
       product: l.product
     }))
   };
@@ -163,7 +167,11 @@ export async function setStockTakeLines(
   return getStockTake(tenantId, id);
 }
 
-export async function postStockTake(tenantId: number, id: number) {
+export async function postStockTake(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
   const take = await prisma.stockTake.findFirst({
     where: { id, tenant_id: tenantId },
     include: {
@@ -178,9 +186,30 @@ export async function postStockTake(tenantId: number, id: number) {
     if (l.counted_qty == null) throw new Error("IncompleteLines");
   }
 
-  await prisma.$transaction(async (tx) => {
+  const snapshotLines: {
+    product_id: number;
+    previous_qty: string;
+    counted_qty: string;
+  }[] = [];
+
+  await withTransaction(async (tx) => {
     for (const l of take.lines) {
       const counted = l.counted_qty!;
+      const existing = await tx.stock.findUnique({
+        where: {
+          tenant_id_warehouse_id_product_id: {
+            tenant_id: tenantId,
+            warehouse_id: take.warehouse_id,
+            product_id: l.product_id
+          }
+        },
+        select: { qty: true }
+      });
+      const previousQty = existing?.qty ?? new Prisma.Decimal(0);
+      await tx.stockTakeLine.update({
+        where: { id: l.id },
+        data: { previous_qty: previousQty }
+      });
       await tx.stock.upsert({
         where: {
           tenant_id_warehouse_id_product_id: {
@@ -197,6 +226,11 @@ export async function postStockTake(tenantId: number, id: number) {
         },
         update: { qty: counted }
       });
+      snapshotLines.push({
+        product_id: l.product_id,
+        previous_qty: previousQty.toString(),
+        counted_qty: counted.toString()
+      });
     }
     await tx.stockTake.update({
       where: { id },
@@ -204,19 +238,108 @@ export async function postStockTake(tenantId: number, id: number) {
     });
   });
   void invalidateStock(tenantId, take.warehouse_id);
+
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "stock_take",
+    entityId: id,
+    action: "stock_take.post",
+    payload: {
+      id,
+      warehouse_id: take.warehouse_id,
+      stock_snapshot: snapshotLines
+    }
+  });
+
   return getStockTake(tenantId, id);
 }
 
-export async function cancelStockTake(tenantId: number, id: number) {
+export async function cancelStockTake(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+) {
   const take = await prisma.stockTake.findFirst({
     where: { id, tenant_id: tenantId },
-    select: { id: true, status: true }
+    include: { lines: true }
   });
   if (!take) return null;
-  if (take.status !== "draft") throw new Error("NotDraft");
-  await prisma.stockTake.update({
-    where: { id },
-    data: { status: "cancelled" }
+  if (take.status === "cancelled") throw new Error("AlreadyCancelled");
+  if (take.status !== "draft" && take.status !== "posted") {
+    throw new Error("NotCancellable");
+  }
+
+  if (take.status === "draft") {
+    await prisma.stockTake.update({
+      where: { id },
+      data: { status: "cancelled" }
+    });
+    await appendTenantAuditEvent({
+      tenantId,
+      actorUserId,
+      entityType: "stock_take",
+      entityId: id,
+      action: "stock_take.cancel",
+      payload: { id, draft: true }
+    });
+    return getStockTake(tenantId, id);
+  }
+
+  // Posted: restore stock to previous_qty snapshot
+  for (const l of take.lines) {
+    if (l.previous_qty == null) {
+      throw new Error("CANNOT_CANCEL_POSTED_NO_SNAPSHOT");
+    }
+  }
+
+  const restored: { product_id: number; previous_qty: string; counted_qty: string | null }[] = [];
+
+  await withTransaction(async (tx) => {
+    for (const l of take.lines) {
+      const restoreQty = l.previous_qty!;
+      await tx.stock.upsert({
+        where: {
+          tenant_id_warehouse_id_product_id: {
+            tenant_id: tenantId,
+            warehouse_id: take.warehouse_id,
+            product_id: l.product_id
+          }
+        },
+        create: {
+          tenant_id: tenantId,
+          warehouse_id: take.warehouse_id,
+          product_id: l.product_id,
+          qty: restoreQty
+        },
+        update: { qty: restoreQty }
+      });
+      restored.push({
+        product_id: l.product_id,
+        previous_qty: restoreQty.toString(),
+        counted_qty: l.counted_qty != null ? l.counted_qty.toString() : null
+      });
+    }
+    await tx.stockTake.update({
+      where: { id },
+      data: { status: "cancelled" }
+    });
   });
+  void invalidateStock(tenantId, take.warehouse_id);
+
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "stock_take",
+    entityId: id,
+    action: "stock_take.cancel",
+    payload: {
+      id,
+      posted: true,
+      warehouse_id: take.warehouse_id,
+      stock_restored: restored
+    }
+  });
+
   return getStockTake(tenantId, id);
 }

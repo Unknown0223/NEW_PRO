@@ -8,6 +8,36 @@ export type BonusConditionRow = {
   sort_order: number;
 };
 
+export type BonusRuleClauseRow = {
+  id?: number;
+  sort_order: number;
+  grants_reward: boolean;
+  priority: number;
+  client_category: string | null;
+  payment_type: string | null;
+  client_type: string | null;
+  sales_channel: string | null;
+  price_type: string | null;
+  product_ids: number[];
+  bonus_product_ids: number[];
+  product_category_ids: number[];
+  scope_restrict_assortment?: boolean;
+  scope_restrict_category?: boolean;
+  target_all_clients: boolean;
+  selected_client_ids: number[];
+  in_blocks: boolean;
+  once_per_client: boolean;
+  one_plus_one_gift?: boolean;
+  buy_qty?: number | null;
+  free_qty?: number | null;
+  min_sum?: number | null;
+  sum_threshold_scope?: string;
+  scope_branch_codes?: string[];
+  scope_agent_user_ids?: number[];
+  scope_trade_direction_ids?: number[];
+  conditions: BonusConditionRow[];
+};
+
 export type BonusRuleRow = {
   id: number;
   name: string;
@@ -42,7 +72,7 @@ export type BonusRuleRow = {
   in_blocks: boolean;
   once_per_client: boolean;
   one_plus_one_gift: boolean;
-  /** Oldindan bajarilishi kerak bo‘lgan qoidalar (API eski bo‘lsa bo‘sh). */
+  /** Oldindan bajarilishi kerak bo‘lgan qoidalar (skidka). Bonusda clauses ishlatiladi. */
   prerequisite_rule_ids?: number[];
   /** Bo‘sh = barcha filiallar (cheklov yo‘q). */
   scope_branch_codes?: string[];
@@ -53,4 +83,6 @@ export type BonusRuleRow = {
   /** Ro‘yxat API: har bir bog‘langan qoida uchun qisqa shart matni (nomisiz). */
   prerequisite_summaries?: string[];
   conditions: BonusConditionRow[];
+  /** Ichki shartlar (bonus). */
+  clauses?: BonusRuleClauseRow[];
 };

@@ -39,4 +39,47 @@ void main() {
       {10, 11},
     );
   });
+
+  test('resolveDailyVisitPlanIds — jadval yo‘q, reja bo‘sh', () {
+    final clients = [
+      {'id': 1, 'name': 'A'},
+      {'id': 2, 'name': 'B'},
+    ];
+    expect(
+      resolveDailyVisitPlanIds(
+        route: {'stops': []},
+        allClients: clients,
+        weekday: 3,
+        todayIso: '2026-07-08',
+      ),
+      isEmpty,
+    );
+  });
+
+  test('resolveDailyVisitPlanIds — ОКБ rejasi ustun', () {
+    final clients = [
+      {'id': 1, 'visit_weekdays': [3]},
+      {'id': 2, 'visit_weekdays': [1]},
+      {'id': 3},
+    ];
+    expect(
+      resolveDailyVisitPlanIds(
+        route: {'stops': []},
+        allClients: clients,
+        weekday: 3,
+        todayIso: '2026-07-08',
+      ),
+      {1},
+    );
+  });
+
+  test('splitVisitProgress — reja bo‘yicha', () {
+    final r = splitVisitProgress(
+      planIds: {10, 11, 12},
+      visitedIds: {10, 11, 99},
+    );
+    expect(r.visitedOnPlan, 2);
+    expect(r.remainingOnPlan, 1);
+    expect(r.visitedOffPlan, 1);
+  });
 }

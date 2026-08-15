@@ -18,7 +18,10 @@ const BULK_ERROR_RU: Record<string, string> = {
   BadCategory: "Не выбрана категория товаров",
   EmptyProductPatch: "Укажите товары или типы цен",
   BadMaxSessions: "Лимит сессий должен быть от 1 до 99",
-  BadDelta: "Недопустимое изменение лимита сессий"
+  BadDelta: "Недопустимое изменение лимита сессий",
+  BadCloseDay: "День закрытия консигнации: от 1 до 31",
+  BadCloseHour: "Часы закрытия консигнации: от 0 до 23",
+  BadCloseMinute: "Минуты закрытия консигнации: от 0 до 59"
 };
 
 function validationBulkHint(ax: AxiosError<{ error?: string; message?: string; details?: unknown }>): string {

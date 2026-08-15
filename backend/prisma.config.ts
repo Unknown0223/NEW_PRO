@@ -10,12 +10,14 @@ const cwdIsBackend = existsSync(path.join(cwd, "prisma", "schema.prisma"));
 const envPaths = cwdIsBackend
   ? [path.join(cwd, "..", ".env"), path.join(cwd, ".env")]
   : [path.join(cwd, ".env"), path.join(cwd, "backend", ".env")];
+// Railway run / CI: allaqachon berilgan DATABASE_URL ni lokal .env ustidan yozmasin
+const preserveExisting = Boolean(process.env.DATABASE_URL?.trim() || process.env.RAILWAY_ENVIRONMENT);
 for (const p of envPaths) {
-  loadEnv({ path: p, override: true });
+  loadEnv({ path: p, override: !preserveExisting });
 }
 
 const backendDir = cwdIsBackend ? cwd : path.join(cwd, "backend");
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" && !preserveExisting) {
   const localPath = path.join(backendDir, ".env.local");
   if (existsSync(localPath)) {
     loadEnv({ path: localPath, override: true });

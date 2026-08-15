@@ -15,6 +15,11 @@ import {
 } from "../../contracts/orders.schemas";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { getErrorCode } from "../../lib/app-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
@@ -62,15 +67,23 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actor = getAccessUser(request);
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
-      const result = await bulkUpdateOrderStatus(
-        request.tenant!.id,
-        parsed.data.order_ids,
-        parsed.data.status,
-        actorUserId,
-        actor.role,
-        parsed.data.occurred_at
-      );
-      return reply.send(result);
+      try {
+        for (const orderId of parsed.data.order_ids) {
+          await assertDocWritableById(request, "orders", orderId);
+        }
+        const result = await bulkUpdateOrderStatus(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          parsed.data.status,
+          actorUserId,
+          actor.role,
+          parsed.data.occurred_at
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
     }
   );
 
@@ -86,14 +99,22 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actor = getAccessUser(request);
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
-      const result = await bulkUpdateOrderExpeditor(
-        request.tenant!.id,
-        parsed.data.order_ids,
-        parsed.data.expeditor_user_id,
-        actorUserId,
-        actor.role
-      );
-      return reply.send(result);
+      try {
+        for (const orderId of parsed.data.order_ids) {
+          await assertDocWritableById(request, "orders", orderId);
+        }
+        const result = await bulkUpdateOrderExpeditor(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          parsed.data.expeditor_user_id,
+          actorUserId,
+          actor.role
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
     }
   );
 
@@ -109,14 +130,23 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actor = getAccessUser(request);
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
-      const result = await bulkUpdateOrderConsignment(
-        request.tenant!.id,
-        parsed.data.order_ids,
-        parsed.data.is_consignment,
-        parsed.data.consignment_due_date ?? null,
-        actorUserId
-      );
-      return reply.send(result);
+      try {
+        for (const orderId of parsed.data.order_ids) {
+          await assertDocWritableById(request, "orders", orderId);
+        }
+        const result = await bulkUpdateOrderConsignment(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          parsed.data.is_consignment,
+          parsed.data.consignment_due_date ?? null,
+          actorUserId,
+          parsed.data.conditions_note ?? null
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
     }
   );
 

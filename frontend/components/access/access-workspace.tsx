@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { AccessWorkspaceLeftPanel } from "./access-workspace-left-panel";
@@ -9,10 +11,18 @@ import { AccessWorkspaceScopePanel } from "./access-workspace-scope-panel";
 import { AccessWorkspaceUserPickerModal } from "./access-workspace-user-picker-modal";
 import { AccessUserDetailPanel } from "@/components/access/access-user-detail-panel";
 import { useAccessWorkspace } from "./use-access-workspace";
-import { isScopeDimensionTab, type ScopeDimensionTab } from "./access-workspace.shared";
+import { isScopeDimensionTab } from "./access-workspace.shared";
+
+const ACCESS_RESET_CONSEQUENCES = [
+  "Персональные разрешения и доп. роли будут сброшены к роли по умолчанию",
+  "Снимок текущих прав сохраняется в журнале доступа",
+  "Восстановление возможно через restore-reset по последнему снимку"
+];
 
 export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const ws = useAccessWorkspace({ tenantSlug });
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   return (
     <div className="access-surface flex min-h-0 w-full max-w-full flex-1 flex-col gap-3 p-3">
@@ -63,7 +73,11 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 userAccountControls={{
                   isActive: ws.selected.status === "active",
                   onToggle: () => void ws.toggleMut.mutateAsync(ws.selected!),
-                  onReset: (id) => { if (id !== ws.selected!.id) return; void ws.resetMut.mutateAsync(id); },
+                  onReset: (id) => {
+                    if (id !== ws.selected!.id) return;
+                    setResetError(null);
+                    setResetConfirmOpen(true);
+                  },
                   togglePending: ws.toggleMut.isPending && ws.toggleMut.variables?.id === ws.selected!.id,
                   resetPending: ws.resetMut.isPending && ws.resetMut.variables === ws.selected!.id
                 }}
@@ -95,6 +109,37 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
         </div>
       </div>
       <AccessWorkspaceUserPickerModal ws={ws} />
+
+      <SoftVoidConfirmDialog
+        open={resetConfirmOpen}
+        onClose={() => {
+          if (ws.resetMut.isPending) return;
+          setResetConfirmOpen(false);
+          setResetError(null);
+        }}
+        onConfirm={async () => {
+          if (!ws.selected) return;
+          try {
+            setResetError(null);
+            await ws.resetMut.mutateAsync(ws.selected.id);
+            setResetConfirmOpen(false);
+          } catch {
+            setResetError("Не удалось сбросить доступ.");
+          }
+        }}
+        title="Сбросить права доступа"
+        description={
+          ws.selected
+            ? `Сбросить персональные права пользователя «${ws.selected.login ?? ws.selected.id}» к роли по умолчанию?`
+            : "Сбросить персональные права к роли по умолчанию?"
+        }
+        reasonRequired={false}
+        reasonPlaceholder="Комментарий (необязательно)"
+        confirmLabel="Сбросить"
+        pending={ws.resetMut.isPending}
+        error={resetError}
+        consequences={ACCESS_RESET_CONSEQUENCES}
+      />
     </div>
   );
 }

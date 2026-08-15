@@ -12,6 +12,11 @@ import {
 } from "../../contracts/orders.schemas";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { getErrorCode } from "../../lib/app-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
@@ -56,6 +61,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
+        await assertDocWritableById(request, "orders", id);
         const actor = getAccessUser(request);
         const actorSub = Number.parseInt(actor.sub, 10);
         const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
@@ -69,6 +75,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "INVALID_OCCURRED_AT") {
           return sendApiError(reply, request, 400, "InvalidOccurredAt");
@@ -116,6 +123,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
+        await assertDocWritableById(request, "orders", id);
         const actor = getAccessUser(request);
         const row = await updateOrderMilestoneAt(
           request.tenant!.id,
@@ -126,6 +134,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         );
         return reply.send(row);
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "MILESTONE_NOT_FOUND") {
@@ -195,6 +204,33 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
             outstanding: ex.outstanding,
             order_total: ex.order_total
           });
+        }
+        if (msg === "ORDER_BLOCKED_BY_DEBT") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "OrderBlockedByDebt",
+            "Заказ запрещён: у клиента есть долг"
+          );
+        }
+        if (msg === "CONSIGNMENT_CLIENT_DISABLED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ConsignmentClientDisabled",
+            "Консигнационные заказы для этого клиента запрещены"
+          );
+        }
+        if (msg === "CONSIGNMENT_BLOCKED_BY_DEBT") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ConsignmentBlockedByDebt",
+            "Консигнация запрещена: есть долг по консигнации"
+          );
         }
         if (msg === "ORDER_RESTRICTED") {
           const ex = e as Error & { rule_id?: number; rule_name?: string };

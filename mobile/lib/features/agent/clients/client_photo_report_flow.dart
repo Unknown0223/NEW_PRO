@@ -254,10 +254,32 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   );
   if (photo == null || !context.mounted) return null;
 
-  final b64 = await encodeClientPhotoBase64(
-    photo.filePath,
-    config: ref.read(sessionProvider).mobileConfig?.photo,
-  );
+  var loadingShown = false;
+  void hideLoading() {
+    if (!loadingShown || !context.mounted) return;
+    loadingShown = false;
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+
+  if (context.mounted) {
+    loadingShown = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  String? b64;
+  try {
+    b64 = await encodeClientPhotoBase64(
+      photo.filePath,
+      config: ref.read(sessionProvider).mobileConfig?.photo,
+    );
+  } finally {
+    hideLoading();
+  }
+
   if (b64 == null) {
     if (context.mounted) {
       showAgentToast(context, 'Не удалось сжать фото — сделайте снимок ещё раз');
@@ -327,10 +349,32 @@ Future<ClientPhotoReport?> replacePhotoReport({
   );
   if (photo == null || !context.mounted) return null;
 
-  final b64 = await encodeClientPhotoBase64(
-    photo.filePath,
-    config: ref.read(sessionProvider).mobileConfig?.photo,
-  );
+  var loadingShown = false;
+  void hideLoading() {
+    if (!loadingShown || !context.mounted) return;
+    loadingShown = false;
+    Navigator.of(context, rootNavigator: true).pop();
+  }
+
+  if (context.mounted) {
+    loadingShown = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  String? b64;
+  try {
+    b64 = await encodeClientPhotoBase64(
+      photo.filePath,
+      config: ref.read(sessionProvider).mobileConfig?.photo,
+    );
+  } finally {
+    hideLoading();
+  }
+
   if (b64 == null) {
     if (context.mounted) {
       showAgentToast(context, 'Не удалось сжать фото — сделайте снимок ещё раз');

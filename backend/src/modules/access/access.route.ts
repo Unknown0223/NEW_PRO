@@ -7,6 +7,7 @@ import { registerAccessRolesHistoryRoutes } from "./access.route.roles-history";
 import { registerAccessUsersBulkRoutes } from "./access.route.users-bulk";
 import { registerAccessUsersListRoutes } from "./access.route.users-list";
 import { registerAccessUsersWriteRoutes } from "./access.route.users-write";
+import { registerAccessUsersResetRoutes } from "./access.route.users-reset";
 
 export async function registerAccessRoutes(app: FastifyInstance) {
   await registerAccessRouteMe(app);
@@ -16,5 +17,6 @@ export async function registerAccessRoutes(app: FastifyInstance) {
   await registerAccessUsersListRoutes(app);
   await registerAccessUsersBulkRoutes(app);
   await registerAccessUsersWriteRoutes(app);
+  await registerAccessUsersResetRoutes(app);
   await registerAccessRolesHistoryRoutes(app);
 }

@@ -12,6 +12,11 @@ export const ENTITY_TYPE_LABEL: Record<string, string> = {
   staff: "Сотрудник",
   product: "Товар",
   product_category: "Категория товара",
+  product_brand: "Бренд",
+  product_manufacturer: "Производитель",
+  product_segment: "Сегмент",
+  product_catalog_group: "Группа товаров",
+  interchangeable_product_group: "Взаимозаменяемая группа",
   product_price: "Цена товара",
   warehouse: "Склад",
   tenant_settings: "Настройки",
@@ -30,7 +35,12 @@ export const ENTITY_TYPE_LABEL: Record<string, string> = {
   refusal: "Отказ клиента",
   warehouse_block: "Блок склада",
   stock_take: "Инвентаризация",
-  price_matrix: "Матрица цен"
+  price_matrix: "Матрица цен",
+  work_slot: "Рабочее место",
+  geo_boundary: "Гео-граница",
+  report_builder: "Конфиг отчёта",
+  client_dedupe: "Группа дублей",
+  plans: "Планы"
 };
 
 /** action (to'liq kod) → tushunarli nom (RU). */
@@ -69,21 +79,27 @@ const ACTION_LABEL: Record<string, string> = {
   "client.create": "Клиент создан",
   "client.patch": "Клиент изменён",
   "client.photo_report_add": "Добавлен фотоотчёт",
+  "client.photo_report_delete": "Фотоотчёт удалён",
+  "client.photo_report_restore": "Фотоотчёт восстановлен",
+  "client.equipment_remove": "Оборудование снято",
   "client.payment": "Оплата клиента",
+  "client.payment_void": "Оплата клиента аннулирована",
+  "client.payment_restore": "Оплата клиента восстановлена",
   "client.client_expense": "Расход клиента",
   "client.discount_payment": "Оплата скидки",
   "client.sales_return": "Возврат клиента",
-
-  // QR клиента
-  "client_qr.generate": "QR-код создан",
-  "client_qr.bind": "QR-код привязан",
-  "client_qr.unbind": "QR-код отвязан",
-  "client_qr.print": "QR-код распечатан",
+  "client.import.create": "Клиент создан (импорт)",
+  "client.import.patch": "Клиент изменён (импорт)",
+  "client.tags.patch": "Теги клиента изменены",
+  "client.merge": "Объединение клиентов",
+  "client.merge.undo": "Отмена объединения клиентов",
 
   // Поставщики
   "supplier.create": "Поставщик создан",
   "supplier.update": "Поставщик изменён",
   "supplier.delete": "Поставщик удалён",
+  "supplier.void": "Поставщик деактивирован",
+  "supplier.restore": "Поставщик восстановлен",
   "supplier_payment.create": "Оплата поставщику создана",
   "supplier_payment.reverse": "Оплата поставщику отменена",
 
@@ -129,6 +145,8 @@ const ACTION_LABEL: Record<string, string> = {
   "currency_rate.create": "Курс добавлен",
   "currency_rate.update": "Курс изменён",
   "currency_rate.delete": "Курс удалён",
+  "currency_rate.void": "Курс удалён (в архив)",
+  "currency_rate.restore": "Курс восстановлен",
 
   // Территории
   "territory.create": "Территория создана",
@@ -142,6 +160,8 @@ const ACTION_LABEL: Record<string, string> = {
   "automation_rule.create": "Правило создано",
   "automation_rule.update": "Правило изменено",
   "automation_rule.delete": "Правило удалено",
+  "automation_rule.void": "Правило удалено (в архив)",
+  "automation_rule.restore": "Правило восстановлено",
   "automation_rule.copy": "Правило скопировано",
 
   // Отказы
@@ -151,7 +171,11 @@ const ACTION_LABEL: Record<string, string> = {
   "warehouse_block.create": "Блок склада создан",
   "warehouse_block.update": "Блок склада изменён",
   "warehouse_block.delete": "Блок склада удалён",
+  "warehouse_block.void": "Блок склада удалён (в архив)",
+  "warehouse_block.restore": "Блок склада восстановлен",
   "warehouse_block.confirm_empty": "Блок подтверждён пустым",
+  "warehouse.void": "Склад деактивирован",
+  "warehouse.restore": "Склад восстановлен",
 
   // Инвентаризация
   "stock_take.create": "Инвентаризация создана",
@@ -179,9 +203,32 @@ const ACTION_LABEL: Record<string, string> = {
   // Доступ
   "permissions.updated": "Изменение прав доступа",
   "permissions.bulk_updated": "Массовое изменение прав",
+  "access.reset": "Сброс прав доступа",
+  "access.reset_restore": "Восстановление прав после сброса",
+  "access.cloned": "Копирование прав доступа",
 
   // Заказ
   status_change: "Изменение статуса",
+  "order.create": "Заказ создан",
+  "order.status": "Изменение статуса заказа",
+  "order.cancel": "Заказ отменён",
+  "order.meta": "Изменение данных заказа",
+
+  // Рабочее место / гео / отчёты
+  "work_slot.create": "Рабочее место создано",
+  "work_slot.update": "Рабочее место изменено",
+  "work_slot.void": "Рабочее место удалено",
+  "work_slot.restore": "Рабочее место восстановлено",
+  "geo_boundary.upsert": "Гео-граница сохранена",
+  "geo_boundary.delete": "Гео-граница удалена",
+  "geo_boundary.void": "Гео-граница удалена (в архив)",
+  "geo_boundary.restore": "Гео-граница восстановлена",
+  "report_builder.delete": "Конфиг отчёта удалён",
+  "report_builder.void": "Конфиг отчёта удалён (в архив)",
+  "report_builder.restore": "Конфиг отчёта восстановлен",
+  "client_dedupe.void": "Группа дублей удалена (в архив)",
+  "client_dedupe.restore": "Группа дублей восстановлена",
+  "plans.approvers.save": "Утверждающие планов сохранены",
 
   // Табель
   "timesheet.patch.attendance": "Изменение посещаемости",

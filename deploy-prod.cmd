@@ -13,6 +13,7 @@ echo   Loyiha: %REPO_ROOT%
 echo ========================================
 echo.
 echo Avval: npx @railway/cli login
+echo To'liq deploy (mobil bilan): deploy-all.cmd
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\railway\deploy.ps1" -SkipBootstrap %*

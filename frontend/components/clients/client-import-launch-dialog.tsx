@@ -1,9 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { FileSpreadsheet, Upload, X } from "lucide-react";
+import { FileSpreadsheet, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ExcelFileDropZone } from "@/components/ui/excel-file-drop-zone";
 
 type Props = {
   open: boolean;
@@ -23,7 +24,6 @@ export function ClientImportLaunchDialog({
   onDownloadTemplate,
   onConfirm
 }: Props) {
-  const hiddenInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -31,7 +31,6 @@ export function ClientImportLaunchDialog({
   const reset = useCallback(() => {
     setFile(null);
     setErr(null);
-    if (hiddenInputRef.current) hiddenInputRef.current.value = "";
   }, []);
 
   const close = useCallback(() => {
@@ -71,6 +70,12 @@ export function ClientImportLaunchDialog({
     <div
       className="fixed inset-0 z-[9998] flex animate-in fade-in items-center justify-center bg-[#013532]/30 backdrop-blur-[1px] duration-150"
       role="presentation"
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+      }}
     >
       <div
         ref={panelRef}
@@ -106,24 +111,17 @@ export function ClientImportLaunchDialog({
         </div>
 
         <div className="grid grid-cols-2 gap-3 px-6 pb-6">
-          <button
-            type="button"
+          <ExcelFileDropZone
+            file={file}
             disabled={busy}
-            onClick={() => hiddenInputRef.current?.click()}
-            className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card py-3 text-sm font-medium text-gray-600 transition-colors hover:border-border hover:bg-muted disabled:opacity-60"
-          >
-            <Upload className="h-4 w-4 shrink-0 text-gray-500" />
-            <span className="truncate">{file ? file.name : "Выберите Excel файл"}</span>
-          </button>
-          <input
-            ref={hiddenInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={(e) => {
+            allowCsv
+            emptyLabel="Выберите Excel файл"
+            dropHint="или перетащите сюда"
+            onFile={(f) => {
               setErr(null);
-              setFile(e.target.files?.[0] ?? null);
+              setFile(f);
             }}
+            onInvalid={(msg) => setErr(msg)}
           />
           <button
             type="button"

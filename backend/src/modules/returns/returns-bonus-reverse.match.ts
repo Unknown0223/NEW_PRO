@@ -9,6 +9,7 @@ import {
   ruleMatchesProduct
 } from "../orders/order-bonus-context.match-gifts";
 import type { ProductLite } from "../orders/order-bonus-context.fetch";
+import { rewardRuleViews } from "../orders/order-bonus-clauses";
 
 function ruleActiveAt(rule: BonusRuleRow, at: Date): boolean {
   if (!rule.is_active) return false;
@@ -26,18 +27,21 @@ export async function loadActiveQtyBonusRules(tenantId: number, at: Date): Promi
   return rows.map(mapBonusRuleFull).filter((r) => ruleActiveAt(r, at));
 }
 
+/** Mos qoida: reward clause view (multi-shart) yoki host. */
 export function findQtyRuleForProduct(
   rules: BonusRuleRow[],
   product: ProductLite
 ): BonusRuleRow | null {
   for (const rule of rules) {
-    if (!rule.is_manual && ruleMatchesProduct(rule, product)) {
-      return rule;
+    if (!rule.is_manual) {
+      for (const view of rewardRuleViews(rule)) {
+        if (ruleMatchesProduct(view, product)) return view;
+      }
     }
   }
   for (const rule of rules) {
-    if (ruleMatchesProduct(rule, product)) {
-      return rule;
+    for (const view of rewardRuleViews(rule)) {
+      if (ruleMatchesProduct(view, product)) return view;
     }
   }
   return null;

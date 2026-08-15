@@ -8,11 +8,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
+import '../../../core/update/app_update_info.dart';
 import 'agent_display_title.dart';
 import 'agent_menu_config.dart';
 import '../warehouse/warehouse_stock_providers.dart';
 
-/// Menyu ekrani (shablon MenuScreen) — develop-flutter-mobile-frontend.
+/// Menyu ekrani — salec-agent-mobile-ui-design shablon.
 class AgentDrawer extends ConsumerStatefulWidget {
   const AgentDrawer({super.key});
 
@@ -21,6 +22,8 @@ class AgentDrawer extends ConsumerStatefulWidget {
 }
 
 class _AgentDrawerState extends ConsumerState<AgentDrawer> {
+  bool _checkingUpdate = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +31,35 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       ref.read(authStateProvider.notifier).refreshAgentIdentity();
     });
+  }
+
+  void _soonSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Скоро будет доступно')),
+    );
+  }
+
+  Future<void> _onCheckUpdate() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final result = await ref.read(authStateProvider.notifier).checkForAppUpdateManual();
+      if (!mounted) return;
+      switch (result) {
+        case AppUpdateUpToDate(:final currentVersion):
+          showAgentToast(
+            context,
+            S.appUpdateAlreadyLatest(currentVersion),
+            accentColor: AppColors.success,
+          );
+        case AppUpdateOffered():
+          Navigator.pop(context);
+        case AppUpdateCheckFailed(:final message):
+          showAgentToast(context, message, accentColor: AppColors.error);
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
   }
 
   @override
@@ -39,6 +71,9 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
 
     final agentName = (user?.name ?? '').trim();
     final agentCode = user?.code?.trim();
+    final tenantLabel = session.tenantName?.trim().isNotEmpty == true
+        ? session.tenantName!
+        : 'Сервер: ${session.tenantSlug ?? "-"}';
 
     void go(String path) {
       Navigator.pop(context);
@@ -55,98 +90,102 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
       width: MediaQuery.sizeOf(context).width,
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  AgentIconButton(icon: Icons.arrow_back, onPressed: () => Navigator.pop(context)),
+                  AgentIconButton(icon: Icons.edit_outlined, onPressed: () => go('/profile')),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      AgentIconButton(icon: Icons.arrow_back, onPressed: () => Navigator.pop(context)),
-                      AgentIconButton(icon: Icons.edit_outlined, onPressed: () => go('/profile')),
+                      AgentMenuAvatar(name: agentName, code: agentCode),
+                      const SizedBox(width: 14),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width - 40 - 62 - 14,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                              if (agentCode != null && agentCode.isNotEmpty)
+                                Text(
+                                  agentCode,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.3,
+                                    color: AppColors.textTitle,
+                                  ),
+                                ),
+                              Text(
+                                agentName.isEmpty ? 'Агент' : agentName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.25,
+                                  color: AppColors.textTitle,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                tenantLabel,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.bodyMedium.copyWith(
+                                  fontSize: 13,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  const AgentMenuAvatar(),
                   const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Column(
-                      children: [
-                        if (agentCode != null && agentCode.isNotEmpty)
-                          Text(
-                            agentCode,
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                              color: AppColors.textTitle,
-                            ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                        const AgentRoleBadge(label: 'Агент'),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: _soonSnack,
+                          icon: const Icon(Icons.add_rounded, size: 14),
+                          label: const Text(
+                            'Добавить аккаунт',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                           ),
-                        if (agentCode != null && agentCode.isNotEmpty) const SizedBox(height: 4),
-                        Text(
-                          agentName.isEmpty ? 'Агент' : agentName,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: agentCode != null && agentCode.isNotEmpty ? 16 : 20,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                            color: AppColors.textTitle,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            foregroundColor: AppColors.primaryDark,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    session.tenantName?.trim().isNotEmpty == true
-                        ? session.tenantName!
-                        : 'Сервер: ${session.tenantSlug ?? "-"}',
-                    style: AppTypography.bodyMedium.copyWith(fontSize: 16, color: AppColors.textMuted),
-                  ),
-                  const SizedBox(height: 8),
-                  const AgentRoleBadge(label: 'Агент'),
-                  const SizedBox(height: 16),
-                  Material(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Добавление аккаунта — скоро')),
-                        );
-                      },
-                      child: const SizedBox(
-                        height: 46,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add, color: AppColors.primary, size: 24),
-                            SizedBox(width: 8),
-                            Text(
-                              'Добавить аккаунт',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -159,21 +198,21 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                           AgentMenuTile(
                             icon: _iconFor(menu[i].label),
                             label: menu[i].label,
-                            badge: menu[i].soon ? 'Скоро!' : null,
+                            badge: menu[i].soon ? 'скоро' : null,
                             showDivider: i > 0,
-                            onTap: menu[i].soon ? () {} : () => go(menu[i].route),
+                            onTap: menu[i].soon ? _soonSnack : () => go(menu[i].route),
                           ),
                         AgentMenuTile(
                           icon: Icons.system_update_outlined,
-                          label: S.checkAppUpdate,
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await ref.read(authStateProvider.notifier).checkForAppUpdate();
-                          },
+                          label: _checkingUpdate ? S.appUpdateChecking : S.checkAppUpdate,
+                          iconColor: AppColors.info,
+                          loading: _checkingUpdate,
+                          onTap: _checkingUpdate ? null : _onCheckUpdate,
                         ),
                         AgentMenuTile(
                           icon: Icons.logout,
                           label: 'Выйти',
+                          destructive: true,
                           onTap: () async {
                             Navigator.pop(context);
                             await ref.read(authStateProvider.notifier).logout();
@@ -187,15 +226,36 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: FutureBuilder<String>(
-                future: AppBuildInfo.versionWithBuild(),
-                builder: (context, snap) {
-                  final v = snap.data ?? '…';
-                  return Text(
-                    'SALEC $v',
-                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted, fontSize: 14),
-                  );
-                },
+              child: Column(
+                children: [
+                  Image.asset(
+                    'assets/brand/header_logo.png',
+                    height: 28,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    errorBuilder: (_, __, ___) => Text(
+                      S.appName,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  FutureBuilder<String>(
+                    future: AppBuildInfo.versionWithBuild(),
+                    builder: (context, snap) {
+                      final v = snap.data ?? '…';
+                      return Text(
+                        'v$v',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyMedium.copyWith(color: AppColors.textMuted, fontSize: 13),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],
@@ -208,6 +268,8 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     if (label.contains('Главная')) return Icons.home_outlined;
     if (label.contains('торговую')) return Icons.add_business_outlined;
     if (label.contains('Заказы')) return Icons.shopping_cart_outlined;
+    if (label.contains('Almashinuv')) return Icons.swap_horiz_outlined;
+    if (label.contains('Polkadan')) return Icons.undo_outlined;
     if (label == 'KPI') return Icons.insights_outlined;
     if (label.contains('Зарплата')) return Icons.payments_outlined;
     if (label.contains('Диагностика')) return Icons.medical_services_outlined;
@@ -217,6 +279,7 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
     if (label.contains('Черновик')) return Icons.drafts_outlined;
     if (label.contains('Задачи')) return Icons.task_alt_outlined;
     if (label.contains('локация')) return Icons.my_location_outlined;
+    if (label.contains('Табель') || label.contains('jadval')) return Icons.assignment_outlined;
     if (label.contains('Настройки')) return Icons.settings_outlined;
     return Icons.chevron_right;
   }

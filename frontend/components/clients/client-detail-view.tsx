@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { ClientAuditHistoryWorkspace } from "@/components/clients/client-audit-history-workspace";
 import { ClientHistoryToolbar } from "@/components/clients/client-history-toolbar";
 import { DateRangePopover, formatDateRangeButton, localYmd } from "@/components/ui/date-range-popover";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -824,14 +825,14 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
               <p className="text-sm font-medium">Добавить движение</p>
               <div className="grid gap-1.5">
                 <Label htmlFor="bal-delta">Изменение (UZS, отриц. — расход)</Label>
-                <Input
+                <GroupedNumberInput
                   id="bal-delta"
-                  type="text"
-                  inputMode="decimal"
+                  allowNegative
+                  maxFractionDigits={2}
                   value={deltaInput}
-                  onChange={(e) => setDeltaInput(e.target.value)}
+                  onValueChange={setDeltaInput}
                   disabled={addMovement.isPending}
-                  placeholder="например 50000 или -10000"
+                  placeholder="например 50 000 или -10 000"
                 />
                 {balanceFieldErrors.delta ? (
                   <p className="text-xs text-destructive" role="alert">

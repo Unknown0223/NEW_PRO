@@ -35,6 +35,10 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY prisma ./prisma
 COPY shared ./shared
 
+RUN mkdir -p uploads tmp && chown -R node:node /app
+
 ENV NODE_ENV=production
+
+USER node
 
 CMD ["node", "dist/src/worker/index.js"]

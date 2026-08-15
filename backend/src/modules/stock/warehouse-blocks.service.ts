@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { prisma } from "../../config/database";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 
 /** Blok = bitta доставщик (экспедитор) uchun yuk maydoni; biriktirish faqat `expeditor` roli. */
 const EXPEDITOR_ROLE = "expeditor" as const;
@@ -24,14 +25,18 @@ export type WarehouseBlockSort = "name_asc" | "name_desc" | "sort_asc" | "sort_d
 
 function warehouseBlocksWhere(
   tenantId: number,
-  opts: { warehouse_id?: number; is_active?: boolean; q: string }
+  opts: { warehouse_id?: number; is_active?: boolean; q: string; archive?: boolean }
 ): Prisma.WarehouseBlockWhereInput {
   const where: Prisma.WarehouseBlockWhereInput = { tenant_id: tenantId };
   if (opts.warehouse_id != null && opts.warehouse_id > 0) {
     where.warehouse_id = opts.warehouse_id;
   }
-  if (opts.is_active !== undefined) {
+  if (opts.archive) {
+    where.is_active = false;
+  } else if (opts.is_active !== undefined) {
     where.is_active = opts.is_active;
+  } else {
+    where.is_active = true;
   }
   const q = opts.q.trim();
   if (q) {
@@ -56,6 +61,7 @@ export async function listWarehouseBlocks(
   opts: {
     warehouse_id?: number;
     is_active?: boolean;
+    archive?: boolean;
     q: string;
     sort: WarehouseBlockSort;
     page: number;
@@ -100,7 +106,7 @@ export async function listWarehouseBlocks(
 
 export async function buildWarehouseBlocksExportBuffer(
   tenantId: number,
-  opts: { warehouse_id?: number; is_active?: boolean; q: string; sort: WarehouseBlockSort }
+  opts: { warehouse_id?: number; is_active?: boolean; archive?: boolean; q: string; sort: WarehouseBlockSort }
 ): Promise<Buffer> {
   const where = warehouseBlocksWhere(tenantId, opts);
   const orderBy = warehouseBlocksOrderBy(opts.sort);
@@ -260,14 +266,59 @@ export async function updateWarehouseBlock(
   ]);
 }
 
-export async function deleteWarehouseBlock(tenantId: number, id: number): Promise<void> {
-  const r = await prisma.warehouseBlock.deleteMany({ where: { id, tenant_id: tenantId } });
-  if (r.count === 0) throw new Error("NOT_FOUND");
+export async function deleteWarehouseBlock(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.warehouseBlock.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, name: true, is_active: true }
+  });
+  if (!existing) throw new Error("NOT_FOUND");
+  if (!existing.is_active) throw new Error("ALREADY_VOIDED");
+  await prisma.warehouseBlock.update({
+    where: { id },
+    data: { is_active: false }
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "warehouse_block",
+    entityId: id,
+    action: "warehouse_block.void",
+    payload: { name: existing.name, soft: true }
+  });
+}
+
+export async function restoreWarehouseBlock(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<void> {
+  const existing = await prisma.warehouseBlock.findFirst({
+    where: { id, tenant_id: tenantId },
+    select: { id: true, name: true, is_active: true }
+  });
+  if (!existing) throw new Error("NOT_FOUND");
+  if (existing.is_active) throw new Error("NOT_VOIDED");
+  await prisma.warehouseBlock.update({
+    where: { id },
+    data: { is_active: true }
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "warehouse_block",
+    entityId: id,
+    action: "warehouse_block.restore",
+    payload: { name: existing.name }
+  });
 }
 
 export async function confirmWarehouseBlockEmpty(tenantId: number, id: number): Promise<void> {
   const r = await prisma.warehouseBlock.updateMany({
-    where: { id, tenant_id: tenantId },
+    where: { id, tenant_id: tenantId, is_active: true },
     data: { empty_stock_confirmed_at: new Date() }
   });
   if (r.count === 0) throw new Error("NOT_FOUND");

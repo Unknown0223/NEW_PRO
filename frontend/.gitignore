@@ -38,3 +38,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pivot-engine vendor (sync skripti yaratadi; Railway up uchun ignore QILINMASIN)
+/vendor/pivot-engine/node_modules/
+/vendor/pivot-engine/tests/

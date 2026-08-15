@@ -52,3 +52,63 @@ export function formatDigitsGroupedLoose(raw: string | null | undefined): string
   if (digits.length < 6) return t;
   return formatNumberGrouped(digits, { maxFractionDigits: 0 });
 }
+
+/** API / state uchun: bo‘shliq va vergulni normalizatsiya qiladi */
+export function normalizeNumericInput(raw: string | null | undefined): string {
+  return (raw ?? "").trim().replace(/\s/g, "").replace(",", ".");
+}
+
+export type DecimalInputSanitizeOpts = {
+  allowNegative?: boolean;
+  maxFractionDigits?: number;
+};
+
+/** Kiritish paytida: raqamlar, bitta nuqta, ixtiyoriy minus */
+export function sanitizeDecimalInput(input: string, opts?: DecimalInputSanitizeOpts): string {
+  let t = input.replace(/\s/g, "").replace(",", ".");
+  const allowNeg = opts?.allowNegative ?? false;
+  const maxFd = opts?.maxFractionDigits;
+
+  let sign = "";
+  if (allowNeg && t.startsWith("-")) {
+    sign = "-";
+    t = t.slice(1);
+  }
+
+  t = t.replace(/[^\d.]/g, "");
+  const di = t.indexOf(".");
+  if (di === -1) return sign + t;
+
+  const intp = t.slice(0, di);
+  let frac = t.slice(di + 1).replace(/\./g, "");
+  if (maxFd != null) frac = frac.slice(0, Math.max(0, maxFd));
+  return `${sign}${intp}.${frac}`;
+}
+
+/** Tahrirlanadigan maydon uchun minglik guruhlash (ru-RU) */
+export function formatDecimalInputDisplay(raw: string, opts?: DecimalInputSanitizeOpts): string {
+  const sanitized = sanitizeDecimalInput(raw, opts);
+  if (!sanitized) return "";
+  if (sanitized === "-") return "-";
+
+  const negative = sanitized.startsWith("-");
+  const abs = negative ? sanitized.slice(1) : sanitized;
+  const dotIdx = abs.indexOf(".");
+  const intRaw = dotIdx === -1 ? abs : abs.slice(0, dotIdx);
+  const fracRaw = dotIdx === -1 ? "" : abs.slice(dotIdx + 1);
+  const hasDot = dotIdx !== -1;
+
+  let intDisplay = "";
+  if (intRaw === "") {
+    intDisplay = hasDot ? "0" : "";
+  } else {
+    const intNum = Number(intRaw);
+    intDisplay = Number.isFinite(intNum)
+      ? intNum.toLocaleString(LOCALE, { maximumFractionDigits: 0 })
+      : intRaw;
+  }
+
+  let result = (negative ? "-" : "") + intDisplay;
+  if (hasDot) result += `,${fracRaw}`;
+  return result;
+}

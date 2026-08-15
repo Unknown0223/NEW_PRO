@@ -77,17 +77,26 @@ export async function consolidateClientBalancesForMerge(
   }
 }
 
+export type AgentAssignmentMergeStats = {
+  agent_assignments_reassigned: number;
+  agent_assignments_dropped_duplicate_slot: number;
+};
+
 export async function reassignAgentAssignmentsForMerge(
   tx: Prisma.TransactionClient,
   tenantId: number,
   keepClientId: number,
   mergeIds: number[]
-): Promise<void> {
+): Promise<AgentAssignmentMergeStats> {
+  const empty: AgentAssignmentMergeStats = {
+    agent_assignments_reassigned: 0,
+    agent_assignments_dropped_duplicate_slot: 0
+  };
   const rows = await tx.clientAgentAssignment.findMany({
     where: { tenant_id: tenantId, client_id: { in: mergeIds } }
   });
 
-  if (rows.length === 0) return;
+  if (rows.length === 0) return empty;
 
   const masterAssignments = await tx.clientAgentAssignment.findMany({
     where: { tenant_id: tenantId, client_id: keepClientId }
@@ -117,6 +126,11 @@ export async function reassignAgentAssignmentsForMerge(
       data: { client_id: keepClientId }
     });
   }
+
+  return {
+    agent_assignments_reassigned: toReassign.length,
+    agent_assignments_dropped_duplicate_slot: toDelete.length
+  };
 }
 
 export function normalizeMergePreviewCell(v: string | null | undefined): string {

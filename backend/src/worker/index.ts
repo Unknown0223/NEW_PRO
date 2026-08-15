@@ -46,7 +46,7 @@ const safeRedisUrl = env.REDIS_URL.includes("@")
   ? env.REDIS_URL.replace(/\/\/[^@]+\//, "//***@/")
   : env.REDIS_URL;
 process.stdout.write(
-  `[worker] BullMQ tinglayapti: queue=${BACKGROUND_QUEUE_NAME} redis=${safeRedisUrl}\n`
+  `[worker] BullMQ tinglayapti: queue=${BACKGROUND_QUEUE_NAME} redis=${safeRedisUrl} (import v3)\n`
 );
 
 function shutdown(signal: string): void {

@@ -72,6 +72,10 @@ jobs:
         run: npm ci
         working-directory: backend
 
+      - name: npm audit (high/critical)
+        run: npm audit --audit-level=high
+        working-directory: backend
+
       - name: Generate Prisma client
         run: npm run db:generate
         working-directory: backend
@@ -96,7 +100,7 @@ jobs:
         run: npm run test:contracts
         working-directory: backend
 
-      - name: Orders domain coverage gate (bonus modules 10%+ threshold)
+      - name: Orders domain coverage gate (included modules 75% threshold)
         run: npm run test:coverage:orders
         working-directory: backend
 
@@ -150,6 +154,10 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: npm audit (high/critical)
+        run: npm audit --audit-level=high
+        working-directory: frontend
+
       - name: Audit max file lines (components, app, lib ≤400)
         run: npm run audit:max-loc
         working-directory: frontend
@@ -169,6 +177,12 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
         working-directory: frontend
+
+      - name: Frontend a11y smoke (axe)
+        run: npx playwright test e2e/a11y-smoke.spec.ts
+        working-directory: frontend
+        env:
+          CI: true
 
       - name: Frontend full gate (quality + e2e smoke)
         run: npm run test:all

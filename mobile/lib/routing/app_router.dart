@@ -22,6 +22,8 @@ import '../features/agent/orders/agent_orders_page.dart';
 import '../features/agent/orders/agent_misc_orders_page.dart';
 import '../features/agent/orders/create_order_screen.dart';
 import '../features/agent/visits/agent_visits_page.dart';
+import '../features/agent/visits/start_visit_screen.dart';
+import '../features/agent/visits/visit_in_progress_screen.dart';
 import '../features/agent/shell/agent_shell.dart';
 import '../features/agent/sync/manual_sync_screen.dart';
 import '../features/agent/sync/sync_success_screen.dart';
@@ -208,9 +210,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (extra is Map) {
             initialClient = Map<String, dynamic>.from(extra);
           }
+          final heldId = int.tryParse(state.uri.queryParameters['held_id'] ?? '');
           return CreateOrderScreen(
             initialClientId: clientId,
             initialClient: initialClient,
+            heldOrderId: heldId,
           );
         },
       ),
@@ -218,6 +222,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/clients/new',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const NewClientPage(),
+      ),
+      GoRoute(
+        path: '/visits/start',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const StartVisitScreen(),
+      ),
+      GoRoute(
+        path: '/visits/active/:clientId',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['clientId'] ?? '');
+          if (id == null) {
+            return const Scaffold(body: Center(child: Text('Vizit topilmadi')));
+          }
+          return VisitInProgressScreen(clientId: id);
+        },
       ),
       GoRoute(
         path: '/clients/:id',
@@ -506,41 +526,10 @@ class _NavShell extends ConsumerWidget {
         const _NavItem(Icons.home_outlined, Icons.home, 'Главная', '/home'),
         const _NavItem(
             Icons.location_on_outlined, Icons.location_on, 'Визиты', '/visits',),
-        const _NavItem(Icons.qr_code_scanner, Icons.qr_code_scanner, '', '/qr-scan'),
         const _NavItem(Icons.person_outline, Icons.person, 'Должники', '/debtors'),
         const _NavItem(Icons.receipt_long_outlined, Icons.receipt_long, 'Накладные',
             '/invoices',),
       ];
-
-      final idx = items.indexWhere((it) => it.path == loc);
-
-      return Scaffold(
-        body: body,
-        floatingActionButton: FloatingActionButton(
-          heroTag: 'exp-shell-qr',
-          onPressed: () => _expeditorQrScan(context),
-          backgroundColor: color,
-          child: const Icon(Icons.qr_code_scanner, color: Colors.white),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 6,
-          child: SizedBox(
-            height: 56,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _expNavItem(context, items[0], idx == 0, color),
-                _expNavItem(context, items[1], idx == 1, color),
-                const SizedBox(width: 40),
-                _expNavItem(context, items[3], idx == 3, color),
-                _expNavItem(context, items[4], idx == 4, color),
-              ],
-            ),
-          ),
-        ),
-      );
     } else if (role == 'supervisor') {
       body = SupervisorShell(child: child);
       color = AppColors.supervisorAccent;
@@ -585,49 +574,4 @@ class _NavItem {
   final IconData icon, activeIcon;
   final String label, path;
   const _NavItem(this.icon, this.activeIcon, this.label, this.path);
-}
-
-void _expeditorQrScan(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('QR сканер'),
-      content: const Text('Сканирование QR для быстрого перехода к заказу'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text('Отмена'),),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(ctx);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Сканер QR — в следующем обновлении'),),
-            );
-          },
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _expNavItem(
-    BuildContext context, _NavItem item, bool active, Color color,) {
-  return InkWell(
-    onTap: () => GoRouter.of(context).go(item.path),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(active ? item.activeIcon : item.icon,
-              color: active ? color : AppColors.textMuted, size: 22,),
-          if (item.label.isNotEmpty)
-            Text(item.label,
-                style: TextStyle(
-                    fontSize: 10, color: active ? color : AppColors.textMuted,),),
-        ],
-      ),
-    ),
-  );
 }

@@ -10,6 +10,10 @@ import {
   type MergeDuplicateGroup,
   type MergePreviewStats
 } from "./client-merge-compare-shared";
+import {
+  CLIENT_MERGE_CONSEQUENCES,
+  CLIENT_MERGE_WARNING_SUMMARY
+} from "@/lib/client-merge-warnings";
 
 export type { ClientDedupePreview, MergeDuplicateGroup, MergePreviewStats };
 
@@ -136,7 +140,6 @@ export function CompareMergeOverlay(props: {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <span>Заказы: {mergePreview.orders_to_reassign}</span>
               <span>Платежи: {mergePreview.payments_to_reassign}</span>
-              <span>QR: {mergePreview.qr_codes_to_reassign}</span>
               <span>Оборудование: {mergePreview.equipment_to_reassign}</span>
               <span>Баланс после merge: {mergePreview.expected_master_balance_after}</span>
               <span>
@@ -149,10 +152,14 @@ export function CompareMergeOverlay(props: {
         </div>
         <div className="flex items-start gap-2 text-sm text-rose-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>
-            Подсветка ячеек: зелёный — совпадение, жёлтый — частично, красный — конфликт. Операция переносит заказы,
-            платежи и QR на мастера. Отмена невозможна.
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p>{CLIENT_MERGE_WARNING_SUMMARY}</p>
+            <ul className="list-disc space-y-0.5 pl-4 text-xs text-rose-800/90">
+              {CLIENT_MERGE_CONSEQUENCES.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3 pb-1 text-[10px] text-slate-500">
           <span className="inline-flex items-center gap-1">

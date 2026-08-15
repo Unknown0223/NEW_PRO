@@ -2,6 +2,7 @@
 
 export const STEP_SHEET_TAB: Record<string, string> = {
   company: "Компания",
+  territory: "Территория",
   units: "Единицы",
   currencies: "Валюты",
   "payment-methods": "Способ оплаты",
@@ -9,9 +10,11 @@ export const STEP_SHEET_TAB: Record<string, string> = {
   "trade-directions": "Направление",
   "sales-channels": "Канал продаж",
   branches: "Филиалы",
+  warehouses: "Склады",
   "client-formats": "Формат клиента",
   "client-types": "Тип клиента",
   "client-categories": "Категория клиента",
+  "product-categories": "Категории продуктов",
   "products-catalog": "Продукты",
   "product-prices": "Цены",
   clients: "Клиенты",
@@ -48,6 +51,7 @@ export function stepIdFromTabLabel(tab: string): string | undefined {
 
 export const STEP_SHEET_HINT_RU: Record<string, string> = {
   company: "Одна строка: организация, телефон, адрес",
+  territory: "Дерево: название + родитель (пусто = корень). Уровень: зона / регион / город",
   units: "Код обязателен (шт → SHT, кг → KG)",
   currencies: "Для UZS в колонке «По умолчанию» укажите 1",
   "payment-methods": "Код валюты — из листа «Валюты»",
@@ -55,14 +59,16 @@ export const STEP_SHEET_HINT_RU: Record<string, string> = {
   "trade-directions": "Направления торговли",
   "sales-channels": "Нужны для импорта клиентов",
   branches: "Код филиала для складов и агентов",
+  warehouses: "Название обязательно; код — по желанию",
   "client-formats": "Заполните до импорта клиентов",
   "client-types": "Заполните до импорта клиентов",
   "client-categories": "Заполните до импорта клиентов",
-  "products-catalog": "Коды категории и единицы должны существовать",
+  "product-categories": "Родитель — название существующей категории (можно пусто)",
+  "products-catalog": "Название категории и код единицы должны существовать в справочниках",
   "product-prices": "SKU должен быть в каталоге",
   clients: "После справочников и территории",
   "work-slots": "Колонка slot_code обязательна (техн. имя)",
-  "stock-receipts": "Опционально — после складов и продуктов"
+  "stock-receipts": "Склад + код товара + количество прихода (после складов и продуктов)"
 };
 
 export function hintForStep(stepId: string): string {

@@ -46,6 +46,12 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
     const data = error.response?.data as { message?: string; error?: string } | undefined;
     if (data?.message && data.message.trim()) base = data.message.trim();
     else if (status === 401) base = "Сессия истекла, войдите снова.";
+    else if (
+      status === 403 &&
+      (data?.error === "DOCUMENT_EDIT_PERIOD_LOCKED" || data?.error === "DocumentEditPeriodLocked")
+    ) {
+      base = data?.message?.trim() || "Davr yopilgan. Admin ochishi kerak.";
+    }
     else if (status === 403) base = "Недостаточно прав для этого действия.";
     else if (status === 404) base = "Данные не найдены.";
     else if (status === 409 && data?.error === "RuleLocked") {

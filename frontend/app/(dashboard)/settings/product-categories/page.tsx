@@ -1,5 +1,6 @@
 "use client";
 
+import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { TableRowActionGroup } from "@/components/data-table/table-row-actions";
@@ -30,7 +31,7 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { Pencil } from "lucide-react";
+import { Ban, Pencil, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -109,13 +110,16 @@ export default function ProductCategoriesSettingsPage() {
 
   const [msg, setMsg] = useState<string | null>(null);
   const [serverFieldErrs, setServerFieldErrs] = useState<Record<string, string>>({});
+  const [voidTarget, setVoidTarget] = useState<ProductCategoryRow | null>(null);
 
   const catsQ = useQuery({
-    queryKey: ["product-categories", tenantSlug],
+    queryKey: ["product-categories", tenantSlug, "include_inactive"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: ProductCategoryRow[] }>(`/api/${tenantSlug}/product-categories`);
+      const { data } = await api.get<{ data: ProductCategoryRow[] }>(
+        `/api/${tenantSlug}/product-categories?include_inactive=true`
+      );
       return data.data;
     }
   });
@@ -206,6 +210,32 @@ export default function ProductCategoriesSettingsPage() {
       }
       setMsg(getUserFacingError(e, "Xatolik yoki ruxsat yo‘q."));
     }
+  });
+
+  const deactivateMut = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/api/${tenantSlug}/product-categories/${id}`);
+    },
+    onSuccess: async () => {
+      setVoidTarget(null);
+      setMsg("Деактивировано.");
+      await qc.invalidateQueries({ queryKey: ["product-categories", tenantSlug] });
+    },
+    onError: (e: unknown) => {
+      setMsg(getUserFacingError(e, "Не удалось деактивировать."));
+      setVoidTarget(null);
+    }
+  });
+
+  const restoreMut = useMutation({
+    mutationFn: async (id: number) => {
+      await api.post(`/api/${tenantSlug}/product-categories/${id}/restore`);
+    },
+    onSuccess: async () => {
+      setMsg("Восстановлено.");
+      await qc.invalidateQueries({ queryKey: ["product-categories", tenantSlug] });
+    },
+    onError: (e: unknown) => setMsg(getUserFacingError(e, "Не удалось восстановить."))
   });
 
   function resetForm() {
@@ -428,7 +458,7 @@ export default function ProductCategoriesSettingsPage() {
               )}
               onClick={() => setStatusTab("inactive")}
             >
-              Не активный
+              Не активный / Архив
             </button>
             <Input
               className="ml-auto max-w-xs"
@@ -478,6 +508,32 @@ export default function ProductCategoriesSettingsPage() {
                           >
                             <Pencil className="size-3.5" aria-hidden />
                           </Button>
+                          {statusTab === "active" ? (
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              type="button"
+                              className="text-amber-800 hover:bg-amber-500/15"
+                              title="Деактивировать"
+                              aria-label="Деактивировать"
+                              onClick={() => setVoidTarget(r)}
+                            >
+                              <Ban className="size-3.5" aria-hidden />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              type="button"
+                              className="text-emerald-800 hover:bg-emerald-500/15"
+                              title="Восстановить"
+                              aria-label="Восстановить"
+                              disabled={restoreMut.isPending}
+                              onClick={() => restoreMut.mutate(r.id)}
+                            >
+                              <RotateCcw className="size-3.5" aria-hidden />
+                            </Button>
+                          )}
                         </TableRowActionGroup>
                       ) : null}
                     </td>
@@ -628,6 +684,28 @@ export default function ProductCategoriesSettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <SoftVoidConfirmDialog
+        open={voidTarget != null}
+        onClose={() => {
+          if (deactivateMut.isPending) return;
+          setVoidTarget(null);
+        }}
+        onConfirm={async () => {
+          if (voidTarget) await deactivateMut.mutateAsync(voidTarget.id);
+        }}
+        title="Деактивировать категорию"
+        description={
+          voidTarget
+            ? `«${voidTarget.name}» будет деактивирована и скрыта из активного списка.`
+            : "Категория будет деактивирована."
+        }
+        reasonRequired={false}
+        reasonPlaceholder="Комментарий (необязательно)"
+        confirmLabel="Деактивировать"
+        pending={deactivateMut.isPending}
+        consequences={["Запись останется в базе и может быть восстановлена во вкладке «Архив»"]}
+      />
     </PageShell>
   );
 }

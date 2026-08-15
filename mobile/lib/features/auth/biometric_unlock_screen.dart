@@ -75,7 +75,7 @@ class _BiometricUnlockScreenState extends ConsumerState<BiometricUnlockScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Вход в SalesDoc',
+                  'Вход в Sales Arena',
                   style: AppTypography.displayMedium.copyWith(color: AppColors.textTitle),
                 ),
                 const SizedBox(height: 4),

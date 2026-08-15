@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import { prisma } from "../../config/database";
 
 export type ListTenantAuditQuery = {
@@ -10,7 +11,18 @@ export type ListTenantAuditQuery = {
   limit: number;
 };
 
-export async function listTenantAuditEvents(tenantId: number, q: ListTenantAuditQuery) {
+export type TenantAuditEventRow = {
+  id: number;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  payload: unknown;
+  actor_user_id: number | null;
+  actor_login: string | null;
+  created_at: string;
+};
+
+function buildWhere(tenantId: number, q: Omit<ListTenantAuditQuery, "page" | "limit">) {
   const where: {
     tenant_id: number;
     entity_type?: string;
@@ -46,6 +58,33 @@ export async function listTenantAuditEvents(tenantId: number, q: ListTenantAudit
       delete where.created_at;
     }
   }
+  return where;
+}
+
+function mapRow(r: {
+  id: number;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  payload: unknown;
+  actor_user_id: number | null;
+  created_at: Date;
+  actor: { login: string } | null;
+}): TenantAuditEventRow {
+  return {
+    id: r.id,
+    entity_type: r.entity_type,
+    entity_id: r.entity_id,
+    action: r.action,
+    payload: r.payload,
+    actor_user_id: r.actor_user_id,
+    actor_login: r.actor?.login ?? null,
+    created_at: r.created_at.toISOString()
+  };
+}
+
+export async function listTenantAuditEvents(tenantId: number, q: ListTenantAuditQuery) {
+  const where = buildWhere(tenantId, q);
 
   const [total, rows] = await Promise.all([
     prisma.tenantAuditEvent.count({ where }),
@@ -61,18 +100,70 @@ export async function listTenantAuditEvents(tenantId: number, q: ListTenantAudit
   ]);
 
   return {
-    data: rows.map((r) => ({
-      id: r.id,
-      entity_type: r.entity_type,
-      entity_id: r.entity_id,
-      action: r.action,
-      payload: r.payload,
-      actor_user_id: r.actor_user_id,
-      actor_login: r.actor?.login ?? null,
-      created_at: r.created_at.toISOString()
-    })),
+    data: rows.map(mapRow),
     total,
     page: q.page,
     limit: q.limit
   };
+}
+
+const EXPORT_MAX = 5000;
+
+/** Filtrlarga mos audit jurnal (export limithi). */
+export async function listTenantAuditEventsForExport(
+  tenantId: number,
+  q: Omit<ListTenantAuditQuery, "page" | "limit">
+): Promise<{ data: TenantAuditEventRow[]; total: number; truncated: boolean }> {
+  const where = buildWhere(tenantId, q);
+  const total = await prisma.tenantAuditEvent.count({ where });
+  const rows = await prisma.tenantAuditEvent.findMany({
+    where,
+    orderBy: { created_at: "desc" },
+    take: EXPORT_MAX,
+    include: { actor: { select: { login: true } } }
+  });
+  return {
+    data: rows.map(mapRow),
+    total,
+    truncated: total > rows.length
+  };
+}
+
+function formatAuditDateRu(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" });
+}
+
+export async function buildTenantAuditXlsxBuffer(rows: TenantAuditEventRow[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Аудит", { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = [
+    { header: "Дата", key: "date", width: 22 },
+    { header: "Исполнитель", key: "actor", width: 28 },
+    { header: "Тип объекта", key: "entity_type", width: 22 },
+    { header: "ID объекта", key: "entity_id", width: 14 },
+    { header: "Действие", key: "action", width: 36 },
+    { header: "Payload", key: "payload", width: 48 }
+  ];
+  ws.getRow(1).font = { bold: true };
+  for (const r of rows) {
+    let payloadStr = "";
+    try {
+      payloadStr = JSON.stringify(r.payload ?? {});
+      if (payloadStr.length > 2000) payloadStr = `${payloadStr.slice(0, 2000)}…`;
+    } catch {
+      payloadStr = String(r.payload ?? "");
+    }
+    ws.addRow({
+      date: formatAuditDateRu(r.created_at),
+      actor: r.actor_login ?? (r.actor_user_id != null ? String(r.actor_user_id) : ""),
+      entity_type: r.entity_type,
+      entity_id: r.entity_id,
+      action: r.action,
+      payload: payloadStr
+    });
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf);
 }

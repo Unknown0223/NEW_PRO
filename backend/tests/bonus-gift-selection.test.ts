@@ -86,4 +86,17 @@ describe("bonusGiftSelectionMeta", () => {
     const meta = bonusGiftSelectionMeta(rule({ bonus_product_ids: [99] }), 1);
     expect(meta).toEqual({ kind: "fixed", allow_gift_swap: false });
   });
+
+  it("global qty (SKU/kategoriya yo‘q) — assortment_auto (1 ta sovg‘a ham)", () => {
+    const meta = bonusGiftSelectionMeta(rule({ product_ids: [], bonus_product_ids: [] }), 1);
+    expect(meta).toEqual({ kind: "assortment_auto", allow_gift_swap: false });
+  });
+
+  it("faqat kategoriya, aniq sovg‘a SKU yo‘q — ombor ustuvorligi (category_stock), almashtirib bo‘lmaydi", () => {
+    const meta = bonusGiftSelectionMeta(
+      rule({ product_ids: [], product_category_ids: [5], bonus_product_ids: [] }),
+      0
+    );
+    expect(meta).toEqual({ kind: "category_stock", allow_gift_swap: false });
+  });
 });

@@ -179,11 +179,7 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       require_stock_snapshot_for_order: asBool(m.require_stock_snapshot_for_order),
       require_shipment_date: asBool(m.require_shipment_date),
       allow_exchange_request: asBool(m.allow_exchange_request),
-      disallowed_payment_method_codes: disallowed,
-      qr_attach_visit_page: asBool(m.qr_attach_visit_page),
-      qr_change_visit_page: asBool(m.qr_change_visit_page),
-      qr_attach_client_page: asBool(m.qr_attach_client_page),
-      qr_change_client_page: asBool(m.qr_change_client_page)
+      disallowed_payment_method_codes: disallowed
     };
     if (!Object.values(misc).some((v) => v !== undefined)) misc = undefined;
   }
@@ -196,7 +192,8 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       mandatory_sync_count: asNum(s.mandatory_sync_count) ?? undefined,
       block_sync: asBool(s.block_sync),
       allowed_window_from: asStr(s.allowed_window_from, 8),
-      allowed_window_to: asStr(s.allowed_window_to, 8)
+      allowed_window_to: asStr(s.allowed_window_to, 8),
+      post_order_delay_minutes: asNum(s.post_order_delay_minutes) ?? undefined
     };
     if (!Object.values(sync).some((v) => v !== undefined)) sync = undefined;
   }

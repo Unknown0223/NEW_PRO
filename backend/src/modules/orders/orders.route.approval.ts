@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { getErrorCode } from "../../lib/app-error";
+import {
+  isDocumentEditPeriodLockedError,
+  sendDocumentEditPeriodLocked
+} from "../../lib/document-edit-lock.http";
+import { assertDocWritableById } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
@@ -53,6 +58,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
       if (actorUserId == null) return sendApiError(reply, request, 401, "Unauthorized");
 
       try {
+        await assertDocWritableById(request, "orders", parsedParams.data.id);
         const result = await advanceOrderApproval(
           request.tenant!.id,
           parsedParams.data.id,
@@ -72,6 +78,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
         }
         return reply.send({ data: { approval: result.view } });
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "APPROVAL_NOT_PENDING") return sendApiError(reply, request, 400, "ApprovalNotPending");
@@ -95,6 +102,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
       if (actorUserId == null) return sendApiError(reply, request, 401, "Unauthorized");
 
       try {
+        await assertDocWritableById(request, "orders", parsedParams.data.id);
         const view = await rejectOrderApproval(
           request.tenant!.id,
           parsedParams.data.id,
@@ -103,6 +111,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
         );
         return reply.send({ data: view });
       } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
         const msg = getErrorCode(e) ?? "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "APPROVAL_NOT_PENDING") return sendApiError(reply, request, 400, "ApprovalNotPending");

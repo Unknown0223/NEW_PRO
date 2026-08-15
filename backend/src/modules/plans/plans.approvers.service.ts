@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import {
   isApproverLeaderRole,
   isApproverLevelRole,
@@ -377,7 +378,8 @@ async function assertReferencesValid(
 export async function saveApproverConfig(
   tenantId: number,
   directionId: number,
-  input: SaveApproverInput
+  input: SaveApproverInput,
+  actorUserId?: number | null
 ): Promise<ApproverConfig> {
   await assertReferencesValid(tenantId, directionId, input);
 
@@ -426,6 +428,19 @@ export async function saveApproverConfig(
           leader_user_id: leaderUserId
         }))
       });
+    }
+  });
+
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId: actorUserId ?? null,
+    entityType: "plans",
+    entityId: directionId,
+    action: "plans.approvers.save",
+    payload: {
+      direction_id: directionId,
+      rows: input.rows.length,
+      leaders: leaderIds.length
     }
   });
 

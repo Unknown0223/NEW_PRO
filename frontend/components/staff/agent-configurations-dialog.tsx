@@ -726,28 +726,6 @@ export function AgentConfigurationsDialog({
                 </>
               ) : null}
             </div>
-            <div>
-              <ConfigSectionTitle>QR-коды</ConfigSectionTitle>
-              <div className="divide-y divide-border/60 rounded-lg border border-border/70 bg-card/40">
-                {(
-                  [
-                    ["qr_attach_visit_page", "Прикрепить QR-код на странице визиты"],
-                    ["qr_change_visit_page", "Изменить QR-код на странице визиты"],
-                    ["qr_attach_client_page", "Прикрепить QR-код на странице клиент"],
-                    ["qr_change_client_page", "Изменить QR-код на странице клиент"]
-                  ] as const
-                ).map(([k, label]) => (
-                  <ConfigCheckRow
-                    key={k}
-                    checked={Boolean(draft.misc?.[k])}
-                    onChange={(v) =>
-                      setDraft((d) => setDraftPath(d, "misc", (m) => ({ ...m, [k]: v })))
-                    }
-                    label={label}
-                  />
-                ))}
-              </div>
-            </div>
             {!hideAgentOnlyMisc ? (
               <div className="rounded-lg border border-border/70 bg-muted/15 shadow-inner">
                 <div className="border-b border-border/60 bg-muted/25 px-3 py-2">
@@ -885,6 +863,62 @@ export function AgentConfigurationsDialog({
                 {" — "}
                 <span className="font-mono font-semibold text-foreground">{summaryTo}</span>
               </p>
+            </div>
+            <div className="space-y-3">
+              <ConfigSectionTitle>Задержка отправки заказа</ConfigSectionTitle>
+              <p className="text-xs text-muted-foreground">
+                После завершения заказа в приложении — пауза перед отправкой на сервер. Агент может
+                отредактировать или отменить заказ, пока идёт таймер. ID заказа создаётся после истечения
+                времени.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Сразу", value: 0 },
+                  { label: "5 мин", value: 5 },
+                  { label: "10 мин", value: 10 },
+                  { label: "15 мин", value: 15 }
+                ].map((opt) => {
+                  const active = (draft.sync?.post_order_delay_minutes ?? 0) === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-[12px] font-semibold transition-colors",
+                        active
+                          ? "border-teal-600 bg-teal-600 text-white"
+                          : "border-border/80 bg-background text-foreground hover:bg-muted/60"
+                      )}
+                      onClick={() =>
+                        setDraft((d) =>
+                          setDraftPath(d, "sync", (s) => ({
+                            ...s,
+                            post_order_delay_minutes: opt.value
+                          }))
+                        )
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <ConfigTextField
+                label="Свой интервал (минуты)"
+                hint="0 — без задержки, максимум 120"
+                type="number"
+                min={0}
+                max={120}
+                value={draft.sync?.post_order_delay_minutes ?? ""}
+                onChange={(e) =>
+                  setDraft((d) =>
+                    setDraftPath(d, "sync", (s) => ({
+                      ...s,
+                      post_order_delay_minutes: e.target.value === "" ? null : Number(e.target.value)
+                    }))
+                  )
+                }
+              />
             </div>
           </div>
         );

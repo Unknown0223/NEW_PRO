@@ -20,6 +20,7 @@ import {
   createSupplierRow,
   deleteSupplierRow,
   listSuppliersForTenant,
+  restoreSupplierRow,
   updateSupplierRow
 } from "./suppliers.service";
 
@@ -225,37 +226,47 @@ export async function registerSupplierPaymentRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (!Number.isFinite(id) || id <= 0) return sendApiError(reply, request, 400, "BadId");
       try {
-        await deleteSupplierRow(request.tenant!.id, id);
+        const row = await deleteSupplierRow(request.tenant!.id, id, actorUserIdOrNull(request));
         await appendTenantAuditEvent({
           tenantId: request.tenant!.id,
           actorUserId: actorUserIdOrNull(request),
           entityType: AuditEntityType.supplier,
           entityId: String(id),
-          action: "supplier.delete",
-          payload: {}
+          action: "supplier.void",
+          payload: { name: row.name, soft: true }
         });
         return reply.status(204).send();
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
-        if (msg === "HAS_RECEIPTS") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "HasReceipts",
-            "У поставщика есть приходы — удаление запрещено, отключите (не активный)."
-          );
-        }
-        if (msg === "HAS_PAYMENTS") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "HasPayments",
-            "У поставщика есть оплаты — удаление запрещено."
-          );
-        }
+        if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/suppliers/:id/restore",
+    { preHandler: [jwtAccessVerify, requireRoles(...writeRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (!Number.isFinite(id) || id <= 0) return sendApiError(reply, request, 400, "BadId");
+      try {
+        const row = await restoreSupplierRow(request.tenant!.id, id, actorUserIdOrNull(request));
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: AuditEntityType.supplier,
+          entityId: String(id),
+          action: "supplier.restore",
+          payload: { name: row.name }
+        });
+        return reply.send({ ok: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
         throw e;
       }
     }

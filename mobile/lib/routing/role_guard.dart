@@ -9,6 +9,7 @@ class _RoleRoutes {
     '/clients/new',
     '/orders',
     '/visits',
+    '/visits/start',
     '/report',
     '/warehouse-stock',
     '/sync-success',
@@ -63,6 +64,8 @@ class _RoleRoutes {
     final allowed = forRole(role);
     if (location == '/home' || location == '/profile') return null;
     if (role == 'agent' && location.startsWith('/clients/')) return null;
+    if (role == 'agent' && location.startsWith('/visits/')) return null;
+    if (role == 'agent' && location.startsWith('/orders/')) return null;
     if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
     if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
     if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;

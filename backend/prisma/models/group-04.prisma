@@ -132,6 +132,10 @@ model Order {
   is_consignment              Boolean          @default(false)
   /// Konsignatsiya to‘lash muddati (ixtiyoriy)
   consignment_due_date      DateTime?
+  /// Konsignatsiyaga o‘tkazilgan vaqt (ro‘yxat / kalendar filtr)
+  consignment_moved_at      DateTime?
+  /// Kim konsignatsiyaga o‘tkazgan
+  consignment_moved_by_user_id Int?
   /// Obmen: manba zakazlar va minus/plus qatorlar (audit)
   exchange_meta             Json?
   /// Savdo zakazida majburiy: reja / tanlangan to‘lov usuli (spravochnik, masalan naqd)
@@ -145,6 +149,7 @@ model Order {
   agent                       User?            @relation("OrderAgents", fields: [agent_id], references: [id])
   client                      Client           @relation(fields: [client_id], references: [id])
   expeditor_user              User?            @relation("OrderExpeditor", fields: [expeditor_user_id], references: [id])
+  consignment_moved_by_user   User?            @relation("OrderConsignmentMovedBy", fields: [consignment_moved_by_user_id], references: [id])
   tenant                      Tenant           @relation(fields: [tenant_id], references: [id])
   warehouse                   Warehouse?       @relation(fields: [warehouse_id], references: [id])
   warehouse_block             WarehouseBlock?  @relation(fields: [warehouse_block_id], references: [id], onDelete: SetNull)
@@ -167,22 +172,26 @@ model Order {
   @@index([tenant_id, agent_id, status])
   @@index([tenant_id, client_id, status])
   @@index([warehouse_block_id])
+  @@index([tenant_id, is_consignment, consignment_moved_at(sort: Desc)])
   @@map("orders")
 }
 
 
 model OrderStatusLog {
-  id          Int      @id @default(autoincrement())
-  order_id    Int
-  from_status String
-  to_status   String
-  user_id     Int?
-  created_at  DateTime @default(now())
-  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  user        User?    @relation(fields: [user_id], references: [id])
+  id            Int       @id @default(autoincrement())
+  order_id      Int
+  from_status   String
+  to_status     String
+  user_id       Int?
+  created_at    DateTime  @default(now())
+  /// Orqaga status o‘tkazilganda keyingi milestone loglari o‘chirilmaydi — belgilangan.
+  superseded_at DateTime?
+  order         Order     @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  user          User?     @relation(fields: [user_id], references: [id])
 
   @@index([order_id])
   @@index([order_id, to_status, created_at(sort: Desc)])
+  @@index([order_id, superseded_at])
   @@map("order_status_logs")
 }
 
@@ -231,6 +240,8 @@ model Payment {
   deleted_at         DateTime?
   deleted_by_user_id Int?
   delete_reason_ref  String?   @db.VarChar(128)
+  /// Void paytida taqsimotlar snapshoti — restore da qayta yaratiladi
+  allocations_snapshot Json?
   client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   created_by         User?     @relation("PaymentCreator", fields: [created_by_user_id], references: [id])
   deleted_by         User?     @relation("PaymentVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
@@ -283,6 +294,35 @@ model PaymentEditGrant {
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, expires_at])
   @@map("payment_edit_grants")
+}
+
+/// Vaqtinchalik yozish ruxsati: bo‘lim + hujjat + user (davr cheklovi).
+model DocumentEditGrant {
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  /// payments | orders | returns | stock | expenses | opening_balances
+  section            String    @db.VarChar(32)
+  document_id        Int
+  /// stock: goods_receipt | transfer | correction | stock_take; boshqalar null
+  document_kind      String?   @db.VarChar(32)
+  access_user_id     Int
+  duration_minutes   Int
+  expires_at         DateTime
+  revoked_at         DateTime?
+  /// active | revoked | expired
+  status             String    @default("active") @db.VarChar(16)
+  comment            String?   @db.VarChar(2000)
+  created_by_user_id Int?
+  created_at         DateTime  @default(now())
+  tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  access_user        User      @relation("DocumentEditGrantAccess", fields: [access_user_id], references: [id], onDelete: Restrict)
+  created_by         User?     @relation("DocumentEditGrantCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, section, document_id])
+  @@index([tenant_id, status, expires_at])
+  @@index([tenant_id, access_user_id])
+  @@index([tenant_id, created_at(sort: Desc)])
+  @@map("document_edit_grants")
 }
 
 /// Mahsulot qaytarish — ombor qoldig’ini oshiradi, ixtiyoriy pul qaytarish balansga.

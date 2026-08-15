@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
@@ -10,11 +11,11 @@ import {
   createProductCatalogGroup,
   createProductManufacturer,
   createProductSegment,
-  deleteInterchangeableProductGroup,
-  deleteProductBrand,
-  deleteProductCatalogGroup,
-  deleteProductManufacturer,
-  deleteProductSegment,
+  deactivateInterchangeableProductGroup,
+  deactivateProductBrand,
+  deactivateProductCatalogGroup,
+  deactivateProductManufacturer,
+  deactivateProductSegment,
   getInterchangeableExchangeLookupForProduct,
   getInterchangeableProductGroup,
   listInterchangeableProductGroups,
@@ -22,6 +23,11 @@ import {
   listProductCatalogGroups,
   listProductManufacturers,
   listProductSegments,
+  restoreInterchangeableProductGroup,
+  restoreProductBrand,
+  restoreProductCatalogGroup,
+  restoreProductManufacturer,
+  restoreProductSegment,
   updateInterchangeableProductGroup,
   updateProductBrand,
   updateProductCatalogGroup,
@@ -35,7 +41,8 @@ const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(500).optional().default(50),
   search: z.string().optional(),
-  is_active: z.enum(["true", "false"]).optional()
+  is_active: z.enum(["true", "false"]).optional(),
+  include_inactive: z.enum(["true", "false"]).optional()
 });
 
 const simpleBodySchema = z.object({
@@ -67,16 +74,24 @@ const interchangeablePatchSchema = interchangeableBodySchema.partial();
 function parseListQuery(q: Record<string, unknown>) {
   const parsed = listQuerySchema.safeParse(q);
   if (!parsed.success) return null;
-  const { page, limit, search, is_active } = parsed.data;
+  const { page, limit, search, is_active, include_inactive } = parsed.data;
   let active: boolean | null = null;
   if (is_active === "true") active = true;
   if (is_active === "false") active = false;
-  return { page, limit, search: search?.trim() || undefined, is_active: active };
+  return {
+    page,
+    limit,
+    search: search?.trim() || undefined,
+    is_active: active,
+    include_inactive: include_inactive === "true"
+  };
 }
 
 function mapErr(reply: FastifyReply, request: FastifyRequest, e: unknown) {
   const msg = e instanceof Error ? e.message : "";
   if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+  if (msg === "ALREADY_INACTIVE") return sendApiError(reply, request, 409, "AlreadyInactive");
+  if (msg === "NOT_INACTIVE") return sendApiError(reply, request, 409, "NotInactive");
   if (msg === "IN_USE") return sendApiError(reply, request, 409, "InUse");
   if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
   if (msg === "BAD_PRICE_TYPE") {
@@ -94,13 +109,20 @@ function isoDates<T extends Record<string, unknown>>(row: T): T & Record<string,
   return o as T & Record<string, unknown>;
 }
 
+type SimpleListFn = typeof listProductCatalogGroups;
+type SimpleCreateFn = typeof createProductCatalogGroup;
+type SimpleUpdateFn = typeof updateProductCatalogGroup;
+type SimpleDeactivateFn = typeof deactivateProductCatalogGroup;
+type SimpleRestoreFn = typeof restoreProductCatalogGroup;
+
 export async function registerProductCatalogRoutes(app: FastifyInstance) {
   const regSimple = (
     path: string,
-    list: typeof listProductCatalogGroups,
-    create: typeof createProductCatalogGroup,
-    update: typeof updateProductCatalogGroup,
-    del: typeof deleteProductCatalogGroup
+    list: SimpleListFn,
+    create: SimpleCreateFn,
+    update: SimpleUpdateFn,
+    deactivate: SimpleDeactivateFn,
+    restore: SimpleRestoreFn
   ) => {
     app.get(path, { preHandler: [jwtAccessVerify] }, async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -125,7 +147,7 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
         }
         try {
-          const row = await create(request.tenant!.id, parsed.data);
+          const row = await create(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
           return reply.status(201).send(isoDates(row as Record<string, unknown>));
         } catch (e) {
           return mapErr(reply, request, e);
@@ -148,7 +170,7 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "EmptyBody");
         }
         try {
-          const row = await update(request.tenant!.id, id, parsed.data);
+          const row = await update(request.tenant!.id, id, parsed.data, actorUserIdOrNull(request));
           return reply.send(isoDates(row as Record<string, unknown>));
         } catch (e) {
           return mapErr(reply, request, e);
@@ -156,6 +178,7 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
       }
     );
 
+    /** DELETE = deactivate (is_active=false), hard delete yo‘q. */
     app.delete(
       `${path}/:id`,
       { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
@@ -164,8 +187,24 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
         const id = Number.parseInt((request.params as { id: string }).id, 10);
         if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
         try {
-          await del(request.tenant!.id, id);
-          return reply.status(204).send();
+          const row = await deactivate(request.tenant!.id, id, actorUserIdOrNull(request));
+          return reply.send(isoDates(row as Record<string, unknown>));
+        } catch (e) {
+          return mapErr(reply, request, e);
+        }
+      }
+    );
+
+    app.post(
+      `${path}/:id/restore`,
+      { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+      async (request, reply) => {
+        if (!ensureTenantContext(request, reply)) return;
+        const id = Number.parseInt((request.params as { id: string }).id, 10);
+        if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
+        try {
+          const row = await restore(request.tenant!.id, id, actorUserIdOrNull(request));
+          return reply.send(isoDates(row as Record<string, unknown>));
         } catch (e) {
           return mapErr(reply, request, e);
         }
@@ -178,28 +217,32 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
     listProductCatalogGroups,
     createProductCatalogGroup,
     updateProductCatalogGroup,
-    deleteProductCatalogGroup
+    deactivateProductCatalogGroup,
+    restoreProductCatalogGroup
   );
   regSimple(
     "/api/:slug/catalog/brands",
     listProductBrands,
     createProductBrand,
     updateProductBrand,
-    deleteProductBrand
+    deactivateProductBrand,
+    restoreProductBrand
   );
   regSimple(
     "/api/:slug/catalog/manufacturers",
     listProductManufacturers,
     createProductManufacturer,
     updateProductManufacturer,
-    deleteProductManufacturer
+    deactivateProductManufacturer,
+    restoreProductManufacturer
   );
   regSimple(
     "/api/:slug/catalog/segments",
     listProductSegments,
     createProductSegment,
     updateProductSegment,
-    deleteProductSegment
+    deactivateProductSegment,
+    restoreProductSegment
   );
 
   const interchangePath = "/api/:slug/catalog/interchangeable-groups";
@@ -252,7 +295,11 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
       try {
-        const row = await createInterchangeableProductGroup(request.tenant!.id, parsed.data);
+        const row = await createInterchangeableProductGroup(
+          request.tenant!.id,
+          parsed.data,
+          actorUserIdOrNull(request)
+        );
         return reply.status(201).send(isoDates(row as Record<string, unknown>));
       } catch (e) {
         return mapErr(reply, request, e);
@@ -275,7 +322,12 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "EmptyBody");
       }
       try {
-        await updateInterchangeableProductGroup(request.tenant!.id, id, parsed.data);
+        await updateInterchangeableProductGroup(
+          request.tenant!.id,
+          id,
+          parsed.data,
+          actorUserIdOrNull(request)
+        );
         const found = await getInterchangeableProductGroup(request.tenant!.id, id);
         if (!found) return sendApiError(reply, request, 404, "NotFound");
         return reply.send({
@@ -297,12 +349,35 @@ export async function registerProductCatalogRoutes(app: FastifyInstance) {
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
       try {
-        await deleteInterchangeableProductGroup(request.tenant!.id, id);
-        return reply.status(204).send();
+        const row = await deactivateInterchangeableProductGroup(
+          request.tenant!.id,
+          id,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(isoDates(row as Record<string, unknown>));
       } catch (e) {
         return mapErr(reply, request, e);
       }
     }
   );
 
+  app.post(
+    `${interchangePath}/:id/restore`,
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (Number.isNaN(id)) return sendApiError(reply, request, 400, "InvalidId");
+      try {
+        const row = await restoreInterchangeableProductGroup(
+          request.tenant!.id,
+          id,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(isoDates(row as Record<string, unknown>));
+      } catch (e) {
+        return mapErr(reply, request, e);
+      }
+    }
+  );
 }

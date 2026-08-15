@@ -6,7 +6,7 @@ import { filterClientUpdateInputByApplyFields } from "./client-import-masks";
 import { normalizePhoneDigits } from "./clients.types";
 import { CONTACT_SLOTS, IMPORT_CONTACT_PERSON_SLOTS, contactPersonsToJson } from "./clients.helpers";
 import { replaceClientAgentAssignments } from "./clients.agent-assignments";
-import { appendClientAuditLog } from "./clients.audit";
+import { appendClientAuditLogsBatch } from "./clients.audit";
 import {
   buildAgentAssignmentPatchesFromImportRow,
   colMapHasAgentSlots,
@@ -37,8 +37,13 @@ import type { ImportFlowContext } from "./clients.import.runtime";
 import {
   IMPORT_MAX_DATA_ROWS,
   IMPORT_MAX_ERRORS_RETURNED,
+  humanizeImportDbError,
   reportImportRowProgress
 } from "./clients.import.runtime";
+import {
+  fetchImportExistingAssignments,
+  fetchImportExistingClients
+} from "./clients.import.id-lookup";
 import type { ContactPersonSlot } from "./clients.types";
 
 import { buildImportUpdateScalarData } from "./clients.import.rows-update.build";
@@ -53,7 +58,7 @@ export async function importClientUpdateRows(
   staffLookup: ImportStaffLookup,
   ctx: ImportFlowContext,
   updateApplyFields: string[] | null
-): Promise<{ updated: number; errors: string[]; skippedEmpty: number }> {
+): Promise<{ updated: number; errors: string[]; skippedEmpty: number; unchangedRows: number }> {
   const errors: string[] = [];
   let totalRowErrors = 0;
   const pushErr = (msg: string) => {
@@ -63,6 +68,7 @@ export async function importClientUpdateRows(
 
   let updated = 0;
   let skippedEmpty = 0;
+  let unchangedRows = 0;
 
   const firstDataRow = headerRowIdx + 1;
   const lastRowIdx = Math.min(rows.length - 1, headerRowIdx + IMPORT_MAX_DATA_ROWS);
@@ -73,7 +79,8 @@ export async function importClientUpdateRows(
       errors: [
         `Sarlavha ${headerRowIdx + 1}-qatorda («${sheetLabel}»), lekin undan keyin ma’lumot qatori yo‘q.`
       ],
-      skippedEmpty: 0
+      skippedEmpty: 0,
+      unchangedRows: 0
     };
   }
 
@@ -88,56 +95,17 @@ export async function importClientUpdateRows(
     if (idVal != null) candidateIds.add(idVal);
   }
   const candidateIdList = Array.from(candidateIds);
+  const idChunks = Math.max(1, Math.ceil(candidateIdList.length / 50_000));
   console.info(
-    `[clients import/update] tenant=${tenantId} sheet="${sheetLabel}" estDataRows=${ctx.totalRows} distinctClientIdsInFile=${candidateIdList.length}`
+    `[clients import/update] tenant=${tenantId} sheet="${sheetLabel}" estDataRows=${ctx.totalRows} distinctClientIdsInFile=${candidateIdList.length} lookupChunks=${idChunks}`
   );
-  const existingRows =
-    candidateIdList.length > 0
-      ? await prisma.client.findMany({
-          where: {
-            id: { in: candidateIdList },
-            tenant_id: tenantId,
-            merged_into_client_id: null
-          },
-          select: {
-            id: true,
-            name: true,
-            legal_name: true,
-            phone: true,
-            phone_normalized: true,
-            address: true,
-            client_code: true,
-            client_pinfl: true,
-            category: true,
-            client_type_code: true,
-            credit_limit: true,
-            is_active: true,
-            responsible_person: true,
-            landmark: true,
-            inn: true,
-            pdl: true,
-            logistics_service: true,
-            license_until: true,
-            working_hours: true,
-            region: true,
-            district: true,
-            city: true,
-            neighborhood: true,
-            zone: true,
-            street: true,
-            house_number: true,
-            apartment: true,
-            gps_text: true,
-            latitude: true,
-            longitude: true,
-            notes: true,
-            client_format: true,
-            sales_channel: true,
-            product_category_ref: true,
-            contact_persons: true
-          }
-        })
-      : [];
+
+  let existingRows: Awaited<ReturnType<typeof fetchImportExistingClients>> = [];
+  try {
+    existingRows = await fetchImportExistingClients(tenantId, candidateIdList);
+  } catch (e) {
+    throw new Error(humanizeImportDbError(e));
+  }
   const existingById = new Map(existingRows.map((x) => [x.id, x]));
   const currentAssignmentsByClientId = new Map<
     number,
@@ -150,18 +118,12 @@ export async function importClientUpdateRows(
     }>
   >();
   if (hasAgentSlots && candidateIdList.length > 0) {
-    const assignmentRows = await prisma.clientAgentAssignment.findMany({
-      where: { tenant_id: tenantId, client_id: { in: candidateIdList } },
-      orderBy: [{ client_id: "asc" }, { slot: "asc" }],
-      select: {
-        client_id: true,
-        slot: true,
-        agent_id: true,
-        expeditor_user_id: true,
-        expeditor_phone: true,
-        visit_weekdays: true
-      }
-    });
+    let assignmentRows: Awaited<ReturnType<typeof fetchImportExistingAssignments>> = [];
+    try {
+      assignmentRows = await fetchImportExistingAssignments(tenantId, candidateIdList);
+    } catch (e) {
+      throw new Error(humanizeImportDbError(e));
+    }
     const grouped = new Map<number, ExistingImportAssignmentRow[]>();
     for (const row of assignmentRows) {
       const list = grouped.get(row.client_id) ?? [];
@@ -229,6 +191,7 @@ export async function importClientUpdateRows(
       const hasAssignmentChange =
         assignOutcome.touched && !importAssignmentsEqual(nextAssignments, currentAssignments);
       if (!hasScalars && !hasAssignmentChange) {
+        unchangedRows += 1;
         ctx.processedRows += 1;
         await reportImportRowProgress(ctx, "resolving");
         continue;
@@ -310,10 +273,29 @@ export async function importClientUpdateRows(
 
   ctx.writeMs += Date.now() - writeStarted;
 
+  const updatedIds = [
+    ...bothUpdates.map((x) => x.idVal),
+    ...scalarOnly.map((x) => x.idVal),
+    ...assignmentOnly.map((x) => x.idVal)
+  ];
+  if (updatedIds.length > 0) {
+    await appendClientAuditLogsBatch(
+      tenantId,
+      updatedIds,
+      ctx.actorUserId ?? null,
+      "client.import.patch",
+      { source: "xlsx_import" }
+    );
+  }
+
   const out = [...errors];
   if (updated === 0 && errors.length === 0 && skippedEmpty > 0) {
     out.push(
       `Hech narsa yangilanmadi: «ИД» bo‘sh qatorlar (${skippedEmpty}) yoki jadval bo‘sh.`
+    );
+  } else if (updated === 0 && skippedEmpty === 0 && candidateIdList.length > 0) {
+    out.unshift(
+      "Hech qanday yozuv o‘zgarmadi: Excel qiymatlari bazadagi ma’lumot bilan bir xil yoki agent/ustunlar moslanmadi (konsoldagi ogohlantirishlarni ko‘ring)."
     );
   }
   if (totalRowErrors > IMPORT_MAX_ERRORS_RETURNED) {
@@ -326,5 +308,5 @@ export async function importClientUpdateRows(
     out.push(line);
   }
 
-  return { updated, errors: out, skippedEmpty };
+  return { updated, errors: out, skippedEmpty, unchangedRows };
 }

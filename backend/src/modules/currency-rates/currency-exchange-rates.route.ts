@@ -10,7 +10,8 @@ import {
   createCurrencyExchangeRate,
   deleteCurrencyExchangeRate,
   listCurrencyExchangeRates,
-  patchCurrencyExchangeRate
+  patchCurrencyExchangeRate,
+  restoreCurrencyExchangeRate
 } from "./currency-exchange-rates.service";
 
 const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
@@ -71,6 +72,12 @@ function sendKnownDomainError(reply: FastifyReply, request: FastifyRequest, mess
   if (message === "NOT_FOUND") {
     return Boolean(sendApiError(reply, request, 404, "NotFound"));
   }
+  if (message === "ALREADY_VOIDED") {
+    return Boolean(sendApiError(reply, request, 409, "AlreadyVoided"));
+  }
+  if (message === "NOT_VOIDED") {
+    return Boolean(sendApiError(reply, request, 409, "NotVoided"));
+  }
   return false;
 }
 
@@ -98,7 +105,8 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
         from: q.from?.trim() || q.date_from?.trim(),
         to: q.to?.trim() || q.date_to?.trim(),
         base: q.base?.trim(),
-        quote: q.quote?.trim()
+        quote: q.quote?.trim(),
+        archive: q.archive === "true" || q.archive === "1"
       });
       return reply.send(data);
     } catch (e) {
@@ -192,16 +200,43 @@ export async function registerCurrencyExchangeRateRoutes(app: FastifyInstance) {
         return sendInvalidId(reply, request);
       }
       try {
-        await deleteCurrencyExchangeRate(request.tenant!.id, id);
+        await deleteCurrencyExchangeRate(request.tenant!.id, id, actorUserIdOrNull(request));
         await appendTenantAuditEvent({
           tenantId: request.tenant!.id,
           actorUserId: actorUserIdOrNull(request),
           entityType: "currency_rate",
           entityId: id,
-          action: "currency_rate.delete",
-          payload: { id }
+          action: "currency_rate.void",
+          payload: { id, soft: true }
         });
         return reply.status(204).send();
+      } catch (e) {
+        if (e instanceof Error && sendKnownDomainError(reply, request, e.message)) return;
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/currency-rates/:id/restore",
+    { preHandler: [...writePreHandler] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const id = Number.parseInt((request.params as { id: string }).id, 10);
+      if (!Number.isFinite(id) || id < 1) {
+        return sendInvalidId(reply, request);
+      }
+      try {
+        await restoreCurrencyExchangeRate(request.tenant!.id, id, actorUserIdOrNull(request));
+        await appendTenantAuditEvent({
+          tenantId: request.tenant!.id,
+          actorUserId: actorUserIdOrNull(request),
+          entityType: "currency_rate",
+          entityId: id,
+          action: "currency_rate.restore",
+          payload: { id }
+        });
+        return reply.send({ ok: true });
       } catch (e) {
         if (e instanceof Error && sendKnownDomainError(reply, request, e.message)) return;
         throw e;

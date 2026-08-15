@@ -7,6 +7,8 @@ export type SettingsItem = {
   requiredRoles?: readonly string[];
   /** Pastga ochiladigan pastki punktlar (masalan «Пользователи» → Агент, Экспедиторы…) */
   children?: SettingsItem[];
+  /** Qisqa izoh (sidebar title / hub). */
+  description?: string;
 };
 
 export type SettingsSection = {
@@ -227,6 +229,29 @@ export const settingsSections: SettingsSection[] = [
     ]
   },
   {
+    title: "Период и регламент",
+    slug: "period-reglament",
+    items: [
+      {
+        title: "Davr cheklovi",
+        slug: "document-edit-lock",
+        href: "/settings/document-edit-lock",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "Hujjatlarni tahrirlash uchun davr cheklovi"
+      },
+      {
+        title: "Заказы → консигнация",
+        slug: "orders-consignment",
+        href: "/settings/period/orders-consignment",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description:
+          "Доставлен + N кун + тўланмаган заказларни консигнацияга; комментарийда ким/шартлар"
+      }
+    ]
+  },
+  {
     title: "Система",
     slug: "sistema",
     items: [
@@ -298,7 +323,10 @@ const existingHrefByItemTitle: Record<string, string> = {
   "база знаний": "/settings/knowledge-base/base",
   "тема и цвета": "/settings/appearance",
   "boshlang‘ich sozlash": "/settings/initial-setup",
-  "начальная настройка": "/settings/initial-setup"
+  "начальная настройка": "/settings/initial-setup",
+  "davr cheklovi": "/settings/document-edit-lock",
+  "заказы → консигнация": "/settings/period/orders-consignment",
+  "консигнация (oy yopish)": "/settings/spravochnik/consignment"
 };
 
 export function resolveSettingsItemHref(item: SettingsItem): string {

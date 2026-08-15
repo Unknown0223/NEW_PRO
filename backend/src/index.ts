@@ -1,4 +1,4 @@
-/** `env` avval yuklansin — `app` → Prisma `DATABASE_URL` ni `process.env` dan oladi. */
+/** Backend entry — `env` must load before `app` (Prisma reads `DATABASE_URL`). */
 import { env } from "./config/env";
 import { buildApp } from "./app";
 import { prisma } from "./config/database";
@@ -18,7 +18,7 @@ import {
   disableConsignmentClosureCron,
   enableConsignmentClosureCron
 } from "./lib/consignment-closure-cron";
-import { disableActivityRetentionCron, enableActivityRetentionCron } from "./lib/activity-retention-cron";
+import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
 
 async function main() {
   await prisma.$connect();
@@ -37,8 +37,8 @@ async function main() {
   enablePaymentReturnFinalizeCron();
   app.log.info("Payment return finalize cron enabled.");
   enableDashboardCacheWarm();
-  enableActivityRetentionCron();
-  app.log.info("Activity retention cron enabled.");
+  enableAuditRetentionCron();
+  app.log.info("Audit retention cron enabled (audit + activity).");
   enableConsignmentClosureCron();
   app.log.info("Consignment month closure cron enabled.");
 
@@ -47,7 +47,7 @@ async function main() {
     disableProductPriceScheduleCron();
     disablePaymentReturnFinalizeCron();
     disableDashboardCacheWarm();
-    disableActivityRetentionCron();
+    disableAuditRetentionCron();
     disableConsignmentClosureCron();
     await app.close();
     await closeOrderEventBusRedis();

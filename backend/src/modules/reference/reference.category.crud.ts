@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { catalogDeactivateData, catalogRestoreData } from "../../lib/soft-void";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { ProductCategoryListRow } from "./reference.category.types";
 import {
@@ -194,30 +195,85 @@ export async function deleteProductCategoryRow(
   tenantId: number,
   id: number,
   actorUserId: number | null = null
-): Promise<void> {
+): Promise<ProductCategoryListRow> {
+  return deactivateProductCategoryRow(tenantId, id, actorUserId);
+}
+
+/** Hard delete yo‘q — `is_active: false` + code void suffix. */
+export async function deactivateProductCategoryRow(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<ProductCategoryListRow> {
   const row = await prisma.productCategory.findFirst({ where: { id, tenant_id: tenantId } });
   if (!row) {
     throw new Error("NOT_FOUND");
   }
-  const nChild = await prisma.productCategory.count({
-    where: { tenant_id: tenantId, parent_id: id }
-  });
-  if (nChild > 0) {
-    throw new Error("HAS_CHILDREN");
+  if (!row.is_active) {
+    throw new Error("ALREADY_INACTIVE");
   }
-  const n = await prisma.product.count({
-    where: { tenant_id: tenantId, category_id: id }
+  const data = catalogDeactivateData(row.code, id);
+  const updated = await prisma.productCategory.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      name: true,
+      parent_id: true,
+      code: true,
+      sort_order: true,
+      default_unit: true,
+      is_active: true,
+      comment: true,
+      created_at: true
+    }
   });
-  if (n > 0) {
-    throw new Error("CATEGORY_IN_USE");
-  }
-  await prisma.productCategory.delete({ where: { id } });
   await appendTenantAuditEvent({
     tenantId,
     actorUserId,
     entityType: AuditEntityType.product_category,
     entityId: id,
-    action: "delete",
-    payload: { name: row.name }
+    action: "soft_delete",
+    payload: { name: row.name, code: row.code, voided_code: updated.code, is_active: false }
   });
+  return updated;
+}
+
+export async function restoreProductCategoryRow(
+  tenantId: number,
+  id: number,
+  actorUserId: number | null = null
+): Promise<ProductCategoryListRow> {
+  const row = await prisma.productCategory.findFirst({ where: { id, tenant_id: tenantId } });
+  if (!row) {
+    throw new Error("NOT_FOUND");
+  }
+  if (row.is_active) {
+    throw new Error("NOT_INACTIVE");
+  }
+  const data = catalogRestoreData(row.code, id);
+  const updated = await prisma.productCategory.update({
+    where: { id },
+    data,
+    select: {
+      id: true,
+      name: true,
+      parent_id: true,
+      code: true,
+      sort_order: true,
+      default_unit: true,
+      is_active: true,
+      comment: true,
+      created_at: true
+    }
+  });
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: AuditEntityType.product_category,
+    entityId: id,
+    action: "reactivate",
+    payload: { name: row.name, code: updated.code, is_active: true }
+  });
+  return updated;
 }

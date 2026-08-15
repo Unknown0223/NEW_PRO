@@ -15,12 +15,16 @@
  *   AGENT_PASSWORD=111111 (default)
  *   ALLOW_RAILWAY_PROD_INIT=true (production da majburiy)
  */
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
 import bcrypt from "bcryptjs";
 import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { mergeDefaultReasonReferences, prisma } from "../prisma/seed/helpers";
 import { defaultMobileConfigForRole } from "../src/modules/staff/agent-mobile-config.defaults";
+
+if (!process.env.DATABASE_URL?.trim() && !process.env.RAILWAY_ENVIRONMENT) {
+  loadDotenv();
+}
 
 const root = path.resolve(__dirname, "..");
 

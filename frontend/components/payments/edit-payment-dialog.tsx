@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
@@ -354,12 +355,12 @@ export function EditPaymentDialog({
             ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="ep-amount">Summa</Label>
-              <Input
+              <GroupedNumberInput
                 id="ep-amount"
                 className={controlClass}
-                inputMode="decimal"
+                maxFractionDigits={2}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={setAmount}
                 disabled={patchMut.isPending}
               />
               {fieldErrs.amount ? (

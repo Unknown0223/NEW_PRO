@@ -1,6 +1,7 @@
 "use client";
 
 import { OrderSseListener } from "@/components/dashboard/order-sse-listener";
+import { SalesArenaLogo } from "@/components/brand/sales-arena-logo";
 import {
   dashboardClientsNav,
   dashboardHomeNav,
@@ -62,6 +63,8 @@ import { useEffect, useMemo, useState } from "react";
 function isNavActive(pathname: string, href: string): boolean {
   const pathOnly = href.split("?")[0] ?? href;
   if (pathOnly === "/dashboard") return pathname === "/dashboard";
+  // Ro‘yxat ildizi — bolalar sahifalarida sariq bo‘lib qolmasin (merge / group-processing va h.k.)
+  if (pathOnly === "/clients") return pathname === "/clients" || pathname === "/clients/";
   return pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
 }
 
@@ -455,12 +458,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <OrderSseListener />
       <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
         <div className="border-b border-sidebar-border/80 px-3 py-4">
-          <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary/25 text-sidebar-primary-foreground">
-            <ClientLucideIcon icon={Package} className="size-5 opacity-90" />
-          </div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-sidebar-foreground/60">
-            SALESDOC
-          </p>
+          <SalesArenaLogo variant="dark" height={48} className="mb-2.5 w-full max-w-[220px]" />
           <p className="truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
             {tenantSlug ?? "—"}
           </p>
@@ -1180,7 +1178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SALESDOC</p>
+              <SalesArenaLogo variant="light" height={36} className="mb-0.5 max-w-[200px]" />
               <span className="truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
             </div>
             <Button variant="outline" size="sm" type="button" onClick={logout}>

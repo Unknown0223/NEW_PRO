@@ -13,13 +13,12 @@ import '../../../core/sync/sync_data_refresh.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/agent_visit_ui.dart';
 import '../shell/agent_app_bar.dart';
+import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
-import '../../../core/clients/client_outlet_filters.dart';
-import '../../../core/format/money_display.dart';
 import 'clients_list_provider.dart';
 import '../orders/order_draft_provider.dart';
-import '../orders/order_draft_ui.dart';
 import 'create_client_sheet.dart';
 
 export 'clients_list_provider.dart';
@@ -27,9 +26,7 @@ export 'clients_list_provider.dart';
 /// Eski to'liq katalog (sinxron qilinmagan) — ogohlantirish ko'rsatish.
 final agentStaleClientCatalogProvider = FutureProvider<bool>((ref) async {
   ref.watch(clientsListProvider);
-  if (await AppDatabase().isAgentClientsSynced()) return false;
-  final n = await AppDatabase().clientCount();
-  return n > 50;
+  return AppDatabase().needsFullClientCatalogResync();
 });
 
 class AgentClientsPage extends ConsumerStatefulWidget {
@@ -182,10 +179,9 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
-        title: 'Тор. точки (${total ?? totalAll ?? '…'})',
+        title: S.outlets,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/clients')),
-          AgentIconButton(icon: Icons.map_outlined, onPressed: () => context.push('/map')),
           _syncing
               ? const Padding(
                   padding: EdgeInsets.all(8),
@@ -201,30 +197,6 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!inSearch) const AgentDayTabs(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: _LinkedClientsBanner(
-              count: total,
-              loading: clientsAsync.isLoading,
-              agentName: session.user?.name,
-            ),
-          ),
-          if (staleCatalog)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Material(
-                color: AppColors.warning.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Text(
-                    'Eski katalog ($total ta). Yuqoridagi sinxron tugmasini bosing — faqat bog\'langan mijozlar qoladi.',
-                    style: AppTypography.caption.copyWith(color: AppColors.warning),
-                  ),
-                ),
-              ),
-            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: TextField(
@@ -232,8 +204,8 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               focusNode: _searchFocus,
               onChanged: _runSearch,
               decoration: InputDecoration(
-                hintText: 'Nom, kod, telefon...',
-                prefixIcon: const Icon(Icons.search),
+                hintText: S.searchOutlet,
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
                 suffixIcon: inSearch
                     ? IconButton(
                         icon: const Icon(Icons.clear),
@@ -246,6 +218,18 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
               ),
             ),
           ),
+          if (!inSearch) ...[
+            const SizedBox(height: 10),
+            const _OutletCategoryChips(),
+          ],
+          if (staleCatalog)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: AgentWarningBanner(
+                message: '⚠️ ${S.staleCatalog}',
+                onTap: _syncing ? null : _syncClients,
+              ),
+            ),
           const SizedBox(height: 8),
           Expanded(
             child: inSearch
@@ -279,11 +263,11 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
         ],
       ),
       floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
+          ? FloatingActionButton(
               heroTag: 'agent_clients_create_fab',
               onPressed: () => context.push('/clients/new'),
-              icon: const Icon(Icons.person_add_outlined),
-              label: const Text('Yangi mijoz'),
+              backgroundColor: AppColors.primary,
+              child: const Icon(Icons.add_rounded, size: 28),
             )
           : null,
     );
@@ -351,50 +335,66 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
   }
 }
 
-class _LinkedClientsBanner extends StatelessWidget {
-  final int? count;
-  final bool loading;
-  final String? agentName;
+class _OutletCategoryChips extends ConsumerWidget {
+  const _OutletCategoryChips();
 
-  const _LinkedClientsBanner({this.count, this.loading = false, this.agentName});
+  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt];
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final category = ref.watch(outletCategoryFilterProvider);
+    final debtsOnly = ref.watch(outletDebtsOnlyProvider);
+
+    String activeLabel = S.dayAll;
+    if (debtsOnly) {
+      activeLabel = S.withDebt;
+    } else if (category != null && category.isNotEmpty) {
+      activeLabel = category;
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: [
-          const Icon(Icons.link, size: 20, color: AppColors.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'На экране',
-                  style: AppTypography.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
+        children: _filters.map((f) {
+          final isActive = activeLabel == f;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () {
+                if (f == S.dayAll) {
+                  ref.read(outletCategoryFilterProvider.notifier).state = null;
+                  ref.read(outletDebtsOnlyProvider.notifier).state = false;
+                } else if (f == S.withDebt) {
+                  ref.read(outletCategoryFilterProvider.notifier).state = null;
+                  ref.read(outletDebtsOnlyProvider.notifier).state = true;
+                } else {
+                  ref.read(outletCategoryFilterProvider.notifier).state = f;
+                  ref.read(outletDebtsOnlyProvider.notifier).state = false;
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isActive ? AppColors.primary : const Color(0xFFDDE5EA),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  loading
-                      ? 'Загрузка…'
-                      : count != null
-                          ? '${agentName ?? 'Агент'} · $count'
-                          : 'С учётом фильтра дня',
-                  style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+                child: Text(
+                  f,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: isActive ? Colors.white : AppColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -409,31 +409,23 @@ class _ClientListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = client['name']?.toString() ?? '';
-    final code = client['client_code']?.toString().trim() ?? '';
-    final phone = client['phone']?.toString() ?? '';
-    final category = client['category']?.toString() ?? '';
-    final isPending = client['is_active'] == 0 || client['is_active'] == false;
+    final code = client['client_code']?.toString().trim() ?? '—';
+    final category = client['category']?.toString().trim() ?? 'B';
     final clientId = (client['id'] as num?)?.toInt();
     final showBalance = ref.watch(sessionProvider).mobileConfig?.client.showBalance ?? true;
-    final debt = showBalance ? formatClientBalance(client) : '';
-    final n = parseMoneyAmount(client['balance']);
-    final debtColor = showBalance ? colorForClientBalance(n) : AppColors.textPrimary;
-
+    final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
+    final balanceAmount = showBalance
+        ? clientAgentLedgerBalance(agentBalances, clientId)
+        : null;
     final drafts = ref.watch(orderDraftsProvider).valueOrNull;
-    final draft = clientId != null && drafts != null ? drafts[clientId] : null;
+    final hasDraft = clientId != null && drafts?[clientId] != null;
 
-    return AgentOutletCard(
+    return AgentVisitOutletCard(
       name: name,
-      subtitle: code.isNotEmpty ? code : (phone.isNotEmpty ? phone : '—'),
-      grade: isPending ? 'Tasdiq' : (category.isNotEmpty ? category : null),
-      trailing: debt,
-      headerTrailing: draft != null
-          ? OrderDraftHeaderBadge(
-              draft: draft,
-              onExpired: () => ref.invalidate(orderDraftsProvider),
-            )
-          : null,
-      trailingColor: debtColor,
+      code: code,
+      grade: category.isEmpty ? 'B' : category,
+      balanceAmount: balanceAmount,
+      hasDraft: hasDraft,
       onTap: onTap,
     );
   }

@@ -23,7 +23,12 @@
 
 import { spawnSync } from "node:child_process";
 import * as path from "node:path";
-import "dotenv/config";
+import { config as loadDotenv } from "dotenv";
+
+// Railway/CI: tashqaridan berilgan DATABASE_URL ni lokal .env ustidan yozmasin
+if (!process.env.DATABASE_URL?.trim() && !process.env.RAILWAY_ENVIRONMENT) {
+  loadDotenv();
+}
 
 const root = path.resolve(__dirname, "..");
 

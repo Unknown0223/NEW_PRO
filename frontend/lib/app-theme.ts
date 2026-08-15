@@ -48,7 +48,7 @@ export function normalizeAppThemeId(raw: string | null | undefined): AppThemeId 
 }
 
 export const appThemeLabelsRu: Record<AppThemeId, string> = {
-  classic: "Классика (SALESDOC teal)",
+  classic: "Классика (Sales Arena teal)",
   "soft-slate-blue-grey": "1. Soft Slate Blue-Grey",
   "cool-cyan": "2. Cool Cyan",
   "light-indigo": "3. Light Indigo",

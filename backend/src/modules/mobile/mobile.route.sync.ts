@@ -62,7 +62,8 @@ export async function registerMobileSyncRoutes(app: FastifyInstance) {
         const result = await syncFull(request.tenant!.id, userId, lastSyncAt, {
           device_name: parsed.data.device_name,
           user_agent: parsed.data.user_agent,
-          apk_version: parsed.data.apk_version
+          apk_version: parsed.data.apk_version,
+          forceClientsCatalog: parsed.data.force_clients_catalog === true
         });
         return reply.send(result);
       } catch (e) {

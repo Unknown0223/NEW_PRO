@@ -9,6 +9,8 @@ import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
+import { pickFirstExcelFile } from "@/lib/excel-file-pick";
 import {
   Select,
   SelectContent,
@@ -431,17 +433,19 @@ export function WorkSlotsWorkspace() {
             <Download className="mr-1 h-4 w-4" />
             Excel
           </Button>
-          <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()}>
-            <Upload className="mr-1 h-4 w-4" />
-            Import
-          </Button>
+          <ExcelDropTarget onFile={(f) => void importExcel(f)}>
+            <Button type="button" variant="outline" onClick={() => importInputRef.current?.click()}>
+              <Upload className="mr-1 h-4 w-4" />
+              Import
+            </Button>
+          </ExcelDropTarget>
           <input
             ref={importInputRef}
             type="file"
             accept=".xlsx,.xls"
             className="hidden"
             onChange={(e) => {
-              const f = e.target.files?.[0];
+              const f = pickFirstExcelFile(e.target.files);
               if (f) void importExcel(f);
               e.target.value = "";
             }}

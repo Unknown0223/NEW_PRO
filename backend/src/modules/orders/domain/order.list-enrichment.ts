@@ -62,7 +62,7 @@ export async function loadOrdersListMetaEnrichment(
   const ids = rows.map((r) => r.id);
 
   const statusRows = await prisma.orderStatusLog.findMany({
-    where: { order_id: { in: ids } },
+    where: { order_id: { in: ids }, superseded_at: null },
     orderBy: [{ order_id: "asc" }, { created_at: "asc" }],
     select: {
       order_id: true,

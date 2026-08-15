@@ -5,18 +5,46 @@
  * - FK bog'lanishlar uchun CASCADE ishlatiladi
  *
  * Eslatma: `_prisma_migrations` saqlab qolinadi.
+ *
+ * Himoya (ikkala bosqich majburiy):
+ *   CONFIRM_TRUNCATE=YES
+ *   --confirm-phrase=DELETE_ALL_DATA
+ *   --backup-ok
+ *
+ * PowerShell:
+ *   $env:CONFIRM_TRUNCATE="YES"
+ *   npx tsx scripts/db-truncate-all-once.ts --confirm-phrase=DELETE_ALL_DATA --backup-ok
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import {
+  assertOpsDestructiveGate,
+  tryAppendOpsPurgeAudit
+} from "./lib/ops-destructive-gate";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  if (process.env.CONFIRM_DB_WIPE_ALL !== "yes") {
-    console.error(
-      "[db-truncate-all-once] To'xtatildi. Tasdiqlash uchun CONFIRM_DB_WIPE_ALL=yes qo'ying."
-    );
+  const gate = assertOpsDestructiveGate({
+    scriptName: "db-truncate-all-once",
+    altConfirmEnv: "CONFIRM_DB_WIPE_ALL"
+  });
+  if (!gate.ok) {
+    console.error(gate.message);
     process.exit(1);
+  }
+
+  // Best-effort: birinchi tenant uchun ops.purge (truncate hammasi o‘chadi).
+  const anyTenant = await prisma.tenant.findFirst({ select: { id: true, slug: true } });
+  if (anyTenant) {
+    await tryAppendOpsPurgeAudit({
+      prisma,
+      tenantId: anyTenant.id,
+      script: "db-truncate-all-once",
+      detail: { tenant_slug: anyTenant.slug, note: "pre-truncate marker (will be wiped)" }
+    });
+  } else {
+    console.warn("[db-truncate-all-once] Tenant yo‘q — ops.purge yozilmadi.");
   }
 
   const rows = await prisma.$queryRaw<Array<{ tablename: string }>>`

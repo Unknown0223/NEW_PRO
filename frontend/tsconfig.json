@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "downlevelIteration": true,
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -18,19 +13,10 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "plugins": [{ "name": "next" }],
     "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "@shared/*": [
-        "./shared/*",
-        "../shared/*"
-      ]
+      "@/*": ["./*"],
+      "@shared/*": ["./shared/*", "../shared/*"]
     }
   },
   "include": [
@@ -41,8 +27,5 @@
     ".next/types/**/*.ts",
     ".next-bench/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "vitest.config.ts"
-  ]
+  "exclude": ["node_modules", "vitest.config.ts"]
 }
