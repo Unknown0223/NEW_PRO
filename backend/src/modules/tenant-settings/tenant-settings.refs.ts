@@ -159,6 +159,7 @@ type PaymentMethodEntryPatch = {
   comment?: string | null;
   color?: string | null;
   active?: boolean;
+  sync_with_1c?: boolean;
 };
 
 type PriceTypeEntryPatch = {

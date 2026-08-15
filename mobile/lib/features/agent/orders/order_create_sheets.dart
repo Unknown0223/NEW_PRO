@@ -818,6 +818,7 @@ class OrderBonusDiscountResult {
   final bool applyDiscount;
   final List<BonusGiftOverrideInput> giftOverrides;
   final List<BonusGiftLineInput> giftLines;
+  final List<BonusStrategySelectionInput> strategySelections;
   final String bonusShortageComment;
   final String discountShortageComment;
   final int bonusQty;
@@ -829,6 +830,7 @@ class OrderBonusDiscountResult {
     required this.applyDiscount,
     this.giftOverrides = const [],
     this.giftLines = const [],
+    this.strategySelections = const [],
     this.bonusShortageComment = '',
     this.discountShortageComment = '',
     this.bonusQty = 0,
@@ -849,6 +851,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
   final DiscountMode initialDiscountMode;
   final OrderBonusDraftState? initialDraft;
   final ValueChanged<OrderBonusDraftState>? onDraftChanged;
+  final bool isConsignment;
 
   const OrderBonusDiscountSheet({
     super.key,
@@ -863,6 +866,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     this.initialDiscountMode = DiscountMode.auto,
     this.initialDraft,
     this.onDraftChanged,
+    this.isConsignment = false,
   });
 
   static Future<OrderBonusDiscountResult?> show(
@@ -878,6 +882,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     DiscountMode initialDiscountMode = DiscountMode.auto,
     OrderBonusDraftState? initialDraft,
     ValueChanged<OrderBonusDraftState>? onDraftChanged,
+    bool isConsignment = false,
   }) {
     return showModalBottomSheet<OrderBonusDiscountResult>(
       context: context,
@@ -900,6 +905,7 @@ class OrderBonusDiscountSheet extends StatefulWidget {
         initialDiscountMode: initialDiscountMode,
         initialDraft: initialDraft,
         onDraftChanged: onDraftChanged,
+        isConsignment: isConsignment,
       ),
     );
   }
@@ -920,6 +926,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   final Map<int, Set<int>> _manualGiftByRule = {};
   final Set<int> _expandedBonusRuleIds = {};
   final Set<int> _expandedDiscountRuleIds = {};
+  final Map<int, List<int>> _strategyPicks = {};
   OrderBonusPreview _preview = OrderBonusPreview.empty();
   bool _loadingPreview = true;
   String? _previewError;
@@ -1007,16 +1014,25 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         warehouseId: widget.warehouseId,
         items: widget.items,
         priceType: widget.priceType,
+        isConsignment: widget.isConsignment,
       );
       if (!mounted) return;
       final parsed = OrderBonusPreview.fromJson(raw);
       final normalized = _normalizePreview(parsed);
+      _strategyPicks
+        ..clear()
+        ..addEntries(
+          normalized.strategies.map(
+            (s) => MapEntry(s.strategyId, List<int>.from(s.autoSelectedRuleIds)),
+          ),
+        );
       setState(() {
         _preview = OrderBonusPreview(
           bonusStackMode: normalized.bonusStackMode,
           eligibleBonuses: _dedupeEligibleBonuses(normalized.eligibleBonuses),
           eligibleDiscounts: normalized.eligibleDiscounts,
           linkedPairs: normalized.linkedPairs,
+          strategies: normalized.strategies,
           autoApplyRuleIds: normalized.autoApplyRuleIds,
           autoApplyGifts: normalized.autoApplyGifts,
           autoDiscountRuleId: normalized.autoDiscountRuleId,
@@ -1527,6 +1543,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         eligibleBonuses: bonuses,
         eligibleDiscounts: parsed.eligibleDiscounts,
         linkedPairs: parsed.linkedPairs,
+        strategies: parsed.strategies,
         autoApplyRuleIds: parsed.autoApplyRuleIds,
         autoApplyGifts: parsed.autoApplyGifts,
         autoDiscountRuleId: parsed.autoDiscountRuleId,
@@ -1565,6 +1582,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       eligibleBonuses: bonuses,
       eligibleDiscounts: parsed.eligibleDiscounts,
       linkedPairs: parsed.linkedPairs,
+      strategies: parsed.strategies,
       autoApplyRuleIds: parsed.autoApplyRuleIds,
       autoApplyGifts: parsed.autoApplyGifts,
       autoDiscountRuleId: parsed.autoDiscountRuleId,
@@ -1808,11 +1826,22 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       applyDiscount: applyDiscount,
       giftOverrides: _buildGiftOverrides(),
       giftLines: giftLines,
+      strategySelections: _buildStrategySelections(),
       bonusShortageComment: _buildBonusShortageComment(),
       discountShortageComment: _buildDiscountShortageComment(),
       bonusQty: bonusQty,
       discountPct: discountPct,
     );
+  }
+
+  List<BonusStrategySelectionInput> _buildStrategySelections() {
+    final out = <BonusStrategySelectionInput>[];
+    for (final s in _preview.strategies) {
+      final picked = _strategyPicks[s.strategyId] ?? s.autoSelectedRuleIds;
+      if (picked.isEmpty) continue;
+      out.add(BonusStrategySelectionInput(strategyId: s.strategyId, ruleIds: List<int>.from(picked)));
+    }
+    return out;
   }
 
   String _buildDiscountShortageComment() {
@@ -2147,6 +2176,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         ),
         if (_bonusMode == BonusMode.auto) ...[
           const SizedBox(height: 8),
+          if (preview.strategies.isNotEmpty) ...[
+            for (final s in preview.strategies) _buildStrategyPickBlock(s),
+            const SizedBox(height: 8),
+          ],
           if (preview.eligibleBonuses.isEmpty)
             const AgentEmptyState(message: S.emptyBonuses)
           else if (_bonusTabRules().isNotEmpty)
@@ -2158,6 +2191,65 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                 ),
         ],
       ],
+    );
+  }
+
+  Widget _buildStrategyPickBlock(OrderBonusStrategyPreview s) {
+    final picks = _strategyPicks[s.strategyId] ?? s.autoSelectedRuleIds;
+    String ruleName(int id) {
+      for (final b in preview.eligibleBonuses) {
+        if (b.ruleId == id) return b.name;
+      }
+      for (final d in preview.eligibleDiscounts) {
+        if (d.ruleId == id) return d.name;
+      }
+      return '#$id';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Стратегия: ${s.name}',
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Выберите до ${s.maxSelect} из ${s.eligibleRuleIds.length}',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          for (final id in s.eligibleRuleIds)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(ruleName(id), style: AppTypography.bodySmall),
+              value: picks.contains(id),
+              onChanged: _bonusSectionDisabled
+                  ? null
+                  : (v) {
+                      setState(() {
+                        final next = List<int>.from(picks);
+                        if (v == true) {
+                          if (next.length >= s.maxSelect) return;
+                          if (!next.contains(id)) next.add(id);
+                        } else {
+                          next.remove(id);
+                        }
+                        _strategyPicks[s.strategyId] = next;
+                      });
+                    },
+            ),
+        ],
+      ),
     );
   }
 
@@ -2871,11 +2963,49 @@ class AutoApplyBonusGift {
       );
 }
 
+class OrderBonusStrategyPreview {
+  final int strategyId;
+  final String name;
+  final int maxSelect;
+  final List<int> memberRuleIds;
+  final List<int> eligibleRuleIds;
+  final List<int> autoSelectedRuleIds;
+  final bool requiresChoice;
+
+  const OrderBonusStrategyPreview({
+    required this.strategyId,
+    required this.name,
+    required this.maxSelect,
+    this.memberRuleIds = const [],
+    this.eligibleRuleIds = const [],
+    this.autoSelectedRuleIds = const [],
+    this.requiresChoice = false,
+  });
+
+  factory OrderBonusStrategyPreview.fromJson(Map<String, dynamic> j) {
+    List<int> ids(dynamic v) {
+      if (v is! List) return [];
+      return v.whereType<num>().map((e) => e.toInt()).where((e) => e > 0).toList();
+    }
+
+    return OrderBonusStrategyPreview(
+      strategyId: (j['strategy_id'] as num?)?.toInt() ?? 0,
+      name: j['name']?.toString() ?? '',
+      maxSelect: (j['max_select'] as num?)?.toInt() ?? 1,
+      memberRuleIds: ids(j['member_rule_ids']),
+      eligibleRuleIds: ids(j['eligible_rule_ids']),
+      autoSelectedRuleIds: ids(j['auto_selected_rule_ids']),
+      requiresChoice: j['requires_choice'] == true,
+    );
+  }
+}
+
 class OrderBonusPreview {
   final String bonusStackMode;
   final List<OrderBonusPreviewRule> eligibleBonuses;
   final List<OrderDiscountPreviewRule> eligibleDiscounts;
   final List<LinkedBonusDiscountPair> linkedPairs;
+  final List<OrderBonusStrategyPreview> strategies;
   final List<int> autoApplyRuleIds;
   final List<AutoApplyBonusGift> autoApplyGifts;
   final int? autoDiscountRuleId;
@@ -2889,6 +3019,7 @@ class OrderBonusPreview {
     required this.eligibleBonuses,
     required this.eligibleDiscounts,
     required this.linkedPairs,
+    this.strategies = const [],
     this.autoApplyRuleIds = const [],
     this.autoApplyGifts = const [],
     this.autoDiscountRuleId,
@@ -2960,6 +3091,7 @@ class OrderBonusPreview {
       eligibleBonuses: mapList(j['eligible_bonuses'], OrderBonusPreviewRule.fromJson),
       eligibleDiscounts: mapList(j['eligible_discounts'], OrderDiscountPreviewRule.fromJson),
       linkedPairs: _parseLinkedPairs(j),
+      strategies: mapList(j['strategies'], OrderBonusStrategyPreview.fromJson),
       autoApplyRuleIds: ruleIds,
       autoApplyGifts: gifts,
       autoDiscountRuleId: autoDiscountRuleId,
@@ -3000,6 +3132,7 @@ class OrderBonusPreview {
         eligibleBonuses: [],
         eligibleDiscounts: [],
         linkedPairs: [],
+        strategies: [],
         autoApplyRuleIds: [],
         autoApplyGifts: [],
       );

@@ -177,7 +177,17 @@ export const mobileOrderBonusPreviewBodySchema = z.object({
   price_type: z.string().trim().min(1).max(128).optional(),
   items: z.array(mobileCreateOrderItemSchema).min(1),
   bonus_gift_overrides: z.array(mobileBonusGiftOverrideSchema).optional(),
-  bonus_gift_lines: z.array(mobileBonusGiftLineSchema).optional()
+  bonus_gift_lines: z.array(mobileBonusGiftLineSchema).optional(),
+  is_consignment: z.boolean().optional(),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional()
 });
 
 /** POST `/api/:slug/mobile/orders/create` — veb `POST /orders` bilan bir xil bonus/skidka */
@@ -193,7 +203,16 @@ export const mobileCreateOrderBodySchema = z.object({
   is_consignment: z.boolean().optional(),
   consignment_due_date: z.string().max(40).optional().nullable(),
   shipment_date: z.string().max(40).optional().nullable(),
-  items: z.array(mobileCreateOrderItemSchema).min(1)
+  items: z.array(mobileCreateOrderItemSchema).min(1),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional()
 });
 
 /** POST `/api/:slug/mobile/expeditor/orders/:id/payments` */
@@ -232,6 +251,8 @@ export const mobileExpeditorReturnByOrderBodySchema = z.object({
         qty: z.number().min(0).optional(),
         paid_qty: z.number().min(0).optional(),
         bonus_qty: z.number().min(0).optional(),
+        /** Bonusni summa (pul) sifatida qaytarish — so‘m. */
+        bonus_cash: z.number().min(0).optional(),
         return_qty: z.number().min(0).optional(),
         bonus_target_product_id: z.number().int().positive().optional()
       })

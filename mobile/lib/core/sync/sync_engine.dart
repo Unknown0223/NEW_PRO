@@ -11,6 +11,7 @@ import '../config/mobile_config_policy.dart';
 import '../config/sync_policy_provider.dart';
 import '../connectivity/connectivity_service.dart';
 import '../database/app_database.dart';
+import '../time/work_region_time.dart';
 import 'photo_report_queue.dart';
 import 'sync_payload_parser.dart';
 import '../../features/shared/services/sync_service.dart';
@@ -82,6 +83,10 @@ class SyncEngine {
     final last = lastSyncAt ?? await _db.getLastSyncAt();
     final device = await MobileDeviceInfo.syncPayload();
     final result = await _mobileApi.syncDelta(_slug, lastSyncAt: last, entityType: entityType, device: device);
+    applyWorkRegionFromServer(
+      timezoneId: result.workTimezone,
+      utcOffsetHours: result.workUtcOffsetHours,
+    );
     if (entityType == 'clients') {
       await _applySyncClients(result);
     } else if (entityType == 'products' || entityType == 'prices') {
@@ -115,6 +120,10 @@ class SyncEngine {
       lastSyncAt: lastSyncAt,
       device: device,
       forceClientsCatalog: forceClientsCatalog,
+    );
+    applyWorkRegionFromServer(
+      timezoneId: payload.workTimezone,
+      utcOffsetHours: payload.workUtcOffsetHours,
     );
 
     onPhase?.call(1);

@@ -74,7 +74,12 @@ export async function resolveCreateOrderPaidBundle(
       input.warehouse_id,
       { referenceAt: new Date() },
       orderAgentForBonus,
-      { applyDiscount, applyBonusLines: applyBonus }
+      {
+        applyDiscount,
+        applyBonusLines: applyBonus,
+        is_consignment: input.is_consignment === true,
+        strategy_selections: input.bonus_strategy_selections
+      }
     );
     paidAfterDisc = resolved.lines;
     paidTotal = resolved.total;

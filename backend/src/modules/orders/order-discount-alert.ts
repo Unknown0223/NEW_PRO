@@ -38,6 +38,7 @@ export type DiscountAlertEvalInput = {
   /** Tahrirlashda joriy zakaz qoidalarini «allaqachon ishlatilgan» deb hisoblamaslik. */
   excludeOrderId?: number | null;
   referenceAt?: Date;
+  is_consignment?: boolean;
 };
 
 export function buildDiscountAlertComment(
@@ -139,7 +140,8 @@ export async function resolveDiscountAlert(
     ruleCache: new Map(),
     clientMonthMerchandiseSubtotalExclOrder: new Prisma.Decimal(0),
     clientMonthPaidQtyAggregateExclOrder: 0,
-    clientMonthPaidQtyByProductExclOrder: new Map<number, number>()
+    clientMonthPaidQtyByProductExclOrder: new Map<number, number>(),
+    is_consignment: input.is_consignment === true
   };
 
   const winning = await findWinningDiscountRuleWithPrereqs(
@@ -202,6 +204,7 @@ export async function resolveDiscountAlertForCreate(
     giftOverrides: p.validatedGiftOverrides,
     stackPolicy: p.stackPolicy,
     discountSum: paid.discountSum,
-    appliedAutoBonusRuleIds: paid.appliedAutoBonusRuleIds
+    appliedAutoBonusRuleIds: paid.appliedAutoBonusRuleIds,
+    is_consignment: p.input.is_consignment === true
   });
 }

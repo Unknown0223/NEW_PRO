@@ -828,7 +828,7 @@ function AuditorConfigDialog({
           <div className="rounded border border-border p-2 text-sm font-medium">Фото</div>
           <label className="inline-flex items-center gap-2 text-xs">
             <input type="checkbox" checked={photoRequired} onChange={(e) => setPhotoRequired(e.target.checked)} />
-            Обязательная фото-фиксация для добавления заказа
+            Обязательная фотофиксация при создании заказа
           </label>
         </div>
         <DialogFooter className="justify-between">

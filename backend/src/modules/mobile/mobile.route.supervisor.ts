@@ -2,7 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { sendApiError } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser } from "../auth/auth.prehandlers";
-import { applySupervisorSelfScope } from "../dashboard/dashboard.routes.shared";
+import {
+  applyAccessAgentIdsScope,
+  applySupervisorSelfScope
+} from "../dashboard/dashboard.routes.shared";
 import {
   getSupervisorProducts,
   getSupervisorSummary,
@@ -10,7 +13,14 @@ import {
 } from "../dashboard/dashboard.supervisor.snapshot.partials";
 import { parseSupervisorDashboardFilters } from "../dashboard/dashboard.supervisor.scope";
 import { listMobileSupervisorAgentLocations } from "./mobile.service";
+import { getMobileAgentKpi } from "./mobile-agent-kpi.service";
+import {
+  assertAgentLinkedToSupervisor,
+  getSupervisorTeamKpi,
+  listSupervisorLinkedAgents
+} from "./mobile-supervisor-kpi.service";
 import { mobileSyncPreHandler } from "./mobile.route.shared";
+import { workRegionTodayKey } from "./mobile-agent-sync.config.service";
 
 export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
   app.get(
@@ -24,6 +34,7 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
       }
       const parsed = parseSupervisorDashboardFilters(request.query as Record<string, string | undefined>);
       applySupervisorSelfScope(viewer, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, viewer, parsed);
       const data = await getSupervisorSummary(request.tenant!.id, parsed);
       return reply.send(data);
     }
@@ -41,6 +52,7 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const parsed = parseSupervisorDashboardFilters(q);
       applySupervisorSelfScope(viewer, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, viewer, parsed);
       const page = Number.parseInt(q.page ?? "1", 10) || 1;
       const limit = Number.parseInt(q.limit ?? "50", 10) || 50;
       const data = await getSupervisorVisits(request.tenant!.id, parsed, { page, limit });
@@ -57,7 +69,9 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
       if (viewer.role !== "supervisor") {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
-      const data = await listMobileSupervisorAgentLocations(request.tenant!.id);
+      const selfId = Number.parseInt(viewer.sub, 10);
+      if (!Number.isFinite(selfId)) return sendApiError(reply, request, 400, "BadUser");
+      const data = await listMobileSupervisorAgentLocations(request.tenant!.id, selfId);
       return reply.send({ data });
     }
   );
@@ -73,8 +87,82 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
       }
       const parsed = parseSupervisorDashboardFilters(request.query as Record<string, string | undefined>);
       applySupervisorSelfScope(viewer, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, viewer, parsed);
       const data = await getSupervisorProducts(request.tenant!.id, parsed);
       return reply.send(data);
+    }
+  );
+
+  /** Bog‘langan agentlar ro‘yxati */
+  app.get(
+    "/api/:slug/mobile/supervisor/agents",
+    { preHandler: [...mobileSyncPreHandler] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const viewer = getAccessUser(request);
+      if (viewer.role !== "supervisor") {
+        return sendApiError(reply, request, 403, "ForbiddenRole");
+      }
+      const selfId = Number.parseInt(viewer.sub, 10);
+      if (!Number.isFinite(selfId)) return sendApiError(reply, request, 400, "BadUser");
+      const data = await listSupervisorLinkedAgents(request.tenant!.id, selfId);
+      return reply.send({ data });
+    }
+  );
+
+  /** Jamoa KPI (yig‘indi) + agentlar bo‘yicha */
+  app.get(
+    "/api/:slug/mobile/supervisor/team-kpi",
+    { preHandler: [...mobileSyncPreHandler] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const viewer = getAccessUser(request);
+      if (viewer.role !== "supervisor") {
+        return sendApiError(reply, request, 403, "ForbiddenRole");
+      }
+      const selfId = Number.parseInt(viewer.sub, 10);
+      if (!Number.isFinite(selfId)) return sendApiError(reply, request, 400, "BadUser");
+      const q = request.query as Record<string, string | undefined>;
+      const month = (q.month ?? "").trim() || workRegionTodayKey().slice(0, 7);
+      try {
+        const data = await getSupervisorTeamKpi(request.tenant!.id, selfId, month);
+        return reply.send(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "BAD_MONTH") return sendApiError(reply, request, 400, "BadMonth");
+        throw e;
+      }
+    }
+  );
+
+  /** Bitta bog‘langan agent KPI */
+  app.get(
+    "/api/:slug/mobile/supervisor/agent-kpi",
+    { preHandler: [...mobileSyncPreHandler] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const viewer = getAccessUser(request);
+      if (viewer.role !== "supervisor") {
+        return sendApiError(reply, request, 403, "ForbiddenRole");
+      }
+      const selfId = Number.parseInt(viewer.sub, 10);
+      if (!Number.isFinite(selfId)) return sendApiError(reply, request, 400, "BadUser");
+      const q = request.query as Record<string, string | undefined>;
+      const agentId = Number.parseInt(q.agent_id ?? "", 10);
+      if (!Number.isFinite(agentId) || agentId <= 0) {
+        return sendApiError(reply, request, 400, "AgentIdRequired");
+      }
+      const ok = await assertAgentLinkedToSupervisor(request.tenant!.id, selfId, agentId);
+      if (!ok) return sendApiError(reply, request, 403, "AgentOutOfScope");
+      const month = (q.month ?? "").trim() || undefined;
+      try {
+        const data = await getMobileAgentKpi(request.tenant!.id, agentId, month);
+        return reply.send(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "BAD_MONTH") return sendApiError(reply, request, 400, "BadMonth");
+        throw e;
+      }
     }
   );
 }

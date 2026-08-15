@@ -16,6 +16,7 @@ export const AuditEntityType = {
   product_price: "product_price",
   stock: "stock",
   bonus_rule: "bonus_rule",
+  bonus_strategy: "bonus_strategy",
   order: "order",
   goods_receipt: "goods_receipt",
   supplier: "supplier",

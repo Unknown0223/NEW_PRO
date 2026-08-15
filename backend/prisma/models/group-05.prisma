@@ -116,12 +116,49 @@ model BonusRule {
   scope_agent_user_ids       Int[]    @default([])
   /// Bo‘sh = yo‘nalish cheklovi yo‘q. Agent `trade_direction_id` shu ID lardan biri bo‘lishi kerak.
   scope_trade_direction_ids  Int[]    @default([])
+  /// all = har qanday zakaz; yes = faqat konsignatsiya; no = konsignatsiyasiz.
+  consignment_mode           String   @default("all") @db.VarChar(8)
   conditions           BonusRuleCondition[]
   clauses              BonusRuleClause[]
+  strategy_members     BonusStrategyMember[]
   tenant               Tenant               @relation(fields: [tenant_id], references: [id])
 
   @@index([tenant_id])
   @@map("bonus_rules")
+}
+
+/// Nomlangan strategiya: bir nechta aktiv bonus/skidka qoidasidan maksimal N tasini tanlash.
+model BonusStrategy {
+  id                        Int                   @id @default(autoincrement())
+  tenant_id                 Int
+  name                      String
+  is_active                 Boolean               @default(true)
+  /// Bitta zakazda shu tarkibdan nechtasini qo‘llash mumkin (1 … members-1).
+  max_select                Int                   @default(1)
+  scope_branch_codes        String[]              @default([])
+  scope_agent_user_ids      Int[]                 @default([])
+  scope_trade_direction_ids Int[]                 @default([])
+  created_at                DateTime              @default(now())
+  updated_at                DateTime              @updatedAt
+  members                   BonusStrategyMember[]
+  tenant                    Tenant                @relation(fields: [tenant_id], references: [id])
+
+  @@index([tenant_id, is_active])
+  @@map("bonus_strategies")
+}
+
+model BonusStrategyMember {
+  id            Int           @id @default(autoincrement())
+  strategy_id   Int
+  bonus_rule_id Int
+  sort_order    Int           @default(0)
+  created_at    DateTime      @default(now())
+  strategy      BonusStrategy @relation(fields: [strategy_id], references: [id], onDelete: Cascade)
+  bonus_rule    BonusRule     @relation(fields: [bonus_rule_id], references: [id], onDelete: Cascade)
+
+  @@unique([strategy_id, bonus_rule_id])
+  @@index([bonus_rule_id])
+  @@map("bonus_strategy_members")
 }
 
 /// Bitta bonus ichidagi shart (clause): hammasi AND; `grants_reward` = sovg‘a beriladimi.
@@ -207,6 +244,7 @@ model CashDesk {
   links                       CashDeskUserLink[]
   work_slots                  WorkSlot[]         @relation("WorkSlotCashDesk")
   payments                    Payment[]
+  bank_transfer_inbox         BankTransferInbox[]
   opening_balance_entries     ClientOpeningBalanceEntry[]
   supplier_payments           SupplierPayment[]
   tenant                      Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

@@ -44,6 +44,7 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
     onCancel,
     canSubmit,
     isExchangeFlow,
+    isEditMode,
     mutation,
     polkiRangeAnchorRef,
     polkiRangeOpen,
@@ -83,7 +84,9 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
                   ? "Возврат"
                   : isExchangeFlow
                     ? "Обмен"
-                    : "Yaratish"}
+                    : isEditMode
+                      ? "Saqlash"
+                      : "Yaratish"}
             </Button>
           </div>
         </div>

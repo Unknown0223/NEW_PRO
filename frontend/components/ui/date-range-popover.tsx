@@ -1,6 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import {
+  envelopeFromPeriods,
+  monthsCoveredByRange,
+  monthsFromPeriods,
+  selectedDaysToPeriods,
+  selectedMonthsToPeriods,
+  serializeDatePeriods,
+  type DatePeriod,
+  ymIndex
+} from "@/components/ui/date-range-periods";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -14,6 +24,21 @@ import {
   type RefObject
 } from "react";
 import { createPortal } from "react-dom";
+
+export type { DatePeriod };
+export {
+  envelopeFromPeriods,
+  monthBoundsFromYm,
+  monthsCoveredByRange,
+  monthsFromPeriods,
+  daysFromPeriods,
+  daysCoveredByRange,
+  selectedDaysToPeriods,
+  parseDatePeriods,
+  selectedMonthsToPeriods,
+  serializeDatePeriods,
+  ymIndex
+} from "@/components/ui/date-range-periods";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -36,10 +61,31 @@ function parseYmd(s: string): Date | null {
 function formatDisplayRu(from: string, to: string): string {
   const a = parseYmd(from);
   const b = parseYmd(to);
-  if (!a || !b) return `${from} — ${to}`;
   const fmt = (d: Date) =>
     d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
-  return `${fmt(a)} — ${fmt(b)}`;
+  if (a && b) return `${fmt(a)} — ${fmt(b)}`;
+  if (a && !to?.trim()) return `${fmt(a)} — …`;
+  if (!from?.trim() && b) return `… — ${fmt(b)}`;
+  return `${from || "…"} — ${to || "…"}`;
+}
+
+/** Bo‘sh oxir/bosh — bir kunlik oralikka aylantiradi; tartibni tuzatadi. */
+export function normalizeDateRange(from: string, to: string): { dateFrom: string; dateTo: string } {
+  const f = from?.trim() ?? "";
+  const t = to?.trim() ?? "";
+  if (f && !t) return { dateFrom: f, dateTo: f };
+  if (!f && t) return { dateFrom: t, dateTo: t };
+  if (f && t && f > t) return { dateFrom: t, dateTo: f };
+  return { dateFrom: f, dateTo: t };
+}
+
+/** Standart tugma / filter matni (ru-RU) — faqat boshlanish — tugash (avvalgidek). */
+export function formatDateRangeButton(
+  from: string,
+  to: string,
+  _periods?: DatePeriod[] | null
+): string {
+  return formatDisplayRu(from, to);
 }
 
 const RU_WD = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
@@ -63,13 +109,10 @@ function shiftMonthYm(y: number, m0: number, delta: number): { y: number; m: num
   return { y: d.getFullYear(), m: d.getMonth() };
 }
 
-function ymIndex(y: number, m: number): number {
-  return y * 12 + m;
-}
-
 function MonthCalendar({
   year,
   month,
+  selectedDays,
   rangeFrom,
   rangeTo,
   onPick,
@@ -77,6 +120,7 @@ function MonthCalendar({
 }: {
   year: number;
   month: number;
+  selectedDays: ReadonlySet<string>;
   rangeFrom: string;
   rangeTo: string;
   onPick: (iso: string) => void;
@@ -87,10 +131,13 @@ function MonthCalendar({
     year: "numeric"
   });
   const matrix = useMemo(() => daysMatrix(year, month), [year, month]);
+  const useDiscrete = selectedDays.size > 0;
 
   const inRange = (day: number) => {
     const iso = `${year}-${pad2(month + 1)}-${pad2(day)}`;
-    if (!rangeFrom || !rangeTo) return false;
+    if (useDiscrete) return selectedDays.has(iso);
+    if (!rangeFrom) return false;
+    if (!rangeTo) return iso === rangeFrom;
     return iso >= rangeFrom && iso <= rangeTo;
   };
 
@@ -138,6 +185,7 @@ function MonthCalendar({
               <button
                 key={iso}
                 type="button"
+                aria-pressed={hit}
                 onClick={() => onPick(iso)}
                 className={cn(
                   "flex h-6 items-center justify-center rounded-sm text-[0.65rem] transition-colors",
@@ -170,38 +218,17 @@ const RU_MONTH_GRID = [
   "Дек."
 ] as const;
 
-function monthBoundsFromYm(y: number, m0: number): { from: string; to: string } {
-  const from = `${y}-${pad2(m0 + 1)}-01`;
-  const lastDay = new Date(y, m0 + 1, 0).getDate();
-  const to = `${y}-${pad2(m0 + 1)}-${pad2(lastDay)}`;
-  return { from, to };
-}
-
 function MonthYearGrid({
   year,
   onYearChange,
-  df,
-  dt,
-  monthRangeAnchor,
-  onPickMonth
+  selectedMonths,
+  onToggleMonth
 }: {
   year: number;
   onYearChange: (y: number) => void;
-  df: string;
-  dt: string;
-  monthRangeAnchor: { y: number; m: number } | null;
-  onPickMonth: (monthIndex0: number) => void;
+  selectedMonths: ReadonlySet<number>;
+  onToggleMonth: (monthIndex0: number) => void;
 }) {
-  const bounds = useMemo(() => {
-    const a = parseYmd(df);
-    const b = parseYmd(dt);
-    if (!a || !b || df > dt) return null;
-    return {
-      from: { y: a.getFullYear(), m: a.getMonth() },
-      to: { y: b.getFullYear(), m: b.getMonth() }
-    };
-  }, [df, dt]);
-
   return (
     <div className="w-max max-w-[15.5rem]">
       <div className="mb-1.5 flex items-center justify-between gap-1 px-0.5">
@@ -229,27 +256,18 @@ function MonthYearGrid({
       </div>
       <div className="grid grid-cols-3 gap-1">
         {RU_MONTH_GRID.map((label, i) => {
-          const ri = ymIndex(year, i);
-          let inRange = false;
-          if (bounds) {
-            const r0 = ymIndex(bounds.from.y, bounds.from.m);
-            const r1 = ymIndex(bounds.to.y, bounds.to.m);
-            inRange = ri >= r0 && ri <= r1;
-          }
-          const isPending =
-            monthRangeAnchor != null && monthRangeAnchor.y === year && monthRangeAnchor.m === i;
-
+          const selected = selectedMonths.has(ymIndex(year, i));
           return (
             <button
               key={label}
               type="button"
-              onClick={() => onPickMonth(i)}
+              aria-pressed={selected}
+              onClick={() => onToggleMonth(i)}
               className={cn(
                 "rounded-md border px-1 py-2 text-center text-[0.65rem] font-medium leading-tight transition-colors",
-                isPending &&
-                  "border-primary bg-primary text-primary-foreground ring-2 ring-primary/40 ring-offset-1 ring-offset-background hover:bg-primary/90",
-                !isPending && inRange && "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
-                !isPending && !inRange && "border-border/60 bg-background text-foreground hover:bg-muted"
+                selected &&
+                  "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+                !selected && "border-border/60 bg-background text-foreground hover:bg-muted"
               )}
             >
               {label}
@@ -258,7 +276,8 @@ function MonthYearGrid({
         })}
       </div>
       <p className="mt-1.5 text-[0.6rem] leading-snug text-muted-foreground">
-        Два клика — диапазон месяцев (от и до включительно).
+        Клик — включить/выключить месяц. Можно выбрать несколько. Затем «Принять» — окно закроется
+        и период отобразится сверху.
       </p>
     </div>
   );
@@ -295,22 +314,39 @@ function buildPresets(): { label: string; from: string; to: string }[] {
   ];
 }
 
-/** Standart tugma / filter matni (ru-RU) */
-export function formatDateRangeButton(from: string, to: string): string {
-  return formatDisplayRu(from, to);
-}
-
 type PanelProps = {
   dateFrom?: string;
   dateTo?: string;
-  onApply: (next: { dateFrom: string; dateTo: string }) => void;
+  /** Bo‘shliqli oylar — URL/API `date_periods` */
+  datePeriods?: DatePeriod[] | null;
+  onApply: (next: { dateFrom: string; dateTo: string; datePeriods?: DatePeriod[] }) => void;
   onClose: () => void;
   /** true — «Применить» yo‘q; tanlov darhol `onApply` orqali saqlanadi */
   autoSave?: boolean;
 };
 
-function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }: PanelProps) {
-  /** Base UI Input: `value` birinchi renderda `undefined` bo‘lmasin — uncontrolled → controlled ogohlantirishi */
+function seedSelectedMonths(
+  dateFrom: string,
+  dateTo: string,
+  datePeriods?: DatePeriod[] | null
+): Set<number> {
+  if (datePeriods && datePeriods.length > 0) {
+    return new Set(monthsFromPeriods(datePeriods));
+  }
+  if (dateFrom && dateTo) {
+    return new Set(monthsCoveredByRange(dateFrom, dateTo));
+  }
+  return new Set();
+}
+
+function DateRangePanel({
+  dateFrom,
+  dateTo,
+  datePeriods,
+  onApply,
+  onClose,
+  autoSave = false
+}: PanelProps) {
   const from0 = dateFrom ?? "";
   const to0 = dateTo ?? "";
   const [df, setDf] = useState(from0);
@@ -328,9 +364,16 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
     }
     return { y: t.getFullYear(), m: t.getMonth() };
   });
-  const [panelMode, setPanelMode] = useState<"days" | "months">("days");
+  const [panelMode, setPanelMode] = useState<"days" | "daysPick" | "months">("days");
   const [pickYear, setPickYear] = useState(() => new Date().getFullYear());
-  const [monthRangeAnchor, setMonthRangeAnchor] = useState<{ y: number; m: number } | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<Set<number>>(() =>
+    seedSelectedMonths(from0, to0, datePeriods)
+  );
+  /** «Выбрать дни» — har ochilishda toza; tanlov faqat shu sessiyada. */
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(() => new Set());
+
+  const periodsKey = serializeDatePeriods(datePeriods ?? []);
+  const isCalendarMode = panelMode === "days" || panelMode === "daysPick";
 
   useEffect(() => {
     const nextFrom = dateFrom ?? "";
@@ -338,8 +381,8 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
     setDf(nextFrom);
     setDt(nextTo);
     setDayAnchor(null);
-    setMonthRangeAnchor(null);
-    setPanelMode("days");
+    setSelectedMonths(seedSelectedMonths(nextFrom, nextTo, datePeriods));
+    // daysPick tanlovini tashqi sync bilan to‘ldirmaymiz — rejim ochilganda toza qoladi
     const f = parseYmd(nextFrom) ?? new Date();
     const t = parseYmd(nextTo) ?? new Date();
     setViewLeft({ y: f.getFullYear(), m: f.getMonth() });
@@ -349,7 +392,8 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
       setViewRight({ y: t.getFullYear(), m: t.getMonth() });
     }
     setPickYear(f.getFullYear());
-  }, [dateFrom, dateTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- datePeriods mazmuni periodsKey orqali
+  }, [dateFrom, dateTo, periodsKey]);
 
   const syncViewsFromRange = useCallback((from: string, to: string) => {
     const a = parseYmd(from) ?? new Date();
@@ -365,18 +409,77 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
   const commitRange = useCallback(
     (from: string, to: string) => {
       if (!autoSave) return;
-      if (!from || !to || !parseYmd(from) || !parseYmd(to)) return;
-      onApply({ dateFrom: from, dateTo: to });
+      const n = normalizeDateRange(from, to);
+      if (!n.dateFrom || !parseYmd(n.dateFrom) || !parseYmd(n.dateTo)) return;
+      onApply({ dateFrom: n.dateFrom, dateTo: n.dateTo, datePeriods: undefined });
     },
     [autoSave, onApply]
   );
 
-  const pickDay = useCallback(
+  const applyMonthSelection = useCallback(
+    (months: ReadonlySet<number>, close: boolean) => {
+      const periods = selectedMonthsToPeriods(months);
+      const env = envelopeFromPeriods(periods);
+      if (!env) return;
+      setDf(env.from);
+      setDt(env.to);
+      setSelectedDays(new Set());
+      setDayAnchor(null);
+      syncViewsFromRange(env.from, env.to);
+      onApply({
+        dateFrom: env.from,
+        dateTo: env.to,
+        datePeriods: periods.length > 1 ? periods : undefined
+      });
+      if (close) onClose();
+    },
+    [onApply, onClose, syncViewsFromRange]
+  );
+
+  const applyDiscreteDays = useCallback(
+    (days: ReadonlySet<string>, close: boolean) => {
+      if (days.size === 0) return;
+      const periods = selectedDaysToPeriods(days);
+      const env = envelopeFromPeriods(periods);
+      if (!env) return;
+      setDf(env.from);
+      setDt(env.to);
+      setDayAnchor(null);
+      setSelectedMonths(new Set(monthsCoveredByRange(env.from, env.to)));
+      syncViewsFromRange(env.from, env.to);
+      onApply({
+        dateFrom: env.from,
+        dateTo: env.to,
+        datePeriods: periods.length > 1 ? periods : undefined
+      });
+      if (close) onClose();
+    },
+    [onApply, onClose, syncViewsFromRange]
+  );
+
+  const applyContinuousRange = useCallback(
+    (close: boolean) => {
+      const n = normalizeDateRange(df, dt);
+      if (!n.dateFrom || !parseYmd(n.dateFrom)) return;
+      setDf(n.dateFrom);
+      setDt(n.dateTo);
+      setSelectedDays(new Set());
+      setDayAnchor(null);
+      setSelectedMonths(new Set(monthsCoveredByRange(n.dateFrom, n.dateTo)));
+      syncViewsFromRange(n.dateFrom, n.dateTo);
+      onApply({ dateFrom: n.dateFrom, dateTo: n.dateTo, datePeriods: undefined });
+      if (close) onClose();
+    },
+    [df, dt, onApply, onClose, syncViewsFromRange]
+  );
+
+  /** Avvalgidek: ikki klik — uzluksiz oraliq. */
+  const pickDayRange = useCallback(
     (iso: string) => {
       if (!dayAnchor) {
         setDayAnchor(iso);
         setDf(iso);
-        setDt(iso);
+        setDt("");
         return;
       }
       const a = dayAnchor < iso ? dayAnchor : iso;
@@ -384,64 +487,69 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
       setDf(a);
       setDt(b);
       setDayAnchor(null);
+      setSelectedDays(new Set());
+      setSelectedMonths(new Set(monthsCoveredByRange(a, b)));
       commitRange(a, b);
     },
     [dayAnchor, commitRange]
   );
 
-  const handleMonthPick = useCallback(
-    (monthIndex0: number) => {
-      const y = pickYear;
-      if (!monthRangeAnchor) {
-        setMonthRangeAnchor({ y, m: monthIndex0 });
-        const { from, to } = monthBoundsFromYm(y, monthIndex0);
-        setDf(from);
-        setDt(to);
-        commitRange(from, to);
-        return;
+  /** Yangi rejim: alohida kunlar (1, 5, 9…). */
+  const toggleDay = useCallback((iso: string) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(iso)) next.delete(iso);
+      else next.add(iso);
+      const sorted = [...next].sort();
+      if (sorted.length > 0) {
+        setDf(sorted[0]!);
+        setDt(sorted[sorted.length - 1]!);
       }
-      const i1 = ymIndex(monthRangeAnchor.y, monthRangeAnchor.m);
-      const i2 = ymIndex(y, monthIndex0);
-      const fromYm = i1 <= i2 ? monthRangeAnchor : { y, m: monthIndex0 };
-      const toYm = i1 <= i2 ? { y, m: monthIndex0 } : monthRangeAnchor;
-      const fromStr = `${fromYm.y}-${pad2(fromYm.m + 1)}-01`;
-      const lastD = new Date(toYm.y, toYm.m + 1, 0).getDate();
-      const toStr = `${toYm.y}-${pad2(toYm.m + 1)}-${pad2(lastD)}`;
-      setDf(fromStr);
-      setDt(toStr);
-      setMonthRangeAnchor(null);
-      syncViewsFromRange(fromStr, toStr);
-      commitRange(fromStr, toStr);
+      return next;
+    });
+  }, []);
+
+  const toggleMonth = useCallback(
+    (monthIndex0: number) => {
+      const key = ymIndex(pickYear, monthIndex0);
+      setSelectedMonths((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
     },
-    [pickYear, monthRangeAnchor, syncViewsFromRange, commitRange]
+    [pickYear]
   );
 
   useEffect(() => {
     if (!autoSave) return;
+    if (panelMode !== "days") return;
     const t = window.setTimeout(() => commitRange(df, dt), 400);
     return () => window.clearTimeout(t);
-  }, [autoSave, df, dt, commitRange]);
+  }, [autoSave, df, dt, commitRange, panelMode]);
 
   const presets = useMemo(() => buildPresets(), []);
+  const emptyDays = new Set<string>();
 
   return (
     <div
       className={cn(
         "flex min-w-0 flex-col",
         "w-max max-w-[min(628px,calc(100vw-1rem))]",
-        panelMode === "days" && "min-w-[min(100%,38rem)]"
+        isCalendarMode && "min-w-[min(100%,38rem)]"
       )}
     >
       <div
         className={cn(
           "flex flex-col sm:flex-row",
-          panelMode === "days" ? "sm:items-stretch" : "sm:items-start sm:justify-start"
+          isCalendarMode ? "sm:items-stretch" : "sm:items-start sm:justify-start"
         )}
       >
         <div
           className={cn(
             "space-y-2 border-border/50 p-2 sm:border-r",
-            panelMode === "days"
+            isCalendarMode
               ? "min-w-0 flex-1 sm:min-w-[min(100%,25.5rem)] sm:pr-2.5"
               : "w-max max-w-full shrink-0 sm:pr-2"
           )}
@@ -471,32 +579,60 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
                 <MonthCalendar
                   year={viewLeft.y}
                   month={viewLeft.m}
+                  selectedDays={emptyDays}
                   rangeFrom={df}
                   rangeTo={dt}
-                  onPick={pickDay}
+                  onPick={pickDayRange}
                   onShiftMonth={(delta) => setViewLeft((v) => shiftMonthYm(v.y, v.m, delta))}
                 />
                 <MonthCalendar
                   year={viewRight.y}
                   month={viewRight.m}
+                  selectedDays={emptyDays}
                   rangeFrom={df}
                   rangeTo={dt}
-                  onPick={pickDay}
+                  onPick={pickDayRange}
                   onShiftMonth={(delta) => setViewRight((v) => shiftMonthYm(v.y, v.m, delta))}
                 />
               </div>
               <p className="text-[0.6rem] leading-snug text-muted-foreground">
-                Два клика — интервал (в одном или двух календарях); весь диапазон одним цветом.
+                Два клика — непрерывный интервал; второй можно не выбирать (один день). «Принять» —
+                закрыть. Затем «Применить» в фильтре.
+              </p>
+            </>
+          ) : panelMode === "daysPick" ? (
+            <>
+              <div className="scrollbar-none flex flex-row flex-nowrap items-start justify-center gap-2 overflow-x-auto pb-0.5">
+                <MonthCalendar
+                  year={viewLeft.y}
+                  month={viewLeft.m}
+                  selectedDays={selectedDays}
+                  rangeFrom=""
+                  rangeTo=""
+                  onPick={toggleDay}
+                  onShiftMonth={(delta) => setViewLeft((v) => shiftMonthYm(v.y, v.m, delta))}
+                />
+                <MonthCalendar
+                  year={viewRight.y}
+                  month={viewRight.m}
+                  selectedDays={selectedDays}
+                  rangeFrom=""
+                  rangeTo=""
+                  onPick={toggleDay}
+                  onShiftMonth={(delta) => setViewRight((v) => shiftMonthYm(v.y, v.m, delta))}
+                />
+              </div>
+              <p className="text-[0.6rem] leading-snug text-muted-foreground">
+                Чистый выбор: клик — день вкл/выкл (например 1, 5, 9). С пропусками. «Принять» —
+                закрыть, затем «Применить» в фильтре.
               </p>
             </>
           ) : (
             <MonthYearGrid
               year={pickYear}
               onYearChange={setPickYear}
-              df={df}
-              dt={dt}
-              monthRangeAnchor={monthRangeAnchor}
-              onPickMonth={handleMonthPick}
+              selectedMonths={selectedMonths}
+              onToggleMonth={toggleMonth}
             />
           )}
         </div>
@@ -504,7 +640,7 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
         <div
           className={cn(
             "w-full shrink-0 border-t border-border/50 px-2 pb-2 pt-2 sm:border-t-0 sm:border-l sm:pl-2 sm:pt-2",
-            panelMode === "days" ? "sm:w-[11.25rem]" : "sm:w-[10rem]"
+            isCalendarMode ? "sm:w-[11.25rem]" : "sm:w-[10rem]"
           )}
         >
           <p className="mb-1 text-[0.65rem] font-medium text-muted-foreground">Быстрый выбор</p>
@@ -518,7 +654,8 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
                   setDf(p.from);
                   setDt(p.to);
                   setDayAnchor(null);
-                  setMonthRangeAnchor(null);
+                  setSelectedDays(new Set());
+                  setSelectedMonths(new Set(monthsCoveredByRange(p.from, p.to)));
                   setPanelMode("days");
                   syncViewsFromRange(p.from, p.to);
                   commitRange(p.from, p.to);
@@ -535,9 +672,11 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
               )}
               onClick={() => {
                 setPanelMode("months");
-                setMonthRangeAnchor(null);
                 const f = parseYmd(df) ?? new Date();
                 setPickYear(f.getFullYear());
+                if (selectedMonths.size === 0 && df && dt) {
+                  setSelectedMonths(new Set(monthsCoveredByRange(df, dt)));
+                }
               }}
             >
               Выбрать месяц
@@ -550,16 +689,31 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
               )}
               onClick={() => {
                 setPanelMode("days");
-                setMonthRangeAnchor(null);
+                setDayAnchor(null);
               }}
             >
               Выбрать дату
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded px-1.5 py-1 text-left text-[0.65rem] transition-colors",
+                panelMode === "daysPick" ? "bg-primary/15 font-medium text-primary" : "text-foreground hover:bg-muted"
+              )}
+              onClick={() => {
+                setPanelMode("daysPick");
+                setDayAnchor(null);
+                // Birinchi ochilish — toza tanlov (oldingi oraliq/oylar ko‘chirilmaydi)
+                setSelectedDays(new Set());
+              }}
+            >
+              Выбрать дни
             </button>
           </div>
         </div>
       </div>
 
-      {!autoSave ? (
+      {panelMode === "months" ? (
         <div className="flex justify-end gap-2 border-t border-border/50 bg-muted/30 px-2.5 py-2">
           <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
             Отмена
@@ -568,12 +722,40 @@ function DateRangePanel({ dateFrom, dateTo, onApply, onClose, autoSave = false }
             type="button"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => {
-              onApply({ dateFrom: df, dateTo: dt });
-              onClose();
-            }}
+            disabled={selectedMonths.size === 0}
+            onClick={() => applyMonthSelection(selectedMonths, true)}
           >
-            Применить
+            Принять
+          </Button>
+        </div>
+      ) : panelMode === "daysPick" ? (
+        <div className="flex justify-end gap-2 border-t border-border/50 bg-muted/30 px-2.5 py-2">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={selectedDays.size === 0}
+            onClick={() => applyDiscreteDays(selectedDays, true)}
+          >
+            Принять
+          </Button>
+        </div>
+      ) : !autoSave ? (
+        <div className="flex justify-end gap-2 border-t border-border/50 bg-muted/30 px-2.5 py-2">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 text-xs"
+            disabled={!df?.trim() && !dt?.trim()}
+            onClick={() => applyContinuousRange(true)}
+          >
+            Принять
           </Button>
         </div>
       ) : null}
@@ -588,7 +770,8 @@ export type DateRangePopoverProps = {
   /** Bo‘sh yoki `undefined` bo‘lmasin — ixtiyoriy, ichkarida `""` ga normalizatsiya */
   dateFrom?: string;
   dateTo?: string;
-  onApply: (next: { dateFrom: string; dateTo: string }) => void;
+  datePeriods?: DatePeriod[] | null;
+  onApply: (next: { dateFrom: string; dateTo: string; datePeriods?: DatePeriod[] }) => void;
   /** Tanlovni darhol `onApply` ga uzatadi; pastdagi «Применить» tugmasi ko‘rinmaydi */
   autoSave?: boolean;
 };
@@ -599,6 +782,7 @@ export function DateRangePopover({
   anchorRef,
   dateFrom,
   dateTo,
+  datePeriods,
   onApply,
   autoSave = false
 }: DateRangePopoverProps) {
@@ -634,7 +818,7 @@ export function DateRangePopover({
       requestAnimationFrame(() => reposition());
     });
     return () => cancelAnimationFrame(id);
-  }, [open, reposition, safeFrom, safeTo]);
+  }, [open, reposition, safeFrom, safeTo, datePeriods]);
 
   useEffect(() => {
     if (!open) return;
@@ -685,9 +869,10 @@ export function DateRangePopover({
       }}
     >
       <DateRangePanel
-        key={`${safeFrom}|${safeTo}`}
+        key={open ? "open" : "closed"}
         dateFrom={safeFrom}
         dateTo={safeTo}
+        datePeriods={datePeriods}
         onApply={onApply}
         onClose={() => onOpenChange(false)}
         autoSave={autoSave}

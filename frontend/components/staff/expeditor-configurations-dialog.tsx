@@ -353,9 +353,10 @@ export function ExpeditorConfigurationsDialog({
                   label="Отслеживать"
                 />
               </div>
-              <div className="grid max-w-xl gap-3 sm:grid-cols-3">
+              <div className="space-y-4 max-w-md">
                 <ConfigTextField
-                  label="Интервал (сек.)"
+                  label="Интервал отправки координат (сек)"
+                  hint="Как часто приложение отправляет GPS-точку"
                   type="number"
                   value={draft.gps?.tracking_interval_sec ?? ""}
                   onChange={(e) =>
@@ -368,7 +369,8 @@ export function ExpeditorConfigurationsDialog({
                   }
                 />
                 <ConfigTextField
-                  label="Мин. смещение (м)"
+                  label="Минимальное смещение (м)"
+                  hint="Не отправлять точку при меньшем перемещении"
                   type="number"
                   value={draft.gps?.min_distance_m ?? ""}
                   onChange={(e) =>
@@ -381,7 +383,8 @@ export function ExpeditorConfigurationsDialog({
                   }
                 />
                 <ConfigTextField
-                  label="Точность данных (м)"
+                  label="Максимальная погрешность (м)"
+                  hint="Точки с большей погрешностью GPS отбрасываются"
                   type="number"
                   value={draft.gps?.max_accuracy_m ?? ""}
                   onChange={(e) =>

@@ -34,3 +34,42 @@ export function defaultAgentMobileDraft(): AgentMobileConfigDraft {
     orders: { bonus_fill_mode: "auto_fill_remaining" }
   };
 }
+
+/** Backend `defaultMobileConfigForRole('supervisor')` bilan mos. */
+export function defaultSupervisorMobileDraft(): AgentMobileConfigDraft {
+  return {
+    schema_version: AGENT_MOBILE_SCHEMA_VERSION,
+    client: {
+      can_create: false,
+      can_edit: false,
+      can_change_client_location: false,
+      show_balance: true,
+      show_photos: true,
+      phone_prefix: "+998",
+      fields_visible: {
+        name: true,
+        legal_name: true,
+        phone: true,
+        category: true,
+        territory: true,
+        address: true,
+        visit_day: true,
+        coordinates: true
+      }
+    },
+    gps: { tracking_enabled: true, tracking_interval_sec: 300, always_on: false },
+    outlet: { show_plan_in_reports: true },
+    route: { daily_visit_limit: 50, readd_cooldown_days: 0 },
+    photo: { jpeg_quality: 92, max_width_px: 4032, max_height_px: 4032 },
+    misc: { visit_start_end_enabled: true },
+    sync: { allowed_window_from: "06:00", allowed_window_to: "22:00" },
+    supervision: {
+      check_receipt_faces: true,
+      check_merchandising: true,
+      check_default_price: true,
+      check_stock: true,
+      check_sales: true,
+      check_motivation: false
+    }
+  };
+}

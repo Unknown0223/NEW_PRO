@@ -1,3 +1,4 @@
+import { appTzLocaleOpts } from "@/lib/app-timezone";
 import type { WorkSlotType } from "@/lib/work-slots-types";
 
 export const SLOT_TYPE_OPTIONS: { value: WorkSlotType; label: string }[] = [
@@ -135,13 +136,7 @@ export function parseUserTerritoryParts(raw: string | null | undefined): {
 export function formatSlotDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return new Date(iso).toLocaleString("ru-RU", appTzLocaleOpts());
   } catch {
     return iso;
   }

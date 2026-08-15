@@ -4,14 +4,15 @@ import { prisma } from "../../config/database";
 import { buildInitialSetupExportBuffer } from "../tenant-settings/initial-setup-export.service";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
 import {
-  BACKUP_FORMAT_VERSION,
-  BACKUP_KIND,
-  INITIAL_SETUP_XLSX_PATH,
-  MANIFEST_PATH,
-  PROFILE_JSON_PATH
+  BACKUP_FORMAT_VERSION, BACKUP_KIND, INITIAL_SETUP_XLSX_PATH, MANIFEST_PATH, PROFILE_JSON_PATH
 } from "./system-migration.constants";
 import { getMigrationInventory } from "./system-migration.inventory";
 import { extendedDataFilePaths, loadExtendedTables } from "./system-migration.extended.export";
+import { photoReportExportCutoff } from "./system-migration.import.files";
+import {
+  loadTenantSettingsExtra,
+  SETTINGS_EXTRA_JSON_PATH
+} from "./system-migration.import.settings-extra";
 import { jsonFileContent } from "./system-migration.serialize";
 
 type ExportContext = {
@@ -205,7 +206,12 @@ async function loadBonusAndFilesTables(tenantId: number) {
     safeFindMany("kpi_results", () => prisma.kpiResult.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("price_matrix", () => prisma.priceMatrix.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("client_photo_reports", () =>
-      prisma.clientPhotoReport.findMany({ where: { tenant_id: tenantId } })
+      prisma.clientPhotoReport.findMany({
+        where: {
+          tenant_id: tenantId,
+          created_at: { gte: photoReportExportCutoff() }
+        }
+      })
     )
   ]);
 
@@ -213,7 +219,12 @@ async function loadBonusAndFilesTables(tenantId: number) {
   const configIds = planConfigs.map((c) => c.id);
   const planIds = salesPlans.map((p) => p.id);
 
-  const [bonusRuleConditions, planLevels, planTargets] = await Promise.all([
+  const [bonusRuleClauses, bonusRuleConditions, planLevels, planTargets] = await Promise.all([
+    bonusRuleIds.length
+      ? safeFindMany("bonus_rule_clauses", () =>
+          prisma.bonusRuleClause.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
+        )
+      : Promise.resolve([]),
     bonusRuleIds.length
       ? safeFindMany("bonus_rule_conditions", () =>
           prisma.bonusRuleCondition.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
@@ -236,6 +247,7 @@ async function loadBonusAndFilesTables(tenantId: number) {
     kpi_group_products: kpiGroupProducts,
     kpi_group_agents: kpiGroupAgents,
     bonus_rules: bonusRules,
+    bonus_rule_clauses: bonusRuleClauses,
     bonus_rule_conditions: bonusRuleConditions,
     plan_approver_configs: planConfigs,
     plan_approver_levels: planLevels,
@@ -255,15 +267,21 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
   });
   if (!tenant) throw new Error("NOT_FOUND");
 
-  const [inventory, profile, xlsxBuf, references, tables, bonusAndFiles, extended] = await Promise.all([
-    getMigrationInventory(ctx.tenantId),
-    getTenantProfile(ctx.tenantId),
-    buildInitialSetupExportBuffer(ctx.tenantId),
-    loadReferenceTables(ctx.tenantId),
-    loadTransactionalTables(ctx.tenantId),
-    loadBonusAndFilesTables(ctx.tenantId),
-    loadExtendedTables(ctx.tenantId)
-  ]);
+  const [inventory, profile, settingsExtra, xlsxBuf, references, tables, bonusAndFiles, extended] =
+    await Promise.all([
+      getMigrationInventory(ctx.tenantId),
+      getTenantProfile(ctx.tenantId),
+      loadTenantSettingsExtra(ctx.tenantId),
+      buildInitialSetupExportBuffer(ctx.tenantId),
+      loadReferenceTables(ctx.tenantId),
+      loadTransactionalTables(ctx.tenantId),
+      loadBonusAndFilesTables(ctx.tenantId),
+      loadExtendedTables(ctx.tenantId)
+    ]);
+
+  const photoCount = Array.isArray(bonusAndFiles.client_photo_reports)
+    ? bonusAndFiles.client_photo_reports.length
+    : 0;
 
   const manifest = {
     format_version: BACKUP_FORMAT_VERSION,
@@ -275,8 +293,13 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
       tenant_name: tenant.name
     },
     modules: inventory.modules,
+    photo_reports: {
+      retention_days: 30,
+      exported_count: photoCount,
+      note_uz: "Faqat oxirgi 30 kunlik fotootchyotlar; import barcha jadvallardan keyin."
+    },
     files: {
-      spravochniki: [PROFILE_JSON_PATH, INITIAL_SETUP_XLSX_PATH],
+      spravochniki: [PROFILE_JSON_PATH, SETTINGS_EXTRA_JSON_PATH, INITIAL_SETUP_XLSX_PATH],
       data: [
         "data/warehouses.json",
         "data/trade_directions.json",
@@ -304,17 +327,24 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
         "data/payment_allocations.json",
         "data/kpi_groups.json",
         "data/bonus_rules.json",
+        "data/bonus_rule_clauses.json",
+        "data/bonus_rule_conditions.json",
         "data/sales_kpi_plans.json",
         "data/client_photo_reports.json",
         ...extendedDataFilePaths()
       ]
     },
     import_support: {
-      spravochniki: { profile_json: true, reference_json: true, initial_setup_xlsx: true },
+      spravochniki: {
+        profile_json: true,
+        settings_extra_json: true,
+        reference_json: true,
+        initial_setup_xlsx: true
+      },
       transactional: { supported: true, phase: 2 },
       field_activity: { supported: true, phase: 3 },
       bonus_plans: { supported: true, phase: 4 },
-      files: { supported: true, phase: 4 },
+      files: { supported: true, phase: 5, after: "extended", retention_days: 30 },
       extended: { supported: true, phase: 4, tables: extendedDataFilePaths().length }
     }
   };
@@ -322,6 +352,7 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
   const zip = new JSZip();
   zip.file(MANIFEST_PATH, jsonFileContent(manifest));
   zip.file(PROFILE_JSON_PATH, jsonFileContent(profile));
+  zip.file(SETTINGS_EXTRA_JSON_PATH, jsonFileContent(settingsExtra));
   zip.file(INITIAL_SETUP_XLSX_PATH, xlsxBuf);
 
   for (const [name, rows] of Object.entries(references)) {
@@ -362,6 +393,5 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
 
 export function backupDownloadFilename(tenantSlug: string): string {
   const date = new Date().toISOString().slice(0, 10);
-  // Oddiy .zip — brauzer accept/MIME bilan yaxshi moslashadi (.salec-backup.zip ba’zan rad etilardi).
   return `salec-backup-${tenantSlug}-${date}.zip`;
 }

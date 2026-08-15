@@ -229,6 +229,10 @@ export function ruleScalarsFromInput(
     prerequisite_rule_ids: [...new Set((input.prerequisite_rule_ids ?? []).filter((n) => n > 0))].slice(0, 200),
     scope_branch_codes: normalizeScopeBranchCodes(input.scope_branch_codes ?? []),
     scope_agent_user_ids: normalizeScopePositiveIds(input.scope_agent_user_ids ?? []),
-    scope_trade_direction_ids: normalizeScopePositiveIds(input.scope_trade_direction_ids ?? [])
+    scope_trade_direction_ids: normalizeScopePositiveIds(input.scope_trade_direction_ids ?? []),
+    consignment_mode:
+      input.consignment_mode === "yes" || input.consignment_mode === "no"
+        ? input.consignment_mode
+        : "all"
   };
 }

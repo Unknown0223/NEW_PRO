@@ -31,6 +31,7 @@ describe("orders list territory URL binding", () => {
       expeditor_id: "",
       date_from: "",
       date_to: "",
+      date_periods: "",
       client_id: "",
       product_id: "",
       client_category: "",
@@ -57,5 +58,44 @@ describe("orders list territory URL binding", () => {
     expect(qs.has("neighborhood")).toBe(false);
     const again = parseOrdersUrl(qs);
     expect(again.client_zone).toBe("FV");
+  });
+
+  it("round-trips date_periods for non-contiguous months", () => {
+    const next = {
+      status: "",
+      order_type: "",
+      page: 1,
+      search: "",
+      warehouse_id: "",
+      agent_id: "",
+      expeditor_id: "",
+      date_from: "2026-01-01",
+      date_to: "2026-03-31",
+      date_periods: "2026-01-01_2026-01-31,2026-03-01_2026-03-31",
+      client_id: "",
+      product_id: "",
+      client_category: "",
+      client_region: "",
+      client_city: "",
+      client_zone: "",
+      trade_direction: "",
+      date_mode: "order",
+      is_consignment: "",
+      product_category_id: "",
+      payment_type: "",
+      payment_method_ref: "",
+      request_type_ref: "",
+      visit_weekday: "",
+      price_type: "",
+      discount_alert: "",
+      bonus_alert: "",
+      order_alert: ""
+    } as OrdersUrlFilters;
+    const qs = buildOrdersSearchParams(next);
+    expect(qs.get("date_periods")).toBe("2026-01-01_2026-01-31,2026-03-01_2026-03-31");
+    const again = parseOrdersUrl(qs);
+    expect(again.date_periods).toBe("2026-01-01_2026-01-31,2026-03-01_2026-03-31");
+    expect(again.date_from).toBe("2026-01-01");
+    expect(again.date_to).toBe("2026-03-31");
   });
 });

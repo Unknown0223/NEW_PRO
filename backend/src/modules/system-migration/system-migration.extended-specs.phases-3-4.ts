@@ -9,6 +9,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       idMap: "territoryUserLink",
       hasTenantId: false,
       scope: "territory",
+      naturalKey: ["territory_id", "user_id"],
       fk: { territory_id: "territory", user_id: "user", assigned_by: "user" },
       dates: ["assigned_at"]
     },
@@ -16,6 +17,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "slot_user_links",
       delegate: "slotUserLink",
       idMap: "slotUserLink",
+      // DB: UNIQUE (slot_id) WHERE ended_at IS NULL — faol bog‘lanish uchun alohida tekshiruv
       fk: { slot_id: "workSlot", user_id: "user", ended_by: "user" },
       dates: ["started_at", "ended_at", "created_at"]
     },
@@ -32,6 +34,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       idMap: "cashDeskUserLink",
       hasTenantId: false,
       scope: "cash_desk",
+      naturalKey: ["cash_desk_id", "user_id"],
       fk: { cash_desk_id: "cashDesk", user_id: "user" },
       dates: ["created_at"]
     },
@@ -120,6 +123,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "client_agent_assignments",
       delegate: "clientAgentAssignment",
       idMap: "clientAgentAssignment",
+      naturalKey: ["client_id", "slot"],
       fk: {
         client_id: "client",
         agent_id: "user",
@@ -130,9 +134,27 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       dates: ["visit_date", "created_at", "updated_at"]
     },
     {
+      file: "client_tags",
+      delegate: "clientTag",
+      idMap: "clientTag",
+      naturalKey: ["name"],
+      dates: ["created_at"]
+    },
+    {
+      file: "client_tag_links",
+      delegate: "clientTagLink",
+      noId: true,
+      hasTenantId: false,
+      scope: "client",
+      fk: { client_id: "client", tag_id: "clientTag" },
+      requiredFk: ["client_id", "tag_id"],
+      dates: ["created_at"]
+    },
+    {
       file: "client_balances",
       delegate: "clientBalance",
       idMap: "clientBalance",
+      naturalKey: ["client_id"],
       fk: { client_id: "client" },
       decimals: ["balance"],
       dates: ["updated_at"]
@@ -218,6 +240,14 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       dates: ["expires_at", "completed_at", "created_at"]
     },
     {
+      file: "document_edit_grants",
+      delegate: "documentEditGrant",
+      idMap: "documentEditGrant",
+      // document_id — section bo‘yicha remap (import.ts maxsus)
+      fk: { access_user_id: "user", created_by_user_id: "user" },
+      dates: ["expires_at", "revoked_at", "created_at"]
+    },
+    {
       file: "order_auto_confirm_schedules",
       delegate: "orderAutoConfirmSchedule",
       idMap: "orderAutoConfirmSchedule",
@@ -259,6 +289,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "agent_consignment_month_status",
       delegate: "agentConsignmentMonthStatus",
       idMap: "agentConsignmentMonthStatus",
+      naturalKey: ["agent_user_id", "year", "month"],
       fk: { agent_user_id: "user" },
       dates: ["period_closed_at", "debt_cleared_at", "created_at", "updated_at"]
     },
@@ -266,6 +297,7 @@ export const EXTENDED_IMPORT_PHASES_3_4: ExtendedTableSpec[][] = [
       file: "agent_route_days",
       delegate: "agentRouteDay",
       idMap: "agentRouteDay",
+      naturalKey: ["agent_id", "route_date"],
       fk: { agent_id: "user" },
       dates: ["route_date", "created_at", "updated_at"]
     },

@@ -33,8 +33,10 @@ if (-not (Test-Path $ApkPath)) {
 }
 
 if (-not $LatestVersion) { $LatestVersion = Get-PubspecVersion }
-$force = if ($NoForce) { $false } else { $true }
+# Default: ixtiyoriy yangilash (dialog + avto-yuklash). Majburiy bloklash uchun -ForceUpdate.
+$force = $false
 if ($ForceUpdate) { $force = $true }
+if ($NoForce) { $force = $false }
 
 Write-Host "=== APK yuklash (production) ===" -ForegroundColor Cyan
 Write-Host "API: $Api"

@@ -137,17 +137,17 @@ export function WebOperatorCreateWorkspace({
     <div className="grid gap-4 rounded-xl border border-border bg-card p-5 text-sm shadow-sm sm:p-6">
           <WorkplaceMovedNotice />
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Ism *</span>
+            <span className="text-xs text-muted-foreground">Имя *</span>
             <Input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
             <FieldHint name="first_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Familiya</span>
+            <span className="text-xs text-muted-foreground">Фамилия</span>
             <Input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
             <FieldHint name="last_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Otasining ismi</span>
+            <span className="text-xs text-muted-foreground">Отчество</span>
             <Input
               value={form.middle_name}
               onChange={(e) => setForm((f) => ({ ...f, middle_name: e.target.value }))}
@@ -155,10 +155,10 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="middle_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Tizim roli *</span>
+            <span className="text-xs text-muted-foreground">Системная роль *</span>
             <select
               className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              aria-label="Tizim roli"
+              aria-label="Системная роль"
               value={form.web_access_role}
               onChange={(e) => {
                 const v = e.target.value as (typeof form)["web_access_role"];
@@ -174,7 +174,7 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="web_access_role" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Login *</span>
+            <span className="text-xs text-muted-foreground">Логин *</span>
             <Input
               className="font-mono"
               value={form.login}
@@ -184,7 +184,7 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="login" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Parol * (min 6)</span>
+            <span className="text-xs text-muted-foreground">Пароль * (мин. 6)</span>
             <Input
               type="password"
               value={form.password}
@@ -194,7 +194,7 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="password" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Telefon</span>
+            <span className="text-xs text-muted-foreground">Телефон</span>
             <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             <FieldHint name="phone" errors={fieldErrors} />
           </label>
@@ -204,21 +204,21 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Kod</span>
+            <span className="text-xs text-muted-foreground">Код</span>
             <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
             <FieldHint name="code" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">PINFL</span>
+            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Lavozim</span>
+            <span className="text-xs text-muted-foreground">Должность</span>
             <FilterSelect
               className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              emptyLabel="— Tanlanmagan —"
-              aria-label="Lavozim"
+              emptyLabel="— Не выбрано —"
+              aria-label="Должность"
               value={form.position}
               onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
             >
@@ -229,16 +229,16 @@ export function WebOperatorCreateWorkspace({
               ))}
             </FilterSelect>
             <span className="text-[11px] leading-snug text-muted-foreground">
-              Shablonlar:{" "}
+              Шаблоны:{" "}
               <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                sozlamalar
+                настройки
               </Link>
               .
             </span>
             <FieldHint name="position" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Parallel veb-sessiyalar (maks.)</span>
+            <span className="text-xs text-muted-foreground">Параллельные веб-сессии (макс.)</span>
             <Input
               inputMode="numeric"
               value={form.max_sessions}
@@ -252,7 +252,7 @@ export function WebOperatorCreateWorkspace({
               checked={form.app_access}
               onChange={(e) => setForm((f) => ({ ...f, app_access: e.target.checked }))}
             />
-            Mobil ilovaga ruxsat
+            Доступ к мобильному приложению
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -260,7 +260,7 @@ export function WebOperatorCreateWorkspace({
               checked={form.can_authorize}
               onChange={(e) => setForm((f) => ({ ...f, can_authorize: e.target.checked }))}
             />
-            Tizimga kirish mumkin
+            Разрешить вход в систему
           </label>
         </div>
   );
@@ -275,10 +275,10 @@ export function WebOperatorCreateWorkspace({
   const embeddedFooter = (
     <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
       <Button type="button" variant="outline" onClick={() => onCancel?.()} disabled={createMut.isPending}>
-        Bekor
+        Отмена
       </Button>
       <Button type="button" disabled={createMut.isPending} onClick={submitCreate}>
-        {createMut.isPending ? "…" : "Yaratish"}
+        {createMut.isPending ? "…" : "Создать"}
       </Button>
     </div>
   );
@@ -296,15 +296,15 @@ export function WebOperatorCreateWorkspace({
   return (
     <PageShell>
       <PageHeader
-        title="Yangi veb xodim"
-        description="Login va parol noyob bo‘lishi kerak. Lavozim ro‘yxatdan tanlanadi."
+        title="Новый веб-сотрудник"
+        description="Логин и пароль должны быть уникальными. Должность выбирается из списка."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/settings/spravochnik/operators"
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
-              ← Ro‘yxat
+              ← К списку
             </Link>
             <Button
               type="button"
@@ -312,7 +312,7 @@ export function WebOperatorCreateWorkspace({
               disabled={createMut.isPending}
               onClick={submitCreate}
             >
-              {createMut.isPending ? "…" : "Yaratish"}
+              {createMut.isPending ? "…" : "Создать"}
             </Button>
           </div>
         }
@@ -326,10 +326,10 @@ export function WebOperatorCreateWorkspace({
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.push("/settings/spravochnik/operators")}>
-            Bekor
+            Отмена
           </Button>
           <Button type="button" disabled={createMut.isPending} onClick={submitCreate}>
-            {createMut.isPending ? "…" : "Yaratish"}
+            {createMut.isPending ? "…" : "Создать"}
           </Button>
         </div>
       </div>

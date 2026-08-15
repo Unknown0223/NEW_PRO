@@ -21,6 +21,11 @@ import {
   stripDiscountAlertComments
 } from "../order-discount-alert";
 import { normalizeOrderType } from "../order-status";
+import {
+  computeAgentConsignmentOutstanding,
+  parseYearMonth,
+  utcMonthStart
+} from "../../consignment/consignment.service";
 
 import {
   bonusGiftMapToJson,
@@ -75,22 +80,6 @@ export async function updateOrderLines(
     throw new Error("FORBIDDEN_OPERATOR_ORDER_LINES_EDIT");
   }
 
-  // Шапка (клиент / агент / склад / способ оплаты) при редактировании строк не меняется.
-  if (input.warehouse_id !== undefined && !sameNullableId(input.warehouse_id, existing.warehouse_id)) {
-    throw new Error("ORDER_HEADER_LOCKED");
-  }
-  if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
-    throw new Error("ORDER_HEADER_LOCKED");
-  }
-  const existingPm =
-    (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
-  if (
-    input.payment_method_ref !== undefined &&
-    !samePaymentRef(input.payment_method_ref, existingPm)
-  ) {
-    throw new Error("ORDER_HEADER_LOCKED");
-  }
-
   const prevAllItems = await prisma.orderItem.findMany({
     where: { order_id: orderId },
     orderBy: { id: "asc" },
@@ -123,8 +112,34 @@ export async function updateOrderLines(
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
 
-  const warehouseId = existing.warehouse_id;
+  // Agent doim qulflangan. Ombor / to‘lov usuli — faqat «new» da o‘zgartiriladi.
+  if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+
+  const isNewStatus = existing.status === "new";
+  const existingPm =
+    (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
+
+  let warehouseId = existing.warehouse_id;
+  if (input.warehouse_id !== undefined && !sameNullableId(input.warehouse_id, existing.warehouse_id)) {
+    if (!isNewStatus) throw new Error("ORDER_HEADER_LOCKED");
+    warehouseId = input.warehouse_id;
+  }
+
+  let nextPaymentMethodRef = existingPm;
+  if (input.payment_method_ref !== undefined && !samePaymentRef(input.payment_method_ref, existingPm)) {
+    if (!isNewStatus) throw new Error("ORDER_HEADER_LOCKED");
+    nextPaymentMethodRef =
+      input.payment_method_ref === null
+        ? null
+        : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
+  }
+  const warehouseChanged = !sameNullableId(warehouseId, existing.warehouse_id);
+  const paymentChanged = !samePaymentRef(nextPaymentMethodRef, existingPm);
+
   const agentId = existing.agent_id;
+  const priceType = (input.price_type ?? "").trim() || "retail";
 
   const existingOrderType = normalizeOrderType(existing.order_type ?? "order");
 
@@ -193,11 +208,11 @@ export async function updateOrderLines(
     if (!product) {
       throw new Error("BAD_PRODUCT");
     }
-    const priceStr = await getProductPrice(tenantId, it.product_id, "retail");
+    const priceStr = await getProductPrice(tenantId, it.product_id, priceType);
     if (priceStr == null) {
       const e = new Error("NO_PRICE") as Error & { product_id: number; price_type: string };
       e.product_id = it.product_id;
-      e.price_type = "retail";
+      e.price_type = priceType;
       throw e;
     }
     const price = new Prisma.Decimal(priceStr);
@@ -252,7 +267,7 @@ export async function updateOrderLines(
         warehouseId,
         { referenceAt: existing.created_at, excludeOrderId: orderId },
         orderAgentForBonus,
-        { applyDiscount, applyBonusLines: applyBonus }
+        { applyDiscount, applyBonusLines: applyBonus, is_consignment: existing.is_consignment === true }
       );
       paidAfterDisc = resolved.lines;
       paidTotal = resolved.total;
@@ -308,7 +323,8 @@ export async function updateOrderLines(
       discountSum,
       appliedAutoBonusRuleIds,
       excludeOrderId: orderId,
-      referenceAt: existing.created_at
+      referenceAt: existing.created_at,
+      is_consignment: existing.is_consignment === true
     });
     const prevDiscountAlert =
       (existing as { discount_alert?: string | null }).discount_alert ?? null;
@@ -348,6 +364,44 @@ export async function updateOrderLines(
       paidTotal
     });
 
+    // Konsignatsiya limiti: tahrirda summa oshganda ham `new` bandligini hisobga olish
+    if (
+      existing.is_consignment &&
+      normalizeOrderType(existing.order_type) === "order" &&
+      existing.agent_id != null &&
+      existing.agent_id > 0
+    ) {
+      const ag = await tx.user.findFirst({
+        where: { id: existing.agent_id, tenant_id: tenantId, is_active: true },
+        select: {
+          consignment: true,
+          consignment_limit_amount: true,
+          consignment_ignore_previous_months_debt: true
+        }
+      });
+      const lim = ag?.consignment_limit_amount;
+      if (ag?.consignment && lim != null) {
+        const { year, month } = parseYearMonth(undefined);
+        const outstanding = await computeAgentConsignmentOutstanding(tx, tenantId, existing.agent_id, {
+          ignorePreviousMonthsDebt: ag.consignment_ignore_previous_months_debt === true,
+          monthStartsAt: utcMonthStart(year, month),
+          excludeOrderId: orderId
+        });
+        const projected = outstanding.add(paidTotal);
+        if (projected.gt(lim)) {
+          const err = new Error("CONSIGNMENT_LIMIT_EXCEEDED") as Error & {
+            consignment_limit?: string;
+            outstanding?: string;
+            order_total?: string;
+          };
+          err.consignment_limit = lim.toString();
+          err.outstanding = outstanding.toString();
+          err.order_total = paidTotal.toString();
+          throw err;
+        }
+      }
+    }
+
     const nextStockLines = [
       ...paidAfterDisc.map((l) => ({
         product_id: l.product_id,
@@ -360,14 +414,32 @@ export async function updateOrderLines(
         exchange_line_kind: null as string | null
       }))
     ];
-    if (existingOrderType === "order" && warehouseId != null) {
-      await adjustOutboundStockForOrderLinesEdit(tx, {
-        tenantId,
-        warehouseId,
-        orderStatus: existing.status,
-        prevLines: prevAllItems,
-        nextLines: nextStockLines
-      });
+    if (existingOrderType === "order") {
+      if (warehouseChanged && existing.warehouse_id != null && warehouseId != null) {
+        // Eski ombordagi rezervni yechish, yangi omborda bron qilish.
+        await adjustOutboundStockForOrderLinesEdit(tx, {
+          tenantId,
+          warehouseId: existing.warehouse_id,
+          orderStatus: existing.status,
+          prevLines: prevAllItems,
+          nextLines: []
+        });
+        await adjustOutboundStockForOrderLinesEdit(tx, {
+          tenantId,
+          warehouseId,
+          orderStatus: existing.status,
+          prevLines: [],
+          nextLines: nextStockLines
+        });
+      } else if (warehouseId != null) {
+        await adjustOutboundStockForOrderLinesEdit(tx, {
+          tenantId,
+          warehouseId,
+          orderStatus: existing.status,
+          prevLines: prevAllItems,
+          nextLines: nextStockLines
+        });
+      }
     }
 
     await tx.orderItem.deleteMany({ where: { order_id: orderId } });
@@ -380,6 +452,8 @@ export async function updateOrderLines(
     await tx.order.update({
       where: { id: orderId },
       data: {
+        ...(warehouseChanged ? { warehouse_id: warehouseId, warehouse_block_id: null } : {}),
+        ...(paymentChanged ? { payment_method_ref: nextPaymentMethodRef } : {}),
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,

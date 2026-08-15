@@ -9,105 +9,38 @@ import {
 } from "./system-migration.constants";
 import { importBonusPlansTables } from "./system-migration.import.bonus-plans";
 import { importReferenceTables } from "./system-migration.import.references";
+import {
+  purgeTenantAuditHistoryForReplace,
+  purgeTenantBonusKpiForReplace,
+  purgeTenantClientsForReplace,
+  purgeTenantTransactionalForReplace
+} from "./system-migration.import.purge";
 import { importTransactionalTables } from "./system-migration.import.transactional";
+import { importClientPhotoReports } from "./system-migration.import.files";
+import {
+  applyTenantSettingsExtra,
+  remapBranchIdsInTenantSettings,
+  SETTINGS_EXTRA_JSON_PATH
+} from "./system-migration.import.settings-extra";
 import { importExtendedPhases } from "./system-migration.extended.import";
 import { emptyIdMaps } from "./system-migration.id-maps";
-import {
-  parseBackupZip,
-  type ParsedBackupPreview
-} from "./system-migration.import.preview";
-import type { MigrationImportStageId } from "./system-migration.progress";
+import { parseBackupZip, type ParsedBackupPreview } from "./system-migration.import.preview";
 import { prisma } from "../../config/database";
 import { patchTenantProfile } from "../tenant-settings/tenant-settings.service";
 import type { TenantProfileDto } from "../tenant-settings/tenant-settings.types";
+import { assertBackupProfileNotThin, profilePatchFromBackup } from "./system-migration.import.profile";
+import type {
+  ApplyBackupMode, ApplyBackupProgressFn, ApplyBackupResult, MigrationImportProgressReport,
+  MigrationImportStageId
+} from "./system-migration.import.types";
 
-export type { ParsedBackupPreview };
+export type { ParsedBackupPreview, ApplyBackupMode, ApplyBackupResult, ApplyBackupProgressFn, MigrationImportProgressReport };
 export { parseBackupZip };
-
-export type MigrationImportProgressReport = {
-  stage: MigrationImportStageId;
-  percent: number;
-  message: string;
-};
-
-export type ApplyBackupProgressFn = (p: MigrationImportProgressReport) => void | Promise<void>;
-
-export type ApplyBackupResult = {
-  applied: string[];
-  skipped: string[];
-  warnings: string[];
-  next_steps: string[];
-};
-
-export type ApplyBackupMode = "full" | "profile_only";
 
 async function readZipText(zip: JSZip, path: string): Promise<string | null> {
   const entry = zip.file(path);
   if (!entry) return null;
   return entry.async("string");
-}
-
-function profilePatchFromBackup(profile: TenantProfileDto) {
-  return {
-    name: profile.name,
-    phone: profile.phone,
-    address: profile.address,
-    logo_url: profile.logo_url,
-    feature_flags: profile.feature_flags,
-    return_filter: profile.return_filter,
-    references: profile.references
-  };
-}
-
-function countTerritoryRoots(refs: TenantProfileDto["references"] | undefined): number {
-  const nodes = refs?.territory_nodes;
-  return Array.isArray(nodes) ? nodes.length : 0;
-}
-
-/** Bo‘sh/zaif profil backup orqali jonli spravochnikni o‘chirmasin. */
-async function assertBackupProfileNotThin(targetTenantId: number, profile: TenantProfileDto): Promise<void> {
-  const row = await prisma.tenant.findUnique({
-    where: { id: targetTenantId },
-    select: { settings: true }
-  });
-  const prevRef =
-    row?.settings != null && typeof row.settings === "object" && !Array.isArray(row.settings)
-      ? ((row.settings as Record<string, unknown>).references as Record<string, unknown> | undefined)
-      : undefined;
-  const nextRef = (profile.references ?? {}) as Record<string, unknown>;
-
-  const prevNodes = prevRef?.territory_nodes;
-  const prevLen = Array.isArray(prevNodes) ? prevNodes.length : 0;
-  const nextLen = countTerritoryRoots(profile.references);
-  if (prevLen > 0 && nextLen === 0) {
-    throw new Error(
-      "THIN_PROFILE_BACKUP:Backup dagi territory_nodes bo‘sh — mavjud territoriya o‘chib ketmasin. force yoki to‘liq backup kerak."
-    );
-  }
-
-  const catalogKeys = [
-    "unit_measures",
-    "branches",
-    "currency_entries",
-    "payment_method_entries",
-    "price_type_entries",
-    "client_format_entries",
-    "client_type_entries",
-    "client_category_entries",
-    "payment_types",
-    "regions"
-  ] as const;
-  for (const key of catalogKeys) {
-    const prev = prevRef?.[key];
-    const next = nextRef[key];
-    const prevN = Array.isArray(prev) ? prev.length : 0;
-    const nextN = Array.isArray(next) ? next.length : 0;
-    if (prevN > 0 && nextN === 0) {
-      throw new Error(
-        `THIN_PROFILE_BACKUP:Backup dagi ${key} bo‘sh — mavjud spravochnik o‘chib ketmasin. force yoki to‘liq backup kerak.`
-      );
-    }
-  }
 }
 
 export async function applyBackupZip(
@@ -167,6 +100,18 @@ export async function applyBackupZip(
     await assertBackupProfileNotThin(targetTenantId, profileDto);
     await patchTenantProfile(targetTenantId, profilePatchFromBackup(profileDto), opts.actorUserId ?? null);
     applied.push("spravochniki/tenant-profile.json");
+
+    const settingsExtraRaw = await readZipText(zip, SETTINGS_EXTRA_JSON_PATH);
+    if (settingsExtraRaw) {
+      try {
+        const extra = JSON.parse(settingsExtraRaw) as Record<string, unknown>;
+        await applyTenantSettingsExtra(targetTenantId, extra);
+        applied.push(SETTINGS_EXTRA_JSON_PATH);
+      } catch {
+        warnings.push("tenant-settings-extra.json o‘qilmadi — bonus_stack/work_slots qo‘llanmadi.");
+      }
+    }
+
     if (preview.has_initial_setup_xlsx && (stages.has("initial_setup") || mode === "profile_only")) {
       // Excel arxivda — ma’lumotlar profile.references + JSON orqali qo‘llanadi.
       applied.push(INITIAL_SETUP_XLSX_PATH);
@@ -200,6 +145,10 @@ export async function applyBackupZip(
 
   if (stages.has("references")) {
     await report("references", 35, "Spravochniklar (ombor, user, klient, mahsulot)…");
+    if (conflictPolicy === "replace" && opts.force_nonempty) {
+      await purgeTenantClientsForReplace(targetTenantId);
+      warnings.push("Replace: mavjud mijozlar o‘chirildi — arxivdan toza yuklanmoqda (telefon merge yo‘q).");
+    }
     refResult = await importReferenceTables(zip, targetTenantId, { conflictPolicy });
     applied.push(
       "data/trade_directions.json",
@@ -211,6 +160,12 @@ export async function applyBackupZip(
       "data/stock.json"
     );
     warnings.push(...refResult.warnings);
+    const branchRemapped = await remapBranchIdsInTenantSettings(targetTenantId, refResult.maps);
+    if (branchRemapped > 0) {
+      warnings.push(
+        `Filial bog‘lanishlari: ${branchRemapped} ta branch cash_desk/user ID remap qilindi.`
+      );
+    }
   } else if (!stages.has("initial_setup")) {
     skipped.push("spravochniklar (bo‘lim tanlanmagan)");
   }
@@ -265,10 +220,16 @@ export async function applyBackupZip(
     } else {
       try {
         await report("bonus", 50, "Bonus qoidalari va KPI rejalar…");
+        if (conflictPolicy === "replace" && opts.force_nonempty) {
+          await purgeTenantBonusKpiForReplace(targetTenantId);
+          warnings.push("Replace: eski bonus/KPI o‘chirildi — arxivdan toza yuklanmoqda.");
+        }
         await prisma.$transaction(
           async (tx) => {
             const bonusCounts = await importBonusPlansTables(tx, zip, targetTenantId, refResult!.maps);
             if (bonusCounts.bonus_rules) applied.push("data/bonus_rules.json");
+            if (bonusCounts.bonus_rule_clauses) applied.push("data/bonus_rule_clauses.json");
+            if (bonusCounts.bonus_rule_conditions) applied.push("data/bonus_rule_conditions.json");
             if (bonusCounts.kpi_groups) applied.push("data/kpi_groups.json");
             if (bonusCounts.sales_kpi_plans) applied.push("data/sales_kpi_plans.json");
           },
@@ -294,14 +255,25 @@ export async function applyBackupZip(
     } else {
       const opsBusy =
         (preview.target_blockers.orders ?? 0) > 0 || (preview.target_blockers.payments ?? 0) > 0;
-      if (!preview.target_empty && opts.force_nonempty && opsBusy) {
+      // `keep` + force: operatsion tarixni dublikatdan saqlaymiz.
+      // `replace` + force: to‘liq restore — buyurtmalar ham qo‘llanadi.
+      const skipOpsToAvoidDupes =
+        !preview.target_empty && opts.force_nonempty && opsBusy && conflictPolicy !== "replace";
+      if (skipOpsToAvoidDupes) {
         skipped.push("operatsion tarix (orders/payments) — maqsadda allaqachon bor");
         warnings.push(
-          "Maqsadda buyurtma/to‘lov bor: operatsion tarix import qilinmadi (dublikatdan saqlanish). Spravochniklar merge qilindi."
+          "Maqsadda buyurtma/to‘lov bor: operatsion tarix import qilinmadi (dublikatdan saqlanish). Spravochniklar merge qilindi. To‘liq restore uchun «almashtirish» (replace) ni tanlang."
         );
       } else {
         try {
           await report("transactional", 72, "Buyurtmalar, to‘lovlar, audit…");
+          if (opsBusy && conflictPolicy === "replace") {
+            await purgeTenantTransactionalForReplace(targetTenantId);
+            await purgeTenantAuditHistoryForReplace(targetTenantId);
+            warnings.push(
+              "Replace: mavjud buyurtma/to‘lov/tashrif/audit o‘chirildi — arxivdan toza qayta yuklandi."
+            );
+          }
           const txResult = await importTransactionalTables(zip, targetTenantId, refResult.maps);
           applied.push(
             "data/orders.json",
@@ -312,8 +284,7 @@ export async function applyBackupZip(
             "data/tenant_audit_events.json",
             "data/client_refusals.json",
             "data/agent_visits.json",
-            "data/expenses.json",
-            "data/client_photo_reports.json"
+            "data/expenses.json"
           );
           warnings.push(...txResult.warnings);
         } catch (e) {
@@ -371,6 +342,36 @@ export async function applyBackupZip(
     }
   } else {
     skipped.push("kengaytirilgan jadvallar (bo‘lim tanlanmagan)");
+  }
+
+  // Fotootchyotlar — eng oxirida (mijoz/buyurtma/bog‘lanishlar tayyor bo‘lgach).
+  if (stages.has("files")) {
+    if (!refResult) {
+      skipped.push("fotootchyotlar — spravochniklar kerak");
+      warnings.push("Fotootchyotlar o‘tkazib yuborildi: spravochniklar import qilinmagan.");
+    } else {
+      try {
+        await report("files", 97, "Fotootchyotlar (oxirgi 30 kun)…");
+        if (conflictPolicy === "replace" && opts.force_nonempty) {
+          await prisma.clientPhotoReport.deleteMany({ where: { tenant_id: targetTenantId } });
+        }
+        const photoCount = await prisma.$transaction(
+          async (tx) => importClientPhotoReports(tx, zip, targetTenantId, refResult!.maps),
+          { timeout: 300_000 }
+        );
+        if (photoCount > 0) {
+          applied.push("data/client_photo_reports.json");
+          warnings.push(`Fotootchyotlar: ${photoCount} ta yozuv yuklandi (arxivdagi oxirgi 30 kun).`);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith("MAP_MISSING:")) {
+          throw new Error(`IMPORT_MAP_ERROR:${e.message.replace("MAP_MISSING:", "")}`);
+        }
+        throw e;
+      }
+    }
+  } else {
+    skipped.push("fotootchyotlar (bo‘lim tanlanmagan)");
   }
 
   if (!preview.target_empty && opts.force_nonempty) {

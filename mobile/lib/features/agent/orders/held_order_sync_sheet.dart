@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,10 +11,14 @@ import 'held_order_model.dart';
 import 'held_orders_provider.dart';
 
 /// Post-visit auto-sync timer (design screen 30).
+///
+/// [autoGoHomeAfter] > 0 bo‘lsa — shu soniyadan keyin avtomatik asosiy sahifa
+/// (`goHome`). Tugma bosilsa — darhol.
 Future<HeldOrderSyncAction?> showHeldOrderSyncSheet(
   BuildContext context, {
   required HeldOrder order,
   int? delayMinutes,
+  int autoGoHomeAfter = 0,
 }) {
   return showModalBottomSheet<HeldOrderSyncAction>(
     context: context,
@@ -23,20 +29,24 @@ Future<HeldOrderSyncAction?> showHeldOrderSyncSheet(
       orderId: order.id,
       delayMinutes: delayMinutes ??
           order.submitAt.difference(order.createdAt).inMinutes.clamp(1, 59),
+      autoGoHomeAfter: autoGoHomeAfter,
     ),
   );
 }
 
-enum HeldOrderSyncAction { edit, sent, dismissed }
+enum HeldOrderSyncAction { edit, sent, dismissed, goHome }
 
 class HeldOrderSyncSheet extends ConsumerStatefulWidget {
   final int orderId;
   final int delayMinutes;
+  /// 0 = avto yo‘q; >0 = N soniyadan keyin [HeldOrderSyncAction.goHome].
+  final int autoGoHomeAfter;
 
   const HeldOrderSyncSheet({
     super.key,
     required this.orderId,
     required this.delayMinutes,
+    this.autoGoHomeAfter = 0,
   });
 
   @override
@@ -46,6 +56,35 @@ class HeldOrderSyncSheet extends ConsumerStatefulWidget {
 class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
   bool _didClose = false;
   HeldOrder? _lastOrder;
+  Timer? _homeTimer;
+  int _homeSecondsLeft = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    final n = widget.autoGoHomeAfter;
+    if (n > 0) {
+      _homeSecondsLeft = n;
+      _homeTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted || _didClose) {
+          t.cancel();
+          return;
+        }
+        if (_homeSecondsLeft <= 1) {
+          t.cancel();
+          _closeSheet(HeldOrderSyncAction.goHome);
+          return;
+        }
+        setState(() => _homeSecondsLeft -= 1);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _homeTimer?.cancel();
+    super.dispose();
+  }
 
   /// Faqat modal bottom sheet route ni yopadi — go_router sahifasiga tegmaydi.
   void _closeSheet(HeldOrderSyncAction action) {
@@ -53,6 +92,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     final route = ModalRoute.of(context);
     if (route is! ModalBottomSheetRoute) return;
     _didClose = true;
+    _homeTimer?.cancel();
     Navigator.pop(context, action);
   }
 
@@ -101,6 +141,10 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
     final leftMs = remaining.inMilliseconds.clamp(0, totalMs);
     final progress = (leftMs / totalMs).clamp(0.0, 1.0);
     final delayLabel = '${widget.delayMinutes} мин';
+
+    final homeLabel = _homeSecondsLeft > 0
+        ? 'Asosiy sahifaga ($_homeSecondsLeft)'
+        : 'Asosiy sahifaga';
 
     final bottom = MediaQuery.paddingOf(context).bottom;
 
@@ -211,7 +255,8 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                 Expanded(
                   child: Text(
                     'Агар $countdown ичида ўзгартиш киритилмаса, заказ автоматик '
-                    'синхрон қилиниб серверга юборилади.',
+                    'синхрон қилиниб серверга юборилади. '
+                    'Бу kutish zakazlar ro‘yxati va bildirishnomalarda ham ko‘rinadi.',
                     style: AppTypography.caption.copyWith(
                       color: const Color(0xFF92400E),
                       height: 1.35,
@@ -258,6 +303,11 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
             label: 'Редактировать',
             height: 48,
             onPressed: () => _closeSheet(HeldOrderSyncAction.edit),
+          ),
+          const SizedBox(height: 8),
+          AgentSecondaryButton(
+            label: homeLabel,
+            onPressed: () => _closeSheet(HeldOrderSyncAction.goHome),
           ),
           const SizedBox(height: 8),
           Text(

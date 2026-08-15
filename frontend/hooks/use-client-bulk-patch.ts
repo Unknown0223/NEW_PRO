@@ -4,16 +4,16 @@ import { api } from "@/lib/api";
 import {
   BULK_PATCH_MAX_CLIENTS,
   chunkClientIds,
-  type ClientBulkPatchPayload
+  patchClientsBulkItems,
+  type ClientBulkItem,
+  type ClientBulkPatchPayload,
+  type ClientBulkPatchResult
 } from "@/lib/client-bulk-patch";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-export type ClientBulkPatchResult = {
-  updated: number;
-  failed: Array<{ id: number; error: string }>;
-};
+export type { ClientBulkPatchResult, ClientBulkItem };
 
-export { BULK_PATCH_MAX_CLIENTS };
+export { BULK_PATCH_MAX_CLIENTS, patchClientsBulkItems };
 
 export function useClientBulkPatch(tenantSlug: string | null) {
   const qc = useQueryClient();
@@ -44,6 +44,22 @@ export function useClientBulkPatch(tenantSlug: string | null) {
       }
 
       return { updated, failed };
+    },
+    onSuccess: async () => {
+      if (tenantSlug) {
+        await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
+      }
+    }
+  });
+}
+
+export function useClientBulkItemsPatch(tenantSlug: string | null) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (items: ClientBulkItem[]) => {
+      if (!tenantSlug) throw new Error("NO_TENANT");
+      return patchClientsBulkItems(tenantSlug, items);
     },
     onSuccess: async () => {
       if (tenantSlug) {

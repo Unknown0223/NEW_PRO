@@ -25,6 +25,7 @@ import '../visits/agent_visits_page.dart' show visitFromRow;
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/time/work_region_time.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
@@ -1108,6 +1109,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     bool applyDiscount = true,
     List<BonusGiftOverrideInput> giftOverrides = const [],
     List<BonusGiftLineInput> giftLines = const [],
+    List<BonusStrategySelectionInput> strategySelections = const [],
     int bonusQty = 0,
     double discountPct = 0,
   }) async {
@@ -1249,6 +1251,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
         ref.invalidate(heldOrdersProvider);
         ref.invalidate(heldOrderCountProvider);
+        ref.invalidate(ordersListProvider);
+        ref.invalidate(pendingCountProvider);
         refreshVisitStatsProviders(ref.invalidate);
         if (mounted) setState(() => _submitting = false);
         if (mounted) {
@@ -1256,12 +1260,15 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             context,
             order: held,
             delayMinutes: delayMin,
+            autoGoHomeAfter: 5,
           );
           if (!mounted) return;
           if (action == HeldOrderSyncAction.edit) {
             context.go('/orders/create?held_id=${held.id}');
           } else if (action == HeldOrderSyncAction.sent) {
             context.go('/orders');
+          } else if (action == HeldOrderSyncAction.goHome) {
+            context.go('/home');
           } else {
             // Dismiss — faol vizitga qaytish (yuborish u yerda).
             final visits = await AppDatabase().getVisitsForDay();
@@ -1296,6 +1303,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         applyDiscount: applyDiscount,
         giftOverrides: giftOverrides,
         giftLines: giftLines,
+        strategySelections: strategySelections,
         comment: _comment.isEmpty ? null : _comment,
         isConsignment: _isConsignment,
         consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
@@ -1339,8 +1347,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
+        ref.invalidate(ordersListProvider);
+        ref.invalidate(pendingCountProvider);
+        ref.invalidate(orderDebtsByOrdersProvider);
+        // Yangi zakaz bugungi ro‘yxatda ko‘rinsin.
+        final now = workRegionNow();
+        ref.read(ordersHistoryDateProvider.notifier).state =
+            ordersHistoryDateKey(DateTime(now.year, now.month, now.day));
         refreshVisitStatsProviders(ref.invalidate);
-        _toast('Заказ №$orderNumber создан', accent: AppColors.success);
         final vanCfg = ref.read(sessionProvider).mobileConfig?.vanSelling;
         if (vanCfg?.paymentRequired == true && orderId != null) {
           final paid = await VanSellingPaymentSheet.show(
@@ -1442,6 +1456,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       initialBonusMode: draft?.bonusMode ?? BonusMode.auto,
       initialDiscountMode: draft?.discountMode ?? DiscountMode.auto,
       initialDraft: draft,
+      isConsignment: _isConsignment,
       onDraftChanged: (d) {
         _bonusDraft = d;
       },
@@ -1458,6 +1473,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       applyDiscount: result.applyDiscount,
       giftOverrides: result.giftOverrides,
       giftLines: result.giftLines,
+      strategySelections: result.strategySelections,
       bonusQty: result.bonusQty,
       discountPct: result.discountPct,
     );

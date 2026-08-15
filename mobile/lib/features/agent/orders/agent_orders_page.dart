@@ -61,6 +61,12 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
         ordersHistoryDateKey(DateTime(now.year, now.month, now.day));
   }
 
+  void _resetFilters() {
+    _selectToday();
+    ref.invalidate(ordersListProvider);
+    ref.invalidate(heldOrdersProvider);
+  }
+
   Future<void> _refresh() async {
     final se = ref.read(syncEngineProvider);
     if (se != null) {
@@ -161,8 +167,16 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                     style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (!isToday)
-                  TextButton(onPressed: _selectToday, child: const Text('Сегодня')),
+                TextButton(
+                  onPressed: _resetFilters,
+                  child: Text(
+                    isToday ? 'Сброс' : 'Сброс · Сегодня',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: isToday ? AppColors.textMuted : AppColors.primary,
+                    ),
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.calendar_today_outlined),
                   tooltip: 'Выбрать дату',
@@ -203,7 +217,7 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Text(
-                            'Ожидают отправки (${heldOrders.length}) — ещё не на сервере',
+                            'Ожидают отправки (${heldOrders.length}) — таймер синхронизации',
                             style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w800),
                           ),
                         ),
@@ -225,6 +239,8 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
                             if (!context.mounted) return;
                             if (action == HeldOrderSyncAction.edit) {
                               context.push('/orders/create?held_id=${h.id}');
+                            } else if (action == HeldOrderSyncAction.goHome) {
+                              context.go('/home');
                             } else if (action == HeldOrderSyncAction.sent) {
                               showAgentToast(
                                 context,

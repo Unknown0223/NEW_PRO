@@ -167,5 +167,15 @@ class AuthUser {
     appAccess: j['app_access'],
   );
 
-  bool get isMobileRole => role == 'agent' || role == 'expeditor' || role == 'supervisor';
+  bool get isMobileRole =>
+      role == 'agent' ||
+      role == 'expeditor' ||
+      role == 'supervisor' ||
+      isCashDeskMobileRole;
+
+  /// Kassir / operator — Bank Transfer Inbox MVP (katalog sync yo‘q).
+  bool get isCashDeskMobileRole => role == 'cashier' || role == 'operator';
+
+  static bool roleIsCashDesk(String? role) =>
+      role == 'cashier' || role == 'operator';
 }

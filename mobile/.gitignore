@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .env
+
+# local mismatch-test keystore (do not use for prod)
+android/keystore/mismatch-test.jks

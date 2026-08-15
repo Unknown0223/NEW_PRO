@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/app/app_build_info.dart';
-import '../../core/device/mobile_device_info.dart';
 import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../routing/app_router.dart';
@@ -59,8 +55,8 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
     if (state == AppLifecycleState.resumed) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        AppBuildInfo.clearCache();
-        MobileDeviceInfo.clearApkCache();
+        // Versiya keshini har resume da tozalamaymiz — PackageInfo kechiksa
+        // 0.0.0 → soxta majburiy yangilash chiqardi.
         await ref.read(authStateProvider.notifier).resumeDeferredAppUpdate();
       });
     }
@@ -83,14 +79,8 @@ class _AppUpdateListenerState extends ConsumerState<AppUpdateListener>
 
         if (!mounted) return;
 
-        if (!info.required && proceed) {
-          unawaited(
-            MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
-              info: info,
-              afterSync: next.appUpdateAfterSync,
-            ),
-          );
-        }
+        // «Позже» (proceed=true, optional) — qayta bildirishnoma spam qilmasin.
+        // Bildirishnoma faqat fon/kechiktirilgan yangilashda yuboriladi.
 
         ref.read(authStateProvider.notifier).resolveAppUpdateGate(proceed: proceed);
       });

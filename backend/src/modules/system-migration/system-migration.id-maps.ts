@@ -11,6 +11,8 @@ export type MigrationIdMaps = {
   tradeDirection: Map<number, number>;
   kpiGroup: Map<number, number>;
   bonusRule: Map<number, number>;
+  /** Bonus ichki shartlari (clauses) — conditions.clause_id uchun. */
+  bonusRuleClause: Map<number, number>;
   planApproverConfig: Map<number, number>;
   salesKpiPlan: Map<number, number>;
   productCategory: Map<number, number>;
@@ -19,6 +21,9 @@ export type MigrationIdMaps = {
   productSegment: Map<number, number>;
   productCatalogGroup: Map<number, number>;
   interchangeableGroup: Map<number, number>;
+  productPackaging: Map<number, number>;
+  clientTag: Map<number, number>;
+  documentEditGrant: Map<number, number>;
   supplier: Map<number, number>;
   territory: Map<number, number>;
   workSlot: Map<number, number>;
@@ -78,6 +83,7 @@ export function emptyIdMaps(): MigrationIdMaps {
     tradeDirection: new Map(),
     kpiGroup: new Map(),
     bonusRule: new Map(),
+    bonusRuleClause: new Map(),
     planApproverConfig: new Map(),
     salesKpiPlan: new Map(),
     productCategory: new Map(),
@@ -86,6 +92,9 @@ export function emptyIdMaps(): MigrationIdMaps {
     productSegment: new Map(),
     productCatalogGroup: new Map(),
     interchangeableGroup: new Map(),
+    productPackaging: new Map(),
+    clientTag: new Map(),
+    documentEditGrant: new Map(),
     supplier: new Map(),
     territory: new Map(),
     workSlot: new Map(),

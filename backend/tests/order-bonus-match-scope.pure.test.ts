@@ -44,20 +44,9 @@ function rule(over: Partial<BonusRuleRow>): BonusRuleRow {
     scope_agent_user_ids: [],
     scope_branch_codes: [],
     scope_trade_direction_ids: [],
-    scope_warehouse_ids: [],
-    scope_territory_refs: [],
-    scope_zones: [],
-    scope_regions: [],
-    scope_cities: [],
-    payment_method_ref: null,
-    trade_direction_ref: null,
-    scope_trade_direction_refs: [],
-    consignment_mode: null,
-    request_type_refs: [],
-    source_channels: [],
-    execution_type: null,
-    execution_time: null,
-    n_value: null,
+    consignment_mode: "all",
+    conditions: [],
+    clauses: [],
     ...over
   };
 }

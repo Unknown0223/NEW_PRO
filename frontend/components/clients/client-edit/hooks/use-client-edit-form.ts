@@ -26,11 +26,11 @@ import {
   pinflForApi,
   emptyAgentSlot,
   buildAgentSlots,
+  agentSlotIsLinked,
   toggleWeekday,
   dateInputToIso,
   MAP_DEFAULT_LAT,
   MAP_DEFAULT_LON,
-  MAX_TEAM_ROWS,
   VISIT_DAYS
 } from "../client-edit-form.utils";
 import {
@@ -468,14 +468,7 @@ export function useClientEditForm({
         throw new Error("Некорректный кредитный лимит");
       }
 
-      const filled = agentSlots.filter(
-        (s) =>
-          s.agentId.trim() !== "" ||
-          s.expeditorUserId.trim() !== "" ||
-          s.weekdays.length > 0 ||
-          s.legacyVisitDate.trim() !== "" ||
-          s.legacyExpeditorPhone.trim() !== ""
-      );
+      const filled = agentSlots.filter(agentSlotIsLinked);
       const agent_assignments = filled.map((s, idx) => {
         const slot = idx + 1;
         let agent_id: number | null = null;
@@ -611,6 +604,10 @@ export function useClientEditForm({
       markSaved();
       setFieldErrors({});
       setSaveNotice(isCreateMode ? "Клиент создан" : "Изменения сохранены");
+      setAgentSlots((prev) => {
+        const linked = prev.filter(agentSlotIsLinked);
+        return linked.length > 0 ? linked : [emptyAgentSlot()];
+      });
       const doneId = typeof res?.id === "number" && Number.isFinite(res.id) ? res.id : effectiveClientId;
       await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
       if (doneId > 0 && tenantSlug) {

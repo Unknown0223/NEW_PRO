@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { cityStoredCodeToDisplayLabel, pickCityTerritoryHint } from "@/lib/city-territory-hint";
+import { patchClientsBulkItems, type ClientBulkItem } from "@/lib/client-bulk-patch";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -462,9 +463,9 @@ export function GroupProcessingTerritoryWorkspace() {
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("No tenant");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
-      let ok = 0;
       let skipped = 0;
       const failed: string[] = [];
+      const items: ClientBulkItem[] = [];
       for (const id of targets) {
         const draft = draftByClient[id];
         const orig = origByClient[id];
@@ -477,14 +478,12 @@ export function GroupProcessingTerritoryWorkspace() {
           skipped += 1;
           continue;
         }
-        try {
-          await api.patch(`/api/${tenantSlug}/clients/${id}`, patch);
-          ok += 1;
-        } catch (e) {
-          failed.push(`#${id}: ${getUserFacingError(e, "xato")}`);
-        }
+        items.push({ client_id: id, patch });
       }
-      return { ok, skipped, failed };
+      if (items.length === 0) return { ok: 0, skipped, failed };
+      const res = await patchClientsBulkItems(tenantSlug, items);
+      for (const f of res.failed) failed.push(`#${f.id}: ${f.error}`);
+      return { ok: res.updated, skipped, failed };
     },
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });

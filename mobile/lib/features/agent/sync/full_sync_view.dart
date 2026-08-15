@@ -54,10 +54,13 @@ class FullSyncView extends StatelessWidget {
       appBar: AgentTopBar(
         title: title,
         onBack: onBack,
+        centerTitle: true,
         belowTitle: Text(
           syncSubtitle,
+          textAlign: TextAlign.center,
           style: AppTypography.bodyMedium.copyWith(
             fontSize: 13,
+            fontWeight: FontWeight.w500,
             color: AppColors.textMuted,
           ),
         ),
@@ -79,6 +82,7 @@ class FullSyncView extends StatelessWidget {
                         progress: progress,
                         current: _recordCurrent,
                         total: recordTotal,
+                        accentColor: accent,
                       ),
                     const SizedBox(height: 20),
                     ...items.asMap().entries.map((entry) {
@@ -96,7 +100,7 @@ class FullSyncView extends StatelessWidget {
                             ),
                           );
                         },
-                        child: _SyncCheckRow(item: entry.value),
+                        child: _SyncCheckRow(item: entry.value, accent: accent),
                       );
                     }),
                     const SizedBox(height: 18),
@@ -221,8 +225,9 @@ class FullSyncItemState {
 
 class _SyncCheckRow extends StatelessWidget {
   final FullSyncItemState item;
+  final Color accent;
 
-  const _SyncCheckRow({required this.item});
+  const _SyncCheckRow({required this.item, required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +246,7 @@ class _SyncCheckRow extends StatelessWidget {
                   : AppColors.textTitle,
             ),
           ),
-          _StatusIcon(status: item.status),
+          _StatusIcon(status: item.status, accent: accent),
         ],
       ),
     );
@@ -250,19 +255,20 @@ class _SyncCheckRow extends StatelessWidget {
 
 class _StatusIcon extends StatelessWidget {
   final FullSyncItemStatus status;
+  final Color accent;
 
-  const _StatusIcon({required this.status});
+  const _StatusIcon({required this.status, required this.accent});
 
   @override
   Widget build(BuildContext context) {
     switch (status) {
       case FullSyncItemStatus.done:
-        return const Icon(Icons.check_rounded, color: AppColors.success, size: 18);
+        return Icon(Icons.check_rounded, color: accent, size: 18);
       case FullSyncItemStatus.loading:
-        return const SizedBox(
+        return SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+          child: CircularProgressIndicator(strokeWidth: 2, color: accent),
         );
       case FullSyncItemStatus.pending:
         return Container(

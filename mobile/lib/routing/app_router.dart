@@ -67,7 +67,17 @@ import '../features/supervisor/dashboard/supervisor_dashboard_page.dart';
 import '../features/supervisor/visits/supervisor_visits_page.dart';
 import '../features/supervisor/agents/supervisor_agents_page.dart';
 import '../features/supervisor/shell/supervisor_shell.dart';
+import '../features/supervisor/menu/supervisor_menu_page.dart';
+import '../features/supervisor/report/supervisor_report_page.dart';
+import '../features/supervisor/outlets/supervisor_outlets_page.dart';
+import '../features/supervisor/gps/supervisor_gps_page.dart';
+import '../features/supervisor/kpi/supervisor_kpi_page.dart';
+import '../features/supervisor/kpi/supervisor_kpi_route_page.dart';
+import '../features/supervisor/settings/supervisor_settings_page.dart';
 import '../features/shared/profile/profile_page.dart';
+import '../features/cashier/cashier_home_page.dart';
+import '../features/cashier/bank_transfer_inbox_page.dart';
+import '../features/cashier/bank_transfer_inbox_detail_page.dart';
 import 'role_guard.dart';
 
 /// Dialoglar uchun (MaterialApp.builder kontekstida Navigator yo‘q).
@@ -93,6 +103,9 @@ class _HomePage extends ConsumerWidget {
         return const ExpeditorHomePage();
       case 'supervisor':
         return const SupervisorHomePage();
+      case 'cashier':
+      case 'operator':
+        return const CashierHomePage();
       default:
         return const AgentHomePage();
     }
@@ -480,6 +493,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const ExpeditorPaymentsInfoPage(),
       ),
       GoRoute(
+        path: '/bank-transfers/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (ctx, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '');
+          if (id == null) {
+            return const Scaffold(
+              body: Center(child: Text('ID noto\'g\'ri')),
+            );
+          }
+          return BankTransferInboxDetailPage(inboxId: id);
+        },
+      ),
+      GoRoute(
         path: '/payments',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const ExpeditorPaymentsPage(),
@@ -500,6 +526,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/home', builder: (_, __) => const _HomePage()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
+          GoRoute(
+            path: '/bank-transfers',
+            builder: (_, __) => const BankTransferInboxPage(),
+          ),
           GoRoute(
             path: '/clients',
             builder: (_, state) {
@@ -550,6 +580,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               path: '/sv-visits',
               builder: (_, __) => const SupervisorVisitsPage(),),
           GoRoute(
+              path: '/sv-report',
+              builder: (_, __) => const SupervisorReportPage(),),
+          GoRoute(
+              path: '/sv-outlets',
+              builder: (_, __) => const SupervisorOutletsPage(),),
+          GoRoute(
+              path: '/sv-menu',
+              builder: (_, __) => const SupervisorMenuPage(),),
+          GoRoute(
+              path: '/sv-gps',
+              builder: (_, __) => const SupervisorGpsPage(),),
+          GoRoute(
+              path: '/sv-kpi',
+              builder: (_, __) => const SupervisorKpiPage(),
+              routes: [
+                GoRoute(
+                  path: 'route',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (_, __) => const SupervisorKpiRoutePage(),
+                ),
+              ],),
+          GoRoute(
+              path: '/sv-settings',
+              builder: (_, __) => const SupervisorSettingsPage(),),
+          GoRoute(
               path: '/agents',
               builder: (_, __) => const SupervisorAgentsPage(),),
         ],
@@ -587,16 +642,19 @@ class _NavShell extends ConsumerWidget {
             '/invoices',),
       ];
     } else if (role == 'supervisor') {
-      body = SupervisorShell(child: child);
-      color = AppColors.supervisorAccent;
+      // CACTUS uslubi: shell o‘zi pastki nav + QR FAB ni boshqaradi.
+      return SupervisorShell(child: child);
+    } else if (role == 'cashier' || role == 'operator') {
+      color = AppColors.cashierAccent;
       items = [
-        const _NavItem(Icons.home_outlined, Icons.home, 'Bosh', '/home'),
-        const _NavItem(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard',
-            '/dashboard',),
-        const _NavItem(Icons.visibility_outlined, Icons.visibility, 'Vizitlar',
-            '/sv-visits',),
-        const _NavItem(Icons.people_outline, Icons.people, 'Agentlar', '/agents'),
-        const _NavItem(Icons.settings_outlined, Icons.settings, 'Profil', '/profile'),
+        const _NavItem(Icons.home_outlined, Icons.home, 'Главная', '/home'),
+        const _NavItem(
+          Icons.account_balance_outlined,
+          Icons.account_balance,
+          'Переводы',
+          '/bank-transfers',
+        ),
+        const _NavItem(Icons.person_outline, Icons.person, 'Профиль', '/profile'),
       ];
     } else {
       return AgentShell(child: child);

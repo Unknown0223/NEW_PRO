@@ -2,9 +2,12 @@ import type { Prisma } from "@prisma/client";
 import JSZip from "jszip";
 import { prisma } from "../../config/database";
 import type { MigrationIdMaps } from "./system-migration.id-maps";
-import { importBonusPlansTables } from "./system-migration.import.bonus-plans";
 import { importFieldActivityTables } from "./system-migration.import.field";
-import { importClientPhotoReports } from "./system-migration.import.files";
+import {
+  createManyAndMapByKey,
+  createManyAndMapIds,
+  createManyChunked
+} from "./system-migration.import.batch";
 import {
   hydrateDates,
   hydrateDecimals,
@@ -66,6 +69,11 @@ export async function importTransactionalTables(
 
   await prisma.$transaction(
     async (tx) => {
+      const orderRows: Array<{
+        oldId: number;
+        key: string;
+        data: Prisma.OrderUncheckedCreateInput;
+      }> = [];
       for (const row of orders) {
         const oldId = Number(row.id);
         const data = hydrateDecimals(
@@ -78,8 +86,11 @@ export async function importTransactionalTables(
         );
         const clientId = requireMap(maps, "client", data.client_id, "order.client_id");
         if (clientId == null) throw new Error(`MAP_MISSING:order.client_id:${data.client_id}`);
-
-        const created = await tx.order.create({
+        const number = String(data.number ?? "").trim();
+        if (!number) throw new Error(`MAP_MISSING:order.number:${oldId}`);
+        orderRows.push({
+          oldId,
+          key: number,
           data: {
             ...(data as Prisma.OrderUncheckedCreateInput),
             tenant_id: tenantId,
@@ -90,53 +101,66 @@ export async function importTransactionalTables(
             warehouse_block_id: null
           }
         });
-        maps.order.set(oldId, created.id);
       }
-      counts.orders = orders.length;
+      counts.orders = await createManyAndMapByKey(
+        (args) => tx.order.createManyAndReturn(args),
+        orderRows,
+        maps.order
+      );
 
+      const orderItemData: Prisma.OrderItemUncheckedCreateInput[] = [];
       for (const row of orderItems) {
         const orderId = requireMap(maps, "order", row.order_id, "order_item.order_id");
         const productId = requireMap(maps, "product", row.product_id, "order_item.product_id");
         if (orderId == null || productId == null) continue;
         const data = hydrateDecimals(stripIdTenant(row), ["qty", "price", "total"]);
-        await tx.orderItem.create({
-          data: {
-            ...(data as Prisma.OrderItemUncheckedCreateInput),
-            order_id: orderId,
-            product_id: productId
-          }
+        orderItemData.push({
+          ...(data as Prisma.OrderItemUncheckedCreateInput),
+          order_id: orderId,
+          product_id: productId
         });
       }
-      counts.order_items = orderItems.length;
+      counts.order_items = await createManyChunked(
+        (args) => tx.orderItem.createMany(args),
+        orderItemData
+      );
 
+      const statusLogData: Prisma.OrderStatusLogUncheckedCreateInput[] = [];
       for (const row of orderStatusLogs) {
         const orderId = requireMap(maps, "order", row.order_id, "status_log.order_id");
         if (orderId == null) continue;
         const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        await tx.orderStatusLog.create({
-          data: {
-            ...(data as Prisma.OrderStatusLogUncheckedCreateInput),
-            order_id: orderId,
-            user_id: remapId(maps.user, data.user_id) ?? null
-          }
+        statusLogData.push({
+          ...(data as Prisma.OrderStatusLogUncheckedCreateInput),
+          order_id: orderId,
+          user_id: remapId(maps.user, data.user_id) ?? null
         });
       }
-      counts.order_status_logs = orderStatusLogs.length;
+      counts.order_status_logs = await createManyChunked(
+        (args) => tx.orderStatusLog.createMany(args),
+        statusLogData
+      );
 
+      const changeLogData: Prisma.OrderChangeLogUncheckedCreateInput[] = [];
       for (const row of orderChangeLogs) {
         const orderId = requireMap(maps, "order", row.order_id, "change_log.order_id");
         if (orderId == null) continue;
         const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        await tx.orderChangeLog.create({
-          data: {
-            ...(data as Prisma.OrderChangeLogUncheckedCreateInput),
-            order_id: orderId,
-            user_id: remapId(maps.user, data.user_id) ?? null
-          }
+        changeLogData.push({
+          ...(data as Prisma.OrderChangeLogUncheckedCreateInput),
+          order_id: orderId,
+          user_id: remapId(maps.user, data.user_id) ?? null
         });
       }
-      counts.order_change_logs = orderChangeLogs.length;
+      counts.order_change_logs = await createManyChunked(
+        (args) => tx.orderChangeLog.createMany(args),
+        changeLogData
+      );
 
+      const paymentRows: Array<{
+        oldId: number;
+        data: Prisma.PaymentUncheckedCreateInput;
+      }> = [];
       for (const row of payments) {
         const oldId = Number(row.id);
         const clientId = requireMap(maps, "client", row.client_id, "payment.client_id");
@@ -151,7 +175,8 @@ export async function importTransactionalTables(
           ]),
           ["amount"]
         );
-        const created = await tx.payment.create({
+        paymentRows.push({
+          oldId,
           data: {
             ...(data as Prisma.PaymentUncheckedCreateInput),
             tenant_id: tenantId,
@@ -164,9 +189,18 @@ export async function importTransactionalTables(
             deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
           }
         });
-        maps.payment.set(oldId, created.id);
       }
-      counts.payments = payments.length;
+      counts.payments = await createManyAndMapIds(
+        (args) => tx.payment.createManyAndReturn(args),
+        paymentRows,
+        maps.payment
+      );
+
+      const receiptRows: Array<{
+        oldId: number;
+        key: string;
+        data: Prisma.GoodsReceiptUncheckedCreateInput;
+      }> = [];
       for (const row of goodsReceipts) {
         const oldId = Number(row.id);
         const warehouseId = requireMap(maps, "warehouse", row.warehouse_id, "receipt.warehouse_id");
@@ -180,7 +214,11 @@ export async function importTransactionalTables(
           ]),
           ["total_qty", "total_sum", "total_volume_m3", "total_weight_kg"]
         );
-        const created = await tx.goodsReceipt.create({
+        const number = String(data.number ?? "").trim();
+        if (!number) continue;
+        receiptRows.push({
+          oldId,
+          key: number,
           data: {
             ...(data as Prisma.GoodsReceiptUncheckedCreateInput),
             tenant_id: tenantId,
@@ -190,10 +228,14 @@ export async function importTransactionalTables(
             deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
           }
         });
-        maps.goodsReceipt.set(oldId, created.id);
       }
-      counts.goods_receipts = goodsReceipts.length;
+      counts.goods_receipts = await createManyAndMapByKey(
+        (args) => tx.goodsReceipt.createManyAndReturn(args),
+        receiptRows,
+        maps.goodsReceipt
+      );
 
+      const receiptLineData: Prisma.GoodsReceiptLineUncheckedCreateInput[] = [];
       for (const row of goodsReceiptLines) {
         const receiptId = requireMap(maps, "goodsReceipt", row.receipt_id, "receipt_line.receipt_id");
         const productId = requireMap(maps, "product", row.product_id, "receipt_line.product_id");
@@ -206,16 +248,22 @@ export async function importTransactionalTables(
           "volume_m3",
           "weight_kg"
         ]);
-        await tx.goodsReceiptLine.create({
-          data: {
-            ...(data as Prisma.GoodsReceiptLineUncheckedCreateInput),
-            receipt_id: receiptId,
-            product_id: productId
-          }
+        receiptLineData.push({
+          ...(data as Prisma.GoodsReceiptLineUncheckedCreateInput),
+          receipt_id: receiptId,
+          product_id: productId
         });
       }
-      counts.goods_receipt_lines = goodsReceiptLines.length;
+      counts.goods_receipt_lines = await createManyChunked(
+        (args) => tx.goodsReceiptLine.createMany(args),
+        receiptLineData
+      );
 
+      const returnRows: Array<{
+        oldId: number;
+        key: string;
+        data: Prisma.SalesReturnUncheckedCreateInput;
+      }> = [];
       for (const row of salesReturns) {
         const oldId = Number(row.id);
         const warehouseId = requireMap(maps, "warehouse", row.warehouse_id, "return.warehouse_id");
@@ -229,7 +277,11 @@ export async function importTransactionalTables(
           ]),
           ["refund_amount", "bonus_debt_amount"]
         );
-        const created = await tx.salesReturn.create({
+        const number = String(data.number ?? "").trim();
+        if (!number) continue;
+        returnRows.push({
+          oldId,
+          key: number,
           data: {
             ...(data as Prisma.SalesReturnUncheckedCreateInput),
             tenant_id: tenantId,
@@ -241,58 +293,66 @@ export async function importTransactionalTables(
             accepted_by_user_id: remapId(maps.user, data.accepted_by_user_id) ?? null
           }
         });
-        maps.salesReturn.set(oldId, created.id);
       }
-      counts.sales_returns = salesReturns.length;
+      counts.sales_returns = await createManyAndMapByKey(
+        (args) => tx.salesReturn.createManyAndReturn(args),
+        returnRows,
+        maps.salesReturn
+      );
 
+      const returnLineData: Prisma.SalesReturnLineUncheckedCreateInput[] = [];
       for (const row of salesReturnLines) {
         const returnId = requireMap(maps, "salesReturn", row.return_id, "return_line.return_id");
         const productId = requireMap(maps, "product", row.product_id, "return_line.product_id");
         if (returnId == null || productId == null) continue;
         const data = hydrateDecimals(stripIdTenant(row), ["qty", "bonus_qty", "paid_qty"]);
-        await tx.salesReturnLine.create({
-          data: {
-            ...(data as Prisma.SalesReturnLineUncheckedCreateInput),
-            return_id: returnId,
-            product_id: productId
-          }
+        returnLineData.push({
+          ...(data as Prisma.SalesReturnLineUncheckedCreateInput),
+          return_id: returnId,
+          product_id: productId
         });
       }
-      counts.sales_return_lines = salesReturnLines.length;
+      counts.sales_return_lines = await createManyChunked(
+        (args) => tx.salesReturnLine.createMany(args),
+        returnLineData
+      );
 
+      const auditData: Prisma.TenantAuditEventUncheckedCreateInput[] = [];
       for (const row of auditEvents) {
         const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        await tx.tenantAuditEvent.create({
-          data: {
-            ...(data as Prisma.TenantAuditEventUncheckedCreateInput),
-            tenant_id: tenantId,
-            actor_user_id: remapId(maps.user, data.actor_user_id) ?? null
-          }
+        auditData.push({
+          ...(data as Prisma.TenantAuditEventUncheckedCreateInput),
+          tenant_id: tenantId,
+          actor_user_id: remapId(maps.user, data.actor_user_id) ?? null
         });
       }
-      counts.tenant_audit_events = auditEvents.length;
+      counts.tenant_audit_events = await createManyChunked(
+        (args) => tx.tenantAuditEvent.createMany(args),
+        auditData
+      );
 
+      const clientAuditData: Prisma.ClientAuditLogUncheckedCreateInput[] = [];
       for (const row of clientAuditLogs) {
         const clientId = requireMap(maps, "client", row.client_id, "client_audit.client_id");
         if (clientId == null) continue;
         const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-        await tx.clientAuditLog.create({
-          data: {
-            ...(data as Prisma.ClientAuditLogUncheckedCreateInput),
-            tenant_id: tenantId,
-            client_id: clientId,
-            user_id: remapId(maps.user, data.user_id) ?? null
-          }
+        clientAuditData.push({
+          ...(data as Prisma.ClientAuditLogUncheckedCreateInput),
+          tenant_id: tenantId,
+          client_id: clientId,
+          user_id: remapId(maps.user, data.user_id) ?? null
         });
       }
-      counts.client_audit_logs = clientAuditLogs.length;
+      counts.client_audit_logs = await createManyChunked(
+        (args) => tx.clientAuditLog.createMany(args),
+        clientAuditData
+      );
 
       const fieldCounts = await importFieldActivityTables(tx, zip, tenantId, maps);
       Object.assign(counts, fieldCounts);
-
-      const photoCount = await importClientPhotoReports(tx, zip, tenantId, maps);
-      if (photoCount > 0) counts.client_photo_reports = photoCount;
-    },    { timeout: 300_000 }
+      // Fotootchyotlar — import oxirida (applyBackupZip → files stage)
+    },
+    { timeout: 300_000 }
   );
 
   return { counts, warnings };

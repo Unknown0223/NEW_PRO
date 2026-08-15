@@ -85,6 +85,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     createCtxQ,
     expeditorFilterOptions,
     isExchangeFlow,
+    headerClientAgentLocked,
     loadingLists,
     mutation,
     orderClientPickerScopeIds,
@@ -176,8 +177,9 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 eligibleClientIds={orderClientPickerScopeIds}
                 placeholder="Klientni tanlang"
                 className="w-full"
-                disabled={mutation.isPending || loadingLists}
+                disabled={mutation.isPending || loadingLists || headerClientAgentLocked}
                 onValueChange={(id) => {
+                  if (headerClientAgentLocked) return;
                   resetFlowAfterClientChange();
                   setClientId(id);
                   if (isPolkiByOrder) setPolkiOrderIds([]);
@@ -190,6 +192,11 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   }
                 }}
               />
+              {headerClientAgentLocked ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Tahrirda klient o‘zgartirilmaydi.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="oc-order-date">Buyurtma sanasi</Label>
@@ -273,16 +280,26 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   value={agentId}
                   options={agentFilterOptions}
                   onValueChange={(v) => {
+                    if (headerClientAgentLocked) return;
                     setSelectionNotice(null);
                     setAgentId(v);
                   }}
-                  disabled={mutation.isPending || loadingLists || !canPickWarehouse}
+                  disabled={
+                    mutation.isPending ||
+                    loadingLists ||
+                    !canPickWarehouse ||
+                    headerClientAgentLocked
+                  }
                   searchPlaceholder="Qidiruv: login, ism"
                   emptyMessage="Mos agent topilmadi"
                   minPopoverWidth={320}
                   includeEmptyOption={!requiresAgentAndPayment || !agentId.trim()}
                 />
-                {clientId.trim() ? (
+                {headerClientAgentLocked ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Tahrirda agent o‘zgartirilmaydi.
+                  </p>
+                ) : clientId.trim() ? (
                   <OrderCreateAgentLockHint
                     assignments={clientAssignmentsForLock}
                     selectedAgentId={

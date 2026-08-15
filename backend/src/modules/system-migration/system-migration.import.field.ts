@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import JSZip from "jszip";
 import type { MigrationIdMaps } from "./system-migration.id-maps";
+import { createManyChunked } from "./system-migration.import.batch";
 import {
   hydrateDates,
   hydrateDecimals,
@@ -34,22 +35,25 @@ export async function importFieldActivityTables(
     readZipJson<Record<string, unknown>>(zip, "data/payment_allocations.json")
   ]);
 
+  const refusalData: Prisma.ClientRefusalUncheckedCreateInput[] = [];
   for (const row of refusals) {
     const clientId = requireMap(maps, "client", row.client_id, "refusal.client_id");
     const agentId = requireMap(maps, "user", row.agent_id, "refusal.agent_id");
     if (clientId == null || agentId == null) continue;
     const data = hydrateDates(stripIdTenant(row), ["created_at"]);
-    await tx.clientRefusal.create({
-      data: {
-        ...(data as Prisma.ClientRefusalUncheckedCreateInput),
-        tenant_id: tenantId,
-        client_id: clientId,
-        agent_id: agentId
-      }
+    refusalData.push({
+      ...(data as Prisma.ClientRefusalUncheckedCreateInput),
+      tenant_id: tenantId,
+      client_id: clientId,
+      agent_id: agentId
     });
   }
-  counts.client_refusals = refusals.length;
+  counts.client_refusals = await createManyChunked(
+    (args) => tx.clientRefusal.createMany(args),
+    refusalData
+  );
 
+  const visitData: Prisma.AgentVisitUncheckedCreateInput[] = [];
   for (const row of visits) {
     const agentId = requireMap(maps, "user", row.agent_id, "visit.agent_id");
     if (agentId == null) continue;
@@ -57,17 +61,16 @@ export async function importFieldActivityTables(
       hydrateDates(stripIdTenant(row), ["checked_in_at", "checked_out_at"]),
       ["latitude", "longitude"]
     );
-    await tx.agentVisit.create({
-      data: {
-        ...(data as Prisma.AgentVisitUncheckedCreateInput),
-        tenant_id: tenantId,
-        agent_id: agentId,
-        client_id: remapId(maps.client, data.client_id) ?? null
-      }
+    visitData.push({
+      ...(data as Prisma.AgentVisitUncheckedCreateInput),
+      tenant_id: tenantId,
+      agent_id: agentId,
+      client_id: remapId(maps.client, data.client_id) ?? null
     });
   }
-  counts.agent_visits = visits.length;
+  counts.agent_visits = await createManyChunked((args) => tx.agentVisit.createMany(args), visitData);
 
+  const pingData: Prisma.AgentLocationPingUncheckedCreateInput[] = [];
   for (const row of pings) {
     const agentId = requireMap(maps, "user", row.agent_id, "ping.agent_id");
     if (agentId == null) continue;
@@ -75,16 +78,18 @@ export async function importFieldActivityTables(
       "latitude",
       "longitude"
     ]);
-    await tx.agentLocationPing.create({
-      data: {
-        ...(data as Prisma.AgentLocationPingUncheckedCreateInput),
-        tenant_id: tenantId,
-        agent_id: agentId
-      }
+    pingData.push({
+      ...(data as Prisma.AgentLocationPingUncheckedCreateInput),
+      tenant_id: tenantId,
+      agent_id: agentId
     });
   }
-  counts.agent_location_pings = pings.length;
+  counts.agent_location_pings = await createManyChunked(
+    (args) => tx.agentLocationPing.createMany(args),
+    pingData
+  );
 
+  const expenseData: Prisma.ExpenseUncheckedCreateInput[] = [];
   for (const row of expenses) {
     const data = hydrateDecimals(
       hydrateDates(stripIdTenant(row), [
@@ -95,35 +100,35 @@ export async function importFieldActivityTables(
       ]),
       ["amount"]
     );
-    await tx.expense.create({
-      data: {
-        ...(data as Prisma.ExpenseUncheckedCreateInput),
-        tenant_id: tenantId,
-        agent_id: remapId(maps.user, data.agent_id) ?? null,
-        warehouse_id: remapId(maps.warehouse, data.warehouse_id) ?? null,
-        created_by_user_id: remapId(maps.user, data.created_by_user_id) ?? null,
-        approved_by_user_id: remapId(maps.user, data.approved_by_user_id) ?? null,
-        deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
-      }
+    expenseData.push({
+      ...(data as Prisma.ExpenseUncheckedCreateInput),
+      tenant_id: tenantId,
+      agent_id: remapId(maps.user, data.agent_id) ?? null,
+      warehouse_id: remapId(maps.warehouse, data.warehouse_id) ?? null,
+      created_by_user_id: remapId(maps.user, data.created_by_user_id) ?? null,
+      approved_by_user_id: remapId(maps.user, data.approved_by_user_id) ?? null,
+      deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
     });
   }
-  counts.expenses = expenses.length;
+  counts.expenses = await createManyChunked((args) => tx.expense.createMany(args), expenseData);
 
+  const allocationData: Prisma.PaymentAllocationUncheckedCreateInput[] = [];
   for (const row of allocations) {
     const paymentId = requireMap(maps, "payment", row.payment_id, "allocation.payment_id");
     const orderId = requireMap(maps, "order", row.order_id, "allocation.order_id");
     if (paymentId == null || orderId == null) continue;
     const data = hydrateDecimals(hydrateDates(stripIdTenant(row), ["created_at"]), ["amount"]);
-    await tx.paymentAllocation.create({
-      data: {
-        ...(data as Prisma.PaymentAllocationUncheckedCreateInput),
-        tenant_id: tenantId,
-        payment_id: paymentId,
-        order_id: orderId
-      }
+    allocationData.push({
+      ...(data as Prisma.PaymentAllocationUncheckedCreateInput),
+      tenant_id: tenantId,
+      payment_id: paymentId,
+      order_id: orderId
     });
   }
-  counts.payment_allocations = allocations.length;
+  counts.payment_allocations = await createManyChunked(
+    (args) => tx.paymentAllocation.createMany(args),
+    allocationData
+  );
 
   return counts;
 }

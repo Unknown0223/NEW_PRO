@@ -68,3 +68,30 @@ class SupervisorVisitsPayload {
 Map<String, dynamic> parseSupervisorKpi(Map<String, dynamic> raw) {
   return Map<String, dynamic>.from(raw['kpi'] as Map? ?? raw);
 }
+
+/// `GET .../supervisor/products` → kategoriya ulushi (bars / jadval).
+List<(String, double, String)> parseSupervisorCategoryShares(Map<String, dynamic> raw) {
+  final analytics = raw['product_analytics'];
+  final list = analytics is Map
+      ? (analytics['by_category'] as List? ?? const [])
+      : (raw['data'] as List? ?? raw['products'] as List? ?? raw['rows'] as List? ?? const []);
+  final out = <(String, double, String)>[];
+  for (final e in list) {
+    if (e is! Map) continue;
+    final name = e['dimension']?.toString() ??
+        e['name']?.toString() ??
+        e['category']?.toString() ??
+        e['category_name']?.toString() ??
+        e['group']?.toString() ??
+        '';
+    if (name.isEmpty) continue;
+    final pct = (e['share_pct'] as num?)?.toDouble() ??
+        (e['pct'] as num?)?.toDouble() ??
+        (e['percent'] as num?)?.toDouble() ??
+        (e['share'] as num?)?.toDouble() ??
+        0;
+    final revenue = e['revenue']?.toString() ?? e['sum']?.toString() ?? e['amount']?.toString() ?? '0';
+    out.add((name, pct, revenue));
+  }
+  return out;
+}

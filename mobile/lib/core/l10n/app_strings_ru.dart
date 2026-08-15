@@ -262,4 +262,6 @@ abstract final class S {
   static const exclusiveBonusDiscountHint =
       'Можно выбрать только бонус или скидку';
   static const selectCategory = 'Выберите категорию';
+  /** Fotootchet: spravochnik «Причины фотоотчёта». */
+  static const selectPhotoReason = 'Выберите причину фото';
 }

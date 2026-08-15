@@ -19,7 +19,12 @@ import {
   materializeQtyPeeks,
   type OrderAgentBonusContext
 } from "../orders/order-bonus-apply";
-import { ruleRelatesToOrderSelection } from "../orders/order-bonus-context";
+import { ruleRelatesToOrderSelection, ruleMatchesConsignment } from "../orders/order-bonus-context";
+import { loadActiveBonusStrategiesForOrder } from "../bonus-strategies/bonus-strategies.service";
+import {
+  applyBonusStrategyConstraints,
+  strategyMatchesAgentScope
+} from "../bonus-strategies/bonus-strategy-policy";
 import { bonusGiftSelectionMeta, resolveAllowedGiftProductIdsForRule } from "../orders/bonus-gift-selection";
 import { findWinningDiscountRuleWithPrereqs } from "../orders/order-bonus-discount";
 import { calcExpectedDiscountSum } from "../orders/order-discount-alert";
@@ -43,6 +48,8 @@ export type MobileBonusPreviewInput = {
   price_type?: string;
   items: { product_id: number; qty: number }[];
   bonus_gift_overrides?: BonusGiftOverrideInput[];
+  is_consignment?: boolean;
+  bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
 };
 
 export async function previewMobileOrderBonus(
@@ -96,6 +103,7 @@ export async function previewMobileOrderBonus(
     select: { settings: true }
   });
   const stackPolicy = parseBonusStackPolicy(tenantRow?.settings);
+  const isConsignment = input.is_consignment === true;
 
   const validatedGiftOverrides =
     input.bonus_gift_overrides?.length ?
@@ -123,10 +131,16 @@ export async function previewMobileOrderBonus(
       input.warehouse_id,
       { referenceAt: now },
       orderAgent,
-      { applyDiscount: true }
+      {
+        applyDiscount: true,
+        is_consignment: isConsignment,
+        strategy_selections: input.bonus_strategy_selections
+      }
     );
 
-    const discountRules = await loadDiscountRulesForOrder(tx, tenantId);
+    const discountRules = (await loadDiscountRulesForOrder(tx, tenantId)).filter((r) =>
+      ruleMatchesConsignment(r, isConsignment)
+    );
     const sumRaw = await tx.bonusRule.findMany({
       where: activeRuleWhere(tenantId, "sum", now),
       include: bonusRuleInclude,
@@ -134,14 +148,17 @@ export async function previewMobileOrderBonus(
     });
     const sumRules = sumRaw
       .map((r) => mapBonusRuleFull(r))
-      .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0);
+      .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0)
+      .filter((r) => ruleMatchesConsignment(r, isConsignment));
 
     const qtyRulesRaw = await tx.bonusRule.findMany({
       where: activeRuleWhere(tenantId, "qty", now),
       include: bonusRuleInclude,
       orderBy: { priority: "desc" }
     });
-    const qtyRules = qtyRulesRaw.map((r) => mapBonusRuleFull(r));
+    const qtyRules = qtyRulesRaw
+      .map((r) => mapBonusRuleFull(r))
+      .filter((r) => ruleMatchesConsignment(r, isConsignment));
 
     const stockProductIds = collectRuleStockProductIds([...qtyRules, ...sumRules]);
     for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
@@ -188,7 +205,8 @@ export async function previewMobileOrderBonus(
       ruleCache: new Map<number, BonusRuleRow | null>(),
       clientMonthMerchandiseSubtotalExclOrder: new Prisma.Decimal(0),
       clientMonthPaidQtyAggregateExclOrder,
-      clientMonthPaidQtyByProductExclOrder
+      clientMonthPaidQtyByProductExclOrder,
+      is_consignment: isConsignment
     };
 
     const qtyPeeks = await findQtyBonusPeeks(
@@ -435,6 +453,34 @@ export async function previewMobileOrderBonus(
         }
       })) > 0;
 
+    const allEligibleRuleIds = new Set<number>([
+      ...dedupedEligibleBonuses.map((b) => b.rule_id),
+      ...eligibleDiscounts.map((d) => d.id)
+    ]);
+    const activeStrategies = (await loadActiveBonusStrategiesForOrder(tenantId)).filter((s) =>
+      strategyMatchesAgentScope(s, orderAgent)
+    );
+    const strategyPreviews = activeStrategies
+      .map((s) => {
+        const eligible_rule_ids = s.rule_ids.filter((id) => allEligibleRuleIds.has(id));
+        if (eligible_rule_ids.length === 0) return null;
+        const auto = applyBonusStrategyConstraints(
+          eligible_rule_ids.map((ruleId) => ({ ruleId, priority: 0 })),
+          [{ id: s.id, name: s.name, max_select: s.max_select, rule_ids: s.rule_ids }],
+          input.bonus_strategy_selections
+        );
+        return {
+          strategy_id: s.id,
+          name: s.name,
+          max_select: s.max_select,
+          member_rule_ids: s.rule_ids,
+          eligible_rule_ids,
+          auto_selected_rule_ids: auto.applied_selections[0]?.rule_ids ?? [],
+          requires_choice: eligible_rule_ids.length > s.max_select
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+
     return {
       bonus_stack: bonusPolicyToJson(stackPolicy),
       eligible_bonuses: dedupedEligibleBonuses,
@@ -444,6 +490,8 @@ export async function previewMobileOrderBonus(
         discount_pct: d.discount_pct != null ? Number(d.discount_pct) : null,
         prerequisite_rule_ids: d.prerequisite_rule_ids ?? []
       })),
+      strategies: strategyPreviews,
+      strategy_selections: resolved.strategy_selections ?? [],
       links,
       linked_pairs: linkedPairs,
       discount_cash_desk_available: discountCashDeskAvailable,

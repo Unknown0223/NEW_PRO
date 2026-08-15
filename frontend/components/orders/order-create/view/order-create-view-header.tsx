@@ -55,6 +55,8 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
     hasMissingPriceForSelected,
     hasQtyOverStock,
     isExchangeFlow,
+    isEditMode,
+    editOrderNumber,
     mutation,
     paymentMethodRef,
     requiresAgentAndPayment,
@@ -72,7 +74,11 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
               ? "Возврат с полки по заказу"
               : isExchangeFlow
                 ? "Обмен (связанный)"
-                : "Yangi zakaz"
+                : isEditMode
+                  ? editOrderNumber
+                    ? `Zakazni tahrirlash · ${editOrderNumber}`
+                    : "Zakazni tahrirlash"
+                  : "Yangi zakaz"
         }
         description={
           isPolkiSheet
@@ -81,7 +87,9 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
               : "Компактные параметры и таблица состава возврата за период."
             : isExchangeFlow
               ? "Минус по доставленному заказу, плюс только из группы взаимозаменяемых."
-              : "Klient, ombor va mahsulot miqdorlari — to‘liq sahifa."
+              : isEditMode
+                ? "Faqat «Новый» zakaz. Klient va agent o‘zgarmaydi — qolgan maydonlar tahrirlanadi."
+                : "Klient, ombor va mahsulot miqdorlari — to‘liq sahifa."
         }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -150,7 +158,9 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
                   ? "Возврат"
                   : isExchangeFlow
                     ? "Обмен"
-                    : "Yaratish"}
+                    : isEditMode
+                      ? "Saqlash"
+                      : "Yaratish"}
             </Button>
           </div>
         }

@@ -509,16 +509,31 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       </button>
 
       {authHydrated ? (
-        <Link
-          href={paymentPrefill.href}
-          className={cn(
-            toolbarBtn,
-            "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-950/60"
-          )}
-        >
-          <Wallet className="size-4 shrink-0" aria-hidden />
-          Приход в кассу
-        </Link>
+        paymentPrefill.disabled ? (
+          <button
+            type="button"
+            disabled
+            title={paymentPrefill.note ?? undefined}
+            className={cn(
+              toolbarBtn,
+              "cursor-not-allowed border-border bg-muted/40 text-muted-foreground opacity-70"
+            )}
+          >
+            <Wallet className="size-4 shrink-0" aria-hidden />
+            Приход в кассу
+          </button>
+        ) : (
+          <Link
+            href={paymentPrefill.href}
+            className={cn(
+              toolbarBtn,
+              "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-950/60"
+            )}
+          >
+            <Wallet className="size-4 shrink-0" aria-hidden />
+            Приход в кассу
+          </Link>
+        )
       ) : null}
 
       <button

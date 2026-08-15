@@ -287,6 +287,24 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
         }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionRequired",
+            "Стратегия бўйича камида 1 та бонус/скидка танланг."
+          );
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionTooMany",
+            "Стратегия шартидан ортиқ қоида танланган."
+          );
+        }
         if (msg === "EXCHANGE_PAYLOAD_REQUIRED") {
           return sendApiError(reply, request, 400, "ExchangePayloadRequired");
         }

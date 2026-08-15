@@ -228,6 +228,20 @@ export const ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE = ["cancelled", "retur
  */
 export const ORDER_STATUSES_OUTSTANDING_RECEIVABLE = ["delivered"] as const;
 
+/**
+ * Agent **konsignatsiya limiti** bandligi: `cancelled` / `returned` dan tashqari
+ * barcha savdo statuslari (`new` … `delivered`).
+ * Shunda «новый» zakaz ham limitni kamaytiradi — bir nechta yangi zakaz limitdan
+ * oshib ketmasin; otmena/vozvratda joy bo‘shaydi.
+ */
+export const ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE = [
+  "new",
+  "confirmed",
+  "picking",
+  "delivering",
+  "delivered"
+] as const;
+
 const receivableSet = new Set<string>(ORDER_STATUSES_OUTSTANDING_RECEIVABLE);
 
 export function statusContributesToDeliveredReceivableDebt(

@@ -9,6 +9,11 @@ export type OrderCreateProps = {
   onCancel: () => void;
   /** Hujjat tipi: order | return | exchange | partial_return | return_by_order */
   orderType?: string;
+  /**
+   * Mavjud «new» zakazni Sozdat zakaz formasida tahrirlash.
+   * URL: `/orders/new?edit_order_id=…`
+   */
+  editOrderId?: number | null;
 };
 
 export type PolkiPairRowModel = {

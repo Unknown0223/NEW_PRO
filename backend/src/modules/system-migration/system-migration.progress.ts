@@ -1,16 +1,7 @@
 import { randomBytes } from "crypto";
-import type { ApplyBackupResult } from "./system-migration.import";
+import type { ApplyBackupResult, MigrationImportStageId } from "./system-migration.import.types";
 
-export type MigrationImportStageId =
-  | "queued"
-  | "validate"
-  | "profile"
-  | "references"
-  | "bonus"
-  | "transactional"
-  | "extended"
-  | "done"
-  | "failed";
+export type { MigrationImportStageId };
 
 export type MigrationImportProgress = {
   stage: MigrationImportStageId;
@@ -117,6 +108,7 @@ export const MIGRATION_IMPORT_STAGES: Array<{
   { id: "references", label_uz: "Spravochniklar", percent: 40 },
   { id: "bonus", label_uz: "Bonus / KPI", percent: 55 },
   { id: "transactional", label_uz: "Operatsion tarix", percent: 80 },
-  { id: "extended", label_uz: "Kengaytirilgan jadvallar", percent: 95 },
+  { id: "extended", label_uz: "Kengaytirilgan jadvallar", percent: 92 },
+  { id: "files", label_uz: "Fotootchyotlar", percent: 97 },
   { id: "done", label_uz: "Tayyor", percent: 100 }
 ];

@@ -22,6 +22,7 @@ import {
   ruleBlockedByOncePerClient,
   ruleHasPurchaseScope,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleRelatesToOrderSelection,
@@ -167,6 +168,7 @@ export async function findQtyBonusPeeks(
 
   const orderAgentQty =
     engineOpts?.prereqEnv?.orderAgent ?? engineOpts?.orderAgent ?? null;
+  const isConsignment = engineOpts?.prereqEnv?.is_consignment === true;
 
   for (const rule of filtered) {
     const hasClauses = (rule.clauses?.length ?? 0) > 0;
@@ -177,10 +179,12 @@ export async function findQtyBonusPeeks(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       } else {
         if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesConsignment(rule, isConsignment)) continue;
         if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       }
     } else {
       if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesConsignment(rule, isConsignment)) continue;
       if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
       if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
@@ -277,10 +281,12 @@ export async function findQtyBonusPeeks(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       } else {
         if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesConsignment(rule, isConsignment)) continue;
         if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       }
     } else {
       if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesConsignment(rule, isConsignment)) continue;
       if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
       if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;

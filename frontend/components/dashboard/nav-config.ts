@@ -159,6 +159,11 @@ export const dashboardKassaNav: {
       items: [
         { href: "/payments", label: "Оплаты клиентов", showIfAnyPermission: [...NAV_PERM.cashPayments] },
         {
+          href: "/bank-transfers",
+          label: "Перечисления (банк)",
+          showIfAnyPermission: [...NAV_PERM.cashBankTransfers]
+        },
+        {
           href: "/client-expenses",
           label: "Расходы клиента",
           showIfAnyPermission: [...NAV_PERM.cashClientExpenses]
@@ -561,6 +566,7 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
   push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
   push(null, [
+    { href: "/reports/gps/map", label: "GPS мониторинг" },
     { href: "/audit", label: "Аудит" },
     { href: "/activity", label: "Активность и история" },
     { href: "/diagnostics/errors", label: "Журнал ошибок" },

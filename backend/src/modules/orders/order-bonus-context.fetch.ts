@@ -201,6 +201,14 @@ export function ruleMatchesClient(
   return true;
 }
 
+/** `consignment_mode`: all | yes | no — order automation bilan bir xil. */
+export function ruleMatchesConsignment(rule: BonusRuleRow, isConsignment: boolean): boolean {
+  const m = rule.consignment_mode === "yes" || rule.consignment_mode === "no" ? rule.consignment_mode : "all";
+  if (m === "all") return true;
+  if (m === "yes") return isConsignment;
+  return !isConsignment;
+}
+
 /** Zakazdagi agent (bonus cheklovi uchun). */
 export type OrderAgentBonusContext = {
   userId: number;

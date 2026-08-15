@@ -1,7 +1,7 @@
 name: salesdoc_mobile
 description: Sales Arena mobil ilova — agent, ekspeditor, supervayzer uchun
 publish_to: "none"
-version: 3.1.22+323
+version: 3.1.20+329
 
 environment:
   sdk: ">=3.2.0 <4.0.0"

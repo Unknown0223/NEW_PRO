@@ -266,7 +266,82 @@ model Payment {
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
   edit_grants          PaymentEditGrant[]
+  bank_transfer_inbox  BankTransferInbox[]
   @@map("client_payments")
+}
+
+/// Входящие банковские перечисления — Payment создаётся только после match/assign.
+model BankTransferInbox {
+  id                 Int       @id @default(autoincrement())
+  tenant_id          Int
+  /// unmatched | ambiguous | matched | pending | done | ignored
+  status             String    @default("unmatched") @db.VarChar(32)
+  /// excel | csv | manual | bank_api | one_c
+  source             String    @db.VarChar(32)
+  /// Идемпотентность вместе с source (NULL = без внешней id)
+  external_id        String?   @db.VarChar(128)
+  amount             Decimal   @db.Decimal(15, 2)
+  currency           String    @default("UZS") @db.VarChar(8)
+  paid_at            DateTime?
+  payer_name         String?
+  payer_inn          String?   @db.VarChar(32)
+  payer_pinfl        String?   @db.VarChar(20)
+  payer_bank_account String?   @db.VarChar(64)
+  payer_bank_mfo     String?   @db.VarChar(32)
+  payer_client_code  String?   @db.VarChar(32)
+  purpose            String?
+  raw_payload        Json      @default("{}")
+  /// [{ client_id, match_field, warehouse_id }]
+  match_candidates   Json      @default("[]")
+  /// bank_account | inn | pinfl | client_code
+  match_field        String?   @db.VarChar(32)
+  matched_client_id  Int?
+  assigned_client_id Int?
+  payment_id         Int?
+  cash_desk_id       Int?
+  ignored_at         DateTime?
+  ignored_by_user_id Int?
+  created_by_user_id Int?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  tenant             Tenant                    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  matched_client     Client?                   @relation("BankTransferMatchedClient", fields: [matched_client_id], references: [id], onDelete: SetNull)
+  assigned_client    Client?                   @relation("BankTransferAssignedClient", fields: [assigned_client_id], references: [id], onDelete: SetNull)
+  payment            Payment?                  @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+  cash_desk          CashDesk?                 @relation(fields: [cash_desk_id], references: [id], onDelete: SetNull)
+  created_by         User?                     @relation("BankTransferInboxCreator", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  ignored_by         User?                     @relation("BankTransferInboxIgnoredBy", fields: [ignored_by_user_id], references: [id], onDelete: SetNull)
+  events             BankTransferInboxEvent[]
+
+  @@unique([tenant_id, source, external_id])
+  @@index([tenant_id, status])
+  @@index([tenant_id, paid_at(sort: Desc)])
+  @@index([tenant_id, payment_id])
+  @@index([tenant_id, assigned_client_id])
+  @@map("bank_transfer_inbox")
+}
+
+/// Таймлайн / комментарии inbox-элемента.
+model BankTransferInboxEvent {
+  id             Int      @id @default(autoincrement())
+  tenant_id      Int
+  inbox_id       Int
+  /// ingested | matched | unmatched | ambiguous | assigned | reassigned | comment | payment_created | ignored | status
+  event_type     String   @db.VarChar(32)
+  comment        String?
+  from_client_id Int?
+  to_client_id   Int?
+  actor_user_id  Int?
+  payload        Json     @default("{}")
+  created_at     DateTime @default(now())
+
+  tenant Tenant            @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  inbox  BankTransferInbox @relation(fields: [inbox_id], references: [id], onDelete: Cascade)
+  actor  User?             @relation("BankTransferInboxEventActor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, inbox_id, created_at])
+  @@map("bank_transfer_inbox_events")
 }
 
 /// Vaqtinchalik ruxsat: ekskpeditor to‘lovni tahrirlashi mumkin.

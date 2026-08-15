@@ -16,6 +16,10 @@ import {
 } from "./payment-allocations.service";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
+import {
+  parseTransferChannelFromPaymentNote,
+  resolveTransferChannel
+} from "../bank-transfer-inbox/bank-transfer-inbox.helpers";
 import type { PaymentListQuery, PaymentListRow } from "./payment.query.types";
 
 export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
@@ -59,6 +63,11 @@ export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
       orderBy: { expires_at: "desc" },
       take: 1,
       select: { expires_at: true }
+    },
+    bank_transfer_inbox: {
+      select: { id: true, source: true },
+      orderBy: { id: "desc" },
+      take: 1
     }
   };
 }
@@ -98,6 +107,13 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
   const ex = exDirect ?? exOrder;
   const desk = r.cash_desk as { name: string } | null | undefined;
   const ek = String(r.entry_kind ?? "payment");
+  const inboxRows = r.bank_transfer_inbox as Array<{ id: number; source: string }> | undefined;
+  const inbox = Array.isArray(inboxRows) && inboxRows.length > 0 ? inboxRows[0] : null;
+  const fromNote = parseTransferChannelFromPaymentNote(r.note);
+  const transfer_source = inbox?.source ?? fromNote?.source ?? null;
+  const transfer_channel = inbox
+    ? resolveTransferChannel(inbox.source)
+    : (fromNote?.channel ?? null);
   return {
     id: r.id,
     client_id: r.client_id,
@@ -136,7 +152,11 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
     deleted_at: r.deleted_at ? (r.deleted_at as Date).toISOString() : null,
     deleted_by_user_id: r.deleted_by_user_id ?? null,
     deleted_by_name: (r.deleted_by as { name: string } | null | undefined)?.name?.trim() || null,
-    delete_reason_ref: r.delete_reason_ref?.trim() || null
+    delete_reason_ref: r.delete_reason_ref?.trim() || null,
+    /** Перечисление: manual | bank_verified; oddiy naqd to‘lovlarda null */
+    transfer_channel,
+    transfer_source,
+    bank_transfer_inbox_id: inbox?.id ?? null
   };
 }
 
@@ -337,6 +357,16 @@ export function buildPaymentListWhere(
         { note: { contains: "банк", mode: "insensitive" } },
         { note: { contains: "bank", mode: "insensitive" } }
       ]
+    });
+  }
+
+  if (q.transfer_channel === "manual") {
+    andParts.push({ bank_transfer_inbox: { some: { source: "manual" } } });
+  } else if (q.transfer_channel === "bank_verified") {
+    andParts.push({
+      bank_transfer_inbox: {
+        some: { source: { in: ["excel", "csv", "bank_api", "one_c"] } }
+      }
     });
   }
 

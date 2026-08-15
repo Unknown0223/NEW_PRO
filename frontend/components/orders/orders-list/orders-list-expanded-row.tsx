@@ -34,7 +34,8 @@ function OrdersListExpandedBody({
 
   const items = q.data?.items ?? [];
   const status = q.data?.status ?? orderStatus ?? "";
-  const canEditHint = status === "new" || status === "confirmed";
+  /** Tahrirlash faqat «Новый» — Sozdat zakaz formasiga o‘tadi. */
+  const canEditHint = status === "new";
 
   return (
     <div
@@ -46,7 +47,7 @@ function OrdersListExpandedBody({
         <p className="text-xs font-medium text-muted-foreground">Состав заявки</p>
         {canEditHint ? (
           <Link
-            href={`/orders/${orderId}?edit=1`}
+            href={`/orders/new?edit_order_id=${orderId}`}
             className={cn(
               buttonVariants({ variant: "secondary", size: "sm" }),
               "h-8 gap-1.5 text-xs"

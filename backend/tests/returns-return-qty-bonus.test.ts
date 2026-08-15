@@ -29,6 +29,7 @@ function rule5plus1(): BonusRuleRow {
     scope_branch_codes: [],
     scope_agent_user_ids: [],
     scope_trade_direction_ids: [],
+    consignment_mode: "all",
     once_per_client: false,
     valid_from: null,
     valid_to: null,

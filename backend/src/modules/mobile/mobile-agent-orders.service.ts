@@ -262,6 +262,7 @@ export async function createMobileOrder(
       apply_discount: body.apply_discount ?? true,
       bonus_gift_overrides: body.bonus_gift_overrides,
       bonus_gift_lines: body.bonus_gift_lines,
+      bonus_strategy_selections: body.bonus_strategy_selections,
       order_type: "order",
       items: body.items
     },

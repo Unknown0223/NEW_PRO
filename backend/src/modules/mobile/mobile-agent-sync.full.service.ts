@@ -11,6 +11,10 @@ import {
   type CompactClientRow,
   type PresenceOpts
 } from "./mobile-agent-sync.config.service";
+import {
+  loadTenantTimezone,
+  utcOffsetHoursForTimezone
+} from "../tenant-settings/tenant-timezone";
 
 const MOBILE_SYNC_CLIENT_BATCH = 500;
 const MOBILE_SYNC_CLIENT_MAX = 20_000;
@@ -193,12 +197,15 @@ export async function syncFull(
     data: { last_sync_at: now }
   });
 
+  const workTimezone = await loadTenantTimezone(tenantId);
   return {
     sync_at: now.toISOString(),
     clients_replace_all: clientsReplaceAll,
     clients,
     products: products.map(compactProduct),
     prices: productPrices.map(compactPrice),
-    orders
+    orders,
+    work_timezone: workTimezone,
+    work_utc_offset_hours: utcOffsetHoursForTimezone(workTimezone)
   };
 }

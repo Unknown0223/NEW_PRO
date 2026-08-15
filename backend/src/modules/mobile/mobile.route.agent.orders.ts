@@ -19,14 +19,8 @@ import {
   mobileWarehouseStockQuerySchema
 } from "./mobile.route.agent.schemas";
 import {
-  createMobileOrder,
-  enqueueOrder,
-  getMobileAgentOrderDetail,
-  getMobileOrderStock,
-  getMobileWarehouseStockView,
-  getPendingCount,
-  listMobileAgentOrdersHistory,
-  syncOrders
+  createMobileOrder, enqueueOrder, getMobileAgentOrderDetail, getMobileOrderStock,
+  getMobileWarehouseStockView, getPendingCount, listMobileAgentOrdersHistory, syncOrders
 } from "./mobile.service";
 import {
   mobileAgentConfigPreHandler,
@@ -174,6 +168,24 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_ITEMS") return sendApiError(reply, request, 400, "EmptyItems");
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionRequired",
+            "Стратегия бўйича камида 1 та бонус/скидка танланг."
+          );
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionTooMany",
+            "Стратегия шартидан ортиқ қоида танланган."
+          );
         }
         if (msg === "NO_PRICE") {
           const ex = e as Error & { product_id?: number; price_type?: string };

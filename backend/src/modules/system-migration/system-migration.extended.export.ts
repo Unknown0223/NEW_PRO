@@ -28,6 +28,12 @@ function exportWhere(tenantId: number, scope: ExtendedExportScope = "tenant"): R
       return { block: { tenant_id: tenantId } };
     case "client_balance":
       return { client_balance: { tenant_id: tenantId } };
+    case "product":
+      return { product: { tenant_id: tenantId } };
+    case "client":
+      return { client: { tenant_id: tenantId } };
+    case "tag":
+      return { tag: { tenant_id: tenantId } };
     default:
       return { tenant_id: tenantId };
   }

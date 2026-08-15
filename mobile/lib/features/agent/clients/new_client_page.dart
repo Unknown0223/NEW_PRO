@@ -250,6 +250,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
 
       ref.invalidate(clientsListProvider);
       ref.invalidate(filteredClientsProvider);
+      resetOutletFilters(ref);
 
       if (!mounted) return;
 

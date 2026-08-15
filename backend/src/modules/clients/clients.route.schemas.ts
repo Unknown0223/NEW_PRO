@@ -7,6 +7,7 @@ export {
   balanceMovementBodySchema,
   bulkActiveBodySchema,
   bulkPatchBodySchema,
+  bulkItemsPatchBodySchema,
   createClientTagBodySchema,
   bulkTagsBodySchema
 } from "./clients.route.schemas.forms";

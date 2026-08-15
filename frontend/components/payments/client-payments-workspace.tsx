@@ -9,7 +9,8 @@ import {
   formatPaymentMoney,
   PaymentMethodBadge,
   Td,
-  Th
+  Th,
+  TransferChannelBadge
 } from "@/components/payments/client-payments/template-ui";
 import { PaymentRowActionBar } from "@/components/payments/client-payments/payment-row-action-bar";
 import { EprBulkDeleteModal } from "@/components/payments/expeditor-payment-requests/epr-bulk-delete-modal";
@@ -780,10 +781,13 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
                       </Td>
                       <Td>{p.payment_kind}</Td>
                       <Td>
-                        <PaymentMethodBadge
-                          label={methodLabel}
-                          isCash={isCashPaymentType(p.payment_type, methodLabel)}
-                        />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <PaymentMethodBadge
+                            label={methodLabel}
+                            isCash={isCashPaymentType(p.payment_type, methodLabel)}
+                          />
+                          <TransferChannelBadge channel={p.transfer_channel} />
+                        </div>
                       </Td>
                       <Td className="font-semibold text-gray-900">{formatPaymentMoney(p.amount)}</Td>
                       <Td className="max-w-[180px] truncate" title={p.agent_name ?? undefined}>

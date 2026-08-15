@@ -29,8 +29,14 @@ class BootstrapSyncPlan {
         );
       case 'supervisor':
         return const BootstrapSyncPlan(
-          title: 'Supervayzer ma\'lumotlari',
-          phaseLabels: ['Dashboard', 'Vizitlar', 'Agentlar GPS', 'Tayyor'],
+          title: 'Данные супервайзера',
+          phaseLabels: ['Сводка', 'Визиты', 'GPS агентов', 'Готово'],
+        );
+      case 'cashier':
+      case 'operator':
+        return const BootstrapSyncPlan(
+          title: 'Касса',
+          phaseLabels: ['Права', 'Готово'],
         );
       default:
         return BootstrapSyncPlan(
@@ -41,4 +47,7 @@ class BootstrapSyncPlan {
   }
 
   static bool isAgentRole(String? role) => role == null || role == 'agent';
+
+  static bool isCashDeskRole(String? role) =>
+      role == 'cashier' || role == 'operator';
 }

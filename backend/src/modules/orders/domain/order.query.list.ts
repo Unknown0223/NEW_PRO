@@ -303,17 +303,35 @@ export async function listOrdersPaged(
     andClauses.push({ payment_method_ref: listPriceType });
   }
 
+  const parsedPeriods = (() => {
+    const raw = q.date_periods?.trim() ?? "";
+    if (!raw) return [] as Array<{ from: Date; to: Date }>;
+    const out: Array<{ from: Date; to: Date }> = [];
+    for (const part of raw.split(",")) {
+      const chunk = part.trim();
+      if (!chunk) continue;
+      const [a, b] = chunk.split("_");
+      const fromIso = a?.trim() ?? "";
+      const toIso = b?.trim() ?? "";
+      const fromD = fromIso ? parseListOrderLocalDayStart(fromIso) : null;
+      const toD = toIso ? parseListOrderLocalDayEnd(toIso) : null;
+      if (!fromD || !toD || fromD.getTime() > toD.getTime()) continue;
+      out.push({ from: fromD, to: toD });
+    }
+    return out;
+  })();
+
   const fromD = q.date_from?.trim() ? parseListOrderLocalDayStart(q.date_from.trim()) : null;
   const toD = q.date_to?.trim() ? parseListOrderLocalDayEnd(q.date_to.trim()) : null;
-  if (fromD && toD && fromD.getTime() > toD.getTime()) {
+  if (parsedPeriods.length === 0 && fromD && toD && fromD.getTime() > toD.getTime()) {
     return { data: [], total: 0, page: q.page, limit: q.limit };
   }
-  if (fromD || toD) {
-    const range: Prisma.DateTimeFilter = {};
-    if (fromD) range.gte = fromD;
-    if (toD) range.lte = toD;
-    const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
-    if (rawMode === "ship") {
+
+  const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
+  const shipMode = rawMode === "ship";
+
+  const pushDateRangeClause = (range: Prisma.DateTimeFilter) => {
+    if (shipMode) {
       andClauses.push({
         status_logs: {
           some: {
@@ -326,6 +344,32 @@ export async function listOrdersPaged(
       // «Дата заказа» / «Дата создания» — Order.created_at (UI: created_at / list_created_at)
       andClauses.push({ created_at: range });
     }
+  };
+
+  if (parsedPeriods.length > 0) {
+    if (shipMode) {
+      andClauses.push({
+        OR: parsedPeriods.map((p) => ({
+          status_logs: {
+            some: {
+              to_status: "delivering",
+              created_at: { gte: p.from, lte: p.to }
+            }
+          }
+        }))
+      });
+    } else {
+      andClauses.push({
+        OR: parsedPeriods.map((p) => ({
+          created_at: { gte: p.from, lte: p.to }
+        }))
+      });
+    }
+  } else if (fromD || toD) {
+    const range: Prisma.DateTimeFilter = {};
+    if (fromD) range.gte = fromD;
+    if (toD) range.lte = toD;
+    pushDateRangeClause(range);
   }
 
   const rawSearch = q.search?.trim() ?? "";

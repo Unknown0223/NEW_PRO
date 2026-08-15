@@ -153,6 +153,7 @@ class _ExpeditorInvoicesPageState extends ConsumerState<ExpeditorInvoicesPage>
                   setState(() => _filter = _filter.copyWith(dateRange: r));
                 }
               },
+              onReset: () => setState(() => _filter = InvoiceFilterState.defaults()),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),

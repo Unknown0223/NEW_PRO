@@ -7,7 +7,7 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { AssignmentLockPanel } from "@/components/work-slots/assignment-lock-panel";
 import { cn } from "@/lib/utils";
-import { emptyAgentSlot, MAX_TEAM_ROWS, toggleWeekday, VISIT_DAYS } from "./client-edit-form.utils";
+import { emptyAgentSlot, toggleWeekday, VISIT_DAYS } from "./client-edit-form.utils";
 import { Caption, FieldHint, SpravochnikAdminLink, agentAssignmentsFieldHint } from "./client-edit-form-ui";
 import { YandexCoordinatePicker } from "./yandex-coordinate-picker";
 import type { ClientEditFormVm } from "./hooks/use-client-edit-form";
@@ -438,7 +438,8 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                 Команда (агент / доставщик — в разделе пользователей)
               </Caption>
               <p className="mt-1 text-xs text-muted-foreground">
-                Можно добавить несколько команд подряд (макс. {MAX_TEAM_ROWS}).
+                Можно добавить любое количество команд. Сохраняются только связанные (агент или
+                доставщик); пустые после сохранения удаляются.
               </p>
               {territoryAgentPickerCtxQ.data?.territory_matched ? (
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -551,8 +552,8 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={mutation.isPending || agentSlots.length >= MAX_TEAM_ROWS}
-                  onClick={() => setAgentSlots((prev) => (prev.length >= MAX_TEAM_ROWS ? prev : [...prev, emptyAgentSlot()]))}
+                  disabled={mutation.isPending}
+                  onClick={() => setAgentSlots((prev) => [...prev, emptyAgentSlot()])}
                 >
                   Добавить
                 </Button>

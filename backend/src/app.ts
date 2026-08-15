@@ -59,10 +59,21 @@ export function buildApp() {
   registerRoutePermissionGuard(app);
   registerAllRoutes(app);
 
-  app.get("/health", async () => ({
-    status: "ok",
-    time: new Date().toISOString()
-  }));
+  /** Mobil ServerClock uchun ishonchli UTC (HTTP Date ba'zan proxy’da chalkashadi). */
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("X-Server-Time", new Date().toISOString());
+    return payload;
+  });
+
+  app.get("/health", async () => {
+    const now = new Date();
+    return {
+      status: "ok",
+      time: now.toISOString(),
+      timezone: process.env.TZ?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      time_local: now.toLocaleString("sv-SE", { timeZone: "Asia/Tashkent", hour12: false })
+    };
+  });
 
   app.get("/ready", async (request, reply) => {
     const expectedToken = env.INTERNAL_HEALTH_TOKEN?.trim();

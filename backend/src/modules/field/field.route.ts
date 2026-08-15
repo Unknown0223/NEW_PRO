@@ -174,10 +174,22 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 403, "Forbidden");
       }
     } else {
-      if (body.agent_id == null) return sendApiError(reply, request, 400, "AgentIdRequired");
-      agentId = body.agent_id;
+      // supervisor: agent_id bo‘lmasa — o‘z lokatsiyasini yuboradi
+      if (body.agent_id != null) {
+        agentId = body.agent_id;
+      } else if (viewer.role === "supervisor") {
+        const self = parseUserId(request);
+        if (!self) return sendApiError(reply, request, 400, "BadUser");
+        agentId = self;
+      } else {
+        return sendApiError(reply, request, 400, "AgentIdRequired");
+      }
     }
-    if (!(await assertAgentInScope(request, reply, agentId))) return;
+    const selfPing =
+      viewer.role === "supervisor" &&
+      body.agent_id == null &&
+      agentId === parseUserId(request);
+    if (!selfPing && !(await assertAgentInScope(request, reply, agentId))) return;
     try {
       const data = await recordAgentLocationPing(tenantId, agentId, {
         latitude: body.latitude,

@@ -14,11 +14,20 @@ String? roleGuard(String role, String location) {
     '/deliveries', '/payments', '/returns', '/exp-return-by-order',
     '/exp-unfinished', '/payments-info', '/exp-client-map', '/exp-visits-map',
   };
+  const cashierRoutes = {
+    '/home',
+    '/profile',
+    '/bank-transfers',
+  };
 
   Set<String> allowed;
   switch (role) {
     case 'expeditor':
       allowed = expeditorRoutes;
+      break;
+    case 'cashier':
+    case 'operator':
+      allowed = cashierRoutes;
       break;
     default:
       allowed = agentRoutes;
@@ -32,6 +41,10 @@ String? roleGuard(String role, String location) {
   if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-debtor-client/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-return-by-order/')) return null;
+  if ((role == 'cashier' || role == 'operator') &&
+      location.startsWith('/bank-transfers/')) {
+    return null;
+  }
   if (allowed.contains(location)) return null;
   return '/home';
 }
@@ -73,6 +86,12 @@ void main() {
     test('agent can access kpi', () {
       expect(roleGuard('agent', '/kpi'), isNull);
       expect(roleGuard('agent', '/kpi/calc'), isNull);
+    });
+
+    test('cashier can access bank transfers', () {
+      expect(roleGuard('cashier', '/bank-transfers'), isNull);
+      expect(roleGuard('cashier', '/bank-transfers/12'), isNull);
+      expect(roleGuard('cashier', '/clients'), '/home');
     });
   });
 }

@@ -233,7 +233,9 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
         const verFromFilename = filename.match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
         const policy = await patchMobileAppReleasePolicy(request.tenant!.id, {
           download_url: downloadUrl,
-          force_update: true,
+          // Majburiy bloklash — alohida PATCH / force flag orqali.
+          // Har yuklashda force=true qilish loginni berkitib qo‘yardi.
+          force_update: false,
           ...(verFromFilename
             ? {
                 latest_version: verFromFilename,

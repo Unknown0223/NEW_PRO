@@ -62,7 +62,11 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       delegate: "workSlot",
       idMap: "workSlot",
       naturalKey: ["slot_code"],
-      fk: { direction_id: "tradeDirection" },
+      fk: {
+        direction_id: "tradeDirection",
+        warehouse_id: "warehouse",
+        cash_desk_id: "cashDesk"
+      },
       dates: ["created_at", "updated_at"]
     },
     {
@@ -142,6 +146,33 @@ export const EXTENDED_IMPORT_PHASES_0_2: ExtendedTableSpec[][] = [
       hasTenantId: false,
       scope: "group",
       fk: { group_id: "interchangeableGroup" }
+    },
+    {
+      file: "product_packagings",
+      delegate: "productPackaging",
+      idMap: "productPackaging",
+      fk: { product_id: "product" },
+      requiredFk: ["product_id"],
+      decimals: ["width_cm", "height_cm", "length_cm"],
+      dates: ["created_at", "updated_at"]
+    },
+    {
+      file: "product_segment_links",
+      delegate: "productSegmentLink",
+      noId: true,
+      hasTenantId: false,
+      scope: "product",
+      fk: { product_id: "product", segment_id: "productSegment" },
+      requiredFk: ["product_id", "segment_id"]
+    },
+    {
+      file: "product_trade_direction_links",
+      delegate: "productTradeDirectionLink",
+      noId: true,
+      hasTenantId: false,
+      scope: "product",
+      fk: { product_id: "product", trade_direction_id: "tradeDirection" },
+      requiredFk: ["product_id", "trade_direction_id"]
     }
   ]
 ];

@@ -13,6 +13,7 @@ import 'core/config/env_loader.dart';
 import 'core/database/app_database.dart';
 import 'core/errors/error_reporter.dart';
 import 'core/notifications/mobile_local_notification_service.dart';
+import 'core/prefs/app_prefs.dart';
 import 'core/theme/app_theme.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
@@ -84,6 +85,7 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.read(appRouterProvider);
+    final themeMode = ref.watch(appThemeModeProvider);
 
     // Keep autoFlush alive by reading it in build
     ref.watch(autoFlushProvider);
@@ -93,6 +95,8 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         title: 'Sales Arena',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeMode,
         routerConfig: router,
         builder: (context, child) => AppUpdateListener(
           child: BiometricSetupListener(

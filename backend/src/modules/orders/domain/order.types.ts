@@ -38,6 +38,8 @@ export type CreateOrderInput = {
   bonus_gift_overrides?: BonusGiftOverrideInput[];
   /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona (mobil assortiment tanlovi). */
   bonus_gift_lines?: BonusGiftLineInput[];
+  /** Strategiya: qaysi a'zo qoidalarni tanlash (ixtiyoriy — yo‘q bo‘lsa avto). */
+  bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
   comment?: string | null;
   /** Sozlamalar → request_type_entries (kod yoki nom, max 128) */
   request_type_ref?: string | null;
@@ -59,6 +61,8 @@ export type UpdateOrderLinesInput = {
   agent_id?: number | null;
   /** Savdo zakazida saqlangan to‘lov usulini yangilash (ixtiyoriy) */
   payment_method_ref?: string | null;
+  /** Narx turi (getProductPrice); bo‘sh bo‘lsa retail */
+  price_type?: string | null;
   apply_bonus?: boolean;
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount?: boolean;
@@ -432,6 +436,12 @@ export type ListOrdersQuery = {
   /** YYYY-MM-DD (server vaqt zonasi — brauzer `date` input bilan mos) */
   date_from?: string;
   date_to?: string;
+  /**
+   * Bir nechta sana oraliklari (oy multi-select bo‘shliqlari).
+   * Format: `YYYY-MM-DD_YYYY-MM-DD,YYYY-MM-DD_YYYY-MM-DD`.
+   * Berilganda `date_from`/`date_to` o‘rniga OR bilan filtrlanadi.
+   */
+  date_periods?: string;
   /**
    * Sana oralig‘i qaysi vaqtga tegishli: `created` | `order` | `ship`.
    * `order` — hozircha `created_at` bilan bir xil (alohida «zakaz sanasi» ustuni yo‘q).

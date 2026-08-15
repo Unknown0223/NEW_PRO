@@ -7,14 +7,16 @@ import '../../../core/agent/outlet_radius.dart';
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/field_api.dart';
 import '../../../core/auth/session.dart';
-import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/clients/client_outlet_filters.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
 import '../config/agent_config_enforcement.dart';
+import '../route/agent_route_provider.dart';
 import '../visits/visit_stats_helper.dart';
 import '../shell/agent_app_bar.dart';
 import 'agent_visits_page.dart';
@@ -37,10 +39,68 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
     _load();
   }
 
+  /// Faqat bugungi kunga belgilangan (marshrut / visit_weekdays) nuqtalar.
+  Future<List<Map<String, dynamic>>> _clientsForTodayVisit() async {
+    final all = await AppDatabase().getAllClients();
+    final byId = <int, Map<String, dynamic>>{
+      for (final c in all)
+        if (c['id'] is num) (c['id'] as num).toInt(): c,
+    };
+
+    Map<String, dynamic>? route;
+    try {
+      route = await ref.read(realTodayRouteProvider.future);
+    } catch (_) {
+      route = null;
+    }
+
+    final stops = (route?['stops'] as List?) ?? const [];
+    if (stops.isNotEmpty) {
+      final out = <Map<String, dynamic>>[];
+      final seen = <int>{};
+      for (final raw in stops) {
+        if (raw is! Map) continue;
+        final cid = (raw['client_id'] as num?)?.toInt();
+        if (cid == null || cid < 1 || seen.contains(cid)) continue;
+        seen.add(cid);
+        final local = byId[cid];
+        if (local != null) {
+          out.add(local);
+          continue;
+        }
+        out.add({
+          'id': cid,
+          'name': raw['client_name']?.toString() ?? 'Mijoz #$cid',
+          'client_code': raw['client_code'],
+          'latitude': raw['latitude'],
+          'longitude': raw['longitude'],
+        });
+      }
+      return out;
+    }
+
+    // Server marshruti bo‘sh — lokal tashrif kunlari bo‘yicha.
+    final routeDate = serverTodayKey();
+    final weekday = serverTodayWeekday();
+    return all
+        .where((c) => clientPlannedForVisitDay(c, weekday, routeDate))
+        .toList();
+  }
+
   Future<void> _load() async {
-    final list = await AppDatabase().getAllClients();
+    final list = await _clientsForTodayVisit();
     final tracker = ref.read(gpsTrackerProvider.notifier);
     final p = await tracker.getCurrentPosition();
+    if (p != null && list.isNotEmpty) {
+      list.sort((a, b) {
+        final da = _distanceMFor(a, p);
+        final db = _distanceMFor(b, p);
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return da.compareTo(db);
+      });
+    }
     if (mounted) {
       setState(() {
         _clients = list;
@@ -50,14 +110,19 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
     }
   }
 
-  double? _distanceM(Map<String, dynamic> client) {
-    if (_pos == null || client['latitude'] == null || client['longitude'] == null) return null;
+  double? _distanceMFor(Map<String, dynamic> client, Position pos) {
+    if (client['latitude'] == null || client['longitude'] == null) return null;
     return Geolocator.distanceBetween(
-      _pos!.latitude,
-      _pos!.longitude,
+      pos.latitude,
+      pos.longitude,
       (client['latitude'] as num).toDouble(),
       (client['longitude'] as num).toDouble(),
     );
+  }
+
+  double? _distanceM(Map<String, dynamic> client) {
+    if (_pos == null) return null;
+    return _distanceMFor(client, _pos!);
   }
 
   Future<void> _startVisit(Map<String, dynamic> client) async {
@@ -117,7 +182,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : _clients.isEmpty
-              ? AgentEmptyState.fill(message: S.emptyStartVisitClients)
+              ? AgentEmptyState.fill(message: S.noVisitsPlannedToday)
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _clients.length,

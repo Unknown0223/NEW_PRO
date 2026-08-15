@@ -105,6 +105,8 @@ class OrdersApi {
     required int warehouseId,
     required List<OrderLineInput> items,
     String? priceType,
+    bool isConsignment = false,
+    List<BonusStrategySelectionInput> strategySelections = const [],
     List<BonusGiftOverrideInput> giftOverrides = const [],
     List<BonusGiftLineInput> giftLines = const [],
   }) async {
@@ -115,6 +117,14 @@ class OrdersApi {
           'client_id': clientId,
           'warehouse_id': warehouseId,
           if (priceType != null && priceType.trim().isNotEmpty) 'price_type': priceType.trim(),
+          if (isConsignment) 'is_consignment': true,
+          if (strategySelections.isNotEmpty)
+            'bonus_strategy_selections': strategySelections
+                .map((s) => {
+                      'strategy_id': s.strategyId,
+                      'rule_ids': s.ruleIds,
+                    },)
+                .toList(),
           'items': items
               .map((i) => {
                     'product_id': i.productId,
@@ -158,6 +168,7 @@ class OrdersApi {
     bool isConsignment = false,
     String? consignmentDueDate,
     String? shipmentDate,
+    List<BonusStrategySelectionInput> strategySelections = const [],
   }) async {
     try {
       final r = await _dio.post(
@@ -181,6 +192,13 @@ class OrdersApi {
                       'bonus_rule_id': g.bonusRuleId,
                       'product_id': g.productId,
                       'qty': g.qty,
+                    },)
+                .toList(),
+          if (strategySelections.isNotEmpty)
+            'bonus_strategy_selections': strategySelections
+                .map((s) => {
+                      'strategy_id': s.strategyId,
+                      'rule_ids': s.ruleIds,
                     },)
                 .toList(),
           if (comment != null && comment.isNotEmpty) 'comment': comment,
@@ -226,6 +244,12 @@ class BonusGiftLineInput {
     required this.productId,
     required this.qty,
   });
+}
+
+class BonusStrategySelectionInput {
+  final int strategyId;
+  final List<int> ruleIds;
+  const BonusStrategySelectionInput({required this.strategyId, required this.ruleIds});
 }
 
 class StockRow {

@@ -40,6 +40,7 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending-bell";
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
 import { UserMenu } from "@/components/dashboard/user-menu";
+import { TenantSidebarClock } from "@/components/dashboard/tenant-sidebar-clock";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -51,6 +52,7 @@ import {
   Loader2,
   Lightbulb,
   Package,
+  Radar,
   Receipt,
   Search,
   Settings,
@@ -68,11 +70,24 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+/**
+ * Ba'zi ildiz yo‘llar — exact match only.
+ * Prefix (`/path/...`) boshqa menyu bandi yoki header tool (masalan GPS chip) bo‘lsa
+ * yon panelda noto‘g‘ri sariq belgilanishni oldini oladi.
+ */
+const NAV_ACTIVE_EXACT_ONLY = new Set([
+  "/dashboard",
+  "/clients",
+  "/suppliers",
+  "/reports", // Kassa «Отчёт по приходам» ≠ /reports/*
+  "/reports/gps" // Jadval hisobot ≠ /reports/gps/map (header GPS)
+]);
+
 function isNavActive(pathname: string, href: string): boolean {
   const pathOnly = href.split("?")[0] ?? href;
-  if (pathOnly === "/dashboard") return pathname === "/dashboard";
-  // Ro‘yxat ildizi — bolalar sahifalarida sariq bo‘lib qolmasin (merge / group-processing va h.k.)
-  if (pathOnly === "/clients") return pathname === "/clients" || pathname === "/clients/";
+  if (NAV_ACTIVE_EXACT_ONLY.has(pathOnly)) {
+    return pathname === pathOnly || pathname === `${pathOnly}/`;
+  }
   return pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
 }
 
@@ -485,9 +500,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
         <div className="border-b border-sidebar-border/80 px-3 py-4">
           <SalesArenaLogo variant="dark" height={48} className="mb-2.5 w-full max-w-[220px]" />
-          <p className="truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
-            {tenantSlug ?? "—"}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
+              {tenantSlug ?? "—"}
+            </p>
+            <TenantSidebarClock />
+          </div>
         </div>
         <nav className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden p-2 overscroll-contain">
           {dashboardSidebarLayout.map((entry, idx) => {
@@ -1259,6 +1277,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="truncate text-sm font-semibold text-foreground">{breadcrumb.label}</span>
               </div>
             ) : null}
+            {(effectiveRole === "admin" ||
+              permissionKeySet == null ||
+              permissionKeySet.has("gps.gps.view") ||
+              permissionKeySet.has("routes.trek.view") ||
+              permissionKeySet.has("gps.dostup_k_gps")) && (
+              <Link
+                href="/reports/gps/map"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-bold transition-colors",
+                  pathname === "/reports/gps/map" || pathname.startsWith("/reports/gps/map/")
+                    ? "border-teal-600/40 bg-teal-50 text-teal-800 shadow-sm"
+                    : "border-border/80 bg-background text-muted-foreground hover:border-teal-600/30 hover:bg-teal-50/60 hover:text-teal-800"
+                )}
+                title="GPS мониторинг (карта)"
+              >
+                <Radar className="size-3.5 shrink-0" aria-hidden />
+                GPS
+              </Link>
+            )}
             <WorkSlotProfileBadge />
           </div>
           <div className="flex items-center gap-1.5">
@@ -1272,11 +1309,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <SalesArenaLogo variant="light" height={36} className="mb-0.5 max-w-[200px]" />
-              <span className="truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
+                <TenantSidebarClock tone="header" />
+              </div>
             </div>
-            <Button variant="outline" size="sm" type="button" onClick={logout}>
-              Выход
-            </Button>
+            <div className="flex items-center gap-2">
+              {(effectiveRole === "admin" ||
+                permissionKeySet == null ||
+                permissionKeySet.has("gps.gps.view") ||
+                permissionKeySet.has("routes.trek.view") ||
+                permissionKeySet.has("gps.dostup_k_gps")) && (
+                <Link
+                  href="/reports/gps/map"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold",
+                    pathname.startsWith("/reports/gps/map")
+                      ? "border-teal-600/40 bg-teal-50 text-teal-800"
+                      : "border-border text-muted-foreground"
+                  )}
+                >
+                  <Radar className="size-3" aria-hidden />
+                  GPS
+                </Link>
+              )}
+              <Button variant="outline" size="sm" type="button" onClick={logout}>
+                Выход
+              </Button>
+            </div>
           </div>
           <nav className="scrollbar-none flex gap-1.5 overflow-x-auto pb-0.5">
             {mobileItems.map((item) => {

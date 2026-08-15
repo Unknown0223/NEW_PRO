@@ -7,10 +7,15 @@ type RuleWithRelations = BonusRule & {
   clauses?: ClauseWithConditions[];
 };
 
-import type { BonusConditionRow, BonusRuleRow } from "./bonus-rules.types";
+import type { BonusConditionRow, BonusConsignmentMode, BonusRuleRow } from "./bonus-rules.types";
 import { bonusRuleInclude } from "./bonus-rules.types";
 import { mapClauseRow } from "./bonus-rules.clauses";
 import { bonusRuleHasBeenUsed } from "./bonus-rules.usage";
+
+export function normalizeBonusConsignmentMode(v: string | null | undefined): BonusConsignmentMode {
+  if (v === "yes" || v === "no") return v;
+  return "all";
+}
 
 export function normalizeScopeBranchCodes(codes: readonly string[] | undefined): string[] {
   const out = new Set<string>();
@@ -148,6 +153,7 @@ export function mapBonusRuleFull(r: RuleWithRelations): BonusRuleRow {
     scope_trade_direction_ids: normalizeScopePositiveIds(
       primary?.scope_trade_direction_ids ?? r.scope_trade_direction_ids ?? []
     ),
+    consignment_mode: normalizeBonusConsignmentMode(r.consignment_mode),
     conditions,
     clauses
   };

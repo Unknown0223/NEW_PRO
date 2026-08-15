@@ -206,22 +206,112 @@ function buildPartialFromLog(
   return v;
 }
 
+function parseDecStr(s: unknown): string {
+  if (s == null || s === "") return "";
+  return formatSum(String(s));
+}
+
+function buildPartialFromChangeLog(
+  log: OrderChangeLogRow,
+  data: OrderDetailRow
+): OrderHistoryVersion {
+  const v = emptyVersionFields();
+  v.date = formatOrderHistoryDateTime(log.created_at);
+  v.updatedBy = log.user_login?.trim() || "";
+  v.status = statusLabel(data.status);
+  v.statusKey = mapStatusKey(data.status);
+
+  const p =
+    log.payload && typeof log.payload === "object"
+      ? (log.payload as Record<string, unknown>)
+      : {};
+
+  if (log.action === "lines") {
+    const ts = p.total_sum as { from?: unknown; to?: unknown } | undefined;
+    if (ts?.to != null) v.sum = parseDecStr(ts.to);
+    else if (ts != null && typeof ts !== "object") v.sum = parseDecStr(ts);
+
+    const paid = p.paid_lines as { to?: unknown[] } | undefined;
+    if (paid?.to) {
+      v.quantity = String(paid.to.length);
+    }
+
+    const da = p.discount_alert as { to?: unknown; from?: unknown } | string | null | undefined;
+    const alertTo =
+      da != null && typeof da === "object" && !Array.isArray(da)
+        ? (da as { to?: unknown }).to
+        : da;
+    const parts: string[] = ["Изменён состав / сумма"];
+    if (alertTo) parts.push(`Скидка: ${String(alertTo)}`);
+    v.comment = parts.join(" · ");
+  } else if (log.action === "meta") {
+    const bits: string[] = [];
+    if (p.warehouse_id) bits.push("склад");
+    if (p.agent_id) bits.push("агент");
+    if (p.expeditor_user_id) bits.push("экспедитор");
+    if (p.payment_method_ref) bits.push("тип оплаты");
+    v.comment = bits.length ? `Изменены: ${bits.join(", ")}` : "Изменены данные заказа";
+    v.warehouse = data.warehouse_name?.trim() || "";
+    v.agent = formatAgentMultiline(data);
+    v.expediter = data.expeditor_display?.trim() || data.expeditors?.trim() || "";
+    v.priceType = data.payment_method_label?.trim() || data.price_type?.trim() || "";
+  } else if (log.action.includes("consignment")) {
+    v.consignation = log.action.includes("unset") ? "Нет" : "Да";
+    v.comment = log.action.includes("unset") ? "Консигнация отключена" : "Консигнация включена";
+  } else if (log.action === "return_reason") {
+    const reason =
+      typeof p.reason === "string"
+        ? p.reason
+        : typeof p.comment === "string"
+          ? p.comment
+          : "";
+    v.comment = reason ? `Причина возврата: ${reason}` : "Указана причина возврата";
+  } else {
+    v.comment = log.action;
+  }
+
+  return v;
+}
+
+type TimelineEvent =
+  | { kind: "status"; at: number; log: NonNullable<OrderDetailRow["status_logs"]>[number] }
+  | { kind: "change"; at: number; log: OrderChangeLogRow };
+
 export function buildOrderVersions(data: OrderDetailRow): OrderHistoryVersion[] {
-  const logs = [...(data.status_logs ?? [])].sort(
+  const statusLogs = [...(data.status_logs ?? [])].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const changeLogs = [...(data.change_logs ?? [])].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 
-  if (logs.length === 0) {
-    return [buildFullVersion(data, data.status, data.created_at)];
+  const events: TimelineEvent[] = [
+    ...statusLogs.map((log) => ({
+      kind: "status" as const,
+      at: new Date(log.created_at).getTime(),
+      log
+    })),
+    ...changeLogs.map((log) => ({
+      kind: "change" as const,
+      at: new Date(log.created_at).getTime(),
+      log
+    }))
+  ].sort((a, b) => a.at - b.at);
+
+  const initialStatus = statusLogs[0]?.from_status ?? data.status ?? "new";
+  const versions: OrderHistoryVersion[] = [
+    buildFullVersion(data, initialStatus, data.created_at)
+  ];
+
+  for (const ev of events) {
+    if (ev.kind === "status") {
+      versions.push(buildPartialFromLog(ev.log, data));
+    } else {
+      versions.push(buildPartialFromChangeLog(ev.log, data));
+    }
   }
 
-  const initialStatus = logs[0]?.from_status ?? "new";
-  const versions: OrderHistoryVersion[] = [buildFullVersion(data, initialStatus, data.created_at)];
-
-  for (const log of logs) {
-    versions.push(buildPartialFromLog(log, data));
-  }
-
+  // Faqat yaratish snapshoti — change/status yo‘q bo‘lsa ham 1 ustun yetarli
   return versions;
 }
 
@@ -426,14 +516,43 @@ export function orderHistoryAuditMeta(
 ): { createdBy: string; updatedBy: string; lastChange: string } {
   const first = versions[0];
   const last = versions[versions.length - 1];
+
+  const changeLogs = [...(data.change_logs ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  const statusLogs = [...(data.status_logs ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const latestChange = changeLogs[0];
+  const latestStatus = statusLogs[0];
+  let latestAt = data.created_at;
+  let latestUser = last?.updatedBy || last?.createdBy || "";
+
+  const candidates: Array<{ at: string; user: string }> = [];
+  if (latestChange) {
+    candidates.push({
+      at: latestChange.created_at,
+      user: latestChange.user_login?.trim() || ""
+    });
+  }
+  if (latestStatus) {
+    candidates.push({
+      at: latestStatus.created_at,
+      user: latestStatus.user_login?.trim() || ""
+    });
+  }
+  if (data.delivered_at) candidates.push({ at: data.delivered_at, user: latestUser });
+  if (data.shipped_at) candidates.push({ at: data.shipped_at, user: latestUser });
+  if (candidates.length) {
+    candidates.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    latestAt = candidates[0]!.at;
+    if (candidates[0]!.user) latestUser = candidates[0]!.user;
+  }
+
   return {
     createdBy: first?.createdBy || formatCreatedBy(data) || "—",
-    updatedBy: last?.updatedBy || last?.createdBy || "—",
-    lastChange:
-      last?.date ||
-      formatOrderHistoryDateTime(
-        data.delivered_at ?? data.shipped_at ?? data.created_at
-      ) ||
-      "—"
+    updatedBy: latestUser || formatCreatedBy(data) || "—",
+    lastChange: formatOrderHistoryDateTime(latestAt) || last?.date || "—"
   };
 }

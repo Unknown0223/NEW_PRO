@@ -531,6 +531,8 @@ class AgentConfigResult {
   final TenantReferences tenantReferences;
   final List<AgentCityOption> agentCities;
   final AppUpdateInfo? appUpdate;
+  final String? workTimezone;
+  final num? workUtcOffsetHours;
   AgentConfigResult({
     required this.userId,
     this.tenantName,
@@ -542,12 +544,15 @@ class AgentConfigResult {
     this.tenantReferences = const TenantReferences(),
     this.agentCities = const [],
     this.appUpdate,
+    this.workTimezone,
+    this.workUtcOffsetHours,
   });
   factory AgentConfigResult.fromJson(Map<String, dynamic> j) {
     final mc = j['mobile_config'];
     final tr = j['tenant_references'];
     final limitsRaw = j['agent_limits'];
     final upd = j['app_update'];
+    final offsetRaw = j['work_utc_offset_hours'];
     return AgentConfigResult(
       userId: j['user_id'] as int? ?? 0,
       tenantName: j['tenant_name']?.toString(),
@@ -565,6 +570,8 @@ class AgentConfigResult {
           : const TenantReferences(),
       agentCities: parseAgentCities(j['agent_cities']),
       appUpdate: upd is Map ? AppUpdateInfo.fromJson(Map<String, dynamic>.from(upd)) : null,
+      workTimezone: j['work_timezone']?.toString(),
+      workUtcOffsetHours: offsetRaw is num ? offsetRaw : num.tryParse('$offsetRaw'),
     );
   }
 
@@ -588,6 +595,8 @@ class SyncFullResult {
   final List<SyncProduct> products;
   final List<SyncPrice> prices;
   final List<SyncOrder> orders;
+  final String? workTimezone;
+  final num? workUtcOffsetHours;
 
   SyncFullResult({
     required this.syncAt,
@@ -596,16 +605,23 @@ class SyncFullResult {
     this.products = const [],
     this.prices = const [],
     this.orders = const [],
+    this.workTimezone,
+    this.workUtcOffsetHours,
   });
 
-  factory SyncFullResult.fromJson(Map<String, dynamic> j) => SyncFullResult(
-    syncAt: j['sync_at'] ?? '',
-    clientsReplaceAll: j['clients_replace_all'] == true,
-    clients: (j['clients'] as List?)?.map((e) => SyncClient.fromJson(e)).toList() ?? [],
-    products: (j['products'] as List?)?.map((e) => SyncProduct.fromJson(e)).toList() ?? [],
-    prices: (j['prices'] as List?)?.map((e) => SyncPrice.fromJson(e)).toList() ?? [],
-    orders: (j['orders'] as List?)?.map((e) => SyncOrder.fromJson(e)).toList() ?? [],
-  );
+  factory SyncFullResult.fromJson(Map<String, dynamic> j) {
+    final offsetRaw = j['work_utc_offset_hours'];
+    return SyncFullResult(
+      syncAt: j['sync_at'] ?? '',
+      clientsReplaceAll: j['clients_replace_all'] == true,
+      clients: (j['clients'] as List?)?.map((e) => SyncClient.fromJson(e)).toList() ?? [],
+      products: (j['products'] as List?)?.map((e) => SyncProduct.fromJson(e)).toList() ?? [],
+      prices: (j['prices'] as List?)?.map((e) => SyncPrice.fromJson(e)).toList() ?? [],
+      orders: (j['orders'] as List?)?.map((e) => SyncOrder.fromJson(e)).toList() ?? [],
+      workTimezone: j['work_timezone']?.toString(),
+      workUtcOffsetHours: offsetRaw is num ? offsetRaw : num.tryParse('$offsetRaw'),
+    );
+  }
 }
 
 class SyncClient {

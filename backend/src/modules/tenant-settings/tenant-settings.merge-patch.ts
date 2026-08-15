@@ -1,5 +1,6 @@
 import type { ReturnFilterSettings } from "../returns/returns-filter.types";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
+import { normalizeTenantTimezone } from "./tenant-timezone";
 import type { CurrencyEntryDto, PaymentMethodEntryDto } from "./finance-refs";
 import {
   defaultCurrencyCodeFromEntries,
@@ -60,6 +61,7 @@ export type ProfileReferencesPatch = {
     comment?: string | null;
     color?: string | null;
     active?: boolean;
+    sync_with_1c?: boolean;
   }[];
   price_type_entries?: {
     id: string;
@@ -85,6 +87,7 @@ export type ProfileReferencesPatch = {
 export type ProfileSettingsPatch = {
   feature_flags?: Record<string, unknown>;
   return_filter?: ReturnFilterSettings;
+  timezone?: string;
   references?: ProfileReferencesPatch;
 };
 
@@ -96,6 +99,9 @@ export function mergeProfilePatchIntoSettings(
   const nextSettings = { ...baseSettings };
   if (patch.return_filter != null) {
     nextSettings.return_filter = normalizeReturnFilterSettings(patch.return_filter);
+  }
+  if (patch.timezone != null) {
+    nextSettings.timezone = normalizeTenantTimezone(patch.timezone);
   }
   if (patch.feature_flags != null) {
     nextSettings.feature_flags = {
@@ -269,7 +275,8 @@ export function mergeProfilePatchIntoSettings(
           sort_order: e.sort_order ?? null,
           comment: e.comment?.trim() || null,
           color: e.color?.trim().slice(0, 32) || null,
-          active: e.active ?? true
+          active: e.active ?? true,
+          sync_with_1c: e.sync_with_1c === true
         };
       });
       merged.payment_method_entries = asDto;

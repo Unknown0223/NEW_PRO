@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE } from "../orders/order-status";
 import {
   parseConsignmentMonthCloseDay,
   patchConsignmentSettings
@@ -15,6 +15,8 @@ export type ConsignmentOutstandingOptions = {
   ignorePreviousMonthsDebt: boolean;
   /** UTC: hisobot oyi 1-kuni 00:00 */
   monthStartsAt: Date;
+  /** Tahrirda: shu zakazni outstandingdan chiqarib, yangi summa bilan proyeksiya */
+  excludeOrderId?: number;
 };
 
 /** `YYYY-MM` yoki bo‘sh — joriy oy */
@@ -35,7 +37,11 @@ export function utcMonthStart(year: number, month: number): Date {
 }
 
 /**
- * Zakaz bo‘yicha to‘langan summa: avvalo `payment_allocations`, bo‘sh bo‘lsa `order_id` li to‘lovlar.
+ * Agent konsignatsiya limiti uchun band summa (to‘lanmagan).
+ * `new`…`delivered` — hisobga kiradi; `cancelled` / `returned` — yo‘q.
+ * To‘lov / allocation (confirmed, void emas) bo‘yicha qarz kamaysa — band summa
+ * ham kamayadi → limit qaytadi.
+ * Debitor «Балансы по консигнации» (faqat delivered) dan alohida.
  */
 export async function computeAgentConsignmentOutstanding(
   db: Prisma.TransactionClient | typeof prisma,
@@ -49,8 +55,8 @@ export async function computeAgentConsignmentOutstanding(
       agent_id: agentId,
       is_consignment: true,
       order_type: "order",
-      /** «Балансы по консигнации» bilan bir xil: faqat доставлен (mijoz olgach). */
-      status: { in: [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE] }
+      status: { in: [...ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE] },
+      ...(opts.excludeOrderId != null ? { id: { not: opts.excludeOrderId } } : {})
     },
     select: { id: true, total_sum: true, created_at: true }
   });
@@ -65,16 +71,31 @@ export async function computeAgentConsignmentOutstanding(
   const ids = filtered.map((o) => o.id);
   const totalById = new Map(filtered.map((o) => [o.id, o.total_sum]));
 
-  const allocGroups = await db.paymentAllocation.groupBy({
-    by: ["order_id"],
+  // PaymentAllocation da `payment` relation yo‘q — confirmed to‘lovlarni alohida filterlaymiz.
+  const allocRows = await db.paymentAllocation.findMany({
     where: { tenant_id: tenantId, order_id: { in: ids } },
-    _sum: { amount: true }
+    select: { order_id: true, payment_id: true, amount: true }
   });
+  const allocPaymentIds = [...new Set(allocRows.map((r) => r.payment_id))];
+  const confirmedAllocPayIds = new Set<number>();
+  if (allocPaymentIds.length > 0) {
+    const confirmedPays = await db.payment.findMany({
+      where: {
+        tenant_id: tenantId,
+        id: { in: allocPaymentIds },
+        deleted_at: null,
+        workflow_status: "confirmed",
+        entry_kind: { in: ["payment", "discount_settlement"] }
+      },
+      select: { id: true }
+    });
+    for (const p of confirmedPays) confirmedAllocPayIds.add(p.id);
+  }
   const allocMap = new Map<number, Prisma.Decimal>();
-  for (const g of allocGroups) {
-    if (g.order_id != null) {
-      allocMap.set(g.order_id, g._sum.amount ?? new Prisma.Decimal(0));
-    }
+  for (const row of allocRows) {
+    if (!confirmedAllocPayIds.has(row.payment_id)) continue;
+    const prev = allocMap.get(row.order_id) ?? new Prisma.Decimal(0);
+    allocMap.set(row.order_id, prev.add(row.amount));
   }
 
   const payGroups = await db.payment.groupBy({
@@ -82,7 +103,7 @@ export async function computeAgentConsignmentOutstanding(
     where: {
       tenant_id: tenantId,
       order_id: { in: ids },
-      entry_kind: "payment",
+      entry_kind: { in: ["payment", "discount_settlement"] },
       workflow_status: "confirmed",
       deleted_at: null
     },
@@ -99,7 +120,10 @@ export async function computeAgentConsignmentOutstanding(
   for (const oid of ids) {
     const total = totalById.get(oid) ?? new Prisma.Decimal(0);
     const alloc = allocMap.get(oid) ?? new Prisma.Decimal(0);
-    const paid = alloc.gt(0) ? alloc : payMap.get(oid) ?? new Prisma.Decimal(0);
+    const direct = payMap.get(oid) ?? new Prisma.Decimal(0);
+    // Allocation bo‘lsa u asosiy; aks holda order_id li to‘lov.
+    // Ikkisi ham bo‘lsa — kattaroqini olamiz (qisman allocation + to‘g‘ridan to‘lov).
+    const paid = alloc.gt(direct) ? alloc : direct;
     const unpaid = total.sub(paid);
     if (unpaid.gt(0)) outstanding = outstanding.add(unpaid);
   }

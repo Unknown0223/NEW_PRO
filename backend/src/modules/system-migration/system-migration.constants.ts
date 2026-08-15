@@ -125,7 +125,8 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     phase: 4,
     export_status: "included",
     import_status: "included",
-    import_note_uz: "Mijoz foto hisobotlari (data URI) arxivda."
+    import_note_uz:
+      "Faqat oxirgi 30 kunlik mijoz fotootchyotlari. Import eng oxirida (barcha bog‘lanishlardan keyin)."
   },
   {
     id: "extended",
@@ -135,7 +136,7 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Mahsulot katalogi, narxlar, hududlar, rollar, kassa/ombor bog‘lanishlari, balans harakatlari va boshqalar."
+      "Mahsulot katalogi, narxlar, hududlar, rollar, kassa/ombor/slot bog‘lanishlari, shartlar (srok), balans harakatlari va boshqalar."
   }
 ];
 
@@ -158,7 +159,8 @@ export type MigrationImportStageFlag =
   | "bonus"
   | "transactional"
   | "extended"
-  | "initial_setup";
+  | "initial_setup"
+  | "files";
 
 const MODULE_STAGE: Record<string, MigrationImportStageFlag> = {
   initial_setup: "initial_setup",
@@ -172,7 +174,7 @@ const MODULE_STAGE: Record<string, MigrationImportStageFlag> = {
   visits: "transactional",
   expenses: "transactional",
   bonus_plans: "bonus",
-  files: "extended",
+  files: "files",
   extended: "extended"
 };
 
@@ -188,7 +190,7 @@ export function resolveImportSelection(
   if (!modules?.length) {
     return {
       applyProfile: true,
-      stages: new Set(["initial_setup", "references", "bonus", "transactional", "extended"])
+      stages: new Set(["initial_setup", "references", "bonus", "transactional", "extended", "files"])
     };
   }
   const selected = new Set(modules.map((m) => String(m).trim()).filter(Boolean));
@@ -209,7 +211,7 @@ export function resolveImportSelection(
   if (stages.size === 0) {
     return {
       applyProfile: true,
-      stages: new Set(["initial_setup", "references", "bonus", "transactional", "extended"])
+      stages: new Set(["initial_setup", "references", "bonus", "transactional", "extended", "files"])
     };
   }
   return { applyProfile, stages };

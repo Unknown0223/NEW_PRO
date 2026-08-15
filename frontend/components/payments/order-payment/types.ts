@@ -20,7 +20,8 @@ export type OrderCashInContextOrder = {
 };
 
 export type OrderCashInContext = {
-  client: { id: number; name: string };
+  client: { id: number; name: string } | null;
+  clients_count?: number;
   payment_methods: OrderCashInPaymentMethod[];
   orders: OrderCashInContextOrder[];
 };

@@ -165,5 +165,7 @@ export type OrderBonusPrereqEnv = {
   clientMonthPaidQtyAggregateExclOrder: number;
   /** SKU bo‘yicha boshqa zakazlardan pullik donalar, joriy zakaz chiqarilgan. */
   clientMonthPaidQtyByProductExclOrder: ReadonlyMap<number, number>;
+  /** Zakaz konsignatsiyami — `BonusRule.consignment_mode` filtri. */
+  is_consignment: boolean;
 };
 

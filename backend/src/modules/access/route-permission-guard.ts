@@ -85,6 +85,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/warehouses(\/|$)/, "warehouse.sklady.view"),
 
   // ─────────── Касса (payments / cash-desks / currency / expenses) ───────────
+  r(WRITE, /\/bank-transfer-inbox\/(ingest|import|manual)$/, "cash.perechisleniya.import", "cash.perechisleniya.create"),
+  r(WRITE, /\/bank-transfer-inbox\/:id\/(assign|reassign|comment|ignore|create-payment)$/, "cash.perechisleniya.update"),
+  r(READ, /\/bank-transfer-inbox(\/|$)/, "cash.perechisleniya.view"),
   r(WRITE, /\/payments\/:id\/(confirm|batch-confirm)$/, "cash.oplaty_klientov.update"),
   r(WRITE, /\/payments\/:id\/(reject|return-to-expeditor)$/, "cash.oplaty_klientov.update"),
   r(["POST"], /\/payments(\/order-cash-in)?$/, "cash.oplaty_klientov.create"),
@@ -257,6 +260,12 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["DELETE"], /\/bonus-rules\/:id$/, "settings.bonusy_i_skidki.delete"),
   r(READ, /\/bonus-rules(\/|$)/, "settings.bonusy_i_skidki.view"),
 
+  // ─────────── Стратегия бонусов и скидок ───────────
+  r(["POST"], /\/bonus-strategies$/, "settings.bonusy_i_skidki.create"),
+  r(["PUT", "PATCH"], /\/bonus-strategies\/:id(\/active)?$/, "settings.bonusy_i_skidki.update"),
+  r(["DELETE"], /\/bonus-strategies\/:id$/, "settings.bonusy_i_skidki.delete"),
+  r(READ, /\/bonus-strategies(\/|$)/, "settings.bonusy_i_skidki.view"),
+
   // ─────────── Отказы (refusals) ───────────
   r(WRITE, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.create", "orders.obmen_i_otkaz.update"),
   r(READ, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.view"),
@@ -286,6 +295,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Полевые / GPS / маршруты ───────────
   r(WRITE, /\/field(\/|$)/, "gps.gps.update", "routes.marshruty.update"),
   r(READ, /\/field(\/|$)/, "gps.gps.view", "routes.marshruty.view"),
+  r(READ, /\/gps-monitoring(\/|$)/, "gps.gps.view", "routes.trek.view", "routes.marshruty.view"),
   r(WRITE, /\/geo-boundaries(\/|$)/, "clients.klient.assign", "clients.klient.update"),
   r(READ, /\/geo-boundaries(\/|$)/, "clients.klient.view"),
 

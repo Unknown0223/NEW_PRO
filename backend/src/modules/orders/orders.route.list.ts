@@ -189,6 +189,7 @@ export async function registerOrderListRoutes(app: FastifyInstance) {
           product_id: q.product_id,
           date_from: q.date_from,
           date_to: q.date_to,
+          date_periods: q.date_periods,
           date_mode: q.date_mode,
           order_type: q.order_type,
           is_consignment: q.is_consignment,

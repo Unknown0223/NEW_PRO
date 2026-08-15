@@ -4,6 +4,15 @@
  * o'rniga rus tilidagi tushunarli matn va xom JSON o'rniga qisqa xulosa.
  */
 
+import { bonusAlertLabel } from "@/lib/bonus-alert";
+import { discountAlertLabel } from "@/lib/discount-alert";
+import { formatNumberGrouped } from "@/lib/format-numbers";
+import {
+  formatOrderChangeSummary,
+  formatOrderPayloadDetailRows
+} from "@/lib/order-change-log-format";
+import { ORDER_STATUS_LABELS } from "@/lib/order-status";
+
 /** entity_type → tushunarli nom (RU). */
 export const ENTITY_TYPE_LABEL: Record<string, string> = {
   order: "Заказ",
@@ -325,7 +334,9 @@ const PAYLOAD_KEY_LABEL: Record<string, string> = {
   bonus_alert: "проблема бонуса",
   alerts_resolved_at: "проблемы исправлены",
   paid_lines: "товары",
-  schedule: "расписание"
+  schedule: "расписание",
+  payment_method_ref: "тип оплаты",
+  warehouse_block_id: "блок склада (ID)"
 };
 
 /** Kalitni tushunarli nomga o'giradi (mos kelmasa — o'qiladigan ko'rinish). */
@@ -333,13 +344,42 @@ export function humanizeKey(key: string): string {
   return PAYLOAD_KEY_LABEL[key] ?? key.replace(/[._]/g, " ");
 }
 
-function formatScalar(value: unknown): string {
+function formatScalar(key: string, value: unknown): string {
   if (value == null) return "—";
   if (typeof value === "boolean") return value ? "да" : "нет";
+  if (key === "discount_alert" || key === "bonus_alert") {
+    const s = String(value);
+    return discountAlertLabel(s) ?? bonusAlertLabel(s) ?? s;
+  }
+  if (
+    (key === "total_sum" ||
+      key === "discount_sum" ||
+      key === "bonus_sum" ||
+      key === "amount" ||
+      key === "refund") &&
+    (typeof value === "string" || typeof value === "number")
+  ) {
+    return `${formatNumberGrouped(value, { maxFractionDigits: 0 })} сум`;
+  }
+  if ((key === "from_status" || key === "to_status") && typeof value === "string") {
+    return ORDER_STATUS_LABELS[value] ?? value;
+  }
   return String(value);
 }
 
 export type PayloadRow = { label: string; value: string };
+
+function isOrderishPayload(obj: Record<string, unknown>): boolean {
+  return (
+    "paid_lines" in obj ||
+    "discount_alert" in obj ||
+    "bonus_alert" in obj ||
+    "total_sum" in obj ||
+    "warehouse_id" in obj ||
+    "agent_id" in obj ||
+    "expeditor_user_id" in obj
+  );
+}
 
 /**
  * Payload'ning BARCHA maydonlarini batafsil, tushunarli ko'rinishda qaytaradi
@@ -348,21 +388,37 @@ export type PayloadRow = { label: string; value: string };
 export function payloadDetailRows(payload: unknown): PayloadRow[] {
   if (payload == null || typeof payload !== "object") return [];
   const obj = payload as Record<string, unknown>;
+
+  if (isOrderishPayload(obj)) {
+    const orderRows = formatOrderPayloadDetailRows(payload);
+    if (orderRows.length) return orderRows;
+  }
+
   const rows: PayloadRow[] = [];
   for (const [k, v] of Object.entries(obj)) {
     if (v == null || v === "") continue;
+    // Texnik shovqin — order_id auditda keraksiz
+    if (k === "order_id") continue;
     let text: string;
     if (Array.isArray(v)) {
-      text = v.length === 0 ? "—" : v.map((x) => formatScalar(x)).join(", ");
+      text = v.length === 0 ? "—" : v.map((x) => formatScalar(k, x)).join(", ");
     } else if (typeof v === "object") {
-      const entries = Object.entries(v as Record<string, unknown>).filter(([, vv]) => vv != null);
-      text = entries.length
-        ? entries.map(([kk, vv]) => `${humanizeKey(kk)}: ${formatScalar(vv)}`).join("; ")
-        : "—";
+      const d = v as { from?: unknown; to?: unknown };
+      if ("from" in d || "to" in d) {
+        const from = formatScalar(k, d.from);
+        const to = formatScalar(k, d.to);
+        if (from === to) continue;
+        text = `${from} → ${to}`;
+      } else {
+        const entries = Object.entries(v as Record<string, unknown>).filter(([, vv]) => vv != null);
+        text = entries.length
+          ? entries.map(([kk, vv]) => `${humanizeKey(kk)}: ${formatScalar(kk, vv)}`).join("; ")
+          : "—";
+      }
     } else if (k === "entry_kind" && typeof v === "string") {
       text = ENTRY_KIND_LABEL[v] ?? v;
     } else {
-      text = formatScalar(v);
+      text = formatScalar(k, v);
     }
     rows.push({ label: humanizeKey(k), value: text });
   }
@@ -380,59 +436,42 @@ function valueToText(key: string, value: unknown): string | null {
   if (key === "entry_kind" && typeof value === "string") return ENTRY_KIND_LABEL[value] ?? value;
   if (Array.isArray(value)) return value.length ? `${value.length}` : null;
   if (typeof value === "object") {
+    const d = value as { from?: unknown; to?: unknown };
+    if ("from" in d || "to" in d) {
+      const from = formatScalar(key, d.from);
+      const to = formatScalar(key, d.to);
+      if (from === to) return null;
+      return `${from} → ${to}`;
+    }
     const keys = Object.keys(value as object);
     return keys.length ? keys.join(", ") : null;
   }
   if (typeof value === "boolean") return value ? "да" : "нет";
-  const s = String(value);
-  return s.length > 60 ? `${s.slice(0, 60)}…` : s;
+  const s = formatScalar(key, value);
+  return s.length > 80 ? `${s.slice(0, 80)}…` : s;
 }
 
 /**
  * Payload'dan qisqa, tushunarli xulosa: "статус: новый → собран", "сумма: 50 000".
  * Hech narsa topilmasa bo'sh string.
  */
-export function summarizePayload(payload: unknown): string {
+export function summarizePayload(payload: unknown, action?: string | null): string {
   if (payload == null || typeof payload !== "object") return "";
   const obj = payload as Record<string, unknown>;
 
   // Status o'zgarishi maxsus ko'rinish
   if (obj.from_status != null || obj.to_status != null) {
-    const parts: string[] = [];
-    if (obj.to_status != null) parts.push(`статус: ${obj.from_status ?? "—"} → ${obj.to_status}`);
-    return parts.join(", ");
+    const from = formatScalar("from_status", obj.from_status);
+    const to = formatScalar("to_status", obj.to_status);
+    return `статус: ${from} → ${to}`;
   }
 
-  // Zakaz qatorlari tahriri (order_change.lines)
-  if (obj.paid_lines != null || obj.discount_alert != null || obj.bonus_alert != null) {
-    const parts: string[] = [];
-    const fmtDelta = (v: unknown): string | null => {
-      if (v == null || typeof v !== "object") return null;
-      const d = v as { from?: unknown; to?: unknown };
-      if (String(d.from ?? "") === String(d.to ?? "")) return null;
-      return `${d.from ?? "—"} → ${d.to ?? "—"}`;
-    };
-    for (const [key, label] of [
-      ["total_sum", "сумма"],
-      ["discount_sum", "скидка"],
-      ["bonus_sum", "бонус"],
-      ["discount_alert", "скидка-проблема"],
-      ["bonus_alert", "бонус-проблема"]
-    ] as const) {
-      const t = fmtDelta(obj[key]);
-      if (t) parts.push(`${label}: ${t}`);
-    }
-    if (obj.alerts_resolved === true) {
-      const at = typeof obj.alerts_resolved_at === "string" ? obj.alerts_resolved_at : "";
-      parts.push(at ? `проблемы исправлены (${at})` : "проблемы исправлены");
-    }
-    const paid = obj.paid_lines as
-      | { from?: unknown[]; to?: unknown[] }
-      | undefined;
-    if (paid?.from && paid?.to) {
-      parts.push(`товары: ${paid.from.length} → ${paid.to.length} поз.`);
-    }
-    if (parts.length) return parts.join("; ");
+  const orderSummary = formatOrderChangeSummary(action ?? "", payload);
+  if (orderSummary && orderSummary !== "—") return orderSummary;
+
+  // Zakaz qatorlari tahriri (fallback)
+  if (obj.paid_lines != null || obj.discount_alert != null || obj.bonus_alert != null || obj.total_sum != null) {
+    return formatOrderChangeSummary("lines", payload);
   }
 
   // `patch` — qaysi maydonlar o'zgargani
@@ -451,12 +490,12 @@ export function summarizePayload(payload: unknown): string {
     "refund",
     "payment_type",
     "entry_kind",
-    "order_id",
     "client_id",
     "line_count",
     "role",
     "login",
-    "reason"
+    "reason",
+    "comment"
   ];
   const out: string[] = [];
   for (const k of priority) {

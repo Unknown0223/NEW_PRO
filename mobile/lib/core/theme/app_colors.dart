@@ -37,8 +37,12 @@ class AppColors {
 
   // Role accents (agent = shablon primary)
   static const Color agentAccent = primary;
-  static const Color expeditorAccent = Color(0xFFF97316);
-  static const Color supervisorAccent = Color(0xFF6366F1);
+  /// Экспедитор / dastavchik — 0223 dizayn brand (#0E8A4F)
+  static const Color expeditorAccent = Color(0xFF0E8A4F);
+  /// CACTUS Supervayzer yashil accent
+  static const Color supervisorAccent = Color(0xFF1FA855);
+  /// Kassir / bank transfer inbox
+  static const Color cashierAccent = Color(0xFF0F766E);
 
   // UI chrome
   static const Color border = Color(0xFFE2E8F0);

@@ -164,6 +164,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Cash (Касса) ───────────────────────────────────────────
   { module: "cash", section: "oplaty_klientov", labelRu: "Оплаты клиентов", actions: ["view", "create", "update", "delete", "void", "restore", "copy", "history"] },
+  { module: "cash", section: "perechisleniya", labelRu: "Перечисления (банк)", actions: ["view", "create", "update", "import", "history"] },
   { module: "cash", section: "rashody_klienta", labelRu: "Расходы клиента", actions: CRUD_VOID },
   { module: "cash", section: "nachalnye_balansy", labelRu: "Начальные балансы клиентов", actions: ["view", "create", "update", "void", "restore"] },
   { module: "cash", section: "otchety", labelRu: "Отчеты", actions: VIEW_COPY },
@@ -243,7 +244,12 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "format_klienta", labelRu: "Формат клиента", actions: [...CRUD, "activate", "deactivate"] },
   { module: "settings", section: "tip_klienta", labelRu: "Тип клиента", actions: [...CRUD, "activate", "deactivate"] },
   { module: "settings", section: "kategoriya_klienta", labelRu: "Категория клиента", actions: [...CRUD, "activate", "deactivate"] },
-  { module: "settings", section: "bonusy_i_skidki", labelRu: "Бонусы и скидки", actions: CRUD_VOID },
+  {
+    module: "settings",
+    section: "bonusy_i_skidki",
+    labelRu: "Бонусы и скидки",
+    actions: ["view", "create", "update", "delete", "void", "restore", "history"]
+  },
   { module: "settings", section: "ustanovit_natsenku", labelRu: "Наценка", actions: ["view", "update"] },
   { module: "settings", section: "profil_kompanii", labelRu: "Профиль компании", actions: ["view", "update"] },
   { module: "settings", section: "zakrytie_perioda", labelRu: "Закрытие периода", actions: ["view", "status"] },

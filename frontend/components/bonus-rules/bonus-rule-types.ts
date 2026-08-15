@@ -1,3 +1,6 @@
+/** all = любой заказ; yes = только консигнация; no = без консигнации. */
+export type BonusConsignmentMode = "all" | "yes" | "no";
+
 export type BonusConditionRow = {
   id: number;
   min_qty: number | null;
@@ -80,6 +83,8 @@ export type BonusRuleRow = {
   scope_agent_user_ids?: number[];
   /** Bo‘sh = barcha yo‘nalishlar (cheklov yo‘q). */
   scope_trade_direction_ids?: number[];
+  /** all | yes | no — консигнация заказыга qo‘llash. */
+  consignment_mode?: BonusConsignmentMode;
   /** Ro‘yxat API: har bir bog‘langan qoida uchun qisqa shart matni (nomisiz). */
   prerequisite_summaries?: string[];
   conditions: BonusConditionRow[];

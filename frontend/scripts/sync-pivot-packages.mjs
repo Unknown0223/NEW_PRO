@@ -28,14 +28,39 @@ function copyTree(from, to) {
 /** Staging tayyor bo‘lgach: dst → .old, staging → dst, keyin .old o‘chiriladi. */
 function atomicReplaceDir(livePath, stagingPath) {
   const bak = `${livePath}.old`;
-  rmSync(bak, { recursive: true, force: true });
+  try {
+    rmSync(bak, { recursive: true, force: true });
+  } catch {
+    /* Windows lock — davom etamiz */
+  }
   if (existsSync(livePath)) {
-    renameSync(livePath, bak);
+    try {
+      renameSync(livePath, bak);
+    } catch (err) {
+      // EPERM: papka band (Next/antivirus). To‘g‘ridan-to‘g‘ri o‘chirishga urinish.
+      const code = err && typeof err === "object" && "code" in err ? err.code : "";
+      if (code === "EPERM" || code === "EACCES" || code === "EBUSY") {
+        try {
+          rmSync(livePath, { recursive: true, force: true });
+        } catch (rmErr) {
+          // Hali band — stagingni live ichiga merge/copy qilib, eski fayllarni saqlaymiz
+          console.warn(
+            `[sync-pivot] rename/rm band (${livePath}), copy fallback:`,
+            rmErr instanceof Error ? rmErr.message : rmErr
+          );
+          copyTree(stagingPath, livePath);
+          rmSync(stagingPath, { recursive: true, force: true });
+          return;
+        }
+      } else {
+        throw err;
+      }
+    }
   }
   try {
     renameSync(stagingPath, livePath);
   } catch (err) {
-    // Swap muvaffaqiyatsiz — eski versiyani qaytarish
+    // Swap muvaffaqiyatsiz — eski versiyani qaytarish yoki copy fallback
     if (existsSync(bak) && !existsSync(livePath)) {
       try {
         renameSync(bak, livePath);
@@ -43,9 +68,25 @@ function atomicReplaceDir(livePath, stagingPath) {
         /* ignore */
       }
     }
+    const code = err && typeof err === "object" && "code" in err ? err.code : "";
+    if (code === "EPERM" || code === "EACCES" || code === "EBUSY") {
+      console.warn(`[sync-pivot] staging→live rename band, copy fallback: ${livePath}`);
+      copyTree(stagingPath, livePath);
+      rmSync(stagingPath, { recursive: true, force: true });
+      try {
+        rmSync(bak, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     throw err;
   }
-  rmSync(bak, { recursive: true, force: true });
+  try {
+    rmSync(bak, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
 }
 
 if (!existsSync(join(src, "package.json"))) {

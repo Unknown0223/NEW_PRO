@@ -202,9 +202,13 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
             .map((s) => Number.parseInt(s.trim(), 10))
             .filter((n) => Number.isFinite(n) && n > 0)
         : undefined;
+      const client_id =
+        parsed.data.client_id != null && parsed.data.client_id > 0
+          ? parsed.data.client_id
+          : undefined;
       try {
         const data = await getOrderCashInContext(request.tenant!.id, {
-          client_id: parsed.data.client_id,
+          client_id,
           order_ids
         });
         return reply.send({ data });

@@ -16,6 +16,7 @@ import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../orders/held_order_model.dart' show HeldOrder, formatHeldCountdown;
 import '../orders/held_orders_provider.dart';
+import '../orders/held_order_sync_sheet.dart';
 import '../orders/order_create_models.dart' show formatMoneyUz, formatDebtMoney;
 import '../orders/order_draft_provider.dart';
 import '../orders/orders_providers.dart';
@@ -577,9 +578,21 @@ class _NotifCard extends StatelessWidget {
         return _UrgentHeldCard(
           held: item.held!,
           unread: unread,
-          onTap: () {
+          onTap: () async {
             onMarkRead();
-            context.push('/orders/create?held_id=${item.held!.id}');
+            final h = item.held!;
+            final delayMin = h.submitAt.difference(h.createdAt).inMinutes.clamp(1, 59);
+            final action = await showHeldOrderSyncSheet(
+              context,
+              order: h,
+              delayMinutes: delayMin,
+            );
+            if (!context.mounted) return;
+            if (action == HeldOrderSyncAction.edit) {
+              context.push('/orders/create?held_id=${h.id}');
+            } else if (action == HeldOrderSyncAction.goHome) {
+              context.go('/home');
+            }
           },
           onCancel: onCancelHeld,
         );
@@ -798,7 +811,7 @@ class _UrgentHeldCardState extends State<_UrgentHeldCard> with SingleTickerProvi
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'осталось $countdown',
+                        'осталось $countdown · автосинхр. таймери',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

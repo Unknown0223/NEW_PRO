@@ -1,5 +1,6 @@
 "use client";
 
+import { TenantTimezoneBootstrap } from "@/components/tenant-timezone-bootstrap";
 import { AppThemeProvider } from "@/components/app-theme-provider";
 import { LoaderPrefsProvider } from "@/components/loader-prefs-provider";
 import { ShiftWheelHorizontalScroll } from "@/components/shift-wheel-horizontal-scroll";
@@ -106,6 +107,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AppThemeProvider>
         <LoaderPrefsProvider>
+          <TenantTimezoneBootstrap />
           <ShiftWheelHorizontalScroll />
           <WebVitalsReporter />
           {children}

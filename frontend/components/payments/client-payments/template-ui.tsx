@@ -97,6 +97,27 @@ export function PaymentMethodBadge({ label, isCash }: { label: string; isCash: b
   );
 }
 
+/** Перечисление kanali: qo‘lda vs 1C/bank. */
+export function TransferChannelBadge({
+  channel
+}: {
+  channel: "manual" | "bank_verified" | null | undefined;
+}) {
+  if (!channel) return null;
+  const manual = channel === "manual";
+  return (
+    <span
+      className={cn(
+        "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+        manual ? "bg-amber-50 text-amber-800" : "bg-indigo-50 text-indigo-800"
+      )}
+      title={manual ? "Qo‘lda kiritilgan перечисление" : "Bank / 1C / Excel orqali"}
+    >
+      {manual ? "Вручную" : "1С / банк"}
+    </span>
+  );
+}
+
 export function GrantAccessIcon({ className }: { className?: string }) {
   return (
     <svg

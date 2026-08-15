@@ -256,13 +256,17 @@ export async function importReferenceTables(
       const agentId = remapId(maps.user, data.agent_id);
       const clientCode = asTrimmedString(data.client_code);
       const phoneNorm = asTrimmedString(data.phone_normalized);
-      const existing =
-        (clientCode
-          ? await tx.client.findFirst({ where: { tenant_id: tenantId, client_code: clientCode } })
-          : null) ??
-        (phoneNorm
+      // replace (to‘liq restore): telefon bo‘yicha birlashtirmaymiz — bitta raqamda
+      // ko‘p nuqta bo‘lishi mumkin (998000000000 va h.k.). Faqat client_code match.
+      // keep (merge): kod yoki telefon bo‘yicha mavjud mijozga yopishtiramiz.
+      const existingByCode = clientCode
+        ? await tx.client.findFirst({ where: { tenant_id: tenantId, client_code: clientCode } })
+        : null;
+      const existingByPhone =
+        conflictPolicy !== "replace" && phoneNorm
           ? await tx.client.findFirst({ where: { tenant_id: tenantId, phone_normalized: phoneNorm } })
-          : null);
+          : null;
+      const existing = existingByCode ?? existingByPhone;
       if (existing) {
         if (conflictPolicy === "replace") {
           await tx.client.update({

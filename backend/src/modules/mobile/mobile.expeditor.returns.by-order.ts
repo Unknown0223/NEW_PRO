@@ -59,13 +59,14 @@ export async function createMobileExpeditorReturnByOrder(
   const { merged, totalDebt } = mergeReturnByOrderQtyMaps(manualReq, previewLines);
 
   const lines = Array.from(merged.entries())
-    .filter(([, v]) => v.paid + v.bonus > 0)
+    .filter(([, v]) => v.paid + v.bonus + v.cash > 0)
     .map(([product_id, v]) => {
       const tgt = targetByProduct.get(product_id);
       return {
         product_id,
         paid_qty: v.paid,
         bonus_qty: v.bonus,
+        ...(v.cash > 0 ? { bonus_cash: v.cash } : {}),
         ...(tgt != null ? { return_as_product_id: tgt } : {})
       };
     });

@@ -68,9 +68,9 @@ export default function BonusStackHubPage() {
       icon: Percent
     },
     {
-      href: "/settings/bonus-rules/strategy",
-      title: "Стратегия бонусов",
-      desc: "Порядок объединения (stack).",
+      href: "/settings/bonus-strategies",
+      title: "Стратегия бонусов и скидок",
+      desc: "Группы бонусов/скидок с лимитом выбора в заказе.",
       icon: Layers
     },
     {
@@ -127,8 +127,12 @@ export default function BonusStackHubPage() {
               )}
               <p className="mt-3 text-xs text-muted-foreground">
                 Изменить stack можно через API{" "}
-                <code className="rounded bg-muted px-1">PATCH /settings/bonus-stack</code> или форму на странице
-                стратегии.
+                <code className="rounded bg-muted px-1">PATCH /settings/bonus-stack</code>. Именные группы
+                бонусов/скидок — в разделе{" "}
+                <Link href="/settings/bonus-strategies" className="underline hover:text-foreground">
+                  Стратегия бонусов и скидок
+                </Link>
+                .
               </p>
             </div>
           </div>

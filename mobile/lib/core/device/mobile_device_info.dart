@@ -15,19 +15,42 @@ class MobileDeviceInfo {
   static String? _cachedDeviceId;
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   static const String _deviceIdKey = 'device_id';
+  static const String _apkVersionKey = 'last_known_apk_version';
 
+  /// Faqat o‘rnatishdan keyin chaqiriladi — har resume da tozalash soxta
+  /// «0.0.0 → majburiy yangilash» ga olib kelishi mumkin.
   static void clearApkCache() {
     _cachedApk = null;
   }
 
   /// Faqat versiya (`pubspec.yaml`) — build raqami web panelda ko‘rsatilmaydi.
+  /// PackageInfo xato bersa, oxirgi muvaffaqiyatli o‘qilgan versiya saqlanadi
+  /// (0.0.0 bilan force-update qilmaslik uchun).
   static Future<String> get apkVersion async {
-    if (_cachedApk != null) return _cachedApk!;
-    try {
-      _cachedApk = await AppBuildInfo.versionOnly();
-    } catch (_) {
-      _cachedApk = '0.0.0';
+    if (_cachedApk != null && _cachedApk!.isNotEmpty && _cachedApk != '0.0.0') {
+      return _cachedApk!;
     }
+    try {
+      final v = (await AppBuildInfo.versionOnly()).trim();
+      if (v.isNotEmpty && v != '0.0.0') {
+        _cachedApk = v;
+        try {
+          await _secureStorage.write(key: _apkVersionKey, value: v);
+        } catch (_) {}
+        return v;
+      }
+    } catch (_) {}
+
+    try {
+      final stored = (await _secureStorage.read(key: _apkVersionKey))?.trim();
+      if (stored != null && stored.isNotEmpty && stored != '0.0.0') {
+        _cachedApk = stored;
+        return stored;
+      }
+    } catch (_) {}
+
+    if (_cachedApk != null && _cachedApk!.isNotEmpty) return _cachedApk!;
+    _cachedApk = '0.0.0';
     return _cachedApk!;
   }
 

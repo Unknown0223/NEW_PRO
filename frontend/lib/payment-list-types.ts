@@ -41,6 +41,10 @@ export type PaymentListApiRow = {
   deleted_by_user_id?: number | null;
   deleted_by_name?: string | null;
   delete_reason_ref?: string | null;
+  /** Перечисление: manual | bank_verified; oddiy to‘lovlarda null */
+  transfer_channel?: "manual" | "bank_verified" | null;
+  transfer_source?: string | null;
+  bank_transfer_inbox_id?: number | null;
 };
 
 export type PaymentListApiResponse = {

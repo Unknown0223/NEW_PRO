@@ -39,6 +39,7 @@ export const NAV_PERM = {
   stockMaterial: ["warehouse.materialnyy_otchet.view"],
 
   cashPayments: ["cash.oplaty_klientov.view"],
+  cashBankTransfers: ["cash.perechisleniya.view"],
   cashClientExpenses: ["cash.rashody_klienta.view"],
   cashOpeningBalances: ["cash.nachalnye_balansy.view", "cash.nachalnye_balansy_klientov.view"],
   cashClientBalances: ["cash.otchety.view", "cash.balansy.view"],

@@ -194,6 +194,18 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
             order_total: ex.order_total
           });
         }
+        if (msg === "CONSIGNMENT_LIMIT_EXCEEDED") {
+          const ex = e as Error & {
+            consignment_limit?: string;
+            outstanding?: string;
+            order_total?: string;
+          };
+          return sendApiError(reply, request, 400, "ConsignmentLimitExceeded", undefined, {
+            consignment_limit: ex.consignment_limit,
+            outstanding: ex.outstanding,
+            order_total: ex.order_total
+          });
+        }
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
         }

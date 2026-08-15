@@ -17,6 +17,7 @@ import {
   effectiveSubtotalForSumMinRule,
   ruleBlockedByOncePerClient,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleNeedsOrderContext,
@@ -31,7 +32,8 @@ function discountPctRuleCandidates(
   orderedProductIds: ReadonlySet<number>,
   productById: ReadonlyMap<number, ProductLite>,
   clientUsedAutoBonusRuleIds: ReadonlySet<number>,
-  orderAgent: OrderAgentBonusContext | null
+  orderAgent: OrderAgentBonusContext | null,
+  isConsignment: boolean
 ): BonusRuleRow[] {
   return rules
     .filter((r) => {
@@ -49,6 +51,7 @@ function discountPctRuleCandidates(
       return false;
     })
     .filter((r) => ruleMatchesClient(r, client))
+    .filter((r) => ruleMatchesConsignment(r, isConsignment))
     .filter((r) => ruleMatchesOrderAgentScope(r, orderAgent))
     .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
     .filter((r) => r.discount_pct != null && Number(r.discount_pct) > 0);
@@ -74,7 +77,8 @@ export async function findWinningDiscountRuleWithPrereqs(
     orderedProductIds,
     productById,
     clientUsedAutoBonusRuleIds,
-    orderAgent
+    orderAgent,
+    prereqEnv.is_consignment
   ).sort((a, b) => b.priority - a.priority);
 
   const baseSubtotal = opts?.baseSubtotalBeforeDiscount ?? new PrismaClient.Decimal(0);
@@ -100,11 +104,13 @@ export function findWinningDiscountRule(
   orderedProductIds: ReadonlySet<number>,
   productById: ReadonlyMap<number, ProductLite>,
   clientUsedAutoBonusRuleIds: ReadonlySet<number> = new Set(),
-  orderAgent: OrderAgentBonusContext | null = null
+  orderAgent: OrderAgentBonusContext | null = null,
+  isConsignment = false
 ): BonusRuleRow | null {
   const candidates = discountRulesSorted
     .filter((r) => r.type === "discount" && !ruleNeedsOrderContext(r) && !ruleBlockedByOncePerClient(r, clientUsedAutoBonusRuleIds))
     .filter((r) => ruleMatchesClient(r, client))
+    .filter((r) => ruleMatchesConsignment(r, isConsignment))
     .filter((r) => ruleMatchesOrderAgentScope(r, orderAgent))
     .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
     .filter((r) => r.discount_pct != null && r.discount_pct > 0);

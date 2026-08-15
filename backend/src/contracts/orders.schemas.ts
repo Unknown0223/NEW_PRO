@@ -48,6 +48,15 @@ export const createOrderBodySchema = z
     apply_discount: z.boolean().optional(),
     bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
     bonus_gift_lines: z.array(bonusGiftLineSchema).optional(),
+    bonus_strategy_selections: z
+      .array(
+        z.object({
+          strategy_id: z.number().int().positive(),
+          rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+        })
+      )
+      .max(50)
+      .optional(),
     comment: z.string().max(4000).optional().nullable(),
     request_type_ref: z.string().trim().max(128).optional().nullable(),
     is_consignment: z.boolean().optional(),
@@ -149,6 +158,8 @@ export const ordersListQuerySchema = z
     date_to: z.string().optional(),
     from: z.string().optional(),
     to: z.string().optional(),
+    /** Bo‘shliqli oylar: `YYYY-MM-DD_YYYY-MM-DD,YYYY-MM-DD_YYYY-MM-DD` */
+    date_periods: z.string().optional(),
     order_type: z.string().optional(),
     is_consignment: z.string().optional(),
     product_category_id: z.string().optional(),
@@ -189,6 +200,7 @@ export const ordersListQuerySchema = z
       product_id: parseOptionalPosInt(q.product_id),
       date_from: q.date_from?.trim() || q.from?.trim() || undefined,
       date_to: q.date_to?.trim() || q.to?.trim() || undefined,
+      date_periods: q.date_periods?.trim() || undefined,
       order_type: q.order_type?.trim() || undefined,
       is_consignment: parseConsignmentFlag(q.is_consignment),
       product_category_id: parseOptionalPosInt(q.product_category_id),
@@ -226,6 +238,11 @@ export const bulkOrderStatusBodySchema = z.object({
   order_ids: orderIdsBulkSchema,
   status: z.string().min(1),
   occurred_at: z.string().datetime({ offset: true }).optional()
+});
+
+/** POST `/api/:slug/orders/bulk/details` — guruh jami / export */
+export const bulkOrderDetailsBodySchema = z.object({
+  order_ids: orderIdsBulkSchema
 });
 
 /** PATCH `/api/:slug/orders/:id/milestone-at` — mavjud bosqich log vaqtini tuzatish */
@@ -439,6 +456,8 @@ export const patchOrderLinesBodySchema = z.object({
   warehouse_id: z.number().int().positive().nullable().optional(),
   agent_id: z.number().int().positive().nullable().optional(),
   payment_method_ref: z.string().trim().max(64).optional().nullable(),
+  /** Narx turi — tahrirda qayta hisoblash (Order jadvalida saqlanmaydi). */
+  price_type: z.string().trim().min(1).max(128).optional(),
   apply_bonus: z.boolean().optional(),
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount: z.boolean().optional(),

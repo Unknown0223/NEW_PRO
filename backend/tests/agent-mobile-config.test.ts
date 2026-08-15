@@ -49,6 +49,15 @@ describe("agent-mobile-config", () => {
   it("defaultMobileConfigForRole sets supervisor supervision flags", () => {
     const mc = defaultMobileConfigForRole("supervisor");
     expect(mc.supervision?.check_sales).toBe(true);
+    expect(mc.client?.show_balance).toBe(true);
+    expect(mc.gps?.tracking_enabled).toBe(true);
+    expect(mc.sync?.allowed_window_from).toBe("06:00");
+  });
+
+  it("resolveMobileConfigForUser merges supervisor defaults", () => {
+    const mc = resolveMobileConfigForUser("supervisor", {});
+    expect(mc.supervision?.check_receipt_faces).toBe(true);
+    expect(mc.misc?.visit_start_end_enabled).toBe(true);
   });
 
   it("extractMobileConfigFromEntitlementsUnknown reads nested mobile_config", () => {

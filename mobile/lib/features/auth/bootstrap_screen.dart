@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/errors/user_facing_error.dart';
+import '../../core/theme/app_colors.dart';
 import '../agent/sync/full_sync_view.dart';
 import 'auth_provider.dart';
 
@@ -25,6 +26,11 @@ class BootstrapScreen extends ConsumerWidget {
 
     final errorInfo = auth.errorInfo ??
         UserFacingError.tryParseLegacy(auth.error);
+    final accent = switch (role) {
+      'supervisor' => AppColors.supervisorAccent,
+      'expeditor' => AppColors.expeditorAccent,
+      _ => AppColors.primary,
+    };
 
     return Stack(
       children: [
@@ -33,6 +39,7 @@ class BootstrapScreen extends ConsumerWidget {
           progress: model.progress,
           items: model.items,
           title: model.title,
+          accentColor: accent,
           onContinue: isSuccess ? finish : null,
           onBack: isSuccess ? finish : null,
         ),

@@ -23,7 +23,7 @@ import {
   prepareRow,
   prismaKnownCode
 } from "./system-migration.extended.import-shared";
-import { readZipJson } from "./system-migration.parse";
+import { readZipJson, remapId } from "./system-migration.parse";
 
 export { fkSkipWarningUz } from "./system-migration.extended.import-fk";
 
@@ -34,6 +34,26 @@ type ExtendedImportOpts = {
   skipDuplicateKeys?: boolean;
   conflictPolicy?: MigrationConflictPolicy;
 };
+
+/** Polymorphic document_id — section/kind bo‘yicha ID remap. */
+function remapDocumentEditGrantDocumentId(
+  data: Record<string, unknown>,
+  maps: MigrationIdMaps
+): void {
+  const section = String(data.section ?? "");
+  const kind = String(data.document_kind ?? "");
+  const oldId = data.document_id;
+  let mapped: number | null | undefined;
+  if (section === "payments") mapped = remapId(maps.payment, oldId);
+  else if (section === "orders") mapped = remapId(maps.order, oldId);
+  else if (section === "returns") mapped = remapId(maps.salesReturn, oldId);
+  else if (section === "stock") {
+    if (kind === "goods_receipt") mapped = remapId(maps.goodsReceipt, oldId);
+    else if (kind === "correction") mapped = remapId(maps.warehouseCorrection, oldId);
+    else if (kind === "stock_take") mapped = remapId(maps.stockTake, oldId);
+  }
+  if (mapped != null) data.document_id = mapped;
+}
 
 async function resolveExistingId(
   model: ReturnType<typeof delegateOf>,
@@ -89,6 +109,9 @@ async function importTableSpec(
 
   for (const row of rows) {
     const data = prepareRow(row, spec, maps, tenantId, strictFk);
+    if (spec.file === "document_edit_grants") {
+      remapDocumentEditGrantDocumentId(data, maps);
+    }
     rowIdx += 1;
     const sp = `mig_${spec.file.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 24)}_${rowIdx}`;
     try {
@@ -156,6 +179,25 @@ async function importTableSpec(
           if (conflictPolicy === "replace") {
             await model.update({
               where: { id: existingId },
+              data: omitForUpdate(data)
+            });
+            imported += 1;
+          } else {
+            skippedDup += 1;
+          }
+          continue;
+        }
+      }
+      // Partial unique: bitta faol slot_user_link (ended_at IS NULL) per slot_id
+      if (spec.file === "slot_user_links" && data.ended_at == null && typeof model.findFirst === "function") {
+        const active = await model.findFirst({
+          where: { slot_id: data.slot_id, ended_at: null }
+        });
+        if (active?.id != null) {
+          if (spec.idMap) maps[spec.idMap].set(oldId, active.id);
+          if (conflictPolicy === "replace") {
+            await model.update({
+              where: { id: active.id },
               data: omitForUpdate(data)
             });
             imported += 1;

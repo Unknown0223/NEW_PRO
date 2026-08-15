@@ -15,12 +15,12 @@ import { OrderPaymentFilterBar } from "./order-payment-filter-bar";
 import { OrderPaymentStatistics } from "./order-payment-statistics";
 import { OrderPaymentTable } from "./order-payment-table";
 import {
+  applyDraftWithCap,
   buildContextQuery,
   contextOrderToRow,
   defaultPaidAtLocal,
   fillCellDraftFromOrderAmount,
   prefillDraftFromTotalAmount,
-  recomputeRowTotals,
   sumDraft,
   sumTotalPaid,
   toIsoFromLocal,
@@ -69,7 +69,10 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
       clientIdParam,
       orderIdsParam.join(",")
     ],
-    enabled: Boolean(tenantSlug) && hydrated && Boolean(clientIdParam),
+    enabled:
+      Boolean(tenantSlug) &&
+      hydrated &&
+      (Boolean(clientIdParam) || orderIdsParam.length > 0),
     staleTime: STALE.detail,
     queryFn: async () => {
       const params = buildContextQuery(clientIdParam, orderIdsParam);
@@ -91,6 +94,12 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
       return (data.data ?? []).filter((d) => d.is_active);
     }
   });
+
+  useEffect(() => {
+    setPrefillDone(false);
+    setRows([]);
+    setFormErr(null);
+  }, [clientIdParam, orderIdsParam.join(",")]);
 
   useEffect(() => {
     if (!contextQ.data) return;
@@ -135,10 +144,7 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
     setRows((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
-        return recomputeRowTotals({
-          ...o,
-          draftByMethodId: { ...o.draftByMethodId, [methodId]: value }
-        });
+        return applyDraftWithCap(o, methodId, value);
       })
     );
   }, []);
@@ -151,8 +157,7 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const cid = Number.parseInt(clientIdParam, 10);
-      if (!Number.isFinite(cid) || cid < 1) throw new Error("NO_CLIENT");
+      if (!clientIdParam && orderIdsParam.length === 0) throw new Error("NO_CLIENT");
       const deskRaw = filters.cashDeskId.trim();
       const deskId = deskRaw ? Number.parseInt(deskRaw, 10) : null;
       const cash_desk_id =
@@ -176,9 +181,11 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
       }
 
       if (lines.length === 0) throw new Error("NO_LINES");
+      if (rows.some((r) => r.hasError)) throw new Error("OVER_AMOUNT");
 
+      const cid = Number.parseInt(clientIdParam, 10);
       await api.post(`/api/${tenantSlug}/payments/order-cash-in`, {
-        client_id: cid,
+        ...(Number.isFinite(cid) && cid > 0 ? { client_id: cid } : {}),
         cash_desk_id,
         paid_at,
         lines
@@ -193,11 +200,15 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
     },
     onError: (e: unknown) => {
       if (e instanceof Error && e.message === "NO_CLIENT") {
-        setFormErr("Укажите клиента (перейдите из списка заявок с выбранными заказами).");
+        setFormErr("Укажите заказы (перейдите из списка заявок с выбранными заказами).");
         return;
       }
       if (e instanceof Error && e.message === "NO_LINES") {
         setFormErr("Введите сумму хотя бы в одной ячейке.");
+        return;
+      }
+      if (e instanceof Error && e.message === "OVER_AMOUNT") {
+        setFormErr("Сумма оплаты по заказу не может превышать сумму заказа.");
         return;
       }
       if (axios.isAxiosError(e)) {
@@ -207,7 +218,7 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
           return;
         }
         if (code === "BadOrder") {
-          setFormErr("Заказ не найден или не принадлежит клиенту.");
+          setFormErr("Заказ не найден.");
           return;
         }
         if (code === "BadPaymentType") {
@@ -224,18 +235,22 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
   });
 
   const hasDraftLines = rows.some((r) => sumDraft(r) > 0);
-  const clientName = contextQ.data?.client.name;
+  const clientsCount = contextQ.data?.clients_count ?? (contextQ.data?.client ? 1 : 0);
+  const clientName = contextQ.data?.client?.name;
+  const hasSelectionContext = Boolean(clientIdParam) || orderIdsParam.length > 0;
 
   return (
     <PageShell>
       <PageHeader
         title="Приход в кассу"
         description={
-          clientIdParam
+          hasSelectionContext
             ? orderIdsParam.length > 0
-              ? `${clientName ?? "Клиент"} · выбранные заказы (${orderIdsParam.length})`
+              ? clientsCount > 1
+                ? `Выбранные заказы (${orderIdsParam.length}) · клиентов: ${clientsCount}`
+                : `${clientName ?? "Клиент"} · выбранные заказы (${orderIdsParam.length})`
               : `${clientName ?? "Клиент"} · доставленные заказы`
-            : "Выберите заказы в разделе «Заявки» → «Касса (выбранные)»"
+            : "Выберите заказы в разделе «Заявки» → «Приход в кассу»"
         }
         actions={
           <Link
@@ -249,9 +264,12 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
 
       {!hydrated || !tenantSlug ? (
         <p className="text-sm text-muted-foreground">…</p>
-      ) : !clientIdParam ? (
+      ) : !hasSelectionContext ? (
         <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
-          <p>Клиент не указан. Откройте страницу из списка заявок с выбранными заказами одного клиента.</p>
+          <p>
+            Заказы не указаны. Откройте страницу из списка заявок с выбранными{" "}
+            <span className="font-medium text-foreground">«Доставлен»</span> заказами.
+          </p>
           <Link href="/orders" className="mt-3 inline-block text-teal-700 hover:underline dark:text-teal-400">
             Перейти к заявкам
           </Link>
@@ -262,7 +280,7 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
         <p className="text-sm text-destructive" role="alert">
           {getUserFacingError(contextQ.error, "Не удалось загрузить данные.")}
         </p>
-      ) : paymentMethods.length === 0 ? (
+          ) : paymentMethods.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
           <p>
             Нет активных способов оплаты. Настройте их в{" "}
@@ -271,6 +289,16 @@ export function OrderPaymentWorkspace({ tenantSlug }: Props) {
             </Link>
             .
           </p>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+          <p>
+            По выбранным заказам ничего не найдено. Вернитесь к заявкам и отметьте
+            «Доставлен» заказы снова.
+          </p>
+          <Link href="/orders" className="mt-3 inline-block text-teal-700 hover:underline dark:text-teal-400">
+            Перейти к заявкам
+          </Link>
         </div>
       ) : (
         <div className="space-y-5">

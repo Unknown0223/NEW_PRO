@@ -7,11 +7,12 @@ import '../../../core/auth/app_lock.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/camera/photo_service.dart'
     show encodeClientPhotoBase64, photoServiceProvider;
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui.dart';
 
-/// Ekspeditor (dastavchik) uchun ALOHIDA foto kategoriyalari.
-/// Agent spravochnigidan mustaqil — yetkazib berishga oid bo'limlar.
+/// Ekspeditor (dastavchik) uchun ALOHIDA foto sabablari (kodda fixed).
+/// Agent spravochnigidan mustaqil — yetkazib berishga oid.
 const expeditorPhotoCategories = <String>[
   'Фото доставленного товара',
   'Фото витрины / полки',
@@ -22,7 +23,7 @@ const expeditorPhotoCategories = <String>[
   'Другое',
 ];
 
-/// Ekspeditor uchun kategoriya tanlash oynasi (dastavchik ranglarida).
+/// Ekspeditor uchun sabab tanlash oynasi (dastavchik ranglarida).
 Future<String?> pickExpeditorPhotoCategory(BuildContext context) async {
   return showModalBottomSheet<String>(
     context: context,
@@ -51,7 +52,7 @@ Future<String?> pickExpeditorPhotoCategory(BuildContext context) async {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Выберите категорию',
+                          S.selectPhotoReason,
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.w800,),
                         ),

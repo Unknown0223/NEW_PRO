@@ -26,6 +26,13 @@ import {
 } from "./order-bonus-rules";
 import { collectRuleStockProductIds, ruleOrAnyClauseUsesCalendarMonth } from "./order-bonus-clauses";
 import { bonusRoomAfterPaidQty } from "./order-bonus-context.match-scope";
+import { ruleMatchesConsignment } from "./order-bonus-context.fetch";
+import { loadActiveBonusStrategiesForOrder } from "../bonus-strategies/bonus-strategies.service";
+import {
+  applyBonusStrategyConstraints,
+  strategyMatchesAgentScope,
+  type BonusStrategySelectionInput
+} from "../bonus-strategies/bonus-strategy-policy";
 
 type BonusSlot =
   | { kind: "discount"; priority: number; rule: BonusRuleRow }
@@ -38,8 +45,14 @@ function slotSortKey(s: BonusSlot): string {
   return `q:${s.peek.rule.id}:p${s.peek.purchasedPid}`;
 }
 
+function slotRuleId(s: BonusSlot): number {
+  if (s.kind === "discount") return s.rule.id;
+  if (s.kind === "sum") return s.peek.rule.id;
+  return s.peek.rule.id;
+}
+
 /**
- * Chegirma + summa + qty ni `bonus_stack` siyosati bo‘yicha birlashtiradi.
+ * Chegirma + summa + qty ni strategiya + `bonus_stack` siyosati bo‘yicha birlashtiradi.
  */
 export async function resolveOrderBonusesForCreate(
   tx: Prisma.TransactionClient,
@@ -58,15 +71,22 @@ export async function resolveOrderBonusesForCreate(
   warehouseId?: number | null,
   calendarContext?: { referenceAt: Date; excludeOrderId?: number },
   orderAgent: OrderAgentBonusContext | null = null,
-  opts?: { applyDiscount?: boolean; applyBonusLines?: boolean }
+  opts?: {
+    applyDiscount?: boolean;
+    applyBonusLines?: boolean;
+    is_consignment?: boolean;
+    strategy_selections?: BonusStrategySelectionInput[];
+  }
 ): Promise<{
   lines: PaidLineDraft[];
   total: PrismaClient.Decimal;
   bonusDrafts: BonusLineDraft[];
   appliedAutoBonusRuleIds: number[];
+  strategy_selections?: BonusStrategySelectionInput[];
 }> {
+  const isConsignment = opts?.is_consignment === true;
   const now = new Date();
-  const [discountRules, sumRaw, qtyRaw] = await Promise.all([
+  const [discountRulesRaw, sumRaw, qtyRaw] = await Promise.all([
     loadDiscountRulesForOrder(tx, tenantId),
     tx.bonusRule.findMany({
       where: activeRuleWhere(tenantId, "sum", now),
@@ -79,10 +99,14 @@ export async function resolveOrderBonusesForCreate(
       orderBy: { priority: "desc" }
     })
   ]);
+  const discountRules = discountRulesRaw.filter((r) => ruleMatchesConsignment(r, isConsignment));
   const sumRules = sumRaw
     .map((r) => mapBonusRuleFull(r))
-    .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0);
-  const qtyRules = qtyRaw.map((r) => mapBonusRuleFull(r));
+    .filter((r) => r.discount_pct == null || Number(r.discount_pct) <= 0)
+    .filter((r) => ruleMatchesConsignment(r, isConsignment));
+  const qtyRules = qtyRaw
+    .map((r) => mapBonusRuleFull(r))
+    .filter((r) => ruleMatchesConsignment(r, isConsignment));
 
   const stockProductIds = collectRuleStockProductIds([...discountRules, ...sumRules, ...qtyRules]);
   for (const pid of qtyByProduct.keys()) stockProductIds.add(pid);
@@ -135,7 +159,8 @@ export async function resolveOrderBonusesForCreate(
     ruleCache: new Map(),
     clientMonthMerchandiseSubtotalExclOrder,
     clientMonthPaidQtyAggregateExclOrder,
-    clientMonthPaidQtyByProductExclOrder
+    clientMonthPaidQtyByProductExclOrder,
+    is_consignment: isConsignment
   };
 
   const discountRule =
@@ -199,8 +224,33 @@ export async function resolveOrderBonusesForCreate(
     return slotSortKey(a).localeCompare(slotSortKey(b));
   });
 
-  const take = resolveBonusSlotTakeCount(slots.length, stackPolicy);
-  const chosen = slots.slice(0, take);
+  const allStrategies = await loadActiveBonusStrategiesForOrder(tenantId);
+  const matchingStrategies = allStrategies
+    .filter((s) => strategyMatchesAgentScope(s, orderAgent))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      max_select: s.max_select,
+      rule_ids: s.rule_ids
+    }));
+
+  const strategySlots: Array<BonusSlot & { ruleId: number }> = slots.map((s) => ({
+    ...s,
+    ruleId: slotRuleId(s),
+    priority: s.priority
+  }));
+  const strategyResult = applyBonusStrategyConstraints(
+    strategySlots,
+    matchingStrategies,
+    opts?.strategy_selections
+  );
+  if (strategyResult.error) {
+    throw new Error(strategyResult.error);
+  }
+  const afterStrategy = strategyResult.slots;
+
+  const take = resolveBonusSlotTakeCount(afterStrategy.length, stackPolicy);
+  const chosen = afterStrategy.slice(0, take);
 
   let lines = paidLines.map((l) => ({ ...l }));
   let total = paidTotal;
@@ -221,7 +271,7 @@ export async function resolveOrderBonusesForCreate(
       }
     }
 
-    const chosenQty = chosen.filter((s): s is BonusSlot & { kind: "qty" } => s.kind === "qty");
+    const chosenQty = chosen.filter((s) => s.kind === "qty");
     if (chosenQty.length > 0) {
       for (const s of chosenQty) {
         const splits = qtyBonusGiftSplits.get(s.peek.rule.id);
@@ -243,8 +293,8 @@ export async function resolveOrderBonusesForCreate(
     if (chosen.some((s) => s.kind === "sum") && sumPeek) {
       appliedRuleIds.push(sumPeek.rule.id);
     }
-    for (const s of chosen.filter((x): x is BonusSlot & { kind: "qty" } => x.kind === "qty")) {
-      appliedRuleIds.push(s.peek.rule.id);
+    for (const s of chosen) {
+      if (s.kind === "qty") appliedRuleIds.push(s.peek.rule.id);
     }
   }
   const uniqueApplied = [...new Set(appliedRuleIds)];
@@ -253,7 +303,8 @@ export async function resolveOrderBonusesForCreate(
     lines,
     total,
     bonusDrafts: mergeBonusLineDrafts(bonusParts),
-    appliedAutoBonusRuleIds: uniqueApplied
+    appliedAutoBonusRuleIds: uniqueApplied,
+    strategy_selections: strategyResult.applied_selections
   };
 }
 

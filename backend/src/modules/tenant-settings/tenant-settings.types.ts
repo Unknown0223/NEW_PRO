@@ -78,6 +78,10 @@ export type TenantProfileDto = {
   logo_url: string | null;
   feature_flags: Record<string, unknown>;
   return_filter: ReturnFilterSettings;
+  /** Ish mintaqasi (IANA), masalan Asia/Tashkent. */
+  timezone: string;
+  /** Joriy UTC ofset (soat) — mobil / hisob-kitob uchun. */
+  utc_offset_hours: number;
   references: {
     payment_types: string[];
     return_reasons: string[];

@@ -1,6 +1,6 @@
 "use client";
 
-import type { BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
+import type { BonusConsignmentMode, BonusRuleRow } from "@/components/bonus-rules/bonus-rule-types";
 import { BonusRuleCategoryHoverField } from "@/components/bonus-rules/bonus-rule-category-hover-field";
 import {
   BonusRuleFloatingInput,
@@ -240,6 +240,7 @@ export function BonusRuleForm({
   const [conditions, setConditions] = useState<CondForm[]>([emptyCond()]);
   const [clientCategory, setClientCategory] = useState("");
   const [paymentType, setPaymentType] = useState("");
+  const [consignmentMode, setConsignmentMode] = useState<BonusConsignmentMode>("all");
   const [clientType, setClientType] = useState("");
   const [salesChannel, setSalesChannel] = useState("");
   const [priceType, setPriceType] = useState("");
@@ -345,6 +346,9 @@ export function BonusRuleForm({
       }
       setClientCategory(rule.client_category ?? "");
       setPaymentType(rule.payment_type ?? "");
+      setConsignmentMode(
+        rule.consignment_mode === "yes" || rule.consignment_mode === "no" ? rule.consignment_mode : "all"
+      );
       setClientType(rule.client_type ?? "");
       setSalesChannel(rule.sales_channel ?? "");
       setPriceType(rule.price_type ?? "");
@@ -400,6 +404,7 @@ export function BonusRuleForm({
       setConditions([emptyCond()]);
       setClientCategory("");
       setPaymentType("");
+      setConsignmentMode("all");
       setClientType("");
       setSalesChannel("");
       setPriceType("");
@@ -495,6 +500,7 @@ export function BonusRuleForm({
         valid_to: localDatetimeToIso(validTo),
         client_category: clientCategory.trim() || null,
         payment_type: paymentType.trim() || null,
+        consignment_mode: consignmentMode,
         client_type: clientType.trim() || null,
         sales_channel: salesChannel.trim() || null,
         price_type: priceType.trim() || null,
@@ -964,6 +970,24 @@ export function BonusRuleForm({
             .
           </p>
         ) : null}
+
+        <div className="mt-4">
+          <BonusRuleTemplateRadioGroup
+            title="Консигнация"
+            name="br-consignment-mode"
+            value={consignmentMode}
+            onChange={(v) => setConsignmentMode(v as BonusConsignmentMode)}
+            disabled={fieldDisabled}
+            options={[
+              { value: "all", label: "Все" },
+              { value: "yes", label: "Да" },
+              { value: "no", label: "Нет" }
+            ]}
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Да — только консигнационные заказы; Нет — только обычные; Все — без ограничения.
+          </p>
+        </div>
 
         <div
           ref={restrictionsRef}

@@ -1876,6 +1876,25 @@ class _AgentFilterSheetState extends ConsumerState<AgentFilterSheet> {
             onChanged: (v) => setState(() => _debtsOnly = v ?? false),
           ),
           const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () {
+                setState(() {
+                  _category = null;
+                  _visitStatus = S.dayAll;
+                  _debtsOnly = false;
+                });
+                resetOutletFilters(ref);
+                Navigator.pop(context);
+              },
+              child: const Text(
+                'Сброс',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
           Row(
             children: [
               Expanded(child: AgentSecondaryButton(label: 'Закрыть', onPressed: () => Navigator.pop(context))),
@@ -2359,7 +2378,7 @@ class AgentHeldOrderCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(clientName, style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w700)),
                         Text(
-                          '$itemCount поз. · $sumLabel · нажмите, чтобы изменить',
+                          '$itemCount поз. · $sumLabel · синхр. таймери $countdown',
                           style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                         ),
                       ],

@@ -67,6 +67,7 @@ class _ExpeditorClientOrdersPageState
             range: _range,
             onPresetTap: _openPreset,
             onRangeTap: _openCalendar,
+            onReset: () => setState(() => _range = HistoryPreset.thisWeek.resolve()),
           ),
           Expanded(
             child: orders.when(

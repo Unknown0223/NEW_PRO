@@ -100,8 +100,8 @@ export function OrderProductsTable({
         </p>
       ) : !canEditOrderLines && !editingLines ? (
         <p className="mb-4 text-xs text-muted-foreground">
-          Редактирование доступно для статусов «Новый» / «Подтверждён» при праве orders.zakaz.update.
-          Клиент, агент, склад и тип цены не меняются. Все изменения пишутся в историю заказа.
+          Редактирование доступно для статуса «Новый» при праве orders.zakaz.update — через форму
+          «Создать заказ». Клиент и агент не меняются.
         </p>
       ) : null}
 

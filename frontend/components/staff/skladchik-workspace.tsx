@@ -661,12 +661,13 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
       />
 
       <p className="text-xs text-muted-foreground">
-        <strong className="text-foreground">Skladchik</strong> — ombor xodimlari (<code className="text-foreground">skladchik</code>{" "}
-        JWT). Bir nechta ombor biriktirish mumkin. Lavozim shablonlari:{" "}
+        <strong className="text-foreground">Складчик</strong> — сотрудники склада (роль{" "}
+        <code className="text-foreground">skladchik</code> в JWT). Можно привязать несколько складов.
+        Шаблоны должностей:{" "}
         <Link href="/settings/web-staff-position-presets" className="text-primary underline">
-          Veb xodim lavozimlari
+          Должности веб-сотрудников
         </Link>
-        . Faol sessiyalar taxminan <code className="text-foreground">45 s</code> da yangilanadi.
+        . Активные сессии обновляются примерно каждые <code className="text-foreground">45 с</code>.
       </p>
 
       <WebStaffEditDialog

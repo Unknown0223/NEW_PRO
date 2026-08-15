@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import { formatAppDate, formatAppDateTime } from "@/lib/app-timezone";
 import { parseStoredFio } from "@/lib/person-display";
 import { cn } from "@/lib/utils";
 
@@ -10,21 +11,11 @@ export function parseAgentFio(fio: string) {
 }
 
 export function formatAgentDateTime(d?: string | null) {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
+  return formatAppDateTime(d, "—");
 }
 
 export function formatAgentCreatedDate(d?: string | null) {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+  return formatAppDate(d, "—");
 }
 
 export const agentModalInputClass =

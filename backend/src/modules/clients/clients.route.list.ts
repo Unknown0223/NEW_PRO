@@ -11,12 +11,18 @@ import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   bulkSetClientsActive,
   bulkPatchClients,
+  bulkPatchClientItems,
   exportClientsFilteredCsv,
   getClientReferences,
   listClientsForTenantPaged
 } from "./clients.service";
 import { listDuplicateCandidates } from "./client-dedupe.service";
-import { bulkActiveBodySchema, bulkPatchBodySchema, parseClientListQuery } from "./clients.route.schemas";
+import {
+  bulkActiveBodySchema,
+  bulkItemsPatchBodySchema,
+  bulkPatchBodySchema,
+  parseClientListQuery
+} from "./clients.route.schemas";
 
 export async function registerClientListRoutes(app: FastifyInstance) {
   app.get(
@@ -174,6 +180,30 @@ export async function registerClientListRoutes(app: FastifyInstance) {
         parsed.data.patch,
         actorUserId
       );
+      return reply.send(result);
+    }
+  );
+
+  app.patch(
+    "/api/:slug/clients/bulk-items",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkItemsPatchBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Request validation failed",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const actor = getAccessUser(request);
+      const sub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+      const result = await bulkPatchClientItems(request.tenant!.id, parsed.data.items, actorUserId);
       return reply.send(result);
     }
   );

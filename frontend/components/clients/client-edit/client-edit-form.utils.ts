@@ -42,7 +42,8 @@ export const VISIT_DAYS: { k: number; l: string }[] = [
   { k: 7, l: "Вс" }
 ];
 
-export const MAX_TEAM_ROWS = 10;
+/** Amaliy yuqori lim (API bilan mos); UI da «maks.» ko‘rsatilmaydi. */
+export const MAX_TEAM_ROWS = 100;
 export const MAP_DEFAULT_LAT = 41.311081;
 export const MAP_DEFAULT_LON = 69.279737;
 
@@ -59,15 +60,13 @@ export function emptyAgentSlot(): AgentSlotForm {
   return { agentId: "", expeditorUserId: "", weekdays: [], legacyVisitDate: "", legacyExpeditorPhone: "" };
 }
 
+/** Jamoa bog‘langan: agent yoki dostavshik tanlangan. */
+export function agentSlotIsLinked(s: AgentSlotForm): boolean {
+  return s.agentId.trim() !== "" || s.expeditorUserId.trim() !== "";
+}
+
 export function assignmentRowHasData(a: ClientRow["agent_assignments"][number]): boolean {
-  const wd = Array.isArray(a.visit_weekdays) ? a.visit_weekdays.filter((x) => x >= 1 && x <= 7) : [];
-  return (
-    a.agent_id != null ||
-    a.expeditor_user_id != null ||
-    wd.length > 0 ||
-    (a.visit_date != null && String(a.visit_date).trim() !== "") ||
-    (a.expeditor_phone != null && a.expeditor_phone.trim() !== "")
-  );
+  return a.agent_id != null || a.expeditor_user_id != null;
 }
 
 export function buildAgentSlots(client: ClientRow): AgentSlotForm[] {

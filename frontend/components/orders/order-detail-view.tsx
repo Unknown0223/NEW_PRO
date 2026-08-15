@@ -14,6 +14,7 @@ import { STALE } from "@/lib/query-stale";
 import { usePermissions } from "@/lib/use-permissions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios, { type AxiosError } from "axios";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OrderBonusSection } from "./order-detail/bonus-section";
 import { ClientInfoCard } from "./order-detail/client-info-card";
@@ -174,6 +175,8 @@ export type OrderDetailRow = OrderListRow & {
   client_category?: string | null;
   client_responsible_person?: string | null;
   payment_method_label?: string | null;
+  /** Savdo zakazi to‘lov usuli (spravochnik id). */
+  payment_method_ref?: string | null;
 };
 
 type Props = {
@@ -200,7 +203,8 @@ function paidItemsToLines(items: OrderItemRow[]): Line[] {
   }));
 }
 
-const ORDER_LINES_EDITABLE_STATUSES = new Set(["new", "confirmed"]);
+/** Inline tafsilot tahriri — faqat «new» (confirmed endi Sozdat forma orqali emas). */
+const ORDER_LINES_EDITABLE_STATUSES = new Set(["new"]);
 
 function patchOrderLinesErrorMessage(err: unknown): string | null {
   if (!axios.isAxiosError(err)) return null;
@@ -278,6 +282,7 @@ export function OrderDetailView({
   autoStartEdit = false
 }: Props) {
   const qc = useQueryClient();
+  const router = useRouter();
   const role = useEffectiveRole();
   const { has } = usePermissions();
   const canOperate =
@@ -359,10 +364,8 @@ export function OrderDetailView({
   useEffect(() => {
     if (!autoStartEdit || !canEditOrderLines || !data || autoEditStartedRef.current) return;
     autoEditStartedRef.current = true;
-    setLines(paidItemsToLines(data.items));
-    setEditError(null);
-    setEditingLines(true);
-  }, [autoStartEdit, canEditOrderLines, data]);
+    router.replace(`/orders/new?edit_order_id=${orderId}`);
+  }, [autoStartEdit, canEditOrderLines, data, orderId, router]);
 
   const productsQ = useQuery({
     queryKey: ["products", tenantSlug, "order-edit"],
@@ -529,10 +532,7 @@ export function OrderDetailView({
   }
 
   function startEditLines() {
-    if (!data) return;
-    setLines(paidItemsToLines(data.items));
-    setEditError(null);
-    setEditingLines(true);
+    router.push(`/orders/new?edit_order_id=${orderId}`);
   }
 
   function cancelEditLines() {

@@ -162,7 +162,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
     if (!actionId) return;
     switch (actionId) {
       case "team": {
-        const s = Math.min(10, Math.max(1, Number.parseInt(slot, 10) || 1));
+        const s = Math.min(100, Math.max(1, Number.parseInt(slot, 10) || 1));
         if (mode === "detach") {
           onApply({
             agent_assignments: [

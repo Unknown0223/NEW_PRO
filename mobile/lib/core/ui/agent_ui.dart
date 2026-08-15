@@ -16,6 +16,8 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// Sarlavha o‘ngida (rasmdagi qizil joy — sinхрон taymer).
   final Widget? titleTrailing;
   final int? menuBadge;
+  /// Sync/bootstrap kabi ekranlar uchun sarlavhani markazda.
+  final bool centerTitle;
 
   const AgentTopBar({
     super.key,
@@ -26,13 +28,23 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.belowTitle,
     this.titleTrailing,
     this.menuBadge,
+    this.centerTitle = false,
   });
 
   @override
-  Size get preferredSize => Size.fromHeight(belowTitle != null ? 118 : 79);
+  Size get preferredSize => Size.fromHeight(belowTitle != null ? (centerTitle ? 108 : 118) : 79);
 
   @override
   Widget build(BuildContext context) {
+    final hasLeading = onBack != null || onMenu != null;
+    final titleStyle = AppTypography.headlineLarge.copyWith(
+      fontSize: centerTitle ? 20 : 22,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.4,
+      color: AppColors.textTitle,
+      height: 1.2,
+    );
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -41,48 +53,89 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
           BoxShadow(color: AppColors.topBarShadow, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: EdgeInsets.fromLTRB(12, centerTitle ? 10 : 8, 12, centerTitle ? 14 : 12),
       child: SafeArea(
         bottom: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                if (onBack != null)
-                  AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
-                else if (onMenu != null)
-                  _menuIcon(onMenu!),
-                if (onBack != null || onMenu != null) const SizedBox(width: 10),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
+            if (centerTitle)
+              Row(
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: hasLeading
+                        ? (onBack != null
+                            ? AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
+                            : _menuIcon(onMenu!))
+                        : null,
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
                           title,
-                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.headlineLarge.copyWith(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.4,
-                            color: AppColors.textTitle,
+                          style: titleStyle,
+                        ),
+                        if (titleTrailing != null) ...[
+                          const SizedBox(height: 6),
+                          titleTrailing!,
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 44,
+                    child: actions.isEmpty
+                        ? null
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: actions,
+                          ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  if (onBack != null)
+                    AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
+                  else if (onMenu != null)
+                    _menuIcon(onMenu!),
+                  if (hasLeading) const SizedBox(width: 10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: titleStyle,
                           ),
                         ),
-                      ),
-                      if (titleTrailing != null) ...[
-                        const SizedBox(width: 8),
-                        titleTrailing!,
+                        if (titleTrailing != null) ...[
+                          const SizedBox(width: 8),
+                          titleTrailing!,
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                ...actions,
-              ],
-            ),
+                  ...actions,
+                ],
+              ),
             if (belowTitle != null) ...[
-              const SizedBox(height: 8),
-              belowTitle!,
+              SizedBox(height: centerTitle ? 6 : 8),
+              if (centerTitle)
+                DefaultTextStyle.merge(
+                  style: const TextStyle(height: 1.25),
+                  child: Align(alignment: Alignment.center, child: belowTitle!),
+                )
+              else
+                belowTitle!,
             ],
           ],
         ),
@@ -924,17 +977,20 @@ class SyncProgressRing extends StatelessWidget {
   final double progress;
   final int current;
   final int total;
+  final Color? accentColor;
 
   const SyncProgressRing({
     super.key,
     required this.progress,
     required this.current,
     required this.total,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final pct = (progress.clamp(0.0, 1.0) * 100).round();
+    final accent = accentColor ?? AppColors.primary;
     return SizedBox(
       width: 148,
       height: 148,
@@ -964,7 +1020,7 @@ class SyncProgressRing extends StatelessWidget {
                   strokeWidth: 10,
                   strokeCap: StrokeCap.round,
                   backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                  valueColor: AlwaysStoppedAnimation(accent),
                 ),
               );
             },

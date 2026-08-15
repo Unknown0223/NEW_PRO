@@ -107,7 +107,9 @@ const paymentMethodEntrySchema = z.object({
   sort_order: z.number().int().nullable().optional(),
   comment: z.string().max(4000).nullable().optional(),
   color: z.string().max(32).nullable().optional(),
-  active: z.boolean().optional()
+  active: z.boolean().optional(),
+  /** Перечисление ↔ 1C / bank inbox */
+  sync_with_1c: z.boolean().optional()
 });
 
 const priceTypeEntrySchema = z.object({
@@ -169,6 +171,8 @@ export const profilePatchSchema = z
     logo_url: z.string().max(4000).nullable().optional(),
     feature_flags: z.record(z.string(), z.unknown()).optional(),
     return_filter: returnFilterSchema.optional(),
+    /** IANA timezone (masalan Asia/Tashkent). */
+    timezone: z.string().min(1).max(64).optional(),
     references: z
       .object({
         payment_types: z.array(z.string()).optional(),

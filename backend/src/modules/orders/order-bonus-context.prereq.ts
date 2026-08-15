@@ -9,6 +9,7 @@ import {
   effectivePurchasedQtyForQtyRule,
   effectiveSubtotalForSumMinRule,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleNeedsOrderContext
 } from "./order-bonus-context.fetch";
 import {
@@ -139,6 +140,7 @@ function ruleMatchesAsStandaloneAutoBonusForOrder(rule: BonusRuleRow, env: Order
   if (!ruleActiveAt(rule, now)) return false;
   if (ruleBlockedByOncePerClient(rule, env.clientUsedAutoBonusRuleIds)) return false;
   if (!ruleMatchesClient(rule, env.client)) return false;
+  if (!ruleMatchesConsignment(rule, env.is_consignment)) return false;
   if (!ruleMatchesOrderAgentScope(rule, env.orderAgent)) return false;
   if (!ruleMatchesOrderProductScope(rule, env.orderedProductIds, env.productById)) return false;
 

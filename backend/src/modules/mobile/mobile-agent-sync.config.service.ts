@@ -8,6 +8,7 @@ import {
 } from "../staff/agent-mobile-config.sync-policy";
 import {
   extractMobileConfigFromEntitlementsUnknown,
+  resolveMobileConfigForUser,
   type AgentMobileConfigV1
 } from "../staff/agent-mobile-config";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
@@ -19,6 +20,11 @@ import {
 import { paymentMethodStorageKey, priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { territoryNodesFromUnknown } from "../tenant-settings/tenant-settings.refs";
+import {
+  loadTenantTimezone,
+  loadTimezoneFromSettingsJson,
+  utcOffsetHoursForTimezone
+} from "../tenant-settings/tenant-timezone";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
@@ -160,7 +166,8 @@ export async function applyMobileSyncGate(
     await reportMobilePresence(userId, presence);
   }
   const cfg = await loadAgentMobileConfig(tenantId, userId);
-  const policy = evaluateMobileSyncPolicy(cfg?.sync);
+  const timeZone = await loadTenantTimezone(tenantId);
+  const policy = evaluateMobileSyncPolicy(cfg?.sync, new Date(), timeZone);
   if (!policy.allowed) {
     throw new Error(`SYNC_NOT_ALLOWED:${policy.message ?? syncWindowMessage(cfg?.sync ?? {})}`);
   }
@@ -407,7 +414,8 @@ async function loadMobileTenantReferences(tenantId: number) {
 export async function getMobileAgentConfigPayload(
   tenantId: number,
   userId: number,
-  clientVersion?: string
+  clientVersion?: string,
+  opts?: { origin?: string | null }
 ) {
   const u = await prisma.user.findFirst({
     where: { id: userId, tenant_id: tenantId, is_active: true },
@@ -452,13 +460,18 @@ export async function getMobileAgentConfigPayload(
       : [];
 
   const appUpdate = await resolveAppUpdateForTenant(tenantId, clientVersion, "android", {
-    tenantSlug: tenantRow?.slug
+    tenantSlug: tenantRow?.slug,
+    origin: opts?.origin
   });
+
+  const workTimezone = loadTimezoneFromSettingsJson(st);
+  const workUtcOffsetHours = utcOffsetHoursForTimezone(workTimezone);
 
   return {
     ok: true as const,
     user_id: u.id,
-    mobile_config: extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements) ?? null,
+    /** Rol defaultlari + saqlangan patch — mobil «Настройки» / enforcement bilan bir xil. */
+    mobile_config: resolveMobileConfigForUser(u.role, u.agent_entitlements),
     agent_entitlements: u.agent_entitlements,
     agent_limits: {
       consignment: u.consignment === true,
@@ -466,6 +479,9 @@ export async function getMobileAgentConfigPayload(
     },
     work_slot_id: slot?.slot_id ?? null,
     work_slot_code: slot?.slot_code ?? null,
+    /** Ish mintaqasi — admin Sozlamalar → Sistema → Vaqt mintaqasi. */
+    work_timezone: workTimezone,
+    work_utc_offset_hours: workUtcOffsetHours,
     tenant_references: await loadMobileTenantReferences(tenantId),
     agent_cities: agentCities,
     ...(appUpdate ? { app_update: appUpdate } : {})

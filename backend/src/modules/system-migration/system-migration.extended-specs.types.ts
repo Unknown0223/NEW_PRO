@@ -13,7 +13,10 @@ export type ExtendedExportScope =
   | "stock_take"
   | "correction"
   | "block"
-  | "client_balance";
+  | "client_balance"
+  | "product"
+  | "client"
+  | "tag";
 
 export type ExtendedTableSpec = {
   file: string;

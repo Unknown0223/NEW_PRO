@@ -8,11 +8,13 @@ import '../../../core/auth/app_lock.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/camera/photo_service.dart' show encodeClientPhotoBase64, photoServiceProvider;
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/ui/agent_ui.dart';
 
-/// Standart foto kategoriyalari (spravochnik bo‘sh bo‘lsa).
+/// Standart foto sabablari (veb spravochnik bo‘sh bo‘lsa).
+/// Asosiy ro‘yxat: Sozlamalar → Причины и категории → Причины фотоотчёта.
 const defaultPhotoReportCategories = [
   'Ёпик докон расми',
   'Буш полка',
@@ -199,7 +201,7 @@ Future<String?> pickPhotoReportCategory(BuildContext context, WidgetRef ref) asy
                     children: [
                       const Expanded(
                         child: Text(
-                          'Выберите категорию',
+                          S.selectPhotoReason,
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                         ),
                       ),

@@ -63,7 +63,8 @@ const targetingFields = {
   sum_threshold_scope: z.enum(["order", "calendar_month"]).optional(),
   scope_branch_codes: z.array(z.string().max(500)).max(200).optional(),
   scope_agent_user_ids: z.array(z.number().int().positive()).max(2000).optional(),
-  scope_trade_direction_ids: z.array(z.number().int().positive()).max(200).optional()
+  scope_trade_direction_ids: z.array(z.number().int().positive()).max(200).optional(),
+  consignment_mode: z.enum(["all", "yes", "no"]).optional()
 };
 
 export const createBodySchema = z

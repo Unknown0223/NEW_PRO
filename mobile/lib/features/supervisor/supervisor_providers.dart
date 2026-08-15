@@ -1,7 +1,9 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/mobile_api.dart';
 import '../../core/api/supervisor_api.dart';
 import '../../core/auth/session.dart';
+import '../../core/time/work_region_time.dart';
 
 final supervisorSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final slug = ref.watch(sessionProvider).tenantSlug ?? '';
@@ -26,4 +28,32 @@ final supervisorAgentLocationsProvider = FutureProvider<List<AgentLocationPin>>(
   final slug = ref.watch(sessionProvider).tenantSlug ?? '';
   if (slug.isEmpty) return [];
   return ref.read(supervisorApiProvider).getAgentLocations(slug);
+});
+
+final supervisorLinkedAgentsProvider = FutureProvider<List<SupervisorLinkedAgent>>((ref) async {
+  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  if (slug.isEmpty) return [];
+  return ref.read(supervisorApiProvider).getLinkedAgents(slug);
+});
+
+final supervisorKpiMonthProvider = StateProvider<String>((ref) {
+  return serverTodayKey().substring(0, 7);
+});
+
+final supervisorKpiAgentIdProvider = StateProvider<int?>((ref) => null);
+
+final supervisorKpiByAgentModeProvider = StateProvider<bool>((ref) => false);
+
+final supervisorTeamKpiProvider = FutureProvider<SupervisorTeamKpi>((ref) async {
+  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final month = ref.watch(supervisorKpiMonthProvider);
+  if (slug.isEmpty) return SupervisorTeamKpi.empty();
+  return ref.read(supervisorApiProvider).getTeamKpi(slug, month: month);
+});
+
+final supervisorAgentKpiProvider = FutureProvider.family<AgentKpiResult, int>((ref, agentId) async {
+  final slug = ref.watch(sessionProvider).tenantSlug ?? '';
+  final month = ref.watch(supervisorKpiMonthProvider);
+  if (slug.isEmpty || agentId <= 0) return AgentKpiResult.empty();
+  return ref.read(supervisorApiProvider).getAgentKpi(slug, agentId: agentId, month: month);
 });

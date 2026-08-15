@@ -4,7 +4,7 @@ import {
   type ClientAgentAssignmentApi,
   parseVisitWeekdaysJson
 } from "./clients.types";
-import { CONTACT_SLOTS } from "./clients.helpers";
+import { MAX_AGENT_ASSIGNMENT_SLOTS } from "./clients.helpers";
 
 
 function visitWeekdaysToPrismaJson(days: number[]): Prisma.InputJsonValue {
@@ -103,7 +103,7 @@ export async function replaceClientAgentAssignments(
   const bySlot = new Map<number, AgentAssignmentPatch>();
   for (const s of raw) {
     const slot = Math.floor(Number(s.slot));
-    if (slot < 1 || slot > CONTACT_SLOTS) {
+    if (slot < 1 || slot > MAX_AGENT_ASSIGNMENT_SLOTS) {
       throw new Error("VALIDATION");
     }
     bySlot.set(slot, s);
@@ -193,14 +193,9 @@ export async function replaceClientAgentAssignments(
     }
 
     const weekdaysJson = visitWeekdaysToPrismaJson(s.visit_weekdays ?? []);
-    const weekdaysArr = parseVisitWeekdaysJson(s.visit_weekdays);
 
-    const hasData =
-      agent_id != null ||
-      visit_date != null ||
-      (expeditor_phone != null && expeditor_phone.length > 0) ||
-      expeditor_user_id != null ||
-      weekdaysArr.length > 0;
+    // Faqat bog‘langan jamoa saqlanadi (agent yoki dostavshik) — bo‘sh qatorlar axlat bo‘lmasin.
+    const hasData = agent_id != null || expeditor_user_id != null;
     if (!hasData) continue;
 
     const prev = existingBySlot.get(slot);

@@ -38,19 +38,12 @@ async function fetchOrderDetailsBatch(
   tenantSlug: string,
   orderIds: number[]
 ): Promise<OrderDetailRow[]> {
-  const chunkSize = 8;
-  const out: OrderDetailRow[] = [];
-  for (let i = 0; i < orderIds.length; i += chunkSize) {
-    const chunk = orderIds.slice(i, i + chunkSize);
-    const rows = await Promise.all(
-      chunk.map(async (id) => {
-        const { data } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${id}`);
-        return data;
-      })
-    );
-    out.push(...rows);
-  }
-  return out;
+  if (orderIds.length === 0) return [];
+  const { data } = await api.post<{ data: OrderDetailRow[] }>(
+    `/api/${tenantSlug}/orders/bulk/details`,
+    { order_ids: orderIds }
+  );
+  return data.data ?? [];
 }
 
 export function OrdersSelectionTotalsDialog({

@@ -99,6 +99,15 @@ export async function confirmPendingPayment(
     });
   }
 
+  try {
+    const { markInboxDoneIfPaymentConfirmed } = await import(
+      "../bank-transfer-inbox/bank-transfer-inbox.service"
+    );
+    await markInboxDoneIfPaymentConfirmed(tenantId, paymentId);
+  } catch {
+    /* inbox optional — миграция ещё не применена */
+  }
+
   const detail = await getPaymentDetail(tenantId, paymentId);
   if (!detail) throw new Error("NOT_FOUND");
   return detail;

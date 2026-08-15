@@ -11,6 +11,7 @@ import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
+import 'expeditor_bonus_calc_sheet.dart';
 
 /// Qaytarish usuli:
 /// - [byProducts] — savdo va bonus dona alohida belgilanadi (qo'lda);
@@ -38,6 +39,11 @@ class _ExpeditorReturnByOrderPageState
   // «По продуктам» — savdo va bonus alohida kiritiladi.
   final Map<int, double> _paid = {};
   final Map<int, double> _bonus = {};
+  /// Bonusni summa (to‘lov) sifatida qaytarish — dona (keyin × tannarx).
+  final Map<int, double> _bonusCashQty = {};
+  final Map<int, double> _prices = {};
+  /// Galochka: «Возврат бонуса суммой» — yoqilganda summa kiritish ochiladi.
+  bool _bonusCashEnabled = false;
   // «По заказу» / «Полный заказ» — har mahsulotga bitta umumiy miqdor.
   final Map<int, double> _returnQty = {};
   // Peresort (almashtirish): manba mahsulot → bonus yo'naltiriladigan «aka-uka»
@@ -166,6 +172,9 @@ class _ExpeditorReturnByOrderPageState
                                   _orderId = o['id'] as int?;
                                   _paid.clear();
                                   _bonus.clear();
+                                  _bonusCashQty.clear();
+                                  _prices.clear();
+                                  _bonusCashEnabled = false;
                                   _returnQty.clear();
                                   _swap.clear();
                                   _method = _ReturnMethod.byProducts;
@@ -662,11 +671,19 @@ class _ExpeditorReturnByOrderPageState
 
     var saleSum = 0.0;
     var bonusQty = 0.0;
+    var bonusCashSum = 0.0;
+    var hasAnyBonus = false;
+    _prices.clear();
     for (final p in products) {
       final pid = p['product_id'] as int;
       final price = p['price'] as double;
+      _prices[pid] = price;
       saleSum += (_paid[pid] ?? 0) * price;
       bonusQty += (_bonus[pid] ?? 0);
+      if (_bonusCashEnabled) {
+        bonusCashSum += (_bonusCashQty[pid] ?? 0) * price;
+      }
+      if ((p['max_bonus'] as double) > 0) hasAnyBonus = true;
     }
 
     return Column(
@@ -709,6 +726,10 @@ class _ExpeditorReturnByOrderPageState
                         fontWeight: FontWeight.w800,
                         color: AppColors.expeditorAccent,),),
               ),
+              if (!fullOrder && !byOrder && hasAnyBonus) ...[
+                _bonusCashToggle(),
+                const SizedBox(height: 8),
+              ],
               if (fullOrder)
                 ..._categoryAccordions(products, readOnly: true)
               else if (byOrder)
@@ -718,8 +739,41 @@ class _ExpeditorReturnByOrderPageState
             ],
           ),
         ),
-        _bottomBar(orderId, products, saleSum, bonusQty),
+        _bottomBar(orderId, products, saleSum, bonusQty, bonusCashSum),
       ],
+    );
+  }
+
+  Widget _bonusCashToggle() {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: CheckboxListTile(
+        value: _bonusCashEnabled,
+        onChanged: _submitting
+            ? null
+            : (v) {
+                setState(() {
+                  _bonusCashEnabled = v == true;
+                  if (!_bonusCashEnabled) {
+                    _bonusCashQty.clear();
+                  }
+                });
+              },
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        activeColor: AppColors.expeditorAccent,
+        title: const Text(
+          'Возврат бонуса суммой',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        ),
+        subtitle: Text(
+          _bonusCashEnabled
+              ? 'Сначала укажите дона товаром — сумма оплаты считается автоматически (× таннарх)'
+              : 'Включите, чтобы часть бонуса вернуть оплатой (на баланс)',
+          style: AppTypography.caption.copyWith(color: AppColors.textMuted),
+        ),
+      ),
     );
   }
 
@@ -782,6 +836,8 @@ class _ExpeditorReturnByOrderPageState
       _method = m;
       _paid.clear();
       _bonus.clear();
+      _bonusCashQty.clear();
+      _bonusCashEnabled = false;
       _returnQty.clear();
       _swap.clear();
     });
@@ -1163,7 +1219,12 @@ class _ExpeditorReturnByOrderPageState
     final maxBonus = p['max_bonus'] as double;
     final paid = _paid[pid] ?? 0;
     final bonus = _bonus[pid] ?? 0;
-    final active = paid > 0 || bonus > 0;
+    final cashQty =
+        _bonusCashEnabled ? (_bonusCashQty[pid] ?? 0) : 0.0;
+    final goodsMax = (maxBonus - cashQty).clamp(0.0, maxBonus);
+    final cashMax = (maxBonus - bonus).clamp(0.0, maxBonus);
+    final cashSum = cashQty * price;
+    final active = paid > 0 || bonus > 0 || cashQty > 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1184,7 +1245,7 @@ class _ExpeditorReturnByOrderPageState
           const SizedBox(height: 2),
           Text(
             '${p['sku'] ?? ''}'
-            "${price > 0 ? ' · ${formatMoneySpaced(price)} So\'m' : ''}",
+            "${price > 0 ? ' · таннарх ${formatMoneySpaced(price)} So\'m' : ''}",
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           if (maxPaid > 0)
@@ -1205,26 +1266,98 @@ class _ExpeditorReturnByOrderPageState
                 }
               }),
             ),
-          if (maxBonus > 0)
+          if (maxBonus > 0) ...[
             _qtyRow(
-              label: 'Бонус',
+              label: 'Бонус товаром',
               name: '${p['name'] ?? ''}',
               color: AppColors.success,
-              maxQty: maxBonus,
-              value: bonus,
+              maxQty: goodsMax,
+              value: bonus.clamp(0.0, goodsMax),
               hint: null,
               onChanged: (v) => setState(() {
-                if (v <= 0) {
+                final next = v.clamp(0.0, goodsMax);
+                if (next <= 0) {
                   _bonus.remove(pid);
                 } else {
-                  _bonus[pid] = v;
+                  _bonus[pid] = next;
+                }
+                // Dona toldirilgandan keyin cash maxni qisqartirish.
+                final c = _bonusCashQty[pid] ?? 0;
+                final cMax = (maxBonus - next).clamp(0.0, maxBonus);
+                if (c > cMax) {
+                  if (cMax <= 0) {
+                    _bonusCashQty.remove(pid);
+                  } else {
+                    _bonusCashQty[pid] = cMax;
+                  }
                 }
               }),
             ),
+            if (_bonusCashEnabled)
+              _qtyRow(
+                label: 'Бонус оплатой',
+                name: '${p['name'] ?? ''}',
+                color: AppColors.warning,
+                maxQty: cashMax,
+                value: cashQty.clamp(0.0, cashMax),
+                hint: cashQty > 0
+                    ? "= ${formatMoneySpaced(cashSum)} So'm"
+                    : 'сумма = дона × таннарх',
+                onChanged: (v) => setState(() {
+                  final next = v.clamp(0.0, cashMax);
+                  if (next <= 0) {
+                    _bonusCashQty.remove(pid);
+                  } else {
+                    _bonusCashQty[pid] = next;
+                  }
+                }),
+              ),
+            if (_bonusCashEnabled)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _submitting
+                      ? null
+                      : () => _openBonusCalc(p),
+                  icon: const Icon(Icons.calculate_outlined, size: 18),
+                  label: const Text('Расчет бонусов'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.expeditorAccent,
+                  ),
+                ),
+              ),
+          ],
           _peresortControls(p),
         ],
       ),
     );
+  }
+
+  Future<void> _openBonusCalc(Map<String, dynamic> p) async {
+    final pid = p['product_id'] as int;
+    final price = p['price'] as double;
+    final maxBonus = p['max_bonus'] as double;
+    final result = await showExpeditorBonusCalcSheet(
+      context: context,
+      productName: '${p['name'] ?? ''}',
+      unitPrice: price,
+      bonusAvailable: maxBonus,
+      goodsQty: _bonus[pid] ?? 0,
+      cashQty: _bonusCashQty[pid] ?? 0,
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.goodsQty <= 0) {
+        _bonus.remove(pid);
+      } else {
+        _bonus[pid] = result.goodsQty;
+      }
+      if (result.cashQty <= 0) {
+        _bonusCashQty.remove(pid);
+      } else {
+        _bonusCashQty[pid] = result.cashQty;
+      }
+    });
   }
 
   Widget _qtyRow({
@@ -1284,12 +1417,14 @@ class _ExpeditorReturnByOrderPageState
   }
 
   Widget _bottomBar(int orderId, List<Map<String, dynamic>> products,
-      double saleSum, double bonusQty,) {
+      double saleSum, double bonusQty, double bonusCashSum,) {
     final byOrder = _method == _ReturnMethod.byOrder ||
         _method == _ReturnMethod.fullOrder;
     final hasAny = byOrder
         ? _returnQty.values.any((v) => v > 0)
-        : (_paid.values.any((v) => v > 0) || _bonus.values.any((v) => v > 0));
+        : (_paid.values.any((v) => v > 0) ||
+            _bonus.values.any((v) => v > 0) ||
+            (_bonusCashEnabled && _bonusCashQty.values.any((v) => v > 0)));
 
     double totalReturnQty = 0;
     for (final v in _returnQty.values) {
@@ -1326,7 +1461,7 @@ class _ExpeditorReturnByOrderPageState
                   ),
                 ],
               )
-            else
+            else ...[
               Row(
                 children: [
                   Expanded(
@@ -1336,13 +1471,23 @@ class _ExpeditorReturnByOrderPageState
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _totalChip('Бонус (шт)',
+                    child: _totalChip(
+                        'Бонус товаром',
                         bonusQty.toStringAsFixed(
                             bonusQty.truncateToDouble() == bonusQty ? 0 : 2,),
                         color: AppColors.success,),
                   ),
                 ],
               ),
+              if (_bonusCashEnabled && bonusCashSum > 0) ...[
+                const SizedBox(height: 8),
+                _totalChip(
+                  'Бонус оплатой',
+                  "${formatMoneySpaced(bonusCashSum)} So'm",
+                  color: AppColors.warning,
+                ),
+              ],
+            ],
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -1350,7 +1495,13 @@ class _ExpeditorReturnByOrderPageState
               child: ElevatedButton(
                 onPressed: (!hasAny || _submitting)
                     ? null
-                    : () => _openFinalize(orderId, products, saleSum, bonusQty),
+                    : () => _openFinalize(
+                          orderId,
+                          products,
+                          saleSum,
+                          bonusQty,
+                          bonusCashSum,
+                        ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.expeditorAccent,
                   foregroundColor: Colors.white,
@@ -1404,7 +1555,8 @@ class _ExpeditorReturnByOrderPageState
   /// Joriy usul bo'yicha qaytarish satrlari.
   ///  - «По заказу» / «Полный заказ» (AUTO): `return_qty` (savdo) — bonus haqqini
   ///    va bo'linishni tizim markazdan hisoblaydi;
-  ///  - «По продуктам» (MANUAL): `paid_qty` + `bonus_qty` aynan yuboriladi.
+  ///  - «По продуктам» (MANUAL): `paid_qty` + `bonus_qty` (+ ixtiyoriy `bonus_cash`)
+  ///    aynan yuboriladi.
   /// [withSwap] — submit uchun: peresort manzili (`bonus_target_product_id`)
   /// savdo va bonus ikkalasiga ham tegishli.
   List<Map<String, dynamic>> _aggregatedLines({bool withSwap = false}) {
@@ -1425,15 +1577,24 @@ class _ExpeditorReturnByOrderPageState
         lines.add(line);
       }
     } else {
-      final pids = <int>{..._paid.keys, ..._bonus.keys};
+      final pids = <int>{
+        ..._paid.keys,
+        ..._bonus.keys,
+        if (_bonusCashEnabled) ..._bonusCashQty.keys,
+      };
       for (final pid in pids) {
         final paid = _paid[pid] ?? 0;
         final bonus = _bonus[pid] ?? 0;
-        if (!(paid > 0) && !(bonus > 0)) continue;
+        final cashQty =
+            _bonusCashEnabled ? (_bonusCashQty[pid] ?? 0) : 0.0;
+        final price = _prices[pid] ?? 0;
+        final cashMoney = cashQty > 0 && price > 0 ? cashQty * price : 0.0;
+        if (!(paid > 0) && !(bonus > 0) && !(cashMoney > 0)) continue;
         final line = <String, dynamic>{
           'product_id': pid,
           'paid_qty': paid,
           'bonus_qty': bonus,
+          if (cashMoney > 0) 'bonus_cash': cashMoney,
         };
         if (withSwap) {
           final target = _swap[pid];
@@ -1449,7 +1610,7 @@ class _ExpeditorReturnByOrderPageState
   /// (server preview), kamchilik bo'lsa — markazdan ogohlantirish bilan
   /// tasdiqlash modal oynasi (bekor → tahrirga qaytadi).
   Future<void> _openFinalize(int orderId, List<Map<String, dynamic>> products,
-      double saleSum, double bonusQty,) async {
+      double saleSum, double bonusQty, double bonusCashSum,) async {
     final lines = _aggregatedLines();
     if (lines.isEmpty) {
       _toast('Укажите количество');
@@ -1571,11 +1732,20 @@ class _ExpeditorReturnByOrderPageState
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _totalChip('Бонус (шт)', _fmtQty(bonusReturned),
+                        child: _totalChip(
+                            'Бонус товаром', _fmtQty(bonusReturned),
                             color: AppColors.success,),
                       ),
                     ],
                   ),
+                  if (bonusCashSum > 0.0001) ...[
+                    const SizedBox(height: 8),
+                    _totalChip(
+                      'Бонус оплатой',
+                      "${formatMoneySpaced(bonusCashSum)} So'm",
+                      color: AppColors.warning,
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
                     initialValue: reason.isEmpty ? null : reason,
@@ -1827,6 +1997,8 @@ class _ExpeditorReturnByOrderPageState
                   _orderId = null;
                   _paid.clear();
                   _bonus.clear();
+                  _bonusCashQty.clear();
+                  _bonusCashEnabled = false;
                   _returnQty.clear();
                   _swap.clear();
                   _method = _ReturnMethod.byProducts;

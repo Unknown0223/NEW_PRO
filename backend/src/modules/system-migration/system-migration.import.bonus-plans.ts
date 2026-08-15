@@ -32,6 +32,7 @@ export async function importBonusPlansTables(
     kpiGroupProducts,
     kpiGroupAgents,
     bonusRules,
+    bonusRuleClauses,
     bonusRuleConditions,
     planConfigs,
     planLevels,
@@ -45,6 +46,7 @@ export async function importBonusPlansTables(
     readZipJson<Record<string, unknown>>(zip, "data/kpi_group_products.json"),
     readZipJson<Record<string, unknown>>(zip, "data/kpi_group_agents.json"),
     readZipJson<Record<string, unknown>>(zip, "data/bonus_rules.json"),
+    readZipJson<Record<string, unknown>>(zip, "data/bonus_rule_clauses.json"),
     readZipJson<Record<string, unknown>>(zip, "data/bonus_rule_conditions.json"),
     readZipJson<Record<string, unknown>>(zip, "data/plan_approver_configs.json"),
     readZipJson<Record<string, unknown>>(zip, "data/plan_approver_levels.json"),
@@ -132,6 +134,31 @@ export async function importBonusPlansTables(
     });
   }
 
+  // Clauses → conditions tartibi: conditions.clause_id FK.
+  for (const row of bonusRuleClauses) {
+    const oldId = Number(row.id);
+    const bonusRuleId = requireMap(maps, "bonusRule", row.bonus_rule_id, "bonus_clause.bonus_rule_id");
+    if (bonusRuleId == null) continue;
+    const data = hydrateDecimals(
+      hydrateDates(stripIdTenant(row), ["created_at", "updated_at"]),
+      ["min_sum"]
+    );
+    const created = await tx.bonusRuleClause.create({
+      data: {
+        ...(data as Prisma.BonusRuleClauseUncheckedCreateInput),
+        bonus_rule_id: bonusRuleId,
+        product_ids: remapIntArray(maps.product, data.product_ids),
+        bonus_product_ids: remapIntArray(maps.product, data.bonus_product_ids),
+        product_category_ids: remapIntArray(maps.productCategory, data.product_category_ids),
+        selected_client_ids: remapIntArray(maps.client, data.selected_client_ids),
+        scope_agent_user_ids: remapIntArray(maps.user, data.scope_agent_user_ids),
+        scope_trade_direction_ids: remapIntArray(maps.tradeDirection, data.scope_trade_direction_ids)
+      }
+    });
+    maps.bonusRuleClause.set(oldId, created.id);
+  }
+  counts.bonus_rule_clauses = bonusRuleClauses.length;
+
   for (const row of bonusRuleConditions) {
     const bonusRuleId = requireMap(maps, "bonusRule", row.bonus_rule_id, "bonus_condition.bonus_rule_id");
     if (bonusRuleId == null) continue;
@@ -142,10 +169,17 @@ export async function importBonusPlansTables(
       "bonus_qty",
       "max_bonus_qty"
     ]);
+    // Eski arxivda clauses fayli bo‘lmasa — FK yiqilmasin, clause_id null.
+    const { clause_id: rawClauseId, ...rest } = data;
+    const clauseId =
+      rawClauseId == null || rawClauseId === ""
+        ? null
+        : (remapId(maps.bonusRuleClause, rawClauseId) ?? null);
     await tx.bonusRuleCondition.create({
       data: {
-        ...(data as Prisma.BonusRuleConditionUncheckedCreateInput),
-        bonus_rule_id: bonusRuleId
+        ...(rest as Prisma.BonusRuleConditionUncheckedCreateInput),
+        bonus_rule_id: bonusRuleId,
+        clause_id: clauseId
       }
     });
   }

@@ -40,4 +40,33 @@ describe("route-permission-guard matchRule", () => {
     expect(joined).toContain("cash.");
     expect(joined).toContain("clients.klient.");
   });
+
+  it("maps bank-transfer-inbox read/import/assign to cash.perechisleniya.*", () => {
+    const view = matchRule("GET", "/api/:slug/bank-transfer-inbox");
+    expect(view?.anyOf).toContain("cash.perechisleniya.view");
+
+    const counts = matchRule("GET", "/api/:slug/bank-transfer-inbox/counts");
+    expect(counts?.anyOf).toContain("cash.perechisleniya.view");
+
+    const ingest = matchRule("POST", "/api/:slug/bank-transfer-inbox/ingest");
+    expect(ingest?.anyOf).toEqual(
+      expect.arrayContaining(["cash.perechisleniya.import", "cash.perechisleniya.create"])
+    );
+
+    const importRule = matchRule("POST", "/api/:slug/bank-transfer-inbox/import");
+    expect(importRule?.anyOf).toEqual(
+      expect.arrayContaining(["cash.perechisleniya.import", "cash.perechisleniya.create"])
+    );
+
+    const manual = matchRule("POST", "/api/:slug/bank-transfer-inbox/manual");
+    expect(manual?.anyOf).toEqual(
+      expect.arrayContaining(["cash.perechisleniya.import", "cash.perechisleniya.create"])
+    );
+
+    const assign = matchRule("POST", "/api/:slug/bank-transfer-inbox/:id/assign");
+    expect(assign?.anyOf).toContain("cash.perechisleniya.update");
+
+    const reassign = matchRule("POST", "/api/:slug/bank-transfer-inbox/:id/reassign");
+    expect(reassign?.anyOf).toContain("cash.perechisleniya.update");
+  });
 });

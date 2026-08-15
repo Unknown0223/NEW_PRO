@@ -35,12 +35,17 @@ export function ordersListQueryReady(f: OrdersUrlFilters): boolean {
 }
 
 export function withDefaultOrdersDateRange(f: OrdersUrlFilters): OrdersUrlFilters {
-  if (f.date_from && f.date_to) return f;
+  let date_from = f.date_from?.trim() ?? "";
+  let date_to = f.date_to?.trim() ?? "";
+  // Oraliq oxiri bo‘sh qoldirilsa — bir kunlik deb qabul qilamiz
+  if (date_from && !date_to) date_to = date_from;
+  if (date_to && !date_from) date_from = date_to;
+  if (date_from && date_to) return { ...f, date_from, date_to };
   const defaults = defaultOrdersDayRange();
   return {
     ...f,
-    date_from: f.date_from || defaults.date_from,
-    date_to: f.date_to || defaults.date_to
+    date_from: date_from || defaults.date_from,
+    date_to: date_to || defaults.date_to
   };
 }
 
@@ -54,6 +59,11 @@ export type OrdersUrlFilters = {
   expeditor_id: string;
   date_from: string;
   date_to: string;
+  /**
+   * Bo‘shliqli oylar: `YYYY-MM-DD_YYYY-MM-DD,YYYY-MM-DD_YYYY-MM-DD`.
+   * Bo‘sh = faqat `date_from`/`date_to` (uzluksiz oraliq).
+   */
+  date_periods: string;
   client_id: string;
   product_id: string;
   client_category: string;
@@ -203,6 +213,7 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
   const date_from = ISO_DATE_RE.test(df) ? df : "";
   const dt = searchParams.get("date_to")?.trim() ?? "";
   const date_to = ISO_DATE_RE.test(dt) ? dt : "";
+  const date_periods = (searchParams.get("date_periods")?.trim() ?? "").slice(0, 2048);
   const cr = searchParams.get("client_id")?.trim() ?? "";
   const client_id = /^\d+$/.test(cr) ? cr : "";
   const pr = searchParams.get("product_id")?.trim() ?? "";
@@ -245,6 +256,7 @@ export function parseOrdersUrl(searchParams: URLSearchParams): OrdersUrlFilters 
     expeditor_id,
     date_from,
     date_to,
+    date_periods,
     client_id,
     product_id,
     client_category,
@@ -336,32 +348,58 @@ export function parseNumField(s: string): number {
 export function buildPaymentPrefillFromSelection(
   list: OrderListRow[],
   ids: Set<number>
-): { href: string; note: string | null } {
+): { href: string; note: string | null; disabled?: boolean } {
   const sel = list.filter((r) => ids.has(r.id));
   if (sel.length === 0) {
-    return { href: "/payments/new", note: null };
+    return { href: "/payments/new", note: null, disabled: true };
   }
-  const clientSet = new Set(sel.map((r) => r.client_id));
-  if (clientSet.size > 1) {
+
+  const delivered = sel.filter((r) => r.status === "delivered");
+  if (delivered.length === 0) {
     return {
-      href: "/payments/new",
-      note: "Tanlov turli mijozlar — kassada mijozni qo‘lda tanlang."
+      href: "/orders",
+      note: "«Приход в кассу» uchun kamida bitta «Доставлен» zakaz belgilang.",
+      disabled: true
     };
   }
-  const clientId = sel[0]!.client_id;
-  const sum = sel.reduce((acc, r) => acc + parseNumField(r.total_sum), 0);
+
+  const clientIds = [
+    ...new Set(delivered.map((r) => r.client_id).filter((id) => Number.isFinite(id) && id > 0))
+  ];
+  if (clientIds.length === 0) {
+    return {
+      href: "/orders",
+      note: "Tanlangan zakazlarda mijoz yo‘q.",
+      disabled: true
+    };
+  }
+
+  const sum = delivered.reduce((acc, r) => acc + parseNumField(r.total_sum), 0);
   const p = new URLSearchParams();
-  p.set("client_id", String(clientId));
-  p.set("order_ids", sel.map((r) => String(r.id)).join(","));
+  p.set("order_ids", delivered.map((r) => String(r.id)).join(","));
+  if (clientIds.length === 1) {
+    p.set("client_id", String(clientIds[0]));
+  }
   if (sum > 0) {
     p.set("amount", sum.toFixed(2));
   }
+
+  const skipped = sel.length - delivered.length;
+  const notes: string[] = [];
+  if (delivered.length > 1) {
+    notes.push(
+      clientIds.length > 1
+        ? `${delivered.length} ta «Доставлен» zakaz (${clientIds.length} mijoz).`
+        : `${delivered.length} ta «Доставлен» zakaz.`
+    );
+  }
+  if (skipped > 0) {
+    notes.push(`${skipped} ta yetkazilmagan zakaz o‘tkazib yuborildi.`);
+  }
+
   return {
     href: `/payments/new?${p.toString()}`,
-    note:
-      sel.length > 1
-        ? `${sel.length} ta zakaz — «Приход в кассу» jadvalida naqd ustuniga taqsimlangan.`
-        : null
+    note: notes.length > 0 ? notes.join(" ") : null
   };
 }
 
@@ -401,6 +439,7 @@ export function buildOrdersSearchParams(next: OrdersUrlFilters): URLSearchParams
   if (next.expeditor_id) p.set("expeditor_id", next.expeditor_id);
   if (next.date_from) p.set("date_from", next.date_from);
   if (next.date_to) p.set("date_to", next.date_to);
+  if (next.date_periods?.trim()) p.set("date_periods", next.date_periods.trim());
   if (next.client_id) p.set("client_id", next.client_id);
   if (next.product_id) p.set("product_id", next.product_id);
   if (next.client_category) p.set("client_category", next.client_category);
@@ -427,7 +466,9 @@ export function isOrdersFiltersEmpty(f: OrdersUrlFilters): boolean {
   const scoped = withDefaultOrdersDateRange(f);
   const dayDefaults = defaultOrdersDayRange();
   const hasDefaultDayOnly =
-    scoped.date_from === dayDefaults.date_from && scoped.date_to === dayDefaults.date_to;
+    scoped.date_from === dayDefaults.date_from &&
+    scoped.date_to === dayDefaults.date_to &&
+    !scoped.date_periods?.trim();
   return (
     !f.search &&
     !f.warehouse_id &&

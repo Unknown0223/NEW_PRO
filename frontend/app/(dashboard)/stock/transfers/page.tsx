@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatAppDate, formatAppDateTimeFull } from "@/lib/app-timezone";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -121,20 +122,12 @@ const COLS = [
 const DEFAULT_ORDER = COLS.map((c) => c.id);
 
 function formatDateDdMmYyyy(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+  return formatAppDate(iso, "—");
 }
 
-/** Mahalliy vaqt: DD.MM.YYYY HH:mm:ss */
+/** Asia/Tashkent: DD.MM.YYYY HH:mm:ss */
 function formatDateTimeLocal(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return formatAppDateTimeFull(iso, "—");
 }
 
 /** Excel/filtirlash uchun aniq vaqt (UTC, ISO 8601 matn) */

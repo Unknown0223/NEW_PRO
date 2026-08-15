@@ -13,9 +13,8 @@ Future<void> startManualSync(
   required bool full,
 }) async {
   var policy = ref.read(syncPolicyProvider);
-  if (!policy.allowed) {
-    policy = await ref.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
-  }
+  // Webdagi sozlamalar (vaqt mintaqasi, sync oynasi, mobile_config) har sinxron oldidan.
+  policy = await ref.read(authStateProvider.notifier).refreshConfigAndEvaluateSyncPolicy();
   if (!policy.allowed) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

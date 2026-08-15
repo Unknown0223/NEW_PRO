@@ -11,6 +11,8 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/clients/agent_outlet_filters_provider.dart';
+import 'clients_list_provider.dart';
 import 'client_dynamic_form.dart';
 
 Future<bool?> showCreateClientSheet(BuildContext context) {
@@ -106,7 +108,7 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       });
 
       final isActive = row['is_active'];
-      await AppDatabase().upsertClients([
+        await AppDatabase().upsertClients([
         {
           'id': row['id'],
           'name': row['name'] ?? name,
@@ -119,6 +121,9 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
           'longitude': row['longitude'],
         },
       ]);
+
+      ref.invalidate(clientsListProvider);
+      resetOutletFilters(ref);
 
       if (mounted) {
         if (_clientCfg.requireNewClientApproval || isActive == false) {

@@ -1,11 +1,11 @@
 "use client";
 
-import type { OrderDetailRow } from "@/components/orders/order-detail-view";
+import type { OrderDetailRow, OrderListRow } from "@/components/orders/order-detail-view";
 import { api } from "@/lib/api";
 import { downloadOrdersNakladnoyXlsx, type NakladnoyExportPrefs, type NakladnoyTemplateId } from "@/lib/order-nakladnoy";
 import type { OrdersListCacheBody } from "@/lib/orders-list-cache";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   buildPaymentPrefillFromSelection,
   formatConsignmentBulkFeedback,
@@ -42,6 +42,18 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     [rows, selectedOrderIds]
   );
 
+  /** Sahifa almashganda tanlangan qatorlar yo‘qolmasligi uchun kesh */
+  const selectedOrdersCacheRef = useRef<Map<number, OrderListRow>>(new Map());
+  useEffect(() => {
+    const cache = selectedOrdersCacheRef.current;
+    for (const r of rows) {
+      if (selectedOrderIds.has(r.id)) cache.set(r.id, r);
+    }
+    for (const id of [...cache.keys()]) {
+      if (!selectedOrderIds.has(id)) cache.delete(id);
+    }
+  }, [rows, selectedOrderIds]);
+
   const selectionTotals = useMemo(() => {
     let qty = 0;
     let total = 0;
@@ -60,10 +72,12 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     return { count: selectedRows.length, qty, total, discount, bonusQty, debt };
   }, [selectedRows]);
 
-  const paymentPrefill = useMemo(
-    () => buildPaymentPrefillFromSelection(rows, selectedOrderIds),
-    [rows, selectedOrderIds]
-  );
+  const paymentPrefill = useMemo(() => {
+    const fromCache = [...selectedOrderIds]
+      .map((id) => selectedOrdersCacheRef.current.get(id) ?? rows.find((r) => r.id === id))
+      .filter((r): r is OrderListRow => Boolean(r));
+    return buildPaymentPrefillFromSelection(fromCache, selectedOrderIds);
+  }, [rows, selectedOrderIds]);
 
   const rowStatusMut = useMutation({
     mutationFn: async ({
@@ -228,7 +242,10 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       );
       return data;
     },
-    onSuccess: (res) => {
+    onSuccess: (res, vars) => {
+      for (const id of res.updated) {
+        patchOrderInOrdersListCaches(qc, tenantSlug, id, (r) => ({ ...r, status: vars.status }));
+      }
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
       setSelectedOrderIds(new Set());
       setBulkTargetStatus("");

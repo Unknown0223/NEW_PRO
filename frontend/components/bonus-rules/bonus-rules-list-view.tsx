@@ -5,6 +5,7 @@ import { BonusRulesBulkToolbar } from "@/components/bonus-rules/bonus-rules-bulk
 import { BonusRuleOrderScopeDialog } from "@/components/bonus-rules/bonus-rule-order-scope-dialog";
 import { ruleSummary } from "@/components/bonus-rules/rule-summary";
 import { BonusRuleLinkedBonusesCell } from "@/components/bonus-rules/bonus-rule-linked-bonuses-cell";
+import { HistoryIconButton } from "@/components/history/history-icon-button";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -794,6 +795,13 @@ export function BonusRulesListView({ activeOnly, variant = "bonuses" }: Props) {
                               >
                                 <UserRound className="size-3.5" />
                               </Button>
+                              <HistoryIconButton
+                                module="settings"
+                                section="bonusy_i_skidki"
+                                entityType="bonus_rule"
+                                entityId={row.id}
+                                title={`История: ${row.name}`}
+                              />
                               <Link
                                 href={`${listBase}/${row.id}/edit`}
                                 className={cn(

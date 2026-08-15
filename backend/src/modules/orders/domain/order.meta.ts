@@ -64,14 +64,22 @@ export async function updateOrderMeta(
   const blockOnly = patchBl && !patchWh && !patchAg && !patchEx && !patchComment && !patchPm;
 
   if (paymentMethodOnly) {
-    // Способ оплаты / тип цены после создания не меняем.
+    // «new» dan boshqa statuslarda to‘lov usuli o‘zgarmaydi.
     const pmNext =
       input.payment_method_ref === null
         ? null
         : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
     const pmPrev = (existing as { payment_method_ref?: string | null }).payment_method_ref ?? null;
     if (String(pmNext ?? "") !== String(pmPrev ?? "")) {
-      throw new Error("ORDER_HEADER_LOCKED");
+      if (existing.status !== "new") {
+        throw new Error("ORDER_HEADER_LOCKED");
+      }
+      const updatedPm = await prisma.order.update({
+        where: { id: orderId },
+        data: { payment_method_ref: pmNext },
+        include: orderDetailInclude
+      });
+      return enrichOrderDetailRow(tenantId, updatedPm as unknown as OrderDetailLoaded, viewerRole);
     }
     const row = await prisma.order.findFirstOrThrow({
       where: { id: orderId, tenant_id: tenantId },
@@ -94,9 +102,13 @@ export async function updateOrderMeta(
   const nextAgentId = patchAg ? input.agent_id! : existing.agent_id;
   const whChanged = nextWarehouseId !== existing.warehouse_id;
   const agChanged = nextAgentId !== existing.agent_id;
+  const isNewStatus = existing.status === "new";
 
-  // Клиент / агент / склад / способ оплаты в шапке после создания не меняем.
-  if (whChanged || agChanged) {
+  // Agent doim qulflangan. Ombor — faqat «new».
+  if (agChanged) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+  if (whChanged && !isNewStatus) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
 
@@ -110,7 +122,7 @@ export async function updateOrderMeta(
     String(nextPaymentMethodRef ?? "") !==
       String((existing as { payment_method_ref?: string | null }).payment_method_ref ?? "");
 
-  if (pmChanged) {
+  if (pmChanged && !isNewStatus) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
 

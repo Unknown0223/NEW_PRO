@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { chunkClientIds, patchClientsBulkItems, type ClientBulkItem } from "@/lib/client-bulk-patch";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -328,9 +329,15 @@ export function GroupProcessingMiscWorkspace() {
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("No tenant");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
-      let ok = 0;
       let skipped = 0;
       const failed: string[] = [];
+      const items: ClientBulkItem[] = [];
+      const tagOps: Array<{
+        client_id: number;
+        add_tag_ids: number[];
+        remove_tag_ids: number[];
+      }> = [];
+
       for (const id of targets) {
         const draft = draftByClient[id];
         const orig = origByClient[id];
@@ -344,28 +351,66 @@ export function GroupProcessingMiscWorkspace() {
           skipped += 1;
           continue;
         }
-        try {
-          if (patch) {
-            await api.patch(`/api/${tenantSlug}/clients/${id}`, patch);
+        if (patch) items.push({ client_id: id, patch });
+        if (tagsChanged) {
+          const origSet = new Set(orig.tagIds);
+          const draftSet = new Set(draft.tagIds);
+          const add_tag_ids = draft.tagIds.filter((t) => !origSet.has(t));
+          const remove_tag_ids = orig.tagIds.filter((t) => !draftSet.has(t));
+          if (add_tag_ids.length || remove_tag_ids.length) {
+            tagOps.push({ client_id: id, add_tag_ids, remove_tag_ids });
           }
-          if (tagsChanged) {
-            const origSet = new Set(orig.tagIds);
-            const draftSet = new Set(draft.tagIds);
-            const add_tag_ids = draft.tagIds.filter((t) => !origSet.has(t));
-            const remove_tag_ids = orig.tagIds.filter((t) => !draftSet.has(t));
-            if (add_tag_ids.length || remove_tag_ids.length) {
-              await api.patch(`/api/${tenantSlug}/clients/bulk-tags`, {
-                client_ids: [id],
-                ...(add_tag_ids.length ? { add_tag_ids } : {}),
-                ...(remove_tag_ids.length ? { remove_tag_ids } : {})
-              });
-            }
-          }
-          ok += 1;
-        } catch (e) {
-          failed.push(`#${id}: ${getUserFacingError(e, "xato")}`);
         }
       }
+
+      const failedIds = new Set<number>();
+      let ok = 0;
+
+      if (items.length > 0) {
+        const res = await patchClientsBulkItems(tenantSlug, items);
+        ok += res.updated;
+        for (const f of res.failed) {
+          failedIds.add(f.id);
+          failed.push(`#${f.id}: ${f.error}`);
+        }
+      }
+
+      // Bir xil teg o‘zgarishlarini guruhlab — kamroq so‘rov.
+      const tagGroups = new Map<string, { client_ids: number[]; add: number[]; remove: number[] }>();
+      for (const op of tagOps) {
+        if (failedIds.has(op.client_id)) continue;
+        const key = `${op.add_tag_ids.join(",")}|${op.remove_tag_ids.join(",")}`;
+        const g = tagGroups.get(key);
+        if (g) g.client_ids.push(op.client_id);
+        else {
+          tagGroups.set(key, {
+            client_ids: [op.client_id],
+            add: op.add_tag_ids,
+            remove: op.remove_tag_ids
+          });
+        }
+      }
+
+      for (const g of tagGroups.values()) {
+        for (const chunk of chunkClientIds(g.client_ids)) {
+          try {
+            await api.patch(`/api/${tenantSlug}/clients/bulk-tags`, {
+              client_ids: chunk,
+              ...(g.add.length ? { add_tag_ids: g.add } : {}),
+              ...(g.remove.length ? { remove_tag_ids: g.remove } : {})
+            });
+            // Field patch bo‘lmagan (faqat teg) klientlar ham muvaffaqiyat.
+            for (const id of chunk) {
+              if (!items.some((it) => it.client_id === id)) ok += 1;
+            }
+          } catch (e) {
+            for (const id of chunk) {
+              failed.push(`#${id}: ${getUserFacingError(e, "teg xato")}`);
+            }
+          }
+        }
+      }
+
       return { ok, skipped, failed };
     },
     onSuccess: (res) => {

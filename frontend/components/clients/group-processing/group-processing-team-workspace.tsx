@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { patchClientsBulkItems } from "@/lib/client-bulk-patch";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { orderAgentFilterOption, orderExpeditorFilterOption } from "@/lib/order-picker-labels";
@@ -17,7 +18,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
-const MAX_TEAMS = 10;
+const MAX_TEAMS = 100;
 const VISIT_DAYS = [
   { k: 1, l: "Пн", weekend: false },
   { k: 2, l: "Вт", weekend: false },
@@ -55,6 +56,9 @@ type TeamSlot = {
   agentId: string;
   expeditorUserId: string;
   weekdays: number[];
+  /** Faol ro‘yxatda yo‘q (nofaol / VACANT) agent uchun ko‘rsatish */
+  agentOrphanLabel?: string;
+  expeditorOrphanLabel?: string;
 };
 
 type ClientsResponse = {
@@ -69,7 +73,36 @@ function emptySlot(): TeamSlot {
 }
 
 function slotHasData(s: TeamSlot): boolean {
-  return s.agentId !== "" || s.expeditorUserId !== "" || s.weekdays.length > 0;
+  return s.agentId !== "" || s.expeditorUserId !== "";
+}
+
+/** Nofaol / topilmagan agent-dostavshiklarni saqlashdan oldin tozalaydi (VACANT va h.k.). */
+function scrubInactiveStaff(
+  slots: TeamSlot[],
+  activeAgentIds: Set<string>,
+  activeExpeditorIds: Set<string>
+): { slots: TeamSlot[]; clearedInactive: boolean } {
+  let clearedInactive = false;
+  const next = slots.map((s) => {
+    let agentId = s.agentId;
+    let expeditorUserId = s.expeditorUserId;
+    if (agentId && !activeAgentIds.has(agentId)) {
+      agentId = "";
+      clearedInactive = true;
+    }
+    if (expeditorUserId && !activeExpeditorIds.has(expeditorUserId)) {
+      expeditorUserId = "";
+      clearedInactive = true;
+    }
+    return {
+      agentId,
+      expeditorUserId,
+      weekdays: s.weekdays,
+      agentOrphanLabel: undefined,
+      expeditorOrphanLabel: undefined
+    };
+  });
+  return { slots: next, clearedInactive };
 }
 
 /** Bir klientda bir agent faqat bitta yo‘nalishda bo‘lishi mumkin. */
@@ -97,15 +130,24 @@ function slotsFromClient(c: ClientRow): TeamSlot[] {
   const rows: TeamSlot[] = [];
   for (const a of list) {
     const wd = Array.isArray(a.visit_weekdays) ? a.visit_weekdays.filter((x) => x >= 1 && x <= 7) : [];
-    if (a.agent_id == null && a.expeditor_user_id == null && wd.length === 0) continue;
+    if (a.agent_id == null && a.expeditor_user_id == null) continue;
+    const agentLabel = (a.agent_name ?? a.agent_code ?? "").trim();
+    const expeditorLabel = (a.expeditor_name ?? "").trim();
     rows.push({
       agentId: a.agent_id != null ? String(a.agent_id) : "",
       expeditorUserId: a.expeditor_user_id != null ? String(a.expeditor_user_id) : "",
-      weekdays: wd
+      weekdays: wd,
+      agentOrphanLabel: agentLabel || undefined,
+      expeditorOrphanLabel: expeditorLabel || undefined
     });
   }
   if (rows.length === 0 && c.agent_id != null) {
-    rows.push({ agentId: String(c.agent_id), expeditorUserId: "", weekdays: [] });
+    rows.push({
+      agentId: String(c.agent_id),
+      expeditorUserId: "",
+      weekdays: [],
+      agentOrphanLabel: (c.agent_name ?? "").trim() || undefined
+    });
   }
   return rows.length ? rows : [emptySlot()];
 }
@@ -292,6 +334,14 @@ export function GroupProcessingTeamWorkspace() {
       ),
     [expeditorsQ.data]
   );
+  const activeAgentIds = useMemo(
+    () => new Set((agentsQ.data ?? []).map((u) => String(u.id))),
+    [agentsQ.data]
+  );
+  const activeExpeditorIds = useMemo(
+    () => new Set((expeditorsQ.data ?? []).map((u) => String(u.id))),
+    [expeditorsQ.data]
+  );
 
   const ensureClientSlots = useCallback(
     (clientId: number): TeamSlot[] => {
@@ -404,9 +454,15 @@ export function GroupProcessingTeamWorkspace() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("No tenant");
+      if (agentsQ.isLoading || expeditorsQ.isLoading) {
+        throw new Error("Agentlar ro‘yxati yuklanmoqda — biroz kuting");
+      }
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
-      let ok = 0;
       const failed: string[] = [];
+      const clearedNotes: string[] = [];
+      const items: Array<{ client_id: number; patch: { agent_assignments: ReturnType<typeof slotToApi>[] } }> =
+        [];
+
       for (const id of targets) {
         const allSlots = ensureClientSlots(id);
         const dup = findDuplicateAgentDirections(allSlots);
@@ -414,9 +470,18 @@ export function GroupProcessingTeamWorkspace() {
           failed.push(`#${id}: bir agent bir necha yo‘nalishda (faqat bitta ruxsat)`);
           continue;
         }
-        const slots = allSlots.filter(slotHasData);
+        const { slots: scrubbed, clearedInactive } = scrubInactiveStaff(
+          allSlots,
+          activeAgentIds,
+          activeExpeditorIds
+        );
+        const slots = scrubbed.filter(slotHasData);
         if (slots.length === 0) {
-          failed.push(`#${id}: agent / dastavchik / kun tanlanmagan`);
+          failed.push(
+            clearedInactive
+              ? `#${id}: faqat nofaol agent/dastavchik bor edi — faolini tanlang`
+              : `#${id}: agent yoki dastavchik bog‘lanmagan (bo‘sh yo‘nalish saqlanmaydi)`
+          );
           continue;
         }
         const badId = slots.find(
@@ -428,26 +493,39 @@ export function GroupProcessingTeamWorkspace() {
           failed.push(`#${id}: agent yoki dastavchik ID noto‘g‘ri`);
           continue;
         }
-        const agent_assignments = slots.map((s, i) => slotToApi(s, i + 1));
-        try {
-          await api.patch(`/api/${tenantSlug}/clients/${id}`, { agent_assignments });
-          ok += 1;
-        } catch (e) {
-          failed.push(`#${id}: ${getUserFacingError(e, "xato")}`);
-        }
+        items.push({
+          client_id: id,
+          patch: { agent_assignments: slots.map((s, i) => slotToApi(s, i + 1)) }
+        });
+        if (clearedInactive) clearedNotes.push(`#${id}`);
       }
-      return { ok, failed };
+
+      if (items.length === 0) {
+        return { ok: 0, failed, clearedNotes };
+      }
+
+      const res = await patchClientsBulkItems(tenantSlug, items);
+      for (const f of res.failed) {
+        failed.push(`#${f.id}: ${f.error}`);
+        const idx = clearedNotes.indexOf(`#${f.id}`);
+        if (idx >= 0) clearedNotes.splice(idx, 1);
+      }
+      return { ok: res.updated, failed, clearedNotes };
     },
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
-      if (res.ok > 0 && res.failed.length === 0) {
+      if (res.ok > 0 && res.failed.length === 0 && res.clearedNotes.length === 0) {
         router.push("/clients");
         return;
       }
+      const clearedHint =
+        res.clearedNotes.length > 0
+          ? ` Nofaol agent/dastavchik olib tashlandi: ${res.clearedNotes.slice(0, 5).join(", ")}${res.clearedNotes.length > 5 ? "…" : ""}.`
+          : "";
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}`
-          : `Saqlandi: ${res.ok} ta klient`
+          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}${clearedHint}`
+          : `Saqlandi: ${res.ok} ta klient.${clearedHint}`
       );
     },
     onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
@@ -505,10 +583,15 @@ export function GroupProcessingTeamWorkspace() {
             <select
               className={selectClass}
               value={s.agentId}
-              onChange={(e) => onChange(teamIdx, { agentId: e.target.value })}
+              onChange={(e) => onChange(teamIdx, { agentId: e.target.value, agentOrphanLabel: undefined })}
               aria-label={`Направление ${teamIdx + 1}: агент`}
             >
               <option value="">—</option>
+              {s.agentId && !activeAgentIds.has(s.agentId) ? (
+                <option value={s.agentId}>
+                  {(s.agentOrphanLabel || `Agent #${s.agentId}`) + " (nofaol)"}
+                </option>
+              ) : null}
               {agentOpts.map((o) => {
                 const taken = !opts?.master && takenAgents.has(o.value) && o.value !== s.agentId;
                 return (
@@ -534,10 +617,17 @@ export function GroupProcessingTeamWorkspace() {
             <select
               className={selectClass}
               value={s.expeditorUserId}
-              onChange={(e) => onChange(teamIdx, { expeditorUserId: e.target.value })}
+              onChange={(e) =>
+                onChange(teamIdx, { expeditorUserId: e.target.value, expeditorOrphanLabel: undefined })
+              }
               aria-label={`Направление ${teamIdx + 1}: доставщик`}
             >
               <option value="">—</option>
+              {s.expeditorUserId && !activeExpeditorIds.has(s.expeditorUserId) ? (
+                <option value={s.expeditorUserId}>
+                  {(s.expeditorOrphanLabel || `Dastavchik #${s.expeditorUserId}`) + " (nofaol)"}
+                </option>
+              ) : null}
               {expeditorOpts.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -572,7 +662,16 @@ export function GroupProcessingTeamWorkspace() {
             Shart: har bir yo‘nalishda klientga faqat <b>bitta</b> agent; bir xil agent boshqa yo‘nalishda
             takrorlanmaydi.
           </p>
-          {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
+          {statusMsg ? (
+            <p
+              className={cn(
+                "mt-1 text-sm",
+                /Xato:/.test(statusMsg) ? "text-amber-800" : "text-emerald-700"
+              )}
+            >
+              {statusMsg}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -620,7 +719,7 @@ export function GroupProcessingTeamWorkspace() {
         <Button type="button" variant="ghost" size="sm" onClick={() => toggleSelectAll(false)}>
           Снять выбор
         </Button>
-        <Button type="button" variant="secondary" size="sm" disabled={teamCount >= MAX_TEAMS} onClick={addTeam}>
+        <Button type="button" variant="secondary" size="sm" onClick={addTeam}>
           <Plus className="mr-1 size-3.5" />
           Добавить направление
         </Button>

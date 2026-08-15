@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { patchClientsBulkItems, type ClientBulkItem } from "@/lib/client-bulk-patch";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -200,9 +201,9 @@ export function GroupProcessingDebtWorkspace() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("No tenant");
-      let ok = 0;
       let skipped = 0;
       const failed: string[] = [];
+      const items: ClientBulkItem[] = [];
       for (const c of rows) {
         const draft = draftByClient[c.id];
         const orig = origByClient[c.id];
@@ -215,14 +216,12 @@ export function GroupProcessingDebtWorkspace() {
           skipped += 1;
           continue;
         }
-        try {
-          await api.patch(`/api/${tenantSlug}/clients/${c.id}`, patch);
-          ok += 1;
-        } catch (e) {
-          failed.push(`#${c.id}: ${getUserFacingError(e, "ошибка")}`);
-        }
+        items.push({ client_id: c.id, patch });
       }
-      return { ok, skipped, failed };
+      if (items.length === 0) return { ok: 0, skipped, failed };
+      const res = await patchClientsBulkItems(tenantSlug, items);
+      for (const f of res.failed) failed.push(`#${f.id}: ${f.error}`);
+      return { ok: res.updated, skipped, failed };
     },
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
