@@ -28,6 +28,8 @@ export {
   type RawRecordColumn
 } from "./exportRawRecords.js";
 
+export { exportPivotToCsv, type ExportCsvOptions } from "./ExportCsv.js";
+
 export {
   EXPORT_CHUNK_SIZE,
   EXPORT_LARGE_DATASET_THRESHOLD,

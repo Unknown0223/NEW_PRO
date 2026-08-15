@@ -4,7 +4,6 @@ import {
   BUNDLE_IMPORT_SHEETS_FALLBACK,
   BUNDLE_REFERENCE_SHEETS,
   CLIENT_IMPORT_HEADERS,
-  PRICE_IMPORT_HEADERS,
   type BundleTemplateSheet
 } from "@/lib/initial-setup/bundle-template-sheets";
 import { getStepTableConfig } from "@/lib/initial-setup/ref-table-config";
@@ -38,10 +37,29 @@ function sheetFromObjects(stepId: string, items: Record<string, unknown>[]): Bun
         if (typeof v === "boolean") return v ? "1" : "0";
         return cellStr(v);
       }
+      if (k === "payment_method") {
+        return cellStr(item.payment_method ?? item.payment_method_code ?? item.payment_method_id);
+      }
       return cellStr(item[k]);
     })
   );
   return { sheetName: stepId, rows: [headers, ...rows] };
+}
+
+function enrichPriceTypeItems(
+  items: Record<string, unknown>[],
+  payMethods: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  return items.map((item) => {
+    const pmid = cellStr(item.payment_method_id);
+    const pay = payMethods.find((p) => cellStr(p.id) === pmid);
+    const code = pay ? cellStr(pay.code) : "";
+    const name = pay ? cellStr(pay.name) : "";
+    return {
+      ...item,
+      payment_method: code || name || pmid
+    };
+  });
 }
 
 type ProfilePayload = {
@@ -185,32 +203,59 @@ function clientsSheet(rows: Record<string, unknown>[]): BundleTemplateSheet | nu
 
 async function fetchProductPricesSheet(tenantSlug: string, profile: ProfilePayload): Promise<BundleTemplateSheet | null> {
   try {
-    const priceTypes =
-      (profile.references?.price_type_entries as Array<{ code?: string }> | undefined)
-        ?.map((p) => cellStr(p.code))
-        .filter(Boolean) ?? [];
+    const entries =
+      (profile.references?.price_type_entries as Array<{
+        name?: string;
+        code?: string | null;
+        active?: boolean;
+      }> | undefined) ?? [];
+    const typeKeys = entries
+      .filter((p) => p.active !== false)
+      .map((p) => {
+        const code = cellStr(p.code);
+        const name = cellStr(p.name);
+        return code || name;
+      })
+      .filter(Boolean);
+    // Prefer name as column header when present (Excel-да кўриниши осон)
+    const typeHeaders = entries
+      .filter((p) => p.active !== false)
+      .map((p) => cellStr(p.name) || cellStr(p.code))
+      .filter(Boolean);
+
+    const headers = typeHeaders.length ? typeHeaders : typeKeys;
+    if (!headers.length) return null;
 
     const { data: catRes } = await api.get<{ data?: Array<{ id: number }> }>(
       `/api/${tenantSlug}/product-categories`
     );
     const categoryIds = (catRes.data ?? []).map((c) => c.id).filter((id) => id > 0);
-    if (!categoryIds.length || !priceTypes.length) return null;
+    if (!categoryIds.length) return null;
 
-    const priceRows: string[][] = [];
+    const bySku = new Map<string, Record<string, string>>();
     const chunkSize = 50;
+    const queryKeys = entries
+      .filter((p) => p.active !== false)
+      .map((p) => ({
+        header: cellStr(p.name) || cellStr(p.code),
+        key: cellStr(p.code) || cellStr(p.name)
+      }))
+      .filter((x) => x.header && x.key);
 
-    for (const priceType of priceTypes) {
+    for (const { header, key } of queryKeys) {
       for (let i = 0; i < categoryIds.length; i += chunkSize) {
         const chunk = categoryIds.slice(i, i + chunkSize);
         try {
           const { data } = await api.get<{
             data: Array<{ sku: string; price: string | null }>;
           }>(
-            `/api/${tenantSlug}/products/prices/matrix?price_type=${encodeURIComponent(priceType)}&category_ids=${chunk.join(",")}`
+            `/api/${tenantSlug}/products/prices/matrix?price_type=${encodeURIComponent(key)}&category_ids=${chunk.join(",")}`
           );
           for (const row of data.data ?? []) {
             if (!row.sku || row.price == null) continue;
-            priceRows.push([row.sku, priceType, row.price]);
+            const cur = bySku.get(row.sku) ?? {};
+            cur[header] = row.price;
+            bySku.set(row.sku, cur);
           }
         } catch {
           /* skip chunk */
@@ -218,10 +263,14 @@ async function fetchProductPricesSheet(tenantSlug: string, profile: ProfilePaylo
       }
     }
 
-    if (!priceRows.length) return null;
+    if (!bySku.size) return null;
+    const dataRows = [...bySku.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "ru"))
+      .map(([sku, prices]) => [sku, ...headers.map((h) => prices[h] ?? "")]);
+
     return {
       sheetName: "product-prices",
-      rows: [[...PRICE_IMPORT_HEADERS], ...priceRows]
+      rows: [["Артикул (SKU)", ...headers], ...dataRows]
     };
   } catch {
     return null;
@@ -285,29 +334,45 @@ export async function collectBundleExportSheets(tenantSlug: string): Promise<Bun
   for (const [stepId, refKey] of profileSheets) {
     const raw = refs[refKey];
     if (!Array.isArray(raw) || !raw.length) continue;
-    const items = raw.filter((x) => x != null && typeof x === "object" && !Array.isArray(x)) as Record<
+    let items = raw.filter((x) => x != null && typeof x === "object" && !Array.isArray(x)) as Record<
       string,
       unknown
     >[];
+    if (stepId === "price-types") {
+      const pays = (
+        Array.isArray(refs.payment_method_entries) ? refs.payment_method_entries : []
+      ).filter((x) => x != null && typeof x === "object" && !Array.isArray(x)) as Record<
+        string,
+        unknown
+      >[];
+      items = enrichPriceTypeItems(items, pays);
+    }
     const sheet = sheetFromObjects(stepId, items);
     if (sheet) byId.set(stepId, sheet);
   }
 
-  // Territory tree
+  // Territory tree → flat Gorod rows (зона → регион → город)
   type TerrNode = { name?: string; code?: string | null; comment?: string | null; children?: TerrNode[] };
   const terrRoots = (refs.territory_nodes as TerrNode[] | undefined) ?? [];
   if (terrRoots.length) {
     const terrRows: string[][] = [templateHeaders("territory")];
-    const walk = (nodes: TerrNode[], parent: string, depth: number) => {
-      const level = depth === 0 ? "зона" : depth === 1 ? "регион" : "город";
+    const walk = (nodes: TerrNode[], zone: string, region: string, depth: number) => {
       for (const n of nodes) {
         const name = cellStr(n.name);
         if (!name) continue;
-        terrRows.push([name, cellStr(n.comment) || level, parent, cellStr(n.code)]);
-        if (Array.isArray(n.children) && n.children.length) walk(n.children, name, depth + 1);
+        const children = Array.isArray(n.children) ? n.children : [];
+        if (depth === 0) {
+          if (children.length) walk(children, name, region, 1);
+        } else if (depth === 1) {
+          if (children.length) walk(children, zone, name, 2);
+        } else if (!children.length && zone && region) {
+          terrRows.push([name, cellStr(n.code), region, zone]);
+        } else if (children.length) {
+          walk(children, zone, region, depth + 1);
+        }
       }
     };
-    walk(terrRoots, "", 0);
+    walk(terrRoots, "", "", 0);
     if (terrRows.length > 1) byId.set("territory", { sheetName: "territory", rows: terrRows });
   }
 

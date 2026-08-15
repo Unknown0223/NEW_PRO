@@ -5,6 +5,7 @@ import {
   effectiveSubtotalForSumMinRule,
   ruleBlockedByOncePerClient,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleNeedsOrderContext,
@@ -39,6 +40,7 @@ export async function findAllEligibleDiscountRules(
       return false;
     })
     .filter((r) => ruleMatchesClient(r, client))
+    .filter((r) => ruleMatchesConsignment(r, prereqEnv.is_consignment))
     .filter((r) => ruleMatchesOrderAgentScope(r, orderAgent))
     .filter((r) => ruleMatchesOrderProductScope(r, orderedProductIds, productById))
     .filter((r) => r.discount_pct != null && Number(r.discount_pct) > 0);

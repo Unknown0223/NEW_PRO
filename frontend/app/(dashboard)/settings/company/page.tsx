@@ -83,16 +83,19 @@ export default function CompanySettingsPage() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("no");
+      const pay = splitLines(payTypes);
+      const regs = splitLines(regions);
+      const references: Record<string, string[]> = {};
+      /** Bo‘sh massiv yuborilmasin — spravochnik o‘chib ketmasin. */
+      if (pay.length > 0) references.payment_types = pay;
+      if (regs.length > 0) references.regions = regs;
       const { data: body } = await api.patch<TenantProfile>(`/api/${tenantSlug}/settings/profile`, {
         name: name.trim(),
         phone: phone.trim() || null,
         address: address.trim() || null,
         logo_url: logoUrl.trim() || null,
         feature_flags: { orders_sse: ordersSse },
-        references: {
-          payment_types: splitLines(payTypes),
-          regions: splitLines(regions)
-        }
+        ...(Object.keys(references).length > 0 ? { references } : {})
       });
       return body;
     },

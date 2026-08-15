@@ -2,9 +2,11 @@ import type { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 import { registerAccessRoutes } from "./modules/access/access.route";
 import { registerActivityRoutes } from "./modules/activity/activity.route";
+import { registerErrorEventRoutes } from "./modules/error-events/error-events.route";
 import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
 import { registerAuthRoutes } from "./modules/auth/auth.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
+import { registerBonusStrategyRoutes } from "./modules/bonus-strategies/bonus-strategies.route";
 import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
 import { registerClientBalanceRoutes } from "./modules/client-balances/client-balances.route";
 import { registerClientRoutes } from "./modules/clients/clients.route";
@@ -13,6 +15,7 @@ import { registerCurrencyExchangeRateRoutes } from "./modules/currency-rates/cur
 import { registerDashboardRoutes } from "./modules/dashboard/dashboard.route";
 import { registerExpenseRoutes } from "./modules/expenses/expenses.route";
 import { registerFieldRoutes } from "./modules/field/field.route";
+import { registerGpsMonitoringRoutes } from "./modules/gps-monitoring/gps-monitoring.route";
 import { registerGeoBoundaryRoutes } from "./modules/geo-boundaries/geo-boundaries.route";
 import { registerJobRoutes } from "./modules/jobs/jobs.route";
 import { registerLinkageRoutes } from "./modules/linkage/linkage.route";
@@ -23,6 +26,7 @@ import { registerOrderAutomationRoutes } from "./modules/order-automation/order-
 import { registerOrderRoutes } from "./modules/orders/orders.route";
 import { registerOrderStreamRoutes } from "./modules/orders/order-stream.route";
 import { registerPaymentRoutes } from "./modules/payments/payments.route";
+import { registerBankTransferInboxRoutes } from "./modules/bank-transfer-inbox/bank-transfer-inbox.route";
 import { registerPlansRoutes } from "./modules/plans/plans.route";
 import { registerProductCatalogRoutes } from "./modules/products/product-catalog.route";
 import { registerProductPriceRoutes } from "./modules/products/product-prices.route";
@@ -46,6 +50,7 @@ import { registerTenantSettingsRoutes } from "./modules/tenant-settings/tenant-s
 import { registerDocumentEditLockRoutes } from "./modules/document-edit-lock/document-edit-lock.route";
 import { registerTerritoryRoutes } from "./modules/territory/territory.route";
 import { registerTimesheetRoutes } from "./modules/timesheet/timesheet.route";
+import { registerTabelRoutes } from "./modules/tabel/tabel.route";
 import { registerUserUiRoutes } from "./modules/users/user-ui.route";
 import { registerWorkSlotRoutes } from "./modules/work-slots/work-slots.route";
 
@@ -64,11 +69,13 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerConsignmentRoutes,
   registerSalesDirectionRoutes,
   registerBonusRuleRoutes,
+  registerBonusStrategyRoutes,
   registerOrderAutomationRoutes,
   registerOrderRoutes,
   registerOrderStreamRoutes,
   registerDashboardRoutes,
   registerPaymentRoutes,
+  registerBankTransferInboxRoutes,
   registerOpeningBalanceRoutes,
   registerClientBalanceRoutes,
   registerSalesReturnRoutes,
@@ -77,6 +84,7 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerDocumentEditLockRoutes,
   registerAuditEventRoutes,
   registerActivityRoutes,
+  registerErrorEventRoutes,
   registerStockRoutes,
   registerRetailStockRoutes,
   registerWarehouseBlockRoutes,
@@ -97,12 +105,14 @@ export const routeRegistrars: RouteRegistrar[] = [
   registerGeoBoundaryRoutes,
   registerPriceMatrixRoutes,
   registerFieldRoutes,
+  registerGpsMonitoringRoutes,
   registerRefusalRoutes,
   registerNotificationRoutes,
   registerMobileRoutes,
   registerLinkageRoutes,
   registerJobRoutes,
   registerTimesheetRoutes,
+  registerTabelRoutes,
   registerWorkSlotRoutes,
   registerPlansRoutes,
   registerSystemMigrationRoutes

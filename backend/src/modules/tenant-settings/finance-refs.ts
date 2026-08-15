@@ -18,6 +18,11 @@ export type PaymentMethodEntryDto = {
   comment: string | null;
   color: string | null;
   active: boolean;
+  /**
+   * Перечисление bog‘langan: Bank Transfer Inbox / 1C / bank.
+   * Faol yozuvlar orasidan inbox to‘lov yaratishda `payment_type` sifatida ishlatiladi.
+   */
+  sync_with_1c: boolean;
 };
 
 export type PriceTypeEntryDto = {
@@ -134,6 +139,7 @@ export function parsePaymentMethodEntry(item: unknown): PaymentMethodEntryDto | 
   const colorRaw = typeof row.color === "string" ? row.color.trim() : "";
   const color = colorRaw ? colorRaw.slice(0, 32) : null;
   const active = typeof row.active === "boolean" ? row.active : true;
+  const sync_with_1c = typeof row.sync_with_1c === "boolean" ? row.sync_with_1c : false;
   return {
     id,
     name,
@@ -142,7 +148,8 @@ export function parsePaymentMethodEntry(item: unknown): PaymentMethodEntryDto | 
     sort_order,
     comment: comment || null,
     color,
-    active
+    active,
+    sync_with_1c
   };
 }
 
@@ -177,6 +184,31 @@ function sortPaymentMethods(a: PaymentMethodEntryDto, b: PaymentMethodEntryDto):
   return a.name.localeCompare(b.name, "uz");
 }
 
+/**
+ * Sozlamada `sync_with_1c` belgilangan faol to‘lov usullari (sort_order tartibida).
+ * Bir nechtasi bo‘lsa — barchasi qaytadi; inbox default uchun birinchisi.
+ */
+export function paymentMethodsSyncedWith1c(entries: PaymentMethodEntryDto[]): PaymentMethodEntryDto[] {
+  return entries
+    .filter((e) => e.active !== false && e.sync_with_1c === true)
+    .slice()
+    .sort(sortPaymentMethods);
+}
+
+/**
+ * Inbox / bank→Payment yaratishda `payment_type`: sozlamadagi 1C-bog‘langan kod, yo‘q bo‘lsa fallback.
+ */
+export function resolveConfiguredBankTransferPaymentType(
+  entries: PaymentMethodEntryDto[],
+  fallback = "bank_transfer"
+): string {
+  const synced = paymentMethodsSyncedWith1c(entries);
+  const first = synced[0];
+  if (first) return paymentMethodStorageKey(first).slice(0, 64);
+  const fb = fallback.trim();
+  return (fb || "bank_transfer").slice(0, 64);
+}
+
 export function legacyPaymentMethodsFromStrings(
   strings: string[],
   defaultCurrencyCode: string
@@ -189,7 +221,8 @@ export function legacyPaymentMethodsFromStrings(
     sort_order: i + 1,
     comment: null,
     color: null,
-    active: true
+    active: true,
+    sync_with_1c: false
   }));
 }
 
@@ -281,4 +314,27 @@ export function uniqueSortedPriceTypeKeys(keys: string[]): string[] {
   return Array.from(new Set(keys.map((k) => k.trim()).filter(Boolean))).sort((a, b) =>
     a.localeCompare(b, "uz")
   );
+}
+
+/**
+ * DB kaliti (`product_prices.price_type`, kod yoki nom) → katalogdagi ko‘rinadigan nom.
+ * Topilmasa kalit o‘zi qaytadi — jadval/filtr «xom» kod ko‘rsatmasin.
+ */
+export function resolvePriceTypeKeyToLabel(
+  rawKey: string | null | undefined,
+  entries: PriceTypeEntryDto[]
+): string | null {
+  const key = (rawKey ?? "").trim();
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  const active = entries.filter((e) => e.active !== false);
+  for (const pool of [active, entries]) {
+    const byKey = pool.find((e) => priceTypeKey(e).trim().toLowerCase() === lower);
+    if (byKey) return byKey.name.trim();
+    const byCode = pool.find((e) => (e.code ?? "").trim().toLowerCase() === lower);
+    if (byCode) return byCode.name.trim();
+    const byName = pool.find((e) => e.name.trim().toLowerCase() === lower);
+    if (byName) return byName.name.trim();
+  }
+  return key;
 }

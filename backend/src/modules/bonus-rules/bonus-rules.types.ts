@@ -1,3 +1,6 @@
+/** all = har qanday zakaz; yes = faqat konsignatsiya; no = konsignatsiyasiz. */
+export type BonusConsignmentMode = "all" | "yes" | "no";
+
 export type BonusConditionRow = {
   id: number;
   min_qty: number | null;
@@ -80,6 +83,8 @@ export type BonusRuleRow = {
   scope_agent_user_ids: number[];
   /** Bo‘sh = cheklov yo‘q. `User.trade_direction_id`. */
   scope_trade_direction_ids: number[];
+  /** all | yes | no — konsignatsiya zakaziga qo‘llanish. */
+  consignment_mode: BonusConsignmentMode;
   /** Ro‘yxat API: bog‘langan qoidalar shartining qisqa matni (nomisiz), `prerequisite_rule_ids` tartibi bilan. */
   prerequisite_summaries?: string[];
   conditions: BonusConditionRow[];
@@ -157,6 +162,7 @@ export type CreateBonusRuleInput = {
   scope_branch_codes?: string[];
   scope_agent_user_ids?: number[];
   scope_trade_direction_ids?: number[];
+  consignment_mode?: BonusConsignmentMode;
   conditions?: BonusConditionInput[];
   /** Ichki shartlar — bonus (qty/sum gift) uchun. */
   clauses?: BonusRuleClauseInput[];

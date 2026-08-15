@@ -21,9 +21,11 @@ import '../../../core/prefs/agent_local_prefs_provider.dart';
 import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/database/app_database.dart';
 import '../visits/visit_stats_helper.dart';
+import '../visits/agent_visits_page.dart' show visitFromRow;
 import '../../../core/sync/sync_data_refresh.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/time/work_region_time.dart';
 import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
@@ -32,6 +34,7 @@ import '../shell/agent_app_bar.dart';
 import '../shell/agent_drawer.dart';
 import '../clients/client_photo_report_flow.dart';
 import '../../../core/api/mobile_api.dart';
+import '../../../core/sync/photo_report_queue.dart';
 import 'order_create_models.dart';
 import 'order_create_sheets.dart';
 import 'order_draft_model.dart';
@@ -40,6 +43,7 @@ import 'order_draft_ui.dart';
 import 'bonus_stock_utils.dart';
 import '../warehouse/warehouse_stock_providers.dart';
 import 'held_orders_provider.dart';
+import 'held_order_sync_sheet.dart';
 import 'orders_providers.dart';
 import 'van_selling_payment_sheet.dart';
 
@@ -75,6 +79,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   String _shipmentDate = '';
   List<Map<String, dynamic>> _warehouses = [];
   List<String> _priceTypes = const ['default'];
+  Map<String, String> _priceTypeLabels = const {};
 
   List<Map<String, dynamic>> _allProducts = [];
   Map<int, Map<String, dynamic>> _productById = {};
@@ -98,6 +103,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   OrderClientFinance? _clientFinance;
   bool _hasUnlinkedPhotoToday = false;
   Map<int, double>? _pendingDraftRestore;
+  OrderBonusDraftState? _bonusDraft;
 
   OrderCreateContext? _createContextCache;
   int? _createContextCacheClientId;
@@ -110,7 +116,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   final _productSearchCtrl = TextEditingController();
   Timer? _productSearchDebounce;
 
-  static const _createContextCacheTtl = Duration(minutes: 2);
+  static const _createContextCacheTtl = Duration(minutes: 5);
   static const _photoStatusCacheTtl = Duration(minutes: 2);
   static const _configRefreshTtl = Duration(minutes: 5);
   static const _mandatoryChecksCacheTtl = Duration(minutes: 10);
@@ -487,6 +493,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         now.difference(_photoStatusFetchedAt!) < _photoStatusCacheTtl) {
       return;
     }
+    // Oflayn navbatdagi foto ham buyurtma uchun hisoblanadi.
+    if (await AppDatabase().hasPendingUnlinkedPhotoReportToday(_selectedClientId)) {
+      if (mounted) {
+        setState(() => _hasUnlinkedPhotoToday = true);
+        _photoStatusFetchedAt = now;
+      }
+      return;
+    }
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _selectedClientId);
       if (mounted) {
@@ -534,6 +548,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       setState(() {
         _selectedClient = picked;
         _hasUnlinkedPhotoToday = false;
+        _bonusDraft = null;
       });
       _invalidateCreateContextCache();
       _photoStatusFetchedAt = null;
@@ -548,12 +563,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final ctx = await _getCreateContext();
       if (ctx == null || !mounted) return;
       setState(() {
+        _applyCreateContextMeta(ctx);
         _warehouses = ctx.warehouses;
         _defaultWarehouseId = ctx.defaultWarehouseId;
-        _priceTypes = ctx.priceTypes.isNotEmpty ? ctx.priceTypes : const ['retail'];
-        if (_priceType.isEmpty || !_priceTypes.contains(_priceType)) {
-          _priceType = _priceTypes.first;
-        }
         if (_warehouseId == null) {
           final stockWh = ref.read(warehouseStockWarehouseIdProvider);
           final allowedIds = ctx.warehouses
@@ -566,15 +578,38 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
             _warehouseId = ctx.defaultWarehouseId;
           }
         }
-        if (ctx.clientFinance != null) {
-          _clientFinance = ctx.clientFinance;
-          if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
-            _isConsignment = false;
-            _consignmentDueDate = '';
-          }
-        }
       });
     } catch (_) {}
+  }
+
+  /// create-context + session: narx turlari / label / moliya (retail-placeholder ni almashtirish).
+  void _applyCreateContextMeta(OrderCreateContext ctx) {
+    final session = ref.read(sessionProvider);
+    final sessionLabels =
+        session.tenantReferences?.priceTypeLabels ?? const <String, String>{};
+    final sessionPts =
+        session.priceTypes.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final ctxPts =
+        ctx.priceTypes.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final ctxIsRetailOnly =
+        ctxPts.length == 1 && ctxPts.first.toLowerCase() == 'retail';
+    final nextTypes = (!ctxIsRetailOnly && ctxPts.isNotEmpty)
+        ? ctxPts
+        : (sessionPts.isNotEmpty
+            ? sessionPts
+            : (ctxPts.isNotEmpty ? ctxPts : const ['retail']));
+    _priceTypes = nextTypes;
+    _priceTypeLabels = {...sessionLabels, ...ctx.priceTypeLabels};
+    if (_priceType.isEmpty || !_priceTypes.contains(_priceType)) {
+      _priceType = _priceTypes.first;
+    }
+    if (ctx.clientFinance != null) {
+      _clientFinance = ctx.clientFinance;
+      if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
+        _isConsignment = false;
+        _consignmentDueDate = '';
+      }
+    }
   }
 
   Future<void> _openSetupSheet({bool fromInitialClient = false}) async {
@@ -583,6 +618,31 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
     await _ensureSelectedClientFromRoute();
     await _prefetchWarehouses();
+    if (!mounted) return;
+
+    // create-context labels bo‘sh qolsa ham agent-config katalogidan ko‘rsatamiz
+    if (_priceTypeLabels.isEmpty || _priceTypes.isEmpty || _clientFinance == null) {
+      final session = ref.read(sessionProvider);
+      final sessionLabels = session.tenantReferences?.priceTypeLabels ?? const <String, String>{};
+      final sessionPts =
+          session.priceTypes.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      setState(() {
+        if (_priceTypeLabels.isEmpty && sessionLabels.isNotEmpty) {
+          _priceTypeLabels = sessionLabels;
+        }
+        if ((_priceTypes.isEmpty ||
+                (_priceTypes.length == 1 && _priceTypes.first.toLowerCase() == 'retail')) &&
+            sessionPts.isNotEmpty) {
+          _priceTypes = sessionPts;
+          if (_priceType.isEmpty || !_priceTypes.contains(_priceType)) {
+            _priceType = _priceTypes.first;
+          }
+        }
+      });
+      if (_clientFinance == null) {
+        await _refreshClientFinance();
+      }
+    }
     if (!mounted) return;
 
     final agentLimits = ref.read(sessionProvider).agentLimits;
@@ -615,6 +675,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       context,
       warehouses: _warehouses,
       priceTypes: _priceTypes,
+      priceTypeLabels: _priceTypeLabels,
       initialWarehouseId: _warehouseId,
       defaultWarehouseId: _defaultWarehouseId,
       initialPriceType: _priceType,
@@ -728,7 +789,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     setState(() {
       _loadingCatalog = true;
       _loadError = null;
-      if (clearCart) _quantities.clear();
+      if (clearCart) {
+        _quantities.clear();
+        _bonusDraft = null;
+      }
       _openCategory = null;
       _step = _CreateStep.categories;
     });
@@ -748,7 +812,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     try {
-      final ctx = await _getCreateContext(warehouseId: whId, forceRefresh: clearCart);
+      final ctx = await _getCreateContext(warehouseId: whId, forceRefresh: false);
       if (ctx == null) {
         if (mounted) {
           setState(() {
@@ -758,8 +822,6 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         }
         return;
       }
-      final showOutOfStock =
-          ref.read(sessionProvider).mobileConfig?.productList.showOutOfStock ?? true;
       var products = ctx.products
           .where((p) => p['is_blocked'] != true && p['is_active'] != false)
           .toList();
@@ -782,25 +844,17 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         prices[id] = unitPriceForProduct(p, _priceType);
       }
 
-      if (!showOutOfStock) {
-        products = products.where((p) {
-          final id = (p['id'] as num?)?.toInt() ?? 0;
-          return (stockMap[id] ?? 0) > 0;
-        }).toList();
-      }
+      // Zakaz katalogida qoldig‘i 0 mahsulotlar ko‘rinmasin.
+      products = products.where((p) {
+        final id = (p['id'] as num?)?.toInt() ?? 0;
+        return (stockMap[id] ?? 0) > 0;
+      }).toList();
 
       if (!mounted) return;
       setState(() {
-        _priceTypes = ctx.priceTypes.isNotEmpty ? ctx.priceTypes : _priceTypes;
+        _applyCreateContextMeta(ctx);
         _warehouses = ctx.warehouses.isNotEmpty ? ctx.warehouses : _warehouses;
         _defaultWarehouseId = ctx.defaultWarehouseId ?? _defaultWarehouseId;
-        if (ctx.clientFinance != null) {
-          _clientFinance = ctx.clientFinance;
-          if (!ctx.clientFinance!.consignmentToggleEnabled && _isConsignment) {
-            _isConsignment = false;
-            _consignmentDueDate = '';
-          }
-        }
         _allProducts = products;
         _productById = {
           for (final p in products)
@@ -926,6 +980,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final slug = ref.read(sessionProvider).tenantSlug ?? '';
       if (slug.isEmpty) return false;
       try {
+        // Oflayn fotolarni avval serverga yuborish — so‘ng tekshiruv ishlaydi.
+        await PhotoReportQueue.flush(
+          api: ref.read(mobileApiProvider),
+          slug: slug,
+          photoConfig: cfg.photo,
+        );
         if (!_hasUnlinkedPhotoToday) {
           await _refreshPhotoStatus(force: true);
         }
@@ -937,7 +997,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
           _toast('Необходимо добавить фотоотчет', accent: AppColors.warning);
           await _addPhotoReport();
-          await _refreshPhotoStatus();
+          await PhotoReportQueue.flush(
+            api: ref.read(mobileApiProvider),
+            slug: slug,
+            photoConfig: cfg.photo,
+          );
+          await _refreshPhotoStatus(force: true);
           if (!_hasUnlinkedPhotoToday) return false;
         }
       } catch (_) {
@@ -1005,12 +1070,22 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       clientId: _selectedClientId,
       category: category,
     );
-    if (row != null && mounted) {
+    if (!mounted) return false;
+    if (row != null) {
       setState(() {
         _hasUnlinkedPhotoToday = true;
         _photoStatusFetchedAt = DateTime.now();
       });
       _toast('Фотоотчет сохранён', accent: AppColors.success);
+      return true;
+    }
+    // Serverga chiqmagan, lekin oflayn navbatga tushgan bo‘lishi mumkin.
+    if (await AppDatabase().hasPendingUnlinkedPhotoReportToday(_selectedClientId)) {
+      setState(() {
+        _hasUnlinkedPhotoToday = true;
+        _photoStatusFetchedAt = DateTime.now();
+      });
+      _toast('Фотоотчет сохранён (офлайн)', accent: AppColors.success);
       return true;
     }
     return false;
@@ -1034,6 +1109,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     bool applyDiscount = true,
     List<BonusGiftOverrideInput> giftOverrides = const [],
     List<BonusGiftLineInput> giftLines = const [],
+    List<BonusStrategySelectionInput> strategySelections = const [],
+    int bonusQty = 0,
+    double discountPct = 0,
   }) async {
     if (_selectedClient == null || _warehouseId == null || _cartQty == 0) return;
     setState(() => _submitting = true);
@@ -1078,7 +1156,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       final price = _unitPrices[e.key] ?? 0;
       if (price <= 0) {
         if (mounted) {
-          _toast('Mahsulot #${e.key}: «$_priceType» narxi yo\'q — asosiy ma\'lumotlarni tekshiring');
+          final ptLabel = _priceTypeLabels[_priceType] ?? _priceType;
+          _toast('Mahsulot #${e.key}: «$ptLabel» narxi yo\'q — asosiy ma\'lumotlarni tekshiring');
         }
         setState(() => _submitting = false);
         return;
@@ -1144,7 +1223,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     final delayMin = ref.read(sessionProvider).mobileConfig?.sync.postOrderDelayMinutes ?? 0;
     if (delayMin > 0) {
       try {
-        await saveHeldOrder(
+        final held = await saveHeldOrder(
           ref: ref,
           clientId: _selectedClientId,
           clientName: _selectedClient?['name']?.toString() ?? '',
@@ -1160,26 +1239,50 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
           shipmentDate: _shipmentDate.isEmpty ? null : _shipmentDate,
           estimatedTotal: _total,
+          bonusQty: bonusQty,
+          discountPct: discountPct,
           delayMinutes: delayMin,
           existingId: _heldOrderId,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
-          _selectedClientId,
-          clientName: _selectedClient?['name']?.toString(),
-        );
+        // Vizit hold oynasida ochiq qoladi — «Отправить сейчас» vizit bo‘limida.
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
         ref.invalidate(heldOrdersProvider);
         ref.invalidate(heldOrderCountProvider);
+        ref.invalidate(ordersListProvider);
+        ref.invalidate(pendingCountProvider);
         refreshVisitStatsProviders(ref.invalidate);
+        if (mounted) setState(() => _submitting = false);
         if (mounted) {
-          _toast(
-            'Заказ в очереди — отправка через $delayMin мин',
-            accent: AppColors.warning,
+          final action = await showHeldOrderSyncSheet(
+            context,
+            order: held,
+            delayMinutes: delayMin,
+            autoGoHomeAfter: 5,
           );
-          context.go('/orders');
+          if (!mounted) return;
+          if (action == HeldOrderSyncAction.edit) {
+            context.go('/orders/create?held_id=${held.id}');
+          } else if (action == HeldOrderSyncAction.sent) {
+            context.go('/orders');
+          } else if (action == HeldOrderSyncAction.goHome) {
+            context.go('/home');
+          } else {
+            // Dismiss — faol vizitga qaytish (yuborish u yerda).
+            final visits = await AppDatabase().getVisitsForDay();
+            final hasActive = visits.any((row) {
+              final v = visitFromRow(row);
+              return v.clientId == _selectedClientId && v.status == 'in_progress';
+            });
+            if (!mounted) return;
+            if (hasActive) {
+              context.go('/visits/active/$_selectedClientId');
+            } else {
+              context.go('/visits');
+            }
+          }
         }
       } catch (e) {
         if (mounted) _toast('Ошибка очереди: $e');
@@ -1200,6 +1303,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         applyDiscount: applyDiscount,
         giftOverrides: giftOverrides,
         giftLines: giftLines,
+        strategySelections: strategySelections,
         comment: _comment.isEmpty ? null : _comment,
         isConsignment: _isConsignment,
         consignmentDueDate: _isConsignment ? _consignmentDueDate : null,
@@ -1243,8 +1347,14 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
+        ref.invalidate(ordersListProvider);
+        ref.invalidate(pendingCountProvider);
+        ref.invalidate(orderDebtsByOrdersProvider);
+        // Yangi zakaz bugungi ro‘yxatda ko‘rinsin.
+        final now = workRegionNow();
+        ref.read(ordersHistoryDateProvider.notifier).state =
+            ordersHistoryDateKey(DateTime(now.year, now.month, now.day));
         refreshVisitStatsProviders(ref.invalidate);
-        _toast('Заказ №$orderNumber создан', accent: AppColors.success);
         final vanCfg = ref.read(sessionProvider).mobileConfig?.vanSelling;
         if (vanCfg?.paymentRequired == true && orderId != null) {
           final paid = await VanSellingPaymentSheet.show(
@@ -1328,6 +1438,12 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
     if (!mounted) return;
     final ordersCfg = ref.read(sessionProvider).mobileConfig?.orders ?? const OrdersConfig();
+    final fp = OrderBonusDraftState.fingerprintFor(items);
+    final draft = _bonusDraft == null
+        ? null
+        : (_bonusDraft!.itemsFingerprint == fp
+            ? _bonusDraft
+            : _bonusDraft!.withItemsFingerprint(fp));
     final result = await OrderBonusDiscountSheet.show(
       context,
       slug: slug,
@@ -1337,6 +1453,13 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       items: items,
       ordersApi: ref.read(ordersApiProvider),
       ordersConfig: ordersCfg,
+      initialBonusMode: draft?.bonusMode ?? BonusMode.auto,
+      initialDiscountMode: draft?.discountMode ?? DiscountMode.auto,
+      initialDraft: draft,
+      isConsignment: _isConsignment,
+      onDraftChanged: (d) {
+        _bonusDraft = d;
+      },
     );
     if (result == null || !mounted) return;
     if (result.bonusShortageComment.isNotEmpty) {
@@ -1350,6 +1473,9 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       applyDiscount: result.applyDiscount,
       giftOverrides: result.giftOverrides,
       giftLines: result.giftLines,
+      strategySelections: result.strategySelections,
+      bonusQty: result.bonusQty,
+      discountPct: result.discountPct,
     );
   }
 

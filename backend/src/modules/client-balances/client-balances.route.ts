@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { ensureTenantContext } from "../../lib/tenant-context";
+import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { enrichScopedReportActor, intersectRequestedAgentIds } from "../access/access-agent-scope";
 import { listConsignmentBalancesReport } from "./consignment-balances.service";
 import {
   listClientBalancesReport,
@@ -47,7 +49,9 @@ function parseListQuery(q: Record<string, string | undefined>): ClientBalanceLis
       ? "agents"
       : viewRaw === "clients_delivery"
         ? "clients_delivery"
-        : "clients";
+        : viewRaw === "clients_legacy"
+          ? "clients_legacy"
+          : "clients";
 
   return {
     view,
@@ -109,32 +113,6 @@ function parseListQuery(q: Record<string, string | undefined>): ClientBalanceLis
   };
 }
 
-function toNum(value: string | number | null | undefined): number {
-  if (value == null) return 0;
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const n = Number(String(value).trim().replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function collectPagePaymentStats(
-  rows: Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>
-) {
-  const paymentSums: Record<string, number> = {};
-  let pageBalanceSum = 0;
-  let nonZeroRows = 0;
-  for (const row of rows) {
-    const bal = toNum(row.balance);
-    pageBalanceSum += bal;
-    let rowHasNonZero = bal !== 0;
-    for (const p of row.payment_amounts ?? []) {
-      paymentSums[p.label] = (paymentSums[p.label] ?? 0) + toNum(p.amount);
-      if (toNum(p.amount) !== 0) rowHasNonZero = true;
-    }
-    if (rowHasNonZero) nonZeroRows += 1;
-  }
-  return { pageBalanceSum, nonZeroRows, paymentSums };
-}
-
 export async function registerClientBalanceRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/client-balances/territory-options",
@@ -168,6 +146,20 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const parsed = parseListQuery(q);
+      const viewer = getAccessUser(request);
+      const actor = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const requested = [
+        ...(parsed.agent_ids ?? []),
+        ...(parsed.agent_id != null && parsed.agent_id > 0 ? [parsed.agent_id] : [])
+      ];
+      const hit = intersectRequestedAgentIds(requested, actor);
+      if (hit.restricted) {
+        parsed.agent_ids = hit.agentIds;
+        parsed.agent_id = undefined;
+      }
       const t0 = Date.now();
       const result = await listClientBalancesReport(request.tenant!.id, parsed);
       request.log.info(
@@ -182,24 +174,6 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           elapsedMs: Date.now() - t0
         },
         "client-balances report timing"
-      );
-      const pageStats = collectPagePaymentStats(
-        (result.data as Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>) ??
-          []
-      );
-      request.log.info(
-        {
-          tenantId: request.tenant!.id,
-          view: parsed.view,
-          page: parsed.page,
-          limit: parsed.limit,
-          summaryBalance: result.summary.balance,
-          summaryPaymentByType: result.summary.payment_by_type,
-          pageBalanceSum: pageStats.pageBalanceSum,
-          pagePaymentSums: pageStats.paymentSums,
-          pageNonZeroRows: pageStats.nonZeroRows
-        },
-        "client-balances payment debug"
       );
       return reply.send(result);
     }
@@ -225,23 +199,6 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
           elapsedMs: Date.now() - t0
         },
         "consignment-balances report timing"
-      );
-      const pageStats = collectPagePaymentStats(
-        (result.data as Array<{ balance?: string; payment_amounts?: Array<{ label: string; amount: string }> }>) ??
-          []
-      );
-      request.log.info(
-        {
-          tenantId: request.tenant!.id,
-          page: parsed.page,
-          limit: parsed.limit,
-          summaryBalance: result.summary.total_debt,
-          summaryPaymentByType: result.summary.payment_by_type,
-          pageBalanceSum: pageStats.pageBalanceSum,
-          pagePaymentSums: pageStats.paymentSums,
-          pageNonZeroRows: pageStats.nonZeroRows
-        },
-        "consignment-balances payment debug"
       );
       return reply.send(result);
     }

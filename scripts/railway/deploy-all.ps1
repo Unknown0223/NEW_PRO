@@ -57,15 +57,24 @@ if (-not $SkipMobile) {
   $BuildDir = "C:\salesdoc_mobile"
   $SyncCmd = Join-Path $MobileDir "scripts\sync-to-build-dir.cmd"
   $StopGradle = Join-Path $MobileDir "scripts\stop-gradle-daemons.ps1"
+  $VerifySigning = Join-Path $MobileDir "scripts\verify-ota-signing.ps1"
+
+  # OTA kalit PC dan mustaqil — yo‘qolsa / almashtirilsa build to‘xtaydi.
+  if (Test-Path $VerifySigning) {
+    & $VerifySigning -MobileDir $MobileDir
+  }
 
   # Cyrillic/D: disk muammosi: APK C:\salesdoc_mobile da yig'iladi
   Write-Host "Sync: $MobileDir -> $BuildDir" -ForegroundColor DarkGray
   & cmd /c "`"$SyncCmd`""
   if ($LASTEXITCODE -ne 0) { throw "sync-to-build-dir xato" }
-  # Android gradle sozlamalarini yangilash (lintVital o'chirilgan)
+  # Android gradle sozlamalarini yangilash (lintVital o'chirilgan) + OTA keystore
   robocopy (Join-Path $MobileDir "android") (Join-Path $BuildDir "android") /E /XD .gradle /NFL /NDL /NJH /NJS | Out-Null
   if (Test-Path (Join-Path $MobileDir ".env")) {
     Copy-Item (Join-Path $MobileDir ".env") (Join-Path $BuildDir ".env") -Force
+  }
+  if (Test-Path $VerifySigning) {
+    & $VerifySigning -MobileDir $BuildDir
   }
 
   if (Test-Path $StopGradle) {

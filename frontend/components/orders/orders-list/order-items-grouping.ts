@@ -64,7 +64,8 @@ export function computeItemTotals(items: OrderItemRow[]) {
   );
 }
 
-/** Qator summasi ko‘rinishi — zakaz darajasidagi skidka to‘liq narxda qolgan qatorlarga qo‘llanadi. */
+/** Qator summasi ko‘rinishi — faqat gross qatorlarda (narx×qty ≈ total) foizni qo‘llaydi.
+ * type=discount dan keyin narxlar allaqachon net: `discount_pct` faqat ko‘rsatish uchun. */
 export function displayLineTotal(p: OrderItemRow): number {
   const qty = parseOrderItemNum(p.qty);
   const price = parseOrderItemNum(p.price);
@@ -72,10 +73,27 @@ export function displayLineTotal(p: OrderItemRow): number {
   const pct = parseOrderItemNum(p.discount_pct);
   if (p.is_bonus || pct <= 0) return total;
   const gross = qty * price;
+  // Narx×miqdor ≈ total → skidka hali narxga singmagan (gross qator).
+  // Agar farq katta bo‘lsa, total allaqachon net yoki boshqa hisob — qayta ayirmaymiz.
   if (Math.abs(gross - total) < 0.02) {
-    return total * (1 - pct / 100);
+    // gross qator + display foiz: lekin net qatorlarda ham gross≈total (narx yangilangan).
+    // Shuning uchun foizni faqat caller/footer orqali ayiramiz; bu yerda total qaytaramiz.
+    return total;
   }
   return total;
+}
+
+/** Expand jadval: to‘lanadigan jami (net). */
+export function orderLinesFooterPayable(
+  paidLinesSum: number,
+  orderDiscount: number,
+  orderNet?: number | null
+): number {
+  if (orderDiscount <= 0) return paidLinesSum;
+  if (orderNet != null && orderNet > 0 && Math.abs(paidLinesSum - orderNet) < 0.02) {
+    return paidLinesSum;
+  }
+  return Math.max(0, paidLinesSum - orderDiscount);
 }
 
 function aggregateKey(item: OrderItemRow): string {

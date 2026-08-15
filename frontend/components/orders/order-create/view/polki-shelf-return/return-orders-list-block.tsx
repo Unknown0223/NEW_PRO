@@ -239,7 +239,7 @@ export function ReturnOrdersListBlock({
 
   if (variant === "strip") {
     return (
-      <div className={cn(polkiCard, "p-4")}>
+      <div className={cn(polkiCard, "p-4")} data-oc-error="polki-orders">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">{mode.ordersListTitle}</h2>
@@ -252,7 +252,7 @@ export function ReturnOrdersListBlock({
   }
 
   return (
-    <div className={cn(polkiCard, "flex min-h-[280px] flex-col p-4")}>
+    <div className={cn(polkiCard, "flex min-h-[280px] flex-col p-4")} data-oc-error="polki-orders">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-[15px] font-semibold text-slate-800">{mode.ordersListTitle}</h2>

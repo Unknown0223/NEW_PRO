@@ -82,18 +82,26 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
           lastChange={derived.audit.lastChange}
         />
 
+        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold text-foreground">Хронология изменений</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Все действия по заказу: создание, товары, статус, комментарии
+          </p>
+          {timeline.isLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка хронологии...</p>
+          ) : timeline.isError ? (
+            <p className="text-sm text-destructive">Не удалось загрузить хронологию</p>
+          ) : (
+            <HistoryTimeline
+              items={timeline.data?.items ?? []}
+              emptyText="Пока нет записей изменений по этому заказу"
+            />
+          )}
+        </section>
+
         <OrderHistoryInfoSection versions={derived.versions} products={derived.products} />
 
         <OrderHistoryBonusTable section={derived.bonusSection} />
-
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Хронология действий</h2>
-          {timeline.isLoading ? (
-            <p className="text-sm text-muted-foreground">Загрузка хронологии...</p>
-          ) : (
-            <HistoryTimeline items={timeline.data?.items ?? []} />
-          )}
-        </section>
       </div>
     </div>
   );

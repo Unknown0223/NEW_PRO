@@ -185,7 +185,7 @@ class MiscConfig {
   final List<String> disallowedPaymentMethodCodes;
 
   const MiscConfig({
-    this.visitStartEndEnabled = false,
+    this.visitStartEndEnabled = true,
     this.requireWithinOutletRadiusM,
     this.requireStockSnapshotForOrder = false,
     this.requireShipmentDate = false,
@@ -194,7 +194,7 @@ class MiscConfig {
   });
 
   factory MiscConfig.fromJson(Map<String, dynamic> j) => MiscConfig(
-        visitStartEndEnabled: j['visit_start_end_enabled'] ?? false,
+        visitStartEndEnabled: j['visit_start_end_enabled'] ?? true,
         requireWithinOutletRadiusM: (j['require_within_outlet_radius_m'] as num?)?.toDouble(),
         requireStockSnapshotForOrder: j['require_stock_snapshot_for_order'] ?? false,
         requireShipmentDate: j['require_shipment_date'] ?? false,
@@ -227,7 +227,11 @@ class SyncConfig {
         blockSync: j['block_sync'] ?? false,
         allowedWindowFrom: _optHm(j['allowed_window_from']),
         allowedWindowTo: _optHm(j['allowed_window_to']),
-        postOrderDelayMinutes: (j['post_order_delay_minutes'] as num?)?.toInt() ?? 0,
+        postOrderDelayMinutes: () {
+          final raw = (j['post_order_delay_minutes'] as num?)?.toInt() ?? 0;
+          if (raw <= 0) return 0;
+          return raw > 59 ? 59 : raw;
+        }(),
       );
 }
 
@@ -269,12 +273,12 @@ class ProductListConfig {
   final bool allowSubmitForNewClient;
 
   const ProductListConfig({
-    this.showOutOfStock = true,
+    this.showOutOfStock = false,
     this.allowSubmitForNewClient = true,
   });
 
   factory ProductListConfig.fromJson(Map<String, dynamic> j) => ProductListConfig(
-        showOutOfStock: j['show_out_of_stock'] ?? true,
+        showOutOfStock: j['show_out_of_stock'] ?? false,
         allowSubmitForNewClient: j['allow_submit_for_new_client'] ?? true,
       );
 }

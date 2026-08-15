@@ -1,7 +1,13 @@
 import { applyCalculatedMeasures, calculatedMeasuresToFields } from "../utils/calculatedMeasures.js";
 import { getDrillThroughRecords } from "../utils/drillThrough.js";
-import { formatValue } from "../utils/formatters.js";
+import { formatValue, shouldShowCurrencySuffix } from "../utils/formatters.js";
 import { lastGroupKeyPart, splitGroupKey, GROUP_KEY_SEPARATOR } from "../utils/groupBy.js";
+import { buildFlatPivotData } from "../utils/buildFlatPivotData.js";
+import { hasFlatSlice, resolveLayoutForm } from "../utils/layoutForm.js";
+import { getActiveSliceFilters } from "../utils/sliceFilters.js";
+import { resolvePivotValueLabel } from "../utils/valueLabels.js";
+import { resolveRowAxisHeaderLabel } from "../utils/rowAxisHeader.js";
+import { valuesOnRows } from "../utils/valuesPosition.js";
 import { Aggregator } from "./Aggregator.js";
 import { CubeBuilder, ROOT_COL_KEY } from "./CubeBuilder.js";
 import { CubeStore, hashAggregationConfig, hashFullConfig, hashPivotData, isAppendOnlyDataUpdate } from "./CubeStore.js";
@@ -13,22 +19,8 @@ import { applyPercentAggregations } from "./PercentProcessor.js";
 import { applyRunningTotalAggregations } from "./RunningTotalProcessor.js";
 import { SortEngine } from "./SortEngine.js";
 import { getPivotStrings } from "../i18n/index.js";
-export const DEFAULT_PIVOT_OPTIONS = {
-    showSubtotals: true,
-    showGrandTotal: true,
-    showColumnTotals: false,
-    compactMode: false,
-    drillDown: true,
-    maxRows: 10000
-};
-export const DEFAULT_PIVOT_CONFIG = {
-    rows: [],
-    columns: [],
-    values: [],
-    reportFilters: [],
-    filters: [],
-    options: { ...DEFAULT_PIVOT_OPTIONS }
-};
+export { DEFAULT_PIVOT_CONFIG, DEFAULT_PIVOT_OPTIONS } from "./defaults.js";
+const MEASURE_ROW_MARKER = "__v__";
 export class PivotEngine {
     constructor() {
         this.aggregator = new Aggregator();
@@ -39,6 +31,8 @@ export class PivotEngine {
         this.cube = new CubeBuilder();
         this.resultCache = null;
         this.incrementalContext = null;
+        /** 2+ turli valyuta bo‘lsa formatda soʻm/USD ko‘rsatiladi. */
+        this.showCurrencySuffix = false;
     }
     /** Drill-through: katakdagi manba qatorlar. */
     static getDrillThroughRecords(rawData, fields, config, cellContext) {
@@ -63,6 +57,22 @@ export class PivotEngine {
     compute(rawData, fields, config) {
         const startTime = performance.now();
         const warnings = [];
+        const layoutForm = resolveLayoutForm(config.options);
+        if (layoutForm === "flat") {
+            if (!hasFlatSlice(config)) {
+                return {
+                    headers: [],
+                    rows: [],
+                    metadata: {
+                        totalRows: rawData.length,
+                        processedRows: 0,
+                        executionTime: performance.now() - startTime,
+                        warnings: [getPivotStrings().engine.noValueFields]
+                    }
+                };
+            }
+            return buildFlatPivotData(rawData, fields, config, startTime);
+        }
         if (!config.values.length) {
             return {
                 headers: [],
@@ -75,19 +85,19 @@ export class PivotEngine {
                 }
             };
         }
-        const reportScopedFilters = config.filters.filter((f) => config.reportFilters.includes(f.fieldId) ||
-            config.rows.includes(f.fieldId) ||
-            config.columns.includes(f.fieldId));
+        const reportScopedFilters = getActiveSliceFilters(config);
         const filteredData = this.filterEngine.apply(rawData, reportScopedFilters, fields);
         let workingData = applyCalculatedMeasures(filteredData, config.calculatedMeasures ?? [], fields);
         if (config.options.maxRows && workingData.length > config.options.maxRows) {
-            warnings.push(`Ma'lumot ${workingData.length} qatordan ${config.options.maxRows} ga qisqartirildi`);
+            const strings = getPivotStrings();
+            warnings.push(strings.reportBuilder.pivotRowsTruncated(String(config.options.maxRows), String(workingData.length)));
             workingData = workingData.slice(0, config.options.maxRows);
         }
         const enrichedFields = [
             ...fields,
             ...calculatedMeasuresToFields(config.calculatedMeasures ?? [])
         ];
+        this.showCurrencySuffix = shouldShowCurrencySuffix(config, enrichedFields);
         const dataHash = hashPivotData(workingData);
         const configHash = hashAggregationConfig(config);
         const fullConfigHash = hashFullConfig(config);
@@ -144,34 +154,45 @@ export class PivotEngine {
             });
         }
         this.incrementalContext = { configHash, filteredData: workingData, dataHash };
-        let colSpecs = this.buildColSpecs(workingData, config);
+        let colSpecs = this.buildColSpecs(workingData, config, enrichedFields);
         colSpecs = this.sortEngine.sortColSpecs(colSpecs, config.options.sortBy, config);
         const headers = this.buildHeaders(colSpecs, config, enrichedFields);
+        const onRows = valuesOnRows(config.options);
         const rowGroups = config.rows.length > 0
             ? this.transformer.groupData(workingData, [config.rows[0]])
             : this.transformer.groupData(workingData, []);
         let rows = [];
-        for (const [groupKey, groupData] of rowGroups) {
-            if (groupKey === "__all__" && config.rows.length === 0) {
-                rows.push(this.buildFlatRow(groupData, colSpecs, config, enrichedFields, getPivotStrings().engine.grandTotal, 0, groupKey));
-                continue;
+        if (onRows && config.rows.length === 0) {
+            rows = this.buildMeasureChildRows(workingData, colSpecs, config, enrichedFields, "__all__", 0);
+        }
+        else {
+            for (const [groupKey, groupData] of rowGroups) {
+                if (groupKey === "__all__" && config.rows.length === 0) {
+                    rows.push(this.buildFlatRow(groupData, colSpecs, config, enrichedFields, getPivotStrings().engine.grandTotal, 0, groupKey));
+                    continue;
+                }
+                const rowLabel = lastGroupKeyPart(groupKey);
+                const measureChildren = onRows && !(config.options.drillDown && config.rows.length > 1)
+                    ? this.buildMeasureChildRows(groupData, colSpecs, config, enrichedFields, groupKey, 1)
+                    : undefined;
+                const cells = onRows
+                    ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+                    : this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
+                const subtotal = config.options.showSubtotals && config.rows.length > 1
+                    ? this.buildSubtotalRow(groupData, colSpecs, config, enrichedFields, rowLabel, groupKey)
+                    : undefined;
+                const children = config.options.drillDown && config.rows.length > 1
+                    ? this.buildChildRows(groupData, config, enrichedFields, colSpecs, 1, groupKey)
+                    : measureChildren;
+                rows.push({
+                    key: groupKey,
+                    depth: 0,
+                    cells,
+                    subtotal,
+                    isExpanded: Boolean(children?.length),
+                    children
+                });
             }
-            const rowLabel = lastGroupKeyPart(groupKey);
-            const cells = this.buildCellsForData(groupData, colSpecs, config, enrichedFields, groupKey);
-            const subtotal = config.options.showSubtotals && config.rows.length > 1
-                ? this.buildSubtotalRow(groupData, colSpecs, config, enrichedFields, rowLabel, groupKey)
-                : undefined;
-            const children = config.options.drillDown && config.rows.length > 1
-                ? this.buildChildRows(groupData, config, enrichedFields, colSpecs, 1, groupKey)
-                : undefined;
-            rows.push({
-                key: groupKey,
-                depth: 0,
-                cells,
-                subtotal,
-                isExpanded: false,
-                children
-            });
         }
         rows = this.sortEngine.sortRows(rows, config.options.sortBy, config);
         const columnTotals = config.options.showColumnTotals && config.columns.length > 0
@@ -207,11 +228,32 @@ export class PivotEngine {
         this.resultCache = { key: resultKey, result: finalResult };
         return finalResult;
     }
-    buildColSpecs(data, config) {
+    buildColSpecs(data, config, fields) {
+        const valueLabel = (v) => resolvePivotValueLabel(v, fields);
+        const onRows = valuesOnRows(config.options);
+        if (onRows) {
+            if (config.columns.length === 0) {
+                return [
+                    {
+                        colKey: ROOT_COL_KEY,
+                        colParts: [getPivotStrings().engine.group]
+                    }
+                ];
+            }
+            const colGroups = this.transformer.getColumnGroups(data, config.columns);
+            const specs = [];
+            for (const [colKey] of colGroups) {
+                specs.push({
+                    colKey,
+                    colParts: splitGroupKey(colKey)
+                });
+            }
+            return specs;
+        }
         if (config.columns.length === 0) {
             return config.values.map((v) => ({
                 colKey: v.fieldId,
-                colParts: [v.label ?? v.fieldId]
+                colParts: [valueLabel(v)]
             }));
         }
         const colGroups = this.transformer.getColumnGroups(data, config.columns);
@@ -219,10 +261,9 @@ export class PivotEngine {
         for (const [colKey] of colGroups) {
             for (const valueDef of config.values) {
                 const colParts = splitGroupKey(colKey);
-                const valueLabel = valueDef.label ?? valueDef.fieldId;
                 specs.push({
                     colKey: `${colKey}__${valueDef.fieldId}`,
-                    colParts: [...colParts, valueLabel]
+                    colParts: [...colParts, valueLabel(valueDef)]
                 });
             }
         }
@@ -230,7 +271,7 @@ export class PivotEngine {
             for (const valueDef of config.values) {
                 specs.push({
                     colKey: valueDef.fieldId,
-                    colParts: [valueDef.label ?? valueDef.fieldId]
+                    colParts: [valueLabel(valueDef)]
                 });
             }
         }
@@ -239,19 +280,68 @@ export class PivotEngine {
     buildHeaders(colSpecs, config, fields) {
         if (colSpecs.length === 0)
             return [];
+        const onRows = valuesOnRows(config.options);
         const rowLabelHeader = {
             key: "__row_label__",
-            label: config.rows.length > 0 ? getPivotStrings().engine.group : "",
+            label: config.rows.length > 0 || onRows
+                ? resolveRowAxisHeaderLabel(config, fields)
+                : "",
             colspan: 1,
-            rowspan: config.columns.length > 0 ? config.columns.length + 1 : 1,
+            rowspan: 1,
             depth: 0,
             isValue: false
         };
+        if (onRows) {
+            if (config.columns.length === 0) {
+                rowLabelHeader.rowspan = 1;
+                return [
+                    [
+                        rowLabelHeader,
+                        {
+                            key: ROOT_COL_KEY,
+                            label: colSpecs[0]?.colParts[0] ?? "",
+                            colspan: 1,
+                            rowspan: 1,
+                            depth: 0,
+                            isValue: true
+                        }
+                    ]
+                ];
+            }
+            const colDepth = config.columns.length;
+            const levels = [];
+            for (let depth = 0; depth < colDepth; depth++) {
+                const level = depth === 0 ? [rowLabelHeader] : [];
+                let i = 0;
+                while (i < colSpecs.length) {
+                    const part = colSpecs[i].colParts[depth] ?? "";
+                    let span = 1;
+                    while (i + span < colSpecs.length &&
+                        colSpecs[i + span].colParts.slice(0, depth + 1).join("|") ===
+                            colSpecs[i].colParts.slice(0, depth + 1).join("|")) {
+                        span++;
+                    }
+                    level.push({
+                        key: `col_${depth}_${i}`,
+                        label: part,
+                        colspan: span,
+                        rowspan: 1,
+                        depth,
+                        isValue: depth === colDepth - 1
+                    });
+                    i += span;
+                }
+                levels.push(level);
+            }
+            if (levels[0]?.[0])
+                levels[0][0].rowspan = colDepth;
+            return levels;
+        }
         if (config.columns.length === 0) {
             return [
                 [
                     rowLabelHeader,
-                    ...colSpecs.map((spec, i) => ({
+                    ...colSpecs.map((spec) => ({
                         key: spec.colKey,
                         label: spec.colParts[0] ?? spec.colKey,
                         colspan: 1,
@@ -266,6 +356,7 @@ export class PivotEngine {
         const colDepth = config.columns.length;
         const hasValueRow = config.values.length > 1 || config.columns.length > 0;
         const totalDepth = colDepth + (hasValueRow ? 1 : 0);
+        rowLabelHeader.rowspan = totalDepth;
         for (let depth = 0; depth < colDepth; depth++) {
             const level = depth === 0 ? [rowLabelHeader] : [];
             let i = 0;
@@ -318,7 +409,50 @@ export class PivotEngine {
         }
         return levels;
     }
-    buildCellsForData(data, colSpecs, config, fields, rowGroupKey) {
+    buildEmptyLabelCells(colSpecs, config, label) {
+        const labelCell = {
+            value: label,
+            rawValue: null,
+            formatted: label,
+            columnKey: "__row_label__",
+            isEmpty: false
+        };
+        const empty = colSpecs.map((spec) => ({
+            value: null,
+            rawValue: null,
+            formatted: "",
+            columnKey: spec.colKey,
+            isEmpty: true
+        }));
+        return config.rows.length > 0 || valuesOnRows(config.options)
+            ? [labelCell, ...empty]
+            : empty;
+    }
+    buildMeasureChildRows(data, colSpecs, config, fields, parentRowGroupKey, depth) {
+        return config.values.map((valueDef) => {
+            const label = resolvePivotValueLabel(valueDef, fields);
+            const rowKey = parentRowGroupKey === "__all__"
+                ? `${MEASURE_ROW_MARKER}${GROUP_KEY_SEPARATOR}${valueDef.fieldId}`
+                : `${parentRowGroupKey}${GROUP_KEY_SEPARATOR}${MEASURE_ROW_MARKER}${GROUP_KEY_SEPARATOR}${valueDef.fieldId}`;
+            const cells = this.buildCellsForData(data, colSpecs, config, fields, parentRowGroupKey === "__all__" ? "__all__" : parentRowGroupKey, valueDef);
+            if (cells[0]) {
+                cells[0] = {
+                    ...cells[0],
+                    value: label,
+                    formatted: label,
+                    isEmpty: false
+                };
+            }
+            return {
+                key: rowKey,
+                depth,
+                cells,
+                parentKey: parentRowGroupKey === "__all__" ? undefined : parentRowGroupKey,
+                isExpanded: false
+            };
+        });
+    }
+    buildCellsForData(data, colSpecs, config, fields, rowGroupKey, measureOverride) {
         const labelCell = {
             value: null,
             rawValue: null,
@@ -326,13 +460,18 @@ export class PivotEngine {
             columnKey: "__row_label__",
             isEmpty: true
         };
-        const valueCells = colSpecs.map((spec) => this.computeCell(data, spec, config, fields, rowGroupKey));
-        return config.rows.length > 0 ? [labelCell, ...valueCells] : valueCells;
+        const valueCells = colSpecs.map((spec) => this.computeCell(data, spec, config, fields, rowGroupKey, measureOverride));
+        const needLabel = config.rows.length > 0 || valuesOnRows(config.options) || Boolean(measureOverride);
+        return needLabel ? [labelCell, ...valueCells] : valueCells;
     }
-    computeCell(data, spec, config, fields, rowGroupKey) {
+    computeCell(data, spec, config, fields, rowGroupKey, measureOverride) {
         let valueDef;
         let colCubeKey = ROOT_COL_KEY;
-        if (config.columns.length > 0) {
+        if (measureOverride || valuesOnRows(config.options)) {
+            valueDef = measureOverride ?? config.values[0];
+            colCubeKey = config.columns.length > 0 ? spec.colKey : ROOT_COL_KEY;
+        }
+        else if (config.columns.length > 0) {
             colCubeKey = spec.colKey.split("__")[0] ?? ROOT_COL_KEY;
             const fieldId = spec.colKey.split("__").slice(1).join("__");
             valueDef = config.values.find((v) => v.fieldId === fieldId) ?? config.values[0];
@@ -361,12 +500,19 @@ export class PivotEngine {
         else {
             rawValue = this.aggregator.aggregate(rawValues, valueDef.aggregation);
         }
-        const formatted = formatValue(rawValue, valueDef.format ?? field?.format);
+        const formatted = formatValue(rawValue, valueDef.format ?? field?.format, {
+            showCurrency: this.showCurrencySuffix
+        });
+        const columnKey = valuesOnRows(config.options) || measureOverride
+            ? config.columns.length > 0
+                ? `${colCubeKey}__${valueDef.fieldId}`
+                : valueDef.fieldId
+            : spec.colKey;
         return {
             value: rawValue,
             rawValue,
             formatted,
-            columnKey: spec.colKey,
+            columnKey,
             isEmpty: rawValues.length === 0,
             drillContext: {
                 rowGroupKey,
@@ -379,7 +525,9 @@ export class PivotEngine {
     extractNumericValuesFromSubset(data, spec, config, fieldId) {
         let subset = data;
         if (config.columns.length > 0) {
-            const colKey = spec.colKey.split("__")[0];
+            const colKey = valuesOnRows(config.options)
+                ? spec.colKey
+                : (spec.colKey.split("__")[0] ?? spec.colKey);
             subset = data.filter((row) => this.rowMatchesColKey(row, config.columns, colKey));
         }
         return this.extractNumericValues(subset, fieldId);
@@ -408,14 +556,21 @@ export class PivotEngine {
     buildChildRows(data, config, fields, colSpecs, depth, parentRowGroupKey) {
         if (depth >= config.rows.length)
             return [];
+        const onRows = valuesOnRows(config.options);
         const childField = config.rows[depth];
         const childGroups = this.transformer.groupData(data, [childField]);
         const result = [];
         for (const [groupKey, groupData] of childGroups) {
             const rowGroupKey = `${parentRowGroupKey}${GROUP_KEY_SEPARATOR}${groupKey}`;
             const rowLabel = lastGroupKeyPart(groupKey);
-            const cells = this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
-            if (cells[0]) {
+            const isLeaf = depth + 1 >= config.rows.length;
+            const measureChildren = onRows && isLeaf
+                ? this.buildMeasureChildRows(groupData, colSpecs, config, fields, rowGroupKey, depth + 1)
+                : undefined;
+            const cells = onRows
+                ? this.buildEmptyLabelCells(colSpecs, config, rowLabel)
+                : this.buildCellsForData(groupData, colSpecs, config, fields, rowGroupKey);
+            if (!onRows && cells[0]) {
                 cells[0] = {
                     ...cells[0],
                     value: rowLabel,
@@ -423,23 +578,26 @@ export class PivotEngine {
                     isEmpty: false
                 };
             }
-            const children = depth + 1 < config.rows.length
+            const children = !isLeaf
                 ? this.buildChildRows(groupData, config, fields, colSpecs, depth + 1, rowGroupKey)
-                : undefined;
+                : measureChildren;
             result.push({
-                key: `${parentRowGroupKey} > ${groupKey}`,
+                key: rowGroupKey,
                 depth,
                 cells,
                 parentKey: parentRowGroupKey,
                 children,
-                isExpanded: false
+                isExpanded: Boolean(children?.length)
             });
         }
         return this.sortEngine.sortRows(result, config.options.sortBy, config);
     }
     buildSubtotalRow(data, colSpecs, config, fields, parentLabel, rowGroupKey) {
-        const cells = this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
-        if (cells[0]) {
+        const onRows = valuesOnRows(config.options);
+        const cells = onRows
+            ? this.buildEmptyLabelCells(colSpecs, config, getPivotStrings().engine.subtotalInline(parentLabel))
+            : this.buildCellsForData(data, colSpecs, config, fields, rowGroupKey);
+        if (!onRows && cells[0]) {
             cells[0] = {
                 ...cells[0],
                 value: getPivotStrings().engine.subtotalInline(parentLabel),
@@ -450,7 +608,8 @@ export class PivotEngine {
         return { label: getPivotStrings().engine.subtotal, cells };
     }
     buildColumnTotals(data, colSpecs, config, fields) {
-        const cells = this.buildCellsForData(data, colSpecs, config, fields, "__all__");
+        const measure = valuesOnRows(config.options) ? config.values[0] : undefined;
+        const cells = this.buildCellsForData(data, colSpecs, config, fields, "__all__", measure);
         if (cells[0]) {
             cells[0] = {
                 ...cells[0],
@@ -468,7 +627,8 @@ export class PivotEngine {
         return { label: getPivotStrings().engine.columnTotal, cells };
     }
     buildGrandTotal(data, colSpecs, config, fields) {
-        const cells = this.buildCellsForData(data, colSpecs, config, fields, "__all__");
+        const measure = valuesOnRows(config.options) ? config.values[0] : undefined;
+        const cells = this.buildCellsForData(data, colSpecs, config, fields, "__all__", measure);
         if (cells[0]) {
             cells[0] = {
                 ...cells[0],

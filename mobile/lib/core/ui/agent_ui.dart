@@ -16,6 +16,8 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// Sarlavha o‘ngida (rasmdagi qizil joy — sinхрон taymer).
   final Widget? titleTrailing;
   final int? menuBadge;
+  /// Sync/bootstrap kabi ekranlar uchun sarlavhani markazda.
+  final bool centerTitle;
 
   const AgentTopBar({
     super.key,
@@ -26,13 +28,23 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.belowTitle,
     this.titleTrailing,
     this.menuBadge,
+    this.centerTitle = false,
   });
 
   @override
-  Size get preferredSize => Size.fromHeight(belowTitle != null ? 118 : 79);
+  Size get preferredSize => Size.fromHeight(belowTitle != null ? (centerTitle ? 108 : 118) : 79);
 
   @override
   Widget build(BuildContext context) {
+    final hasLeading = onBack != null || onMenu != null;
+    final titleStyle = AppTypography.headlineLarge.copyWith(
+      fontSize: centerTitle ? 20 : 22,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.4,
+      color: AppColors.textTitle,
+      height: 1.2,
+    );
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -41,48 +53,89 @@ class AgentTopBar extends StatelessWidget implements PreferredSizeWidget {
           BoxShadow(color: AppColors.topBarShadow, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: EdgeInsets.fromLTRB(12, centerTitle ? 10 : 8, 12, centerTitle ? 14 : 12),
       child: SafeArea(
         bottom: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                if (onBack != null)
-                  AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
-                else if (onMenu != null)
-                  _menuIcon(onMenu!),
-                if (onBack != null || onMenu != null) const SizedBox(width: 10),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
+            if (centerTitle)
+              Row(
+                children: [
+                  SizedBox(
+                    width: 44,
+                    child: hasLeading
+                        ? (onBack != null
+                            ? AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
+                            : _menuIcon(onMenu!))
+                        : null,
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
                           title,
-                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.headlineLarge.copyWith(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.4,
-                            color: AppColors.textTitle,
+                          style: titleStyle,
+                        ),
+                        if (titleTrailing != null) ...[
+                          const SizedBox(height: 6),
+                          titleTrailing!,
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 44,
+                    child: actions.isEmpty
+                        ? null
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: actions,
+                          ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  if (onBack != null)
+                    AgentIconButton(icon: Icons.arrow_back, onPressed: onBack)
+                  else if (onMenu != null)
+                    _menuIcon(onMenu!),
+                  if (hasLeading) const SizedBox(width: 10),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: titleStyle,
                           ),
                         ),
-                      ),
-                      if (titleTrailing != null) ...[
-                        const SizedBox(width: 8),
-                        titleTrailing!,
+                        if (titleTrailing != null) ...[
+                          const SizedBox(width: 8),
+                          titleTrailing!,
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                ...actions,
-              ],
-            ),
+                  ...actions,
+                ],
+              ),
             if (belowTitle != null) ...[
-              const SizedBox(height: 8),
-              belowTitle!,
+              SizedBox(height: centerTitle ? 6 : 8),
+              if (centerTitle)
+                DefaultTextStyle.merge(
+                  style: const TextStyle(height: 1.25),
+                  child: Align(alignment: Alignment.center, child: belowTitle!),
+                )
+              else
+                belowTitle!,
             ],
           ],
         ),
@@ -240,9 +293,9 @@ class AgentBottomNav extends StatelessWidget {
   static const _tabs = [
     (Icons.home_outlined, Icons.home, S.navHome),
     (Icons.location_on_outlined, Icons.location_on, S.navVisits),
+    (Icons.shopping_cart_outlined, Icons.shopping_cart, S.navOrders),
     (Icons.adjust_outlined, Icons.adjust, S.navKpi),
-    (Icons.bar_chart_outlined, Icons.bar_chart, S.navReports),
-    (Icons.storefront_outlined, Icons.storefront, S.navPoints),
+    (Icons.calendar_view_day_outlined, Icons.calendar_view_day, S.navDailyPlan),
   ];
 
   @override
@@ -668,8 +721,9 @@ class AgentMenuTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelStyle = TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w600,
+      fontSize: 17,
+      fontWeight: FontWeight.w700,
+      height: 1.25,
       color: destructive ? AppColors.error : AppColors.textMenu,
     );
 
@@ -679,19 +733,19 @@ class AgentMenuTile extends StatelessWidget {
         InkWell(
           onTap: onTap,
           child: SizedBox(
-            height: 52,
+            height: 58,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(9),
                     ),
-                    child: Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary),
+                    child: Icon(icon, size: 22, color: iconColor ?? AppColors.textSecondary),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -705,7 +759,7 @@ class AgentMenuTile extends StatelessWidget {
                   if (badge != null)
                     Container(
                       margin: const EdgeInsets.only(left: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFFF7ED),
                         borderRadius: BorderRadius.circular(6),
@@ -714,8 +768,8 @@ class AgentMenuTile extends StatelessWidget {
                       child: Text(
                         badge!,
                         style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
                           color: Color(0xFF9A4D00),
                         ),
                       ),
@@ -758,7 +812,7 @@ class AgentRoleBadge extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: FontWeight.w800,
           color: Color(0xFF066E69),
           height: 1.2,
@@ -923,17 +977,20 @@ class SyncProgressRing extends StatelessWidget {
   final double progress;
   final int current;
   final int total;
+  final Color? accentColor;
 
   const SyncProgressRing({
     super.key,
     required this.progress,
     required this.current,
     required this.total,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final pct = (progress.clamp(0.0, 1.0) * 100).round();
+    final accent = accentColor ?? AppColors.primary;
     return SizedBox(
       width: 148,
       height: 148,
@@ -963,7 +1020,7 @@ class SyncProgressRing extends StatelessWidget {
                   strokeWidth: 10,
                   strokeCap: StrokeCap.round,
                   backgroundColor: Colors.transparent,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                  valueColor: AlwaysStoppedAnimation(accent),
                 ),
               );
             },
@@ -1095,42 +1152,104 @@ void showAgentToast(
       behavior: SnackBarBehavior.floating,
       dismissDirection: DismissDirection.up,
       duration: const Duration(seconds: 5),
-      content: Container(
+      content: _AgentSnackContent(
+        message: message,
+        accentColor: accentColor,
+        onDismiss: () {
+          messenger.hideCurrentSnackBar();
+          onDismiss?.call();
+        },
+      ),
+    ),
+  );
+}
+
+/// Login / sessiya xatolari — ekran **pastida** (rasmdagi qorong‘i bar + chap qizil chiziq).
+void showAuthBottomToast(
+  BuildContext context,
+  String message, {
+  Color accentColor = AppColors.error,
+  Duration duration = const Duration(seconds: 5),
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  final bottomPad = MediaQuery.paddingOf(context).bottom;
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      padding: EdgeInsets.zero,
+      margin: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomPad),
+      behavior: SnackBarBehavior.floating,
+      dismissDirection: DismissDirection.down,
+      duration: duration,
+      content: _AgentSnackContent(
+        message: message,
+        accentColor: accentColor,
+        showClose: false,
+        onDismiss: () => messenger.hideCurrentSnackBar(),
+      ),
+    ),
+  );
+}
+
+class _AgentSnackContent extends StatelessWidget {
+  final String message;
+  final Color accentColor;
+  final VoidCallback onDismiss;
+  final bool showClose;
+
+  const _AgentSnackContent({
+    required this.message,
+    required this.accentColor,
+    required this.onDismiss,
+    this.showClose = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
         decoration: BoxDecoration(
           color: AppColors.toastDark,
           borderRadius: BorderRadius.circular(10),
           boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 16)],
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 4,
-              constraints: const BoxConstraints(minHeight: 48),
-              decoration: BoxDecoration(
-                color: accentColor,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                child: Text(
-                  message,
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600, height: 1.35),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
                 ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Color(0xFFCBD5E1), size: 20),
-              onPressed: () {
-                messenger.hideCurrentSnackBar();
-                onDismiss?.call();
-              },
-            ),
-          ],
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(14, 14, showClose ? 4 : 14, 14),
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+              if (showClose)
+                IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFFCBD5E1), size: 20),
+                  onPressed: onDismiss,
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

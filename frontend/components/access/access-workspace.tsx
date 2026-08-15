@@ -9,6 +9,7 @@ import { AccessWorkspaceLeftPanel } from "./access-workspace-left-panel";
 import { AccessWorkspaceOperationsPanel } from "./access-workspace-operations-panel";
 import { AccessWorkspaceScopePanel } from "./access-workspace-scope-panel";
 import { AccessWorkspaceUserPickerModal } from "./access-workspace-user-picker-modal";
+import { AccessEntityRoleLinkModal } from "./access-entity-role-link-modal";
 import { AccessUserDetailPanel } from "@/components/access/access-user-detail-panel";
 import { useAccessWorkspace } from "./use-access-workspace";
 import { isScopeDimensionTab } from "./access-workspace.shared";
@@ -64,23 +65,29 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch">
         <AccessWorkspaceLeftPanel ws={ws} />
         <div className="access-right-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {ws.tab === "users" && ws.selected ? (
+          {ws.tab === "users" &&
+          ws.selectedKey &&
+          Number.isFinite(Number(ws.selectedKey)) ? (
             <div className="min-h-0 flex-1 overflow-hidden">
               <AccessUserDetailPanel
                 tenantSlug={ws.tenantSlug}
-                userId={ws.selected.id}
+                userId={Number(ws.selectedKey)}
                 onInvalidateUsers={ws.scheduleAccessUsersListRefresh}
-                userAccountControls={{
-                  isActive: ws.selected.status === "active",
-                  onToggle: () => void ws.toggleMut.mutateAsync(ws.selected!),
-                  onReset: (id) => {
-                    if (id !== ws.selected!.id) return;
-                    setResetError(null);
-                    setResetConfirmOpen(true);
-                  },
-                  togglePending: ws.toggleMut.isPending && ws.toggleMut.variables?.id === ws.selected!.id,
-                  resetPending: ws.resetMut.isPending && ws.resetMut.variables === ws.selected!.id
-                }}
+                userAccountControls={
+                  ws.selected
+                    ? {
+                        isActive: ws.selected.status === "active",
+                        onToggle: () => void ws.toggleMut.mutateAsync(ws.selected!),
+                        onReset: (id) => {
+                          if (id !== ws.selected!.id) return;
+                          setResetError(null);
+                          setResetConfirmOpen(true);
+                        },
+                        togglePending: ws.toggleMut.isPending && ws.toggleMut.variables?.id === ws.selected!.id,
+                        resetPending: ws.resetMut.isPending && ws.resetMut.variables === ws.selected!.id
+                      }
+                    : null
+                }
               />
             </div>
           ) : ws.tab !== "users" && ws.selectedDimension ? (
@@ -100,15 +107,14 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <p className="text-sm text-muted-foreground">
-                {ws.tab === "users" && ws.selectedKey && !ws.selected
-                  ? "Пользователь не найден в списке (обновите поиск или фильтр)."
-                  : `Выберите запись в «${ws.activeTabLabel}» слева.`}
+                {`Выберите запись в «${ws.activeTabLabel}» слева.`}
               </p>
             </div>
           )}
         </div>
       </div>
       <AccessWorkspaceUserPickerModal ws={ws} />
+      <AccessEntityRoleLinkModal ws={ws} />
 
       <SoftVoidConfirmDialog
         open={resetConfirmOpen}

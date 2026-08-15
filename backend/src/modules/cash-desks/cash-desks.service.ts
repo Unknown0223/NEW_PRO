@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { OPERATOR_LIKE_WEB_ROLES } from "../../lib/tenant-user-roles";
+import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
 import { mapCashDeskIdToBranchName } from "../tenant-settings/tenant-settings.service";
 
 export const CASH_DESK_LINK_ROLES = [
@@ -80,10 +81,20 @@ export async function assertCashDeskCollectorNotOccupied(
   if (other) throw new Error("CASH_DESK_OCCUPIED");
 }
 
-export async function listCashDeskPickers(tenantId: number) {
+export async function listCashDeskPickers(
+  tenantId: number,
+  actor?: { userId: number | null; role: string }
+) {
+  const agentScope = await buildScopedAgentDirectoryWhereForActor(tenantId, actor);
+  const agentWhere: Prisma.UserWhereInput = {
+    tenant_id: tenantId,
+    is_active: true,
+    role: "agent",
+    ...(agentScope ? { AND: [agentScope] } : {})
+  };
   const [agents, operators, supervisors, expeditors] = await Promise.all([
     prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: "agent" },
+      where: agentWhere,
       select: { id: true, name: true, login: true },
       orderBy: [{ name: "asc" }, { login: "asc" }]
     }),

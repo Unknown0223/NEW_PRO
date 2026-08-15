@@ -1,4 +1,4 @@
-import { formatValue } from "../utils/formatters.js";
+import { formatValue, shouldShowCurrencySuffix } from "../utils/formatters.js";
 function valueFieldIdFromColumnKey(columnKey, config) {
     if (config.columns.length > 0) {
         const parts = columnKey.split("__");
@@ -20,16 +20,16 @@ function walkRows(rows, visit) {
             walkRows(row.children, visit);
     }
 }
-function toRunningTotalCell(cell, cumulative, valueDef) {
+function toRunningTotalCell(cell, cumulative, valueDef, showCurrency) {
     return {
         ...cell,
         value: cumulative,
         rawValue: cumulative,
-        formatted: formatValue(cumulative, valueDef.format),
+        formatted: formatValue(cumulative, valueDef.format, { showCurrency }),
         isEmpty: false
     };
 }
-function applyRunningTotalToRows(rows, config, valueDefMap, columnRunning) {
+function applyRunningTotalToRows(rows, config, valueDefMap, columnRunning, showCurrency) {
     walkRows(rows, (row) => {
         row.cells = row.cells.map((cell) => {
             if (cell.columnKey === "__row_label__")
@@ -45,14 +45,14 @@ function applyRunningTotalToRows(rows, config, valueDefMap, columnRunning) {
             const prev = columnRunning.get(cell.columnKey) ?? 0;
             const cumulative = prev + base;
             columnRunning.set(cell.columnKey, cumulative);
-            return toRunningTotalCell(cell, cumulative, valueDef);
+            return toRunningTotalCell(cell, cumulative, valueDef, showCurrency);
         });
         if (row.subtotal) {
-            row.subtotal = applyRunningTotalToTotalRow(row.subtotal, config, valueDefMap, columnRunning);
+            row.subtotal = applyRunningTotalToTotalRow(row.subtotal, config, valueDefMap, columnRunning, showCurrency);
         }
     });
 }
-function applyRunningTotalToTotalRow(total, config, valueDefMap, columnRunning) {
+function applyRunningTotalToTotalRow(total, config, valueDefMap, columnRunning, showCurrency) {
     return {
         ...total,
         cells: total.cells.map((cell) => {
@@ -66,7 +66,7 @@ function applyRunningTotalToTotalRow(total, config, valueDefMap, columnRunning) 
             if (!valueDef)
                 return cell;
             const cumulative = columnRunning.get(cell.columnKey) ?? cell.rawValue ?? 0;
-            return toRunningTotalCell(cell, cumulative, valueDef);
+            return toRunningTotalCell(cell, cumulative, valueDef, showCurrency);
         })
     };
 }
@@ -78,17 +78,18 @@ export function applyRunningTotalAggregations(data, config) {
     const hasRunning = config.values.some((v) => v.aggregation === "RUNNING_TOTAL");
     if (!hasRunning)
         return data;
+    const showCurrency = shouldShowCurrencySuffix(config);
     const valueDefMap = new Map(config.values.map((v) => [v.fieldId, v]));
     const columnRunning = new Map();
     const rows = data.rows.map((row) => ({ ...row, cells: [...row.cells] }));
-    applyRunningTotalToRows(rows, config, valueDefMap, columnRunning);
+    applyRunningTotalToRows(rows, config, valueDefMap, columnRunning, showCurrency);
     let columnTotals = data.columnTotals;
     if (columnTotals) {
-        columnTotals = applyRunningTotalToTotalRow(columnTotals, config, valueDefMap, columnRunning);
+        columnTotals = applyRunningTotalToTotalRow(columnTotals, config, valueDefMap, columnRunning, showCurrency);
     }
     let grandTotal = data.grandTotal;
     if (grandTotal) {
-        grandTotal = applyRunningTotalToTotalRow(grandTotal, config, valueDefMap, columnRunning);
+        grandTotal = applyRunningTotalToTotalRow(grandTotal, config, valueDefMap, columnRunning, showCurrency);
     }
     return { ...data, rows, columnTotals, grandTotal };
 }

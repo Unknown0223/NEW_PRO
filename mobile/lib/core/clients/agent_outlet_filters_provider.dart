@@ -26,6 +26,16 @@ final outletVisitStatusFilterProvider = StateProvider<String?>((ref) => S.dayAll
 
 final outletDebtsOnlyProvider = StateProvider<bool>((ref) => false);
 
+/// Barcha outlet filtrlarni defaultga: kun «Все», kategoriya/status/qarz tozalash.
+void resetOutletFilters(WidgetRef ref) {
+  ref.read(outletWeekdayTabProvider.notifier).state = 0;
+  ref.read(outletCategoryFilterProvider.notifier).state = null;
+  ref.read(outletVisitStatusFilterProvider.notifier).state = S.dayAll;
+  ref.read(outletDebtsOnlyProvider.notifier).state = false;
+  ref.invalidate(filteredClientsProvider);
+  ref.invalidate(visitedTodayClientIdsProvider);
+}
+
 /// Joriy agent bo‘yicha mijozlar umumiy balansi (veb kartochka «Общий» per agent).
 final clientAgentLedgerBalancesProvider = FutureProvider<Map<int, double>>((ref) async {
   final slug = ref.watch(sessionProvider).tenantSlug ?? '';

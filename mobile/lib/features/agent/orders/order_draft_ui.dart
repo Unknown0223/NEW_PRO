@@ -1,7 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session.dart';
+import '../../../core/config/price_type_labels.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -72,128 +73,33 @@ Future<bool?> showOrderDraftExitDialog(BuildContext context) {
   );
 }
 
-/// Mijoz sarlavhasi / ro‘yxat kartasi — o‘ng yuqori chernovik belgisi.
+/// Mijoz sarlavhasi / ro‘yxat kartasi — o‘ng yuqori chernovik belgisi (countdown yo‘q).
 class OrderDraftHeaderBadge extends StatelessWidget {
   final OrderDraft draft;
-  final VoidCallback? onExpired;
 
-  const OrderDraftHeaderBadge({super.key, required this.draft, this.onExpired});
+  const OrderDraftHeaderBadge({super.key, required this.draft});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 4),
-      child: OrderDraftListBadge(draft: draft, onExpired: onExpired),
+      child: OrderDraftListBadge(key: ValueKey(draft.clientId)),
     );
   }
 }
 
-/// Ro'yxatda chernovik belgisi + taymer.
-class OrderDraftListBadge extends StatefulWidget {
-  final OrderDraft draft;
-  final VoidCallback? onExpired;
-
-  const OrderDraftListBadge({super.key, required this.draft, this.onExpired});
-
-  @override
-  State<OrderDraftListBadge> createState() => _OrderDraftListBadgeState();
-}
-
-class _OrderDraftListBadgeState extends State<OrderDraftListBadge> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      if (widget.draft.isExpired) {
-        widget.onExpired?.call();
-        _timer?.cancel();
-        return;
-      }
-      setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+/// Ro'yxatda chernovik belgisi — taymersiz.
+class OrderDraftListBadge extends StatelessWidget {
+  const OrderDraftListBadge({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final remaining = widget.draft.remaining;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.description_outlined, size: 20, color: Color(0xFFFF9800)),
-        const SizedBox(height: 2),
-        Text(
-          formatDraftCountdown(remaining),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFFFF9800),
-            fontFeatures: [FontFeature.tabularFigures()],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Taymer matni — har soniyada yangilanadi.
-class OrderDraftCountdownText extends StatefulWidget {
-  final DateTime expiresAt;
-  final TextStyle style;
-  final VoidCallback? onExpired;
-
-  const OrderDraftCountdownText({
-    super.key,
-    required this.expiresAt,
-    required this.style,
-    this.onExpired,
-  });
-
-  @override
-  State<OrderDraftCountdownText> createState() => _OrderDraftCountdownTextState();
-}
-
-class _OrderDraftCountdownTextState extends State<OrderDraftCountdownText> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      final remaining = widget.expiresAt.difference(DateTime.now());
-      if (remaining.isNegative) {
-        widget.onExpired?.call();
-        _timer?.cancel();
-      }
-      setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final remaining = widget.expiresAt.difference(DateTime.now());
-    return Text(formatDraftCountdown(remaining), style: widget.style);
+    return const Icon(Icons.description_outlined, size: 20, color: Color(0xFFFF9800));
   }
 }
 
 /// Mijoz kartasidagi chernovik bloki.
-class OrderDraftClientCard extends StatelessWidget {
+class OrderDraftClientCard extends ConsumerWidget {
   final OrderDraft draft;
   final String? clientName;
   final VoidCallback? onTap;
@@ -208,7 +114,11 @@ class OrderDraftClientCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labels = ref.watch(sessionProvider).tenantReferences?.priceTypeLabels;
+    final priceLabel = draft.priceType.isEmpty
+        ? '—'
+        : priceTypeDisplayLabel(draft.priceType, labels);
     return AgentSurfaceCard(
       padding: EdgeInsets.zero,
       child: InkWell(
@@ -247,14 +157,6 @@ class OrderDraftClientCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  OrderDraftCountdownText(
-                    expiresAt: draft.expiresAt,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFFF9800),
-                    ),
-                  ),
                   if (onOptions != null) ...[
                     const SizedBox(width: 4),
                     IconButton(
@@ -266,7 +168,7 @@ class OrderDraftClientCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              _row(S.orderPriceType, draft.priceType.isEmpty ? '—' : draft.priceType),
+              _row(S.orderPriceType, priceLabel),
               _row('Бонус', '—'),
               const SizedBox(height: 10),
               Row(
@@ -365,7 +267,15 @@ Future<void> showOrderDraftDataSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => DraggableScrollableSheet(
+    builder: (ctx) {
+      Map<String, String>? labels;
+      try {
+        labels = ProviderScope.containerOf(context).read(sessionProvider).tenantReferences?.priceTypeLabels;
+      } catch (_) {}
+      final priceLabel = draft.priceType.isEmpty
+          ? '—'
+          : priceTypeDisplayLabel(draft.priceType, labels);
+      return DraggableScrollableSheet(
       initialChildSize: 0.75,
       minChildSize: 0.4,
       maxChildSize: 0.92,
@@ -399,7 +309,7 @@ Future<void> showOrderDraftDataSheet(
                 children: [
                   const Text('Общие данные', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 8),
-                  _dataTile(S.orderPriceType, draft.priceType.isEmpty ? '—' : draft.priceType),
+                  _dataTile(S.orderPriceType, priceLabel),
                   _dataTile(S.orderWarehouse, draft.warehouseName.isEmpty ? '—' : draft.warehouseName),
                   _dataTile('Бонус', '—'),
                   _dataTile('Дата создание', formatDraftSavedAt(draft.savedAt)),
@@ -462,7 +372,8 @@ Future<void> showOrderDraftDataSheet(
           ],
         ),
       ),
-    ),
+    );
+    },
   );
 }
 

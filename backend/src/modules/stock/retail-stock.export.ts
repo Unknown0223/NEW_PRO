@@ -4,13 +4,15 @@ import { prisma } from "../../config/database";
 
 
 import type { RetailStockCategoryRow, RetailStockDetailedRow, RetailStockListQuery } from "./retail-stock.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { listRetailStock } from "./retail-stock.list";
 
 export async function buildRetailStockExportBuffer(
   tenantId: number,
-  q: RetailStockListQuery
+  q: RetailStockListQuery,
+  actor?: ScopedReportActor
 ): Promise<Buffer> {
-  const data = await listRetailStock(tenantId, { ...q, page: 1, limit: 25000 });
+  const data = await listRetailStock(tenantId, { ...q, page: 1, limit: 25000 }, actor);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Retail stock", { views: [{ state: "frozen", ySplit: 1 }] });
   if (data.view === "categories") {

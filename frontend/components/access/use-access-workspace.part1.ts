@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import {
   ACCESS_DIM_TABLE_ROW_ESTIMATE_PX,
   ACCESS_MANAGE_KEY,
@@ -112,6 +113,7 @@ export function useAccessWorkspacePart1({ tenantSlug }: { tenantSlug: string }) 
     staleTime: 45_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
     /** «Операции/кассы…» — chapda `dimensions`; ikki og‘ir GET kerak emas (terminaldagi 120+ ms). */
     enabled: Boolean(tenantSlug) && tab === "users",
     queryFn: async () => {
@@ -147,6 +149,7 @@ export function useAccessWorkspacePart1({ tenantSlug }: { tenantSlug: string }) 
     staleTime: 45_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
     enabled: Boolean(tenantSlug) && tab !== "users",
     queryFn: async () => {
       const params = new URLSearchParams({ type: tab });
@@ -195,8 +198,9 @@ export function useAccessWorkspacePart1({ tenantSlug }: { tenantSlug: string }) 
     mutationFn: async (id: number) => {
       await api.post(`/api/${tenantSlug}/access/users/${id}/reset`, {});
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, id) => {
       await qc.invalidateQueries({ queryKey: ["access-users", tenantSlug] });
+      invalidateMePermissionsQueries(qc, tenantSlug, { userId: id });
     }
   });
 

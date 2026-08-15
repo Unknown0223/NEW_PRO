@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import type { PivotField, PivotFilter } from "@salec/pivot-engine";
-import { DateRangeFilter } from "./DateRangeFilter";
 import { MultiSelectFilter } from "./MultiSelectFilter";
-import { NumberRangeFilter } from "./NumberRangeFilter";
+import { DateRangeFilter } from "./DateRangeFilter";
 import { TopNFilter } from "./TopNFilter";
 
 type Props = {
@@ -16,6 +15,9 @@ type Props = {
   onClose: () => void;
 };
 
+/**
+ * Header / fields filter editor — WDR/demo chrome; host centers the panel.
+ */
 export function FilterEditor({ field, members, allFields, filter, onApply, onClose }: Props) {
   const [view, setView] = useState<"default" | "topn">(
     filter?.type === "top_n" || filter?.type === "bottom_n" ? "topn" : "default"
@@ -50,20 +52,9 @@ export function FilterEditor({ field, members, allFields, filter, onApply, onClo
     );
   }
 
-  if (field.dataType === "number" || field.dataType === "currency") {
-    return (
-      <NumberRangeFilter
-        fieldLabel={field.label}
-        fieldId={field.id}
-        filter={filter}
-        onApply={onApply}
-        onClose={onClose}
-      />
-    );
-  }
-
   return (
     <MultiSelectFilter
+      fieldId={field.id}
       fieldLabel={field.label}
       members={members}
       filter={filter ? { ...filter, fieldId: field.id } : { fieldId: field.id, type: "include", values: [] }}

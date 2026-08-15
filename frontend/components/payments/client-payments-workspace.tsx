@@ -9,7 +9,8 @@ import {
   formatPaymentMoney,
   PaymentMethodBadge,
   Td,
-  Th
+  Th,
+  TransferChannelBadge
 } from "@/components/payments/client-payments/template-ui";
 import { PaymentRowActionBar } from "@/components/payments/client-payments/payment-row-action-bar";
 import { EprBulkDeleteModal } from "@/components/payments/expeditor-payment-requests/epr-bulk-delete-modal";
@@ -20,6 +21,7 @@ import { PaymentsTemplateFiltersPanel } from "@/components/payments/payments-tem
 import { PaymentsTemplateListToolbar } from "@/components/payments/payments-template-list-toolbar";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
 import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
@@ -215,6 +217,8 @@ function isCashPaymentType(code: string, label: string): boolean {
 export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: ClientPaymentsWorkspaceVariant }) {
   const isExpenses = variant === "client_expenses";
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const canVoidPayments = effectiveRole === "admin";
@@ -249,7 +253,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   }, [queryString]);
 
   const listQ = useQuery({
-    queryKey: ["payments", tenantSlug, variant, queryString],
+    queryKey: ["payments", tenantSlug, actorUserId, variant, queryString],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.list,
     queryFn: async () => {
@@ -261,7 +265,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   useEffect(() => setFilterVis(loadPaymentFilterVisibility()), []);
 
   const agentsQ = useQuery({
-    queryKey: ["agents", tenantSlug, "payments-filters"],
+    queryKey: ["agents", tenantSlug, actorUserId, "payments-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -271,7 +275,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   });
 
   const expeditorsQ = useQuery({
-    queryKey: ["expeditors", tenantSlug, "payments-filters"],
+    queryKey: ["expeditors", tenantSlug, actorUserId, "payments-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -777,10 +781,13 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
                       </Td>
                       <Td>{p.payment_kind}</Td>
                       <Td>
-                        <PaymentMethodBadge
-                          label={methodLabel}
-                          isCash={isCashPaymentType(p.payment_type, methodLabel)}
-                        />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <PaymentMethodBadge
+                            label={methodLabel}
+                            isCash={isCashPaymentType(p.payment_type, methodLabel)}
+                          />
+                          <TransferChannelBadge channel={p.transfer_channel} />
+                        </div>
                       </Td>
                       <Td className="font-semibold text-gray-900">{formatPaymentMoney(p.amount)}</Td>
                       <Td className="max-w-[180px] truncate" title={p.agent_name ?? undefined}>

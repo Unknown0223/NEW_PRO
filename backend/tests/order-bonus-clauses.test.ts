@@ -45,6 +45,7 @@ function hostStub(partial: Partial<BonusRuleRow> & { clauses?: BonusRuleClauseRo
     scope_branch_codes: [],
     scope_agent_user_ids: [],
     scope_trade_direction_ids: [],
+    consignment_mode: "all",
     conditions: [],
     clauses: [],
     ...partial
@@ -82,6 +83,7 @@ describe("order-bonus-clauses", () => {
           scope_branch_codes: [],
           scope_agent_user_ids: [],
           scope_trade_direction_ids: [],
+    consignment_mode: "all",
           conditions: []
         }
       ]
@@ -130,6 +132,7 @@ describe("order-bonus-clauses", () => {
           scope_branch_codes: [],
           scope_agent_user_ids: [],
           scope_trade_direction_ids: [],
+    consignment_mode: "all",
           conditions: []
         },
         {
@@ -159,6 +162,7 @@ describe("order-bonus-clauses", () => {
           scope_branch_codes: [],
           scope_agent_user_ids: [],
           scope_trade_direction_ids: [],
+    consignment_mode: "all",
           conditions: []
         }
       ]

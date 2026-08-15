@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { decodeAccessTokenTenantSlug, useAuthStore } from "@/lib/auth-store";
+import { emitMePermissionsRefreshNeeded } from "@/lib/me-permissions";
 import { readPersistedAuth } from "@/lib/persisted-auth";
 import {
   backoffMsBeforeTransientRetry,
@@ -128,9 +129,16 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
       return data.accessToken;
     } catch (err) {
       const refreshStatus = axios.isAxiosError(err) ? err.response?.status : undefined;
+      const refreshBody = (axios.isAxiosError(err) ? err.response?.data : undefined) as
+        | ApiErrorResponseBody
+        | undefined;
       // Faqat aniq rad etilgan refresh — tarmoq xatosi uchun sessiyani saqlab qolamiz
       if (refreshStatus === 401 || refreshStatus === 403) {
         store.clearSession();
+        const deny = loginDenyReasonFromBody(refreshStatus, refreshBody ?? {});
+        if (deny) {
+          redirectToLoginIfBrowser(deny);
+        }
       }
       return null;
     } finally {
@@ -140,7 +148,7 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
   return refreshInFlight;
 }
 
-function redirectToLoginIfBrowser(reason?: "session_ended") {
+function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied" | "user_not_on_slot") {
   if (typeof window === "undefined") return;
   const current = `${window.location.pathname}${window.location.search}`;
   const params = new URLSearchParams({ from: current });
@@ -156,9 +164,29 @@ function isSessionRevoked(status: number | undefined, body: ApiErrorResponseBody
   return status === 401 && body?.error === "SESSION_REVOKED";
 }
 
+/** Ilova kirish o‘chirilgan yoki ishchi o‘rin yo‘q — sessiya yopiladi. */
+function loginDenyReasonFromBody(
+  status: number | undefined,
+  body: ApiErrorResponseBody
+): "app_access_denied" | "user_not_on_slot" | null {
+  if (status !== 403) return null;
+  if (body?.error === "APP_ACCESS_DENIED") return "app_access_denied";
+  if (body?.error === "USER_NOT_ON_SLOT") return "user_not_on_slot";
+  return null;
+}
+
 api.interceptors.request.use(async (config) => {
-  if (config.data instanceof FormData) {
-    delete config.headers["Content-Type"];
+  // FormData uchun Content-Type ni o‘chirish shart — aks holda boundary yo‘qoladi va fayl qabul qilinmaydi.
+  if (typeof FormData !== "undefined" && config.data instanceof FormData && config.headers) {
+    const h = config.headers as { delete?: (k: string) => void; set?: (k: string, v: string) => void } &
+      Record<string, unknown>;
+    if (typeof h.delete === "function") {
+      h.delete("Content-Type");
+      h.delete("content-type");
+    } else {
+      delete h["Content-Type"];
+      delete h["content-type"];
+    }
   }
   if (typeof window !== "undefined") {
     const fromStore = useAuthStore.getState().accessToken;
@@ -197,6 +225,8 @@ api.interceptors.response.use(
         requestId,
         status,
         code: body.error,
+        message: body.message,
+        details: (body as { details?: unknown }).details,
         url: original?.url
       });
     }
@@ -217,6 +247,20 @@ api.interceptors.response.use(
       store.clearSession();
       redirectToLoginIfBrowser("session_ended");
       return Promise.reject(error);
+    }
+
+    // Ilova kirish o‘chirilgan yoki ishchi o‘rin yo‘q — deep-link / mid-session ham to‘xtatiladi.
+    const accessDeny = loginDenyReasonFromBody(status, body);
+    if (accessDeny) {
+      const store = useAuthStore.getState();
+      store.clearSession();
+      redirectToLoginIfBrowser(accessDeny);
+      return Promise.reject(error);
+    }
+
+    // Ruxsat olib tashlangan — menyu/gate darhol yangilansin (polling kutmasdan).
+    if (status === 403 && body.error === "ForbiddenPermission") {
+      emitMePermissionsRefreshNeeded();
     }
 
     if (status === 401 && original && !original._retry && !isAuthEndpointNoRefresh(original.url)) {

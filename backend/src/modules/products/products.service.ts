@@ -5,6 +5,7 @@
 export * from "./products.shared";
 export * from "./products.types";
 export * from "./products.crud";
+export * from "./products.duplicates";
 export * from "./products.import.helpers";
 export * from "./products.import.template";
 export * from "./products.import.catalog";

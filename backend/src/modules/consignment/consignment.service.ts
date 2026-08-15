@@ -1,11 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
+import { ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE } from "../orders/order-status";
 import {
   parseConsignmentMonthCloseDay,
-  patchConsignmentSettings,
-  resolveAgentConsignmentCloseSchedule
+  patchConsignmentSettings
 } from "./consignment-settings";
 import { reconcileTenantConsignmentMonthClosures } from "./consignment-month-closure.service";
 import { listAgentConsignmentMonthStatusForMonth } from "./consignment-month-status.repo";
@@ -15,6 +15,8 @@ export type ConsignmentOutstandingOptions = {
   ignorePreviousMonthsDebt: boolean;
   /** UTC: hisobot oyi 1-kuni 00:00 */
   monthStartsAt: Date;
+  /** Tahrirda: shu zakazni outstandingdan chiqarib, yangi summa bilan proyeksiya */
+  excludeOrderId?: number;
 };
 
 /** `YYYY-MM` yoki bo‘sh — joriy oy */
@@ -35,7 +37,11 @@ export function utcMonthStart(year: number, month: number): Date {
 }
 
 /**
- * Zakaz bo‘yicha to‘langan summa: avvalo `payment_allocations`, bo‘sh bo‘lsa `order_id` li to‘lovlar.
+ * Agent konsignatsiya limiti uchun band summa (to‘lanmagan).
+ * `new`…`delivered` — hisobga kiradi; `cancelled` / `returned` — yo‘q.
+ * To‘lov / allocation (confirmed, void emas) bo‘yicha qarz kamaysa — band summa
+ * ham kamayadi → limit qaytadi.
+ * Debitor «Балансы по консигнации» (faqat delivered) dan alohida.
  */
 export async function computeAgentConsignmentOutstanding(
   db: Prisma.TransactionClient | typeof prisma,
@@ -49,8 +55,8 @@ export async function computeAgentConsignmentOutstanding(
       agent_id: agentId,
       is_consignment: true,
       order_type: "order",
-      /** «Балансы по консигнации» bilan bir xil: faqat доставлен (mijoz olgach). */
-      status: { in: [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE] }
+      status: { in: [...ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE] },
+      ...(opts.excludeOrderId != null ? { id: { not: opts.excludeOrderId } } : {})
     },
     select: { id: true, total_sum: true, created_at: true }
   });
@@ -65,16 +71,31 @@ export async function computeAgentConsignmentOutstanding(
   const ids = filtered.map((o) => o.id);
   const totalById = new Map(filtered.map((o) => [o.id, o.total_sum]));
 
-  const allocGroups = await db.paymentAllocation.groupBy({
-    by: ["order_id"],
+  // PaymentAllocation da `payment` relation yo‘q — confirmed to‘lovlarni alohida filterlaymiz.
+  const allocRows = await db.paymentAllocation.findMany({
     where: { tenant_id: tenantId, order_id: { in: ids } },
-    _sum: { amount: true }
+    select: { order_id: true, payment_id: true, amount: true }
   });
+  const allocPaymentIds = [...new Set(allocRows.map((r) => r.payment_id))];
+  const confirmedAllocPayIds = new Set<number>();
+  if (allocPaymentIds.length > 0) {
+    const confirmedPays = await db.payment.findMany({
+      where: {
+        tenant_id: tenantId,
+        id: { in: allocPaymentIds },
+        deleted_at: null,
+        workflow_status: "confirmed",
+        entry_kind: { in: ["payment", "discount_settlement"] }
+      },
+      select: { id: true }
+    });
+    for (const p of confirmedPays) confirmedAllocPayIds.add(p.id);
+  }
   const allocMap = new Map<number, Prisma.Decimal>();
-  for (const g of allocGroups) {
-    if (g.order_id != null) {
-      allocMap.set(g.order_id, g._sum.amount ?? new Prisma.Decimal(0));
-    }
+  for (const row of allocRows) {
+    if (!confirmedAllocPayIds.has(row.payment_id)) continue;
+    const prev = allocMap.get(row.order_id) ?? new Prisma.Decimal(0);
+    allocMap.set(row.order_id, prev.add(row.amount));
   }
 
   const payGroups = await db.payment.groupBy({
@@ -82,7 +103,7 @@ export async function computeAgentConsignmentOutstanding(
     where: {
       tenant_id: tenantId,
       order_id: { in: ids },
-      entry_kind: "payment",
+      entry_kind: { in: ["payment", "discount_settlement"] },
       workflow_status: "confirmed",
       deleted_at: null
     },
@@ -99,7 +120,10 @@ export async function computeAgentConsignmentOutstanding(
   for (const oid of ids) {
     const total = totalById.get(oid) ?? new Prisma.Decimal(0);
     const alloc = allocMap.get(oid) ?? new Prisma.Decimal(0);
-    const paid = alloc.gt(0) ? alloc : payMap.get(oid) ?? new Prisma.Decimal(0);
+    const direct = payMap.get(oid) ?? new Prisma.Decimal(0);
+    // Allocation bo‘lsa u asosiy; aks holda order_id li to‘lov.
+    // Ikkisi ham bo‘lsa — kattaroqini olamiz (qisman allocation + to‘g‘ridan to‘lov).
+    const paid = alloc.gt(direct) ? alloc : direct;
     const unpaid = total.sub(paid);
     if (unpaid.gt(0)) outstanding = outstanding.add(unpaid);
   }
@@ -200,7 +224,8 @@ export async function patchConsignmentSettingsForTenant(
 
 export async function listConsignmentAgents(
   tenantId: number,
-  q: ListConsignmentAgentsQuery
+  q: ListConsignmentAgentsQuery,
+  actor?: { userId: number | null; role: string }
 ): Promise<{ data: ConsignmentAgentRow[]; meta: ConsignmentListMeta }> {
   const { year, month } = parseYearMonth(q.year_month);
   const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
@@ -228,7 +253,13 @@ export async function listConsignmentAgents(
     ])
   );
 
-  const where: Prisma.UserWhereInput = { tenant_id: tenantId, role: "agent", is_active: true };
+  const where: Prisma.UserWhereInput = {
+    tenant_id: tenantId,
+    role: "agent",
+    is_active: true,
+    // Faqat ishchi o‘rniga biriktirilgan agentlar
+    slot_user_links: { some: { ended_at: null } }
+  };
   const c = q.consignment ?? "all";
   if (c === "yes") where.consignment = true;
   else if (c === "no") where.consignment = false;
@@ -239,6 +270,8 @@ export async function listConsignmentAgents(
   }
 
   const andExtra: Prisma.UserWhereInput[] = [];
+  const scopeWhere = await buildScopedAgentDirectoryWhereForActor(tenantId, actor);
+  if (scopeWhere) andExtra.push(scopeWhere);
   if (q.trade_direction_id != null && q.trade_direction_id > 0) {
     andExtra.push(await userWhereTradeDirection(tenantId, q.trade_direction_id));
   }
@@ -266,26 +299,34 @@ export async function listConsignmentAgents(
 
   const rows: ConsignmentAgentRow[] = [];
   for (const u of users) {
-    const ignore = u.consignment_ignore_previous_months_debt;
+    const slot = workSlotByUser.get(u.id);
+    if (!slot) continue;
+    // Manba: ishchi o‘rni (konsignatsiya sahifasi yozadi → slot + user)
+    const consignmentOn = slot.consignment;
+    const ignore = slot.consignment_ignore_previous_months_debt;
     const outstanding = await computeAgentConsignmentOutstanding(prisma, tenantId, u.id, {
       ignorePreviousMonthsDebt: ignore,
       monthStartsAt
     });
-    const limitAmt = u.consignment_limit_amount;
+    const limitAmt = slot.consignment_limit_amount;
     let remaining: string | null = null;
     if (limitAmt != null) {
       const rem = limitAmt.sub(outstanding);
       remaining = (rem.gt(0) ? rem : new Prisma.Decimal(0)).toString();
     }
     const closure = closureByAgent.get(u.id);
-    const closeSchedule = resolveAgentConsignmentCloseSchedule(u, tenantSettings);
+    const closeSchedule = {
+      day: slot.consignment_close_day,
+      hour: slot.consignment_close_hour,
+      minute: slot.consignment_close_minute
+    };
     rows.push({
       id: u.id,
       code: u.code,
-      work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null,
+      work_slot_code: slot.slot_code,
       name: toFio(u),
       is_active: u.is_active,
-      consignment: u.consignment,
+      consignment: consignmentOn,
       consignment_limit_amount: limitAmt?.toString() ?? null,
       consignment_ignore_previous_months_debt: ignore,
       consignment_updated_at: u.consignment_updated_at?.toISOString() ?? null,
@@ -311,6 +352,34 @@ export type BulkPatchConsignmentInput = {
   consignment_ignore_previous_months_debt?: boolean;
 };
 
+/** Konsignatsiya patchini faol ishchi o‘rniga yozadi (manba — Consigment sahifa). */
+async function mirrorConsignmentPatchToActiveSlot(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  userId: number,
+  patch: {
+    consignment?: boolean;
+    consignment_limit_amount?: Prisma.Decimal | null;
+    consignment_ignore_previous_months_debt?: boolean;
+  }
+): Promise<void> {
+  const link = await tx.slotUserLink.findFirst({
+    where: { user_id: userId, ended_at: null, slot: { tenant_id: tenantId } },
+    select: { slot_id: true }
+  });
+  if (!link) throw new Error("NO_WORKPLACE");
+  const data: Prisma.WorkSlotUpdateInput = {};
+  if (patch.consignment !== undefined) data.consignment = patch.consignment;
+  if (patch.consignment_limit_amount !== undefined) {
+    data.consignment_limit_amount = patch.consignment_limit_amount;
+  }
+  if (patch.consignment_ignore_previous_months_debt !== undefined) {
+    data.consignment_ignore_previous_months_debt = patch.consignment_ignore_previous_months_debt;
+  }
+  if (Object.keys(data).length === 0) return;
+  await tx.workSlot.update({ where: { id: link.slot_id }, data });
+}
+
 export async function bulkPatchConsignmentAgents(
   tenantId: number,
   input: BulkPatchConsignmentInput,
@@ -327,14 +396,17 @@ export async function bulkPatchConsignmentAgents(
   if (input.consignment_ignore_previous_months_debt !== undefined) {
     data.consignment_ignore_previous_months_debt = input.consignment_ignore_previous_months_debt;
   }
+  let limitAmt: Prisma.Decimal | null | undefined;
   if (input.consignment_limit_amount !== undefined) {
     if (input.consignment_limit_amount == null || String(input.consignment_limit_amount).trim() === "") {
       data.consignment_limit_amount = null;
       data.consignment_ignore_previous_months_debt = false;
+      limitAmt = null;
     } else {
       const d = new Prisma.Decimal(input.consignment_limit_amount);
       if (d.lt(0)) throw new Error("BAD_LIMIT");
       data.consignment_limit_amount = d;
+      limitAmt = d;
     }
   }
 
@@ -344,9 +416,22 @@ export async function bulkPatchConsignmentAgents(
     input.consignment_ignore_previous_months_debt !== undefined;
   if (!hasField) throw new Error("EMPTY_PATCH");
 
-  const res = await prisma.user.updateMany({
-    where: { tenant_id: tenantId, role: "agent", is_active: true, id: { in: ids } },
-    data
+  await prisma.$transaction(async (tx) => {
+    for (const userId of ids) {
+      const res = await tx.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", is_active: true, id: userId },
+        data
+      });
+      if (res.count !== 1) throw new Error("BAD_AGENT_ROW");
+      await mirrorConsignmentPatchToActiveSlot(tx, tenantId, userId, {
+        consignment: input.consignment,
+        consignment_limit_amount: limitAmt,
+        consignment_ignore_previous_months_debt:
+          input.consignment_limit_amount !== undefined && limitAmt == null
+            ? false
+            : input.consignment_ignore_previous_months_debt
+      });
+    }
   });
 
   await appendTenantAuditEvent({
@@ -358,7 +443,7 @@ export async function bulkPatchConsignmentAgents(
     payload: { user_ids: ids, keys: Object.keys(data).filter((k) => k !== "consignment_updated_at") }
   });
 
-  return { updated: res.count };
+  return { updated: ids.length };
 }
 
 export type ConsignmentAgentRowPatch = {
@@ -414,6 +499,11 @@ export async function bulkPatchConsignmentAgentRows(
         }
       });
       if (res.count !== 1) throw new Error("BAD_AGENT_ROW");
+      await mirrorConsignmentPatchToActiveSlot(tx, tenantId, row.user_id, {
+        consignment: row.consignment,
+        consignment_limit_amount: limitAmt,
+        consignment_ignore_previous_months_debt: ignoreDebt
+      });
     }
   });
 

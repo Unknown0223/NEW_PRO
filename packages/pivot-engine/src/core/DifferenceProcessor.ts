@@ -1,11 +1,12 @@
 import type { PivotCell, PivotConfig, PivotData, PivotRow, PivotTotalRow, PivotValue } from "../types/pivot.types.js";
-import { formatValue } from "../utils/formatters.js";
+import { formatValue, shouldShowCurrencySuffix } from "../utils/formatters.js";
 import { aggregationForColumn, valueFieldIdFromColumnKey } from "./aggregationColumnUtils.js";
 
 function applyDifferenceToCells(
   cells: PivotCell[],
   config: PivotConfig,
-  valueDefMap: Map<string, PivotValue>
+  valueDefMap: Map<string, PivotValue>,
+  showCurrency: boolean
 ): PivotCell[] {
   const prevByField = new Map<string, number>();
 
@@ -34,27 +35,37 @@ function applyDifferenceToCells(
       ...cell,
       value: diff,
       rawValue: diff,
-      formatted: formatValue(diff, valueDef.format),
+      formatted: formatValue(diff, valueDef.format, { showCurrency }),
       isEmpty: false
     };
   });
 }
 
-function processRow(row: PivotRow, config: PivotConfig, valueDefMap: Map<string, PivotValue>): void {
-  row.cells = applyDifferenceToCells(row.cells, config, valueDefMap);
-  row.children?.forEach((child) => processRow(child, config, valueDefMap));
+function processRow(
+  row: PivotRow,
+  config: PivotConfig,
+  valueDefMap: Map<string, PivotValue>,
+  showCurrency: boolean
+): void {
+  row.cells = applyDifferenceToCells(row.cells, config, valueDefMap, showCurrency);
+  row.children?.forEach((child) => processRow(child, config, valueDefMap, showCurrency));
   if (row.subtotal) {
     row.subtotal = {
       ...row.subtotal,
-      cells: applyDifferenceToCells(row.subtotal.cells, config, valueDefMap)
+      cells: applyDifferenceToCells(row.subtotal.cells, config, valueDefMap, showCurrency)
     };
   }
 }
 
-function processTotalRow(total: PivotTotalRow, config: PivotConfig, valueDefMap: Map<string, PivotValue>): PivotTotalRow {
+function processTotalRow(
+  total: PivotTotalRow,
+  config: PivotConfig,
+  valueDefMap: Map<string, PivotValue>,
+  showCurrency: boolean
+): PivotTotalRow {
   return {
     ...total,
-    cells: applyDifferenceToCells(total.cells, config, valueDefMap)
+    cells: applyDifferenceToCells(total.cells, config, valueDefMap, showCurrency)
   };
 }
 
@@ -63,10 +74,11 @@ export function applyDifferenceAggregations(data: PivotData, config: PivotConfig
   const hasDifference = config.values.some((v) => v.aggregation === "DIFFERENCE");
   if (!hasDifference) return data;
 
+  const showCurrency = shouldShowCurrencySuffix(config);
   const valueDefMap = new Map(config.values.map((v) => [v.fieldId, v]));
   const rows = data.rows.map((row) => {
     const copy = { ...row, cells: [...row.cells] };
-    processRow(copy, config, valueDefMap);
+    processRow(copy, config, valueDefMap, showCurrency);
     return copy;
   });
 
@@ -74,8 +86,10 @@ export function applyDifferenceAggregations(data: PivotData, config: PivotConfig
     ...data,
     rows,
     columnTotals: data.columnTotals
-      ? processTotalRow(data.columnTotals, config, valueDefMap)
+      ? processTotalRow(data.columnTotals, config, valueDefMap, showCurrency)
       : undefined,
-    grandTotal: data.grandTotal ? processTotalRow(data.grandTotal, config, valueDefMap) : undefined
+    grandTotal: data.grandTotal
+      ? processTotalRow(data.grandTotal, config, valueDefMap, showCurrency)
+      : undefined
   };
 }

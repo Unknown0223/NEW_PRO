@@ -1,0 +1,2 @@
+"use strict";Object.defineProperty(exports,Symbol.toStringTag,{value:"Module"});const T=require("../chunks/heatmapPresets-BRSoijZZ.js");typeof window<"u"&&(window.SalecPivot={PivotApp:T.PivotApp,PIVOT_THEMES:T.PIVOT_THEMES,HEATMAP_CONDITIONAL_PRESETS:T.HEATMAP_CONDITIONAL_PRESETS});exports.HEATMAP_CONDITIONAL_PRESETS=T.HEATMAP_CONDITIONAL_PRESETS;exports.PIVOT_THEMES=T.PIVOT_THEMES;exports.PivotApp=T.PivotApp;
+//# sourceMappingURL=pivot.cjs.map

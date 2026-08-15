@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/auth/session.dart';
+import '../../../core/config/mobile_config.dart';
+import '../../../core/config/sync_window_countdown.dart';
 import '../../../core/ui/agent_ui.dart';
 import 'agent_scaffold_key.dart';
 
 /// Agent sahifalari uchun TopBar (shablon Agent 2.0).
-class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
+/// Sinхron oynasi taymeri har doim title yonida ko‘rinadi.
+class AgentAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
   final bool showBack;
@@ -14,6 +19,7 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? titleTrailing;
   final VoidCallback? onBack;
   final int? menuBadge;
+  final bool showSyncCountdown;
 
   const AgentAppBar({
     super.key,
@@ -25,6 +31,7 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.titleTrailing,
     this.onBack,
     this.menuBadge,
+    this.showSyncCountdown = true,
   });
 
   @override
@@ -52,15 +59,31 @@ class AgentAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final useMenuLeading = drawerScaffoldKey != null || !showBack;
+    final syncCfg = ref.watch(sessionProvider).mobileConfig?.sync ?? const SyncConfig();
+
+    Widget? trailing = titleTrailing;
+    if (showSyncCountdown) {
+      final timer = SyncWindowCountdownStrip(syncConfig: syncCfg, inline: true);
+      trailing = trailing == null
+          ? timer
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                timer,
+                const SizedBox(width: 6),
+                trailing,
+              ],
+            );
+    }
 
     return AgentTopBar(
       title: title,
       onMenu: useMenuLeading ? () => _openMenu(context) : null,
       onBack: !useMenuLeading ? () => _goBack(context) : null,
       belowTitle: belowTitle,
-      titleTrailing: titleTrailing,
+      titleTrailing: trailing,
       menuBadge: menuBadge,
       actions: [
         if (showBack && useMenuLeading)

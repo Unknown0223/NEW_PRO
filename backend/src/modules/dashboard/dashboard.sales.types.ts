@@ -6,6 +6,8 @@ export type SalesDashboardFilters = {
   category_ids: number[];
   manufacturer_ids: number[];
   supervisor_ids: number[];
+  /** Access «Сотрудники» / filtr: faqat shu agentlar. */
+  agent_ids: number[];
   group_ids: number[];
   brand_ids: number[];
   territory_ids: number[];

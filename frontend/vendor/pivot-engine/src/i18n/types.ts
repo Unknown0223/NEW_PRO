@@ -33,6 +33,7 @@ export type PivotStrings = {
     table: string;
     chart: string;
     excel: string;
+    csv: string;
     pdf: string;
     html: string;
     fullscreen: string;
@@ -48,6 +49,7 @@ export type PivotStrings = {
   chart: {
     bar: string;
     line: string;
+    pie: string;
     noData: string;
     truncatedCategories: (shown: number, total: number) => string;
     largeDatasetWarning: (rows: number) => string;
@@ -62,6 +64,7 @@ export type PivotStrings = {
     done: string;
     progress: (processed: number, total: number) => string;
     exportingExcel: string;
+    exportingCsv: string;
     exportingPdf: string;
     exportingHtml: string;
   };
@@ -101,7 +104,12 @@ export type PivotStrings = {
     remove: string;
     reorder: string;
     filter: string;
+    filterByValues: string;
+    selectAll: string;
+    selectedOfTotal: (selected: number, total: number) => string;
     selectedCount: (count: number) => string;
+    reportFiltersLabel: string;
+    activeFiltersCount: (count: number) => string;
   };
   aggregations: Record<AggregationType, string>;
   engine: {
@@ -139,6 +147,11 @@ export type PivotStrings = {
     savePrompt: string;
     savedReportWdrSuffix: string;
     sliceTemplatesLabel: string;
+    datasetTruncated: (cap: string, total: string) => string;
+    pivotRowsTruncated: (shown: string, total: string) => string;
+    computeFailed: (detail?: string) => string;
+    largeDatasetHint: (rows: string) => string;
+    exportDocumentTitle: string;
   };
   calculatedMeasurePresets: CalculatedMeasurePreset[];
   sliceTemplates: Array<{

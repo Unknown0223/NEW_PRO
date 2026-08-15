@@ -1,18 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Building2, Hash, Settings2, UserRound } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
+  AgentFormField,
+  AgentFormSection,
+  agentModalInputClass
+} from "@/components/staff/agent-workspace-template-ui";
+import { Button } from "@/components/ui/button";
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
+import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
 import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
@@ -26,6 +23,7 @@ import {
 import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS } from "./work-slots-utils";
 
 type PickerOpt = { id: number; name: string };
+type TradeDirectionOpt = { id: number; name: string; code: string | null };
 
 type Props = {
   open: boolean;
@@ -33,6 +31,7 @@ type Props = {
   tenant: string;
   slotId: number | null;
   branchOptions: string[];
+  tradeDirections: TradeDirectionOpt[];
   warehouses: PickerOpt[];
   cashDesks: PickerOpt[];
   clientRefs?: {
@@ -45,6 +44,8 @@ type Props = {
   };
   territoryNodes: TerritoryNode[];
   onSaved: () => void;
+  /** Open workplace config (prices, limits, product entitlements). */
+  onOpenConfig?: (slotId: number) => void;
 };
 
 const emptyLocation = (): WorkSlotsLocationValues => ({
@@ -55,6 +56,7 @@ const emptyLocation = (): WorkSlotsLocationValues => ({
   territoryOblastList: [],
   territoryCityList: [],
   warehouseId: null,
+  returnWarehouseId: null,
   cashDeskId: null
 });
 
@@ -64,16 +66,19 @@ export function EditSlotDialog({
   tenant,
   slotId,
   branchOptions,
+  tradeDirections,
   warehouses,
   cashDesks,
   clientRefs,
   territoryNodes,
-  onSaved
+  onSaved,
+  onOpenConfig
 }: Props) {
   const [original, setOriginal] = useState<WorkSlotListItem | null>(null);
   const [slotCode, setSlotCode] = useState("");
   const [label, setLabel] = useState("");
   const [branchCode, setBranchCode] = useState("");
+  const [directionId, setDirectionId] = useState("");
   const [slotType, setSlotType] = useState<WorkSlotType>("agent");
   const [isActive, setIsActive] = useState(true);
   const [location, setLocation] = useState<WorkSlotsLocationValues>(emptyLocation);
@@ -123,6 +128,7 @@ export function EditSlotDialog({
         setSlotCode(d.slot_code ?? "");
         setLabel(d.label ?? "");
         setBranchCode(d.branch_code ?? "");
+        setDirectionId(d.direction_id != null ? String(d.direction_id) : "");
         setSlotType(d.slot_type as WorkSlotType);
         setIsActive(d.is_active);
         setLocation({
@@ -133,6 +139,7 @@ export function EditSlotDialog({
           territoryOblastList: [],
           territoryCityList: [],
           warehouseId: d.active_warehouse_id,
+          returnWarehouseId: d.return_warehouse_id ?? null,
           cashDeskId: d.active_cash_desk_id
         });
       })
@@ -155,8 +162,11 @@ export function EditSlotDialog({
     const changes: Record<string, unknown> = {};
     const l = label.trim() || null;
     const b = branchCode.trim() || null;
+    if (code !== (original.slot_code ?? "").trim().toUpperCase()) changes.slot_code = code;
     if (l !== (original.label ?? null)) changes.label = l;
     if (b !== (original.branch_code ?? null)) changes.branch_code = b;
+    const dirParsed = directionId.trim() ? Number.parseInt(directionId.trim(), 10) : null;
+    if (dirParsed !== (original.direction_id ?? null)) changes.direction_id = dirParsed;
     if (slotType !== original.slot_type) changes.slot_type = slotType;
     if (isActive !== original.is_active) changes.is_active = isActive;
 
@@ -168,6 +178,7 @@ export function EditSlotDialog({
       territoryOblastList: [],
       territoryCityList: [],
       warehouseId: original.active_warehouse_id,
+      returnWarehouseId: original.return_warehouse_id ?? null,
       cashDeskId: original.active_cash_desk_id
     };
 
@@ -183,6 +194,9 @@ export function EditSlotDialog({
     if (location.warehouseId !== origLoc.warehouseId) {
       changes.warehouse_id = location.warehouseId;
     }
+    if (location.returnWarehouseId !== origLoc.returnWarehouseId) {
+      changes.return_warehouse_id = location.returnWarehouseId;
+    }
     if (location.cashDeskId !== origLoc.cashDeskId) {
       changes.cash_desk_id = location.cashDeskId;
     }
@@ -192,6 +206,7 @@ export function EditSlotDialog({
       changes.territory_oblast !== undefined ||
       changes.territory_city !== undefined ||
       changes.warehouse_id !== undefined ||
+      changes.return_warehouse_id !== undefined ||
       changes.cash_desk_id !== undefined;
 
     if (hasUserAttrs && !original.active_user_id) {
@@ -215,6 +230,22 @@ export function EditSlotDialog({
       onOpenChange(false);
       onSaved();
     } catch (e) {
+      if (e instanceof Error && "apiBody" in e) {
+        const apiErr = e as Error & { apiBody?: { error?: string; message?: string } };
+        const code = apiErr.apiBody?.error?.trim();
+        if (code === "CodeTaken") {
+          setError("Этот Smart-код уже занят — укажите другой код");
+          return;
+        }
+        if (apiErr.apiBody?.message?.trim()) {
+          setError(apiErr.apiBody.message.trim());
+          return;
+        }
+        if (code) {
+          setError(code);
+          return;
+        }
+      }
       setError(e instanceof Error ? e.message : "Не удалось сохранить");
     } finally {
       setSaving(false);
@@ -222,111 +253,177 @@ export function EditSlotDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(92vh,920px)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="border-b bg-muted/25 px-6 py-4">
-          <DialogTitle>Редактирование</DialogTitle>
-        </DialogHeader>
-        {loading ? (
-          <p className="px-6 py-4 text-sm text-muted-foreground">Загрузка…</p>
+    <WorkSlotFormDrawer
+      open={open}
+      title="Редактирование рабочего места"
+      subtitle={
+        original ? (
+          <>
+            Smart-код: <span className="font-mono font-medium text-slate-700">{original.slot_code}</span>
+            {original.active_user_name ? (
+              <>
+                {" "}
+                · сотрудник: <span className="font-medium text-slate-700">{original.active_user_name}</span>
+              </>
+            ) : (
+              " · место свободно"
+            )}
+          </>
         ) : (
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            <div className="space-y-1">
-              <Label htmlFor="edit-slot-code">Smart-kod</Label>
-              <Input
-                id="edit-slot-code"
-                value={slotCode}
-                readOnly
-                disabled
-                className="font-mono bg-muted"
-                autoComplete="off"
-                title="Kod yaratilgandan keyin o‘zgartirilmaydi"
-              />
+          "Загрузка данных места…"
+        )
+      }
+      onClose={() => onOpenChange(false)}
+      onSubmit={() => void submit()}
+      submitDisabled={loading || !original}
+      submitBusy={saving}
+      submitError={error}
+    >
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Загрузка…</p>
+      ) : (
+        <div className="space-y-5">
+          <AgentFormSection title="Основное" icon={<Hash className="h-4 w-4" />}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AgentFormField label="Smart-код">
+                <div className="relative">
+                  <input
+                    id="edit-slot-code"
+                    value={slotCode}
+                    onChange={(e) => setSlotCode(e.target.value.toUpperCase())}
+                    maxLength={32}
+                    readOnly={false}
+                    className={`${agentModalInputClass} pr-14 font-mono`}
+                    autoComplete="off"
+                    placeholder="A-SERGEli-001"
+                    aria-describedby="edit-slot-code-hint"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                    {slotCode.length}/32
+                  </span>
+                </div>
+                <p id="edit-slot-code-hint" className="mt-1 text-xs text-muted-foreground">
+                  Уникальный код места — можно изменить вручную
+                </p>
+              </AgentFormField>
+              <AgentFormField label="Название">
+                <input
+                  id="edit-slot-label"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  className={agentModalInputClass}
+                  placeholder="Север — розница"
+                />
+              </AgentFormField>
+              <AgentFormField label="Роль">
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={false}
+                  placeholder="Роль"
+                  items={SLOT_TYPE_OPTIONS.map((o) => ({ id: o.value, title: o.label }))}
+                  selectedValues={[slotType]}
+                  onChange={(next) => {
+                    const v = next[0];
+                    if (v) setSlotType(v as WorkSlotType);
+                  }}
+                />
+              </AgentFormField>
+              <AgentFormField label="Статус места">
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={false}
+                  placeholder="Статус"
+                  items={SLOT_ACTIVE_STATUS_ITEMS}
+                  selectedValues={[isActive ? "true" : "false"]}
+                  onChange={(next) => setIsActive((next[0] ?? "true") === "true")}
+                />
+              </AgentFormField>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="edit-slot-label">Название</Label>
-              <Input id="edit-slot-label" value={label} onChange={(e) => setLabel(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Филиал</Label>
-              <WorkSlotsMultiSelect
-                variant="form"
-                multiple={false}
-                placeholder="Филиал"
-                items={[
-                  { id: "__none__", title: "—" },
-                  ...branchOptions.map((b) => ({ id: b, title: b }))
-                ]}
-                selectedValues={branchCode ? [branchCode] : []}
-                onChange={(next) => {
-                  const v = next[0] ?? "";
-                  setBranchCode(v === "__none__" ? "" : v);
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Роль</Label>
-              <WorkSlotsMultiSelect
-                variant="form"
-                multiple={false}
-                placeholder="Роль"
-                items={SLOT_TYPE_OPTIONS.map((o) => ({ id: o.value, title: o.label }))}
-                selectedValues={[slotType]}
-                onChange={(next) => {
-                  const v = next[0];
-                  if (v) setSlotType(v as WorkSlotType);
-                }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Статус места</Label>
-              <WorkSlotsMultiSelect
-                variant="form"
-                multiple={false}
-                placeholder="Статус"
-                items={SLOT_ACTIVE_STATUS_ITEMS}
-                selectedValues={[isActive ? "true" : "false"]}
-                onChange={(next) => setIsActive((next[0] ?? "true") === "true")}
-              />
-            </div>
+          </AgentFormSection>
 
+          <AgentFormSection title="Филиал и направление" icon={<Building2 className="h-4 w-4" />}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AgentFormField label="Филиал">
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={false}
+                  placeholder="Филиал"
+                  items={[
+                    { id: "__none__", title: "—" },
+                    ...branchOptions.map((b) => ({ id: b, title: b }))
+                  ]}
+                  selectedValues={branchCode ? [branchCode] : []}
+                  onChange={(next) => {
+                    const v = next[0] ?? "";
+                    setBranchCode(v === "__none__" ? "" : v);
+                  }}
+                />
+              </AgentFormField>
+              <AgentFormField label="Направление торговли">
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={false}
+                  placeholder="Направление"
+                  items={[
+                    { id: "__none__", title: "—" },
+                    ...tradeDirections.map((t) => ({
+                      id: String(t.id),
+                      title: t.code ? `${t.name} (${t.code})` : t.name
+                    }))
+                  ]}
+                  selectedValues={directionId ? [directionId] : []}
+                  onChange={(next) => {
+                    const v = next[0] ?? "";
+                    setDirectionId(v === "__none__" ? "" : v);
+                  }}
+                />
+              </AgentFormField>
+            </div>
+          </AgentFormSection>
+
+          <AgentFormSection title="Сотрудник на месте" icon={<UserRound className="h-4 w-4" />}>
+            {!original?.active_user_id ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                На месте нет сотрудника. Территория и привязки (склад, касса) станут доступны после
+                назначения.
+              </p>
+            ) : (
+              <p className="mb-3 text-xs text-muted-foreground">
+                Территория и привязки сохраняются в профиле сотрудника на этом месте.
+              </p>
+            )}
             <WorkSlotsLocationFields
               mode="edit"
               values={location}
               onChange={(patch) => setLocation((prev) => ({ ...prev, ...patch }))}
               territoryCascade={territoryCascade}
+              cityTerritoryHints={clientRefs?.city_territory_hints as Record<string, import("@/lib/city-territory-hint").CityTerritoryHint> | undefined}
               warehouses={warehouses}
               cashDesks={cashDesks}
               disabled={!original?.active_user_id}
             />
-            {!original?.active_user_id ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Территория и привязки доступны после назначения сотрудника.
-              </p>
-            ) : null}
+          </AgentFormSection>
 
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          </div>
-        )}
-        <DialogFooter className="mx-0 mb-0 shrink-0 gap-3 border-t bg-muted/25 px-6 py-5 sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 min-h-10 min-w-[6.5rem]"
-            onClick={() => onOpenChange(false)}
-          >
-            Отмена
-          </Button>
-          <Button
-            type="button"
-            className="h-10 min-h-10 min-w-[6.5rem]"
-            disabled={saving || loading}
-            onClick={() => void submit()}
-          >
-            {saving ? "…" : "Сохранить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <AgentFormSection title="Конфигурация места" icon={<Settings2 className="h-4 w-4" />}>
+            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+              Цены, лимиты и доступ к товарам (entitlements) настраиваются отдельно от филиала и
+              территории.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={!slotId || !onOpenConfig}
+              onClick={() => {
+                if (slotId && onOpenConfig) onOpenConfig(slotId);
+              }}
+            >
+              <Settings2 className="mr-2 h-4 w-4" />
+              Открыть конфигурацию
+            </Button>
+          </AgentFormSection>
+        </div>
+      )}
+    </WorkSlotFormDrawer>
   );
 }

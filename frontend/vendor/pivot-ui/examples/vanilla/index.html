@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@salec/pivot-ui — Vanilla (5 daqiqada)</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #f4f4f5;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      .banner {
+        padding: 12px 16px;
+        background: #18181b;
+        color: #fafafa;
+        font-size: 14px;
+      }
+      .banner code {
+        background: #27272a;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      Vanilla embed — <code>window.SalecPivot</code> (build: <code>npm run build --workspace=@salec/pivot-ui</code>)
+      yoki workspace import orqali PivotApp.
+    </div>
+    <div id="root"></div>
+    <script type="module">
+      /**
+       * Dev: monorepo relative import (no CDN required).
+       * Production CDN: import from dist/cdn/pivot.js after peers (react, react-dom) on page.
+       */
+      import { createElement } from "react";
+      import { createRoot } from "react-dom/client";
+      import { PivotApp } from "../../src/index.ts";
+      import "../../src/pivot-ui.css";
+
+      const fields = [
+        { id: "Country", label: "Mamlakat", dataType: "string" },
+        { id: "Price", label: "Narx", dataType: "currency" }
+      ];
+      const data = [
+        { Country: "UZ", Price: 1200 },
+        { Country: "KZ", Price: 800 },
+        { Country: "UZ", Price: 450 }
+      ];
+
+      createRoot(document.getElementById("root")).render(
+        createElement(PivotApp, {
+          data,
+          fields,
+          options: { locale: "uz", drillThrough: false, theme: "default" }
+        })
+      );
+    </script>
+  </body>
+</html>

@@ -24,7 +24,10 @@ export default function SettingsProductsExcelPage() {
           tenantSlug={tenantSlug}
           backHref={BACK}
           showCardHeader={false}
-          onDone={() => void qc.invalidateQueries({ queryKey: ["products", tenantSlug] })}
+          onDone={() => {
+            if (!tenantSlug) return;
+            void qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
+          }}
         />
       </SettingsWorkspace>
     </PageShell>

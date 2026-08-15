@@ -44,7 +44,29 @@ export async function registerProductListRoutes(app: FastifyInstance) {
       if (listQ.uncategorized) {
         where.category_id = null;
       } else if (listQ.category_id !== undefined) {
-        where.category_id = listQ.category_id;
+        const selected = await prisma.productCategory.findFirst({
+          where: { id: listQ.category_id, tenant_id: request.tenant!.id },
+          select: { id: true, name: true, parent_id: true }
+        });
+        if (selected) {
+          const sameName = await prisma.productCategory.findMany({
+            where: {
+              tenant_id: request.tenant!.id,
+              parent_id: selected.parent_id,
+              name: { equals: selected.name, mode: "insensitive" }
+            },
+            select: { id: true }
+          });
+          const rootIds = sameName.map((c) => c.id);
+          const childIds = await prisma.productCategory.findMany({
+            where: { tenant_id: request.tenant!.id, parent_id: { in: rootIds } },
+            select: { id: true }
+          });
+          const ids = [...new Set([...rootIds, ...childIds.map((c) => c.id)])];
+          where.category_id = { in: ids };
+        } else {
+          where.category_id = listQ.category_id;
+        }
       }
 
       if (listQ.product_group_id !== undefined) where.product_group_id = listQ.product_group_id;

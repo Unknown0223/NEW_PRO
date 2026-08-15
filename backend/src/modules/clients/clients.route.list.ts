@@ -6,15 +6,23 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   bulkSetClientsActive,
   bulkPatchClients,
+  bulkPatchClientItems,
   exportClientsFilteredCsv,
   getClientReferences,
   listClientsForTenantPaged
 } from "./clients.service";
 import { listDuplicateCandidates } from "./client-dedupe.service";
-import { bulkActiveBodySchema, bulkPatchBodySchema, parseClientListQuery } from "./clients.route.schemas";
+import {
+  bulkActiveBodySchema,
+  bulkItemsPatchBodySchema,
+  bulkPatchBodySchema,
+  parseClientListQuery
+} from "./clients.route.schemas";
 
 export async function registerClientListRoutes(app: FastifyInstance) {
   app.get(
@@ -23,7 +31,16 @@ export async function registerClientListRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
-      const result = await listClientsForTenantPaged(request.tenant!.id, parseClientListQuery(q));
+      const viewer = getAccessUser(request);
+      const actorScope = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const result = await listClientsForTenantPaged(
+        request.tenant!.id,
+        parseClientListQuery(q),
+        actorScope
+      );
       return reply.send(result);
     }
   );
@@ -90,7 +107,16 @@ export async function registerClientListRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const listQ = parseClientListQuery(q);
-      const { csv, truncated, totalMatched } = await exportClientsFilteredCsv(request.tenant!.id, listQ);
+      const viewer = getAccessUser(request);
+      const actorScope = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const { csv, truncated, totalMatched } = await exportClientsFilteredCsv(
+        request.tenant!.id,
+        listQ,
+        actorScope
+      );
       reply
         .header("Content-Type", "text/csv; charset=utf-8")
         .header("Content-Disposition", 'attachment; filename="mijozlar.csv"')
@@ -154,6 +180,30 @@ export async function registerClientListRoutes(app: FastifyInstance) {
         parsed.data.patch,
         actorUserId
       );
+      return reply.send(result);
+    }
+  );
+
+  app.patch(
+    "/api/:slug/clients/bulk-items",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkItemsPatchBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Request validation failed",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const actor = getAccessUser(request);
+      const sub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
+      const result = await bulkPatchClientItems(request.tenant!.id, parsed.data.items, actorUserId);
       return reply.send(result);
     }
   );

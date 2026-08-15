@@ -1,6 +1,6 @@
 // Types
 export type * from "./types/index.js";
-export type { ConditionalFormatRule, ConditionalFormatRuleType, CalculatedMeasure, PivotCellDrillContext, CustomizeCellContext, CustomizeCellFn, CustomizeCellStyle, PivotTableSizes } from "./types/pivot.types.js";
+export type { ConditionalFormatRule, ConditionalFormatRuleType, CalculatedMeasure, PivotCellDrillContext, CustomizeCellContext, CustomizeCellFn, CustomizeCellStyle, PivotLayoutForm, PivotTableSizes, PivotValuesPosition } from "./types/pivot.types.js";
 export type * from "./types/schema.types.js";
 
 // Core (Phase A + B)
@@ -31,6 +31,8 @@ export {
   formatNumber,
   formatDate,
   formatUzNumber,
+  collectCurrencyCodesFromPivot,
+  shouldShowCurrencySuffix,
   groupBy,
   splitGroupKey,
   lastGroupKeyPart,
@@ -57,6 +59,18 @@ export {
   resolvePivotConfig,
   mergeCellStyles,
   resolveCustomizeCellStyle,
+  resolveLayoutForm,
+  withLayoutForm,
+  hasFlatSlice,
+  buildFlatPivotData,
+  getFlatColumnFieldIds,
+  getActiveSliceFilters,
+  resolvePivotValueLabel,
+  hydratePivotValueLabels,
+  PIVOT_VALUES_AXIS_ID,
+  resolveValuesPosition,
+  valuesOnRows,
+  isWdrMeasuresFieldId,
   type FlatPivotRowItem,
   type ConditionalFormatStyle,
   type MergedCellStyle,
@@ -64,6 +78,7 @@ export {
   type GroupByOptions,
   type PivotSliceTemplate
 } from "./utils/index.js";
+export { resolveRowAxisHeaderLabel } from "./utils/rowAxisHeader.js";
 
 // Export (Phase 3)
 export {
@@ -77,9 +92,11 @@ export {
   pivotDataToPdfTable,
   exportPivotToHtml,
   pivotDataToHtml,
+  exportPivotToCsv,
   type ExportExcelOptions,
   type ExportPdfOptions,
   type ExportHtmlOptions,
+  type ExportCsvOptions,
   type PivotPdfTable,
   exportRawRecordsToCsv,
   exportRawRecordsToExcel,

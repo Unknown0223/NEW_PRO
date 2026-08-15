@@ -1,11 +1,13 @@
 # FAZA 9.8 — Play Market va App Store (kelajak)
 
-## Hozirgi model (Telegram APK)
+## Hozirgi model (server OTA)
 
-- Admin: **Настройки → Mobil ilova** — `download_url` (APK havolasi)
-- Mobil: majburiy/ixtiyoriy dialog → brauzer orqali APK yuklab olish
+- Admin: **Настройки → Mobil ilova** — APK ni serverga yuklash, `latest_version` / `min_version` / `force_update`
+- APK URL: `/api/mobile/apk-download?slug=...` (Telegram o‘rniga)
+- Mobil: majburiy/ixtiyoriy dialog → **ilova ichida** yuklab o‘rnatish (PIN, kesh, offline ma’lumot saqlanadi)
+- Deploy: `deploy-mobile-prod.cmd` yoki `scripts/railway/upload-mobile-apk-prod.ps1`
 
-## Store modeli
+## Store modeli (kelajak)
 
 | Platform | Havola maydoni | Mobil xatti-harakat |
 |----------|----------------|---------------------|

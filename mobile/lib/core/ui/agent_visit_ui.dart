@@ -460,6 +460,9 @@ class AgentVisitActionsSheet extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onPhotoReport;
   final VoidCallback? onCreateOrder;
+  final VoidCallback? onSendHeldOrder;
+  final String? heldOrderHint;
+  final bool sendHeldBusy;
   final VoidCallback? onRefusal;
   final VoidCallback? onSupervision;
   final VoidCallback? onComplete;
@@ -472,6 +475,9 @@ class AgentVisitActionsSheet extends StatelessWidget {
     required this.subtitle,
     this.onPhotoReport,
     this.onCreateOrder,
+    this.onSendHeldOrder,
+    this.heldOrderHint,
+    this.sendHeldBusy = false,
     this.onRefusal,
     this.onSupervision,
     this.onComplete,
@@ -509,6 +515,15 @@ class AgentVisitActionsSheet extends StatelessWidget {
           _action(Icons.camera_alt_rounded, S.photoReport, onPhotoReport, iconColor: Colors.blue),
           if (createOrderEnabled)
             _action(Icons.shopping_cart_rounded, S.createOrderAction, onCreateOrder, iconColor: AppColors.primary),
+          if (onSendHeldOrder != null) ...[
+            _action(
+              Icons.send_rounded,
+              sendHeldBusy ? 'Отправка…' : S.sendHeldOrderNow,
+              sendHeldBusy ? null : onSendHeldOrder,
+              iconColor: AppColors.warning,
+              subtitle: heldOrderHint,
+            ),
+          ],
           _action(Icons.block_rounded, S.refusalAction, onRefusal, iconColor: AppColors.error),
           if (supervisionEnabled)
             _action(Icons.checklist_rounded, S.supervisionChecklist, onSupervision, iconColor: const Color(0xFF0D9488)),
@@ -538,7 +553,13 @@ class AgentVisitActionsSheet extends StatelessWidget {
     );
   }
 
-  Widget _action(IconData icon, String label, VoidCallback? onTap, {Color? iconColor}) {
+  Widget _action(
+    IconData icon,
+    String label,
+    VoidCallback? onTap, {
+    Color? iconColor,
+    String? subtitle,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Material(
@@ -548,7 +569,7 @@ class AgentVisitActionsSheet extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            height: 56,
+            height: subtitle == null ? 56 : 64,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
@@ -559,7 +580,18 @@ class AgentVisitActionsSheet extends StatelessWidget {
                 Icon(icon, color: iconColor ?? AppColors.primary, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      if (subtitle != null && subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
+                        ),
+                    ],
+                  ),
                 ),
                 Icon(Icons.chevron_right_rounded, color: AppColors.textMuted.withValues(alpha: 0.55), size: 20),
               ],

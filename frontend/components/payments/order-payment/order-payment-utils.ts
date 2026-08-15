@@ -39,6 +39,41 @@ export function recomputeRowTotals(row: PaymentOrderRow): PaymentOrderRow {
   return { ...row, unpaid, hasError };
 }
 
+/**
+ * To‘lov usullari yig‘indisi zakaz qoldig‘idan oshmasin.
+ * Yangi maydon to‘lganda — boshqa (avvalgi) maydonlardan kamaytiriladi.
+ */
+export function applyDraftWithCap(
+  row: PaymentOrderRow,
+  methodId: string,
+  rawValue: number
+): PaymentOrderRow {
+  const existingPaid = sumExisting(row);
+  const cap = Math.max(0, row.orderAmount - existingPaid);
+  const target = Math.min(Math.max(0, rawValue), cap);
+
+  const draftByMethodId: Record<string, number> = { ...row.draftByMethodId };
+  const otherIds = Object.keys(draftByMethodId).filter((id) => id !== methodId);
+  let othersSum = otherIds.reduce((a, id) => a + (draftByMethodId[id] ?? 0), 0);
+  const othersBudget = Math.max(0, cap - target);
+
+  if (othersSum > othersBudget + 0.0001) {
+    let toReduce = othersSum - othersBudget;
+    // Avval to‘ldirilgan (musbat) ustunlardan kamaytiramiz — oxirgidan emas, boshidan
+    for (const id of otherIds) {
+      if (toReduce <= 0.0001) break;
+      const cur = draftByMethodId[id] ?? 0;
+      if (cur <= 0) continue;
+      const take = Math.min(cur, toReduce);
+      draftByMethodId[id] = Math.round((cur - take) * 100) / 100;
+      toReduce -= take;
+    }
+  }
+
+  draftByMethodId[methodId] = Math.round(target * 100) / 100;
+  return recomputeRowTotals({ ...row, draftByMethodId });
+}
+
 export function contextOrderToRow(
   o: OrderCashInContextOrder,
   methods: OrderCashInPaymentMethod[]
@@ -76,7 +111,7 @@ export function fillCellDraftFromOrderAmount(
   return recomputeRowTotals({ ...row, draftByMethodId });
 }
 
-/** URL `amount` — birinchi to‘lov usuliga (katalog tartibi) taqsimlanadi. */
+/** URL `amount` — birinchi to‘lov usuliga (katalog tartibi) taqsimlanadi; har qator qoldig‘idan oshmaydi. */
 export function prefillDraftFromTotalAmount(
   rows: PaymentOrderRow[],
   methods: OrderCashInPaymentMethod[],
@@ -90,18 +125,19 @@ export function prefillDraftFromTotalAmount(
   const weightSum = weights.reduce((a, b) => a + b, 0);
   let allocated = 0;
   return rows.map((r, i) => {
+    const rowCap = weights[i]!;
     const isLast = i === rows.length - 1;
-    const share =
+    let share =
       weightSum <= 0
         ? isLast
           ? totalAmount - allocated
           : Math.round(totalAmount / rows.length)
         : isLast
           ? Math.max(0, totalAmount - allocated)
-          : Math.round((totalAmount * weights[i]!) / weightSum);
+          : Math.round((totalAmount * rowCap) / weightSum);
+    share = Math.min(Math.max(0, share), rowCap);
     allocated += share;
-    const draftByMethodId = { ...r.draftByMethodId, [firstId]: share };
-    return recomputeRowTotals({ ...r, draftByMethodId });
+    return applyDraftWithCap(r, firstId, share);
   });
 }
 
@@ -122,7 +158,8 @@ export function buildContextQuery(
   clientId: string,
   orderIds: number[]
 ): URLSearchParams {
-  const p = new URLSearchParams({ client_id: clientId });
+  const p = new URLSearchParams();
+  if (clientId.trim()) p.set("client_id", clientId.trim());
   if (orderIds.length > 0) {
     p.set("order_ids", orderIds.join(","));
   }

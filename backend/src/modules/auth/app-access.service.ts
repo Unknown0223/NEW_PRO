@@ -7,9 +7,23 @@ import {
   isMobileFieldRole,
   type MobileFieldRole
 } from "../../lib/constants";
+import {
+  APP_ACCESS_DENIED_MESSAGE,
+  APP_ACCESS_ENFORCED_ROLE_NAMES,
+  APP_ACCESS_ENFORCED_ROLES,
+  assertAppAccessAllowed,
+  isAppAccessEnforcedRole
+} from "./app-access.constants";
 import { getAccessUser } from "./auth.prehandlers";
 
 export { MOBILE_FIELD_ROLE_NAMES, MOBILE_FIELD_ROLES, isMobileFieldRole, type MobileFieldRole };
+export {
+  APP_ACCESS_DENIED_MESSAGE,
+  APP_ACCESS_ENFORCED_ROLE_NAMES,
+  APP_ACCESS_ENFORCED_ROLES,
+  assertAppAccessAllowed,
+  isAppAccessEnforcedRole
+};
 
 /**
  * Ajratilgan sessiya cheklovi qo'llanmaydigan rollar.
@@ -39,6 +53,9 @@ export async function isMobileAppAccessAllowed(userId: number): Promise<boolean>
   });
   return Boolean(row?.is_active && row.app_access !== false);
 }
+
+/** Alias: DB dagi app_access + is_active (JWT kill-switch uchun). */
+export const isAppAccessAllowed = isMobileAppAccessAllowed;
 
 /** Faol refresh token (web «Завершить все сессии» dan keyin yo‘q). */
 export async function hasActiveRefreshSession(tenantId: number, userId: number): Promise<boolean> {
@@ -115,20 +132,28 @@ export async function requireActiveSessionForNonAdmin(request: FastifyRequest, r
   }
 }
 
-/** JWT dan keyin: agent/expeditor/supervisor uchun app_access tekshiruvi. */
-export async function requireMobileAppAccess(request: FastifyRequest, reply: FastifyReply) {
+/**
+ * JWT dan keyin: `APP_ACCESS_ENFORCED_ROLES` uchun DB `app_access` tekshiruvi.
+ * Access token hali amal qilsa ham, admin «Доступ к приложению» ni o‘chirganda 403.
+ */
+export async function requireAppAccessForEnforcedRoles(request: FastifyRequest, reply: FastifyReply) {
   const user = getAccessUser(request);
-  if (!MOBILE_FIELD_ROLES.has(user.role)) return;
+  if (!isAppAccessEnforcedRole(user.role)) return;
 
   const userId = Number(user.sub);
   if (!Number.isFinite(userId) || userId < 1) {
     return sendApiError(reply, request, 401, "InvalidAccessUser");
   }
 
-  const allowed = await isMobileAppAccessAllowed(userId);
+  const allowed = await isAppAccessAllowed(userId);
   if (!allowed) {
-    return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", "Ilova kirish o‘chirilgan");
+    return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", APP_ACCESS_DENIED_MESSAGE);
   }
+}
+
+/** @deprecated Use requireAppAccessForEnforcedRoles — mobile field roles subset covered. */
+export async function requireMobileAppAccess(request: FastifyRequest, reply: FastifyReply) {
+  return requireAppAccessForEnforcedRoles(request, reply);
 }
 
 /** PATCH app_access=false bo‘lganda barcha refresh tokenlarni bekor qilish. */

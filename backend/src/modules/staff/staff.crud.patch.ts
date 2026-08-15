@@ -113,8 +113,13 @@ export async function patchAgentSupervisor(
   }
   return row;
 }
-export async function getStaffRow(tenantId: number, kind: StaffKind, id: number): Promise<StaffRow | null> {
-  const rows = await listStaff(tenantId, kind);
+export async function getStaffRow(
+  tenantId: number,
+  kind: StaffKind,
+  id: number,
+  accessScope?: Prisma.UserWhereInput | null
+): Promise<StaffRow | null> {
+  const rows = await listStaff(tenantId, kind, undefined, accessScope);
   return rows.find((r) => r.id === id) ?? null;
 }
 
@@ -122,6 +127,7 @@ export type PatchAgentInput = {
   first_name?: string;
   last_name?: string | null;
   middle_name?: string | null;
+  login?: string;
   phone?: string | null;
   email?: string | null;
   product?: string | null;

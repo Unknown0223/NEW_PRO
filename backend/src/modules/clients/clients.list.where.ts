@@ -9,6 +9,8 @@ import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.se
 import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import type { ListClientsQuery } from "./clients.types";
 import { buildClientListSearchOrClause } from "./clients.list.search";
+import type { ScopedReportActor } from "../access/access-agent-scope";
+import { intersectRequestedAgentIds } from "../access/access-agent-scope";
 
 export async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
   const d = Math.floor(day);
@@ -118,7 +120,8 @@ function cityKeysMatchingZoneInHints(
 /** Ro‘yxat, eksport va count uchun umumiy WHERE. `null` — hech qachon mos kelmas (masalan hafta kuni bo‘yicha bo‘sh). */
 export async function buildClientListWhereInput(
   tenantId: number,
-  q: ListClientsQuery
+  q: ListClientsQuery,
+  actorScope?: ScopedReportActor
 ): Promise<Prisma.ClientWhereInput | null> {
   const andList: Prisma.ClientWhereInput[] = [{ tenant_id: tenantId, merged_into_client_id: null }];
 
@@ -175,7 +178,14 @@ export async function buildClientListWhereInput(
     ...(q.agent_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
     ...(q.agent_id != null && Number.isFinite(q.agent_id) && q.agent_id > 0 ? [q.agent_id] : [])
   ];
-  const uniqAgentIds = [...new Set(agentIds)];
+  let uniqAgentIds = [...new Set(agentIds)];
+  if (actorScope) {
+    const scoped = intersectRequestedAgentIds(uniqAgentIds, actorScope);
+    if (scoped.restricted) {
+      uniqAgentIds = scoped.agentIds;
+      if (uniqAgentIds.length === 0) return null;
+    }
+  }
 
   if (Array.isArray(q.client_ids)) {
     const ids = q.client_ids

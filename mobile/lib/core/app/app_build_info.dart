@@ -6,6 +6,10 @@ class AppBuildInfo {
 
   static PackageInfo? _cached;
 
+  static void clearCache() {
+    _cached = null;
+  }
+
   static Future<PackageInfo> load() async {
     if (_cached != null) return _cached!;
     _cached = await PackageInfo.fromPlatform();

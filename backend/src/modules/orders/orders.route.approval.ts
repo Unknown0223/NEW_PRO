@@ -22,7 +22,7 @@ const catalogRoles = ORDER_APPROVAL_ROUTE_ROLES;
 
 export async function registerOrderApprovalRoutes(app: FastifyInstance) {
   app.get(
-    "/api/:slug/orders/:id/approval",
+    "/api/:slug/orders/:id(\\d+)/approval",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -45,7 +45,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/api/:slug/orders/:id/approval/advance",
+    "/api/:slug/orders/:id(\\d+)/approval/advance",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -89,7 +89,7 @@ export async function registerOrderApprovalRoutes(app: FastifyInstance) {
   );
 
   app.post(
-    "/api/:slug/orders/:id/approval/reject",
+    "/api/:slug/orders/:id(\\d+)/approval/reject",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;

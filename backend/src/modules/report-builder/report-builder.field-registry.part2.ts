@@ -6,7 +6,7 @@ export const FIELD_REGISTRY_PART2: Record<
   { label: string; allowRow: boolean; allowCol: boolean; expr: () => import("@prisma/client").Prisma.Sql }
 > = {
   product_group_name: {
-    label: "Группа товара",
+    label: "Группа",
     allowRow: true,
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(pgc.name, '')`
@@ -34,6 +34,24 @@ export const FIELD_REGISTRY_PART2: Record<
     allowRow: true,
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(p.qty_per_block::text, '')`
+  },
+  /** Flat Excel «Блок»: qty / qty_per_block (yoki qty). */
+  block_qty: {
+    label: "Блок",
+    allowRow: true,
+    allowCol: true,
+    expr: () =>
+      Prisma.sql`CASE
+        WHEN COALESCE(p.qty_per_block, 0) > 0
+          THEN ROUND((oi.qty / NULLIF(p.qty_per_block, 0))::numeric, 3)::text
+        ELSE oi.qty::numeric(15,3)::text
+      END`
+  },
+  product_article: {
+    label: "Артикул продукта",
+    allowRow: true,
+    allowCol: true,
+    expr: () => Prisma.sql`COALESCE(NULLIF(TRIM(p.sell_code), ''), NULLIF(TRIM(p.sku), ''), '')`
   },
   product_comment: {
     label: "Комментарий",
@@ -184,6 +202,39 @@ export const FIELD_REGISTRY_PART2: Record<
     expr: () =>
       Prisma.sql`CASE WHEN sret.return_at IS NULL THEN '' ELSE EXTRACT(DAY FROM sret.return_at AT TIME ZONE 'UTC')::int::text END`
   },
+  order_date: {
+    label: "Дата заявки",
+    allowRow: true,
+    allowCol: true,
+    expr: () => Prisma.sql`to_char(o.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`
+  },
+  shipped_date: {
+    label: "Дата отгрузки",
+    allowRow: true,
+    allowCol: true,
+    expr: () =>
+      Prisma.sql`CASE WHEN sl.shipped_at IS NULL THEN '' ELSE to_char(sl.shipped_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END`
+  },
+  delivered_date: {
+    label: "Дата доставки",
+    allowRow: true,
+    allowCol: true,
+    expr: () =>
+      Prisma.sql`CASE WHEN sl.delivered_at IS NULL THEN '' ELSE to_char(sl.delivered_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END`
+  },
+  return_date: {
+    label: "Дата возврата",
+    allowRow: true,
+    allowCol: true,
+    expr: () =>
+      Prisma.sql`CASE WHEN sret.return_at IS NULL THEN '' ELSE to_char(sret.return_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END`
+  },
+  client_created_date: {
+    label: "Дата создания клиента",
+    allowRow: true,
+    allowCol: true,
+    expr: () => Prisma.sql`to_char(c.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`
+  },
   client_created_year: {
     label: "Дата создания клиента.Год",
     allowRow: true,
@@ -215,16 +266,20 @@ export const FIELD_REGISTRY_PART2: Record<
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(cb.balance, 0::numeric)::numeric(15,2)::text`
   },
-  order_bonuses_display: {
+  /** Bonus mahsulot miqdori (dona) — qiymat (Σ), Значения zonasiga. */
+  bonus_qty: {
     label: "Бонусы",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(o.bonus_sum::text, '')`
+    expr: () =>
+      Prisma.sql`(CASE WHEN oi.is_bonus THEN oi.qty ELSE 0 END)::numeric(15,3)::text`
   },
+  /** Bonus qatorida berilgan mahsulot nomi; oddiy qatorda bo‘sh. */
   is_bonus: {
     label: "Бонус",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`(CASE WHEN oi.is_bonus THEN 'Да' ELSE 'Нет' END)`
+    expr: () =>
+      Prisma.sql`(CASE WHEN oi.is_bonus THEN COALESCE(NULLIF(TRIM(p.name), ''), '') ELSE '' END)`
   }
 };

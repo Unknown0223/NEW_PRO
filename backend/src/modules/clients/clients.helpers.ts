@@ -4,6 +4,11 @@ import { salesRefStoredValue } from "../sales-directions/sales-directions.servic
 import type { ClientRefOptionDto, ContactPersonSlot } from "./clients.types";
 
 export const CONTACT_SLOTS = 10;
+/**
+ * Mijoz «команда» (agent_assignments) slotlari — UI da cheklov yo‘q, API himoyasi uchun yuqori lim.
+ * Kontaktlar (`CONTACT_SLOTS`) dan alohida.
+ */
+export const MAX_AGENT_ASSIGNMENT_SLOTS = 100;
 /** Excel import: faqat kontakt 1–2 (UI da uchinchi kontakt yo‘q). */
 export const IMPORT_CONTACT_PERSON_SLOTS = 2;
 

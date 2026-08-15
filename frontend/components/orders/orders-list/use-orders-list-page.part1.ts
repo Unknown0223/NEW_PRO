@@ -3,6 +3,7 @@
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import {
   DEFAULT_NAKLADNOY_EXPORT_PREFS,
   loadNakladnoyExportPrefs,
@@ -47,6 +48,8 @@ export function useOrdersListPagePart1() {
   const clientIdFromUrl = filters.client_id;
 
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const qc = useQueryClient();
@@ -79,6 +82,21 @@ export function useOrdersListPagePart1() {
   useEffect(() => {
     setFilterDraft(withDefaultOrdersDateRange(filters));
   }, [filters]);
+
+  /** Birinchi kirishda URLda sana bo‘lmasa — bugungi kunni avtomatik qo‘llash (Применить bosmasdan). */
+  const defaultDatesBootstrappedRef = useRef(false);
+  useEffect(() => {
+    if (defaultDatesBootstrappedRef.current) return;
+    if (ordersListQueryReady(filters)) {
+      defaultDatesBootstrappedRef.current = true;
+      return;
+    }
+    defaultDatesBootstrappedRef.current = true;
+    const next = withDefaultOrdersDateRange({ ...filters, page: 1 });
+    setFilterDraft(next);
+    const qs = buildOrdersSearchParams(next).toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [filters, pathname, router]);
 
   useEffect(() => {
     setNakladnoyPrefs(loadNakladnoyExportPrefs());
@@ -128,7 +146,7 @@ export function useOrdersListPagePart1() {
     paymentMethodFilterOpts,
     paymentTypeFilterOpts,
     nakladnoyTypeFilterOpts
-  } = useOrdersListReferenceData(tenantSlug, effectiveRole, filterDraft);
+  } = useOrdersListReferenceData(tenantSlug, effectiveRole, filterDraft, actorUserId);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -152,6 +170,7 @@ export function useOrdersListPagePart1() {
         expeditor_id: patch.expeditor_id !== undefined ? patch.expeditor_id : cur.expeditor_id,
         date_from: patch.date_from !== undefined ? patch.date_from : cur.date_from,
         date_to: patch.date_to !== undefined ? patch.date_to : cur.date_to,
+        date_periods: patch.date_periods !== undefined ? patch.date_periods : cur.date_periods,
         client_id: patch.client_id !== undefined ? patch.client_id : cur.client_id,
         product_id: patch.product_id !== undefined ? patch.product_id : cur.product_id,
         client_category:
@@ -183,12 +202,15 @@ export function useOrdersListPagePart1() {
     [pathname, router, searchParams]
   );
 
-  const applyFilterDraft = useCallback(() => {
-    const next = withDefaultOrdersDateRange({ ...filterDraft, page: 1 });
-    setFilterDraft(next);
-    const qs = buildOrdersSearchParams(next).toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [filterDraft, pathname, router]);
+  const applyFilterDraft = useCallback(
+    (patch?: Partial<OrdersUrlFilters>) => {
+      const next = withDefaultOrdersDateRange({ ...filterDraft, ...patch, page: 1 });
+      setFilterDraft(next);
+      const qs = buildOrdersSearchParams(next).toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [filterDraft, pathname, router]
+  );
 
   const resetFilterDraft = useCallback(() => {
     const { date_from, date_to } = defaultOrdersDayRange();
@@ -202,6 +224,7 @@ export function useOrdersListPagePart1() {
       expeditor_id: "",
       date_from,
       date_to,
+      date_periods: "",
       client_id: "",
       product_id: "",
       client_category: "",
@@ -229,6 +252,7 @@ export function useOrdersListPagePart1() {
     queryKey: [
       "orders",
       tenantSlug,
+      actorUserId,
       filters.page,
       filters.search,
       filters.status,
@@ -239,6 +263,7 @@ export function useOrdersListPagePart1() {
       filters.expeditor_id,
       filters.date_from,
       filters.date_to,
+      filters.date_periods,
       filters.date_mode,
       filters.is_consignment,
       filters.product_category_id,
@@ -276,6 +301,7 @@ export function useOrdersListPagePart1() {
       if (f.expeditor_id) params.set("expeditor_id", f.expeditor_id);
       if (f.date_from) params.set("date_from", f.date_from);
       if (f.date_to) params.set("date_to", f.date_to);
+      if (f.date_periods?.trim()) params.set("date_periods", f.date_periods.trim());
       if (f.product_id) params.set("product_id", f.product_id);
       if (f.client_category) params.set("client_category", f.client_category);
       if (f.client_region) params.set("client_region", f.client_region);

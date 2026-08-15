@@ -1,17 +1,17 @@
 "use client";
 
 import { GoodsReceiptNewWorkspace } from "@/components/stock/goods-receipt-new-workspace";
-import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import Link from "next/link";
 
 export default function StockReceiptNewPage() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
-  const role = useEffectiveRole();
-  const canWrite = isAdminOrOperatorLikeRole(role);
+  const { has, isLoading } = usePermissions();
+  const canWrite = has("warehouse.postuplenie.create");
 
-  if (!hydrated || !tenantSlug) {
+  if (!hydrated || isLoading || !tenantSlug) {
     return <p className="text-sm text-muted-foreground">Загрузка…</p>;
   }
 

@@ -4,6 +4,8 @@ import { catalogRoles } from "./clients.route.shared";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import { assertClientAllowedForActor } from "../access/access-agent-scope";
 import { getClientBalanceLedger } from "./client-balance-ledger.service";
 import { getClientDebtorCreditorMonthly } from "./client-debtor-creditor-report.service";
 import {
@@ -15,6 +17,18 @@ import {
   endOfLocalDay,
   parseLocalYmd
 } from "./clients.route.schemas";
+
+async function assertClientScope(
+  request: Parameters<typeof getAccessUser>[0],
+  tenantId: number,
+  clientId: number
+): Promise<void> {
+  const viewer = getAccessUser(request);
+  await assertClientAllowedForActor(tenantId, clientId, {
+    userId: actorUserIdOrNull(request),
+    role: viewer.role ?? ""
+  });
+}
 
 export async function registerClientBalanceRoutes(app: FastifyInstance) {
   app.get(
@@ -74,6 +88,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "BadDateRange");
       }
       try {
+        await assertClientScope(request, request.tenant!.id, id);
         const result = await getClientBalanceLedger(request.tenant!.id, id, {
           page: pageNum,
           limit: limitNum,
@@ -91,6 +106,9 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+        }
         throw e;
       }
     }
@@ -106,11 +124,15 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
       try {
+        await assertClientScope(request, request.tenant!.id, id);
         const rows = await getClientDebtorCreditorMonthly(request.tenant!.id, id);
         return reply.send({ rows });
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
         }
         throw e;
       }
@@ -142,6 +164,7 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
         dateToEnd = endOfLocalDay(b);
       }
       try {
+        await assertClientScope(request, request.tenant!.id, id);
         const result = await listClientBalanceMovements(request.tenant!.id, id, pageNum, limitNum, {
           date_from: dateFrom,
           date_to_end: dateToEnd
@@ -150,6 +173,9 @@ export async function registerClientBalanceRoutes(app: FastifyInstance) {
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
         }
         throw e;
       }

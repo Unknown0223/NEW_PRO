@@ -19,14 +19,8 @@ import {
   mobileWarehouseStockQuerySchema
 } from "./mobile.route.agent.schemas";
 import {
-  createMobileOrder,
-  enqueueOrder,
-  getMobileAgentOrderDetail,
-  getMobileOrderStock,
-  getMobileWarehouseStockView,
-  getPendingCount,
-  listMobileAgentOrdersHistory,
-  syncOrders
+  createMobileOrder, enqueueOrder, getMobileAgentOrderDetail, getMobileOrderStock,
+  getMobileWarehouseStockView, getPendingCount, listMobileAgentOrdersHistory, syncOrders
 } from "./mobile.service";
 import {
   mobileAgentConfigPreHandler,
@@ -36,9 +30,6 @@ import {
 
 export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
 
-  // -----------------------------------------------------------------------
-  // GET /api/:slug/mobile/orders/stock — ombor qoldig‘i (tanlangan mahsulotlar)
-  // -----------------------------------------------------------------------
   app.get(
     "/api/:slug/mobile/orders/stock",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -61,9 +52,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  // -----------------------------------------------------------------------
-  // GET /api/:slug/mobile/warehouse-stock — ombor qoldig‘i (agent, bitta javob)
-  // -----------------------------------------------------------------------
   app.get(
     "/api/:slug/mobile/warehouse-stock",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -87,9 +75,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  // -----------------------------------------------------------------------
-  // POST /api/:slug/mobile/orders/bonus-preview — bonus/skidka oldindan ko‘rish
-  // -----------------------------------------------------------------------
   app.post(
     "/api/:slug/mobile/orders/bonus-preview",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -115,14 +100,29 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
         if (msg === "BAD_QTY") return sendApiError(reply, request, 400, "BadQty");
         if (msg === "EMPTY_ITEMS") return sendApiError(reply, request, 400, "EmptyItems");
+        if (msg === "DUPLICATE_PRODUCT") return sendApiError(reply, request, 400, "DuplicateProduct");
+        if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
+          return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "NO_PRICE") {
+          const ex = e as Error & { product_id?: number; price_type?: string };
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "NoPrice",
+            "Для выбранного типа цены нет цены на товар в корзине",
+            {
+              product_id: ex.product_id,
+              price_type: ex.price_type ?? "retail"
+            }
+          );
+        }
         throw e;
       }
     }
   );
 
-  // -----------------------------------------------------------------------
-  // POST /api/:slug/mobile/orders/create — zakaz (bonus/skidka serverda)
-  // -----------------------------------------------------------------------
   app.post(
     "/api/:slug/mobile/orders/create",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -154,11 +154,38 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Агент не на рабочем месте — новый заказ запрещён"
+          );
+        }
         if (msg === "BAD_PRODUCT") return sendApiError(reply, request, 400, "BadProduct");
         if (msg === "BAD_QTY") return sendApiError(reply, request, 400, "BadQty");
         if (msg === "EMPTY_ITEMS") return sendApiError(reply, request, 400, "EmptyItems");
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionRequired",
+            "Стратегия бўйича камида 1 та бонус/скидка танланг."
+          );
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionTooMany",
+            "Стратегия шартидан ортиқ қоида танланган."
+          );
         }
         if (msg === "NO_PRICE") {
           const ex = e as Error & { product_id?: number; price_type?: string };
@@ -240,9 +267,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  // -----------------------------------------------------------------------
-  // POST /api/:slug/mobile/orders/enqueue  — queue an offline order
-  // -----------------------------------------------------------------------
   app.post(
     "/api/:slug/mobile/orders/enqueue",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -299,9 +323,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     },
   );
 
-  // -----------------------------------------------------------------------
-  // GET /api/:slug/mobile/orders/history — agent bugungi zakazlar (mahsulotlar + bonus)
-  // -----------------------------------------------------------------------
   app.get(
     "/api/:slug/mobile/orders/history",
     { preHandler: [...mobileAgentConfigPreHandler] },
@@ -319,9 +340,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  // -----------------------------------------------------------------------
-  // GET /api/:slug/mobile/orders/:id/detail — bitta zakaz (mahsulotlar + bonus)
-  // -----------------------------------------------------------------------
   app.get(
     "/api/:slug/mobile/orders/:id/detail",
     { preHandler: [...mobileAgentConfigPreHandler] },
@@ -348,9 +366,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  // -----------------------------------------------------------------------
-  // GET /api/:slug/mobile/orders/pending  — count pending offline orders
-  // -----------------------------------------------------------------------
   app.get(
     "/api/:slug/mobile/orders/pending",
     { preHandler: [...mobileOfflineOrderPreHandler] },
@@ -362,9 +377,6 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     },
   );
 
-  // -----------------------------------------------------------------------
-  // POST /api/:slug/mobile/orders/sync-flush — push pending offline orders
-  // -----------------------------------------------------------------------
   app.post(
     "/api/:slug/mobile/orders/sync-flush",
     { preHandler: [...mobileOfflineOrderPreHandler] },

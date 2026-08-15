@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Search, FileSpreadsheet, SlidersHorizontal, ChevronDown } from "lucide-react";
 import type { PlanningEmployee, PlanningKpiGroup, PlanningPlan, PlanningTarget } from "./planning-api";
-import { formatNumber, getPlanningRoleLabel, getRoleLabel } from "./planning-utils";
+import { formatNumber, getPlanningRoleLabel, getRoleLabel, sumDescendantAgentMetric } from "./planning-utils";
 import { flattenPlanningTree, getPlanningParentIds, defaultExpandedPlanningNodes } from "./planning-tree";
 
 interface TotalsSectionProps {
@@ -60,19 +60,34 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
     }
   };
 
-  const groupTotal = (groupId: number, metric: string) => {
+  /** Qator qiymati: agent — o‘z targeti; SVR/filial — agentlar yig‘indisi (yoki o‘z targeti agar > 0). */
+  const rowMetricValue = (emp: PlanningEmployee, groupId: number, metric: string): number => {
     const plan = plans.find((p) => p.kpi_group_id === groupId);
     if (!plan) return 0;
-    return kpiTargets
-      .filter((t) => t.plan_id === plan.id)
-      .reduce((s, t) => s + getMetricValue(t, metric), 0);
+    const own = getMetricValue(getTarget(plan.id, emp.id), metric);
+    if (!parentIds.has(emp.id)) return own;
+    if (own !== 0) return own;
+    return sumDescendantAgentMetric(emp.id, employees, (agentId) =>
+      getMetricValue(getTarget(plan.id, agentId), metric)
+    );
   };
 
-  const empTotal = (userId: number, metric: string) =>
-    kpiTargets.filter((t) => t.user_id === userId).reduce((s, t) => s + getMetricValue(t, metric), 0);
+  const groupTotal = (groupId: number, metric: string) => {
+    // Faqat agentlar — double-count bo‘lmasin
+    return employees
+      .filter((e) => e.role === "agent")
+      .reduce((s, e) => {
+        const plan = plans.find((p) => p.kpi_group_id === groupId);
+        if (!plan) return s;
+        return s + getMetricValue(getTarget(plan.id, e.id), metric);
+      }, 0);
+  };
+
+  const empTotal = (emp: PlanningEmployee, metric: string) =>
+    kpiGroups.reduce((s, g) => s + rowMetricValue(emp, g.id, metric), 0);
 
   const grandTotal = (metric: string) =>
-    kpiTargets.reduce((s, t) => s + getMetricValue(t, metric), 0);
+    kpiGroups.reduce((s, g) => s + groupTotal(g.id, metric), 0);
 
   const metrics = ["Сумма", "Количество", "Объем", "АКБ", "Кол-во-заказов"];
   const metricLabel = activeMetric === "Сумма" ? "Сумма по группе KPI" : `${activeMetric} по группе KPI`;
@@ -210,9 +225,7 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
                       <td className="px-3 py-2 text-xs text-slate-400">{emp.code ?? "—"}</td>
                       <td className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{getPlanningRoleLabel(emp)}</td>
                       {kpiGroups.map((g) => {
-                        const plan = plans.find((p) => p.kpi_group_id === g.id);
-                        const target = plan ? getTarget(plan.id, emp.id) : undefined;
-                        const val = getMetricValue(target, activeMetric);
+                        const val = rowMetricValue(emp, g.id, activeMetric);
                         return (
                           <td key={g.id} className="px-3 py-2 text-center text-xs text-slate-600">
                             {formatNumber(val)}
@@ -220,7 +233,7 @@ export function TotalsSection({ employees, kpiGroups, kpiTargets, plans }: Total
                         );
                       })}
                       <td className="px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                        {formatNumber(empTotal(emp.id, activeMetric))}
+                        {formatNumber(empTotal(emp, activeMetric))}
                       </td>
                     </tr>
                   );

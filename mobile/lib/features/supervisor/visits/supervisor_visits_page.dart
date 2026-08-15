@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session.dart';
-import '../../../core/l10n/app_strings_ru.dart';
-import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/prefs/app_prefs.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../config/supervisor_config_enforcement.dart';
 import '../shared/supervisor_api_parse.dart';
 import '../shared/supervisor_visit_detail_sheet.dart';
+import '../shared/supervisor_ui.dart';
 import '../supervisor_providers.dart';
-
-enum _VisitDateFilter { today, yesterday, week }
 
 class SupervisorVisitsPage extends ConsumerStatefulWidget {
   const SupervisorVisitsPage({super.key});
@@ -20,244 +18,250 @@ class SupervisorVisitsPage extends ConsumerStatefulWidget {
   ConsumerState<SupervisorVisitsPage> createState() => _SupervisorVisitsPageState();
 }
 
-class _SupervisorVisitsPageState extends ConsumerState<SupervisorVisitsPage> {
-  _VisitDateFilter _dateFilter = _VisitDateFilter.today;
+class _SupervisorVisitsPageState extends ConsumerState<SupervisorVisitsPage> with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  bool _onlyWithLocation = false;
+  String _query = '';
+  String _dateKey = 'today';
 
-  String? _dateParam() {
-    final now = DateTime.now();
-    switch (_dateFilter) {
-      case _VisitDateFilter.today:
-        return null;
-      case _VisitDateFilter.yesterday:
-        final y = now.subtract(const Duration(days: 1));
-        return '${y.year}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
-      case _VisitDateFilter.week:
-        return null;
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    _tabs.addListener(() {
+      if (!_tabs.indexIsChanging) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFilter() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Сегодня'),
+              trailing: _dateKey == 'today' ? const Icon(Icons.check, color: AppColors.supervisorAccent) : null,
+              onTap: () => Navigator.pop(ctx, 'today'),
+            ),
+            ListTile(
+              title: const Text('Вчера'),
+              trailing: _dateKey != 'today' ? const Icon(Icons.check, color: AppColors.supervisorAccent) : null,
+              onTap: () {
+                final y = DateTime.now().subtract(const Duration(days: 1));
+                final key =
+                    '${y.year}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
+                Navigator.pop(ctx, key);
+              },
+            ),
+            ListTile(
+              title: const Text('Сброс', style: TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: const Text('Сегодня · без поиска'),
+              onTap: () => Navigator.pop(ctx, 'reset'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    if (picked == 'reset') {
+      setState(() {
+        _dateKey = 'today';
+        _query = '';
+        _onlyWithLocation = false;
+      });
+      return;
     }
+    setState(() => _dateKey = picked);
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = ref.watch(sessionProvider);
-    final policy = SupervisorConfigPolicy(
-      supervision: session.mobileConfig?.supervision,
-      misc: session.mobileConfig?.misc,
-    );
-    final dateKey = _dateParam() ?? 'today';
-    final visitsAsync = ref.watch(supervisorVisitsProvider(dateKey));
+    const accent = AppColors.supervisorAccent;
+    final l10n = ref.watch(svL10nProvider);
+    final visitsAsync = ref.watch(supervisorVisitsProvider(_dateKey));
+    final gpsAsync = ref.watch(supervisorAgentLocationsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vizitlar'),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: supervisorAppBar(
+        context,
+        title: l10n.visits,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () async {
+              final q = await showSupervisorSearchSheet(context, hint: l10n.search);
+              if (q != null) setState(() => _query = q);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _pickFilter,
+          ),
+          IconButton(
+            icon: const Icon(Icons.map_outlined),
+            onPressed: () {
+              final pins = (gpsAsync.valueOrNull ?? [])
+                  .map((p) => (name: p.agentName, lat: p.latitude, lng: p.longitude))
+                  .toList();
+              openSupervisorMapPins(context: context, pins: pins);
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                _DateChip('Bugun', _dateFilter == _VisitDateFilter.today, () {
-                  setState(() => _dateFilter = _VisitDateFilter.today);
-                }),
-                const SizedBox(width: 8),
-                _DateChip('Kecha', _dateFilter == _VisitDateFilter.yesterday, () {
-                  setState(() => _dateFilter = _VisitDateFilter.yesterday);
-                }),
-                const SizedBox(width: 8),
-                _DateChip('Hafta', _dateFilter == _VisitDateFilter.week, () {
-                  setState(() => _dateFilter = _VisitDateFilter.week);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Haftalik filtr tez orada qo\'shiladi')),
-                  );
-                }),
-              ],
-            ),
+          TabBar(
+            controller: _tabs,
+            labelColor: accent,
+            unselectedLabelColor: AppColors.textSecondary,
+            indicatorColor: accent,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+            tabs: [
+              Tab(text: l10n.notVisited),
+              Tab(text: l10n.visited),
+            ],
           ),
-          visitsAsync.when(
-            data: (payload) {
-              final parsed = SupervisorVisitsPayload.fromApi(payload);
-              return Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.supervisorAccent.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(10),
+          if (_query.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: SvCard(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('«$_query»', style: AppTypography.caption)),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() => _query = ''),
                     ),
-                    child: Row(children: [
-                      Expanded(child: _VisitStat('Rejada', '${parsed.totalPlanned()}', AppColors.textPrimary)),
-                      Container(width: 1, height: 30, color: AppColors.border),
-                      Expanded(child: _VisitStat('Bajarildi', '${parsed.totalVisited()}', AppColors.success)),
-                      Container(width: 1, height: 30, color: AppColors.border),
-                      Expanded(child: _VisitStat('Buyurtmali', '${parsed.totalWithOrders()}', AppColors.info)),
-                      Container(width: 1, height: 30, color: AppColors.border),
-                      Expanded(child: _VisitStat('Qoldi', '${parsed.totalNotVisited()}', AppColors.warning)),
-                    ],),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              );
-            },
-            loading: () => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
+                  ],
+                ),
+              ),
             ),
-            error: (_, __) => const SizedBox.shrink(),
+          CheckboxListTile(
+            dense: true,
+            value: _onlyWithLocation,
+            onChanged: (v) => setState(() => _onlyWithLocation = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Показать только с местоположением', style: TextStyle(fontSize: 13)),
+            activeColor: accent,
           ),
           Expanded(
             child: visitsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => const Center(child: Text('Нет визитов')),
               data: (payload) {
                 final parsed = SupervisorVisitsPayload.fromApi(payload);
-                if (parsed.rows.isEmpty) {
-                  return const Center(child: AgentEmptyState(message: S.emptySupervisorVisits));
+                final gpsIds = {
+                  for (final p in gpsAsync.valueOrNull ?? const [])
+                    if (p.latitude != null && p.longitude != null) p.agentId,
+                };
+                final notVisited = parsed.rows.where((r) => r.notVisited > 0 || r.visitedTotal == 0).toList();
+                final visited = parsed.rows.where((r) => r.visitedTotal > 0).toList();
+                var list = _tabs.index == 0 ? notVisited : visited;
+                if (_onlyWithLocation) {
+                  list = list.where((r) => gpsIds.contains(r.agentId)).toList();
                 }
+                if (_query.isNotEmpty) {
+                  final q = _query.toLowerCase();
+                  list = list
+                      .where((r) =>
+                          r.agentName.toLowerCase().contains(q) ||
+                          (r.agentCode?.toLowerCase().contains(q) ?? false),)
+                      .toList();
+                }
+
+                if (list.isEmpty) {
+                  return Center(
+                    child: Text(
+                      _tabs.index == 0 ? 'Нет непосещённых' : 'Нет визитов',
+                      style: AppTypography.caption,
+                    ),
+                  );
+                }
+
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(supervisorVisitsProvider(dateKey)),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: parsed.rows.length,
-                    itemBuilder: (ctx, i) {
-                      final row = parsed.rows[i];
-                      final progress = row.plannedVisits > 0
-                          ? row.visitedTotal / row.plannedVisits
-                          : 0.0;
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => showSupervisorVisitDetailSheet(
+                  color: accent,
+                  onRefresh: () async {
+                    ref.invalidate(supervisorVisitsProvider(_dateKey));
+                    await ref.read(supervisorVisitsProvider(_dateKey).future);
+                  },
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final r = list[i];
+                      return SvCard(
+                        onTap: () {
+                          final session = ref.read(sessionProvider);
+                          showSupervisorVisitDetailSheet(
                             context,
-                            row: row,
-                            policy: policy,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: AppColors.supervisorAccent.withValues(alpha: 0.1),
-                                    child: Text(
-                                      row.agentName.isNotEmpty ? row.agentName[0].toUpperCase() : '?',
-                                      style: const TextStyle(
-                                        color: AppColors.supervisorAccent,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(row.agentName, style: AppTypography.titleMedium),
-                                        if (row.agentCode != null)
-                                          Text(row.agentCode!, style: AppTypography.caption),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    '${row.visitedTotal}/${row.plannedVisits}',
-                                    style: AppTypography.labelMedium.copyWith(
-                                      color: progress >= 1 ? AppColors.success : AppColors.supervisorAccent,
-                                    ),
-                                  ),
-                                ],),
-                                const SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(3),
-                                  child: LinearProgressIndicator(
-                                    value: progress.clamp(0.0, 1.0),
-                                    backgroundColor: AppColors.border,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      progress >= 1 ? AppColors.success : AppColors.supervisorAccent,
-                                    ),
-                                    minHeight: 4,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    _MiniStat('Qolmagan', '${row.notVisited}'),
-                                    const SizedBox(width: 12),
-                                    _MiniStat('Buyurtma', '${row.visitsWithOrders}'),
-                                    const SizedBox(width: 12),
-                                    _MiniStat('GPS', '${row.gpsVisits}'),
-                                  ],
-                                ),
-                              ],
+                            row: r,
+                            policy: SupervisorConfigPolicy(session.mobileConfig),
+                          );
+                        },
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.storefront, color: accent, size: 22),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(r.agentName.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                                  if (r.agentCode != null && r.agentCode!.isNotEmpty)
+                                    Text(r.agentCode!, style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Text('План ${r.visitedTotal}/${r.plannedVisits}', style: AppTypography.caption),
+                                      const Spacer(),
+                                      Text('${r.salesSum} UZS', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              width: 26,
+                              height: 26,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryDark,
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                              child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                            ),
+                          ],
                         ),
                       );
                     },
                   ),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('$e')),
             ),
           ),
         ],
       ),
     );
-  }
-}
-
-class _DateChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _DateChip(this.label, this.selected, this.onTap);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.supervisorAccent : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? AppColors.supervisorAccent : AppColors.border),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: selected ? Colors.white : AppColors.textMuted,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VisitStat extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _VisitStat(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: color)),
-      Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
-    ],);
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final String label, value;
-  const _MiniStat(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text('$label: $value', style: const TextStyle(fontSize: 10, color: AppColors.textMuted));
   }
 }

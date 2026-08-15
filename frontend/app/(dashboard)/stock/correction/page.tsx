@@ -228,6 +228,12 @@ export default function StockCorrectionPage() {
   const [rowPrice, setRowPrice] = useState<Record<number, string>>({});
   /** Корр. rejimida: остаток после; инв. — реальный остаток (delta bilan sinxron). */
   const [rowFact, setRowFact] = useState<Record<number, string>>({});
+  /** Kategoriya almashganda delta/fakt saqlanishi uchun — mahsulot qoldiq meta. */
+  const [rowStockMeta, setRowStockMeta] = useState<
+    Record<number, { qty: number; available_qty: number }>
+  >({});
+  /** product_id → category_id (draft belgisi uchun). */
+  const [productCategoryId, setProductCategoryId] = useState<Record<number, number>>({});
   const [occurredAtLocal, setOccurredAtLocal] = useState("");
   const [wComment, setWComment] = useState("");
   const [wError, setWError] = useState<string | null>(null);
@@ -365,7 +371,9 @@ export default function StockCorrectionPage() {
   }
 
   useEffect(() => {
-    if (!workspaceRows.length) return;
+    // keepPreviousData: kategoriya almashganda eski qatorlar vaqtinchalik ko‘rinadi —
+    // ularni yangi kategoriya deb belgilamaslik kerak.
+    if (!workspaceRows.length || workspaceIsPlaceholder) return;
     setRowPrice((prev) => {
       const next = { ...prev };
       for (const r of workspaceRows) {
@@ -375,7 +383,26 @@ export default function StockCorrectionPage() {
       }
       return next;
     });
-  }, [workspaceRows]);
+    setRowStockMeta((prev) => {
+      const next = { ...prev };
+      for (const r of workspaceRows) {
+        next[r.product_id] = {
+          qty: parseNum(r.qty),
+          available_qty: parseNum(r.available_qty)
+        };
+      }
+      return next;
+    });
+    if (selectedCategoryId != null && selectedCategoryId > 0) {
+      setProductCategoryId((prev) => {
+        const next = { ...prev };
+        for (const r of workspaceRows) {
+          next[r.product_id] = selectedCategoryId;
+        }
+        return next;
+      });
+    }
+  }, [workspaceRows, selectedCategoryId, workspaceIsPlaceholder]);
 
   useEffect(() => {
     if (tab !== "correction") return;
@@ -423,6 +450,9 @@ export default function StockCorrectionPage() {
   const resetRowInputs = useCallback(() => {
     setRowCorrection({});
     setRowFact({});
+    setRowPrice({});
+    setRowStockMeta({});
+    setProductCategoryId({});
     setWError(null);
   }, []);
 
@@ -440,9 +470,10 @@ export default function StockCorrectionPage() {
     if (first) setWWarehouseId(String(first.id));
   }, [tab, warehouses, wWarehouseId]);
 
+  // Kategoriya almashganda draft saqlanadi; faqat ombor / narx / tab o‘zgaganda tozalanadi.
   useEffect(() => {
     resetRowInputs();
-  }, [selectedCategoryId, wWarehouseId, wPriceType, tab, resetRowInputs]);
+  }, [wWarehouseId, wPriceType, tab, resetRowInputs]);
 
   const bulkMutation = useMutation({
     mutationFn: async (payload: {
@@ -510,51 +541,82 @@ export default function StockCorrectionPage() {
   const buildItemsFromWorkspace = useMemo(() => {
     return (): { product_id: number; delta: number; price_unit?: number | null }[] => {
       const out: { product_id: number; delta: number; price_unit?: number | null }[] = [];
-      for (const r of workspaceRows) {
-        const qty = parseNum(r.qty);
+      const productIds = new Set<number>([
+        ...Object.keys(rowCorrection).map((k) => Number.parseInt(k, 10)),
+        ...Object.keys(rowFact).map((k) => Number.parseInt(k, 10))
+      ]);
+      for (const productId of productIds) {
+        if (!Number.isFinite(productId) || productId <= 0) continue;
+        const live = workspaceRows.find((r) => r.product_id === productId);
+        const qty = live != null ? parseNum(live.qty) : (rowStockMeta[productId]?.qty ?? 0);
+        const avail =
+          live != null ? parseNum(live.available_qty) : (rowStockMeta[productId]?.available_qty ?? 0);
         const { delta, hasInput } = resolveWorkspaceDelta(
           qty,
-          r.product_id,
+          productId,
           rowCorrection,
           rowFact
         );
         if (!hasInput || !Number.isFinite(delta) || delta === 0) continue;
-        const avail = parseNum(r.available_qty);
         if (delta < 0 && delta < -avail - 1e-9) continue;
-        const pRaw = rowPrice[r.product_id]?.trim();
+        const pRaw = rowPrice[productId]?.trim();
         const price_unit =
           pRaw != null && pRaw !== "" && Number.isFinite(Number.parseFloat(pRaw.replace(",", ".")))
             ? Number.parseFloat(pRaw.replace(",", "."))
             : null;
-        out.push({ product_id: r.product_id, delta, price_unit });
+        out.push({ product_id: productId, delta, price_unit });
       }
       return out;
     };
-  }, [workspaceRows, rowCorrection, rowFact, rowPrice]);
+  }, [workspaceRows, rowCorrection, rowFact, rowPrice, rowStockMeta]);
 
   const workspaceTotals = useMemo(() => {
     let sumDelta = 0;
     let sumAmount = 0;
     let linesTouched = 0;
-    for (const r of workspaceRows) {
-      const qty = parseNum(r.qty);
-      const avail = parseNum(r.available_qty);
+    const productIds = new Set<number>([
+      ...Object.keys(rowCorrection).map((k) => Number.parseInt(k, 10)),
+      ...Object.keys(rowFact).map((k) => Number.parseInt(k, 10))
+    ]);
+    for (const productId of productIds) {
+      if (!Number.isFinite(productId) || productId <= 0) continue;
+      const live = workspaceRows.find((r) => r.product_id === productId);
+      const qty = live != null ? parseNum(live.qty) : (rowStockMeta[productId]?.qty ?? 0);
+      const avail =
+        live != null ? parseNum(live.available_qty) : (rowStockMeta[productId]?.available_qty ?? 0);
       const minDelta = -avail;
       const { delta, hasInput } = resolveWorkspaceDelta(
         qty,
-        r.product_id,
+        productId,
         rowCorrection,
         rowFact
       );
       if (!hasInput || !Number.isFinite(delta) || delta === 0 || delta < minDelta - 1e-9) continue;
       linesTouched += 1;
       sumDelta += delta;
-      const pStr = rowPrice[r.product_id] ?? "";
+      const pStr = rowPrice[productId] ?? "";
       const pu = Number.parseFloat(pStr.replace(",", "."));
       if (pStr.trim() !== "" && Number.isFinite(pu)) sumAmount += delta * pu;
     }
     return { sumDelta, sumAmount, linesTouched };
-  }, [workspaceRows, rowCorrection, rowFact, rowPrice]);
+  }, [workspaceRows, rowCorrection, rowFact, rowPrice, rowStockMeta]);
+
+  const categoriesWithDraft = useMemo(() => {
+    const set = new Set<number>();
+    const productIds = new Set<number>([
+      ...Object.keys(rowCorrection).map((k) => Number.parseInt(k, 10)),
+      ...Object.keys(rowFact).map((k) => Number.parseInt(k, 10))
+    ]);
+    for (const productId of productIds) {
+      if (!Number.isFinite(productId) || productId <= 0) continue;
+      const qty = rowStockMeta[productId]?.qty ?? 0;
+      const { delta, hasInput } = resolveWorkspaceDelta(qty, productId, rowCorrection, rowFact);
+      if (!hasInput || !Number.isFinite(delta) || delta === 0) continue;
+      const catId = productCategoryId[productId];
+      if (catId != null) set.add(catId);
+    }
+    return set;
+  }, [rowCorrection, rowFact, rowStockMeta, productCategoryId]);
 
   const journalTotal = journalResult?.total ?? 0;
   const journalPages = Math.max(1, Math.ceil(journalTotal / journalPrefs.pageSize));
@@ -1029,13 +1091,20 @@ export default function StockCorrectionPage() {
                           <button
                             type="button"
                             className={cn(
-                              "hover:bg-muted/80 w-full rounded-r-md border-l-2 border-transparent py-1.5 pl-2 pr-2 text-left text-sm transition-colors",
+                              "hover:bg-muted/80 flex w-full items-center justify-between gap-2 rounded-r-md border-l-2 border-transparent py-1.5 pl-2 pr-2 text-left text-sm transition-colors",
                               selectedCategoryId === c.id &&
                                 "border-primary bg-primary/10 font-medium text-foreground"
                             )}
                             onClick={() => setSelectedCategoryId(c.id)}
                           >
-                            {c.name}
+                            <span className="min-w-0 truncate">{c.name}</span>
+                            {categoriesWithDraft.has(c.id) ? (
+                              <span
+                                className="bg-teal-600 size-1.5 shrink-0 rounded-full"
+                                title="Есть несохранённые правки"
+                                aria-label="Есть несохранённые правки"
+                              />
+                            ) : null}
                           </button>
                         </li>
                       ))}
@@ -1221,8 +1290,13 @@ export default function StockCorrectionPage() {
                 </div>
               )}
 
-              {workspaceRows.length > 0 && !workspaceLoading && !workspaceIsError && wWarehouseId && selectedCategoryId != null ? (
+              {wWarehouseId && workspaceTotals.linesTouched > 0 ? (
                 <div className="bg-muted/40 border-border/60 flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-md border px-3 py-2 text-sm">
+                  {categoriesWithDraft.size > 1 ? (
+                    <span className="text-muted-foreground mr-auto text-xs">
+                      По всем категориям ({categoriesWithDraft.size})
+                    </span>
+                  ) : null}
                   <span className="text-muted-foreground">
                     Строк с изменением:{" "}
                     <strong className="text-foreground">{workspaceTotals.linesTouched}</strong>
@@ -1273,10 +1347,7 @@ export default function StockCorrectionPage() {
                   disabled={
                     bulkMutation.isPending ||
                     !wWarehouseId ||
-                    selectedCategoryId == null ||
-                    selectedCategoryId <= 0 ||
-                    workspaceLoading ||
-                    workspaceFetching
+                    workspaceTotals.linesTouched === 0
                   }
                   onClick={handleSaveBulk}
                 >

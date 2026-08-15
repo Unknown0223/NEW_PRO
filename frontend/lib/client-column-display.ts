@@ -77,7 +77,7 @@ export function displayVisitDateShort(iso: string | null): string | null {
 
 /** Agent N — `agent_assignments` yoki (slot 1) `agent_name` */
 export function displayAgentName(row: ClientRow, slot: number): string | null {
-  if (slot < 1 || slot > 10) return null;
+  if (slot < 1) return null;
   const list = row.agent_assignments;
   if (Array.isArray(list)) {
     const a = list.find((x) => x.slot === slot);
@@ -92,7 +92,7 @@ const WD_LABEL = ["", "Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"];
 
 /** Slot bo‘yicha tanlangan hafta kunlari (1..7) */
 export function getVisitWeekdaysForSlot(row: ClientRow, slot: number): number[] {
-  if (slot < 1 || slot > 10) return [];
+  if (slot < 1) return [];
   const list = row.agent_assignments;
   if (!Array.isArray(list)) return [];
   const a = list.find((x) => x.slot === slot);
@@ -102,7 +102,7 @@ export function getVisitWeekdaysForSlot(row: ClientRow, slot: number): number[] 
 
 /** «День» — avvalo hafta kunlari (teglar uchun matn), keyin `visit_date` */
 export function displayAgentDay(row: ClientRow, slot: number): string | null {
-  if (slot < 1 || slot > 10) return null;
+  if (slot < 1) return null;
   const wd = getVisitWeekdaysForSlot(row, slot);
   if (wd.length > 0) {
     const shown = wd.slice(0, 4).map((k) => WD_LABEL[k] ?? String(k));
@@ -120,7 +120,7 @@ export function displayAgentDay(row: ClientRow, slot: number): string | null {
 
 /** Экспедитор N — avvalo `agent_assignments[N].expeditor_phone`, keyin kontakt */
 export function displayExpeditorPhone(row: ClientRow, slot: number): string | null {
-  if (slot < 1 || slot > 10) return null;
+  if (slot < 1) return null;
   const list = row.agent_assignments;
   if (Array.isArray(list)) {
     const a = list.find((x) => x.slot === slot);
@@ -129,8 +129,11 @@ export function displayExpeditorPhone(row: ClientRow, slot: number): string | nu
     const en = nonEmpty(a?.expeditor_name);
     if (en) return en;
   }
-  const p = row.contact_persons[slot - 1]?.phone;
-  return nonEmpty(p);
+  if (slot >= 1 && slot <= 10) {
+    const p = row.contact_persons[slot - 1]?.phone;
+    return nonEmpty(p);
+  }
+  return null;
 }
 
 export function displayLegalName(row: ClientRow): string | null {
@@ -161,7 +164,9 @@ export function displayFormatCode(row: ClientRow): string | null {
 /** Barcha slotlardagi hafta kunlari (1..7), tartiblangan */
 export function getAllVisitWeekdaysForClient(row: ClientRow): number[] {
   const set = new Set<number>();
-  for (let slot = 1; slot <= 10; slot++) {
+  const list = Array.isArray(row.agent_assignments) ? row.agent_assignments : [];
+  const slots = list.length > 0 ? list.map((a) => a.slot) : [1];
+  for (const slot of slots) {
     for (const d of getVisitWeekdaysForSlot(row, slot)) set.add(d);
   }
   return [...set].sort((a, b) => a - b);
@@ -171,7 +176,9 @@ export function getAllVisitWeekdaysForClient(row: ClientRow): number[] {
 export function getExpeditorLabelsForClient(row: ClientRow): string[] {
   const labels: string[] = [];
   const seen = new Set<string>();
-  for (let slot = 1; slot <= 10; slot++) {
+  const list = Array.isArray(row.agent_assignments) ? row.agent_assignments : [];
+  const slots = list.length > 0 ? [...new Set(list.map((a) => a.slot))].sort((a, b) => a - b) : [1];
+  for (const slot of slots) {
     const label = displayExpeditorPhone(row, slot);
     if (!label) continue;
     const key = label.toLowerCase();
@@ -201,7 +208,7 @@ export function displayClientVisitDays(row: ClientRow): string | null {
 
 /** Slot bo‘yicha jadvalda «mazmun» bormi (agent / kun / eks.) — bo‘sh ustunlarni yashirish uchun */
 export function clientSlotHasAnyDisplayData(row: ClientRow, slot: number): boolean {
-  if (slot < 1 || slot > 10) return false;
+  if (slot < 1) return false;
   if (getVisitWeekdaysForSlot(row, slot).length > 0) return true;
   if (displayAgentName(row, slot)) return true;
   if (displayAgentDay(row, slot)) return true;
@@ -213,8 +220,13 @@ export function clientSlotHasAnyDisplayData(row: ClientRow, slot: number): boole
 export function getClientSlotsWithDataInRows(rows: ClientRow[]): Set<number> {
   const s = new Set<number>();
   for (const row of rows) {
-    for (let slot = 1; slot <= 10; slot++) {
-      if (clientSlotHasAnyDisplayData(row, slot)) s.add(slot);
+    const list = Array.isArray(row.agent_assignments) ? row.agent_assignments : [];
+    if (list.length === 0) {
+      if (clientSlotHasAnyDisplayData(row, 1)) s.add(1);
+      continue;
+    }
+    for (const a of list) {
+      if (clientSlotHasAnyDisplayData(row, a.slot)) s.add(a.slot);
     }
   }
   return s;

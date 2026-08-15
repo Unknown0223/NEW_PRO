@@ -101,6 +101,31 @@ export function canEmployeeSetPlan(emp: PlanningEmployee): boolean {
   return canRoleSetPlan(emp.role);
 }
 
+/**
+ * Filial / SVR ostidagi barcha agentlarning metrika yig‘indisi (rekursiv).
+ * Ota qatorda o‘z targeti 0 bo‘lsa — shu rollup ko‘rsatiladi.
+ */
+export function sumDescendantAgentMetric(
+  rootId: number,
+  employees: PlanningEmployee[],
+  getAgentValue: (agentId: number) => number
+): number {
+  const childrenOf = (parentId: number) =>
+    employees.filter((e) => e.parent_id === parentId);
+  let sum = 0;
+  const walk = (id: number) => {
+    for (const child of childrenOf(id)) {
+      if (child.role === "agent") {
+        sum += getAgentValue(child.id);
+      } else {
+        walk(child.id);
+      }
+    }
+  };
+  walk(rootId);
+  return sum;
+}
+
 /** Qidiruv: mos kelgan xodim + uning barcha ota-zanjirlari saqlanadi (daraxt buzilmasin). */
 export function filterEmployeesWithAncestors(
   employees: PlanningEmployee[],

@@ -9,6 +9,8 @@ export type SettingsItem = {
   children?: SettingsItem[];
   /** Qisqa izoh (sidebar title / hub). */
   description?: string;
+  /** Alohida sahifa o‘rniga modal (masalan vaqt mintaqasi). */
+  opensModal?: "timezone";
 };
 
 export type SettingsSection = {
@@ -181,7 +183,13 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/discount-rules",
         status: "available"
       },
-      makeItem("bonusy-i-skidki", "RLP бонусы", "available", 2)
+      {
+        title: "Стратегия бонусов и скидок",
+        slug: "bonus-strategii",
+        href: "/settings/bonus-strategies",
+        status: "available"
+      },
+      makeItem("bonusy-i-skidki", "RLP бонусы", "available", 3)
     ]
   },
   {
@@ -192,7 +200,7 @@ export const settingsSections: SettingsSection[] = [
       makeItem("prichiny-i-kategorii", "Причины отказа", "available", 1),
       makeItem("prichiny-i-kategorii", "Причины отмены оплаты", "available", 2),
       makeItem("prichiny-i-kategorii", "Примечание к заказу", "available", 3),
-      makeItem("prichiny-i-kategorii", "Категория фотоотчёта", "available", 4),
+      makeItem("prichiny-i-kategorii", "Причины фотоотчёта", "available", 4),
       makeItem("prichiny-i-kategorii", "Категория доходов/расходов", "available", 5)
     ]
   },
@@ -256,6 +264,15 @@ export const settingsSections: SettingsSection[] = [
     slug: "sistema",
     items: [
       {
+        title: "Vaqt mintaqasi",
+        slug: "timezone",
+        href: "/settings/timezone",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        opensModal: "timezone",
+        description: "Ish soati / sinxron oynasi — qurilma standart IANA mintaqalari"
+      },
+      {
         title: "Boshlang‘ich sozlash",
         slug: "initial-setup",
         href: "/settings/initial-setup",
@@ -300,6 +317,7 @@ const existingHrefByItemTitle: Record<string, string> = {
   "группа kpi": "/settings/sales-directions/kpi-groups",
   "бонусы": "/settings/bonus-rules",
   "скидки": "/settings/discount-rules",
+  "стратегия бонусов и скидок": "/settings/bonus-strategies",
   "rlp бонусы": "/settings/bonus-stack",
   "причины отказа": "/settings/reasons/refusal-reasons",
   "компания": "/settings/company",
@@ -314,6 +332,7 @@ const existingHrefByItemTitle: Record<string, string> = {
   "причины отмены оплаты": "/settings/reasons/cancel-payment-reasons",
   "примечание к заказу": "/settings/reasons/order-notes",
   "категория фотоотчёта": "/settings/reasons/photo-categories",
+  "причины фотоотчёта": "/settings/reasons/photo-categories",
   "категория доходов/расходов": "/settings/reasons/finance-categories",
   "тип инвентаря": "/settings/inventory/type",
   "тип коробки": "/settings/inventory/box-type",
@@ -322,6 +341,9 @@ const existingHrefByItemTitle: Record<string, string> = {
   "тип базы знания": "/settings/knowledge-base/type",
   "база знаний": "/settings/knowledge-base/base",
   "тема и цвета": "/settings/appearance",
+  "vaqt mintaqasi": "/settings/timezone",
+  "время / часовой пояс": "/settings/timezone",
+  "часовой пояс": "/settings/timezone",
   "boshlang‘ich sozlash": "/settings/initial-setup",
   "начальная настройка": "/settings/initial-setup",
   "davr cheklovi": "/settings/document-edit-lock",
@@ -371,4 +393,38 @@ export function findSettingsItem(sectionSlug: string, itemSlug: string): Setting
     if (child) return child;
   }
   return null;
+}
+
+/** Deep-link: pathname bo‘yicha `requiredRoles` bandini topish. */
+export function findSettingsItemRequiringRolesForPath(pathname: string): SettingsItem | null {
+  const path = pathname.split("?")[0] ?? pathname;
+  const normalized = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  let best: SettingsItem | null = null;
+  let bestLen = -1;
+
+  const visit = (item: SettingsItem) => {
+    if (!item.requiredRoles?.length) return;
+    const href = resolveSettingsItemHref(item).split("?")[0] ?? "";
+    const hrefNorm = href.length > 1 && href.endsWith("/") ? href.slice(0, -1) : href;
+    if (normalized === hrefNorm || normalized.startsWith(`${hrefNorm}/`)) {
+      if (hrefNorm.length > bestLen) {
+        best = item;
+        bestLen = hrefNorm.length;
+      }
+    }
+  };
+
+  for (const section of settingsSections) {
+    for (const item of section.items) {
+      visit(item);
+      for (const child of item.children ?? []) visit(child);
+    }
+  }
+  return best;
+}
+
+export function isSettingsItemAllowedForRole(item: SettingsItem, role: string | null): boolean {
+  if (!item.requiredRoles?.length) return true;
+  if (role === "admin") return true;
+  return role != null && item.requiredRoles.includes(role);
 }

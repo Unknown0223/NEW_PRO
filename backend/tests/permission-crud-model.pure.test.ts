@@ -116,6 +116,17 @@ describe("role-permission-presets", () => {
     expect(agent.some((k) => k.startsWith("warehouse."))).toBe(false);
   });
 
+  it("operator — lean: buyurtma/mijoz bor, kassa/ombor/staff/access yo'q", () => {
+    const op = buildRoleDefaultKeys("operator");
+    expect(op).toContain("orders.zakaz.view");
+    expect(op).toContain("clients.klient.view");
+    expect(op.some((k) => k.startsWith("cash."))).toBe(false);
+    expect(op.some((k) => k.startsWith("warehouse."))).toBe(false);
+    expect(op.some((k) => k.startsWith("staff."))).toBe(false);
+    expect(op.some((k) => k.startsWith("access."))).toBe(false);
+    expect(op).not.toContain("access.manage");
+  });
+
   it("supervisor — activate bor, deactivate yo'q", () => {
     const sup = buildRoleDefaultKeys("supervisor");
     expect(sup).toContain("clients.klient.activate");

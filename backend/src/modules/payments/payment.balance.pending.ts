@@ -70,7 +70,8 @@ export async function confirmPendingPayment(
     await allocatePaymentInTransaction(tx, tenantId, paymentId, uid, {
       mode: "none",
       agent_id: null,
-      order_ids: []
+      order_ids: [],
+      priority: "legacy_first"
     });
   });
 
@@ -96,6 +97,15 @@ export async function confirmPendingPayment(
       action: "payment.confirm_pending",
       payload: { payment_id: paymentId }
     });
+  }
+
+  try {
+    const { markInboxDoneIfPaymentConfirmed } = await import(
+      "../bank-transfer-inbox/bank-transfer-inbox.service"
+    );
+    await markInboxDoneIfPaymentConfirmed(tenantId, paymentId);
+  } catch {
+    /* inbox optional — миграция ещё не применена */
   }
 
   const detail = await getPaymentDetail(tenantId, paymentId);

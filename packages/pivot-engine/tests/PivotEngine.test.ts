@@ -37,6 +37,23 @@ describe("PivotEngine", () => {
     expect(result.grandTotal).toBeDefined();
     const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
     expect(toshkent?.cells[1]?.rawValue).toBe(2_300_000);
+    expect(result.headers[0]?.[0]?.label).toBe("Hudud");
+  });
+
+  it("measure headers use field catalog labels, not raw field ids", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      values: [
+        { fieldId: "amount", aggregation: "SUM" },
+        { fieldId: "qty", aggregation: "SUM" }
+      ]
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const measureLabels = result.headers[0]
+      ?.filter((h) => h.isValue)
+      .map((h) => h.label);
+    expect(measureLabels).toEqual(["Summa", "Miqdor"]);
   });
 
   it("qator va ustun kesishmasi", () => {
@@ -74,6 +91,18 @@ describe("PivotEngine", () => {
     const result = engine.compute(ROWS, FIELDS, config);
     expect(result.rows.length).toBe(2);
     expect(result.metadata.processedRows).toBe(3);
+  });
+
+  it("value maydon filtr qo'llanadi (header measure filter)", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      filters: [{ fieldId: "amount", type: "range", range: { min: 1_000_000 } }]
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    expect(result.metadata.processedRows).toBeLessThan(5);
+    expect(result.metadata.processedRows).toBeGreaterThan(0);
   });
 
   it("reportFilters bo'lmagan filtr e'tiborsiz", () => {
@@ -160,5 +189,73 @@ describe("PivotEngine", () => {
     const result = engine.compute(ROWS, FIELDS, config);
     const valueCell = result.rows[0]?.cells[1];
     expect(valueCell?.drillContext?.valueFieldId).toBe("amount");
+  });
+
+  it("valuesPosition columns (default) — metrikalar yonma-yon ustunlar", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      values: [
+        { fieldId: "amount", aggregation: "SUM" },
+        { fieldId: "qty", aggregation: "SUM" }
+      ],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, valuesPosition: "columns" }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const measureLabels = result.headers[0]?.filter((h) => h.isValue).map((h) => h.label);
+    expect(measureLabels).toEqual(["Summa", "Miqdor"]);
+    const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
+    expect(toshkent?.children).toBeUndefined();
+    expect(toshkent?.cells[1]?.rawValue).toBe(2_300_000);
+    expect(toshkent?.cells[2]?.rawValue).toBe(23);
+  });
+
+  it("valuesPosition rows — metrikalar qator darajasi", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      values: [
+        { fieldId: "amount", aggregation: "SUM" },
+        { fieldId: "qty", aggregation: "SUM" }
+      ],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, valuesPosition: "rows", drillDown: false }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const valueHeaders = result.headers[0]?.filter((h) => h.isValue);
+    expect(valueHeaders?.length).toBe(1);
+    expect(valueHeaders?.[0]?.label).not.toBe("Summa");
+
+    const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
+    expect(toshkent?.isExpanded).toBe(true);
+    expect(toshkent?.children?.length).toBe(2);
+    expect(toshkent?.children?.[0]?.cells[0]?.formatted).toBe("Summa");
+    expect(toshkent?.children?.[0]?.cells[1]?.rawValue).toBe(2_300_000);
+    expect(toshkent?.children?.[1]?.cells[0]?.formatted).toBe("Miqdor");
+    expect(toshkent?.children?.[1]?.cells[1]?.rawValue).toBe(23);
+  });
+
+  it("valuesPosition rows + columns — ustunlar faqat o‘lcham, metrikalar qatorda", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region"],
+      columns: ["month"],
+      values: [
+        { fieldId: "amount", aggregation: "SUM" },
+        { fieldId: "qty", aggregation: "SUM" }
+      ],
+      options: { ...DEFAULT_PIVOT_CONFIG.options, valuesPosition: "rows", drillDown: false }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const leafHeaders = result.headers[result.headers.length - 1] ?? [];
+    const labels = leafHeaders.filter((h) => h.key !== "__row_label__").map((h) => h.label);
+    expect(labels).toContain("Yan");
+    expect(labels).toContain("Fev");
+    expect(labels).not.toContain("Summa");
+
+    const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
+    expect(toshkent?.children?.length).toBe(2);
+    const amountRow = toshkent?.children?.[0];
+    expect(amountRow?.cells[0]?.formatted).toBe("Summa");
+    expect(amountRow?.cells.length).toBeGreaterThan(2);
   });
 });

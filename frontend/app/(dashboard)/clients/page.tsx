@@ -27,6 +27,7 @@ import {
 } from "@/lib/client-table-columns";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import {
   appendClientListFilterParams,
   INITIAL_CLIENT_TOOLBAR_FILTERS,
@@ -164,6 +165,8 @@ function sanitizeToolbarForApi(t: ClientToolbarFiltersState): ClientToolbarFilte
 export default function ClientsPage() {
   const router = useRouter();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -188,20 +191,6 @@ export default function ClientsPage() {
   const [groupPickOpen, setGroupPickOpen] = useState(false);
   const [showSessionLoadingHint, setShowSessionLoadingHint] = useState(false);
   const clientsPrefsMigrated = useRef(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      if (localStorage.getItem("salesdoc.clients.filterDebug") === "1") return;
-      if (sessionStorage.getItem("salesdoc.clients.filterHint") === "1") return;
-      sessionStorage.setItem("salesdoc.clients.filterHint", "1");
-    } catch {
-      /* ignore */
-    }
-    console.info(
-      '[clients/filters] Diagnostika: localStorage.setItem("salesdoc.clients.filterDebug","1") keyin sahifani yangilang — har bir so‘rov konsolga chiqadi.'
-    );
-  }, []);
 
   useEffect(() => {
     if (authHydrated) {
@@ -349,8 +338,9 @@ export default function ClientsPage() {
     return `${summary}${statPart}${errPart}`;
   };
 
-  /** Brauzer konsolida importni tahlil qilish: barcha qatorlar nima uchun qo‘shilmaganini ko‘rish. */
+  /** Brauzer konsolida importni tahlil qilish (faqat filterDebug yoqilganda). */
   const logClientImport = (phase: string, payload?: unknown) => {
+    if (!clientsFilterDebugEnabled()) return;
     console.info(`[clients import] ${phase}`, payload ?? "");
   };
 
@@ -668,6 +658,7 @@ export default function ClientsPage() {
     queryKey: [
       "clients",
       tenantSlug,
+      actorUserId,
       page,
       search,
       appliedToolbar,
@@ -906,7 +897,7 @@ export default function ClientsPage() {
   }, [refData]);
 
   const agentsFilterQ = useQuery({
-    queryKey: ["agents", tenantSlug, "clients-toolbar"],
+    queryKey: ["agents", tenantSlug, actorUserId, "clients-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
@@ -920,7 +911,7 @@ export default function ClientsPage() {
   });
 
   const expeditorsFilterQ = useQuery({
-    queryKey: ["expeditors", tenantSlug, "clients-toolbar"],
+    queryKey: ["expeditors", tenantSlug, actorUserId, "clients-toolbar"],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {

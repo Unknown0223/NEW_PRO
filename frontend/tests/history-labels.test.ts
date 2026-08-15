@@ -39,8 +39,19 @@ describe("summarizePayload — qisqa tushunarli xulosa", () => {
   });
   it("oddiy maydonlar", () => {
     const s = summarizePayload({ amount: 50000, payment_type: "нал", client_id: 9 });
-    expect(s).toContain("сумма: 50000");
+    expect(s).toContain("сумма:");
+    expect(s).toMatch(/50\s?000/);
     expect(s).toContain("тип оплаты: нал");
+  });
+  it("zakaz lines flat audit — odam tilida", () => {
+    const s = summarizePayload(
+      { order_id: 13, total_sum: "160200", discount_alert: "not_applied", bonus_alert: null },
+      "order.lines"
+    );
+    expect(s).toContain("Сумма:");
+    expect(s).toMatch(/160\s?200/);
+    expect(s).toContain("Скидка не применена");
+    expect(s).not.toContain("order_id");
   });
   it("bo'sh payload", () => {
     expect(summarizePayload(null)).toBe("");
@@ -50,11 +61,21 @@ describe("summarizePayload — qisqa tushunarli xulosa", () => {
 
 describe("payloadDetailRows — to'liq batafsil (ID/nomer/tip)", () => {
   it("barcha maydonlar yorliq bilan chiqadi", () => {
-    const rows = payloadDetailRows({ client_id: 9, order_id: 143, amount: 50000 });
+    const rows = payloadDetailRows({ client_id: 9, amount: 50000 });
     const map = Object.fromEntries(rows.map((r) => [r.label, r.value]));
     expect(map["клиент (ID)"]).toBe("9");
-    expect(map["заказ (ID)"]).toBe("143");
-    expect(map["сумма"]).toBe("50000");
+    expect(map["сумма"]).toMatch(/50\s?000/);
+  });
+  it("zakaz lines — alert va summa odam tilida, order_id yo'q", () => {
+    const rows = payloadDetailRows({
+      order_id: 13,
+      total_sum: "160200",
+      discount_alert: "not_applied"
+    });
+    const map = Object.fromEntries(rows.map((r) => [r.label, r.value]));
+    expect(map["заказ (ID)"]).toBeUndefined();
+    expect(map["Сумма"]).toMatch(/160\s?200/);
+    expect(map["Проблема скидки"]).toBe("Скидка не применена");
   });
   it("ichki obyekt va massivlar", () => {
     const rows = payloadDetailRows({ patch: { name: "A" }, fields: ["a", "b"] });

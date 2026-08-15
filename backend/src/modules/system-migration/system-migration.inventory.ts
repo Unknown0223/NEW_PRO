@@ -111,6 +111,15 @@ export async function getMigrationInventory(tenantId: number): Promise<{
   ]);
 
   const countByModule: Record<string, Record<string, number>> = {
+    profile: { profile: 1 },
+    initial_setup: {
+      territories,
+      product_categories: productCategories,
+      product_prices: productPrices,
+      work_slots: workSlots,
+      warehouses,
+      initial_setup_xlsx: 1
+    },
     spravochniki: { clients, products, users, warehouses, stock: stockRows },
     orders: { orders, order_items: orderItems },
     payments: { payments },

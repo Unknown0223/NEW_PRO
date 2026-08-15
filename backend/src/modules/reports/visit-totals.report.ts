@@ -25,12 +25,14 @@ import {
   utcDayBounds,
   zeroDayRow
 } from "./visit-totals.helpers";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 export async function getVisitTotalsReport(
   tenantId: number,
   vf: VisitTotalsFilters,
   actor?: ReportActor
 ): Promise<VisitTotalsPayload> {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const days = rangeDayCount(vf.from, vf.to);
   if (days === 0) {
     return { from: vf.from, to: vf.to, page: vf.page, limit: vf.limit, total: 0, rows: [] };
@@ -41,13 +43,13 @@ export async function getVisitTotalsReport(
 
   const ymds = eachUtcYmdInclusive(vf.from, vf.to);
   const allRows: VisitTotalsRow[] = [];
-  const agentList = await listAgentsForGrid(tenantId, vf, actor);
+  const agentList = await listAgentsForGrid(tenantId, vf, scopedActor);
 
   for (const ymd of ymds) {
     const bounds = utcDayBounds(ymd);
     const [dayRows, activityMap] = await Promise.all([
-      fetchVisitTotalsForSingleDay(tenantId, ymd, vf, actor),
-      fetchActivityBounds(tenantId, bounds.dayStart, bounds.dayEnd, vf, actor)
+      fetchVisitTotalsForSingleDay(tenantId, ymd, vf, scopedActor),
+      fetchActivityBounds(tenantId, bounds.dayStart, bounds.dayEnd, vf, scopedActor)
     ]);
     const byAgent = new Map<number, DayMetricRow>();
     for (const r of dayRows) {

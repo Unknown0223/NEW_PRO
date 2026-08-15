@@ -51,6 +51,7 @@ import {
   getVisits2Report
 } from "./visits-2-report.service";
 import { ensureTenantContext } from "../../lib/tenant-context";
+import { registerGpsDeliveryRoutesReports } from "./reports.route.gps";
 import { createReportRouteGuards, parseReportQueryOr400, reportQueryRaw } from "./reports.route.shared";
 
 export async function registerReportsSpecializedRoutes(app: FastifyInstance, guards: ReturnType<typeof createReportRouteGuards> = createReportRouteGuards()) {
@@ -364,5 +365,5 @@ export async function registerReportsSpecializedRoutes(app: FastifyInstance, gua
     }
   });
 
-  // ─── Report Builder (Конструктор отчетов) ─────────────────────────────────
+  registerGpsDeliveryRoutesReports(app, guards);
 }

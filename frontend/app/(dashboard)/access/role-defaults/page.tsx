@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { AccessRoleDefaultsWorkspace } from "@/components/access/access-role-defaults-workspace";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { useAccessModuleGate } from "@/lib/use-access-module-gate";
 
 export default function AccessRoleDefaultsPage() {
@@ -14,7 +15,15 @@ export default function AccessRoleDefaultsPage() {
   const gate = useAccessModuleGate(tenantSlug, role);
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
-  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или доступ к разделу «Доступ»).</p>;
+  if (!gate.allowed) {
+    return (
+      <div className="flex flex-1 items-start justify-center p-8">
+        <AccessDeniedBanner
+          message="Недостаточно прав для раздела «Доступ» / «Доступ» bo‘limiga ruxsat yo‘q (нужны admin или access.upravlenie.view)."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">

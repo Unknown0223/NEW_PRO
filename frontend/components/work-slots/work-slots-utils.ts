@@ -1,3 +1,4 @@
+import { appTzLocaleOpts } from "@/lib/app-timezone";
 import type { WorkSlotType } from "@/lib/work-slots-types";
 
 export const SLOT_TYPE_OPTIONS: { value: WorkSlotType; label: string }[] = [
@@ -59,6 +60,60 @@ export function staffApiPath(slotType: string): string {
   }
 }
 
+/** Joy konfiguratsiyasi tab id — rolga xos. */
+export type SlotWorkplaceConfigTabId =
+  | "main"
+  | "prices"
+  | "limits"
+  | "skladchik"
+  | "expeditor";
+
+/**
+ * Har rol o‘ziga xos sozlamalar:
+ * - agent: narx, mahsulot cheklovi (konsignatsiya — /settings/spravochnik/consignment)
+ * - expeditor: yetkazib berish qoidalari
+ * - skladchik: ombor ruxsatlari
+ * - boshqalar: asosiy (yo‘nalish / ombor qaytarish)
+ */
+export function slotWorkplaceConfigTabs(
+  slotType: WorkSlotType | string | undefined
+): { id: SlotWorkplaceConfigTabId; label: string }[] {
+  switch (slotType) {
+    case "agent":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "prices", label: "Типы цен" },
+        { id: "limits", label: "Ограничения" }
+      ];
+    case "expeditor":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "expeditor", label: "Экспедитор" }
+      ];
+    case "skladchik":
+      return [
+        { id: "main", label: "Основное" },
+        { id: "skladchik", label: "Складчик" }
+      ];
+    case "collector":
+    case "supervisor":
+    case "auditor":
+      return [{ id: "main", label: "Основное" }];
+    default:
+      return [{ id: "main", label: "Основное" }];
+  }
+}
+
+/** Narx turlari + mahsulot bog‘lanishi — faqat agent joyi. */
+export function slotSupportsAgentRestrictions(slotType: string | undefined): boolean {
+  return slotType === "agent";
+}
+
+/** Guruhli «конфигурация» — agent / expeditor / skladchik (maxsus tablar). */
+export function slotSupportsRichWorkplaceConfig(slotType: string | undefined): boolean {
+  return slotType === "agent" || slotType === "expeditor" || slotType === "skladchik";
+}
+
 /** `User.territory` qatori: zona / viloyat / shahar (nomlar, kod emas). */
 export function parseUserTerritoryParts(raw: string | null | undefined): {
   zone: string | null;
@@ -81,13 +136,7 @@ export function parseUserTerritoryParts(raw: string | null | undefined): {
 export function formatSlotDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    return new Date(iso).toLocaleString("ru-RU", appTzLocaleOpts());
   } catch {
     return iso;
   }

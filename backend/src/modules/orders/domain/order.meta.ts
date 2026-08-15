@@ -6,14 +6,12 @@ import { prisma } from "../../../config/database";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
 import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
-import { normalizeOrderType } from "../order-status";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import { ORDER_LINES_EDITABLE_STATUSES } from "./order.lines";
 import { assertOrderWarehouseBlockAssignment, enrichOrderDetailRow } from "./order.detail-mappers";
 import {
   patchOrderMetaBlockOnly,
-  patchOrderMetaCommentOnly,
-  patchOrderMetaPaymentMethodOnly
+  patchOrderMetaCommentOnly
 } from "./order.meta.simple-patches";
 import {
   orderDetailInclude,
@@ -66,7 +64,28 @@ export async function updateOrderMeta(
   const blockOnly = patchBl && !patchWh && !patchAg && !patchEx && !patchComment && !patchPm;
 
   if (paymentMethodOnly) {
-    return patchOrderMetaPaymentMethodOnly(tenantId, orderId, existing, input, actorUserId, viewerRole);
+    // «new» dan boshqa statuslarda to‘lov usuli o‘zgarmaydi.
+    const pmNext =
+      input.payment_method_ref === null
+        ? null
+        : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
+    const pmPrev = (existing as { payment_method_ref?: string | null }).payment_method_ref ?? null;
+    if (String(pmNext ?? "") !== String(pmPrev ?? "")) {
+      if (existing.status !== "new") {
+        throw new Error("ORDER_HEADER_LOCKED");
+      }
+      const updatedPm = await prisma.order.update({
+        where: { id: orderId },
+        data: { payment_method_ref: pmNext },
+        include: orderDetailInclude
+      });
+      return enrichOrderDetailRow(tenantId, updatedPm as unknown as OrderDetailLoaded, viewerRole);
+    }
+    const row = await prisma.order.findFirstOrThrow({
+      where: { id: orderId, tenant_id: tenantId },
+      include: orderDetailInclude
+    });
+    return enrichOrderDetailRow(tenantId, row as unknown as OrderDetailLoaded, viewerRole);
   }
   if (commentOnly) {
     return patchOrderMetaCommentOnly(tenantId, orderId, existing, input, viewerRole);
@@ -83,23 +102,28 @@ export async function updateOrderMeta(
   const nextAgentId = patchAg ? input.agent_id! : existing.agent_id;
   const whChanged = nextWarehouseId !== existing.warehouse_id;
   const agChanged = nextAgentId !== existing.agent_id;
+  const isNewStatus = existing.status === "new";
 
-  const existingOtMeta = normalizeOrderType(existing.order_type ?? "order");
+  // Agent doim qulflangan. Ombor — faqat «new».
+  if (agChanged) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+  if (whChanged && !isNewStatus) {
+    throw new Error("ORDER_HEADER_LOCKED");
+  }
+
   const nextPaymentMethodRef = patchPm
     ? input.payment_method_ref === null
       ? null
       : (input.payment_method_ref ?? "").trim().slice(0, 64) || null
     : ((existing as { payment_method_ref?: string | null }).payment_method_ref ?? null);
   const pmChanged =
-    patchPm && String(nextPaymentMethodRef ?? "") !== String((existing as { payment_method_ref?: string | null }).payment_method_ref ?? "");
+    patchPm &&
+    String(nextPaymentMethodRef ?? "") !==
+      String((existing as { payment_method_ref?: string | null }).payment_method_ref ?? "");
 
-  if (existingOtMeta === "order") {
-    if (nextWarehouseId == null || nextWarehouseId < 1) {
-      throw new Error("ORDER_REQUIRES_WAREHOUSE");
-    }
-    if (nextAgentId == null || nextAgentId < 1) {
-      throw new Error("ORDER_REQUIRES_AGENT");
-    }
+  if (pmChanged && !isNewStatus) {
+    throw new Error("ORDER_HEADER_LOCKED");
   }
 
   let commentNext: string | null | undefined;

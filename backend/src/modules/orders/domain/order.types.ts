@@ -27,6 +27,8 @@ export type CreateOrderInput = {
   expeditor_user_id?: number | null;
   /** Bo’sh bo’lsa `retail` */
   price_type?: string | null;
+  /** Старые цены: YYYY-MM-DD */
+  price_as_of?: string | null;
   /** Hujjat tipi: order | return | exchange | partial_return | return_by_order */
   order_type?: string | null;
   apply_bonus?: boolean;
@@ -36,6 +38,8 @@ export type CreateOrderInput = {
   bonus_gift_overrides?: BonusGiftOverrideInput[];
   /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona (mobil assortiment tanlovi). */
   bonus_gift_lines?: BonusGiftLineInput[];
+  /** Strategiya: qaysi a'zo qoidalarni tanlash (ixtiyoriy — yo‘q bo‘lsa avto). */
+  bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
   comment?: string | null;
   /** Sozlamalar → request_type_entries (kod yoki nom, max 128) */
   request_type_ref?: string | null;
@@ -57,7 +61,11 @@ export type UpdateOrderLinesInput = {
   agent_id?: number | null;
   /** Savdo zakazida saqlangan to‘lov usulini yangilash (ixtiyoriy) */
   payment_method_ref?: string | null;
+  /** Narx turi (getProductPrice); bo‘sh bo‘lsa retail */
+  price_type?: string | null;
   apply_bonus?: boolean;
+  /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
+  apply_discount?: boolean;
   bonus_gift_overrides?: BonusGiftOverrideInput[];
 };
 
@@ -130,6 +138,8 @@ export type OrderListRow = {
   bonus_qty: string;
   /** Foizli chegirma summasi */
   discount_sum: string;
+  /** Vozvrat: «Долг скидка» izohi */
+  discount_debt_note?: string | null;
   /** Skidka kutilgan, lekin qo‘llanmagan */
   discount_alert?: string | null;
   /** Bonus yetarli emas */
@@ -255,6 +265,7 @@ export const orderDetailInclude: Prisma.OrderInclude = {
       region: true,
       city: true,
       district: true,
+      zone: true,
       neighborhood: true,
       category: true,
       responsible_person: true,
@@ -345,6 +356,7 @@ export type OrderDetailLoaded = {
     region: string | null;
     city: string | null;
     district: string | null;
+    zone: string | null;
     neighborhood: string | null;
     category: string | null;
     responsible_person: string | null;
@@ -424,6 +436,12 @@ export type ListOrdersQuery = {
   /** YYYY-MM-DD (server vaqt zonasi — brauzer `date` input bilan mos) */
   date_from?: string;
   date_to?: string;
+  /**
+   * Bir nechta sana oraliklari (oy multi-select bo‘shliqlari).
+   * Format: `YYYY-MM-DD_YYYY-MM-DD,YYYY-MM-DD_YYYY-MM-DD`.
+   * Berilganda `date_from`/`date_to` o‘rniga OR bilan filtrlanadi.
+   */
+  date_periods?: string;
   /**
    * Sana oralig‘i qaysi vaqtga tegishli: `created` | `order` | `ship`.
    * `order` — hozircha `created_at` bilan bir xil (alohida «zakaz sanasi» ustuni yo‘q).

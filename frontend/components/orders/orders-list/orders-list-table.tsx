@@ -1,6 +1,7 @@
 "use client";
 
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageError } from "@/components/ui/page-error";
 import { OrderStatusDatetimeDialog } from "@/components/orders/orders-list/order-status-datetime-dialog";
 import { OrdersListTableRow } from "@/components/orders/orders-list/orders-list-table-row";
@@ -324,9 +325,9 @@ export function OrdersListTable(props: OrdersListTableProps) {
             {!ordersFiltersApplied ? (
               <div className="py-16 text-center text-muted-foreground">
                 <Package className="mx-auto mb-3 size-12 text-muted-foreground/40" aria-hidden />
-                <p className="text-lg font-medium text-foreground">Выберите фильтры</p>
+                <p className="text-lg font-medium text-foreground">Загрузка списка за сегодня…</p>
                 <p className="mt-1 text-sm">
-                  Укажите период и условия, затем нажмите «Применить» — список заказов загрузится.
+                  Если список не появился — нажмите «Применить». Для другого периода измените даты и снова «Применить».
                 </p>
               </div>
             ) : isLoading ? (

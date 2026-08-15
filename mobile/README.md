@@ -72,7 +72,9 @@ powershell -File scripts/test-mobile-agent-flow.ps1
 | `GET /api/:slug/mobile/agent-config` | Mobil rollar |
 | `POST /api/:slug/mobile/sync/full` | Mobil rollar |
 | `POST /api/:slug/mobile/sync/delta` | Mobil rollar |
-| `GET /api/:slug/mobile/agent-dashboard` | Agent KPI |
+| `GET /api/:slug/mobile/agent-dashboard` | Agent KPI (qisqa) |
+| `GET /api/:slug/mobile/agent-kpi` | Agent KPI plan/fact (to‘liq) |
+| `GET /api/:slug/mobile/agent-timesheet` | Agent табель |
 | `PATCH /api/:slug/mobile/clients/:id` | Agent mijoz tahriri |
 | `GET /api/:slug/mobile/clients/debtors` | Agent qarzdorlar |
 | `GET/POST mobile/orders/*` | Agent buyurtma |

@@ -13,3 +13,4 @@ export * from "./client-balances.delivery";
 export * from "./client-balances.mappers";
 export * from "./client-balances.territory";
 export * from "./client-balances.report";
+export * from "./client-debt-by-agent";

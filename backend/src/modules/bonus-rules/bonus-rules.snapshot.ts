@@ -31,6 +31,7 @@ export type AppliedBonusRuleSnapshot = {
   scope_branch_codes: string[];
   scope_agent_user_ids: number[];
   scope_trade_direction_ids: number[];
+  consignment_mode: string;
   conditions: BonusConditionRow[];
   /** Multi-shart: barcha clause lar (gate + reward). */
   clauses: BonusRuleClauseRow[];
@@ -68,6 +69,7 @@ export function buildBonusRuleApplySnapshot(rule: BonusRuleRow): AppliedBonusRul
     scope_branch_codes: [...(rule.scope_branch_codes ?? [])],
     scope_agent_user_ids: [...(rule.scope_agent_user_ids ?? [])],
     scope_trade_direction_ids: [...(rule.scope_trade_direction_ids ?? [])],
+    consignment_mode: rule.consignment_mode ?? "all",
     conditions: rule.conditions.map((c) => ({ ...c })),
     clauses: (rule.clauses ?? []).map((c) => ({
       ...c,
@@ -140,6 +142,8 @@ export function parseAppliedBonusRulesSnapshot(raw: unknown): AppliedBonusRuleSn
       scope_trade_direction_ids: Array.isArray(o.scope_trade_direction_ids)
         ? o.scope_trade_direction_ids.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)
         : [],
+      consignment_mode:
+        o.consignment_mode === "yes" || o.consignment_mode === "no" ? o.consignment_mode : "all",
       conditions: Array.isArray(o.conditions)
         ? (o.conditions as AppliedBonusRuleSnapshot["conditions"])
         : [],

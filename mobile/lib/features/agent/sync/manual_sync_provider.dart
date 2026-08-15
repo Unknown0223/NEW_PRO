@@ -195,6 +195,7 @@ class ManualSyncNotifier extends StateNotifier<ManualSyncState> {
 
     final result = await _ref.read(authStateProvider.notifier).resync(
           full: full,
+          refreshConfig: true,
           onPhase: (phase) {
             if (!mounted) return;
             if (state.status != ManualSyncStatus.running) return;
@@ -214,15 +215,8 @@ class ManualSyncNotifier extends StateNotifier<ManualSyncState> {
     final photosSent = (state.photosPendingStart - photosLeft).clamp(0, state.photosPendingStart);
     final records = result.clients + result.products + result.prices + result.orders;
 
-    if (!result.ok) {
-      final summary = result.errorInfo?.summary ?? result.error ?? '';
-      if (summary.contains('Sessiya') ||
-          summary.contains('401') ||
-          summary.contains('Выйдите') ||
-          summary.contains('войдите')) {
-        await _ref.read(authStateProvider.notifier).sessionExpired();
-      }
-    }
+    // Auth chiqish — faqat Dio/interceptor aniq SESSION_REVOKED / INVALID_REFRESH da.
+    // Matn heuristic («401», «Sessiya») oflayn xatolarda noto‘g‘ri logout qilardi.
 
     if (result.ok) {
       _ref.invalidate(syncCountTodayProvider);

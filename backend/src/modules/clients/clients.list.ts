@@ -11,6 +11,7 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../client-balances/client-balances.service";
 import type { ClientListRow, ListClientsQuery } from "./clients.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { parseContactPersonsJson } from "./clients.helpers";
 import {
   agentAssignmentSelectFields,
@@ -68,6 +69,29 @@ function mapBulkPatchInput(patch: PatchClientBody) {
   };
 }
 
+function bulkClientPatchErrorMessage(code: string): string {
+  switch (code) {
+    case "NOT_FOUND":
+      return "Klient topilmadi";
+    case "DUPLICATE_PHONE":
+      return "Bu telefon mavjud.";
+    case "DUPLICATE_NAME":
+      return "Shu nomga o‘xshash klient mavjud.";
+    case "DUPLICATE_AGENT_DIRECTION":
+      return "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent.";
+    case "AGENT_NOT_FOUND":
+      return "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang.";
+    case "AGENT_NOT_ON_SLOT":
+      return "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish).";
+    case "EXPEDITOR_NOT_FOUND":
+      return "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang.";
+    case "VALIDATION":
+      return "ValidationError";
+    default:
+      return code;
+  }
+}
+
 export async function bulkPatchClients(
   tenantId: number,
   clientIds: number[],
@@ -86,26 +110,71 @@ export async function bulkPatchClients(
   const mapped = mapBulkPatchInput(patch);
   let updated = 0;
   const failed: Array<{ id: number; error: string }> = [];
+  const okIds: number[] = [];
 
   for (const id of ids) {
     try {
       await updateClientFields(tenantId, id, mapped, actorUserId);
-      await invalidateClientDetailCache(tenantId, id);
+      okIds.push(id);
       updated += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "UNKNOWN";
-      failed.push({ id, error: msg });
+      failed.push({ id, error: bulkClientPatchErrorMessage(msg) });
     }
   }
+
+  await Promise.all(okIds.map((id) => invalidateClientDetailCache(tenantId, id)));
+
+  return { updated, failed };
+}
+
+/** Har klient uchun alohida patch — bitta HTTP so‘rovda (guruh ishlov). */
+export async function bulkPatchClientItems(
+  tenantId: number,
+  items: Array<{ client_id: number; patch: PatchClientBody }>,
+  actorUserId: number | null
+): Promise<{ updated: number; failed: Array<{ id: number; error: string }> }> {
+  const MAX = 500;
+  const seen = new Set<number>();
+  const normalized: Array<{ client_id: number; patch: PatchClientBody }> = [];
+  for (const item of items) {
+    const id = Math.floor(Number(item.client_id));
+    if (!Number.isFinite(id) || id < 1 || seen.has(id)) continue;
+    seen.add(id);
+    normalized.push({ client_id: id, patch: item.patch });
+    if (normalized.length >= MAX) break;
+  }
+  if (normalized.length === 0) {
+    return { updated: 0, failed: [] };
+  }
+
+  let updated = 0;
+  const failed: Array<{ id: number; error: string }> = [];
+  const okIds: number[] = [];
+
+  for (const item of normalized) {
+    try {
+      const mapped = mapBulkPatchInput(item.patch);
+      await updateClientFields(tenantId, item.client_id, mapped, actorUserId);
+      okIds.push(item.client_id);
+      updated += 1;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "UNKNOWN";
+      failed.push({ id: item.client_id, error: bulkClientPatchErrorMessage(msg) });
+    }
+  }
+
+  await Promise.all(okIds.map((id) => invalidateClientDetailCache(tenantId, id)));
 
   return { updated, failed };
 }
 
 export async function listClientsForTenantPaged(
   tenantId: number,
-  q: ListClientsQuery
+  q: ListClientsQuery,
+  actorScope?: ScopedReportActor
 ): Promise<{ data: ClientListRow[]; total: number; page: number; limit: number }> {
-  const whereInput = await buildClientListWhereInput(tenantId, q);
+  const whereInput = await buildClientListWhereInput(tenantId, q, actorScope);
   if (whereInput === null) {
     return { data: [], total: 0, page: q.page, limit: q.limit };
   }

@@ -17,6 +17,7 @@ export const ru: PivotStrings = {
     table: "Таблица",
     chart: "График",
     excel: "Excel",
+    csv: "CSV",
     pdf: "PDF",
     html: "HTML",
     fullscreen: "Полный экран",
@@ -32,6 +33,7 @@ export const ru: PivotStrings = {
   chart: {
     bar: "Столбцы",
     line: "Линия",
+    pie: "Круговая",
     noData: "Нет данных для графика.",
     truncatedCategories: (shown, total) =>
       `На графике показаны только первые ${shown} категорий (всего ${total}).`,
@@ -52,6 +54,7 @@ export const ru: PivotStrings = {
     progress: (processed, total) =>
       `Экспорт: ${processed.toLocaleString("ru-RU")} / ${total.toLocaleString("ru-RU")} строк`,
     exportingExcel: "Экспорт Excel…",
+    exportingCsv: "Экспорт CSV…",
     exportingPdf: "Экспорт PDF…",
     exportingHtml: "Экспорт HTML…"
   },
@@ -98,7 +101,12 @@ export const ru: PivotStrings = {
     remove: "Удалить",
     reorder: "Изменить порядок",
     filter: "Фильтр",
-    selectedCount: (count) => `${count}`
+    filterByValues: "Фильтр по значениям",
+    selectAll: "Выделить все",
+    selectedOfTotal: (selected, total) => `${selected} из ${total} выбрано`,
+    selectedCount: (count) => `${count}`,
+    reportFiltersLabel: "Фильтры отчета",
+    activeFiltersCount: (count) => `Активных: ${count}`
   },
   aggregations: {
     SUM: "Сумма",
@@ -152,7 +160,16 @@ export const ru: PivotStrings = {
     jsonReadError: "Не удалось прочитать JSON.",
     savePrompt: "Название отчёта:",
     savedReportWdrSuffix: " (WDR)",
-    sliceTemplatesLabel: "Шаблоны среза"
+    sliceTemplatesLabel: "Шаблоны среза",
+    datasetTruncated: (cap, total) =>
+      `Показано не более ${cap} строк из ${total}. Сузьте фильтры или выгрузите таблицу через «Экспорт» (Excel).`,
+    pivotRowsTruncated: (shown, total) =>
+      `Для сводной таблицы показано ${shown} из ${total} строк (лимит). Сузьте фильтры или смените разметку.`,
+    computeFailed: (detail) =>
+      `Не удалось вычислить сводную таблицу${detail ? `: ${detail}` : "."}`,
+    largeDatasetHint: (rows) =>
+      `Большой набор (${rows} строк): вычисление может занять время. Интерфейс не завис — дождитесь окончания.`,
+    exportDocumentTitle: "Конструктор сводной таблицы"
   },
   sliceTemplates: [
     {
@@ -164,6 +181,16 @@ export const ru: PivotStrings = {
       id: "retrobonus_volume",
       label: "Объём ретробонуса",
       description: "Объём по агенту — совместимо с RETROBONUS_TIER_PRESETS"
+    },
+    {
+      id: "flat_sales_detail",
+      label: "Плоская (детальный)",
+      description: "Табличная форма: дилер, бренд, агент, объём, даты — без агрегации"
+    },
+    {
+      id: "classic_branch_brand",
+      label: "Классическая (дилер → бренд)",
+      description: "Классическая форма: дилер, бренд, SKU + объём/сумма; ота ячейки без повтора"
     }
   ],
   calculatedMeasurePresets: [

@@ -48,7 +48,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderWriteRoutes(app: FastifyInstance) {
   app.patch(
-    "/api/:slug/orders/:id/status",
+    "/api/:slug/orders/:id(\\d+)/status",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -110,7 +110,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
   );
 
   app.patch(
-    "/api/:slug/orders/:id/milestone-at",
+    "/api/:slug/orders/:id(\\d+)/milestone-at",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -169,6 +169,9 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
+        if (msg === "AGENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "AgentOutOfScope");
+        }
         if (msg === "CONTRACT_AGENT_MISMATCH") {
           return sendApiError(reply, request, 409, "ContractAgentMismatch");
         }
@@ -245,6 +248,15 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         if (msg === "ORDER_REQUIRES_AGENT") {
           return sendApiError(reply, request, 400, "OrderRequiresAgent");
         }
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Агент не назначен на рабочее место — новый заказ запрещён (только сбор долга)"
+          );
+        }
         if (msg === "ORDER_REQUIRES_WAREHOUSE") {
           return sendApiError(reply, request, 400, "OrderRequiresWarehouse");
         }
@@ -274,6 +286,24 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         }
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
+        }
+        if (msg === "STRATEGY_SELECTION_REQUIRED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionRequired",
+            "Стратегия бўйича камида 1 та бонус/скидка танланг."
+          );
+        }
+        if (msg === "STRATEGY_SELECTION_TOO_MANY") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "StrategySelectionTooMany",
+            "Стратегия шартидан ортиқ қоида танланган."
+          );
         }
         if (msg === "EXCHANGE_PAYLOAD_REQUIRED") {
           return sendApiError(reply, request, 400, "ExchangePayloadRequired");

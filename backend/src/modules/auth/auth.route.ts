@@ -51,7 +51,13 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
         return sendApiError(reply, request, 404, msg);
       }
       if (msg === "INVALID_CREDENTIALS") {
-        return sendApiError(reply, request, 401, msg);
+        return sendApiError(
+          reply,
+          request,
+          401,
+          msg,
+          "Неверный логин или пароль. Проверьте код компании, логин и пароль."
+        );
       }
       if (msg === "APP_ACCESS_DENIED") {
         return sendApiError(reply, request, 403, msg, "Ilova kirish o‘chirilgan");
@@ -62,7 +68,16 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
           request,
           403,
           msg,
-          "Превышен лимит активных сессий. Завершите сессию на другом устройстве и войдите снова."
+          "Лимит активных сессий исчерпан. Завершите вход на другом устройстве или попросите администратора закрыть лишние сессии."
+        );
+      }
+      if (msg === "USER_NOT_ON_SLOT") {
+        return sendApiError(
+          reply,
+          request,
+          403,
+          msg,
+          "Пользователь не назначен на рабочее место. Обратитесь к администратору."
         );
       }
       throw error;
@@ -90,6 +105,15 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
       }
       if (msg === "APP_ACCESS_DENIED") {
         return sendApiError(reply, request, 403, msg, "Ilova kirish o‘chirilgan");
+      }
+      if (msg === "USER_NOT_ON_SLOT") {
+        return sendApiError(
+          reply,
+          request,
+          403,
+          msg,
+          "Пользователь не назначен на рабочее место. Обратитесь к администратору."
+        );
       }
       throw error;
     }
@@ -143,8 +167,23 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
       if (isSessionEnforcedRole(u.role)) {
         const hasSession = await hasActiveSessionForDevice(u.tenantId, userId, u.did);
         if (!hasSession) {
-          return sendApiError(reply, request, 401, "SESSION_REVOKED", "Sessiya tugatildi");
+          return sendApiError(reply, request, 401, "SESSION_REVOKED", "Сессия завершена. Войдите снова.");
         }
+      }
+      try {
+        const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+        await assertUserOnWorkSlot(u.tenantId, userId, u.role);
+      } catch (e) {
+        if (e instanceof Error && e.message === "USER_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "USER_NOT_ON_SLOT",
+            "Пользователь не назначен на рабочее место. Обратитесь к администратору."
+          );
+        }
+        throw e;
       }
       const slugFromJwt = typeof u.tenantSlug === "string" && u.tenantSlug.trim() !== "" ? u.tenantSlug.trim() : null;
       const slot = await getActiveSlotForUser(userId);

@@ -37,8 +37,12 @@ class AppColors {
 
   // Role accents (agent = shablon primary)
   static const Color agentAccent = primary;
-  static const Color expeditorAccent = Color(0xFFF97316);
-  static const Color supervisorAccent = Color(0xFF6366F1);
+  /// Экспедитор / dastavchik — 0223 dizayn brand (#0E8A4F)
+  static const Color expeditorAccent = Color(0xFF0E8A4F);
+  /// CACTUS Supervayzer yashil accent
+  static const Color supervisorAccent = Color(0xFF1FA855);
+  /// Kassir / bank transfer inbox
+  static const Color cashierAccent = Color(0xFF0F766E);
 
   // UI chrome
   static const Color border = Color(0xFFE2E8F0);
@@ -65,6 +69,11 @@ class AppColors {
   static const Color teal800 = Color(0xFF115E59);
   static const Color teal700 = Color(0xFF0F766E);
   static const Color teal600 = Color(0xFF0D9488);
+
+  // KPI oylik hisobot (Screen 35) — qorong‘i hero
+  static const Color darkSurface = Color(0xFF0B2538);
+  static const Color darkSurface2 = Color(0xFF0F4544);
+  static const Color kpiChartGreen = Color(0xFF86EFAC);
 
   // Bonus / Discount (shablon #29 — BONUS & DISCOUNT LADDER)
   static const Color bonusBg = Color(0xFFFEF9C3);

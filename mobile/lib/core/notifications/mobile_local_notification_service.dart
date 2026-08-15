@@ -23,6 +23,10 @@ class MobileLocalNotificationService {
   static const _appUpdateChannelId = 'app_update';
   static const _appUpdateNotificationId = 91002;
   static const _appUpdatePayloadPrefix = 'app_update';
+  static const _heldOrdersChannelId = 'held_orders';
+  static const _heldOrdersWarnNotificationId = 91003;
+  static const _heldOrdersSentNotificationId = 91004;
+  static const heldOrdersPayloadPrefix = 'held_orders';
 
   Future<void> init() async {
     if (_initialized) return;
@@ -56,6 +60,16 @@ class MobileLocalNotificationService {
         _appUpdateChannelId,
         'Обновление приложения',
         description: 'Доступна новая версия Sales Arena',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _heldOrdersChannelId,
+        'Заказы в ожидании',
+        description: 'Таймер отправки заказа на сервер',
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
@@ -211,6 +225,101 @@ class MobileLocalNotificationService {
 
   static bool isAppUpdatePayload(String? payload) =>
       payload != null && payload.startsWith(_appUpdatePayloadPrefix);
+
+  static bool isHeldOrdersPayload(String? payload) =>
+      payload != null && payload.startsWith(heldOrdersPayloadPrefix);
+
+  /// Kunlik inbox yangilanganda: sinxron / held warn+sent tray yozuvlari.
+  /// App-update bildirishnomasi saqlanadi. Held buyurtmalar DB da qoladi.
+  Future<void> clearDayScopedTrayNotifications() async {
+    await init();
+    _tenMinAlertKey = null;
+    await _plugin.cancel(_syncNotificationId);
+    await _plugin.cancel(_heldOrdersWarnNotificationId);
+    await _plugin.cancel(_heldOrdersSentNotificationId);
+  }
+
+  /// Kechiktirilgan zakaz yuborishiga ~1 daqiqa qolganda.
+  /// Faqat ilova fonda bo‘lganda (foydalanuvchi ichida bo‘lmasa).
+  Future<void> notifyHeldOrderEndingSoon({
+    required int heldOrderId,
+    required String clientName,
+    required String countdown,
+    required int pendingCount,
+  }) async {
+    await init();
+    if (_inForeground) return;
+    final granted = await ensureNotificationPermission();
+    if (!granted) return;
+
+    final title = pendingCount > 1
+        ? 'Ожидают отправки: $pendingCount'
+        : 'Заказ скоро уйдёт на сервер';
+    final body = pendingCount > 1
+        ? '$clientName · осталось $countdown. Всего черновиков ожидания: $pendingCount'
+        : '$clientName · осталось $countdown. Можно изменить или отменить в «Заказы» / «Уведомления».';
+
+    await _plugin.show(
+      _heldOrdersWarnNotificationId,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _heldOrdersChannelId,
+          'Заказы в ожидании',
+          channelDescription: 'Таймер отправки заказа на сервер',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@drawable/ic_stat_sales_arena',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          presentBadge: false,
+        ),
+      ),
+      payload: '$heldOrdersPayloadPrefix|warn|$heldOrderId',
+    );
+  }
+
+  /// Timer tugab, zakaz serverga yuborildi — lokal navbatdan tozalandi.
+  /// Ilova ochiq (foreground) bo‘lsa tizim bildirishnomasi chiqmaydi.
+  Future<void> notifyHeldOrderSent({
+    required String clientName,
+    required String orderNumber,
+  }) async {
+    await init();
+    if (_inForeground) return;
+    final granted = await ensureNotificationPermission(requestIfNeeded: false);
+    if (!granted) return;
+
+    final numLabel = orderNumber.trim().isEmpty ? '' : ' №$orderNumber';
+    await _plugin.show(
+      _heldOrdersSentNotificationId,
+      'Заказ отправлен',
+      '$clientName$numLabel — отправлен на сервер, локальная копия удалена.',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _heldOrdersChannelId,
+          'Заказы в ожидании',
+          channelDescription: 'Таймер отправки заказа на сервер',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          playSound: false,
+          enableVibration: false,
+          icon: '@drawable/ic_stat_sales_arena',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: false,
+          presentBadge: false,
+        ),
+      ),
+      payload: '$heldOrdersPayloadPrefix|sent',
+    );
+  }
 }
 
 /// Eski importlar uchun alias.

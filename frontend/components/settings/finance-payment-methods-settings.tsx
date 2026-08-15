@@ -48,6 +48,8 @@ type PaymentMethodEntry = {
   comment: string | null;
   color: string | null;
   active: boolean;
+  /** Перечисление ↔ 1C / bank inbox */
+  sync_with_1c?: boolean;
 };
 
 type TenantProfile = {
@@ -96,6 +98,7 @@ export function FinancePaymentMethodsSettings() {
   const [color, setColor] = useState("");
   const [currencyCode, setCurrencyCode] = useState("UZS");
   const [active, setActive] = useState(true);
+  const [syncWith1c, setSyncWith1c] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [serverFieldErrs, setServerFieldErrs] = useState<Record<string, string>>({});
   const [showOrderPaymentMethodSelector, setShowOrderPaymentMethodSelector] = useState(true);
@@ -203,6 +206,7 @@ export function FinancePaymentMethodsSettings() {
     const def = currencies.find((c) => c.is_default)?.code ?? currencies[0]?.code ?? "UZS";
     setCurrencyCode(def);
     setActive(true);
+    setSyncWith1c(false);
     setServerFieldErrs({});
   }
 
@@ -221,6 +225,7 @@ export function FinancePaymentMethodsSettings() {
     setColor(row.color ?? "");
     setCurrencyCode(row.currency_code);
     setActive(row.active !== false);
+    setSyncWith1c(row.sync_with_1c === true);
     setServerFieldErrs({});
     setMsg(null);
     setOpen(true);
@@ -242,7 +247,8 @@ export function FinancePaymentMethodsSettings() {
       sort_order: sortOrder.trim() ? Number(sortOrder.trim()) : null,
       comment: comment.trim() || null,
       color: color.trim().slice(0, 32) || null,
-      active
+      active,
+      sync_with_1c: syncWith1c
     };
     const merged = editId ? rows.map((x) => (x.id === editId ? nextRow : x)) : [...rows, nextRow];
     saveMut.mutate(sortRows(merged));
@@ -340,6 +346,7 @@ export function FinancePaymentMethodsSettings() {
                   <th className="px-3 py-2 font-medium">Валюта</th>
                   <th className="px-3 py-2 font-medium">Сортировка</th>
                   <th className="px-3 py-2 font-medium">Код</th>
+                  <th className="px-3 py-2 font-medium">1С / банк</th>
                   <th className="px-3 py-2 font-medium">Цвет</th>
                   <th className="px-3 py-2 text-right font-medium">...</th>
                 </tr>
@@ -351,6 +358,15 @@ export function FinancePaymentMethodsSettings() {
                     <td className="px-3 py-2">{currencyLabel(r.currency_code)}</td>
                     <td className="px-3 py-2">{r.sort_order ?? "—"}</td>
                     <td className="px-3 py-2 font-mono text-xs">{r.code ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {r.sync_with_1c ? (
+                        <span className="rounded bg-sky-50 px-1.5 py-0.5 font-medium text-sky-800">
+                          Перечисление
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       {r.color ? (
                         <span
@@ -383,7 +399,7 @@ export function FinancePaymentMethodsSettings() {
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
                       Ma&apos;lumot yo&apos;q
                     </td>
                   </tr>
@@ -487,6 +503,23 @@ export function FinancePaymentMethodsSettings() {
             </label>
             {pickZodLeaf(serverFieldErrs, "active") ? (
               <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "active")}</p>
+            ) : null}
+            <label className="flex flex-col gap-1 rounded-md border px-3 py-2 text-sm">
+              <span className="flex items-center justify-between gap-3">
+                <span>Перечисление (1С / банк)</span>
+                <input
+                  type="checkbox"
+                  checked={syncWith1c}
+                  onChange={(e) => setSyncWith1c(e.target.checked)}
+                />
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Belgilansa: Bank Transfer Inbox / 1C dan kelgan to‘lovlar shu usul kodini oladi.
+                Qo‘lda kiritilgan перечисление ham shu usulda bo‘ladi, lekin «Вручную» deb ajraladi.
+              </span>
+            </label>
+            {pickZodLeaf(serverFieldErrs, "sync_with_1c") ? (
+              <p className="text-xs text-destructive">{pickZodLeaf(serverFieldErrs, "sync_with_1c")}</p>
             ) : null}
             <Button onClick={submitForm} disabled={saveMut.isPending || !isAdmin}>
               {editId ? "Сохранить" : "Добавить"}

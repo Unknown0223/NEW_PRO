@@ -44,7 +44,7 @@ export const createClientBodySchema = z.object({
   latitude: coordIn,
   longitude: coordIn,
   is_active: z.boolean().optional(),
-  agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(10).optional()
+  agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(100).optional()
 });
 
 export const mergeBodySchema = z.object({
@@ -72,6 +72,19 @@ export const bulkActiveBodySchema = z.object({
 export const bulkPatchBodySchema = z.object({
   client_ids: z.array(z.number().int().positive()).min(1).max(500),
   patch: patchClientBodySchema
+});
+
+/** PATCH `/api/:slug/clients/bulk-items` — har klientga alohida patch (bitta HTTP) */
+export const bulkItemsPatchBodySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        client_id: z.number().int().positive(),
+        patch: patchClientBodySchema
+      })
+    )
+    .min(1)
+    .max(500)
 });
 
 export const createClientTagBodySchema = z.object({

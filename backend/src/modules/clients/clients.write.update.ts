@@ -201,6 +201,8 @@ export async function updateClientFields(
         where: { id: input.agent_id, tenant_id: tenantId, is_active: true }
       });
       if (!u) throw new Error("VALIDATION");
+      const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+      await assertAgentCanTakeNewWork(tenantId, input.agent_id);
       data.agent_id = input.agent_id;
     }
   }

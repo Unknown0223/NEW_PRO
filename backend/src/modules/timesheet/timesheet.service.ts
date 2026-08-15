@@ -1,9 +1,33 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
+import { AuditEntityType, sanitizePayloadForAudit } from "../../lib/tenant-audit";
+import { mergeTabelAudit, readTabelAudit, type NewTabelAuditRecord } from "../tabel/tabel-audit";
+import {
+  listDepartedSlotUserIdsInMonth,
+  loadSlotLeaveDatesForMonth
+} from "../work-slots/work-slots.occupancy";
 
-export type AttendanceStatus = "worked" | "absent" | "vacation" | "sick" | "holiday";
+/**
+ * Полная модель статусов (паритет с прототипом TabelERP):
+ *  worked=1 · half_day=0.5 · absent=0 · holiday=выходной · vacation=отпуск ·
+ *  sick=больничный · trip=командировка.
+ */
+export type AttendanceStatus =
+  | "worked"
+  | "half_day"
+  | "absent"
+  | "vacation"
+  | "sick"
+  | "holiday"
+  | "trip";
 export type AttendanceSource = "manual" | "gps" | "mobile_login" | "auto";
+
+/** Вклад статуса в «Итого» рабочих дней. */
+export function statusWorkValue(status: AttendanceStatus): number {
+  if (status === "worked") return 1;
+  if (status === "half_day") return 0.5;
+  return 0;
+}
 
 type OverrideRow = {
   status: AttendanceStatus;
@@ -38,6 +62,10 @@ export type TimesheetRowDto = {
   cells: TimesheetCellDto[];
   worked_days: number;
   absent_days: number;
+  /** Slotdan chiqish sanasi (YYYY-MM-DD) — shu kundan keyin blok. */
+  slot_left_at: string | null;
+  /** Oy ichida slotdan chiqib, hozir faol sloti yo‘q. */
+  is_departed: boolean;
 };
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -45,7 +73,15 @@ function asObj(v: unknown): Record<string, unknown> {
 }
 
 function isStatus(v: string): v is AttendanceStatus {
-  return v === "worked" || v === "absent" || v === "vacation" || v === "sick" || v === "holiday";
+  return (
+    v === "worked" ||
+    v === "half_day" ||
+    v === "absent" ||
+    v === "vacation" ||
+    v === "sick" ||
+    v === "holiday" ||
+    v === "trip"
+  );
 }
 
 function isSource(v: string): v is AttendanceSource {
@@ -129,10 +165,16 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
   const state = parseTimesheetState(tenant.settings);
   const locked = state.locked_months.includes(input.month);
 
+  const departedIds = await listDepartedSlotUserIdsInMonth(tenantId, from, to);
+  const departedSet = new Set(departedIds);
+
   const users = await prisma.user.findMany({
     where: {
       tenant_id: tenantId,
-      is_active: true,
+      OR: [
+        { is_active: true },
+        ...(departedIds.length ? [{ id: { in: departedIds } }] : [])
+      ],
       ...(input.role?.trim() ? { role: input.role.trim() } : {}),
       ...(typeof input.user_id === "number" ? { id: input.user_id } : {})
     },
@@ -140,6 +182,7 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
   const userIds = users.map((u) => u.id);
+  const leaveByUser = await loadSlotLeaveDatesForMonth(tenantId, from, to, userIds);
 
   const visits = userIds.length
     ? await prisma.agentVisit.findMany({
@@ -155,6 +198,8 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const rows: TimesheetRowDto[] = users.map((u) => {
+    const leftAt = leaveByUser.get(u.id) ?? null;
+    const isDeparted = departedSet.has(u.id);
     let worked = 0;
     let absent = 0;
     const cells = days.map((day) => {
@@ -174,56 +219,176 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
         status = dow === 0 ? "holiday" : "absent";
         source = "auto";
       }
-      if (status === "worked") worked += 1;
+      worked += statusWorkValue(status);
       if (status === "absent") absent += 1;
       return { day, date, status, source };
     });
-    return { user_id: u.id, fio: u.name, role: u.role, login: u.login, cells, worked_days: worked, absent_days: absent };
+    return {
+      user_id: u.id,
+      fio: u.name,
+      role: u.role,
+      login: u.login,
+      cells,
+      worked_days: worked,
+      absent_days: absent,
+      slot_left_at: leftAt,
+      is_departed: isDeparted
+    };
+  });
+
+  // Faol xodimlar yuqorida; slotdan chiqqanlar — jamoa pastida.
+  rows.sort((a, b) => {
+    if (a.is_departed !== b.is_departed) return a.is_departed ? 1 : -1;
+    const roleCmp = a.role.localeCompare(b.role, "ru");
+    if (roleCmp !== 0) return roleCmp;
+    return a.fio.localeCompare(b.fio, "ru");
   });
 
   return { month: input.month, days, rows, locked };
 }
 
-export async function patchAttendanceCell(
+export const ATTENDANCE_STATUS_LABEL_RU: Record<AttendanceStatus, string> = {
+  worked: "Работал",
+  half_day: "Полдня",
+  absent: "Отсутствовал",
+  holiday: "Выходной",
+  vacation: "Отпуск",
+  sick: "Больничный",
+  trip: "Командировка"
+};
+
+export type AttendanceCellInput = {
+  userId: number;
+  date: string;
+  status: AttendanceStatus;
+  source?: AttendanceSource;
+  comment?: string;
+};
+
+/**
+ * Массовая правка ячеек табеля в ОДНОМ запросе/транзакции.
+ *
+ * Раньше веб слал по одному PATCH на каждую ячейку: это не только N сетевых
+ * вызовов, но и гонка «lost update» — каждый запрос читал и перезаписывал весь
+ * `tenant.settings`, затирая соседние изменения. Здесь настройки читаются один
+ * раз, все overrides применяются в памяти, журнал аудита пополняется одним
+ * `mergeTabelAudit`, БД пишется одним `tenant.update`, а события аудита —
+ * одним `createMany`.
+ */
+export async function patchAttendanceCells(
   tenantId: number,
   actorUserId: number | null,
-  input: { userId: number; date: string; status: AttendanceStatus; source?: AttendanceSource }
-): Promise<{ ok: true }> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error("BAD_DATE");
-  const month = input.date.slice(0, 7);
+  entries: AttendanceCellInput[],
+  changedBy?: string,
+  opts?: { actorIsAdmin?: boolean }
+): Promise<{ ok: true; applied: number; changed: number }> {
+  if (entries.length === 0) return { ok: true, applied: 0, changed: 0 };
+
   const today = new Date().toISOString().slice(0, 10);
-  if (input.date > today) throw new Error("FUTURE_DATE_DENIED");
+  for (const e of entries) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) throw new Error("BAD_DATE");
+    if (e.date > today) throw new Error("FUTURE_DATE_DENIED");
+  }
+  const months = new Set(entries.map((e) => e.date.slice(0, 7)));
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   if (!tenant) throw new Error("NOT_FOUND");
-  const user = await prisma.user.findFirst({ where: { id: input.userId, tenant_id: tenantId }, select: { id: true } });
-  if (!user) throw new Error("USER_NOT_FOUND");
 
   const state = parseTimesheetState(tenant.settings);
-  if (state.locked_months.includes(month)) throw new Error("PAYROLL_PERIOD_LOCKED");
+  for (const m of months) if (state.locked_months.includes(m)) throw new Error("PAYROLL_PERIOD_LOCKED");
 
-  const key = `${input.userId}:${input.date}`;
-  const prev = state.overrides[key] ?? null;
-  state.overrides[key] = {
-    status: input.status,
-    source: input.source ?? "manual",
-    updated_at: new Date().toISOString(),
-    updated_by: actorUserId
-  };
+  const userIds = [...new Set(entries.map((e) => e.userId))];
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, tenant_id: tenantId },
+    select: { id: true, name: true }
+  });
+  const userById = new Map(users.map((u) => [u.id, u]));
+  for (const id of userIds) if (!userById.has(id)) throw new Error("USER_NOT_FOUND");
+
+  // Slotdan chiqqandan keyingi kunlar — faqat admin o‘zgartira oladi.
+  if (!opts?.actorIsAdmin) {
+    const leaveMaps: Map<string, Map<number, string>> = new Map();
+    for (const m of months) {
+      const { from, to } = monthDateRange(m);
+      leaveMaps.set(m, await loadSlotLeaveDatesForMonth(tenantId, from, to, userIds));
+    }
+    for (const e of entries) {
+      const left = leaveMaps.get(e.date.slice(0, 7))?.get(e.userId);
+      if (left && e.date > left) throw new Error("SLOT_LEFT_DAY_LOCKED");
+    }
+  }
+
+  const now = new Date().toISOString();
+  const actor = changedBy?.trim() || "система";
+  const additions: NewTabelAuditRecord[] = [];
+  const auditEventData: Prisma.TenantAuditEventCreateManyInput[] = [];
+  const uid =
+    actorUserId != null && Number.isFinite(actorUserId) && actorUserId > 0 ? Math.floor(Number(actorUserId)) : null;
+  let changed = 0;
+
+  for (const e of entries) {
+    const key = `${e.userId}:${e.date}`;
+    const prev = state.overrides[key] ?? null;
+    const prevStatus: AttendanceStatus = prev?.status ?? "absent";
+    const next: OverrideRow = {
+      status: e.status,
+      source: e.source ?? "manual",
+      updated_at: now,
+      updated_by: actorUserId
+    };
+    state.overrides[key] = next;
+    if (prevStatus === e.status) continue;
+    changed += 1;
+    additions.push({
+      module: "timesheet",
+      kind: "status",
+      title: userById.get(e.userId)!.name,
+      subtitle: e.date,
+      oldValue: ATTENDANCE_STATUS_LABEL_RU[prevStatus],
+      newValue: ATTENDANCE_STATUS_LABEL_RU[e.status],
+      comment: e.comment?.trim() || "Изменено в табеле",
+      changedBy: actor
+    });
+    auditEventData.push({
+      tenant_id: tenantId,
+      actor_user_id: uid,
+      entity_type: AuditEntityType.user,
+      entity_id: String(e.userId).slice(0, 64),
+      action: "timesheet.patch.attendance",
+      payload: sanitizePayloadForAudit({ date: e.date, old: prev, new: next }) as Prisma.InputJsonValue
+    });
+  }
+
+  const settingsRoot = patchTimesheetState(tenant.settings, state) as Record<string, unknown>;
+  if (additions.length > 0) {
+    settingsRoot.tabel_audit = mergeTabelAudit(readTabelAudit(tenant.settings), additions);
+  }
 
   await prisma.tenant.update({
     where: { id: tenantId },
-    data: { settings: patchTimesheetState(tenant.settings, state) }
+    data: { settings: settingsRoot as Prisma.InputJsonValue }
   });
 
-  await appendTenantAuditEvent({
+  if (auditEventData.length > 0) {
+    await prisma.tenantAuditEvent.createMany({ data: auditEventData });
+  }
+
+  return { ok: true, applied: entries.length, changed };
+}
+
+/** Правка одной ячейки — тонкая обёртка над массовым путём (единый код). */
+export async function patchAttendanceCell(
+  tenantId: number,
+  actorUserId: number | null,
+  input: AttendanceCellInput & { changedBy?: string },
+  opts?: { actorIsAdmin?: boolean }
+): Promise<{ ok: true }> {
+  await patchAttendanceCells(
     tenantId,
     actorUserId,
-    entityType: AuditEntityType.user,
-    entityId: input.userId,
-    action: "timesheet.patch.attendance",
-    payload: { date: input.date, old: prev, new: state.overrides[key] }
-  });
-
+    [{ userId: input.userId, date: input.date, status: input.status, source: input.source, comment: input.comment }],
+    input.changedBy,
+    opts
+  );
   return { ok: true };
 }

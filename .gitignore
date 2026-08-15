@@ -72,10 +72,28 @@ _extracted_files*/
 _logo_pack/
 _mobile-ui-design/
 _scope_dialog_original.tsx
+_agon-agent-import/
+_employee-route-tracking-import/
+_gps-report-xlsx/
+_product-master-data-extract/
+_salec-agent-mobile-ui-design*/
+_ui_design_extract/
+_zip_extract_temp/
 .cursor/plans/
+
+# Lokal import/audit dump
+backend/tmp-import-*.err
+backend/tmp-import-*.out
+backend/scripts/_audit*.ts
+backend/scripts/_final-audit.ts
+mobile/releases/ota-demo/
 
 # Excel import (scripts/data ildizidagi qo‘lda fayllar)
 backend/scripts/data/*.xlsx
+
+# Bank ID audit CSV eksportlari (mass-edit emas)
+backend/scripts/out/*
+!backend/scripts/out/README.md
 
 # Mobile build artefaktlari
 *.hprof

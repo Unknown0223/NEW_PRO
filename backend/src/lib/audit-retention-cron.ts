@@ -22,13 +22,15 @@ async function runOnce(): Promise<void> {
     t.order_change_logs +
     t.slot_audit_entries +
     t.client_merge_logs +
-    t.user_activity_events;
+    t.user_activity_events +
+    t.error_events;
   if (removed > 0) {
     console.log(
-      "[audit-retention] purged %d rows (audit≤%d d, activity≤%d d): %j",
+      "[audit-retention] purged %d rows (audit≤%d d, activity≤%d d, errors≤%d d): %j",
       removed,
       result.default_audit_days,
       result.activity_days,
+      result.error_event_days,
       t
     );
   }
@@ -53,9 +55,10 @@ export function enableAuditRetentionCron(): void {
     void runOnce().catch((err) => console.error("[audit-retention] error:", err));
   }, RUN_INTERVAL_MS);
   console.log(
-    "[audit-retention] cron enabled (audit = %d days, activity = %d days, photo content = %d days)",
+    "[audit-retention] cron enabled (audit = %d days, activity = %d days, errors = %d days, photo content = %d days)",
     env.AUDIT_RETENTION_DAYS,
     env.ACTIVITY_RETENTION_DAYS,
+    env.ERROR_EVENT_RETENTION_DAYS,
     env.PHOTO_CONTENT_RETENTION_DAYS
   );
 }

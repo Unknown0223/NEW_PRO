@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+}
+
+/* Sprint 5 — mobile */
+@media (max-width: 900px) {
+  .salec-pivot-app .pivot-mobile-stack {
+    grid-template-columns: 1fr !important;
+  }
+
+  .salec-pivot-app {
+    padding: 0.5rem;
+  }
+
+  .salec-pivot-app table {
+    font-size: 12px;
+  }
+
+  .salec-pivot-app .pivot-builder-root {
+    flex-direction: column;
+  }
+
+  .salec-pivot-app .pivot-field-list {
+    width: 100% !important;
+    max-height: 140px;
+  }
+}
+
+.salec-pivot-app:focus-within {
+  outline: none;
+}
+
+.salec-pivot-app [role="dialog"] {
+  /* focus trap host hint for a11y */
+  isolation: isolate;
+}

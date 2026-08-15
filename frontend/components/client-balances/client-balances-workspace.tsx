@@ -6,6 +6,11 @@ import {
   type ClientBalancesFilterForm
 } from "@/components/client-balances/client-balances-filters-panel";
 import {
+  buildConsignmentBalancesQuery,
+  ConsignmentBalancesTable,
+  downloadConsignmentBalancesExcel
+} from "@/components/client-balances/client-balances-consignment-panel";
+import {
   CbCheckbox,
   CbPagination,
   CbSummaryCard,
@@ -13,7 +18,9 @@ import {
   CbToolButton,
   overdueBadgeClass
 } from "@/components/client-balances/client-balances-template-ui";
+import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import {
@@ -30,6 +37,32 @@ import type {
   ClientBalanceTerritoryOptions,
   ClientBalanceViewMode
 } from "@/lib/client-balances-types";
+import {
+  CLIENT_BALANCES_AGENTS_COLUMN_DEFS,
+  CLIENT_BALANCES_AGENTS_COLUMN_IDS,
+  CLIENT_BALANCES_AGENTS_TABLE_ID,
+  CLIENT_BALANCES_CLIENTS_TABLE_ID,
+  CLIENT_BALANCES_COLUMN_DEFS,
+  CLIENT_BALANCES_COLUMN_IDS,
+  CLIENT_BALANCES_CONSIGNMENT_COLUMN_DEFS,
+  CLIENT_BALANCES_CONSIGNMENT_COLUMN_IDS,
+  CLIENT_BALANCES_CONSIGNMENT_TABLE_ID,
+  CLIENT_BALANCES_DEFAULT_HIDDEN,
+  CLIENT_BALANCES_DELIVERY_COLUMN_DEFS,
+  CLIENT_BALANCES_DELIVERY_COLUMN_IDS,
+  CLIENT_BALANCES_DELIVERY_TABLE_ID,
+  CLIENT_BALANCES_LEGACY_COLUMN_DEFS,
+  CLIENT_BALANCES_LEGACY_COLUMN_IDS,
+  CLIENT_BALANCES_LEGACY_TABLE_ID,
+  CLIENT_BALANCES_SORT_KEY,
+  clientBalancesColLabel,
+  formatDebtExcelCell,
+  type ClientBalancesColumnId
+} from "@/lib/client-balances-table-columns";
+import type {
+  ConsignmentBalanceListResponse,
+  ConsignmentBalanceRow
+} from "@/lib/consignment-balances-types";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { formatClientDisplayId } from "@shared/client-display-id";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -50,10 +83,11 @@ import {
   AlertCircle,
   Copy,
   FileSpreadsheet,
+  LayoutGrid,
   RefreshCw
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 type StaffPick = {
@@ -236,7 +270,7 @@ function appendExclusiveEnumListParam(
 
 function buildQuery(
   form: FilterForm,
-  view: ClientBalanceViewMode,
+  view: Exclude<ClientBalanceViewMode, "clients_consignment">,
   page: number,
   limit: number,
   search: string,
@@ -351,7 +385,7 @@ function MoneyCell({
   return (
     <span
       className={cn(
-        "tabular-nums",
+        "whitespace-nowrap tabular-nums",
         align === "right" && "block text-right",
         align === "center" && "block text-center",
         align === "left" && "block text-left",
@@ -370,96 +404,83 @@ function MoneyCell({
   );
 }
 
+function excelCellForClientBalanceCol(r: ClientBalanceRow, colId: string): string | number {
+  switch (colId) {
+    case "order_id": {
+      const oid = rowDeliveryOrderId(r);
+      if (oid == null) return "";
+      return r.delivery_order_number?.trim() ? `${oid} / ${r.delivery_order_number}` : String(oid);
+    }
+    case "client_id":
+      return clientDisplayId(r);
+    case "name":
+      return r.name;
+    case "agent_name":
+      return r.agent_name ?? "";
+    case "agent_code":
+      return r.agent_code ?? "";
+    case "supervisor_name":
+      return r.supervisor_name ?? "";
+    case "legal_name":
+      return r.legal_name ?? "";
+    case "trade_direction":
+      return r.trade_direction ?? "";
+    case "inn":
+      return r.inn ?? "";
+    case "phone":
+      return r.phone ?? "";
+    case "license_until":
+      return r.license_until ? formatDateOnly(r.license_until) : "";
+    case "days_overdue":
+      return r.days_overdue ?? "";
+    case "last_order_at":
+      return r.last_order_at ?? "";
+    case "last_payment_at":
+      return r.last_payment_at ?? "";
+    case "days_since_payment":
+      return r.days_since_payment ?? "";
+    case "balance":
+      return r.balance;
+    case "legacy_debt":
+      return formatDebtExcelCell(r.legacy_debt, r.legacy_agent_names);
+    case "current_debt":
+      return formatDebtExcelCell(r.current_debt, r.current_agent_name);
+    case "legacy_agent_names":
+      return r.legacy_agent_names?.trim() || "";
+    default:
+      return "";
+  }
+}
+
 async function downloadClientsExcel(
   rows: ClientBalanceRow[],
   view: ClientBalanceViewMode,
-  paymentColumnLabels: string[]
+  paymentColumnLabels: string[],
+  visibleColumnOrder: string[]
 ) {
-  const orderCols =
-    view === "clients_delivery" && rows.some((r) => rowDeliveryOrderId(r) != null);
-  const baseHeaders = orderCols
-    ? [
-        "ID заказа",
-        "Номер заказа",
-        "Ид клиента",
-        "Клиент",
-        "Агент",
-        "Код агента",
-        "Супервайзер",
-        "Название фирмы",
-        "Направление торговли",
-        "ИНН",
-        "Телефон",
-        "Срок",
-        "Дни просрочки",
-        "Дата доставки заказа",
-        "Дата последней оплаты",
-        "Дни с последней оплаты",
-        "Общий"
-      ]
-    : [
-        "Ид клиента",
-        "Клиент",
-        "Агент",
-        "Код агента",
-        "Супервайзер",
-        "Название фирмы",
-        "Направление торговли",
-        "ИНН",
-        "Телефон",
-        "Срок",
-        "Дни просрочки",
-        "Дата последней доставки заказа",
-        "Дата последней оплаты",
-        "Дни с последней оплаты",
-        "Общий"
-      ];
+  const variant =
+    view === "clients_delivery" ? "delivery" : view === "clients_legacy" ? "legacy" : "clients";
+  const baseHeaders = visibleColumnOrder.map((id) => clientBalancesColLabel(id, variant));
   const payHeaders = paymentColumnLabels.length > 0 ? paymentColumnLabels : [];
   const headers = [...baseHeaders, ...payHeaders];
   const dataRows = rows.map((r) => {
-    const base = orderCols
-      ? [
-          rowDeliveryOrderId(r) ?? "",
-          r.delivery_order_number ?? "",
-          clientDisplayId(r),
-          r.name,
-          r.agent_name ?? "",
-          r.agent_code ?? "",
-          r.supervisor_name ?? "",
-          r.legal_name ?? "",
-          r.trade_direction ?? "",
-          r.inn ?? "",
-          r.phone ?? "",
-          r.license_until ? formatDateOnly(r.license_until) : "",
-          r.days_overdue ?? "",
-          r.last_order_at ?? "",
-          r.last_payment_at ?? "",
-          r.days_since_payment ?? "",
-          r.balance
-        ]
-      : [
-          clientDisplayId(r),
-          r.name,
-          r.agent_name ?? "",
-          r.agent_code ?? "",
-          r.supervisor_name ?? "",
-          r.legal_name ?? "",
-          r.trade_direction ?? "",
-          r.inn ?? "",
-          r.phone ?? "",
-          r.license_until ? formatDateOnly(r.license_until) : "",
-          r.days_overdue ?? "",
-          r.last_order_at ?? "",
-          r.last_payment_at ?? "",
-          r.days_since_payment ?? "",
-          r.balance
-        ];
+    const base = visibleColumnOrder.map((id) => {
+      if (variant === "legacy" && (id === "legacy_debt" || id === "current_debt")) {
+        return id === "legacy_debt" ? (r.legacy_debt ?? "0") : (r.current_debt ?? "0");
+      }
+      return excelCellForClientBalanceCol(r, id);
+    });
     const payCells = payHeaders.map((lab, idx) =>
       amountForPaymentLabel(r.payment_amounts, lab, idx)
     );
     return [...base, ...payCells];
   });
-  const sheet = view === "clients_delivery" ? "По доставленным заказам" : "По клиентам";
+  const sheet =
+    view === "clients_delivery"
+      ? "По доставленным заказам"
+      : view === "clients_legacy"
+        ? "Долг старого агента"
+        : "По клиентам";
   await downloadXlsxSheet(
     `balansy-klientov-${new Date().toISOString().slice(0, 10)}.xlsx`,
     sheet,
@@ -468,16 +489,39 @@ async function downloadClientsExcel(
   );
 }
 
-async function downloadAgentsExcel(rows: AgentBalanceRow[], paymentColumnLabels: string[]) {
-  const headers = ["Агент id", "Агент", "Код", "Клиентов", "Общий", ...paymentColumnLabels];
-  const dataRows = rows.map((r) => [
-    r.agent_id ?? "",
-    r.agent_name ?? "",
-    r.agent_code ?? "",
-    r.clients_count,
-    r.balance,
-    ...paymentColumnLabels.map((lab, idx) => amountForPaymentLabel(r.payment_amounts, lab, idx))
-  ]);
+async function downloadAgentsExcel(
+  rows: AgentBalanceRow[],
+  paymentColumnLabels: string[],
+  visibleColumnOrder: string[]
+) {
+  const baseHeaders = visibleColumnOrder.map((id) => clientBalancesColLabel(id, "agents"));
+  const headers = [...baseHeaders, ...paymentColumnLabels];
+  const dataRows = rows.map((r) => {
+    const base = visibleColumnOrder.map((colId) => {
+      switch (colId) {
+        case "agent_name":
+          return r.agent_name ?? "";
+        case "agent_code":
+          return r.agent_code ?? "";
+        case "clients_count":
+          return r.clients_count;
+        case "balance":
+          return r.balance;
+        case "legacy_debt":
+          return r.legacy_debt ?? "0";
+        case "current_debt":
+          return r.current_debt ?? "0";
+        case "is_active":
+          return r.is_active === false ? "Архив" : r.is_active === true ? "Активен" : "";
+        default:
+          return "";
+      }
+    });
+    return [
+      ...base,
+      ...paymentColumnLabels.map((lab, idx) => amountForPaymentLabel(r.payment_amounts, lab, idx))
+    ];
+  });
   await downloadXlsxSheet(
     `balansy-agentov-${new Date().toISOString().slice(0, 10)}.xlsx`,
     "По агентам",
@@ -551,16 +595,28 @@ function filterAgentsForBalances(
   });
 }
 
+function parseClientBalancesView(raw: string | null | undefined): ClientBalanceViewMode {
+  if (raw === "agents") return "agents";
+  if (raw === "clients_delivery") return "clients_delivery";
+  if (raw === "clients_legacy") return "clients_legacy";
+  if (raw === "clients_consignment" || raw === "consignment") return "clients_consignment";
+  return "clients";
+}
+
 export function ClientBalancesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
   const [applied, setApplied] = useState<FilterForm>(() => defaultForm());
-  const [view, setView] = useState<ClientBalanceViewMode>("clients");
+  const [view, setView] = useState<ClientBalanceViewMode>(() =>
+    parseClientBalancesView(searchParams.get("view"))
+  );
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState("");
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   /** Tanlangan qatorlar (sahifa almashganda ham saqlanadi) */
   const [selectedClients, setSelectedClients] = useState<Map<string, ClientBalanceRow>>(
@@ -572,21 +628,102 @@ export function ClientBalancesWorkspace() {
   const [clientSort, setClientSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
   const [agentSort, setAgentSort] = useState<{ col: string; dir: SortDir }>({ col: "", dir: "asc" });
 
+  const clientsTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_BALANCES_CLIENTS_TABLE_ID,
+    defaultColumnOrder: [...CLIENT_BALANCES_COLUMN_IDS],
+    defaultHiddenColumnIds: [...CLIENT_BALANCES_DEFAULT_HIDDEN],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const deliveryTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_BALANCES_DELIVERY_TABLE_ID,
+    defaultColumnOrder: [...CLIENT_BALANCES_DELIVERY_COLUMN_IDS],
+    defaultHiddenColumnIds: [...CLIENT_BALANCES_DEFAULT_HIDDEN],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const legacyTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_BALANCES_LEGACY_TABLE_ID,
+    defaultColumnOrder: [...CLIENT_BALANCES_LEGACY_COLUMN_IDS],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const consignmentTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_BALANCES_CONSIGNMENT_TABLE_ID,
+    defaultColumnOrder: [...CLIENT_BALANCES_CONSIGNMENT_COLUMN_IDS],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const agentsTablePrefs = useUserTablePrefs({
+    tenantSlug,
+    tableId: CLIENT_BALANCES_AGENTS_TABLE_ID,
+    defaultColumnOrder: [...CLIENT_BALANCES_AGENTS_COLUMN_IDS],
+    defaultPageSize: 10,
+    allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
+  });
+  const columnPrefs =
+    view === "clients_delivery"
+      ? deliveryTablePrefs
+      : view === "clients_legacy"
+        ? legacyTablePrefs
+        : view === "clients_consignment"
+          ? consignmentTablePrefs
+          : view === "agents"
+            ? agentsTablePrefs
+            : clientsTablePrefs;
+  const limit = columnPrefs.pageSize;
+
+  const isConsignmentView = view === "clients_consignment";
   const activeSort = view === "agents" ? agentSort : clientSort;
+  const mainView = view === "clients_consignment" ? "clients" : view;
   const queryString = useMemo(
-    () => buildQuery(applied, view, page, limit, search, activeSort),
-    [applied, view, page, limit, search, activeSort]
+    () =>
+      isConsignmentView
+        ? ""
+        : buildQuery(
+            applied,
+            mainView as Exclude<ClientBalanceViewMode, "clients_consignment">,
+            page,
+            limit,
+            search,
+            activeSort
+          ),
+    [applied, isConsignmentView, mainView, page, limit, search, activeSort]
+  );
+  const consignmentQueryString = useMemo(
+    () =>
+      isConsignmentView
+        ? buildConsignmentBalancesQuery(applied, page, limit, search)
+        : "",
+    [applied, isConsignmentView, page, limit, search]
   );
 
   const listQ = useQuery({
     queryKey: ["client-balances", tenantSlug, queryString],
-    enabled: Boolean(tenantSlug) && hydrated,
+    enabled: Boolean(tenantSlug) && hydrated && !isConsignmentView,
     staleTime: STALE.heavyList,
     placeholderData: keepPreviousData,
     structuralSharing: false,
     queryFn: async () => {
       const { data } = await api.get<ClientBalanceListResponse>(
         `/api/${tenantSlug}/client-balances?${queryString}`
+      );
+      return data;
+    }
+  });
+
+  const consignmentQ = useQuery({
+    queryKey: ["client-balances-consignment", tenantSlug, consignmentQueryString],
+    enabled: Boolean(tenantSlug) && hydrated && isConsignmentView,
+    staleTime: STALE.heavyList,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { data } = await api.get<ConsignmentBalanceListResponse>(
+        `/api/${tenantSlug}/client-balances/consignment?${consignmentQueryString}`
       );
       return data;
     }
@@ -708,10 +845,18 @@ export function ClientBalancesWorkspace() {
       ? (listQ.data.data as ClientBalanceRow[])
       : view === "clients_delivery" && listQ.data?.view === "clients_delivery"
         ? (listQ.data.data as ClientBalanceRow[])
-        : [];
+        : view === "clients_legacy" && listQ.data?.view === "clients_legacy"
+          ? (listQ.data.data as ClientBalanceRow[])
+          : [];
   const agentRows = (listQ.data?.view === "agents" ? listQ.data.data : []) as AgentBalanceRow[];
-  const summary = listQ.data?.summary;
-  const paymentColumnLabels = summary?.payment_by_type.map((x) => x.label) ?? [];
+  const consignmentRows = (consignmentQ.data?.data ?? []) as ConsignmentBalanceRow[];
+  const summaryBalance = isConsignmentView
+    ? consignmentQ.data?.summary.total_debt
+    : listQ.data?.summary.balance;
+  const paymentByType = isConsignmentView
+    ? (consignmentQ.data?.summary.payment_by_type ?? [])
+    : (listQ.data?.summary.payment_by_type ?? []);
+  const paymentColumnLabels = paymentByType.map((x) => x.label);
   const onClientSort = useCallback((key: string) => {
     setPage(1);
     setClientSort((prev) =>
@@ -725,18 +870,40 @@ export function ClientBalancesWorkspace() {
     );
   }, []);
 
-  const totalPages = listQ.data ? Math.max(1, Math.ceil(listQ.data.total / listQ.data.limit)) : 1;
+  const activeListTotal = isConsignmentView ? consignmentQ.data?.total : listQ.data?.total;
+  const activeListLimit = isConsignmentView ? consignmentQ.data?.limit : listQ.data?.limit;
+  const totalPages =
+    activeListTotal != null && activeListLimit
+      ? Math.max(1, Math.ceil(activeListTotal / activeListLimit))
+      : 1;
   const listErrorDetail = useMemo(() => {
-    if (!listQ.isError || !listQ.error) return null;
-    return getUserFacingError(listQ.error);
-  }, [listQ.isError, listQ.error]);
+    const err = isConsignmentView ? consignmentQ.error : listQ.error;
+    const isErr = isConsignmentView ? consignmentQ.isError : listQ.isError;
+    if (!isErr || !err) return null;
+    return getUserFacingError(err);
+  }, [
+    isConsignmentView,
+    listQ.isError,
+    listQ.error,
+    consignmentQ.isError,
+    consignmentQ.error
+  ]);
+
+  const isClientLikeView =
+    view === "clients" || view === "clients_delivery" || view === "clients_legacy";
+  const showColumnSettings =
+    isClientLikeView || view === "clients_consignment" || view === "agents";
 
   const onTabView = (v: string | null) => {
-    const next: ClientBalanceViewMode =
-      v === "agents" ? "agents" : v === "clients_delivery" ? "clients_delivery" : "clients";
+    const next = parseClientBalancesView(v);
     setView(next);
     setPage(1);
     setSelectedClients(new Map());
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "clients") params.delete("view");
+    else params.set("view", next);
+    const qs = params.toString();
+    router.replace(qs ? `/client-balances?${qs}` : "/client-balances", { scroll: false });
   };
 
   const toggleSelect = (row: ClientBalanceRow, rowIndex: number) => {
@@ -750,7 +917,7 @@ export function ClientBalancesWorkspace() {
   };
 
   const toggleSelectAllPage = () => {
-    if (view !== "clients" && view !== "clients_delivery") return;
+    if (!isClientLikeView) return;
     const keys = clientRowsForSelection.map((r, i) => clientBalanceRowKey(view, r, i));
     const allOn = keys.length > 0 && keys.every((k) => selectedClients.has(k));
     setSelectedClients((prev) => {
@@ -780,20 +947,63 @@ export function ClientBalancesWorkspace() {
     if (!tenantSlug) return;
     setExcelBusy(true);
     try {
-      const qs = buildQuery(applied, view, 1, 5000, search, activeSort, true);
+      if (isConsignmentView) {
+        const qs = buildConsignmentBalancesQuery(applied, 1, 5000, search, true);
+        const { data } = await api.get<ConsignmentBalanceListResponse>(
+          `/api/${tenantSlug}/client-balances/consignment?${qs}`
+        );
+        const payLabels = (data.summary.payment_by_type ?? []).map((x) => x.label);
+        await downloadConsignmentBalancesExcel(
+          data.data,
+          payLabels,
+          consignmentTablePrefs.visibleColumnOrder
+        );
+        return;
+      }
+      const qs = buildQuery(
+        applied,
+        view as Exclude<ClientBalanceViewMode, "clients_consignment">,
+        1,
+        5000,
+        search,
+        activeSort,
+        true
+      );
       const { data } = await api.get<ClientBalanceListResponse>(
         `/api/${tenantSlug}/client-balances?${qs}`
       );
       const payLabels = data.summary.payment_by_type.map((x) => x.label);
       if (data.view === "agents") {
-        await downloadAgentsExcel(data.data as AgentBalanceRow[], payLabels);
+        await downloadAgentsExcel(
+          data.data as AgentBalanceRow[],
+          payLabels,
+          agentsTablePrefs.visibleColumnOrder
+        );
       } else {
-        await downloadClientsExcel(data.data as ClientBalanceRow[], data.view, payLabels);
+        const visible =
+          data.view === "clients_delivery"
+            ? deliveryTablePrefs.visibleColumnOrder
+            : data.view === "clients_legacy"
+              ? legacyTablePrefs.visibleColumnOrder
+              : clientsTablePrefs.visibleColumnOrder;
+        await downloadClientsExcel(data.data as ClientBalanceRow[], data.view, payLabels, visible);
       }
     } finally {
       setExcelBusy(false);
     }
-  }, [tenantSlug, applied, view, search, activeSort]);
+  }, [
+    tenantSlug,
+    applied,
+    view,
+    search,
+    activeSort,
+    isConsignmentView,
+    clientsTablePrefs.visibleColumnOrder,
+    deliveryTablePrefs.visibleColumnOrder,
+    legacyTablePrefs.visibleColumnOrder,
+    consignmentTablePrefs.visibleColumnOrder,
+    agentsTablePrefs.visibleColumnOrder
+  ]);
 
   const paymentTypeFilterOpts = useMemo(
     () => paymentMethodSelectOptions(profileQ.data, profileQ.data?.payment_types),
@@ -1002,6 +1212,28 @@ export function ClientBalancesWorkspace() {
 
   return (
     <PageShell>
+      <TableColumnSettingsDialog
+        open={columnDialogOpen}
+        onOpenChange={setColumnDialogOpen}
+        title="Управление столбцами"
+        description="Видимые столбцы и порядок сохраняются для вашей учётной записи."
+        columns={
+          view === "clients_delivery"
+            ? [...CLIENT_BALANCES_DELIVERY_COLUMN_DEFS]
+            : view === "clients_legacy"
+              ? [...CLIENT_BALANCES_LEGACY_COLUMN_DEFS]
+              : view === "clients_consignment"
+                ? [...CLIENT_BALANCES_CONSIGNMENT_COLUMN_DEFS]
+                : view === "agents"
+                  ? [...CLIENT_BALANCES_AGENTS_COLUMN_DEFS]
+                  : [...CLIENT_BALANCES_COLUMN_DEFS]
+        }
+        columnOrder={columnPrefs.columnOrder}
+        hiddenColumnIds={columnPrefs.hiddenColumnIds}
+        saving={columnPrefs.saving}
+        onSave={(next) => columnPrefs.saveColumnLayout(next)}
+        onReset={() => columnPrefs.resetColumnLayout()}
+      />
       <div className="space-y-4">
         <ClientBalancesFiltersPanel
           draft={draft}
@@ -1018,10 +1250,20 @@ export function ClientBalancesWorkspace() {
           territoryCascade={territoryCascade}
         />
 
-        {summary ? (
+        {summaryBalance != null ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
-            <CbSummaryCard title="Общий" amount={parseAmount(summary.balance)} iconIndex={0} />
-            {(summary.payment_by_type ?? []).map((row, i) => (
+            <CbSummaryCard
+              title={
+                view === "clients_legacy"
+                  ? "Долг старого агента"
+                  : view === "clients_consignment"
+                    ? "Долг по консигнации"
+                    : "Общий"
+              }
+              amount={parseAmount(summaryBalance)}
+              iconIndex={0}
+            />
+            {paymentByType.map((row, i) => (
               <CbSummaryCard
                 key={`${row.label}-${i}`}
                 title={row.label}
@@ -1043,6 +1285,15 @@ export function ClientBalancesWorkspace() {
             <CbTabButton active={view === "clients_delivery"} onClick={() => onTabView("clients_delivery")}>
               По доставке
             </CbTabButton>
+            <CbTabButton active={view === "clients_legacy"} onClick={() => onTabView("clients_legacy")}>
+              Долг старого агента
+            </CbTabButton>
+            <CbTabButton
+              active={view === "clients_consignment"}
+              onClick={() => onTabView("clients_consignment")}
+            >
+              По консигнации
+            </CbTabButton>
           </div>
 
           <div className="rounded-xl rounded-tl-none bg-card shadow-[0_1px_4px_rgba(15,40,60,0.08)]">
@@ -1051,7 +1302,7 @@ export function ClientBalancesWorkspace() {
                 value={String(limit)}
                 title="Строк на странице"
                 onChange={(e) => {
-                  setLimit(Number.parseInt(e.target.value, 10) || 10);
+                  columnPrefs.setPageSize(Number.parseInt(e.target.value, 10) || 10);
                   setPage(1);
                 }}
                 className="h-10 rounded-lg border border-border bg-card px-2.5 text-[13px] text-slate-700 outline-none hover:border-border"
@@ -1062,7 +1313,7 @@ export function ClientBalancesWorkspace() {
                   </option>
                 ))}
               </select>
-              {(view === "clients" || view === "clients_delivery") && selectedClients.size > 0 ? (
+              {isClientLikeView && selectedClients.size > 0 ? (
                 <button
                   type="button"
                   className="flex h-10 shrink-0 items-center gap-2 rounded-lg bg-[#0e9180] px-4 text-[13.5px] font-medium text-white hover:bg-[#0c7d6f]"
@@ -1083,17 +1334,38 @@ export function ClientBalancesWorkspace() {
                   setPage(1);
                 }}
               />
+              {showColumnSettings ? (
+                <CbToolButton title="Столбцы" onClick={() => setColumnDialogOpen(true)}>
+                  <LayoutGrid size={16} className="text-slate-600" />
+                </CbToolButton>
+              ) : null}
               <button
                 type="button"
-                disabled={!listQ.data?.data.length || excelBusy}
+                disabled={
+                  excelBusy ||
+                  (isConsignmentView
+                    ? !consignmentQ.data?.data.length
+                    : !listQ.data?.data.length)
+                }
                 onClick={() => void runExcelExport()}
                 className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-[13.5px] font-medium text-slate-700 transition-colors hover:bg-muted disabled:opacity-60"
               >
                 <FileSpreadsheet size={16} className="text-emerald-600" />
                 {excelBusy ? "Экспорт…" : "Excel"}
               </button>
-              <CbToolButton title="Обновить" onClick={() => void listQ.refetch()}>
-                <RefreshCw size={16} className={cn("text-[#0e9180]", listQ.isFetching && "animate-spin")} />
+              <CbToolButton
+                title="Обновить"
+                onClick={() =>
+                  void (isConsignmentView ? consignmentQ.refetch() : listQ.refetch())
+                }
+              >
+                <RefreshCw
+                  size={16}
+                  className={cn(
+                    "text-[#0e9180]",
+                    (isConsignmentView ? consignmentQ.isFetching : listQ.isFetching) && "animate-spin"
+                  )}
+                />
               </CbToolButton>
             </div>
 
@@ -1103,6 +1375,7 @@ export function ClientBalancesWorkspace() {
               <ClientLikeTable
                 variant="clients"
                 statusFilter={applied.status}
+                visibleColumnOrder={clientsTablePrefs.visibleColumnOrder}
                 rowKey={(r, idx) => clientBalanceRowKey(view, r, idx)}
                 paymentColumnLabels={paymentColumnLabels}
                 sort={clientSort}
@@ -1125,6 +1398,7 @@ export function ClientBalancesWorkspace() {
               <ClientLikeTable
                 variant="delivery"
                 statusFilter={applied.status}
+                visibleColumnOrder={deliveryTablePrefs.visibleColumnOrder}
                 rowKey={(r, idx) => clientBalanceRowKey(view, r, idx)}
                 paymentColumnLabels={paymentColumnLabels}
                 sort={clientSort}
@@ -1147,104 +1421,246 @@ export function ClientBalancesWorkspace() {
                   })
                 }
               />
+            ) : view === "clients_legacy" ? (
+              <ClientLikeTable
+                variant="legacy"
+                statusFilter={applied.status}
+                visibleColumnOrder={legacyTablePrefs.visibleColumnOrder}
+                rowKey={(r, idx) => clientBalanceRowKey(view, r, idx)}
+                paymentColumnLabels={paymentColumnLabels}
+                sort={clientSort}
+                onSort={onClientSort}
+                loading={listQ.isLoading}
+                rows={
+                  listQ.data?.view === "clients_legacy"
+                    ? (listQ.data.data as ClientBalanceRow[])
+                    : []
+                }
+                selected={selectedClients}
+                onToggle={toggleSelect}
+                onToggleAll={toggleSelectAllPage}
+                onCopyId={(text) =>
+                  void copyToClipboard(text).then((ok) => {
+                    if (ok) {
+                      setCopyFlash(true);
+                      window.setTimeout(() => setCopyFlash(false), 1200);
+                    }
+                  })
+                }
+              />
+            ) : view === "clients_consignment" ? (
+              <ConsignmentBalancesTable
+                loading={consignmentQ.isLoading}
+                rows={consignmentRows}
+                paymentColumnLabels={paymentColumnLabels}
+                visibleColumnOrder={consignmentTablePrefs.visibleColumnOrder}
+                statusFilter={applied.status}
+              />
             ) : (
-              <div className="scrollbar-none overflow-x-auto">
-                <table
-                  className="w-full min-w-0 border-collapse text-[13px]"
-                  style={{ minWidth: Math.max(900, 900 + paymentColumnLabels.length * 112) }}
-                >
-                  <thead>
-                    <tr className="border-y border-border text-left text-[12.5px] font-medium text-slate-500">
-                      <SortTh
-                        label="Агент"
-                        sortKey="agent_name"
-                        current={agentSort}
-                        onSort={onAgentSort}
-                        className="whitespace-nowrap px-4 py-3.5"
-                      />
-                      <SortTh
-                        label="Код"
-                        sortKey="agent_code"
-                        current={agentSort}
-                        onSort={onAgentSort}
-                        className="whitespace-nowrap px-3 py-3.5"
-                      />
-                      <SortTh
-                        label="Клиентов"
-                        sortKey="clients_count"
-                        current={agentSort}
-                        onSort={onAgentSort}
-                        className="whitespace-nowrap px-3 py-3.5 text-right"
-                        align="right"
-                      />
-                      <SortTh
-                        label="Общий"
-                        sortKey="balance"
-                        current={agentSort}
-                        onSort={onAgentSort}
-                        className="whitespace-nowrap px-3 py-3.5 text-right"
-                        align="right"
-                      />
-                      {paymentColumnLabels.map((lab) => (
-                        <SortTh
-                          key={lab}
-                          label={<span title={lab}>{lab}</span>}
-                          sortKey={`pay:${lab}`}
-                          current={agentSort}
-                          onSort={onAgentSort}
-                          className="max-w-[10rem] whitespace-normal px-3 py-3.5 text-xs leading-tight"
-                          align="right"
-                        />
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {listQ.isLoading ? (
-                      <tr>
-                        <td
-                          colSpan={4 + paymentColumnLabels.length}
-                          className="px-4 py-16 text-center text-slate-400"
-                        >
-                          Загрузка…
-                        </td>
+              <div className="space-y-2">
+                <p className="px-4 text-xs text-slate-500">
+                  Только активные агенты на рабочем месте. Долг текущего агента — его заказы и остаток
+                  уволенных агентов; долг старого агента — только ещё активных предыдущих агентов.
+                </p>
+                <div className="scrollbar-none overflow-x-auto">
+                  <table
+                    className="w-full min-w-0 border-collapse text-[13px]"
+                    style={{
+                      minWidth: Math.max(
+                        900,
+                        700 +
+                          agentsTablePrefs.visibleColumnOrder.length * 90 +
+                          paymentColumnLabels.length * 112
+                      )
+                    }}
+                  >
+                    <thead>
+                      <tr className="border-y border-border text-left text-[12.5px] font-medium text-slate-500">
+                        {agentsTablePrefs.visibleColumnOrder.map((colId) => {
+                          const label = clientBalancesColLabel(colId, "agents");
+                          const sortKey =
+                            colId === "is_active"
+                              ? undefined
+                              : colId === "agent_name"
+                                ? "agent_name"
+                                : colId;
+                          const right =
+                            colId === "clients_count" ||
+                            colId === "balance" ||
+                            colId === "legacy_debt" ||
+                            colId === "current_debt";
+                          if (!sortKey) {
+                            return (
+                              <th key={colId} className="whitespace-nowrap px-3 py-3.5">
+                                {label}
+                              </th>
+                            );
+                          }
+                          return (
+                            <SortTh
+                              key={colId}
+                              label={label}
+                              sortKey={sortKey}
+                              current={agentSort}
+                              onSort={onAgentSort}
+                              className={cn(
+                                "whitespace-nowrap px-3 py-3.5",
+                                right && "text-right",
+                                colId === "agent_name" && "px-4"
+                              )}
+                              align={right ? "right" : undefined}
+                            />
+                          );
+                        })}
+                        {paymentColumnLabels.map((lab) => (
+                          <SortTh
+                            key={lab}
+                            label={<span title={lab}>{lab}</span>}
+                            sortKey={`pay:${lab}`}
+                            current={agentSort}
+                            onSort={onAgentSort}
+                            className="max-w-[10rem] truncate whitespace-nowrap px-3 py-3.5 text-xs"
+                            align="right"
+                          />
+                        ))}
                       </tr>
-                    ) : agentRows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4 + paymentColumnLabels.length}
-                          className="px-4 py-16 text-center text-slate-400"
-                        >
-                          По заданным фильтрам данные не найдены
-                        </td>
-                      </tr>
-                    ) : (
-                      agentRows.map((r, idx) => (
-                        <tr
-                          key={`${r.agent_id ?? "none"}-${idx}`}
-                          className="border-b border-slate-50 transition-colors hover:bg-muted/60"
-                        >
-                          <td className="px-4 py-3.5">
-                            {r.agent_id != null ? (
-                              <span className="font-medium text-slate-800">{r.agent_name ?? "—"}</span>
-                            ) : (
-                              <span className="text-slate-400">Без агента</span>
-                            )}
+                    </thead>
+                    <tbody>
+                      {listQ.isLoading ? (
+                        <tr>
+                          <td
+                            colSpan={
+                              Math.max(1, agentsTablePrefs.visibleColumnOrder.length) +
+                              paymentColumnLabels.length
+                            }
+                            className="px-4 py-16 text-center text-slate-400"
+                          >
+                            Загрузка…
                           </td>
-                          <td className="px-3 py-3.5 font-mono text-xs text-slate-600">{r.agent_code ?? "—"}</td>
-                          <td className="px-3 py-3.5 text-right tabular-nums text-slate-700">{r.clients_count}</td>
-                          <td className="px-3 py-3.5">
-                            <MoneyCell value={r.balance} />
-                          </td>
-                          {paymentColumnLabels.map((lab, payIdx) => (
-                            <td key={`${r.agent_id ?? "x"}-${payIdx}-${lab}`} className="px-3 py-3.5">
-                              <MoneyCell value={amountForPaymentLabel(r.payment_amounts, lab, payIdx)} />
-                            </td>
-                          ))}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : agentRows.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={
+                              Math.max(1, agentsTablePrefs.visibleColumnOrder.length) +
+                              paymentColumnLabels.length
+                            }
+                            className="px-4 py-16 text-center text-slate-400"
+                          >
+                            По заданным фильтрам данные не найдены
+                          </td>
+                        </tr>
+                      ) : (
+                        agentRows.map((r, idx) => (
+                          <tr
+                            key={`${r.agent_id ?? "none"}-${idx}`}
+                            className="border-b border-slate-50 transition-colors hover:bg-muted/60"
+                          >
+                            {agentsTablePrefs.visibleColumnOrder.map((colId) => {
+                              switch (colId) {
+                                case "agent_name":
+                                  return (
+                                    <td
+                                      key={colId}
+                                      className="max-w-[14rem] truncate whitespace-nowrap px-4 py-3.5"
+                                      title={
+                                        r.agent_id != null
+                                          ? (r.agent_name ?? undefined)
+                                          : "Без агента"
+                                      }
+                                    >
+                                      {r.agent_id != null ? (
+                                        <span className="font-medium text-slate-800">
+                                          {r.agent_name ?? "—"}
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400">Без агента</span>
+                                      )}
+                                    </td>
+                                  );
+                                case "agent_code":
+                                  return (
+                                    <td
+                                      key={colId}
+                                      className="max-w-[8rem] truncate whitespace-nowrap px-3 py-3.5 font-mono text-xs text-slate-600"
+                                      title={r.agent_code ?? undefined}
+                                    >
+                                      {r.agent_code ?? "—"}
+                                    </td>
+                                  );
+                                case "clients_count":
+                                  return (
+                                    <td
+                                      key={colId}
+                                      className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-700"
+                                    >
+                                      {r.clients_count}
+                                    </td>
+                                  );
+                                case "balance":
+                                  return (
+                                    <td key={colId} className="whitespace-nowrap px-3 py-3.5">
+                                      <MoneyCell value={r.balance} />
+                                    </td>
+                                  );
+                                case "legacy_debt":
+                                  return (
+                                    <td key={colId} className="whitespace-nowrap px-3 py-3.5">
+                                      <MoneyCell value={r.legacy_debt ?? "0"} />
+                                    </td>
+                                  );
+                                case "current_debt":
+                                  return (
+                                    <td key={colId} className="whitespace-nowrap px-3 py-3.5">
+                                      <MoneyCell value={r.current_debt ?? "0"} />
+                                    </td>
+                                  );
+                                case "is_active":
+                                  return (
+                                    <td
+                                      key={colId}
+                                      className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600"
+                                    >
+                                      {r.is_active === false ? (
+                                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-500">
+                                          Архив
+                                        </span>
+                                      ) : r.is_active === true ? (
+                                        <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-emerald-700">
+                                          Активен
+                                        </span>
+                                      ) : (
+                                        "—"
+                                      )}
+                                    </td>
+                                  );
+                                default:
+                                  return (
+                                    <td
+                                      key={colId}
+                                      className="whitespace-nowrap px-3 py-3.5 text-slate-300"
+                                    >
+                                      —
+                                    </td>
+                                  );
+                              }
+                            })}
+                            {paymentColumnLabels.map((lab, payIdx) => (
+                              <td
+                                key={`${r.agent_id ?? "x"}-${payIdx}-${lab}`}
+                                className="whitespace-nowrap px-3 py-3.5"
+                              >
+                                <MoneyCell
+                                  value={amountForPaymentLabel(r.payment_amounts, lab, payIdx)}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -1254,13 +1670,13 @@ export function ClientBalancesWorkspace() {
               </p>
             ) : null}
 
-            {listQ.data && listQ.data.total > 0 ? (
+            {activeListTotal != null && activeListTotal > 0 ? (
               <CbPagination
                 page={page}
                 totalPages={totalPages}
-                total={listQ.data.total}
-                limit={listQ.data.limit}
-                selectedCount={selectedClients.size}
+                total={activeListTotal}
+                limit={activeListLimit ?? limit}
+                selectedCount={isClientLikeView ? selectedClients.size : 0}
                 onPage={setPage}
               />
             ) : null}
@@ -1291,9 +1707,30 @@ function isStatusFilterAll(raw: string): boolean {
   return vals.includes("active") && vals.includes("inactive");
 }
 
+function DebtWithAgentCell({
+  amount,
+  agentNames
+}: {
+  amount: string;
+  agentNames?: string | null;
+}) {
+  const names = agentNames?.trim();
+  return (
+    <div className="flex max-w-[14rem] items-center justify-end gap-1.5 whitespace-nowrap">
+      <MoneyCell value={amount} />
+      {names ? (
+        <span className="max-w-[6rem] truncate text-[10px] font-normal text-slate-500" title={names}>
+          {names}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ClientLikeTable({
   variant,
   statusFilter,
+  visibleColumnOrder,
   rowKey,
   paymentColumnLabels,
   sort,
@@ -1305,9 +1742,10 @@ function ClientLikeTable({
   onToggleAll,
   onCopyId
 }: {
-  variant: "clients" | "delivery";
+  variant: "clients" | "delivery" | "legacy";
   /** «Все» — inactive + non-zero balans uchun belgi */
   statusFilter: string;
+  visibleColumnOrder: string[];
   rowKey: (r: ClientBalanceRow, rowIndex: number) => string;
   paymentColumnLabels: string[];
   sort: { col: string; dir: SortDir };
@@ -1322,12 +1760,280 @@ function ClientLikeTable({
   const router = useRouter();
 
   const nPay = paymentColumnLabels.length;
-  const colCount = (variant === "delivery" ? 17 : 16) + nPay;
+  const colCount = 1 + visibleColumnOrder.length + nPay;
   const note =
     variant === "delivery"
       ? "Одна строка — один доставленный неоплаченный заказ. Клик по строке (кроме ссылки и чекбокса) открывает карточку заказа."
-      : null;
-  const tableMinPx = Math.max(1100, 1100 + nPay * 112);
+      : variant === "legacy"
+        ? "Только клиенты с долгом старого агента (заказы, оформленные не текущим агентом клиента)."
+        : null;
+  const tableMinPx = Math.max(1100, 900 + visibleColumnOrder.length * 72 + nPay * 112);
+  const debtNamesInline = variant !== "legacy";
+
+  const renderHeader = (colId: string) => {
+    const label = clientBalancesColLabel(colId, variant);
+    const sortKey = CLIENT_BALANCES_SORT_KEY[colId as ClientBalancesColumnId];
+    const rightAlign =
+      colId === "balance" ||
+      colId === "legacy_debt" ||
+      colId === "current_debt" ||
+      colId === "days_overdue" ||
+      colId === "days_since_payment";
+    if (!sortKey) {
+      return (
+        <th
+          key={colId}
+          className={cn(
+            "whitespace-nowrap px-3 py-3.5 text-[12.5px] font-medium text-slate-500",
+            rightAlign && "text-right"
+          )}
+        >
+          {label}
+        </th>
+      );
+    }
+    return (
+      <SortTh
+        key={colId}
+        label={label}
+        sortKey={sortKey}
+        current={sort}
+        onSort={onSort}
+        className={cn("whitespace-nowrap px-3 py-3.5", rightAlign && "text-right")}
+        align={rightAlign ? "right" : undefined}
+      />
+    );
+  };
+
+  const renderCell = (r: ClientBalanceRow, rowIndex: number, colId: string) => {
+    const oid = rowDeliveryOrderId(r);
+    switch (colId) {
+      case "order_id": {
+        const orderLabel =
+          oid != null
+            ? `#${oid}${r.delivery_order_number?.trim() ? ` / ${r.delivery_order_number.trim()}` : ""}`
+            : null;
+        return (
+          <td key={colId} className="max-w-[12rem] whitespace-nowrap px-3 py-3.5 text-xs">
+            {orderLabel != null && oid != null ? (
+              <Link
+                className="block truncate font-medium text-[#0e9180] underline-offset-2 hover:underline"
+                href={`/orders/${oid}`}
+                title={orderLabel}
+              >
+                {orderLabel}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </td>
+        );
+      }
+      case "client_id":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 font-mono text-xs">
+            <div className="flex items-center gap-1.5">
+              <Link
+                className="shrink-0 font-medium text-[#0e9180] underline-offset-2 hover:underline"
+                href={`/clients/${r.client_id}/balances`}
+              >
+                {clientDisplayId(r)}
+              </Link>
+              <button
+                type="button"
+                className="shrink-0 text-slate-300 hover:text-slate-500"
+                title="Копировать"
+                onClick={() => onCopyId(clientDisplayId(r))}
+              >
+                <Copy size={13} />
+              </button>
+            </div>
+          </td>
+        );
+      case "name":
+        return (
+          <td key={colId} className="max-w-[16rem] whitespace-nowrap px-3 py-3.5">
+            <div className="flex max-w-full items-center gap-1.5">
+              <Link
+                className="min-w-0 truncate font-medium text-slate-800 underline-offset-2 hover:underline"
+                href={`/clients/${r.client_id}/balances`}
+                title={r.name}
+              >
+                {r.name}
+              </Link>
+              {isStatusFilterAll(statusFilter) &&
+              r.is_active === false &&
+              parseAmount(r.balance) !== 0 ? (
+                <span
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:bg-amber-500/25 dark:text-amber-300"
+                  title="Неактивный клиент с ненулевым балансом"
+                >
+                  <AlertCircle className="h-3 w-3" />
+                </span>
+              ) : null}
+            </div>
+          </td>
+        );
+      case "agent_name": {
+        const tags = r.agent_tags.length ? r.agent_tags : [r.agent_name ?? "—"];
+        return (
+          <td key={colId} className="max-w-[14rem] whitespace-nowrap px-3 py-3.5">
+            <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden">
+              {tags.map((t, i) => (
+                <span
+                  key={i}
+                  className="min-w-0 max-w-full truncate rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium uppercase text-[#0c7d6f]"
+                  title={String(t)}
+                >
+                  {String(t)}
+                </span>
+              ))}
+            </div>
+          </td>
+        );
+      }
+      case "legacy_agent_names":
+        return (
+          <td
+            key={colId}
+            className="max-w-[12rem] truncate whitespace-nowrap px-3 py-3.5 text-xs text-slate-700"
+            title={r.legacy_agent_names ?? undefined}
+          >
+            {r.legacy_agent_names?.trim() || "—"}
+          </td>
+        );
+      case "agent_code":
+        return (
+          <td
+            key={colId}
+            className="max-w-[8rem] truncate whitespace-nowrap px-3 py-3.5 font-mono text-xs text-slate-600"
+            title={r.agent_code ?? undefined}
+          >
+            {r.agent_code ?? "—"}
+          </td>
+        );
+      case "supervisor_name":
+        return (
+          <td
+            key={colId}
+            className="max-w-[8rem] truncate whitespace-nowrap px-3 py-3.5 text-xs text-slate-600"
+            title={r.supervisor_name ?? undefined}
+          >
+            {r.supervisor_name ?? "—"}
+          </td>
+        );
+      case "legal_name":
+        return (
+          <td
+            key={colId}
+            className="max-w-[10rem] truncate whitespace-nowrap px-3 py-3.5 text-xs text-slate-700"
+            title={r.legal_name ?? undefined}
+          >
+            {r.legal_name ?? "—"}
+          </td>
+        );
+      case "trade_direction":
+        return (
+          <td key={colId} className="max-w-[8rem] whitespace-nowrap px-3 py-3.5 text-xs">
+            {r.trade_direction ? (
+              <span
+                className="inline-block max-w-full truncate rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-slate-600"
+                title={r.trade_direction}
+              >
+                {r.trade_direction}
+              </span>
+            ) : (
+              "—"
+            )}
+          </td>
+        );
+      case "inn":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 font-mono text-xs text-slate-500">
+            {r.inn ?? "—"}
+          </td>
+        );
+      case "phone":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
+            {r.phone ?? "—"}
+          </td>
+        );
+      case "license_until":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
+            {formatDateOnly(r.license_until)}
+          </td>
+        );
+      case "days_overdue":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums">
+            {r.days_overdue != null ? (
+              <span
+                className={cn(
+                  "inline-block rounded-md px-2 py-1 text-[12px] font-semibold ring-1 ring-inset",
+                  overdueBadgeClass(r.days_overdue)
+                )}
+              >
+                {r.days_overdue}
+              </span>
+            ) : (
+              <span className="text-slate-300">—</span>
+            )}
+          </td>
+        );
+      case "last_order_at":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
+            {formatDt(r.last_order_at)}
+          </td>
+        );
+      case "last_payment_at":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
+            {formatDt(r.last_payment_at)}
+          </td>
+        );
+      case "days_since_payment":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-600">
+            {r.days_since_payment != null ? r.days_since_payment : "—"}
+          </td>
+        );
+      case "balance":
+        return (
+          <td key={colId} className="whitespace-nowrap px-4 py-3.5">
+            <MoneyCell value={r.balance} />
+          </td>
+        );
+      case "legacy_debt":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5">
+            {debtNamesInline ? (
+              <DebtWithAgentCell amount={r.legacy_debt ?? "0"} agentNames={r.legacy_agent_names} />
+            ) : (
+              <MoneyCell value={r.legacy_debt ?? "0"} />
+            )}
+          </td>
+        );
+      case "current_debt":
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5">
+            {debtNamesInline ? (
+              <DebtWithAgentCell amount={r.current_debt ?? "0"} agentNames={r.current_agent_name} />
+            ) : (
+              <MoneyCell value={r.current_debt ?? "0"} />
+            )}
+          </td>
+        );
+      default:
+        return (
+          <td key={colId} className="whitespace-nowrap px-3 py-3.5 text-slate-300">
+            —
+          </td>
+        );
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -1345,115 +2051,7 @@ function ClientLikeTable({
                   onChange={onToggleAll}
                 />
               </th>
-              {variant === "delivery" ? (
-                <SortTh
-                  label="Заказ (id)"
-                  sortKey="order_id"
-                  current={sort}
-                  onSort={onSort}
-                  className="whitespace-nowrap px-3 py-3.5"
-                />
-              ) : null}
-              <SortTh
-                label="Ид клиента"
-                sortKey="client_id"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Клиент"
-                sortKey="name"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Агент"
-                sortKey="agent"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Код агента"
-                sortKey="agent_code"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Супервайзер"
-                sortKey="supervisor"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Название фирмы"
-                sortKey="legal_name"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Направление торговли"
-                sortKey="trade_direction"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh label="ИНН" sortKey="inn" current={sort} onSort={onSort} className="whitespace-nowrap px-3 py-3.5" />
-              <SortTh
-                label="Телефон"
-                sortKey="phone"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Срок"
-                sortKey="license_until"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Дни просрочки"
-                sortKey="days_overdue"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label={variant === "delivery" ? "Дата доставки заказа" : "Дата последней доставки заказа"}
-                sortKey="last_order_at"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Дата последней оплаты"
-                sortKey="last_payment_at"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Дни с последней оплаты"
-                sortKey="days_since_payment"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5"
-              />
-              <SortTh
-                label="Общий"
-                sortKey="balance"
-                current={sort}
-                onSort={onSort}
-                className="whitespace-nowrap px-3 py-3.5 text-right"
-                align="right"
-              />
+              {visibleColumnOrder.map((colId) => renderHeader(colId))}
               {paymentColumnLabels.map((lab) => (
                 <SortTh
                   key={lab}
@@ -1461,7 +2059,7 @@ function ClientLikeTable({
                   sortKey={`pay:${lab}`}
                   current={sort}
                   onSort={onSort}
-                  className="max-w-[10rem] whitespace-normal px-3 py-3.5 text-xs leading-tight"
+                  className="max-w-[10rem] truncate whitespace-nowrap px-3 py-3.5 text-xs"
                   align="right"
                 />
               ))}
@@ -1472,6 +2070,12 @@ function ClientLikeTable({
               <tr>
                 <td colSpan={colCount} className="px-4 py-16 text-center text-slate-400">
                   Загрузка…
+                </td>
+              </tr>
+            ) : visibleColumnOrder.length === 0 && nPay === 0 ? (
+              <tr>
+                <td colSpan={colCount} className="px-4 py-16 text-center text-slate-400">
+                  Нет видимых столбцов
                 </td>
               </tr>
             ) : rows.length === 0 ? (
@@ -1499,7 +2103,7 @@ function ClientLikeTable({
                       }}
                     >
                       <td
-                        className="sticky left-0 z-10 border-r border-border bg-card px-4 py-3.5"
+                        className="sticky left-0 z-10 whitespace-nowrap border-r border-border bg-card px-4 py-3.5"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <CbCheckbox
@@ -1507,124 +2111,12 @@ function ClientLikeTable({
                           onChange={() => onToggle(r, rowIndex)}
                         />
                       </td>
-                      {variant === "delivery" ? (
-                        <td className="max-w-[10rem] px-3 py-3.5 text-xs">
-                          {oid != null ? (
-                            <Link
-                              className="font-medium text-[#0e9180] underline-offset-2 hover:underline"
-                              href={`/orders/${oid}`}
-                            >
-                              #{oid}
-                              {r.delivery_order_number ? (
-                                <span className="block truncate font-normal text-slate-500">
-                                  {r.delivery_order_number}
-                                </span>
-                              ) : null}
-                            </Link>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="px-3 py-3.5 font-mono text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <Link
-                            className="font-medium text-[#0e9180] underline-offset-2 hover:underline"
-                            href={`/clients/${r.client_id}/balances`}
-                          >
-                            {clientDisplayId(r)}
-                          </Link>
-                          <button
-                            type="button"
-                            className="text-slate-300 hover:text-slate-500"
-                            title="Копировать"
-                            onClick={() => onCopyId(clientDisplayId(r))}
-                          >
-                            <Copy size={13} />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="inline-flex items-center gap-1.5">
-                          <Link
-                            className="font-medium text-slate-800 underline-offset-2 hover:underline"
-                            href={`/clients/${r.client_id}/balances`}
-                          >
-                            {r.name}
-                          </Link>
-                          {isStatusFilterAll(statusFilter) &&
-                          r.is_active === false &&
-                          parseAmount(r.balance) !== 0 ? (
-                            <span
-                              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500/20 text-amber-600 dark:bg-amber-500/25 dark:text-amber-300"
-                              title="Неактивный клиент с ненулевым балансом"
-                            >
-                              <AlertCircle className="h-3 w-3" />
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="flex flex-wrap gap-1.5">
-                          {(r.agent_tags.length ? r.agent_tags : [r.agent_name ?? "—"]).map((t, i) => (
-                            <span
-                              key={i}
-                              className="rounded-md bg-[#e6f4f2] px-2 py-1 text-[11.5px] font-medium text-[#0c7d6f]"
-                            >
-                              {String(t).toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5 font-mono text-xs text-slate-600">{r.agent_code ?? "—"}</td>
-                      <td className="max-w-[8rem] truncate px-3 py-3.5 text-xs text-slate-600">
-                        {r.supervisor_name ?? "—"}
-                      </td>
-                      <td className="max-w-[10rem] truncate px-3 py-3.5 text-xs text-slate-700">
-                        {r.legal_name ?? "—"}
-                      </td>
-                      <td className="max-w-[8rem] truncate px-3 py-3.5 text-xs">
-                        {r.trade_direction ? (
-                          <span className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11.5px] font-medium text-slate-600">
-                            {r.trade_direction}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-3 py-3.5 font-mono text-xs text-slate-500">{r.inn ?? "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">{r.phone ?? "—"}</td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
-                        {formatDateOnly(r.license_until)}
-                      </td>
-                      <td className="px-3 py-3.5 text-right tabular-nums">
-                        {r.days_overdue != null ? (
-                          <span
-                            className={cn(
-                              "inline-block rounded-md px-2 py-1 text-[12px] font-semibold ring-1 ring-inset",
-                              overdueBadgeClass(r.days_overdue)
-                            )}
-                          >
-                            {r.days_overdue}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
-                        {formatDt(r.last_order_at)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs text-slate-600">
-                        {formatDt(r.last_payment_at)}
-                      </td>
-                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600">
-                        {r.days_since_payment != null ? r.days_since_payment : "—"}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <MoneyCell value={r.balance} />
-                      </td>
+                      {visibleColumnOrder.map((colId) => renderCell(r, rowIndex, colId))}
                       {paymentColumnLabels.map((lab, idx) => (
-                        <td key={`${rowKey(r, rowIndex)}-${lab}`} className="px-3 py-3.5">
+                        <td
+                          key={`${rowKey(r, rowIndex)}-${lab}`}
+                          className="whitespace-nowrap px-3 py-3.5"
+                        >
                           <MoneyCell value={amountForPaymentLabel(r.payment_amounts, lab, idx)} />
                         </td>
                       ))}

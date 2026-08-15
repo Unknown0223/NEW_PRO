@@ -64,6 +64,13 @@ type Props<T extends string | number> = {
   resetAllLabel?: string | null;
   /** true — trigger va ochilish o‘chiriladi (masalan, majburiy «только вы» rejimi) */
   disabled?: boolean;
+  /** Controlled ochilish (accordion) — berilsa ichki `open` state o‘rniga ishlatiladi */
+  open?: boolean;
+  /**
+   * true — portal o‘rniga trigger ostida ochiladi (Dialog ichida qidiruv uchun).
+   * Yopiq holatda oddiy select; bosilganda pastga expand.
+   */
+  inline?: boolean;
 };
 
 function HeaderSelectAllCheckbox({
@@ -127,9 +134,12 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
   hidePopoverHeader = false,
   filterItemsBySearch = false,
   resetAllLabel = null,
-  disabled = false
+  disabled = false,
+  inline = false,
+  open: openProp
 }: Props<T>) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
   const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -139,13 +149,14 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
 
   const setOpenTracked = useCallback(
     (next: boolean | ((prev: boolean) => boolean)) => {
-      setOpen((prev) => {
-        const resolved = typeof next === "function" ? (next as (p: boolean) => boolean)(prev) : next;
-        if (resolved !== prev) queueMicrotask(() => onOpenChange?.(resolved));
-        return resolved;
-      });
+      const prev = openProp ?? uncontrolledOpen;
+      const resolved = typeof next === "function" ? (next as (p: boolean) => boolean)(prev) : next;
+      if (openProp === undefined) {
+        setUncontrolledOpen(resolved);
+      }
+      if (resolved !== prev) onOpenChange?.(resolved);
     },
-    [onOpenChange]
+    [onOpenChange, openProp, uncontrolledOpen]
   );
 
   useEffect(() => setMounted(true), []);
@@ -225,22 +236,29 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
 
   useEffect(() => {
     if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenTracked(false);
+    };
+    document.addEventListener("keydown", onKey);
+
+    // Inline (accordion) rejimda mousedown-outside yo‘q:
+    // aks holda boshqa triggerga bosganda panel mousedown da yopilib, click yo‘qoladi.
+    if (inline) {
+      return () => document.removeEventListener("keydown", onKey);
+    }
+
     const onDoc = (e: MouseEvent) => {
       const node = e.target as Node;
       if (triggerRef.current?.contains(node)) return;
       if (popRef.current?.contains(node)) return;
       setOpenTracked(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenTracked(false);
-    };
     document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, setOpenTracked]);
+  }, [open, setOpenTracked, inline]);
 
   const toggleVisibleAll = (checked: boolean) => {
     onSelectedChange((prev) => {
@@ -280,22 +298,9 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
 
   const searchActive = searchable && search.trim().length > 0;
 
-  const popoverContent = (
-    <div
-      ref={popRef}
-      id={listId}
-      role="listbox"
-      aria-multiselectable
-      className={cn(
-        "fixed z-[500] flex max-h-[min(55vh,420px)] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg ring-1 ring-black/5 dark:ring-white/10"
-      )}
-      style={{
-        top: coords.top,
-        left: coords.left,
-        width: coords.width
-      }}
-    >
-      {hidePopoverHeader ? null : (
+  const panelBody = (
+    <>
+      {hidePopoverHeader || inline ? null : (
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-muted/40 px-3 py-2">
           <span className="text-xs font-semibold tracking-tight">{label}</span>
           <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
@@ -314,6 +319,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
             className="h-9 border-input bg-background pl-9 text-sm shadow-none"
             placeholder={searchPlaceholder}
             value={search}
+            disabled={disabled}
             onChange={(e) => onSearchChange(e.target.value)}
             onMouseDown={(e) => e.stopPropagation()}
             aria-label={searchPlaceholder}
@@ -328,6 +334,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
             variant="ghost"
             size="sm"
             className="h-7 w-full justify-center text-[11px] text-muted-foreground hover:text-foreground"
+            disabled={disabled}
             onClick={() => {
               onSelectedChange(new Set());
               onSearchChange("");
@@ -343,7 +350,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           <HeaderSelectAllCheckbox
             allSelected={allVisibleSelected}
             someSelected={someVisibleSelected}
-            disabled={!hasVisible || loading}
+            disabled={disabled || !hasVisible || loading}
             onChange={(checked) => toggleVisibleAll(checked)}
           />
           <span>{selectAllLabel}</span>
@@ -353,7 +360,7 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
           variant="ghost"
           size="sm"
           className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-          disabled={!hasVisible || loading}
+          disabled={disabled || !hasVisible || loading}
           onClick={clearVisible}
         >
           {clearVisibleLabel}
@@ -374,13 +381,15 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
                   <label
                     className={cn(
                       "flex cursor-pointer items-start gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-muted/50",
-                      isOn && "bg-primary/[0.06]"
+                      isOn && "bg-primary/[0.06]",
+                      disabled && "cursor-not-allowed opacity-60"
                     )}
                   >
                     <input
                       type="checkbox"
                       className={checkboxCls}
                       checked={isOn}
+                      disabled={disabled}
                       onChange={(e) => toggleOne(item.id, e.target.checked)}
                     />
                     <span className="min-w-0 flex-1">
@@ -407,7 +416,82 @@ export function SearchableMultiSelectPanel<T extends string | number = number>({
       <div className="shrink-0 border-t border-border/60 bg-muted/20 px-3 py-1.5 text-[10px] text-muted-foreground">
         На экране: <span className="font-medium tabular-nums text-foreground/80">{displayItems.length}</span>
         {searchActive ? " (по поиску)" : ""}
+        {inline && selected.size > 0 ? (
+          <>
+            {" · "}
+            Выбрано:{" "}
+            <span className="font-medium tabular-nums text-foreground/80">{selected.size}</span>
+          </>
+        ) : null}
       </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className={cn("w-full", className)}>
+        {hideOuterLabel ? null : (
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+        )}
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-input bg-background px-2 py-1.5 text-left text-xs shadow-sm outline-none transition-colors",
+            "hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            open && "ring-2 ring-ring ring-offset-2",
+            disabled && "opacity-60",
+            triggerClassName
+          )}
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-haspopup="listbox"
+          onClick={() => {
+            if (!disabled) setOpenTracked((v) => !v);
+          }}
+        >
+          <span className={cn("min-w-0 flex-1 truncate", selected.size === 0 && "text-muted-foreground")}>
+            {triggerSummary}
+          </span>
+          <ChevronDown
+            className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+        {open && !disabled ? (
+          <div
+            ref={popRef}
+            id={listId}
+            role="listbox"
+            aria-multiselectable
+            className={cn(
+              "mt-1.5 flex max-h-[min(50vh,360px)] flex-col overflow-hidden rounded-lg border border-input bg-background shadow-sm"
+            )}
+          >
+            {panelBody}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const popoverContent = (
+    <div
+      ref={popRef}
+      id={listId}
+      role="listbox"
+      aria-multiselectable
+      className={cn(
+        "fixed z-[500] flex max-h-[min(55vh,420px)] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-lg ring-1 ring-black/5 dark:ring-white/10"
+      )}
+      style={{
+        top: coords.top,
+        left: coords.left,
+        width: coords.width
+      }}
+    >
+      {panelBody}
     </div>
   );
 

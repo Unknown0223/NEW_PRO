@@ -7,6 +7,7 @@
  * NON-DESTRUCTIVE: eski kalitlar saqlanadi, yangilari qo'shiladi.
  */
 import type { PermissionAction } from "./permission-model";
+import { extractAction } from "./permission-model";
 
 /** Oxirgi segment / butun kalitdagi verb naqshlari → amal tipi. */
 const ACTION_PATTERNS: { re: RegExp; action: PermissionAction }[] = [
@@ -22,7 +23,9 @@ const ACTION_PATTERNS: { re: RegExp; action: PermissionAction }[] = [
   { re: /(odobreno|utverzh)/, action: "approve" },
   { re: /(prikrepit|otkrepit|privyazk|prikrepite)/, action: "assign" },
   { re: /(peremeshch)/, action: "transfer" },
-  { re: /(spisok|prosmotr|detal|detali|spisok_aktivnyh|rezultat|posmotret|istoriya|otchet|otchyot|dnevnoy|dostup)/, action: "view" }
+  // istoriya → history (view emas) — history tugmalari view bilan ochilmasin
+  { re: /(istoriya)/, action: "history" },
+  { re: /(spisok|prosmotr|detal|detali|spisok_aktivnyh|rezultat|posmotret|otchet|otchyot|dnevnoy|dostup)/, action: "view" }
 ];
 
 /** Eski `module.section` → yangi `module.section` slug aliaslari. */
@@ -67,6 +70,9 @@ const SECTION_ALIAS: Record<string, string> = {
   "plans.nastroyka_utverzhdayushchih": "plans.nastroyka_utverzhdayushchih",
   "plans.ustanovka_planov": "plans.ustanovka_planov",
   "plans.otchety": "reports.otchety",
+  "plans.otchety.konstruktor_otchetov": "reports.konstruktor.view",
+  "plans.otchety.sozdat_publichnuyu_konfiguratsiyu": "reports.konstruktor.create",
+  "plans.otchety.excel_eksport": "reports.konstruktor.copy",
   // staff
   "staff.agent": "staff.agent",
   "staff.ekspeditor": "staff.ekspeditor",
@@ -92,6 +98,91 @@ const DASHBOARD_MAP: Record<string, string> = {
   "dashboard.supervayzer": "dashboard.supervayzer.view",
   "dashboard.plan_fakt": "dashboard.plan_fakt.view"
 };
+
+/** Structured → legacy (Access UI structured deny must also drop legacy API keys). */
+const DASHBOARD_STRUCTURED_TO_LEGACY: Record<string, string> = Object.fromEntries(
+  Object.entries(DASHBOARD_MAP).map(([legacy, structured]) => [structured, legacy])
+);
+
+/** Modul-level `module.view` ↔ asosiy section `.view` (nav OR-gate uchun). */
+const MODULE_VIEW_COMPANIONS: Record<string, string[]> = {
+  "orders.view": ["orders.zakaz.view"],
+  "orders.zakaz.view": ["orders.view"],
+  "clients.view": ["clients.klient.view"],
+  "clients.klient.view": ["clients.view"],
+  "suppliers.view": ["suppliers.postavshchik.view"],
+  "suppliers.postavshchik.view": ["suppliers.view"],
+  "cash.view": ["cash.kassa.view"],
+  "cash.kassa.view": ["cash.view"],
+  "reports.view": ["reports.otchety.view", "reports.konstruktor.view"],
+  "reports.otchety.view": ["reports.view"],
+  "reports.konstruktor.view": ["reports.view", "pivot.otchety.view"],
+  "pivot.view": ["pivot.otchety.view", "reports.konstruktor.view"],
+  "pivot.otchety.view": ["pivot.view", "reports.konstruktor.view"],
+  "warehouse.view": ["warehouse.ostatki.view"],
+  "warehouse.ostatki.view": ["warehouse.view"]
+};
+
+let explicitReverseCache: Map<string, string[]> | null = null;
+
+function reverseExplicitMap(): Map<string, string[]> {
+  if (explicitReverseCache) return explicitReverseCache;
+  const m = new Map<string, string[]>();
+  for (const [legacy, structured] of Object.entries(EXPLICIT_MAP)) {
+    const arr = m.get(structured) ?? [];
+    arr.push(legacy);
+    m.set(structured, arr);
+  }
+  explicitReverseCache = m;
+  return m;
+}
+
+/**
+ * Access patch / resolve: bitta kalit → juftliklar (legacy ↔ structured, modul.view).
+ * Admin «Снять» / «Дополнительно» allow: orphan juftliklar me-permissions / navda
+ * qolmasin yoki yo‘qolmasin (deny bilan simmetrik).
+ *
+ * Muhim: allaqachon strukturali `module.section.action` kalitlarga
+ * `mapLegacyKeyToStructured` qo‘llanmaydi — aks holda `staff.agent.activate`
+ * noto‘g‘ri `staff.agent.view` ga aylanib, deny view ni «yutib yuboradi».
+ */
+export function expandPermissionKeyAliases(keys: readonly string[]): string[] {
+  const out = new Set<string>();
+  let touchesDashboard = false;
+  const rev = reverseExplicitMap();
+
+  for (const raw of keys) {
+    const key = raw.trim();
+    if (!key) continue;
+    out.add(key);
+
+    const structuredDash = DASHBOARD_MAP[key];
+    if (structuredDash) out.add(structuredDash);
+    const legacyDash = DASHBOARD_STRUCTURED_TO_LEGACY[key];
+    if (legacyDash) out.add(legacyDash);
+    // Faqat aniq dashboard.view / bare dashboard — section view siblinglarni bog‘lamaydi.
+    if (key === "dashboard.view" || key === "dashboard") touchesDashboard = true;
+
+    const mapped = EXPLICIT_MAP[key];
+    if (mapped) out.add(mapped);
+    for (const legacy of rev.get(key) ?? []) out.add(legacy);
+
+    // Legacy leaf (`staff.agent.spisok_agentov`) → structured (`staff.agent.view`).
+    // Structured CRUD kalitlarga heuristika qo‘llanmaydi.
+    if (!extractAction(key)) {
+      const heur = mapLegacyKeyToStructured(key);
+      if (heur) {
+        out.add(heur);
+        for (const companion of MODULE_VIEW_COMPANIONS[heur] ?? []) out.add(companion);
+        for (const legacy of rev.get(heur) ?? []) out.add(legacy);
+      }
+    }
+
+    for (const companion of MODULE_VIEW_COMPANIONS[key] ?? []) out.add(companion);
+  }
+  if (touchesDashboard) out.add("dashboard.view");
+  return [...out];
+}
 
 /** To'g'ridan-to'g'ri (qo'lda) moslashtirishlar — heuristika noto'g'ri ishlaganda. */
 export const EXPLICIT_MAP: Record<string, string> = {

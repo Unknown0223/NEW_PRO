@@ -116,6 +116,15 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
           );
         }
+        if (e instanceof Error && e.message === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+          );
+        }
         if (e instanceof Error && e.message === "EXPEDITOR_NOT_FOUND") {
           return sendApiError(
             reply,
@@ -184,6 +193,15 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             400,
             "ValidationError",
             "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+          );
+        }
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
           );
         }
         if (msg === "EXPEDITOR_NOT_FOUND") {

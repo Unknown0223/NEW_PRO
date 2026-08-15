@@ -1,4 +1,9 @@
-export type ClientBalanceViewMode = "clients" | "agents" | "clients_delivery";
+export type ClientBalanceViewMode =
+  | "clients"
+  | "agents"
+  | "clients_delivery"
+  | "clients_legacy"
+  | "clients_consignment";
 
 export type ClientBalancePaymentTypeSummary = {
   label: string;
@@ -25,6 +30,10 @@ export type ClientBalanceRow = {
   last_payment_at: string | null;
   days_since_payment: number | null;
   balance: string;
+  legacy_debt?: string | null;
+  current_debt?: string | null;
+  legacy_agent_names?: string | null;
+  current_agent_name?: string | null;
   /** Те же способы оплаты и порядок, что в summary.payment_by_type */
   payment_amounts: ClientBalancePaymentTypeSummary[];
   /** Вкладка «По доставке»: одна строка — один заказ */
@@ -40,6 +49,10 @@ export type AgentBalanceRow = {
   agent_code: string | null;
   clients_count: number;
   balance: string;
+  /** Joriy agent mijozlaridagi eski qarz yig‘indisi. */
+  legacy_debt?: string;
+  current_debt?: string;
+  is_active?: boolean | null;
   payment_amounts: ClientBalancePaymentTypeSummary[];
 };
 

@@ -1,10 +1,12 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { catalogRoles } from "./clients.route.shared";
 
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
 import { sendApiError } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import { assertClientAllowedForActor } from "../access/access-agent-scope";
 import { getClientSalesAnalytics } from "./client-sales-analytics.service";
 import {
   buildClientReconciliationXlsxBuffer,
@@ -23,6 +25,18 @@ import {
   parseReconciliationDateRange
 } from "./clients.route.schemas";
 
+async function assertClientInActorScope(
+  request: FastifyRequest,
+  tenantId: number,
+  clientId: number
+): Promise<void> {
+  const viewer = getAccessUser(request);
+  await assertClientAllowedForActor(tenantId, clientId, {
+    userId: actorUserIdOrNull(request),
+    role: viewer.role ?? ""
+  });
+}
+
 export async function registerClientDetailRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/clients/:id/audit",
@@ -37,11 +51,15 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       const pageNum = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
       const limitNum = Math.min(100, Math.max(1, Number.parseInt(q.limit ?? "30", 10) || 30));
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const result = await listClientAuditLogs(request.tenant!.id, id, pageNum, limitNum);
         return reply.send(result);
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
         }
         throw e;
       }
@@ -83,6 +101,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
         dateToEnd = d.toEnd;
       }
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const buf = await getClientReconciliationPdfBuffer(request.tenant!.id, id, dateFrom, dateToEnd);
         const ymd = (x: Date) =>
           `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
@@ -94,6 +113,9 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+        }
         if (msg === "BAD_DATE_RANGE") {
           return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
         }
@@ -128,11 +150,15 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       }
       const { dateFrom, dateToEnd } = dr;
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const loaded = await loadClientReconciliation(request.tenant!.id, id, dateFrom, dateToEnd);
         return reply.send(toClientReconciliationJson(loaded));
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+        }
         if (msg === "BAD_DATE_RANGE") {
           return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
         }
@@ -166,6 +192,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       }
       const { dateFrom, dateToEnd } = dr;
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const loaded = await loadClientReconciliation(request.tenant!.id, id, dateFrom, dateToEnd);
         const buf = await buildClientReconciliationXlsxBuffer(loaded);
         const ymd = (x: Date) =>
@@ -181,6 +208,9 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+        }
         if (msg === "BAD_DATE_RANGE") {
           return sendApiError(reply, request, 400, "BadDateRange", "date_from date_to dan katta.");
         }
@@ -209,11 +239,15 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       }
       const { id } = parsedParams.data;
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const row = await getClientDetail(request.tenant!.id, id);
         return reply.send(row);
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
         }
         throw e;
       }
@@ -245,6 +279,7 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       const noAgentRaw = q.no_agent?.trim().toLowerCase();
       const include_no_agent = noAgentRaw === "1" || noAgentRaw === "true" || noAgentRaw === "yes";
       try {
+        await assertClientInActorScope(request, request.tenant!.id, id);
         const row = await getClientSalesAnalytics(request.tenant!.id, id, {
           date_from: q.date_from,
           date_to: q.date_to,
@@ -260,6 +295,9 @@ export async function registerClientDetailRoutes(app: FastifyInstance) {
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
         }
         throw e;
       }

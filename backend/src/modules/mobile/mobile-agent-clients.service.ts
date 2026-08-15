@@ -17,7 +17,7 @@ import {
   type MobileClientInput
 } from "../staff/agent-mobile-config.client-mobile";
 import {
-  agentScopedClientWhere,
+  agentScopedClientWhereForUser,
   assertAgentScopedClient,
   clientSyncSelectForAgent,
   compactClient,
@@ -178,7 +178,7 @@ export async function patchMobileAgentClient(
   if (cfg?.client?.can_edit === false) throw new Error("CLIENT_EDIT_FORBIDDEN");
 
   const existing = await prisma.client.findFirst({
-    where: { id: clientId, ...agentScopedClientWhere(tenantId, userId) },
+    where: { id: clientId, ...(await agentScopedClientWhereForUser(tenantId, userId)) },
     select: { id: true }
   });
   if (!existing) throw new Error("NOT_FOUND");
@@ -194,9 +194,21 @@ export async function patchMobileAgentClient(
   return compactClient(row as unknown as CompactClientRow);
 }
 
-export async function listMobileSupervisorAgentLocations(tenantId: number) {
+/** GPS — faqat ushbu supervayzerga bog‘langan agentlar. */
+export async function listMobileSupervisorAgentLocations(
+  tenantId: number,
+  supervisorUserId?: number
+) {
   const agents = await prisma.user.findMany({
-    where: { tenant_id: tenantId, role: "agent", is_active: true, app_access: true },
+    where: {
+      tenant_id: tenantId,
+      role: "agent",
+      is_active: true,
+      app_access: true,
+      ...(supervisorUserId != null && supervisorUserId > 0
+        ? { supervisor_user_id: supervisorUserId }
+        : {})
+    },
     select: { id: true, name: true },
     orderBy: { name: "asc" }
   });

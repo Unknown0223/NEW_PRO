@@ -9,6 +9,7 @@ type StreamPayload = { type: string; tenant_id?: number; order_id?: number };
 
 /**
  * Zakazlar o‘zgarishlarini SSE orqali tinglaydi va tegishli React Query so‘rovlarini yangilaydi.
+ * Guruh status: N ta `order.updated` → bitta debounce refetch (har event uchun alohida GET emas).
  */
 export function OrderSseListener() {
   const qc = useQueryClient();
@@ -16,6 +17,8 @@ export function OrderSseListener() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const esRef = useRef<EventSource | null>(null);
   const nudgeRef = useRef(false);
+  const listInvalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingOrderIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (!tenantSlug || !accessToken) {
@@ -56,12 +59,25 @@ export function OrderSseListener() {
       esRef.current?.close();
       esRef.current = es;
 
+      const flushInvalidations = () => {
+        listInvalidateTimerRef.current = null;
+        const orderIds = [...pendingOrderIdsRef.current];
+        pendingOrderIdsRef.current.clear();
+        void qc.invalidateQueries({ queryKey: ["orders", slugAtStart] });
+        for (const orderId of orderIds) {
+          void qc.invalidateQueries({ queryKey: ["order", slugAtStart, orderId] });
+        }
+      };
+
       es.onmessage = (ev) => {
         try {
           const p = JSON.parse(ev.data) as StreamPayload;
           if (p.type !== "order.updated" || typeof p.order_id !== "number") return;
-          void qc.invalidateQueries({ queryKey: ["orders", slugAtStart] });
-          void qc.invalidateQueries({ queryKey: ["order", slugAtStart, p.order_id] });
+          pendingOrderIdsRef.current.add(p.order_id);
+          if (listInvalidateTimerRef.current != null) {
+            clearTimeout(listInvalidateTimerRef.current);
+          }
+          listInvalidateTimerRef.current = setTimeout(flushInvalidations, 450);
         } catch {
           /* ignore */
         }
@@ -92,6 +108,11 @@ export function OrderSseListener() {
 
     return () => {
       cancelled = true;
+      if (listInvalidateTimerRef.current != null) {
+        clearTimeout(listInvalidateTimerRef.current);
+        listInvalidateTimerRef.current = null;
+      }
+      pendingOrderIdsRef.current.clear();
       ownedEs?.close();
       ownedEs = null;
       if (esRef.current) {

@@ -31,7 +31,8 @@ class _MobileSessionGuardState extends ConsumerState<MobileSessionGuard> with Wi
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) => _ping());
-    _configTimer = Timer.periodic(const Duration(minutes: 15), (_) => _refreshConfigIfLoggedIn());
+    // Web sozlamalari (vaqt, sync oynasi, mobile_config) — 2 daqiqada bir.
+    _configTimer = Timer.periodic(const Duration(minutes: 2), (_) => _refreshConfigIfLoggedIn());
   }
 
   @override
@@ -82,7 +83,7 @@ class _MobileSessionGuardState extends ConsumerState<MobileSessionGuard> with Wi
 
     if (!force && _lastConfigRefresh != null) {
       final elapsed = DateTime.now().difference(_lastConfigRefresh!);
-      if (elapsed.inMinutes < 14) return;
+      if (elapsed.inSeconds < 90) return;
     }
     _lastConfigRefresh = DateTime.now();
     ref.read(authStateProvider.notifier).refreshMobileConfig();

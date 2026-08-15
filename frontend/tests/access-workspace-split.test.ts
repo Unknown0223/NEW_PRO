@@ -56,4 +56,36 @@ describe("access-workspace split", () => {
     expect(matchesPermissionSourceFilter(extraRow, "role")).toBe(false);
     expect(matchesPermissionSourceFilter(extraRow, "extra")).toBe(true);
   });
+
+  it("revoke effective access: role(+allow) → deny, personal allow → remove", async () => {
+    const { buildRevokeEffectiveAccessPatch, revokeEffectiveAccessButtonLabel } = await import(
+      "../lib/access-user-permission-matrix"
+    );
+    const roleOnly = { key: "dashboard.prodazhi.view", effective: true, from_role: true, user_effect: "none" as const };
+    const rolePlusAllow = {
+      key: "dashboard.supervayzer.view",
+      effective: true,
+      from_role: true,
+      user_effect: "allow" as const
+    };
+    const personalOnly = {
+      key: "reports.otchety.view",
+      effective: true,
+      from_role: false,
+      user_effect: "allow" as const
+    };
+    expect(buildRevokeEffectiveAccessPatch(roleOnly)).toEqual({
+      merge_permissions: true,
+      denied_permissions: ["dashboard.prodazhi.view"]
+    });
+    expect(buildRevokeEffectiveAccessPatch(rolePlusAllow)).toEqual({
+      merge_permissions: true,
+      denied_permissions: ["dashboard.supervayzer.view"]
+    });
+    expect(buildRevokeEffectiveAccessPatch(personalOnly)).toEqual({
+      remove_permission_keys: ["reports.otchety.view"]
+    });
+    expect(revokeEffectiveAccessButtonLabel(rolePlusAllow)).toBe("Снять");
+    expect(revokeEffectiveAccessButtonLabel(personalOnly)).toBe("Открепить");
+  });
 });

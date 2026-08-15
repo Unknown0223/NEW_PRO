@@ -4,7 +4,8 @@
  */
 const FULL_HEIGHT_EXACT: readonly string[] = [
   "/payments",
-  "/client-expenses"
+  "/client-expenses",
+  "/reports/gps/map"
 ];
 
 const FULL_HEIGHT_PREFIXES: readonly string[] = [

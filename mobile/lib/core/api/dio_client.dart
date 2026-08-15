@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../auth/session_expired.dart';
 import '../time/server_clock.dart';
 import '../config/app_env.dart';
+import '../errors/error_reporter.dart';
 import 'api_base_url.dart';
 
 export 'api_base_url.dart' show configureApiHostForAndroidEmulator, resolveApiBaseUrl;
@@ -22,15 +23,28 @@ final dioProvider = Provider<Dio>((ref) {
   final dio = _plainDio();
   dio.interceptors.add(ServerTimeInterceptor());
   dio.interceptors.add(AuthInterceptor(ref));
+  dio.interceptors.add(ErrorReportInterceptor(ref));
+  ErrorReporter.bind(ref);
   return dio;
 });
 
-/// Har bir server javobidagi HTTP `Date` sarlavhasidan ishonchli vaqtni
-/// [ServerClock] ga langarlaydi. Shu tariqa sinxron oynasi hisobi qurilma
-/// soatiga emas, serverga tayanadi.
+/// Har bir server javobidagi ishonchli UTC ni [ServerClock] ga langarlaydi.
+///
+/// 1) `X-Server-Time` (ISO UTC) — eng ishonchli (biz yuboramiz)
+/// 2) HTTP `Date` — fallback
 class ServerTimeInterceptor extends Interceptor {
   void _anchor(Headers? headers) {
-    final raw = headers?.value('date');
+    if (headers == null) return;
+    final custom = headers.value('x-server-time')?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      try {
+        ServerClock.instance.anchorFromServerUtc(DateTime.parse(custom).toUtc());
+        return;
+      } catch (_) {
+        // pastga tushamiz — Date
+      }
+    }
+    final raw = headers.value('date');
     if (raw == null || raw.isEmpty) return;
     try {
       ServerClock.instance.anchorFromServerUtc(HttpDate.parse(raw).toUtc());
@@ -61,6 +75,18 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
 
 final accessTokenProvider = StateProvider<String?>((ref) => null);
 final refreshTokenProvider = StateProvider<String?>((ref) => null);
+
+/// Refresh natijasi: faqat aniq bekor/tugashda sessiya yopiladi.
+enum RefreshOutcome {
+  success,
+  /// INVALID_REFRESH / SESSION_REVOKED / APP_ACCESS_DENIED — login kerak
+  definitiveFailure,
+  /// Tarmoq / timeout — mahalliy sessiya saqlanadi
+  transientFailure,
+}
+
+/// Parallel 401 larda bitta refresh (rotate race oldini olish).
+Future<RefreshOutcome>? _refreshInFlight;
 
 class AuthInterceptor extends Interceptor {
   final Ref _ref;
@@ -95,7 +121,7 @@ class AuthInterceptor extends Interceptor {
     }
     if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
       await clearAuthTokens(_ref);
-      Future.microtask(() => notifySessionExpired(_ref));
+      Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
       handler.next(err);
       return;
     }
@@ -114,10 +140,15 @@ class AuthInterceptor extends Interceptor {
       return;
     }
 
-    final refreshed = await _tryRefresh(_ref);
-    if (!refreshed) {
-      await clearAccessTokenOnly(_ref);
-      Future.microtask(() => notifySessionExpired(_ref));
+    final outcome = await refreshAccessToken(_ref);
+    if (outcome == RefreshOutcome.definitiveFailure) {
+      await clearAuthTokens(_ref);
+      Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
+      handler.next(err);
+      return;
+    }
+    if (outcome == RefreshOutcome.transientFailure) {
+      // Oflayn / timeout — sessiya ochiq qoladi, so‘rov xatosi UI ga ketadi.
       handler.next(err);
       return;
     }
@@ -151,45 +182,83 @@ Future<bool> ensureAuthTokens(dynamic ref) async {
   final storage = ref.read(secureStorageProvider);
   final a = await storage.read(key: 'access_token');
   final r = await storage.read(key: 'refresh_token');
-  if (a != null && a.isNotEmpty && r != null && r.isNotEmpty) {
-    ref.read(accessTokenProvider.notifier).state = a;
+  // Access yo‘q / tozalangan bo‘lsa ham refresh bo‘lsa — sessiya hali yashaydi.
+  if (r != null && r.isNotEmpty) {
+    if (a != null && a.isNotEmpty) {
+      ref.read(accessTokenProvider.notifier).state = a;
+    }
     ref.read(refreshTokenProvider.notifier).state = r;
     return true;
   }
   return false;
 }
 
-Future<bool> _tryRefresh(Ref ref) async {
+/// Access muddati tugagan bo‘lsa silent refresh (mutex orqali).
+/// Resume / PIN ochilgandan keyin chaqirish tavsiya etiladi.
+Future<RefreshOutcome> refreshAccessToken(dynamic ref) {
+  final existing = _refreshInFlight;
+  if (existing != null) return existing;
+
+  final future = _doRefresh(ref);
+  _refreshInFlight = future;
+  return future.whenComplete(() {
+    if (identical(_refreshInFlight, future)) {
+      _refreshInFlight = null;
+    }
+  });
+}
+
+Future<RefreshOutcome> _doRefresh(dynamic ref) async {
   try {
     final storage = ref.read(secureStorageProvider);
     var refresh = ref.read(refreshTokenProvider);
     refresh ??= await storage.read(key: 'refresh_token');
-    if (refresh == null || refresh.isEmpty) return false;
+    if (refresh == null || refresh.isEmpty) return RefreshOutcome.definitiveFailure;
 
     final res = await _plainDio().post('/api/auth/refresh', data: {'refreshToken': refresh});
     if (isAppAccessDeniedResponse(res.statusCode, res.data)) {
       await clearAuthTokens(ref);
       Future.microtask(() => notifyAppAccessDenied(ref));
-      return false;
+      return RefreshOutcome.definitiveFailure;
     }
-    if (res.statusCode != 200) return false;
+    if (isSessionRevokedResponse(res.statusCode, res.data) ||
+        isInvalidRefreshResponse(res.statusCode, res.data)) {
+      return RefreshOutcome.definitiveFailure;
+    }
+    if (res.statusCode != 200) {
+      // Noma’lum 4xx/5xx — tarmoq emas, lekin race bo‘lishi mumkin: qayta urinishga joy qoldiramiz.
+      if (res.statusCode == 401) return RefreshOutcome.definitiveFailure;
+      return RefreshOutcome.transientFailure;
+    }
 
     final a = res.data['accessToken'] as String?;
     final r = res.data['refreshToken'] as String?;
-    if (a == null || a.isEmpty) return false;
+    if (a == null || a.isEmpty) return RefreshOutcome.definitiveFailure;
 
     await saveTokens(ref, a, r ?? refresh);
-    return true;
+    return RefreshOutcome.success;
+  } on DioException catch (e) {
+    if (isAppAccessDeniedResponse(e.response?.statusCode, e.response?.data)) {
+      await clearAuthTokens(ref);
+      Future.microtask(() => notifyAppAccessDenied(ref));
+      return RefreshOutcome.definitiveFailure;
+    }
+    if (isSessionRevokedResponse(e.response?.statusCode, e.response?.data) ||
+        isInvalidRefreshResponse(e.response?.statusCode, e.response?.data)) {
+      return RefreshOutcome.definitiveFailure;
+    }
+    // connectionError / timeout / 5xx — sessiya saqlanadi
+    return RefreshOutcome.transientFailure;
   } catch (_) {
-    return false;
+    return RefreshOutcome.transientFailure;
   }
 }
 
 const _apiEnvKey = 'api_env_key';
 
-/// Save tokens — works with Ref (from StateNotifier)
-Future<void> saveTokens(Ref ref, String access, String refresh) async {
-  final storage = ref.read(secureStorageProvider);
+/// Save tokens — works with Ref / WidgetRef (`.read` bor).
+Future<void> saveTokens(dynamic ref, String access, String refresh) async {
+  final storage = ref.read(secureStorageProvider) as FlutterSecureStorage;
   await storage.write(key: 'access_token', value: access);
   await storage.write(key: 'refresh_token', value: refresh);
   await storage.write(key: _apiEnvKey, value: resolveApiEnvKey());
@@ -210,12 +279,15 @@ Future<bool> restoreTokens(Ref ref) async {
   }
   final a = await storage.read(key: 'access_token');
   final r = await storage.read(key: 'refresh_token');
-  final hasTokens = a != null && a.isNotEmpty && r != null && r.isNotEmpty;
-  if (hasTokens && (storedEnv == null || storedEnv.isEmpty)) {
+  // Refresh bo‘lsa — sessiya bor (access muddati tugagan bo‘lishi mumkin).
+  final hasRefresh = r != null && r.isNotEmpty;
+  if (hasRefresh && (storedEnv == null || storedEnv.isEmpty)) {
     await storage.write(key: _apiEnvKey, value: currentEnv);
   }
-  if (hasTokens) {
-    ref.read(accessTokenProvider.notifier).state = a;
+  if (hasRefresh) {
+    if (a != null && a.isNotEmpty) {
+      ref.read(accessTokenProvider.notifier).state = a;
+    }
     ref.read(refreshTokenProvider.notifier).state = r;
     return true;
   }

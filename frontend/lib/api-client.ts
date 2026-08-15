@@ -89,14 +89,20 @@ export async function apiFetch<T = unknown>(path: string, init?: RequestInit): P
 
   if (!res.ok) {
     const text = await res.text();
-    let detail = text;
+    let body: { error?: string; message?: string; details?: unknown } | undefined;
     try {
-      const j = JSON.parse(text) as { error?: string };
-      if (j?.error) detail = j.error;
+      body = JSON.parse(text) as { error?: string; message?: string; details?: unknown };
     } catch {
-      /* use text */
+      body = undefined;
     }
-    throw new Error(detail || res.statusText);
+    const detail = body?.message?.trim() || body?.error?.trim() || text || res.statusText;
+    const err = new Error(detail || res.statusText) as Error & {
+      status?: number;
+      apiBody?: typeof body;
+    };
+    err.status = res.status;
+    err.apiBody = body;
+    throw err;
   }
 
   const ct = res.headers.get("content-type");

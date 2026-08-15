@@ -11,7 +11,7 @@ import {
   MOBILE_APK_MAX_BYTES,
   saveMobileApkStream
 } from "../mobile/mobile-apk.service";
-import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { sendApiError, zodValidationExtras, zodValidationSummary } from "../../lib/api-error";
 import { env } from "../../config/env";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ensureTenantContext } from "../../lib/tenant-context";
@@ -84,7 +84,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
           request,
           400,
           "ValidationError",
-          "Request validation failed",
+          zodValidationSummary(parsed.error),
           zodValidationExtras(parsed.error)
         );
       }
@@ -98,6 +98,25 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       } catch (e) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
+        }
+        if (e instanceof Error && e.message === "TERRITORY_NODES_EMPTY_REJECTED") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "TerritoryNodesEmptyRejected",
+            "Bo‘sh territoriya daraxti saqlanmaydi — mavjud ma’lumot o‘chib ketmasin."
+          );
+        }
+        if (e instanceof Error && e.message.startsWith("REF_EMPTY_WIPE_REJECTED:")) {
+          const field = e.message.split(":")[1] ?? "references";
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "RefEmptyWipeRejected",
+            `Bo‘sh «${field}» saqlanmaydi — mavjud spravochnik o‘chib ketmasin.`
+          );
         }
         if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
           return sendApiError(reply, request, 400, "InvalidBranchCashDesk");
@@ -117,7 +136,23 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       if (!ensureTenantContext(request, reply)) return;
       const policy = await getMobileAppReleasePolicy(request.tenant!.id);
       const outdated = await listOutdatedMobileUsers(request.tenant!.id);
-      return reply.send({ policy, outdated_count: outdated.length, outdated_users: outdated });
+      const { mobileApkReady, buildMobileApkDownloadUrl } = await import("../mobile/mobile-apk.service");
+      const {
+        resolveRequestOrigin
+      } = await import("../mobile/app-release.service");
+      const apk = await mobileApkReady(request.tenant!.slug);
+      const origin = resolveRequestOrigin(request.headers);
+      return reply.send({
+        policy,
+        outdated_count: outdated.length,
+        outdated_users: outdated,
+        apk: {
+          ready: apk.ready,
+          bytes: apk.bytes,
+          mtime_ms: apk.mtime_ms,
+          download_url: buildMobileApkDownloadUrl(origin, request.tenant!.slug)
+        }
+      });
     }
   );
 
@@ -198,13 +233,22 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
         const verFromFilename = filename.match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
         const policy = await patchMobileAppReleasePolicy(request.tenant!.id, {
           download_url: downloadUrl,
-          ...(verFromFilename ? { latest_version: verFromFilename } : {})
+          // Majburiy bloklash — alohida PATCH / force flag orqali.
+          // Har yuklashda force=true qilish loginni berkitib qo‘yardi.
+          force_update: false,
+          ...(verFromFilename
+            ? {
+                latest_version: verFromFilename,
+                min_version: verFromFilename.replace(/\.\d+$/, ".0")
+              }
+            : {})
         });
         return reply.send({
           policy,
           download_url: downloadUrl,
           bytes,
-          max_bytes: MOBILE_APK_MAX_BYTES
+          max_bytes: MOBILE_APK_MAX_BYTES,
+          apk: { ready: true, bytes }
         });
       } catch (e) {
         if (e instanceof Error && e.message === "FILE_TOO_LARGE") {

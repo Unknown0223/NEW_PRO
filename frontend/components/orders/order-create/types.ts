@@ -9,6 +9,11 @@ export type OrderCreateProps = {
   onCancel: () => void;
   /** Hujjat tipi: order | return | exchange | partial_return | return_by_order */
   orderType?: string;
+  /**
+   * Mavjud «new» zakazni Sozdat zakaz formasida tahrirlash.
+   * URL: `/orders/new?edit_order_id=…`
+   */
+  editOrderId?: number | null;
 };
 
 export type PolkiPairRowModel = {
@@ -83,6 +88,9 @@ export type PolkiLinesTableProps = {
   setPolkiBonusToBalance: Dispatch<SetStateAction<Record<string, boolean>>>;
   polkiBonusCash: Record<string, string>;
   setPolkiBonusCash: Dispatch<SetStateAction<Record<string, string>>>;
+  polkiBonusGoodsQty?: Record<string, number>;
+  polkiBonusCashQty?: Record<string, number>;
+  setPolkiBonusSplit?: (pairKey: string, next: { goodsQty: number; cashQty: number }) => void;
   mutationPending: boolean;
   polkiTotalReturnQtySum: number;
   polkiVolumeM3: number;

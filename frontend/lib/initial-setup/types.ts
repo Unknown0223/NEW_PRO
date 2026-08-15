@@ -43,6 +43,8 @@ export type InitialSetupPreviewRow = {
   cells: Record<string, string>;
   errors: string[];
   warnings: string[];
+  /** Qaysi ustunlar qizil (dublikat / majburiy maydon) */
+  errorFields?: string[];
 };
 
 export type InitialSetupPreviewState = {

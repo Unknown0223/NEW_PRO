@@ -35,7 +35,9 @@ export type OrderCashInOrderDto = {
 };
 
 export type OrderCashInContextDto = {
-  client: { id: number; name: string };
+  /** Bitta mijoz — aniq; turli mijozlar — `null` (jadvalda har qator o‘z mijozini ko‘rsatadi). */
+  client: { id: number; name: string } | null;
+  clients_count: number;
   payment_methods: OrderCashInPaymentMethodDto[];
   orders: OrderCashInOrderDto[];
 };
@@ -47,7 +49,7 @@ export type OrderCashInLineInput = {
 };
 
 export type CreateOrderCashInInput = {
-  client_id: number;
+  client_id?: number | null;
   cash_desk_id?: number | null;
   paid_at?: string | null;
   lines: OrderCashInLineInput[];
@@ -120,31 +122,86 @@ function decMapToStrings(m: Record<string, Prisma.Decimal> | undefined): Record<
 
 export async function getOrderCashInContext(
   tenantId: number,
-  input: { client_id: number; order_ids?: number[] }
+  input: { client_id?: number; order_ids?: number[] }
 ): Promise<OrderCashInContextDto> {
-  const client = await prisma.client.findFirst({
-    where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null },
-    select: { id: true, name: true }
-  });
-  if (!client) throw new Error("BAD_CLIENT");
+  const orderIdFilter = [...new Set((input.order_ids ?? []).filter((id) => Number.isFinite(id) && id > 0))];
+  const clientId =
+    input.client_id != null && Number.isFinite(input.client_id) && input.client_id > 0
+      ? input.client_id
+      : null;
 
-  const orderIdFilter = (input.order_ids ?? []).filter((id) => Number.isFinite(id) && id > 0);
-  const list = await listOrdersPaged(
-    tenantId,
-    {
-      page: 1,
-      limit: 500,
-      client_id: input.client_id,
-      ...(orderIdFilter.length === 0 ? { status: "delivered" } : {})
-    },
-    "admin",
-    null
-  );
+  if (!clientId && orderIdFilter.length === 0) {
+    throw new Error("BAD_CLIENT");
+  }
 
-  let orders = list.data;
+  let scopedClient: { id: number; name: string } | null = null;
+  if (clientId != null) {
+    scopedClient = await prisma.client.findFirst({
+      where: { id: clientId, tenant_id: tenantId, merged_into_client_id: null },
+      select: { id: true, name: true }
+    });
+    if (!scopedClient) throw new Error("BAD_CLIENT");
+  }
+
+  type CashInOrderSrc = {
+    id: number;
+    client_id: number;
+    client_name: string;
+    status: string;
+    total_sum: string;
+    debt: string | null;
+  };
+
+  let orders: CashInOrderSrc[];
+
   if (orderIdFilter.length > 0) {
-    const idSet = new Set(orderIdFilter);
-    orders = orders.filter((o) => idSet.has(o.id));
+    const dbOrders = await prisma.order.findMany({
+      where: {
+        tenant_id: tenantId,
+        id: { in: orderIdFilter },
+        ...(clientId != null ? { client_id: clientId } : {})
+      },
+      select: {
+        id: true,
+        client_id: true,
+        status: true,
+        total_sum: true,
+        client: { select: { name: true } }
+      }
+    });
+    const byId = new Map(dbOrders.map((o) => [o.id, o]));
+    orders = orderIdFilter
+      .map((id) => byId.get(id))
+      .filter((o): o is NonNullable<typeof o> => Boolean(o))
+      .map((o) => ({
+        id: o.id,
+        client_id: o.client_id,
+        client_name: o.client.name,
+        status: o.status,
+        total_sum: o.total_sum.toFixed(2),
+        debt: null
+      }));
+  } else {
+    if (clientId == null || !scopedClient) throw new Error("BAD_CLIENT");
+    const list = await listOrdersPaged(
+      tenantId,
+      {
+        page: 1,
+        limit: 500,
+        client_id: clientId,
+        status: "delivered"
+      },
+      "admin",
+      null
+    );
+    orders = list.data.map((o) => ({
+      id: o.id,
+      client_id: o.client_id,
+      client_name: o.client_name,
+      status: o.status,
+      total_sum: o.total_sum,
+      debt: o.debt ?? null
+    }));
   }
 
   const existingMap = await aggregateExistingPaymentsByOrder(
@@ -153,19 +210,40 @@ export async function getOrderCashInContext(
   );
 
   const { methods } = await loadAllowedPaymentTypes(tenantId);
+  const clientIds = [...new Set(orders.map((o) => o.client_id))];
+  const clientsCount = clientIds.length;
+  const clientDto =
+    clientsCount === 1
+      ? scopedClient && scopedClient.id === clientIds[0]
+        ? scopedClient
+        : { id: orders[0]!.client_id, name: orders[0]!.client_name }
+      : null;
 
   return {
-    client: { id: client.id, name: client.name },
+    client: clientDto,
+    clients_count: clientsCount,
     payment_methods: methods,
-    orders: orders.map((o) => ({
-      id: o.id,
-      client_id: o.client_id,
-      client_name: o.client_name,
-      status: o.status,
-      order_amount: o.total_sum,
-      debt: o.debt ?? null,
-      existing_by_type: decMapToStrings(existingMap.get(o.id))
-    }))
+    orders: orders.map((o) => {
+      const existing = existingMap.get(o.id);
+      let paid = new Prisma.Decimal(0);
+      if (existing) {
+        for (const v of Object.values(existing)) paid = paid.add(v);
+      }
+      const total = new Prisma.Decimal(o.total_sum);
+      const remain = total.sub(paid);
+      const debt =
+        o.debt ??
+        (remain.gt(0) ? remain.toFixed(2) : "0.00");
+      return {
+        id: o.id,
+        client_id: o.client_id,
+        client_name: o.client_name,
+        status: o.status,
+        order_amount: o.total_sum,
+        debt,
+        existing_by_type: decMapToStrings(existing)
+      };
+    })
   };
 }
 
@@ -181,25 +259,24 @@ export async function createOrderCashInBatch(
 ): Promise<CreateOrderCashInResult> {
   const { allowed } = await loadAllowedPaymentTypes(tenantId);
 
-  const client = await prisma.client.findFirst({
-    where: { id: input.client_id, tenant_id: tenantId, merged_into_client_id: null },
-    select: { id: true }
-  });
-  if (!client) throw new Error("BAD_CLIENT");
-
   const lines = input.lines.filter((l) => Number.isFinite(l.amount) && l.amount > 0);
   if (lines.length === 0) throw new Error("NO_LINES");
 
   const orderIds = [...new Set(lines.map((l) => l.order_id))];
   const orders = await prisma.order.findMany({
-    where: { tenant_id: tenantId, client_id: input.client_id, id: { in: orderIds } },
-    select: { id: true, is_consignment: true }
+    where: {
+      tenant_id: tenantId,
+      id: { in: orderIds },
+      ...(input.client_id != null && input.client_id > 0
+        ? { client_id: input.client_id }
+        : {})
+    },
+    select: { id: true, client_id: true, is_consignment: true }
   });
-  const orderSet = new Set(orders.map((o) => o.id));
-  const consignmentByOrder = new Map(orders.map((o) => [o.id, o.is_consignment === true]));
+  const orderById = new Map(orders.map((o) => [o.id, o]));
 
   for (const l of lines) {
-    if (!orderSet.has(l.order_id)) throw new Error("BAD_ORDER");
+    if (!orderById.has(l.order_id)) throw new Error("BAD_ORDER");
     const pt = l.payment_type.trim();
     if (!pt || !allowed.has(pt)) throw new Error("BAD_PAYMENT_TYPE");
   }
@@ -207,16 +284,17 @@ export async function createOrderCashInBatch(
   const paymentIds: number[] = [];
 
   for (const line of lines) {
+    const order = orderById.get(line.order_id)!;
     const row = await createPayment(
       tenantId,
       {
-        client_id: input.client_id,
+        client_id: order.client_id,
         order_id: line.order_id,
         amount: line.amount,
         payment_type: line.payment_type.trim(),
         cash_desk_id: input.cash_desk_id ?? null,
         paid_at: input.paid_at ?? null,
-        allocation_mode: consignmentByOrder.get(line.order_id) ? "consignment" : "cash",
+        allocation_mode: order.is_consignment === true ? "consignment" : "cash",
         allocation_order_ids: [line.order_id]
       },
       actorUserId

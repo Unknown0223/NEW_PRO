@@ -21,7 +21,12 @@ import {
   previewHasBlockingErrors,
   updatePreviewCell
 } from "@/lib/initial-setup/preview-xlsx";
-import { validateRowCells, reindexPreviewRows } from "@/lib/initial-setup/row-validation";
+import {
+  getCellValue,
+  normalizeRowCells,
+  reindexPreviewRows,
+  revalidatePreviewRows
+} from "@/lib/initial-setup/row-validation";
 import type { InitialSetupPreviewState, InitialSetupStep } from "@/lib/initial-setup/types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -40,6 +45,9 @@ import {
   type RelationSource
 } from "@/lib/initial-setup/relation-options";
 import { INPUT_SURFACE_CLASS } from "@/lib/ui-input-styles";
+import { InitialSetupBulkToolbar } from "@/components/settings/initial-setup/initial-setup-bulk-toolbar";
+import { importMessageIndicatesSuccess, isImportFailedError, isImportFailureMessage } from "@/lib/initial-setup/import-result";
+import { ProductCatalogImportErrorsDialog } from "@/components/products/product-catalog-import-errors-dialog";
 
 const FIELD_INPUT_CLASS =
   "h-9 min-w-0 w-full rounded-lg border-slate-200 bg-white text-sm shadow-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20";
@@ -67,7 +75,7 @@ function RelationSelect({
         INPUT_SURFACE_CLASS,
         FIELD_INPUT_CLASS,
         "appearance-none bg-[length:1rem] bg-[right_0.5rem_center] bg-no-repeat pr-8",
-        isErr && "border-destructive focus-visible:ring-destructive/25"
+        isErr && "border-destructive bg-destructive/5 text-destructive focus-visible:ring-destructive/30"
       )}
       style={{
         backgroundImage:
@@ -133,7 +141,10 @@ function StepFieldInput({
       type={col.numeric ? "number" : "text"}
       maxFractionDigits={col.maxFractionDigits ?? 6}
       allowNegative={false}
-      className={cn(FIELD_INPUT_CLASS, isErr && "border-destructive focus-visible:ring-destructive/25")}
+      className={cn(
+        FIELD_INPUT_CLASS,
+        isErr && "border-destructive bg-destructive/5 text-destructive focus-visible:ring-destructive/30"
+      )}
       value={value}
       disabled={!enabled}
       placeholder={col.header.replace(/\s*\*$/, "")}
@@ -198,6 +209,7 @@ type Props = {
   externalPreview?: InitialSetupPreviewState | null;
   compact?: boolean;
   onApplied?: (message: string) => void;
+  onFailed?: (message: string, errors?: string[]) => void;
 };
 
 export function InitialSetupStepTable({
@@ -207,13 +219,33 @@ export function InitialSetupStepTable({
   effectiveDoneIds,
   externalPreview,
   compact,
-  onApplied
+  onApplied,
+  onFailed
 }: Props) {
   const qc = useQueryClient();
   const config = getStepTableConfig(step.id);
   const [preview, setPreview] = useState<InitialSetupPreviewState | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [errorDialog, setErrorDialog] = useState<{
+    title: string;
+    summary: string | null;
+    errors: string[];
+  } | null>(null);
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState<Set<number>>(() => new Set());
+  const [bulkDraft, setBulkDraft] = useState<Record<string, string>>({});
+
+  function showFailure(message: string, errors?: string[]) {
+    setMsg(message);
+    if (errors?.length) {
+      setErrorDialog({
+        title: "Import — xatolar",
+        summary: message,
+        errors
+      });
+    }
+    onFailed?.(message, errors);
+  }
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug],
@@ -290,7 +322,6 @@ export function InitialSetupStepTable({
       if (extra.length) base[src] = [...prev, ...extra];
     };
 
-    if (config?.stepId === "territory") merge("territory-parent");
     if (config?.stepId === "product-categories") merge("product-category-parent");
     return base;
   }, [relationQ.data, preview?.rows, config?.stepId]);
@@ -378,6 +409,8 @@ export function InitialSetupStepTable({
     if (!loadedPreview || !config) return;
     const merged = mergePreview(loadedPreview, externalPreview, config);
     setPreview({ ...merged, rows: reindexPreviewRows(merged.rows) });
+    setSelectedRowIndexes(new Set());
+    setBulkDraft({});
   }, [loadedPreview, externalPreview, config]);
 
   const depsOk = useMemo(() => {
@@ -396,14 +429,9 @@ export function InitialSetupStepTable({
 
   const columnDefs = useMemo(() => {
     if (!config) return [] as Array<{ header: string; key: string; meta?: StepTableColumn }>;
-    return (
-      preview?.columns.map((header, i) => ({
-        header,
-        key: config.columns[i]?.key ?? header,
-        meta: config.columns[i]
-      })) ?? config.columns.map((c) => ({ header: c.header, key: c.key, meta: c }))
-    );
-  }, [config, preview?.columns]);
+    // Always prefer live config columns so HMR / schema updates are visible
+    return config.columns.map((c) => ({ header: c.header, key: c.key, meta: c }));
+  }, [config]);
 
   function resolveColMeta(key: string, header: string): StepTableColumn {
     const fromConfig = config?.columns.find((c) => c.key === key);
@@ -417,6 +445,39 @@ export function InitialSetupStepTable({
 
   function setCell(rowIndex: number, key: string, value: string) {
     setPreview((p) => (p && config ? updatePreviewCell(p, rowIndex, key, value, config) : p));
+  }
+
+  const allRowsSelected =
+    Boolean(preview?.rows.length) && preview!.rows.every((r) => selectedRowIndexes.has(r.rowIndex));
+  const someRowsSelected = selectedRowIndexes.size > 0 && !allRowsSelected;
+
+  function toggleRowSelection(rowIndex: number, checked: boolean) {
+    setSelectedRowIndexes((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(rowIndex);
+      else next.delete(rowIndex);
+      return next;
+    });
+  }
+
+  function toggleAllRows(checked: boolean) {
+    if (!preview) return;
+    setSelectedRowIndexes(checked ? new Set(preview.rows.map((r) => r.rowIndex)) : new Set());
+  }
+
+  function clearRowSelection() {
+    setSelectedRowIndexes(new Set());
+    setBulkDraft({});
+  }
+
+  function applyBulkColumn(colKey: string) {
+    const value = (bulkDraft[colKey] ?? "").trim();
+    if (!value || !preview || !config) return;
+    let next = preview;
+    for (const rowIndex of selectedRowIndexes) {
+      next = updatePreviewCell(next, rowIndex, colKey, value, config);
+    }
+    setPreview(next);
   }
 
   if (!config) {
@@ -437,41 +498,92 @@ export function InitialSetupStepTable({
   function addRow() {
     if (!preview || readOnly) return;
     const cells: Record<string, string> = {};
-    for (const col of config!.columns) cells[col.key] = "";
-    const { errors } = validateRowCells(cells, undefined, config!);
+    for (const col of config!.columns) {
+      if (col.key === "kind") {
+        cells[col.key] = "sale";
+      } else if (col.relation === "payment-method") {
+        cells[col.key] = relationOptionsMap["payment-method"]?.[0]?.value ?? "";
+      } else {
+        cells[col.key] = "";
+      }
+    }
+    const nextRows = [
+      ...preview.rows,
+      {
+        rowIndex: preview.rows.reduce((m, r) => Math.max(m, r.rowIndex), 0) + 1,
+        cells,
+        errors: [] as string[],
+        warnings: [] as string[]
+      }
+    ];
     setPreview({
       ...preview,
-      rows: [
-        ...preview.rows,
-        {
-          rowIndex: preview.rows.reduce((m, r) => Math.max(m, r.rowIndex), 0) + 1,
-          cells,
-          errors,
-          warnings: []
-        }
-      ]
+      rows: revalidatePreviewRows(nextRows, config!)
     });
   }
 
   function removeRow(rowIndex: number) {
     if (!preview || readOnly) return;
-    setPreview({ ...preview, rows: preview.rows.filter((r) => r.rowIndex !== rowIndex) });
+    setSelectedRowIndexes((prev) => {
+      const next = new Set(prev);
+      next.delete(rowIndex);
+      return next;
+    });
+    setPreview({
+      ...preview,
+      rows: revalidatePreviewRows(
+        preview.rows.filter((r) => r.rowIndex !== rowIndex),
+        config!
+      )
+    });
   }
 
   async function apply() {
-    if (!preview?.rows.length || hasErrors || !canApply) return;
+    if (!preview?.rows.length) {
+      setMsg("Ma’lumot yo‘q — Excel yuklang yoki qator qo‘shing");
+      return;
+    }
+    if (!canApply) {
+      setMsg(depsBlockedMsg ?? "Avval oldingi qadamlarni bajaring");
+      return;
+    }
+
+    const normalized: InitialSetupPreviewState = {
+      ...preview,
+      rows: revalidatePreviewRows(preview.rows, config!)
+    };
+    setPreview(normalized);
+
+    if (previewHasBlockingErrors(normalized)) {
+      const n = normalized.rows.filter((r) => r.errors.length).length;
+      const lines = normalized.rows
+        .filter((r) => r.errors.length)
+        .flatMap((r) => r.errors.map((e) => `Строка ${r.rowIndex}: ${e}`));
+      showFailure(`Xatolarni tuzating: ${n} qator (dublikat / majburiy maydon)`, lines);
+      return;
+    }
+
     setBusy(true);
     setMsg(null);
     try {
-      const message = await applyStepPreview(tenantSlug, step, preview, qc);
+      const message = await applyStepPreview(tenantSlug, step, normalized, qc);
+      if (step.importApi && !importMessageIndicatesSuccess(message)) {
+        showFailure(message || "Импорт не сохранил строки — проверьте категории в справочнике");
+        return;
+      }
       setMsg(message);
       onApplied?.(message);
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["initial-setup-relations", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["initial-setup-entity", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["initial-setup-readiness", tenantSlug] });
+      await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
     } catch (e) {
-      setMsg(getUserFacingError(e, "Saqlash xatosi"));
+      if (isImportFailedError(e)) {
+        showFailure(e.message, e.errors);
+      } else {
+        showFailure(getUserFacingError(e, "Saqlash xatosi"));
+      }
     } finally {
       setBusy(false);
     }
@@ -483,10 +595,30 @@ export function InitialSetupStepTable({
   function renderTableView(cfg: StepTableConfig) {
     if (!preview) return null;
     return (
-      <div className="max-h-[28rem] overflow-auto rounded-xl border border-border/80 bg-background shadow-sm">
+      <div
+        className={cn(
+          "max-h-[28rem] overflow-auto rounded-xl border border-border/80 bg-background shadow-sm",
+          selectedRowIndexes.size > 0 && "mb-24"
+        )}
+      >
         <table className="w-full min-w-[520px] border-collapse text-sm">
           <thead>
             <tr className="sticky top-0 z-[1] bg-slate-50/95 backdrop-blur">
+              {!readOnly ? (
+                <th className="w-10 border-b px-2 py-2.5">
+                  <input
+                    type="checkbox"
+                    className="size-3.5 accent-primary"
+                    checked={allRowsSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someRowsSelected;
+                    }}
+                    disabled={!enabled}
+                    aria-label="Выбрать все строки"
+                    onChange={(e) => toggleAllRows(e.target.checked)}
+                  />
+                </th>
+              ) : null}
               <th className="border-b px-3 py-2.5 text-left text-xs font-semibold text-slate-600">#</th>
               {columnDefs.map((col) => (
                 <th key={col.key} className="border-b px-3 py-2.5 text-left text-xs font-semibold text-slate-600">
@@ -506,28 +638,53 @@ export function InitialSetupStepTable({
                 key={row.rowIndex}
                 className={cn(
                   "transition-colors",
+                  selectedRowIndexes.has(row.rowIndex) && "bg-teal-50/70",
                   row.errors.length
                     ? "bg-destructive/[0.04]"
                     : row.warnings.length
                       ? "bg-amber-50/60"
-                      : "hover:bg-slate-50/80"
+                      : !selectedRowIndexes.has(row.rowIndex) && "hover:bg-slate-50/80"
                 )}
               >
+                {!readOnly ? (
+                  <td className="border-b border-border/60 px-2 py-1.5 text-center">
+                    <input
+                      type="checkbox"
+                      className="size-3.5 accent-primary"
+                      checked={selectedRowIndexes.has(row.rowIndex)}
+                      disabled={!enabled}
+                      aria-label={`Выбрать строку ${row.rowIndex}`}
+                      onChange={(e) => toggleRowSelection(row.rowIndex, e.target.checked)}
+                    />
+                  </td>
+                ) : null}
                 <td className="border-b border-border/60 px-3 py-1.5 text-xs tabular-nums text-muted-foreground">
                   {row.rowIndex}
                 </td>
                 {columnDefs.map((col) => {
                   const meta = resolveColMeta(col.key, col.header);
-                  const isErr = row.errors.some((e) => e.includes(col.header));
+                  const isDup = Boolean(row.errorFields?.includes(col.key));
+                  const isErr =
+                    isDup ||
+                    row.errors.some((e) => e.includes(col.header) || e.includes(`«${col.header}»`));
+                  const errTitle = isDup
+                    ? row.errors.find((e) => e.startsWith("Дубликат"))
+                    : row.errors.find((e) => e.includes(col.header));
                   return (
-                    <td key={col.key} className="border-b border-border/60 px-1.5 py-1">
+                    <td
+                      key={col.key}
+                      className={cn(
+                        "border-b border-border/60 px-1.5 py-1",
+                        isDup && "bg-destructive/10"
+                      )}
+                    >
                       <StepFieldInput
                         col={meta}
-                        value={row.cells[col.key] ?? ""}
+                        value={getCellValue(row.cells, col.key, config) || row.cells[col.key] || ""}
                         readOnly={readOnly}
                         enabled={enabled}
                         isErr={isErr}
-                        errorTitle={isErr ? row.errors.find((e) => e.includes(col.header)) : undefined}
+                        errorTitle={errTitle}
                         options={optionsForCol(meta)}
                         onChange={(v) => setCell(row.rowIndex, col.key, v)}
                       />
@@ -536,7 +693,7 @@ export function InitialSetupStepTable({
                 })}
                 <td className="border-b border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground">
                   {row.errors.length ? (
-                    <span className="text-destructive">{row.errors.join("; ")}</span>
+                    <span className="font-medium text-destructive">{row.errors.join("; ")}</span>
                   ) : row.warnings.length ? (
                     row.warnings.join("; ")
                   ) : (
@@ -621,6 +778,19 @@ export function InitialSetupStepTable({
             </div>
           ) : null}
           {renderTableView(config)}
+          {!readOnly ? (
+            <InitialSetupBulkToolbar
+              selectedCount={selectedRowIndexes.size}
+              totalCount={preview.rows.length}
+              columns={config.columns}
+              relationOptionsMap={relationOptionsMap}
+              draft={bulkDraft}
+              onDraftChange={(key, value) => setBulkDraft((prev) => ({ ...prev, [key]: value }))}
+              onApplyColumn={applyBulkColumn}
+              onClear={clearRowSelection}
+              enabled={enabled}
+            />
+          ) : null}
         </>
       ) : (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
@@ -635,9 +805,26 @@ export function InitialSetupStepTable({
         </div>
       )}
 
+      {msg ? (
+        <p
+          className={cn(
+            "rounded-lg px-3 py-2 text-sm",
+            isImportFailureMessage(msg)
+              ? "border border-destructive/30 bg-destructive/10 font-medium text-destructive"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-800"
+          )}
+          role="alert"
+        >
+          {msg}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-slate-50/60 px-3 py-2.5">
         {!readOnly ? (
           <>
+            <p className="mr-auto w-full text-[11px] text-muted-foreground sm:w-auto">
+              Virtual holat — tahrirlang, dublikatlar qizil. Keyin tasdiqlang.
+            </p>
             <Button
               type="button"
               variant="outline"
@@ -654,6 +841,13 @@ export function InitialSetupStepTable({
               size="sm"
               className="h-9 rounded-lg text-sm"
               disabled={!canApply || busy || hasErrors || !preview?.rows.length}
+              title={
+                !canApply
+                  ? (depsBlockedMsg ?? "Avval oldingi qadamlarni bajaring")
+                  : hasErrors
+                    ? "Jadvaldagi xatolarni tuzating"
+                    : undefined
+              }
               onClick={() => void apply()}
             >
               {busy ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
@@ -670,18 +864,15 @@ export function InitialSetupStepTable({
         ) : null}
       </div>
 
-      {msg ? (
-        <p
-          className={cn(
-            "rounded-lg px-3 py-2 text-sm",
-            msg.includes("xato") || msg.includes("Xato") || msg.includes("Ошибка")
-              ? "border border-destructive/20 bg-destructive/5 text-destructive"
-              : "border border-emerald-200 bg-emerald-50 text-emerald-800"
-          )}
-        >
-          {msg}
-        </p>
-      ) : null}
+      <ProductCatalogImportErrorsDialog
+        open={errorDialog != null}
+        onOpenChange={(open) => {
+          if (!open) setErrorDialog(null);
+        }}
+        title={errorDialog?.title ?? "Import — xatolar"}
+        summary={errorDialog?.summary}
+        errors={errorDialog?.errors ?? []}
+      />
     </div>
   );
 }

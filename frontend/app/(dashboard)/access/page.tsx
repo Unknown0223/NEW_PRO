@@ -2,6 +2,7 @@
 
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { AccessWorkspace } from "@/components/access/access-workspace";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { useAccessModuleGate } from "@/lib/use-access-module-gate";
 
 export default function AccessPage() {
@@ -12,7 +13,16 @@ export default function AccessPage() {
 
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
-  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или доступ к разделу «Доступ»).</p>;
+  if (!gate.allowed) {
+    return (
+      <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
+        <AccessDeniedBanner
+          title="Нет доступа / Ruxsat yo‘q"
+          message="Недостаточно прав для раздела «Доступ» / «Доступ» bo‘limiga ruxsat yo‘q (нужны admin или access.upravlenie.view)."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">

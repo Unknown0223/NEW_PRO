@@ -1,4 +1,4 @@
-import { DEFAULT_PIVOT_CONFIG } from "../core/PivotEngine.js";
+import { DEFAULT_PIVOT_CONFIG } from "../core/defaults.js";
 import type { PivotConfig, PivotField } from "../types/pivot.types.js";
 
 /** Bo'sh konfiguratsiya uchun mantiqiy default slice: birinchi matnli qator + birinchi sonli metrika. */

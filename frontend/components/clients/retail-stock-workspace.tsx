@@ -11,11 +11,12 @@ import { CalendarDays, Download, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { pickFirstExcelFile } from "@/lib/excel-file-pick";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 
 type ProductRow = { id: number; name: string; sku: string };
 type CategoryRow = { id: number; name: string };
 type AgentPick = { id: number; fio: string; code: string | null };
-type PriceTypeRow = string;
+type PriceTypeRow = PriceTypeOption;
 type RefResponse = {
   region_options?: { value: string; label: string }[];
   zones?: string[];
@@ -133,7 +134,7 @@ export function RetailStockWorkspace() {
         api.get<{ data: CategoryRow[] }>(`/api/${tenantSlug}/product-categories`),
         api.get<RefResponse>(`/api/${tenantSlug}/clients/references`),
         api.get<{ data: AgentPick[] }>(`/api/${tenantSlug}/agents?is_active=true`),
-        api.get<{ data: PriceTypeRow[] }>(`/api/${tenantSlug}/price-types?kind=sale`)
+        api.get<{ data: string[]; options?: PriceTypeOption[] }>(`/api/${tenantSlug}/price-types?kind=sale`)
       ]);
       setProducts(r1.data.data ?? []);
       setCategories(r2.data.data ?? []);
@@ -141,7 +142,7 @@ export function RetailStockWorkspace() {
       setZones(r3.data.zones ?? []);
       setCities(r3.data.city_options ?? []);
       setAgents(r4.data.data ?? []);
-      setPriceTypes(r5.data.data ?? []);
+      setPriceTypes(priceTypeOptionsFromResponse(r5.data));
     })();
   }, [tenantSlug]);
 
@@ -253,7 +254,7 @@ export function RetailStockWorkspace() {
         </select>
         <select className="h-9 rounded-md border bg-background px-2 text-sm" value={priceType} onChange={(e) => setPriceType(e.target.value)}>
           <option value="">Тип цены</option>
-          {priceTypes.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
+          {priceTypes.map((pt) => <option key={pt.id} value={pt.id}>{pt.label}</option>)}
         </select>
         <select className="h-9 rounded-md border bg-background px-2 text-sm" value={territory1} onChange={(e) => setTerritory1(e.target.value)}>
           <option value="">Область</option>

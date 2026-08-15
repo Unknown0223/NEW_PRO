@@ -129,7 +129,9 @@ export const ENTITY_HISTORY: Record<string, EntityHistoryDescriptor> = {
     activity: ["user", "access"],
     sources: ["accessLog"]
   }),
-  currency_rate: desc("settings", "valyuta", { audit: ["currency_rate"] })
+  currency_rate: desc("settings", "valyuta", { audit: ["currency_rate"] }),
+  bonus_rule: desc("settings", "bonusy_i_skidki", { audit: ["bonus_rule"] }),
+  bonus_strategy: desc("settings", "bonusy_i_skidki", { audit: ["bonus_strategy"] })
 };
 
 export function resolveEntityHistory(entityType: string): EntityHistoryDescriptor | null {

@@ -5,7 +5,7 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   bulkPatchConsignmentAgentRows,
   bulkPatchConsignmentAgents,
@@ -151,7 +151,11 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
         sync_closures: sync === "1" || sync === "true" ? true : undefined
       };
       const tenantId = request.tenant!.id;
-      const result = await listConsignmentAgents(tenantId, q);
+      const viewer = getAccessUser(request);
+      const result = await listConsignmentAgents(tenantId, q, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
       result.data = await retainOnlyActiveConsignmentRows(tenantId, result.data);
       return reply.send(result);
     }
@@ -176,6 +180,16 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
         if (msg === "TOO_MANY_IDS") return sendApiError(reply, request, 400, "TooManyIds");
         if (msg === "EMPTY_PATCH") return sendApiError(reply, request, 400, "EmptyPatch");
         if (msg === "BAD_LIMIT") return sendApiError(reply, request, 400, "BadLimit");
+        if (msg === "NO_WORKPLACE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "NoWorkplace",
+            "Агент не назначен на рабочее место"
+          );
+        }
+        if (msg === "BAD_AGENT_ROW") return sendApiError(reply, request, 400, "BadAgentRow");
         throw e;
       }
     }
@@ -203,6 +217,15 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_ROWS") return sendApiError(reply, request, 400, "EmptyRows");
         if (msg === "TOO_MANY_ROWS") return sendApiError(reply, request, 400, "TooManyRows");
         if (msg === "BAD_LIMIT") return sendApiError(reply, request, 400, "BadLimit");
+        if (msg === "NO_WORKPLACE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "NoWorkplace",
+            "Агент не назначен на рабочее место — сначала назначьте в «Рабочее место»"
+          );
+        }
         if (msg === "BAD_AGENT_ROW") {
           return sendApiError(
             reply,

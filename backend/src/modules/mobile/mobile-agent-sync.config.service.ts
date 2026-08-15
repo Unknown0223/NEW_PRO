@@ -8,6 +8,7 @@ import {
 } from "../staff/agent-mobile-config.sync-policy";
 import {
   extractMobileConfigFromEntitlementsUnknown,
+  resolveMobileConfigForUser,
   type AgentMobileConfigV1
 } from "../staff/agent-mobile-config";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
@@ -16,9 +17,14 @@ import {
   territoryRegionPickerNames,
   type CityTerritoryHintDto
 } from "../tenant-settings/tenant-settings.territory";
-import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
+import { paymentMethodStorageKey, priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { territoryNodesFromUnknown } from "../tenant-settings/tenant-settings.refs";
+import {
+  loadTenantTimezone,
+  loadTimezoneFromSettingsJson,
+  utcOffsetHoursForTimezone
+} from "../tenant-settings/tenant-timezone";
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
@@ -26,13 +32,37 @@ import { mergeMobileCitiesByZoneRegion } from "./mobile-territory-references";
 
 export function agentScopedClientWhere(
   tenantId: number,
-  agentId: number
+  agentId: number,
+  workSlotId?: number | null
 ): Prisma.ClientWhereInput {
+  const or: Prisma.ClientWhereInput[] = [
+    { agent_id: agentId },
+    { agent_assignments: { some: { agent_id: agentId } } }
+  ];
+  // VACANT slot: eski agent_id qolgan, lekin assignment work_slot_id orqali slotga bog‘langan.
+  if (workSlotId != null && workSlotId > 0) {
+    or.push({ agent_assignments: { some: { work_slot_id: workSlotId } } });
+  }
   return {
     tenant_id: tenantId,
     merged_into_client_id: null,
-    OR: [{ agent_id: agentId }, { agent_assignments: { some: { agent_id: agentId } } }]
+    OR: or
   };
+}
+
+/** Agentning joriy work_slot_id (yo‘q bo‘lsa null). */
+export async function resolveAgentWorkSlotId(agentId: number): Promise<number | null> {
+  const slotMap = await loadActiveWorkSlotsByUserIds([agentId]);
+  return slotMap.get(agentId)?.slot_id ?? null;
+}
+
+/** Sync/order scope — VACANT slotni ham hisobga oladi. */
+export async function agentScopedClientWhereForUser(
+  tenantId: number,
+  agentId: number
+): Promise<Prisma.ClientWhereInput> {
+  const workSlotId = await resolveAgentWorkSlotId(agentId);
+  return agentScopedClientWhere(tenantId, agentId, workSlotId);
 }
 
 export function agentScopedOrderWhere(tenantId: number, agentId: number): Prisma.OrderWhereInput {
@@ -81,7 +111,11 @@ export async function assertAgentScopedClient(
   clientId: number
 ): Promise<void> {
   const hit = await prisma.client.findFirst({
-    where: { id: clientId, ...agentScopedClientWhere(tenantId, agentId), is_active: true },
+    where: {
+      id: clientId,
+      ...(await agentScopedClientWhereForUser(tenantId, agentId)),
+      is_active: true
+    },
     select: { id: true }
   });
   if (!hit) throw new Error("BAD_CLIENT");
@@ -132,7 +166,8 @@ export async function applyMobileSyncGate(
     await reportMobilePresence(userId, presence);
   }
   const cfg = await loadAgentMobileConfig(tenantId, userId);
-  const policy = evaluateMobileSyncPolicy(cfg?.sync);
+  const timeZone = await loadTenantTimezone(tenantId);
+  const policy = evaluateMobileSyncPolicy(cfg?.sync, new Date(), timeZone);
   if (!policy.allowed) {
     throw new Error(`SYNC_NOT_ALLOWED:${policy.message ?? syncWindowMessage(cfg?.sync ?? {})}`);
   }
@@ -167,12 +202,19 @@ export type CompactClientRow = {
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
-  agent_assignments?: { visit_weekdays: unknown; visit_date?: Date | string | null }[];
+  agent_assignments?: {
+    visit_weekdays: unknown;
+    visit_date?: Date | string | null;
+    agent_id?: number | null;
+  }[];
 };
 
 export function compactClient(c: CompactClientRow) {
   const ledger = c.client_balances?.[0]?.balance;
-  const assignment = c.agent_assignments?.[0];
+  const assignments = c.agent_assignments ?? [];
+  // Avvalo kunlari bor assignment (slot rejasi), keyin birinchisi.
+  const withDays = assignments.find((a) => parseVisitWeekdaysJson(a.visit_weekdays).length > 0);
+  const assignment = withDays ?? assignments[0];
   const weekdays =
     parseVisitWeekdaysJson(assignment?.visit_weekdays) ||
     parseVisitWeekdaysJson(c.visit_weekdays);
@@ -242,14 +284,21 @@ export const clientSyncSelectBase = {
   client_balances: { select: { balance: true }, take: 1 }
 } as const;
 
-/** Mobil sync — joriy agentning slotidagi tashrif jadvali (slot:1 emas, agent_id bo‘yicha). */
-export function clientSyncSelectForAgent(agentId: number) {
+/** Mobil sync — joriy agent + slot:1 tashrif jadvali (VACANT/eski agent_id holati uchun). */
+export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | null) {
+  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [
+    { agent_id: agentId },
+    { slot: 1 }
+  ];
+  if (workSlotId != null && workSlotId > 0) {
+    assignmentOr.push({ work_slot_id: workSlotId });
+  }
   return {
     ...clientSyncSelectBase,
     agent_assignments: {
-      where: { agent_id: agentId },
-      select: { visit_weekdays: true, visit_date: true },
-      take: 1
+      where: { OR: assignmentOr },
+      select: { visit_weekdays: true, visit_date: true, agent_id: true },
+      take: 5
     }
   };
 }
@@ -322,6 +371,15 @@ async function loadMobileTenantReferences(tenantId: number) {
     hints
   });
 
+  const priceTypeOptions = priceTypeEntriesFromUnknown(ref.price_type_entries)
+    .filter((e) => e.active !== false && e.kind === "sale")
+    .map((e) => {
+      const id = priceTypeKey(e).trim();
+      const label = e.name.trim() || id;
+      return { id, label, code: e.code ?? null };
+    })
+    .filter((o) => o.id.length > 0);
+
   return {
     refusal_reason_entries: (ref.refusal_reason_entries ?? []).map((e) => ({
       id: e.id,
@@ -339,6 +397,8 @@ async function loadMobileTenantReferences(tenantId: number) {
       payment_type: paymentMethodStorageKey(e),
       code: e.code ?? null
     })),
+    /** Mobil «Тип цены» dropdown — id=DB kaliti, label=katalog nomi */
+    price_type_options: priceTypeOptions,
     client_categories: ref.client_categories ?? [],
     client_type_codes: ref.client_type_codes ?? [],
     sales_channels: ref.sales_channels ?? [],
@@ -354,7 +414,8 @@ async function loadMobileTenantReferences(tenantId: number) {
 export async function getMobileAgentConfigPayload(
   tenantId: number,
   userId: number,
-  clientVersion?: string
+  clientVersion?: string,
+  opts?: { origin?: string | null }
 ) {
   const u = await prisma.user.findFirst({
     where: { id: userId, tenant_id: tenantId, is_active: true },
@@ -399,13 +460,18 @@ export async function getMobileAgentConfigPayload(
       : [];
 
   const appUpdate = await resolveAppUpdateForTenant(tenantId, clientVersion, "android", {
-    tenantSlug: tenantRow?.slug
+    tenantSlug: tenantRow?.slug,
+    origin: opts?.origin
   });
+
+  const workTimezone = loadTimezoneFromSettingsJson(st);
+  const workUtcOffsetHours = utcOffsetHoursForTimezone(workTimezone);
 
   return {
     ok: true as const,
     user_id: u.id,
-    mobile_config: extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements) ?? null,
+    /** Rol defaultlari + saqlangan patch — mobil «Настройки» / enforcement bilan bir xil. */
+    mobile_config: resolveMobileConfigForUser(u.role, u.agent_entitlements),
     agent_entitlements: u.agent_entitlements,
     agent_limits: {
       consignment: u.consignment === true,
@@ -413,6 +479,9 @@ export async function getMobileAgentConfigPayload(
     },
     work_slot_id: slot?.slot_id ?? null,
     work_slot_code: slot?.slot_code ?? null,
+    /** Ish mintaqasi — admin Sozlamalar → Sistema → Vaqt mintaqasi. */
+    work_timezone: workTimezone,
+    work_utc_offset_hours: workUtcOffsetHours,
     tenant_references: await loadMobileTenantReferences(tenantId),
     agent_cities: agentCities,
     ...(appUpdate ? { app_update: appUpdate } : {})

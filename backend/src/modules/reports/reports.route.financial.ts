@@ -51,7 +51,11 @@ export async function registerReportsFinancialRoutes(app: FastifyInstance, guard
 
   app.get("/api/:slug/reports/income-report/filter-options", { preHandler: incomeViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
-    const data = await getIncomeReportFilterOptions(request.tenant!.id);
+    const u = getAccessUser(request);
+    const data = await getIncomeReportFilterOptions(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: u.role ?? ""
+    });
     return reply.send({ data });
   });
 
@@ -108,7 +112,11 @@ export async function registerReportsFinancialRoutes(app: FastifyInstance, guard
 
   app.get("/api/:slug/reports/agent-orders/filter-options", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
-    const data = await getAgentOrdersFilterOptions(request.tenant!.id);
+    const u = getAccessUser(request);
+    const data = await getAgentOrdersFilterOptions(request.tenant!.id, {
+      userId: actorUserIdOrNull(request),
+      role: u.role ?? ""
+    });
     return reply.send({ data });
   });
 
@@ -121,7 +129,11 @@ export async function registerReportsFinancialRoutes(app: FastifyInstance, guard
       reportQueryRaw(request)
     );
     if (!q) return;
-    const data = await getAgentOrdersReport(request.tenant!.id, q);
+    const u = getAccessUser(request);
+    const data = await getAgentOrdersReport(request.tenant!.id, q, {
+      userId: actorUserIdOrNull(request),
+      role: u.role ?? ""
+    });
     return reply.send({ data });
   });
 

@@ -58,6 +58,7 @@ export function parseSalesDashboardFilters(q: Record<string, string | undefined>
     category_ids: csvToIntArray(q.category_ids),
     manufacturer_ids: csvToIntArray(q.manufacturer_ids),
     supervisor_ids: csvToIntArray(q.supervisor_ids),
+    agent_ids: csvToIntArray(q.agent_ids),
     group_ids: csvToIntArray(q.group_ids),
     brand_ids: csvToIntArray(q.brand_ids),
     territory_ids: csvToIntArray(q.territory_ids),
@@ -140,6 +141,9 @@ export function salesOrderScopeSql(
   }
   if (f.supervisor_ids.length > 0) {
     parts.push(Prisma.sql`u.supervisor_user_id IN (${Prisma.join(f.supervisor_ids)})`);
+  }
+  if (f.agent_ids.length > 0) {
+    parts.push(Prisma.sql`o.agent_id IN (${Prisma.join(f.agent_ids)})`);
   }
   if (f.trade_directions.length > 0) {
     parts.push(Prisma.sql`COALESCE(u.trade_direction, '') IN (${Prisma.join(f.trade_directions)})`);

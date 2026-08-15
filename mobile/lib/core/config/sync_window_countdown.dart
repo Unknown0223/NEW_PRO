@@ -9,7 +9,6 @@ import '../theme/app_typography.dart';
 import 'mobile_config.dart';
 import 'mobile_config_policy.dart';
 import 'sync_countdown_colors.dart';
-import '../time/server_clock.dart';
 import '../time/work_region_time.dart';
 
 int? _parseHmMinutes(String hm) {
@@ -74,7 +73,7 @@ DateTime? _syncWindowEndDateTime({
   return endToday;
 }
 
-/// Sinхрон oynasi boshlanishiga qolgan vaqt (oynadan oldin).
+/// Sinхрон oynasi boshlanishiga qolgan vaqt (oynadan tashqarida — qayta yoqilish).
 Duration? timeUntilSyncWindowStart(SyncConfig sync, DateTime nowLocal) {
   sync = effectiveSyncConfig(sync);
   if (isSyncAllowedNow(sync, nowLocal)) return null;
@@ -85,6 +84,7 @@ Duration? timeUntilSyncWindowStart(SyncConfig sync, DateTime nowLocal) {
   final toM = to != null && to.isNotEmpty ? _parseHmMinutes(to) : null;
   final nowM = syncWindowMinutesOfDay(nowLocal);
 
+  // Faqat `to` berilgan: oyna yopilgach ertaga 00:00 gacha.
   if (fromM == null && toM != null) {
     if (nowM <= toM) return null;
     final midnight = DateTime(nowLocal.year, nowLocal.month, nowLocal.day).add(const Duration(days: 1));
@@ -94,11 +94,23 @@ Duration? timeUntilSyncWindowStart(SyncConfig sync, DateTime nowLocal) {
 
   if (fromM == null) return null;
 
+  // Tun o‘tuvchi oyna (masalan 22:00–06:00): tashqarida keyingi `from`.
+  if (toM != null && fromM > toM) {
+    final startToday = _todayAtHm(from!, nowLocal);
+    if (startToday == null) return null;
+    // Kunduzi (to … from oralig‘ida) — bugungi from.
+    if (nowM > toM && nowM < fromM) {
+      final diff = startToday.difference(nowLocal);
+      return diff.isNegative ? Duration.zero : diff;
+    }
+  }
+
   final start = _todayAtHm(from!, nowLocal);
   if (start == null) return null;
 
   var diff = start.difference(nowLocal);
-  if (diff.isNegative || (toM != null && nowM > toM)) {
+  // Kunlik oyna tugagan (now > to) yoki bugungi from o‘tgan — ertangi from.
+  if (diff.isNegative || (toM != null && fromM <= toM && nowM > toM)) {
     diff = start.add(const Duration(days: 1)).difference(nowLocal);
   }
   return diff.isNegative ? Duration.zero : diff;
@@ -154,8 +166,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
   @override
   void initState() {
     super.initState();
-    _refresh();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+    _scheduleRefresh(immediate: true);
   }
 
   @override
@@ -163,7 +174,7 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.syncConfig.allowedWindowFrom != widget.syncConfig.allowedWindowFrom ||
         oldWidget.syncConfig.allowedWindowTo != widget.syncConfig.allowedWindowTo) {
-      _refresh();
+      _scheduleRefresh(immediate: true);
     }
   }
 
@@ -173,22 +184,31 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     super.dispose();
   }
 
-  void _refresh() {
-    // Server bilan vaqt langarlanmaguncha taymerni ko‘rsatmaymiz — qurilma
-    // soatiga asoslangan chalg‘ituvchi/aldovchi hisobni oldini olamiz.
-    if (!ServerClock.instance.hasAnchor) {
-      _show = false;
-      if (mounted) setState(() {});
+  void _scheduleRefresh({bool immediate = false}) {
+    _refreshTimer?.cancel();
+    if (immediate) {
+      _refresh();
       return;
     }
+    // Har soniyada qayta hisob — oyna tugagach «qayta yoqilish»ga o‘tish kechikmasin.
+    _refreshTimer = Timer(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      _refresh();
+    });
+  }
+
+  void _refresh() {
+    // bestEffort soat: jonli langar > saqlangan floor > qurilma.
+    // Taymer doimo ko‘rinadi; sinхрон siyosati alohida hasAnchor bilan himoyalanadi.
     final nowLocal = syncWindowClockNow();
-    final end = timeUntilSyncWindowEnd(widget.syncConfig, nowLocal);
-    final start = timeUntilSyncWindowStart(widget.syncConfig, nowLocal);
+    final cfg = effectiveSyncConfig(widget.syncConfig);
+    final end = timeUntilSyncWindowEnd(cfg, nowLocal);
+    final start = timeUntilSyncWindowStart(cfg, nowLocal);
     if (end != null) {
       _tick = end;
       _label = S.syncWindowEndsIn;
       _isWindowEnd = true;
-      _windowKey = widget.syncConfig.allowedWindowTo?.trim() ?? 'eod';
+      _windowKey = cfg.allowedWindowTo?.trim() ?? 'eod';
       _show = true;
       if (!_permissionAsked) {
         _permissionAsked = true;
@@ -198,12 +218,42 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
       _tick = start;
       _label = S.syncWindowStartsIn;
       _isWindowEnd = false;
-      _windowKey = widget.syncConfig.allowedWindowFrom?.trim() ?? 'start';
+      _windowKey = cfg.allowedWindowFrom?.trim() ?? 'start';
       _show = true;
     } else {
-      _show = false;
+      // Oyna 24/7 yoki hisob bo‘lmadi — default oynaga qaytamiz.
+      final fallbackEnd = timeUntilSyncWindowEnd(
+        const SyncConfig(
+          allowedWindowFrom: kDefaultSyncWindowFrom,
+          allowedWindowTo: kDefaultSyncWindowTo,
+        ),
+        nowLocal,
+      );
+      final fallbackStart = timeUntilSyncWindowStart(
+        const SyncConfig(
+          allowedWindowFrom: kDefaultSyncWindowFrom,
+          allowedWindowTo: kDefaultSyncWindowTo,
+        ),
+        nowLocal,
+      );
+      if (fallbackEnd != null) {
+        _tick = fallbackEnd;
+        _label = S.syncWindowEndsIn;
+        _isWindowEnd = true;
+        _windowKey = kDefaultSyncWindowTo;
+        _show = true;
+      } else if (fallbackStart != null) {
+        _tick = fallbackStart;
+        _label = S.syncWindowStartsIn;
+        _isWindowEnd = false;
+        _windowKey = kDefaultSyncWindowFrom;
+        _show = true;
+      } else {
+        _show = false;
+      }
     }
     if (mounted) setState(() {});
+    _scheduleRefresh();
   }
 
   @override
@@ -212,14 +262,14 @@ class _SyncWindowCountdownStripState extends State<SyncWindowCountdownStrip> {
     return TickerMode(
       enabled: true,
       child: _CountdownTicker(
-        key: ValueKey('$_label-${widget.syncConfig.allowedWindowTo}'),
+        key: ValueKey('$_label-$_isWindowEnd-$_windowKey'),
         initial: _tick,
         label: _label,
         inline: widget.inline,
         designPill: widget.designPill,
         isWindowEnd: _isWindowEnd,
         windowKey: _windowKey,
-        onExpired: _refresh,
+        onExpired: () => _scheduleRefresh(immediate: true),
       ),
     );
   }
@@ -256,6 +306,16 @@ class _CountdownTickerState extends State<_CountdownTicker> {
   void initState() {
     super.initState();
     Future<void>.delayed(const Duration(seconds: 1), _tick);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CountdownTicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initial != widget.initial ||
+        oldWidget.isWindowEnd != widget.isWindowEnd ||
+        oldWidget.windowKey != widget.windowKey) {
+      _left = widget.initial;
+    }
   }
 
   void _maybeFireTenMinAlert(int prevSec, int nextSec) {

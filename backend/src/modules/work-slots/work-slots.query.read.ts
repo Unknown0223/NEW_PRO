@@ -94,9 +94,95 @@ export async function getSlotHistory(
   };
 }
 
-export type ActiveWorkSlotInfo = { slot_id: number; slot_code: string };
+/**
+ * Slotda ishlagan (yoki hozirgi) agentlar: unpaid delivered qarzlari borlarining ro‘yxati (nom + summa).
+ */
+export async function listSlotDebtCollectors(
+  tenantId: number,
+  slotId: number
+): Promise<
+  Array<{
+    user_id: number;
+    name: string;
+    is_active: boolean;
+    on_active_slot: boolean;
+    unpaid: string;
+  }>
+> {
+  const slot = await prisma.workSlot.findFirst({
+    where: { id: slotId, tenant_id: tenantId },
+    select: { id: true }
+  });
+  if (!slot) throw new Error("NOT_FOUND");
 
-/** Faol `slot_user_links` bo‘yicha foydalanuvchi → ishchi o‘rni. */
+  const links = await prisma.slotUserLink.findMany({
+    where: { tenant_id: tenantId, slot_id: slotId },
+    select: { user_id: true },
+    distinct: ["user_id"]
+  });
+  const audits = await prisma.slotAuditEntry.findMany({
+    where: { tenant_id: tenantId, slot_id: slotId },
+    select: { prev_user_id: true, next_user_id: true }
+  });
+  const userIds = new Set<number>();
+  for (const l of links) userIds.add(l.user_id);
+  for (const a of audits) {
+    if (a.prev_user_id != null) userIds.add(a.prev_user_id);
+    if (a.next_user_id != null) userIds.add(a.next_user_id);
+  }
+  if (userIds.size === 0) return [];
+
+  const { sumUnpaidDeliveredRemainderForAgent } = await import(
+    "../client-balances/client-debt-by-agent"
+  );
+
+  const users = await prisma.user.findMany({
+    where: { tenant_id: tenantId, id: { in: [...userIds] }, role: "agent" },
+    select: { id: true, name: true, is_active: true }
+  });
+
+  const activeLinks = await prisma.slotUserLink.findMany({
+    where: { tenant_id: tenantId, user_id: { in: users.map((u) => u.id) }, ended_at: null },
+    select: { user_id: true }
+  });
+  const onSlot = new Set(activeLinks.map((l) => l.user_id));
+
+  const out: Array<{
+    user_id: number;
+    name: string;
+    is_active: boolean;
+    on_active_slot: boolean;
+    unpaid: string;
+  }> = [];
+
+  for (const u of users) {
+    const unpaid = await sumUnpaidDeliveredRemainderForAgent(tenantId, u.id);
+    if (!unpaid.gt(0.01)) continue;
+    out.push({
+      user_id: u.id,
+      name: u.name?.trim() || `#${u.id}`,
+      is_active: u.is_active,
+      on_active_slot: onSlot.has(u.id),
+      unpaid: unpaid.toString()
+    });
+  }
+
+  out.sort((a, b) => Number(b.unpaid) - Number(a.unpaid));
+  return out;
+}
+
+export type ActiveWorkSlotInfo = {
+  slot_id: number;
+  slot_code: string;
+  consignment: boolean;
+  consignment_limit_amount: import("@prisma/client").Prisma.Decimal | null;
+  consignment_ignore_previous_months_debt: boolean;
+  consignment_close_day: number;
+  consignment_close_hour: number;
+  consignment_close_minute: number;
+};
+
+/** Faol `slot_user_links` bo‘yicha foydalanuvchi → ishchi o‘rni (+ konsignatsiya maydonlari). */
 export async function loadActiveWorkSlotsByUserIds(
   userIds: number[]
 ): Promise<Map<number, ActiveWorkSlotInfo>> {
@@ -105,12 +191,32 @@ export async function loadActiveWorkSlotsByUserIds(
     where: { user_id: { in: userIds }, ended_at: null },
     select: {
       user_id: true,
-      slot: { select: { id: true, slot_code: true } }
+      slot: {
+        select: {
+          id: true,
+          slot_code: true,
+          consignment: true,
+          consignment_limit_amount: true,
+          consignment_ignore_previous_months_debt: true,
+          consignment_close_day: true,
+          consignment_close_hour: true,
+          consignment_close_minute: true
+        }
+      }
     }
   });
   const map = new Map<number, ActiveWorkSlotInfo>();
   for (const l of links) {
-    map.set(l.user_id, { slot_id: l.slot.id, slot_code: l.slot.slot_code });
+    map.set(l.user_id, {
+      slot_id: l.slot.id,
+      slot_code: l.slot.slot_code,
+      consignment: l.slot.consignment,
+      consignment_limit_amount: l.slot.consignment_limit_amount,
+      consignment_ignore_previous_months_debt: l.slot.consignment_ignore_previous_months_debt,
+      consignment_close_day: l.slot.consignment_close_day,
+      consignment_close_hour: l.slot.consignment_close_hour,
+      consignment_close_minute: l.slot.consignment_close_minute
+    });
   }
   return map;
 }

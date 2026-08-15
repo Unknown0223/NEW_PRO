@@ -25,6 +25,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatGroupedDecimal, formatGroupedInteger } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { Box, Coins, Package, Search, X } from "lucide-react";
 
 type CategoryRow = { id: number; name: string; parent_id: number | null; is_active: boolean };
@@ -162,12 +163,14 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "receipt"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(
+      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
         `/api/${tenantSlug}/price-types?kind=purchase`
       );
-      if (data.data.length > 0) return data.data;
-      const { data: all } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types`);
-      return all.data;
+      if (data.data.length > 0) return priceTypeOptionsFromResponse(data);
+      const { data: all } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
+        `/api/${tenantSlug}/price-types`
+      );
+      return priceTypeOptionsFromResponse(all);
     },
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference
@@ -652,8 +655,8 @@ export function GoodsReceiptNewWorkspace({ tenantSlug }: Props) {
                 >
                   <option value="">— выберите —</option>
                   {(priceTypesQ.data ?? []).map((pt) => (
-                    <option key={pt} value={pt}>
-                      {pt}
+                    <option key={pt.id} value={pt.id}>
+                      {pt.label}
                     </option>
                   ))}
                 </select>

@@ -145,6 +145,42 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     }
   }
 
+  if (job.name === "import_system_migration_backup") {
+    const d = job.data as {
+      tenant_id: number;
+      actor_user_id: number | null;
+      file_path: string;
+      force_nonempty?: boolean;
+      mode?: "full" | "profile_only";
+      conflict_policy?: "keep" | "replace";
+      modules?: string[];
+    };
+    const fp = d.file_path;
+    if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
+      throw new Error("Noto‘g‘ri import fayl yo‘li");
+    }
+    try {
+      const buf = await readFile(fp);
+      const { applyBackupZip } = await import("../modules/system-migration/system-migration.import");
+      return await applyBackupZip(buf, d.tenant_id, {
+        force_nonempty: d.force_nonempty ?? false,
+        mode: d.mode ?? "full",
+        conflict_policy: d.conflict_policy === "replace" ? "replace" : "keep",
+        modules: Array.isArray(d.modules) ? d.modules : undefined,
+        actorUserId: d.actor_user_id ?? null,
+        onProgress: async (p) => {
+          await job.updateProgress({
+            stage: p.stage,
+            percent: p.percent,
+            message: p.message
+          });
+        }
+      });
+    } finally {
+      await unlink(fp).catch(() => {});
+    }
+  }
+
   if (job.name === "export_excel") {
     const d = job.data as { tenant_id?: number; report_key?: string };
     return { ok: true, kind: "export_excel", tenant_id: d.tenant_id ?? null, report_key: d.report_key ?? null };

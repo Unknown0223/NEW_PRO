@@ -11,14 +11,10 @@ export default function BonusRulesLayout({ children }: { children: ReactNode }) 
   const pathname = usePathname();
 
   const showTabs =
-    pathname === BR ||
-    pathname === `${BR}/active` ||
-    pathname === `${BR}/inactive` ||
-    pathname === `${BR}/strategy`;
+    pathname === BR || pathname === `${BR}/active` || pathname === `${BR}/inactive`;
 
   const isActiveList = pathname === `${BR}/active` || pathname === BR;
   const isInactiveList = pathname === `${BR}/inactive`;
-  const isStrategy = pathname === `${BR}/strategy`;
 
   return (
     <div className="w-full">
@@ -45,17 +41,6 @@ export default function BonusRulesLayout({ children }: { children: ReactNode }) 
             )}
           >
             Неактивные
-          </Link>
-          <Link
-            href={`${BR}/strategy`}
-            className={cn(
-              "-mb-px inline-flex border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
-              isStrategy
-                ? "border-teal-600 text-teal-800 dark:border-teal-500 dark:text-teal-400"
-                : "border-transparent text-foreground/65 hover:text-foreground"
-            )}
-          >
-            Стратегия
           </Link>
         </div>
       ) : null}

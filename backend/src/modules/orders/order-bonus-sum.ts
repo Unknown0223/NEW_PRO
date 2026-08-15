@@ -22,6 +22,7 @@ import {
   ruleMatchesProduct,
   ruleHasPurchaseScope,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleRelatesToOrderSelection,
@@ -95,6 +96,7 @@ export async function findWinningSumPeek(
 
   const orderAgentPeek =
     engineOpts?.prereqEnv?.orderAgent ?? engineOpts?.orderAgent ?? null;
+  const isConsignment = engineOpts?.prereqEnv?.is_consignment === true;
 
   for (const rule of filtered) {
     const hasClauses = (rule.clauses?.length ?? 0) > 0;
@@ -111,10 +113,12 @@ export async function findWinningSumPeek(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       } else {
         if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesConsignment(rule, isConsignment)) continue;
         if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
       }
     } else {
       if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesConsignment(rule, isConsignment)) continue;
       if (!ruleMatchesOrderAgentScope(rule, orderAgentPeek)) continue;
       if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
       if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
@@ -153,9 +157,7 @@ export async function buildSumBonusDraft(
   units: number
 ): Promise<BonusLineDraft[]> {
   const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-  if (priceStr == null) return [];
-
-  const price = new PrismaClient.Decimal(priceStr);
+  const price = new PrismaClient.Decimal(priceStr ?? "0");
   const qty = new PrismaClient.Decimal(units);
   const total = roundMoney(qty.mul(price));
   return [{ product_id: giftPid, qty, price, total, is_bonus: true }];

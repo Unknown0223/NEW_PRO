@@ -11,5 +11,14 @@ class PermissionSet {
   bool get canViewClients => hasAny(['clients.spisok_klientov', 'clients.view']);
   bool get canViewDashboard => hasAny(['dashboard.view', 'dashboard.supervayzer']);
 
+  /// Bank Transfer Inbox (мобильный / веб).
+  bool get canViewBankTransfers =>
+      hasAny(['cash.perechisleniya.view', 'cash.perechisleniya']);
+  bool get canUpdateBankTransfers =>
+      hasAny(['cash.perechisleniya.update', 'cash.perechisleniya']);
+  /// Confirm pending payment (`POST /payments/:id/confirm`).
+  bool get canConfirmClientPayments =>
+      hasAny(['cash.oplaty_klientov.update', 'cash.oplaty_klientov']);
+
   factory PermissionSet.fromList(List<String> list) => PermissionSet(Set.from(list));
 }

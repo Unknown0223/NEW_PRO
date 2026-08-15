@@ -129,12 +129,13 @@ export function useGeoBoundaryEditorState(tenantSlug: string | null) {
   }, [boundaries, geoKind, geoRefId]);
 
   const adminRegion = useMemo(() => {
-    if (!selectedCatalogItem?.layer || !territoryLayerUsesAdminBoundary(selectedCatalogItem.layer)) {
+    const layer = selectedCatalogItem?.layer;
+    if (!layer || !territoryLayerUsesAdminBoundary(layer)) {
       return null;
     }
     return adminRegionForCatalogName(
       selectedCatalogItem.name,
-      selectedCatalogItem.layer,
+      layer,
       selectedCatalogItem.parentRegionName,
       adminRegions
     );

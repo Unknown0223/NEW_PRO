@@ -7,7 +7,6 @@ import '../../../core/api/field_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
-import '../../../core/config/tenant_references.dart';
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/config/mobile_order_guards.dart';
 import '../../../core/database/app_database.dart';
@@ -18,6 +17,8 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
 import '../clients/client_photo_report_flow.dart';
+import '../orders/held_order_model.dart';
+import '../orders/held_orders_provider.dart';
 import '../orders/order_draft_provider.dart';
 import '../visits/visit_stats_helper.dart';
 import '../shell/agent_app_bar.dart';
@@ -37,6 +38,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
   Map<String, dynamic>? _client;
   VisitRecord? _visit;
   bool _loading = true;
+  bool _sendingHeld = false;
 
   @override
   void initState() {
@@ -72,9 +74,60 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
     refreshVisitStatsProviders(ref.invalidate);
   }
 
+  Future<void> _sendHeldOrderNow(int heldId) async {
+    if (_sendingHeld) return;
+    setState(() => _sendingHeld = true);
+    try {
+      await ref.read(heldOrderSchedulerProvider).submitNow(heldId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заказ отправлен'), backgroundColor: AppColors.success),
+      );
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось отправить заказ'), backgroundColor: AppColors.error),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingHeld = false);
+    }
+  }
+
   Future<void> _completeVisit({required bool refused, String? reasonRef}) async {
     final visit = _visit;
     if (visit == null) return;
+
+    // Tugashdan oldin kutilayotgan zakazlarni yuborish (ixtiyoriy — timer ham yuboradi).
+    final held = (ref.read(heldOrdersProvider).valueOrNull ?? const [])
+        .where((h) => h.clientId == widget.clientId)
+        .toList();
+    if (held.isNotEmpty && !refused) {
+      final send = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Есть заказ в ожидании'),
+          content: Text(
+            held.length == 1
+                ? 'Отправить заказ на сервер перед завершением визита?'
+                : 'Отправить ${held.length} заказа на сервер перед завершением визита?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Отправить')),
+          ],
+        ),
+      );
+      if (send == true) {
+        for (final h in held) {
+          try {
+            await ref.read(heldOrderSchedulerProvider).submitNow(h.id);
+          } catch (_) {}
+        }
+      }
+      if (!mounted) return;
+    }
+
     final updated = visit.copyWith(
       status: refused ? 'refused' : 'completed',
       endTime: DateTime.now().toIso8601String(),
@@ -176,6 +229,14 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         : null;
     final drafts = ref.watch(orderDraftsProvider).valueOrNull;
     final hasDraft = drafts?[widget.clientId] != null;
+    HeldOrder? heldOrder;
+    for (final h in ref.watch(heldOrdersProvider).valueOrNull ?? const <HeldOrder>[]) {
+      if (h.clientId == widget.clientId) {
+        heldOrder = h;
+        break;
+      }
+    }
+    final held = heldOrder;
     final gps = ref.watch(gpsTrackerProvider);
     final pos = gps.lastPosition;
     final gpsLine = pos != null
@@ -231,14 +292,17 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
               supervisionEnabled: _supervisionEnabled,
               onPhotoReport: _addPhotoReport,
               onCreateOrder: () {
-                final clientExtra = client == null
-                    ? null
-                    : Map<String, dynamic>.from(client);
+                final clientExtra = Map<String, dynamic>.from(client);
                 context.push(
                   '/orders/create?client_id=${widget.clientId}',
                   extra: clientExtra,
                 );
               },
+              onSendHeldOrder: held == null ? null : () => _sendHeldOrderNow(held.id),
+              heldOrderHint: held == null
+                  ? null
+                  : 'Ожидает · ${formatHeldCountdown(held.remaining())}',
+              sendHeldBusy: _sendingHeld,
               onRefusal: _pickRefusal,
               onSupervision: () async {
                 final supervision = ref.read(sessionProvider).mobileConfig?.supervision;

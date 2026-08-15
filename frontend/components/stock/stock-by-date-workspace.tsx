@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
@@ -119,8 +120,10 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "by-date"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: PriceTypeOpt[] }>(`/api/${tenantSlug}/price-types?kind=sale`);
-      return data.data;
+      const { data } = await api.get<{ data: PriceTypeOpt[]; options?: PriceTypeOption[] }>(
+        `/api/${tenantSlug}/price-types?kind=sale`
+      );
+      return priceTypeOptionsFromResponse(data);
     },
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference
@@ -263,7 +266,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     setPriceType(v);
                     setPage(1);
                   }}
-                  options={(priceTypesQ.data ?? []).map((pt) => ({ value: pt, label: pt }))}
+                  options={(priceTypesQ.data ?? []).map((pt) => ({ value: pt.id, label: pt.label }))}
                   searchable={false}
                   className="h-8 rounded-md px-2 text-xs"
                 />

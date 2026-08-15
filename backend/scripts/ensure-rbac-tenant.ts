@@ -10,6 +10,7 @@ import {
   syncTenantUserRolesFromProfile
 } from "../src/modules/access/rbac.roles";
 import { setRolePermissions } from "../src/modules/access/rbac.permissions";
+import { buildRoleDefaultKeys } from "../src/modules/access/role-permission-presets";
 
 const MOBILE_PERMISSION_KEYS = [
   "orders.view",
@@ -57,8 +58,10 @@ async function main() {
   const adminN = await grantRoleAllCatalogKeys(tenant.id, "admin");
   console.log(`✓ admin: ${adminN} ruxsat (katalog)`);
 
-  const operatorN = await grantRoleAllCatalogKeys(tenant.id, "operator", ["access.manage"]);
-  console.log(`✓ operator: ${operatorN} ruxsat (access.manage dan tashqari)`);
+  const operatorKeys = buildRoleDefaultKeys("operator");
+  const operatorRole = await ensureRoleByKey(tenant.id, "operator");
+  await setRolePermissions(tenant.id, operatorRole.id, operatorKeys);
+  console.log(`✓ operator: ${operatorKeys.length} ruxsat (lean preset, not full catalog)`);
 
   for (const roleKey of MOBILE_ROLES) {
     const role = await ensureRoleByKey(tenant.id, roleKey);

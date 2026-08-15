@@ -38,6 +38,21 @@ export async function syncProductPrices(
         price: new Prisma.Decimal(it.price)
       }))
     });
+    // Старые цены / as-of: mahsulot sync ham tarixga yoziladi.
+    const now = new Date();
+    await tx.productPriceSchedule.createMany({
+      data: items.map((it) => ({
+        tenant_id: tenantId,
+        product_id: productId,
+        price_type: it.price_type.trim(),
+        price: new Prisma.Decimal(it.price),
+        currency: "UZS",
+        effective_at: now,
+        status: "applied",
+        applied_at: now,
+        created_by: actorUserId ?? undefined
+      }))
+    });
   });
 
   await appendTenantAuditEvent({
@@ -130,9 +145,12 @@ export async function bulkUpsertPricesForType(
     throw new Error(categoryId != null && categoryId > 0 ? "VALIDATION" : "NOT_FOUND");
   }
 
-  await prisma.$transaction(
-    items.map((it) =>
-      prisma.productPrice.upsert({
+  const now = new Date();
+  const cur = currency.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) || "UZS";
+
+  await prisma.$transaction(async (tx) => {
+    for (const it of items) {
+      await tx.productPrice.upsert({
         where: {
           tenant_id_product_id_price_type: {
             tenant_id: tenantId,
@@ -145,15 +163,29 @@ export async function bulkUpsertPricesForType(
           product_id: it.product_id,
           price_type: t,
           price: new Prisma.Decimal(it.price),
-          currency
+          currency: cur
         },
         update: {
           price: new Prisma.Decimal(it.price),
-          currency
+          currency: cur
         }
-      })
-    )
-  );
+      });
+    }
+    // Старые цены / as-of: har bir darhol yozuv tarix sifatida saqlanadi.
+    await tx.productPriceSchedule.createMany({
+      data: items.map((it) => ({
+        tenant_id: tenantId,
+        product_id: it.product_id,
+        price_type: t,
+        price: new Prisma.Decimal(it.price),
+        currency: cur,
+        effective_at: now,
+        status: "applied",
+        applied_at: now,
+        created_by: actorUserId ?? undefined
+      }))
+    });
+  });
 
   await appendTenantAuditEvent({
     tenantId,

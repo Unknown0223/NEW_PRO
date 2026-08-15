@@ -1,9 +1,15 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
 import { MOBILE_FIELD_ROLE_NAMES } from "../../lib/constants";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import {
+  assertOrderAgentAllowedForActor,
+  enrichScopedReportActor,
+  resolveAllowedAgentIdsForActor
+} from "../access/access-agent-scope";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   getAgentRouteDay,
@@ -21,6 +27,28 @@ function parseUserId(request: FastifyRequest) {
   const viewer = getAccessUser(request);
   const uid = Number.parseInt(viewer.sub, 10);
   return Number.isFinite(uid) && uid > 0 ? uid : null;
+}
+
+async function assertAgentInScope(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  agentId: number
+): Promise<boolean> {
+  const viewer = getAccessUser(request);
+  try {
+    await assertOrderAgentAllowedForActor(request.tenant!.id, agentId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role ?? ""
+    });
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "AGENT_OUT_OF_SCOPE") {
+      sendApiError(reply, request, 403, "AgentOutOfScope");
+      return false;
+    }
+    throw e;
+  }
 }
 
 export async function registerFieldRoutes(app: FastifyInstance) {
@@ -47,6 +75,7 @@ export async function registerFieldRoutes(app: FastifyInstance) {
     if (agentId == null) {
       return sendApiError(reply, request, 400, "AgentIdRequired");
     }
+    if (!(await assertAgentInScope(request, reply, agentId))) return;
     const to = q.to ? new Date(q.to) : new Date();
     const from = q.from ? new Date(q.from) : new Date(to.getTime() - 24 * 3600 * 1000);
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
@@ -95,6 +124,7 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (body.agent_id == null) return sendApiError(reply, request, 400, "AgentIdRequired");
       agentId = body.agent_id;
     }
+    if (!(await assertAgentInScope(request, reply, agentId))) return;
     try {
       const data = await recordAgentVisitCheckin(tenantId, agentId, {
         client_id: body.client_id ?? null,
@@ -144,9 +174,22 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 403, "Forbidden");
       }
     } else {
-      if (body.agent_id == null) return sendApiError(reply, request, 400, "AgentIdRequired");
-      agentId = body.agent_id;
+      // supervisor: agent_id bo‘lmasa — o‘z lokatsiyasini yuboradi
+      if (body.agent_id != null) {
+        agentId = body.agent_id;
+      } else if (viewer.role === "supervisor") {
+        const self = parseUserId(request);
+        if (!self) return sendApiError(reply, request, 400, "BadUser");
+        agentId = self;
+      } else {
+        return sendApiError(reply, request, 400, "AgentIdRequired");
+      }
     }
+    const selfPing =
+      viewer.role === "supervisor" &&
+      body.agent_id == null &&
+      agentId === parseUserId(request);
+    if (!selfPing && !(await assertAgentInScope(request, reply, agentId))) return;
     try {
       const data = await recordAgentLocationPing(tenantId, agentId, {
         latitude: body.latitude,
@@ -182,8 +225,19 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (!self) return sendApiError(reply, request, 400, "BadUser");
       agentId = self;
     }
+    const actor = await enrichScopedReportActor(tenantId, {
+      userId: actorUserIdOrNull(request),
+      role: viewer.role ?? ""
+    });
+    const allowed = resolveAllowedAgentIdsForActor(actor);
+    if (agentId != null) {
+      if (!(await assertAgentInScope(request, reply, agentId))) return;
+    } else if (allowed !== null && allowed.length === 0) {
+      return reply.send({ data: [], total: 0, page: q.page ?? 1, limit: q.limit ?? 31 });
+    }
     const result = await listAgentRouteDays(tenantId, {
       agent_id: agentId,
+      agent_ids: agentId == null && allowed != null ? allowed : undefined,
       from: q.from,
       to: q.to,
       page: q.page ?? 1,
@@ -210,6 +264,7 @@ export async function registerFieldRoutes(app: FastifyInstance) {
       if (!self || q.agent_id !== self) return sendApiError(reply, request, 403, "Forbidden");
       agentId = self;
     }
+    if (!(await assertAgentInScope(request, reply, agentId))) return;
     const row = await getAgentRouteDay(tenantId, agentId, q.route_date);
     return reply.send({ data: row });
   });
@@ -227,6 +282,7 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         notes: z.string().max(2000).nullable().optional()
       })
       .parse(request.body);
+    if (!(await assertAgentInScope(request, reply, body.agent_id))) return;
     try {
       const row = await upsertAgentRouteDay(tenantId, body);
       return reply.send({ data: row });

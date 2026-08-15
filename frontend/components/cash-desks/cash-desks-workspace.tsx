@@ -25,14 +25,18 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import {
-  RoleLinkPickerGrid,
   cloneRoleSets,
   emptySetsForRoles,
   linksFromRoleSets,
-  setsFromRoleLinks,
-  type RolePickerColumn
+  setsFromRoleLinks
 } from "@/components/role-link-picker/role-link-picker-grid";
-import { ClipboardList, Clock, MapPin, Pencil, RefreshCw, Search, X } from "lucide-react";
+import {
+  ENTITY_LINK_ROLE_COLUMNS,
+  ENTITY_LINK_ROLE_KEYS,
+  ENTITY_LINK_ROLE_LABELS,
+  RoleLinkUsersModal
+} from "@/components/role-link-picker/role-link-users-modal";
+import { ClipboardList, Clock, MapPin, Pencil, RefreshCw } from "lucide-react";
 import { isAxiosError } from "axios";
 
 const CASH_DESK_TABLE_ID = "cash_desks.v1";
@@ -67,37 +71,9 @@ const COLUMN_META = COLUMN_IDS.map((id) => ({
     }[id] ?? id
 }));
 
-const ROLE_LABELS: Record<string, string> = {
-  agent: "Агент",
-  cashier: "Кассир",
-  manager: "Менеджер",
-  operator: "Оператор",
-  storekeeper: "Склад",
-  supervisor: "Супервайзер",
-  expeditor: "Экспедитор"
-};
-
-const CASH_ROLE_ORDER = [
-  "agent",
-  "cashier",
-  "manager",
-  "operator",
-  "storekeeper",
-  "supervisor",
-  "expeditor"
-] as const;
-
-const CASH_ROLE_KEYS = [...CASH_ROLE_ORDER];
-
-const CASH_ROLE_COLUMNS: RolePickerColumn[] = [
-  { role: "agent", label: ROLE_LABELS.agent, pool: "agents" },
-  { role: "cashier", label: ROLE_LABELS.cashier, pool: "operators" },
-  { role: "manager", label: ROLE_LABELS.manager, pool: "operators" },
-  { role: "operator", label: ROLE_LABELS.operator, pool: "operators" },
-  { role: "storekeeper", label: ROLE_LABELS.storekeeper, pool: "operators" },
-  { role: "supervisor", label: ROLE_LABELS.supervisor, pool: "supervisors" },
-  { role: "expeditor", label: ROLE_LABELS.expeditor, pool: "expeditors" }
-];
+const ROLE_LABELS = ENTITY_LINK_ROLE_LABELS;
+const CASH_ROLE_KEYS = ENTITY_LINK_ROLE_KEYS;
+const CASH_ROLE_COLUMNS = ENTITY_LINK_ROLE_COLUMNS;
 
 const TIMEZONES = [
   { value: "Asia/Tashkent", label: "Asia/Tashkent (+05:00)" },
@@ -139,9 +115,25 @@ function emptyCashLinkSets() {
   return emptySetsForRoles(CASH_ROLE_KEYS);
 }
 
-type Props = { tenantSlug: string; canWrite: boolean };
+type Props = {
+  tenantSlug: string;
+  /** Добавить / редактировать (cash.kassa.create) */
+  canWrite: boolean;
+  /** История смен — иконка часов (cash.kassa.history) */
+  canHistory?: boolean;
+  /** Открыть/закрыть кассу (cash.kassa.status) */
+  canStatus?: boolean;
+  /** Excel выгрузка */
+  canExport?: boolean;
+};
 
-export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
+export function CashDesksWorkspace({
+  tenantSlug,
+  canWrite,
+  canHistory = false,
+  canStatus = false,
+  canExport = false
+}: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [page, setPage] = useState(1);
@@ -287,16 +279,16 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
                   Не активный
                 </button>
               </div>
-              {canWrite ? (
-                <div className="flex flex-wrap items-center gap-2 py-1">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setColumnOpen(true)}>
-                    Столбцы
-                  </Button>
+              <div className="flex flex-wrap items-center gap-2 py-1">
+                <Button type="button" variant="outline" size="sm" onClick={() => setColumnOpen(true)}>
+                  Столбцы
+                </Button>
+                {canWrite ? (
                   <Button type="button" size="sm" onClick={() => setFormOpen(true)}>
                     Добавить
                   </Button>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
 
             <div className="table-toolbar flex flex-wrap items-end gap-2 border-b border-border/80 bg-muted/30 px-3 py-2 sm:px-4">
@@ -318,9 +310,11 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
                   setPage(1);
                 }}
               />
-              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={exportRows}>
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={exportRows}>
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -372,19 +366,29 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
                     {tablePrefs.visibleColumnOrder.map((colId) => (
                       <td key={colId} className="px-2 py-2 align-top">
                         {colId === "closing" ? (
-                          <button
-                            type="button"
-                            className="text-left disabled:opacity-50"
-                            disabled={!canWrite}
-                            title={r.is_closed ? "Открыть" : "Закрыть"}
-                            onClick={() =>
-                              patchMut.mutate({ id: r.id, body: { is_closed: !r.is_closed } })
-                            }
-                          >
+                          canStatus ? (
+                            <button
+                              type="button"
+                              className="text-left disabled:opacity-50"
+                              disabled={patchMut.isPending}
+                              title={r.is_closed ? "Открыть" : "Закрыть"}
+                              onClick={() =>
+                                patchMut.mutate({ id: r.id, body: { is_closed: !r.is_closed } })
+                              }
+                            >
+                              <ClipboardList
+                                className={cn("size-5", r.is_closed ? "text-rose-500" : "text-emerald-600")}
+                              />
+                            </button>
+                          ) : (
                             <ClipboardList
-                              className={cn("size-5", r.is_closed ? "text-rose-500" : "text-emerald-600")}
+                              className={cn(
+                                "size-5 opacity-60",
+                                r.is_closed ? "text-rose-500" : "text-emerald-600"
+                              )}
+                              aria-hidden
                             />
-                          </button>
+                          )
                         ) : colId === "name" ? (
                           <span className="font-medium">{r.name}</span>
                         ) : colId === "branch_name" ? (
@@ -431,28 +435,32 @@ export function CashDesksWorkspace({ tenantSlug, canWrite }: Props) {
                       </td>
                     ))}
                     <td className="px-2 py-2 text-right">
-                      <div className="flex justify-end gap-0.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Смены кассы"
-                          onClick={() => setShiftDesk(r)}
-                        >
-                          <Clock className="size-4" />
-                        </Button>
-                        {canWrite ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Редактировать"
-                            onClick={() => setEditing(r)}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                        ) : null}
-                      </div>
+                      {canHistory || canWrite ? (
+                        <div className="flex justify-end gap-0.5">
+                          {canHistory ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Смены кассы"
+                              onClick={() => setShiftDesk(r)}
+                            >
+                              <Clock className="size-4" />
+                            </Button>
+                          ) : null}
+                          {canWrite ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Редактировать"
+                              onClick={() => setEditing(r)}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -1074,88 +1082,23 @@ function CashDeskFormDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={usersSubOpen} onOpenChange={setUsersSubOpen}>
-        <DialogContent
-          className={cn(
-            "flex max-h-[min(92vh,720px)] w-[min(100vw-1.5rem,1180px)] flex-col gap-0 overflow-x-hidden overflow-y-auto p-0",
-            "!max-w-[min(100vw-1.5rem,1180px)] sm:!max-w-[min(100vw-1.5rem,1180px)] z-[100]"
-          )}
-          showCloseButton
-        >
-          <DialogHeader className="shrink-0 border-b border-border bg-muted/20 px-4 pb-4 pt-5 pr-14 sm:pt-4">
-            <div className="flex flex-col gap-3 text-left">
-              <div className="min-w-0 pr-1">
-                <DialogTitle className="text-lg font-semibold tracking-tight">Пользователи по ролям</DialogTitle>
-                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-                  Блоки по ролям; длинный список внутри блока с прокруткой. Один сотрудник — в одной колонке.
-                </p>
-              </div>
-              <div className="w-full max-w-2xl">
-                <div className="rounded-xl border border-border/90 bg-background p-1 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.07]">
-                  <div className="relative flex items-center">
-                    <Search
-                      className="pointer-events-none absolute left-3.5 top-1/2 size-[1.125rem] -translate-y-1/2 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <Input
-                      placeholder="Поиск по имени или логину"
-                      value={userPickerSearch}
-                      onChange={(e) => setUserPickerSearch(e.target.value)}
-                      className={cn(
-                        "h-11 w-full border-0 bg-transparent pl-11 text-sm shadow-none",
-                        "placeholder:text-muted-foreground/70",
-                        "focus-visible:ring-0 focus-visible:ring-offset-0",
-                        userPickerSearch.trim() ? "pr-11" : "pr-4"
-                      )}
-                      aria-label="Поиск пользователей"
-                    />
-                    {userPickerSearch.trim() ? (
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="Очистить поиск"
-                        onClick={() => setUserPickerSearch("")}
-                      >
-                        <X className="size-4 shrink-0" strokeWidth={2.25} />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="flex flex-col bg-muted/10 px-3 pt-2 pb-1 sm:px-4">
-            <RoleLinkPickerGrid
-              roleOrder={CASH_ROLE_KEYS}
-              columns={CASH_ROLE_COLUMNS}
-              pickers={pickers}
-              local={draftLinkSets}
-              setLocal={setDraftLinkSets}
-              search={userPickerSearch}
-            />
-          </div>
-          <DialogFooter className="mx-0 mb-0 shrink-0 flex-col-reverse gap-2.5 rounded-b-xl border-t border-border bg-background px-5 pt-4 pb-5 sm:flex-row sm:justify-end sm:gap-3 sm:pb-5">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full min-h-10 sm:w-auto sm:min-w-[7.5rem]"
-              onClick={() => setUsersSubOpen(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              className="w-full min-h-10 bg-teal-600 text-white hover:bg-teal-700 sm:w-auto sm:min-w-[7.5rem] dark:bg-teal-600 dark:hover:bg-teal-500"
-              onClick={() => {
-                setLinkSets(cloneRoleSets(CASH_ROLE_KEYS, draftLinkSets));
-                setUsersSubOpen(false);
-              }}
-            >
-              Готово
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RoleLinkUsersModal
+        open={usersSubOpen}
+        onOpenChange={setUsersSubOpen}
+        roleOrder={CASH_ROLE_KEYS}
+        columns={CASH_ROLE_COLUMNS}
+        pickers={pickers}
+        local={draftLinkSets}
+        setLocal={setDraftLinkSets}
+        search={userPickerSearch}
+        setSearch={setUserPickerSearch}
+        subtitle={name.trim() || undefined}
+        onCancel={() => setUsersSubOpen(false)}
+        onDone={() => {
+          setLinkSets(cloneRoleSets(CASH_ROLE_KEYS, draftLinkSets));
+          setUsersSubOpen(false);
+        }}
+      />
     </>
   );
 }

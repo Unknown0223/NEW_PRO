@@ -16,6 +16,7 @@ import {
   scopeCte,
   unitQtySql
 } from "./expeditor-returns.helpers";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 type ProdRowRaw = {
   product_id: number;
@@ -37,13 +38,14 @@ export async function getExpeditorReturnsByProducts(
   f: ExpeditorReturnsFilters,
   actor?: ReportActor
 ) {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const uo = unitQtySql(f.unit_mode, Prisma.sql`j.oq`);
   const uob = unitQtySql(f.unit_mode, Prisma.sql`j.obq`);
   const urt = unitQtySql(f.unit_mode, Prisma.sql`j.rq`);
   const urb = unitQtySql(f.unit_mode, Prisma.sql`j.rbq`);
 
   const rows = await prisma.$queryRaw<ProdRowRaw[]>`
-    WITH ${scopeCte(tenantId, f, actor)},
+    WITH ${scopeCte(tenantId, f, scopedActor)},
     oi_lines AS (
       SELECT oi.order_id, oi.product_id, oi.is_bonus, oi.exchange_line_kind, oi.qty
       FROM order_items oi
@@ -140,13 +142,14 @@ export async function getExpeditorReturnsByClients(
   f: ExpeditorReturnsFilters,
   actor?: ReportActor
 ) {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const uo = unitQtySql(f.unit_mode, Prisma.sql`j.oq`);
   const uob = unitQtySql(f.unit_mode, Prisma.sql`j.obq`);
   const urt = unitQtySql(f.unit_mode, Prisma.sql`j.rq`);
   const urb = unitQtySql(f.unit_mode, Prisma.sql`j.rbq`);
 
   const rows = await prisma.$queryRaw<ClientProdRowRaw[]>`
-    WITH ${scopeCte(tenantId, f, actor)},
+    WITH ${scopeCte(tenantId, f, scopedActor)},
     oi_lines AS (
       SELECT o.client_id, oi.order_id, oi.product_id, oi.is_bonus, oi.exchange_line_kind, oi.qty
       FROM order_items oi

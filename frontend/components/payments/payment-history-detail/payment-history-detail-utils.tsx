@@ -1,4 +1,5 @@
-import { formatPaymentMoney } from "@/components/payments/client-payments/template-ui";
+import { formatPaymentMoney, TransferChannelBadge } from "@/components/payments/client-payments/template-ui";
+import { formatAppDateTimeFull } from "@/lib/app-timezone";
 import type { PaymentDetailPayload, PaymentDetailRow } from "@/lib/payment-detail-types";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -13,11 +14,7 @@ export type PaymentHistoryRow = {
 export type StatusBadgeTone = "pending" | "approved" | "rejected" | "cancelled" | "completed";
 
 export function formatPaymentHistoryDateTime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return formatAppDateTimeFull(iso, "");
 }
 
 export function workflowStatusLabel(status: string | null | undefined): string {
@@ -139,6 +136,17 @@ export function buildPaymentHistoryRows(data: PaymentDetailPayload): PaymentHist
       shaded: true
     },
     { label: "Способ оплаты", v1: p.payment_type },
+    {
+      label: "Канал перечисления",
+      v1: p.transfer_channel ? (
+        <span className="inline-flex items-center gap-1.5">
+          <TransferChannelBadge channel={p.transfer_channel} />
+          {p.transfer_source ? (
+            <span className="text-xs text-muted-foreground">({p.transfer_source})</span>
+          ) : null}
+        </span>
+      ) : undefined
+    },
     { label: "Тип выплаты дохода", v1: paymentKindLabel(p.payment_kind) },
     { label: "Направление торговли", v1: p.trade_direction ?? undefined },
     { label: "Касса", v1: p.cash_desk_name ?? undefined },

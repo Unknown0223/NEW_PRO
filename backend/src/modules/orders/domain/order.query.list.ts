@@ -12,6 +12,10 @@ import { cursorPagination, decodeCursor } from "../../../lib/pagination";
 import { getAppCache, invalidateDashboard, invalidateStock, ordersListCacheKey, setAppCache } from "../../../lib/redis-cache";
 import { stableJsonStringify } from "../../dashboard/dashboard.cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
+import {
+  buildOrderAgentScopeWhere,
+  enrichScopedReportActor
+} from "../../access/access-agent-scope";
 import { clientIdsWithVisitWeekday } from "../../clients/clients.list.where";
 import { isDiscountAlertCode } from "../order-discount-alert";
 import { isBonusAlertCode } from "../order-bonus-stock-cap";
@@ -51,8 +55,14 @@ import {
   loadDeliveryDebtByClient,
   mergeLedgerWithUnpaidDelivered
 } from "../../client-balances/client-balances.service";
-import { resolvePaymentMethodRefToLabel } from "../../tenant-settings/finance-refs";
-import { loadPaymentMethodEntriesForResolve } from "../../tenant-settings/tenant-settings.service";
+import {
+  resolvePaymentMethodRefToLabel,
+  resolvePriceTypeKeyToLabel
+} from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import { prepareExchangeOrderLines } from "../exchange-order-create";
 
 import {
@@ -150,6 +160,15 @@ export async function listOrdersPaged(
 
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
 
+  const scopedActor = await enrichScopedReportActor(tenantId, {
+    userId: viewerUserId ?? null,
+    role: viewerRole
+  });
+  const agentScopeWhere = buildOrderAgentScopeWhere(scopedActor);
+  if (agentScopeWhere) {
+    andClauses.push(agentScopeWhere);
+  }
+
   if (q.status?.trim()) {
     andClauses.push({ status: q.status.trim() });
   }
@@ -215,19 +234,22 @@ export async function listOrdersPaged(
   }
   const reg = q.client_region?.trim();
   if (reg) {
-    andClauses.push({ client: { region: reg } });
+    andClauses.push({ client: { region: { equals: reg, mode: "insensitive" } } });
   }
   const cityF = q.client_city?.trim();
   if (cityF) {
     andClauses.push({
       client: {
-        OR: [{ city: cityF }, { district: cityF }]
+        OR: [
+          { city: { equals: cityF, mode: "insensitive" } },
+          { district: { equals: cityF, mode: "insensitive" } }
+        ]
       }
     });
   }
   const zoneF = q.client_zone?.trim();
   if (zoneF) {
-    andClauses.push({ client: { neighborhood: zoneF } });
+    andClauses.push({ client: { zone: { equals: zoneF, mode: "insensitive" } } });
   }
   const tradeDir = q.agent_trade_direction?.trim();
   if (tradeDir) {
@@ -281,17 +303,35 @@ export async function listOrdersPaged(
     andClauses.push({ payment_method_ref: listPriceType });
   }
 
+  const parsedPeriods = (() => {
+    const raw = q.date_periods?.trim() ?? "";
+    if (!raw) return [] as Array<{ from: Date; to: Date }>;
+    const out: Array<{ from: Date; to: Date }> = [];
+    for (const part of raw.split(",")) {
+      const chunk = part.trim();
+      if (!chunk) continue;
+      const [a, b] = chunk.split("_");
+      const fromIso = a?.trim() ?? "";
+      const toIso = b?.trim() ?? "";
+      const fromD = fromIso ? parseListOrderLocalDayStart(fromIso) : null;
+      const toD = toIso ? parseListOrderLocalDayEnd(toIso) : null;
+      if (!fromD || !toD || fromD.getTime() > toD.getTime()) continue;
+      out.push({ from: fromD, to: toD });
+    }
+    return out;
+  })();
+
   const fromD = q.date_from?.trim() ? parseListOrderLocalDayStart(q.date_from.trim()) : null;
   const toD = q.date_to?.trim() ? parseListOrderLocalDayEnd(q.date_to.trim()) : null;
-  if (fromD && toD && fromD.getTime() > toD.getTime()) {
+  if (parsedPeriods.length === 0 && fromD && toD && fromD.getTime() > toD.getTime()) {
     return { data: [], total: 0, page: q.page, limit: q.limit };
   }
-  if (fromD || toD) {
-    const range: Prisma.DateTimeFilter = {};
-    if (fromD) range.gte = fromD;
-    if (toD) range.lte = toD;
-    const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
-    if (rawMode === "ship") {
+
+  const rawMode = (q.date_mode?.trim() || "order").toLowerCase();
+  const shipMode = rawMode === "ship";
+
+  const pushDateRangeClause = (range: Prisma.DateTimeFilter) => {
+    if (shipMode) {
       andClauses.push({
         status_logs: {
           some: {
@@ -304,6 +344,32 @@ export async function listOrdersPaged(
       // «Дата заказа» / «Дата создания» — Order.created_at (UI: created_at / list_created_at)
       andClauses.push({ created_at: range });
     }
+  };
+
+  if (parsedPeriods.length > 0) {
+    if (shipMode) {
+      andClauses.push({
+        OR: parsedPeriods.map((p) => ({
+          status_logs: {
+            some: {
+              to_status: "delivering",
+              created_at: { gte: p.from, lte: p.to }
+            }
+          }
+        }))
+      });
+    } else {
+      andClauses.push({
+        OR: parsedPeriods.map((p) => ({
+          created_at: { gte: p.from, lte: p.to }
+        }))
+      });
+    }
+  } else if (fromD || toD) {
+    const range: Prisma.DateTimeFilter = {};
+    if (fromD) range.gte = fromD;
+    if (toD) range.lte = toD;
+    pushDateRangeClause(range);
   }
 
   const rawSearch = q.search?.trim() ?? "";
@@ -349,7 +415,7 @@ export async function listOrdersPaged(
             region: true,
             city: true,
             district: true,
-            neighborhood: true
+            zone: true
           }
         },
         warehouse: { select: { name: true } },
@@ -405,6 +471,18 @@ export async function listOrdersPaged(
     }))
   );
 
+  // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
+  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  const priceTypeDisplayLabel = (refRaw: string | null): string | null => {
+    if (!refRaw) return null;
+    const viaPm = resolvePaymentMethodRefToLabel(refRaw, pmEntriesForLabel);
+    if (viaPm != null && viaPm !== refRaw) return viaPm;
+    return resolvePriceTypeKeyToLabel(refRaw, ptEntriesForLabel);
+  };
+
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
     rows.map((o) => ({
@@ -418,12 +496,48 @@ export async function listOrdersPaged(
     }))
   );
 
+  const returnMirrorIds = rows
+    .filter((o) => {
+      const t = o.order_type ?? "order";
+      return t === "return" || t === "return_by_order" || t === "partial_return";
+    })
+    .map((o) => o.id);
+  const returnDiscountByMirror = new Map<
+    number,
+    { amount: Prisma.Decimal; note: string | null }
+  >();
+  if (returnMirrorIds.length > 0) {
+    const srets = await prisma.salesReturn.findMany({
+      where: { tenant_id: tenantId, mirror_order_id: { in: returnMirrorIds } },
+      select: {
+        mirror_order_id: true,
+        discount_debt_amount: true,
+        discount_debt_note: true
+      }
+    });
+    for (const sr of srets) {
+      if (sr.mirror_order_id == null) continue;
+      if (sr.discount_debt_amount != null && sr.discount_debt_amount.gt(0)) {
+        returnDiscountByMirror.set(sr.mirror_order_id, {
+          amount: sr.discount_debt_amount,
+          note: sr.discount_debt_note
+        });
+      }
+    }
+  }
+
   const result = {
     data: rows.map((o) => {
       const ex = o.expeditor_user;
       const expeditorDisplay = ex ? `${ex.login} (${ex.name})` : null;
       const finRow = finance.get(o.id);
       const metaRow = meta.get(o.id);
+      const retDisc = returnDiscountByMirror.get(o.id);
+      const discountSum =
+        retDisc != null
+          ? retDisc.amount.toString()
+          : o.discount_sum.toString();
+      const discountDebtNote = retDisc?.note ?? null;
       return {
       id: o.id,
       number: o.number,
@@ -459,7 +573,7 @@ export async function listOrdersPaged(
       expeditor_display: expeditorDisplay,
       region: o.client.region ?? null,
       city: o.client.city ?? o.client.district ?? null,
-      zone: o.client.neighborhood ?? null,
+      zone: o.client.zone ?? null,
       consignment: o.agent?.consignment ?? null,
       is_consignment: o.is_consignment ?? false,
       day: null,
@@ -480,13 +594,14 @@ export async function listOrdersPaged(
         .toString(),
       total_sum: o.total_sum.toString(),
       bonus_qty: sumBonusQty(o.items),
-      discount_sum: o.discount_sum.toString(),
+      discount_sum: discountSum,
+      discount_debt_note: discountDebtNote,
       discount_alert: (o as { discount_alert?: string | null }).discount_alert ?? null,
       bonus_alert: (o as { bonus_alert?: string | null }).bonus_alert ?? null,
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
-      price_type: o.payment_method_ref?.trim() || null,
+      price_type: priceTypeDisplayLabel(o.payment_method_ref?.trim() || null),
       comment: (o as { comment?: string | null }).comment ?? null,
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
       payment_method_ref: o.payment_method_ref?.trim() || null,

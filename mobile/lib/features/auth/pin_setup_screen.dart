@@ -101,7 +101,15 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textMuted),
-          onPressed: _busy ? null : () => context.pop(),
+          onPressed: _busy
+              ? null
+              : () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/login');
+                  }
+                },
         ),
       ),
       body: SafeArea(

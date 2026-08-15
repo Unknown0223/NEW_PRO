@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { AccessHistoryWorkspace } from "@/components/access/access-history-workspace";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { useAccessModuleGate } from "@/lib/use-access-module-gate";
 
 export default function AccessHistoryPage() {
@@ -15,7 +16,15 @@ export default function AccessHistoryPage() {
   const gate = useAccessModuleGate(tenantSlug, role);
   if (!hydrated || !tenantSlug) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
   if (gate.isLoading) return <p className="text-sm text-muted-foreground">Загрузка...</p>;
-  if (!gate.allowed) return <p className="text-sm text-destructive">Недостаточно прав (нужны admin или доступ к разделу «Доступ»).</p>;
+  if (!gate.allowed) {
+    return (
+      <div className="flex flex-1 items-start justify-center p-8">
+        <AccessDeniedBanner
+          message="Недостаточно прав для раздела «Доступ» / «Доступ» bo‘limiga ruxsat yo‘q (нужны admin или access.upravlenie.view)."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-col gap-4 px-3 pb-4 pt-4 sm:px-4 lg:px-6">

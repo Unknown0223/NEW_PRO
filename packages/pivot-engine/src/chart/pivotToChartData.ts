@@ -23,7 +23,7 @@ export type PivotChartData = {
   meta: PivotChartMeta;
 };
 
-export type PivotChartType = "bar" | "line";
+export type PivotChartType = "bar" | "line" | "pie";
 
 function rowLabel(row: PivotRow): string {
   const labelCell = row.cells.find((c) => c.columnKey === "__row_label__");

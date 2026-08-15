@@ -31,6 +31,8 @@ export type PeresortRequest = { return_qty: number; target?: number };
 export type ManualPeresortRequest = {
   paid_qty: number;
   bonus_qty: number;
+  /** Bonus qaytarish summa (so‘m). */
+  bonus_cash?: number;
   target?: number;
 };
 
@@ -45,6 +47,7 @@ export type ReturnByOrderLineInput = {
   qty?: number;
   paid_qty?: number;
   bonus_qty?: number;
+  bonus_cash?: number;
   return_qty?: number;
   bonus_target_product_id?: number;
 };
@@ -73,10 +76,16 @@ export function parseReturnByOrderLineRequests(lines: ReturnByOrderLineInput[]):
     }
     const paid = l.paid_qty ?? 0;
     const bonus = l.bonus_qty ?? 0;
-    if (paid > 0 || bonus > 0) {
-      const cur = manualReq.get(l.product_id) ?? { paid_qty: 0, bonus_qty: 0 };
+    const cash = l.bonus_cash ?? 0;
+    if (paid > 0 || bonus > 0 || cash > 0) {
+      const cur = manualReq.get(l.product_id) ?? {
+        paid_qty: 0,
+        bonus_qty: 0,
+        bonus_cash: 0
+      };
       cur.paid_qty += paid;
       cur.bonus_qty += bonus;
+      cur.bonus_cash = (cur.bonus_cash ?? 0) + cash;
       if (target != null) cur.target = target;
       manualReq.set(l.product_id, cur);
       continue;
@@ -99,12 +108,16 @@ export function parseReturnByOrderLineRequests(lines: ReturnByOrderLineInput[]):
 export function mergeReturnByOrderQtyMaps(
   manualReq: Map<number, ManualPeresortRequest>,
   previewLines: PeresortPreviewLine[]
-): { merged: Map<number, { paid: number; bonus: number }>; totalDebt: number } {
-  const merged = new Map<number, { paid: number; bonus: number }>();
-  const addMerged = (pid: number, paid: number, bonus: number) => {
-    const c = merged.get(pid) ?? { paid: 0, bonus: 0 };
+): {
+  merged: Map<number, { paid: number; bonus: number; cash: number }>;
+  totalDebt: number;
+} {
+  const merged = new Map<number, { paid: number; bonus: number; cash: number }>();
+  const addMerged = (pid: number, paid: number, bonus: number, cash = 0) => {
+    const c = merged.get(pid) ?? { paid: 0, bonus: 0, cash: 0 };
     c.paid += paid;
     c.bonus += bonus;
+    c.cash += cash;
     merged.set(pid, c);
   };
   let totalDebt = 0;
@@ -115,7 +128,10 @@ export function mergeReturnByOrderQtyMaps(
   }
 
   for (const [pid, v] of manualReq) {
-    if (v.paid_qty + v.bonus_qty > 0) addMerged(pid, v.paid_qty, v.bonus_qty);
+    const cash = v.bonus_cash ?? 0;
+    if (v.paid_qty + v.bonus_qty + cash > 0) {
+      addMerged(pid, v.paid_qty, v.bonus_qty, cash);
+    }
   }
 
   return { merged, totalDebt };

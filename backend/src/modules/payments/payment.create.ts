@@ -330,10 +330,21 @@ export async function createPayment(
   });
 
   if (!isDiscountSettlement) {
+    const explicitAllocAgent =
+      allocationAgentId != null && Number.isFinite(allocationAgentId) && allocationAgentId > 0;
+    const hasExplicitOrders =
+      allocationOrderIds.length > 0 || (input.order_id != null && input.order_id > 0);
+    const useLegacyFirst = !explicitAllocAgent && !hasExplicitOrders;
     await allocatePayment(tenantId, row.id, uid, {
       mode: allocationMode,
-      agent_id: allocationAgentId ?? ledgerAgentId ?? null,
-      order_ids: allocationOrderIds
+      agent_id: explicitAllocAgent ? allocationAgentId : useLegacyFirst ? null : (ledgerAgentId ?? null),
+      order_ids: allocationOrderIds,
+      ...(useLegacyFirst
+        ? {
+            priority: "legacy_first" as const,
+            current_agent_id: client.agent_id ?? ledgerAgentId ?? null
+          }
+        : {})
     });
   }
 

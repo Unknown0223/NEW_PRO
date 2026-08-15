@@ -85,6 +85,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/warehouses(\/|$)/, "warehouse.sklady.view"),
 
   // ─────────── Касса (payments / cash-desks / currency / expenses) ───────────
+  r(WRITE, /\/bank-transfer-inbox\/(ingest|import|manual)$/, "cash.perechisleniya.import", "cash.perechisleniya.create"),
+  r(WRITE, /\/bank-transfer-inbox\/:id\/(assign|reassign|comment|ignore|create-payment)$/, "cash.perechisleniya.update"),
+  r(READ, /\/bank-transfer-inbox(\/|$)/, "cash.perechisleniya.view"),
   r(WRITE, /\/payments\/:id\/(confirm|batch-confirm)$/, "cash.oplaty_klientov.update"),
   r(WRITE, /\/payments\/:id\/(reject|return-to-expeditor)$/, "cash.oplaty_klientov.update"),
   r(["POST"], /\/payments(\/order-cash-in)?$/, "cash.oplaty_klientov.create"),
@@ -152,6 +155,48 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/system-migration(\/|$)/, "settings.profil_kompanii.view"),
 
   // ─────────── Пользователи (staff) ───────────
+  // Excel import (create|update) — before generic POST /agents|staff
+  r(["POST"], /\/staff\/import/, "staff.agent.create", "staff.agent.update", "staff.ekspeditor.create", "staff.ekspeditor.update", "staff.supervayzer.create", "staff.supervayzer.update", "staff.inkassator.create", "staff.inkassator.update", "staff.auditor.create", "staff.auditor.update", "staff.skladchik.create", "staff.skladchik.update", "staff.sotrudniki.create", "staff.sotrudniki.update"),
+  r(READ, /\/staff\/import/, "staff.agent.view", "staff.ekspeditor.view", "staff.supervayzer.view", "staff.inkassator.view", "staff.auditor.view", "staff.skladchik.view", "staff.sotrudniki.view", "staff.agent.create", "staff.ekspeditor.create", "staff.supervayzer.create", "staff.inkassator.create", "staff.auditor.create", "staff.skladchik.create", "staff.sotrudniki.create"),
+  r(["POST"], /\/agents\/import/, "staff.agent.create", "staff.agent.update"),
+  r(READ, /\/agents\/import/, "staff.agent.view", "staff.agent.create", "staff.agent.update"),
+  r(["POST"], /\/expeditors\/import/, "staff.ekspeditor.create", "staff.ekspeditor.update"),
+  r(READ, /\/expeditors\/import/, "staff.ekspeditor.view", "staff.ekspeditor.create", "staff.ekspeditor.update"),
+  r(["POST"], /\/supervisors\/import/, "staff.supervayzer.create", "staff.supervayzer.update"),
+  r(READ, /\/supervisors\/import/, "staff.supervayzer.view", "staff.supervayzer.create", "staff.supervayzer.update"),
+  r(["POST"], /\/collectors\/import/, "staff.inkassator.create", "staff.inkassator.update"),
+  r(READ, /\/collectors\/import/, "staff.inkassator.view", "staff.inkassator.create", "staff.inkassator.update"),
+  r(["POST"], /\/auditors\/import/, "staff.auditor.create", "staff.auditor.update"),
+  r(READ, /\/auditors\/import/, "staff.auditor.view", "staff.auditor.create", "staff.auditor.update"),
+  r(["POST"], /\/operators\/import/, "staff.sotrudniki.create", "staff.sotrudniki.update"),
+  r(READ, /\/operators\/import/, "staff.sotrudniki.view", "staff.sotrudniki.create", "staff.sotrudniki.update"),
+  r(["POST"], /\/skladchik\/import/, "staff.skladchik.create", "staff.skladchik.update"),
+  r(READ, /\/skladchik\/import/, "staff.skladchik.view", "staff.skladchik.create", "staff.skladchik.update"),
+  r(WRITE, /\/skladchik\/.*\/(activate|deactivate|aktivnost)/, "staff.skladchik.activate", "staff.skladchik.deactivate"),
+  r(["POST"], /\/skladchik(\/|$)/, "staff.skladchik.create"),
+  r(["PUT", "PATCH"], /\/skladchik\//, "staff.skladchik.update"),
+  r(["DELETE"], /\/skladchik\//, "staff.skladchik.update"),
+  r(READ, /\/skladchik(\/|$)/, "staff.skladchik.view"),
+  r(WRITE, /\/agents\/.*\/(activate|deactivate|aktivnost)/, "staff.agent.activate", "staff.agent.deactivate"),
+  r(["POST"], /\/agents(\/|$)/, "staff.agent.create"),
+  r(["PUT", "PATCH"], /\/agents\//, "staff.agent.update"),
+  r(["DELETE"], /\/agents\//, "staff.agent.delete"),
+  r(READ, /\/agents(\/|$)/, "staff.agent.view"),
+  r(["POST"], /\/expeditors(\/|$)/, "staff.ekspeditor.create"),
+  r(["PUT", "PATCH"], /\/expeditors\//, "staff.ekspeditor.update"),
+  r(READ, /\/expeditors(\/|$)/, "staff.ekspeditor.view"),
+  r(["POST"], /\/supervisors(\/|$)/, "staff.supervayzer.create"),
+  r(["PUT", "PATCH"], /\/supervisors\//, "staff.supervayzer.update"),
+  r(READ, /\/supervisors(\/|$)/, "staff.supervayzer.view"),
+  r(["POST"], /\/collectors(\/|$)/, "staff.inkassator.create"),
+  r(["PUT", "PATCH"], /\/collectors\//, "staff.inkassator.update"),
+  r(READ, /\/collectors(\/|$)/, "staff.inkassator.view"),
+  r(["POST"], /\/auditors(\/|$)/, "staff.auditor.create"),
+  r(["PUT", "PATCH"], /\/auditors\//, "staff.auditor.update"),
+  r(READ, /\/auditors(\/|$)/, "staff.auditor.view"),
+  r(["POST"], /\/operators(\/|$)/, "staff.sotrudniki.create"),
+  r(["PUT", "PATCH"], /\/operators\//, "staff.sotrudniki.update"),
+  r(READ, /\/operators(\/|$)/, "staff.sotrudniki.view"),
   r(WRITE, /\/staff\/.*\/(activate|deactivate|aktivnost)/, "staff.agent.activate", "staff.agent.deactivate"),
   r(["POST"], /\/staff\//, "staff.agent.create"),
   r(["PUT", "PATCH"], /\/staff\//, "staff.agent.update"),
@@ -161,23 +206,30 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Табель / Рабочее место ───────────
   r(WRITE, /\/timesheet/, "staff.tabel.create", "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
-  r(WRITE, /\/work-slots/, "work_slots.raboche_mesto.create", "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/workdays/, "staff.tabel.create", "staff.tabel.update"),
+  r(READ, /\/workdays/, "staff.tabel.view"),
+  r(READ, /\/tabel-audit/, "staff.tabel.view"),
+  r(WRITE, /\/work-slots\/.*\/(assign|unassign)/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/work-slots/, "work_slots.raboche_mesto.create", "work_slots.raboche_mesto.update", "work_slots.raboche_mesto.assign"),
   r(READ, /\/work-slots/, "work_slots.raboche_mesto.view"),
+  r(WRITE, /\/client-agent-assignments/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
+  r(READ, /\/client-agent-assignments/, "work_slots.raboche_mesto.view"),
 
   // ─────────── Консигнация ───────────
-  r(WRITE, /\/consignment/, "clients.klient.update", "clients.klient.assign"),
-  r(READ, /\/consignment/, "clients.klient.view"),
+  r(WRITE, /\/consignment/, "staff.konsignatsiya.update", "staff.konsignatsiya.create", "clients.klient.update"),
+  r(READ, /\/consignment/, "staff.konsignatsiya.view", "clients.klient.view"),
 
   // ─────────── Планы → Настройка утверждающих ───────────
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
   r(READ, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.view"),
 
-  // ─────────── Планы → Установка планов ───────────
+  // ─────────── Планы → Установка планов / Kunlik KPI ───────────
   r(["POST"], /\/plans\/setup\/confirm$/, "plans.ustanovka_planov.update"),
   r(["POST"], /\/plans\/setup\/approve$/, "plans.ustanovka_planov.approve"),
   r(["POST"], /\/plans\/setup\/return$/, "plans.ustanovka_planov.approve"),
   r(WRITE, /\/plans\/setup/, "plans.ustanovka_planov.update", "plans.ustanovka_planov.create"),
   r(READ, /\/plans\/setup/, "plans.ustanovka_planov.view"),
+  r(READ, /\/plans\/daily-kpi/, "plans.ustanovka_planov.view"),
 
   // ─────────── Dashboard ───────────
   r(READ, /\/dashboard\/sales-monitoring/, "dashboard.prodazhi.view"),
@@ -187,9 +239,17 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
   // ─────────── Отчёты ───────────
-  r(READ, /\/reports\/.*\/export/, "reports.otchety.copy"),
-  r(WRITE, /\/reports\/builder/, "reports.otchety.create", "reports.otchety.update"),
-  r(READ, /\/reports(\/|$)/, "reports.otchety.view"),
+  r(READ, /\/reports\/.*\/export/, "reports.otchety.copy", "reports.konstruktor.copy"),
+  r(
+    WRITE,
+    /\/reports\/builder/,
+    "reports.konstruktor.create",
+    "reports.konstruktor.update",
+    "reports.otchety.create",
+    "reports.otchety.update"
+  ),
+  r(READ, /\/reports\/builder/, "reports.konstruktor.view", "reports.otchety.view", "pivot.otchety.view"),
+  r(READ, /\/reports(\/|$)/, "reports.otchety.view", "reports.konstruktor.view"),
 
   // ─────────── Бонусы и скидки (bonus-rules) ───────────
   r(WRITE, /\/bonus-rules\/bulk$/, "settings.bonusy_i_skidki.update"),
@@ -200,12 +260,21 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["DELETE"], /\/bonus-rules\/:id$/, "settings.bonusy_i_skidki.delete"),
   r(READ, /\/bonus-rules(\/|$)/, "settings.bonusy_i_skidki.view"),
 
+  // ─────────── Стратегия бонусов и скидок ───────────
+  r(["POST"], /\/bonus-strategies$/, "settings.bonusy_i_skidki.create"),
+  r(["PUT", "PATCH"], /\/bonus-strategies\/:id(\/active)?$/, "settings.bonusy_i_skidki.update"),
+  r(["DELETE"], /\/bonus-strategies\/:id$/, "settings.bonusy_i_skidki.delete"),
+  r(READ, /\/bonus-strategies(\/|$)/, "settings.bonusy_i_skidki.view"),
+
   // ─────────── Отказы (refusals) ───────────
   r(WRITE, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.create", "orders.obmen_i_otkaz.update"),
   r(READ, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.view"),
 
   // ─────────── Аудит ───────────
   r(READ, /\/audit-events(\/|$)/, "audit.log.view"),
+
+  // ─────────── Диагностика (xatolik loglari) ───────────
+  r(READ, /\/error-events(\/|$)/, "diagnostics.error_logs.view"),
 
   // ─────────── Доступ (access workspace) ───────────
   r(WRITE, /\/access\/(users|role-defaults|users-bulk)/, "access.upravlenie.update"),
@@ -226,6 +295,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Полевые / GPS / маршруты ───────────
   r(WRITE, /\/field(\/|$)/, "gps.gps.update", "routes.marshruty.update"),
   r(READ, /\/field(\/|$)/, "gps.gps.view", "routes.marshruty.view"),
+  r(READ, /\/gps-monitoring(\/|$)/, "gps.gps.view", "routes.trek.view", "routes.marshruty.view"),
   r(WRITE, /\/geo-boundaries(\/|$)/, "clients.klient.assign", "clients.klient.update"),
   r(READ, /\/geo-boundaries(\/|$)/, "clients.klient.view"),
 

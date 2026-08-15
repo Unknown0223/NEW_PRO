@@ -1,8 +1,8 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 if not exist "package.json" (
-  echo [XATO] package.json topilmadi: %CD%
+  echo [XATO] package.json topilmadi: !CD!
   pause
   exit /b 1
 )

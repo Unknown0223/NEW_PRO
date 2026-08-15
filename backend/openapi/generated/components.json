@@ -574,6 +574,20 @@
       },
       "is_active": {
         "type": "boolean"
+      },
+      "price_type": {
+        "type": "string",
+        "maxLength": 128,
+        "nullable": true
+      },
+      "allow_order_with_debt": {
+        "type": "boolean"
+      },
+      "allow_consignment": {
+        "type": "boolean"
+      },
+      "allow_consignment_with_debt": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -1495,6 +1509,9 @@
         "type": "string",
         "minLength": 1,
         "nullable": true
+      },
+      "force_clients_catalog": {
+        "type": "boolean"
       },
       "device_name": {
         "type": "string",

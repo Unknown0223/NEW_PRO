@@ -2,9 +2,10 @@ import 'dart:convert';
 
 import 'order_create_models.dart';
 
-/// Buyurtma chernovigi — 1 soat saqlanadi, keyin avtomatik o'chiriladi.
+/// Buyurtma chernovigi — saqlanganidan (yoki oxirgi yangilanishidan) 1 kun
+/// keyin avtomatik o'chiriladi. UI da countdown yo'q (held-order taymeridan farqli).
 class OrderDraft {
-  static const ttl = Duration(hours: 1);
+  static const ttl = Duration(days: 1);
 
   final int clientId;
   final int warehouseId;
@@ -83,8 +84,8 @@ class OrderDraft {
     } catch (_) {}
 
     final savedAt = DateTime.tryParse(row['saved_at']?.toString() ?? '') ?? DateTime.now();
-    final expiresAt = DateTime.tryParse(row['expires_at']?.toString() ?? '') ??
-        savedAt.add(ttl);
+    // Always derive from savedAt so legacy 1-hour expires_at rows get the 1-day TTL.
+    final expiresAt = savedAt.add(ttl);
 
     return OrderDraft(
       clientId: clientId,
@@ -113,14 +114,3 @@ String formatDraftSavedAt(DateTime dt) {
   return '${local.day} $m. $h:$min';
 }
 
-String formatDraftCountdown(Duration remaining) {
-  if (remaining.isNegative) return '00:00';
-  final totalSec = remaining.inSeconds;
-  final h = totalSec ~/ 3600;
-  final m = (totalSec % 3600) ~/ 60;
-  final s = totalSec % 60;
-  if (h > 0) {
-    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-}

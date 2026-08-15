@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   bulkOrderConsignmentBodySchema,
+  bulkOrderDetailsBodySchema,
   bulkOrderExpeditorBodySchema,
   bulkOrderNakladnoyBodySchema,
   bulkOrderNakladnoyPreviewBodySchema,
@@ -19,7 +20,7 @@ import {
   isDocumentEditPeriodLockedError,
   sendDocumentEditPeriodLocked
 } from "../../lib/document-edit-lock.http";
-import { assertDocWritableById } from "../../lib/document-edit-lock.request";
+import { assertDocsWritableByIds } from "../../lib/document-edit-lock.request";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
@@ -41,6 +42,7 @@ import {
   bulkUpdateOrderStatus,
   createOrder,
   getOrderDetail,
+  getOrdersDetailBulk,
   listOrdersPaged,
   nakladnoyBuildOptionsFromApi,
   requestBulkOrderNakladnoy,
@@ -56,6 +58,28 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderBulkRoutes(app: FastifyInstance) {
   app.post(
+    "/api/:slug/orders/bulk/details",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderDetailsBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      const actor = getAccessUser(request);
+      const actorSub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
+      const data = await getOrdersDetailBulk(
+        request.tenant!.id,
+        parsed.data.order_ids,
+        actor.role,
+        actorUserId
+      );
+      return reply.send({ data });
+    }
+  );
+
+  app.post(
     "/api/:slug/orders/bulk/status",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
@@ -68,9 +92,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
       try {
-        for (const orderId of parsed.data.order_ids) {
-          await assertDocWritableById(request, "orders", orderId);
-        }
+        await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
         const result = await bulkUpdateOrderStatus(
           request.tenant!.id,
           parsed.data.order_ids,
@@ -100,9 +122,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
       try {
-        for (const orderId of parsed.data.order_ids) {
-          await assertDocWritableById(request, "orders", orderId);
-        }
+        await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
         const result = await bulkUpdateOrderExpeditor(
           request.tenant!.id,
           parsed.data.order_ids,
@@ -131,9 +151,7 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
       const actorSub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
       try {
-        for (const orderId of parsed.data.order_ids) {
-          await assertDocWritableById(request, "orders", orderId);
-        }
+        await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
         const result = await bulkUpdateOrderConsignment(
           request.tenant!.id,
           parsed.data.order_ids,

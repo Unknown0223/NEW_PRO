@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
+import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import type { WarehouseStockPurpose } from "@/components/warehouses/warehouses-workspace";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -510,10 +511,10 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "stock-balances"],
     queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(
+      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
         `/api/${tenantSlug}/price-types?kind=sale`
       );
-      return data.data;
+      return priceTypeOptionsFromResponse(data);
     },
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference
@@ -604,7 +605,7 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
     setPage(1);
     if (next === "valuation") {
       const list = priceTypesQ.data ?? [];
-      const first = list[0];
+      const first = list[0]?.id;
       setDraftPriceType((d) => (d.trim() ? d : first ?? ""));
       setApplied((prev) => {
         if (prev.priceType.trim() || !first) return prev;
@@ -947,8 +948,8 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                     >
                       <option value="">— выберите —</option>
                       {(priceTypesQ.data ?? []).map((pt) => (
-                        <option key={pt} value={pt}>
-                          {pt}
+                        <option key={pt.id} value={pt.id}>
+                          {pt.label}
                         </option>
                       ))}
                     </select>

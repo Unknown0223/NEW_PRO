@@ -1,7 +1,6 @@
 "use client";
 
 import type { OrderListRow } from "@/components/orders/order-detail-view";
-import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import {
   orderListStatusLabel,
   orderListStatusStyle
@@ -17,6 +16,7 @@ import {
   checkShelfReturnByOrder
 } from "@/lib/shelf-return-by-order";
 import { getUserFacingError } from "@/lib/error-utils";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import {
   Ban,
@@ -113,7 +113,8 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
     return allowed.filter((s) => s !== order.status);
   }, [order.allowed_next_statuses, order.status]);
 
-  const canInteract = isAdminOrOperatorLikeRole(effectiveRole);
+  const { has } = usePermissions();
+  const canInteract = has("orders.zakaz.status") || has("orders.status.status");
   const actions = useMemo(() => {
     const base = buildStatusActions(order.status, nextStatuses, order.order_type);
     const specials: StatusAction[] = [];

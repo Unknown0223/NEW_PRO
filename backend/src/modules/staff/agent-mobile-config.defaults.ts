@@ -32,7 +32,7 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
       },
       gps: { tracking_enabled: false, tracking_interval_sec: 300 },
       route: { daily_visit_limit: 50, readd_cooldown_days: 0 },
-      product_list: { show_out_of_stock: true, allow_submit_for_new_client: true },
+      product_list: { show_out_of_stock: false, allow_submit_for_new_client: true },
       misc: { visit_start_end_enabled: true },
       sync: { allowed_window_from: "06:00", allowed_window_to: "22:00" },
       photo: { jpeg_quality: 92, max_width_px: 4032, max_height_px: 4032 },
@@ -63,7 +63,34 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
   if (role === "supervisor") {
     return {
       ...base,
+      client: {
+        can_create: false,
+        can_edit: false,
+        can_change_client_location: false,
+        show_balance: true,
+        show_photos: true,
+        phone_prefix: "+998",
+        fields_visible: {
+          name: true,
+          legal_name: true,
+          phone: true,
+          category: true,
+          territory: true,
+          address: true,
+          visit_day: true,
+          coordinates: true
+        }
+      },
+      gps: {
+        tracking_enabled: true,
+        tracking_interval_sec: 300,
+        always_on: false
+      },
+      outlet: { show_plan_in_reports: true },
+      route: { daily_visit_limit: 50, readd_cooldown_days: 0 },
+      photo: { jpeg_quality: 92, max_width_px: 4032, max_height_px: 4032 },
       misc: { visit_start_end_enabled: true },
+      sync: { allowed_window_from: "06:00", allowed_window_to: "22:00" },
       supervision: {
         check_receipt_faces: true,
         check_merchandising: true,

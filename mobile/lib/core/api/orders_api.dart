@@ -1,8 +1,20 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/price_type_labels.dart';
 import 'api_exceptions.dart';
 import 'dio_client.dart';
+
+OrderCreateContext _parseOrderCreateContextJson(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    throw const FormatException('create-context: invalid JSON');
+  }
+  return OrderCreateContext.fromJson(Map<String, dynamic>.from(decoded));
+}
 
 class OrdersApi {
   final Dio _dio;
@@ -17,11 +29,20 @@ class OrdersApi {
       final q = <String, dynamic>{};
       if (clientId != null) q['selected_client_id'] = clientId;
       if (warehouseId != null) q['selected_warehouse_id'] = warehouseId;
-      final r = await _dio.get(
+      final r = await _dio.get<String>(
         '/api/$slug/mobile/orders/create-context',
         queryParameters: q.isEmpty ? null : q,
+        options: Options(responseType: ResponseType.plain),
       );
-      return OrderCreateContext.fromJson(r.data as Map<String, dynamic>);
+      final raw = r.data ?? '';
+      if (raw.isEmpty) {
+        throw StateError('create-context: empty body');
+      }
+      // Katta katalog — UI threadni muzlatmaslik uchun isolate da parse.
+      if (raw.length > 80 * 1024) {
+        return compute(_parseOrderCreateContextJson, raw);
+      }
+      return _parseOrderCreateContextJson(raw);
     } on DioException catch (e) {
       throw mapDioException(e);
     }
@@ -84,6 +105,8 @@ class OrdersApi {
     required int warehouseId,
     required List<OrderLineInput> items,
     String? priceType,
+    bool isConsignment = false,
+    List<BonusStrategySelectionInput> strategySelections = const [],
     List<BonusGiftOverrideInput> giftOverrides = const [],
     List<BonusGiftLineInput> giftLines = const [],
   }) async {
@@ -94,6 +117,14 @@ class OrdersApi {
           'client_id': clientId,
           'warehouse_id': warehouseId,
           if (priceType != null && priceType.trim().isNotEmpty) 'price_type': priceType.trim(),
+          if (isConsignment) 'is_consignment': true,
+          if (strategySelections.isNotEmpty)
+            'bonus_strategy_selections': strategySelections
+                .map((s) => {
+                      'strategy_id': s.strategyId,
+                      'rule_ids': s.ruleIds,
+                    },)
+                .toList(),
           'items': items
               .map((i) => {
                     'product_id': i.productId,
@@ -137,6 +168,7 @@ class OrdersApi {
     bool isConsignment = false,
     String? consignmentDueDate,
     String? shipmentDate,
+    List<BonusStrategySelectionInput> strategySelections = const [],
   }) async {
     try {
       final r = await _dio.post(
@@ -160,6 +192,13 @@ class OrdersApi {
                       'bonus_rule_id': g.bonusRuleId,
                       'product_id': g.productId,
                       'qty': g.qty,
+                    },)
+                .toList(),
+          if (strategySelections.isNotEmpty)
+            'bonus_strategy_selections': strategySelections
+                .map((s) => {
+                      'strategy_id': s.strategyId,
+                      'rule_ids': s.ruleIds,
                     },)
                 .toList(),
           if (comment != null && comment.isNotEmpty) 'comment': comment,
@@ -205,6 +244,12 @@ class BonusGiftLineInput {
     required this.productId,
     required this.qty,
   });
+}
+
+class BonusStrategySelectionInput {
+  final int strategyId;
+  final List<int> ruleIds;
+  const BonusStrategySelectionInput({required this.strategyId, required this.ruleIds});
 }
 
 class StockRow {
@@ -360,6 +405,8 @@ class OrderCreateContext {
   final List<Map<String, dynamic>> products;
   final List<Map<String, dynamic>> warehouses;
   final List<String> priceTypes;
+  /// DB kaliti → spravochnikdagi nom (dropdown label).
+  final Map<String, String> priceTypeLabels;
   final OrderClientFinance? clientFinance;
   final int? defaultWarehouseId;
 
@@ -368,9 +415,12 @@ class OrderCreateContext {
     this.products = const [],
     this.warehouses = const [],
     this.priceTypes = const ['default'],
+    this.priceTypeLabels = const {},
     this.clientFinance,
     this.defaultWarehouseId,
   });
+
+  String priceTypeLabel(String key) => priceTypeLabels[key] ?? key;
 
   factory OrderCreateContext.fromJson(Map<String, dynamic> j) {
     List<Map<String, dynamic>> asMaps(dynamic v) {
@@ -384,12 +434,14 @@ class OrderCreateContext {
     final priceTypes = pt is List
         ? pt.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
         : <String>['retail'];
+    final labels = priceTypeLabelsFromOptions(j['price_type_options'] as List?);
     final cf = j['client_finance'];
     return OrderCreateContext(
       clients: asMaps(j['clients']),
       products: asMaps(j['products']),
       warehouses: asMaps(j['warehouses']),
       priceTypes: priceTypes.isEmpty ? const ['retail'] : priceTypes,
+      priceTypeLabels: labels,
       clientFinance: cf is Map
           ? OrderClientFinance.fromJson(Map<String, dynamic>.from(cf))
           : null,

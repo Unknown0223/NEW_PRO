@@ -1,11 +1,37 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { TENANT_ADMIN_ROLE, TENANT_USER_ROLE_KEYS_FOR_DEFAULT_COMPOSITION } from "../../lib/tenant-user-roles";
+import { isGrantDelegationKey, isMatrixOperationKey, toGrantDelegationKey } from "./access-grant-delegation";
 import { derivePermissionModule } from "./rbac.resolve";
 import { assertCanGrantAccessManage, withAutoAccessModuleViewForManage } from "./rbac.access-manage";
 
+/** Rolga `access.grant.*` biriktirilmasin — faqat shaxsiy user_permissions. */
+function roleAssignablePermissionKeys(keys: string[]): string[] {
+  return [
+    ...new Set(
+      keys
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0 && !isGrantDelegationKey(k) && isMatrixOperationKey(k))
+    )
+  ];
+}
+
+/** Deny qilingan operatsiya uchun shaxsiy grant-allow ham olib tashlanadi. */
+function grantDelegationKeysForOps(opKeys: string[]): string[] {
+  return [
+    ...new Set(
+      opKeys
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0 && !isGrantDelegationKey(k) && isMatrixOperationKey(k))
+        .map((k) => toGrantDelegationKey(k))
+    )
+  ];
+}
+
 export async function removeUserPermissionsByKeys(tx: Prisma.TransactionClient, tenantId: number, userId: number, keys: string[]) {
-  const uniq = [...new Set(keys.map((k) => k.trim()).filter(Boolean))];
+  const uniq = [
+    ...new Set([...keys.map((k) => k.trim()).filter(Boolean), ...grantDelegationKeysForOps(keys)])
+  ];
   if (uniq.length === 0) return;
   const perms = await tx.permission.findMany({
     where: { tenant_id: tenantId, key: { in: uniq } },
@@ -84,6 +110,10 @@ export async function bulkMergeUserPermissionKeysForUsers(
       skipDuplicates: true
     });
   }
+  const grantRevoke = grantDelegationKeysForOps(denyU);
+  if (grantRevoke.length > 0) {
+    await bulkRemoveUserPermissionsByKeysForUsers(tx, tenantId, userIds, grantRevoke);
+  }
 }
 
 export async function bulkRemoveUserPermissionsByKeysForUsers(
@@ -92,7 +122,9 @@ export async function bulkRemoveUserPermissionsByKeysForUsers(
   userIds: number[],
   keys: string[]
 ): Promise<void> {
-  const uniq = [...new Set(keys.map((k) => k.trim()).filter(Boolean))];
+  const uniq = [
+    ...new Set([...keys.map((k) => k.trim()).filter(Boolean), ...grantDelegationKeysForOps(keys)])
+  ];
   if (uniq.length === 0 || userIds.length === 0) return;
   const perms = await tx.permission.findMany({
     where: { tenant_id: tenantId, key: { in: uniq } },
@@ -155,11 +187,12 @@ export async function mergeUserPermissionKeys(
         skipDuplicates: true
       });
     }
+    await removeUserPermissionsByKeys(tx, tenantId, userId, grantDelegationKeysForOps(denyU));
   }
 }
 
 export async function setRolePermissions(tenantId: number, roleId: number, permissionKeys: string[]) {
-  const keys = [...new Set(permissionKeys.map((k) => k.trim()).filter(Boolean))];
+  const keys = roleAssignablePermissionKeys(permissionKeys);
   const permissions = [];
   const chunkSize = 8;
   for (let i = 0; i < keys.length; i += chunkSize) {
@@ -182,4 +215,20 @@ export async function setRolePermissions(tenantId: number, roleId: number, permi
       skipDuplicates: true
     })
   ]);
+}
+
+/**
+ * Rolga noto‘g‘ri biriktirilgan `access.grant.*` havolalarini olib tashlaydi
+ * (grant faqat shaxsiy user_permissions bo‘lishi kerak).
+ */
+export async function stripGrantDelegationKeysFromRoles(tenantId: number): Promise<number> {
+  const grantPerms = await prisma.permission.findMany({
+    where: { tenant_id: tenantId, key: { startsWith: "access.grant." } },
+    select: { id: true }
+  });
+  if (grantPerms.length === 0) return 0;
+  const result = await prisma.rolePermission.deleteMany({
+    where: { permission_id: { in: grantPerms.map((p) => p.id) }, role: { tenant_id: tenantId } }
+  });
+  return result.count;
 }

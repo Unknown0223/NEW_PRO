@@ -48,8 +48,8 @@ export function listWdrFieldsForDataset(datasetId: string): ReportBuilderWdrFiel
     { uniqueName: "qty", caption: "Количество", type: "number" },
     { uniqueName: "volume", caption: "Объём", type: "number" },
     { uniqueName: "price", caption: "Цена", type: "number" },
-    { uniqueName: "bonus_line_total", caption: "Бонус (сумма строки)", type: "number" },
-    { uniqueName: "order_bonus_sum", caption: "Бонусы (заказ)", type: "number" },
+    { uniqueName: "bonus_line_total", caption: "Бонус сумма (строка)", type: "number" },
+    { uniqueName: "order_bonus_sum", caption: "Бонусы сумма (заказ)", type: "number" },
     { uniqueName: "discount_sum", caption: "Сумма скидки", type: "number" },
     { uniqueName: "client_balance", caption: "Баланс", type: "number" },
     { uniqueName: "order_debt", caption: "Долг по заказу", type: "number" },
@@ -83,7 +83,7 @@ export function getReportBuilderMetadata(): ReportBuilderMetadataResponse {
     metrics: [
       { id: "amount", label: "Сумма" },
       { id: "qty", label: "Количество" },
-      { id: "volume", label: "Объем" },
+      { id: "volume", label: "Объём" },
       { id: "akb", label: "АКБ" }
     ]
   };

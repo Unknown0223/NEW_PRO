@@ -61,6 +61,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
     if (!canCreate || !mounted) return;
     final ok = await showCreateClientSheet(context);
     if (ok == true && mounted) {
+      resetOutletFilters(ref);
       ref.invalidate(clientsListProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Savdo nuqtasi yaratildi'), backgroundColor: AppColors.success),
@@ -138,12 +139,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       final err = result.error ?? '';
       final msg = ok
           ? 'Mijozlar yangilandi (${result.clients} ta)'
-          : (err.contains('401') ||
-                  err.contains('Sessiya') ||
-                  err.contains('Invalid or expired') ||
-                  err.contains('tugadi')
-              ? 'Sessiya tugadi — qayta kiring'
-              : (err.isNotEmpty ? err : 'Sinxronizatsiya xato'));
+          : (err.isNotEmpty ? err : 'Sinxronizatsiya xato');
       if (!silent || !ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -152,15 +148,6 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
             duration: Duration(seconds: ok ? 2 : 4),
           ),
         );
-      }
-      if (!ok &&
-          mounted &&
-          (err.contains('401') ||
-              err.contains('Sessiya') ||
-              err.contains('Invalid or expired') ||
-              err.contains('tugadi'))) {
-        ref.read(authStateProvider.notifier).sessionExpired();
-        context.go('/login');
       }
     }
   }
@@ -338,12 +325,18 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
 class _OutletCategoryChips extends ConsumerWidget {
   const _OutletCategoryChips();
 
-  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt];
+  static final _filters = [S.dayAll, 'A', 'B', 'C', S.withDebt, 'Сброс'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final category = ref.watch(outletCategoryFilterProvider);
     final debtsOnly = ref.watch(outletDebtsOnlyProvider);
+    final weekdayTab = ref.watch(effectiveWeekdayTabProvider);
+    final visitStatus = ref.watch(outletVisitStatusFilterProvider);
+    final filtersActive = weekdayTab > 0 ||
+        debtsOnly ||
+        (category != null && category.isNotEmpty) ||
+        (visitStatus != null && visitStatus != S.dayAll);
 
     String activeLabel = S.dayAll;
     if (debtsOnly) {
@@ -357,11 +350,16 @@ class _OutletCategoryChips extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: _filters.map((f) {
-          final isActive = activeLabel == f;
+          final isReset = f == 'Сброс';
+          final isActive = isReset ? filtersActive : activeLabel == f;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
               onTap: () {
+                if (isReset) {
+                  resetOutletFilters(ref);
+                  return;
+                }
                 if (f == S.dayAll) {
                   ref.read(outletCategoryFilterProvider.notifier).state = null;
                   ref.read(outletDebtsOnlyProvider.notifier).state = false;
@@ -372,21 +370,36 @@ class _OutletCategoryChips extends ConsumerWidget {
                   ref.read(outletCategoryFilterProvider.notifier).state = f;
                   ref.read(outletDebtsOnlyProvider.notifier).state = false;
                 }
+                ref.invalidate(filteredClientsProvider);
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
                 decoration: BoxDecoration(
-                  color: isActive ? AppColors.primary : Colors.white,
+                  color: isReset
+                      ? (filtersActive
+                          ? AppColors.warning.withValues(alpha: 0.15)
+                          : Colors.white)
+                      : (isActive ? AppColors.primary : Colors.white),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isActive ? AppColors.primary : const Color(0xFFDDE5EA),
+                    color: isReset
+                        ? (filtersActive
+                            ? AppColors.warning
+                            : const Color(0xFFDDE5EA))
+                        : (isActive
+                            ? AppColors.primary
+                            : const Color(0xFFDDE5EA)),
                   ),
                 ),
                 child: Text(
                   f,
                   style: AppTypography.bodySmall.copyWith(
-                    color: isActive ? Colors.white : AppColors.textMuted,
+                    color: isReset
+                        ? (filtersActive
+                            ? AppColors.warning
+                            : AppColors.textMuted)
+                        : (isActive ? Colors.white : AppColors.textMuted),
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),

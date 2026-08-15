@@ -39,6 +39,12 @@ export type ClientDetailApiRow = ClientRow & {
   open_orders_total: string;
   /** Yetkazilgan, lekin to‘liq to‘lanmagan savdo zakazlari yig‘indisi */
   delivered_unpaid_total: string;
+  legacy_debt?: string;
+  current_debt?: string;
+  legacy_agent_names?: string | null;
+  current_agent_name?: string | null;
+  /** false = eski agentlar arxivlangan — kartochkada yashirin, ro‘yxatda qoladi */
+  legacy_debt_show_on_card?: boolean;
   updated_at: string;
   created_by_user_label?: string | null;
   last_modified_by_user_label?: string | null;
@@ -728,6 +734,35 @@ export function ClientDetailView({ tenantSlug, clientId }: Props) {
                   <span className="tabular-nums font-mono text-xs text-amber-900 dark:text-amber-200">
                     {formatNumberGrouped(data.delivered_unpaid_total ?? "0", { maxFractionDigits: 2 })}
                   </span>
+                )
+              },
+              data.legacy_debt_show_on_card !== false &&
+              Number(String(data.legacy_debt ?? "0").replace(/\s/g, "").replace(",", ".")) > 0.01
+                ? {
+                    label: "Долг старого агента",
+                    value: (
+                      <div className="space-y-0.5">
+                        <span className="tabular-nums font-mono text-xs">
+                          {formatNumberGrouped(data.legacy_debt ?? "0", { maxFractionDigits: 2 })}
+                        </span>
+                        {data.legacy_agent_names?.trim() ? (
+                          <p className="text-[10px] text-muted-foreground">{data.legacy_agent_names}</p>
+                        ) : null}
+                      </div>
+                    )
+                  }
+                : null,
+              {
+                label: "Долг текущего агента",
+                value: (
+                  <div className="space-y-0.5">
+                    <span className="tabular-nums font-mono text-xs">
+                      {formatNumberGrouped(data.current_debt ?? "0", { maxFractionDigits: 2 })}
+                    </span>
+                    {data.current_agent_name?.trim() ? (
+                      <p className="text-[10px] text-muted-foreground">{data.current_agent_name}</p>
+                    ) : null}
+                  </div>
                 )
               },
               {

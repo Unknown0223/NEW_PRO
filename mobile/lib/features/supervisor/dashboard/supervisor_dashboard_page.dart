@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../config/supervisor_config_enforcement.dart';
 import '../supervisor_providers.dart';
 
 class SupervisorDashboardPage extends ConsumerWidget {
@@ -12,7 +13,8 @@ class SupervisorDashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
-    final supervision = session.mobileConfig?.supervision;
+    final policy = SupervisorConfigPolicy(session.mobileConfig);
+    final supervision = policy.supervision;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -42,7 +44,7 @@ class SupervisorDashboardPage extends ConsumerWidget {
             // Checklist section
             const Text('Tekshiruv ro\'yxati', style: AppTypography.titleMedium),
             const SizedBox(height: 8),
-            if (supervision != null) ...[
+            if (policy.hasAnyChecklist && supervision != null) ...[
               _ChecklistItem('Chek yuzlari', supervision.checkReceiptFaces, Icons.receipt_long),
               _ChecklistItem('Merchandising', supervision.checkMerchandising, Icons.store),
               _ChecklistItem('Narx tekshiruv', supervision.checkDefaultPrice, Icons.price_check),

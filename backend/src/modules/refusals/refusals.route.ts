@@ -4,6 +4,11 @@ import { sendApiError } from "../../lib/api-error";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import {
+  assertOrderAgentAllowedForActor,
+  enrichScopedReportActor
+} from "../access/access-agent-scope";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   createClientRefusal,
@@ -61,7 +66,12 @@ export async function registerRefusalRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const data = await getClientRefusalFilterOptions(request.tenant!.id);
+      const viewer = getAccessUser(request);
+      const actor = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const data = await getClientRefusalFilterOptions(request.tenant!.id, actor);
       return reply.send({ data });
     }
   );
@@ -72,7 +82,12 @@ export async function registerRefusalRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = parseListQuery(request.query as Record<string, string | undefined>);
-      const result = await listClientRefusals(request.tenant!.id, q);
+      const viewer = getAccessUser(request);
+      const actor = await enrichScopedReportActor(request.tenant!.id, {
+        userId: actorUserIdOrNull(request),
+        role: viewer.role ?? ""
+      });
+      const result = await listClientRefusals(request.tenant!.id, q, actor);
       return reply.send(result);
     }
   );
@@ -104,6 +119,17 @@ export async function registerRefusalRoutes(app: FastifyInstance) {
       } else {
         if (body.agent_id == null) return sendApiError(reply, request, 400, "AgentIdRequired");
         agentId = body.agent_id;
+      }
+
+      try {
+        await assertOrderAgentAllowedForActor(request.tenant!.id, agentId, {
+          userId: actorUserIdOrNull(request),
+          role: viewer.role ?? ""
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
+        throw e;
       }
 
       let createdAt: Date | undefined;

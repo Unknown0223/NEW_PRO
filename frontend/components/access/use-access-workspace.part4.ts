@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import {
   ACCESS_DIM_TABLE_ROW_ESTIMATE_PX,
   ACCESS_MANAGE_KEY,
@@ -164,6 +165,7 @@ export function useAccessWorkspacePart4(ctx: ReturnType<typeof useAccessWorkspac
     try {
       await api.post(`/api/${tenantSlug}/access/users-bulk-patch`, { items });
       await invalidateAccessWorkspaceCaches();
+      invalidateMePermissionsQueries(qc, tenantSlug);
       setOpDimBulkSel(new Set());
       setScopeDimBulkSel(new Set());
       return true;
@@ -241,6 +243,12 @@ export function useAccessWorkspacePart4(ctx: ReturnType<typeof useAccessWorkspac
     const targets = filteredOperationUsers.filter((u) => opDimBulkSel.has(u.id) && getOpEffective(u));
     const items: Array<Record<string, unknown> & { user_id: number }> = [];
     for (const u of targets) {
+      // Роль → always deny (даже если есть личный allow).
+      if (u.from_role) {
+        const body = getOpPatchBodyForToggle(u, false, key);
+        if (body) items.push({ user_id: u.id, ...body });
+        continue;
+      }
       if (u.from_direct_allow || u.from_direct_deny) {
         items.push({ user_id: u.id, remove_permission_keys: [key] });
       } else {

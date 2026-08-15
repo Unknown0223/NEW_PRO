@@ -23,7 +23,7 @@ export function OrderPickBlock({ vm }: { vm: OrderCreateVm }) {
   if (!isPolkiByOrder) return null;
 
   return (
-    <div className="mt-3 border-t border-border/70 pt-3">
+    <div className="mt-3 border-t border-border/70 pt-3" data-oc-error="polki-orders">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="space-y-0.5">
           <Label className="text-xs font-medium">Заказ для возврата</Label>

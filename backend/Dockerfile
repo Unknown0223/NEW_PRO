@@ -45,6 +45,8 @@ RUN chmod +x scripts/docker-start.sh
 RUN mkdir -p uploads tmp && chown -R node:node /app
 
 ENV NODE_ENV=production
+# Ish mintaqasi UTC+5 (O‘zbekiston) — cron/log/Date local
+ENV TZ=Asia/Tashkent
 
 USER node
 

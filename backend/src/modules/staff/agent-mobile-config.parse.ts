@@ -193,7 +193,11 @@ export function parseMobileConfigV1(raw: unknown): AgentMobileConfigV1 | undefin
       block_sync: asBool(s.block_sync),
       allowed_window_from: asStr(s.allowed_window_from, 8),
       allowed_window_to: asStr(s.allowed_window_to, 8),
-      post_order_delay_minutes: asNum(s.post_order_delay_minutes) ?? undefined
+      post_order_delay_minutes: (() => {
+        const n = asNum(s.post_order_delay_minutes);
+        if (n == null) return undefined;
+        return Math.min(59, Math.max(0, Math.trunc(n)));
+      })()
     };
     if (!Object.values(sync).some((v) => v !== undefined)) sync = undefined;
   }

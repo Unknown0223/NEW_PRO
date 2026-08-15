@@ -10,8 +10,17 @@ const backendPkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "
 };
 
 describe("prod deploy pack scripts", () => {
-  it("root prod:verify chains module verify scripts", () => {
+  it("root prod:verify delegates to backend pack and frontend module verifies", () => {
     const cmd = rootPkg.scripts["prod:verify"] ?? "";
+    expect(cmd).toContain("prod:verify --prefix backend");
+    expect(cmd).toContain("refaktoring:verify --prefix frontend");
+    expect(cmd).toContain("work-slots:verify --prefix frontend");
+    expect(cmd).toContain("bitta-ilova:verify");
+  });
+
+  it("backend prod:verify chains foundation and module verify scripts", () => {
+    const cmd = backendPkg.scripts["prod:verify"] ?? "";
+    expect(cmd).toContain("prod:ops-check");
     expect(cmd).toContain("foundation:verify:fast");
     expect(cmd).toContain("dostup:verify");
     expect(cmd).toContain("polki:verify");

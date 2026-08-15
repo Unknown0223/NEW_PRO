@@ -11,6 +11,7 @@ import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateDashboard, invalidateStock } from "../../../lib/redis-cache";
 import { enqueueOrderStatusNotifyJob } from "../../jobs/jobs.service";
 import { getProductPrice } from "../../products/product-prices.service";
+import { getProductPriceAsOf } from "../../products/product-prices.as-of";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import {
   fetchClientUsedAutoBonusRuleIds,
@@ -154,12 +155,15 @@ export async function buildCreateOrderLineData(
       where: { id: { in: productIds }, tenant_id: tenantId, is_active: true }
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
+    const priceAsOf = (input.price_as_of ?? "").trim();
     for (const it of input.items) {
       const product = productMap.get(it.product_id);
       if (!product) {
         throw new Error("BAD_PRODUCT");
       }
-      const priceStr = await getProductPrice(tenantId, it.product_id, priceType);
+      const priceStr = priceAsOf
+        ? await getProductPriceAsOf(tenantId, it.product_id, priceType, priceAsOf)
+        : await getProductPrice(tenantId, it.product_id, priceType);
       if (priceStr == null) {
         const e = new Error("NO_PRICE") as Error & { product_id: number; price_type: string };
         e.product_id = it.product_id;

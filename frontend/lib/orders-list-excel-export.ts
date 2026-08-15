@@ -129,17 +129,21 @@ export async function fetchOrderDetailsForExport(
   const map = new Map<number, OrderDetailRow>();
   const ids = orders.map((o) => o.id);
   const total = ids.length;
-  const batchSize = 8;
+  if (total === 0) return map;
 
-  for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize);
-    await Promise.all(
-      batch.map(async (id) => {
-        const { data } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${id}`);
-        map.set(id, data);
-      })
+  const chunkSize = 100;
+  let done = 0;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const batch = ids.slice(i, i + chunkSize);
+    const { data } = await api.post<{ data: OrderDetailRow[] }>(
+      `/api/${tenantSlug}/orders/bulk/details`,
+      { order_ids: batch }
     );
-    onProgress?.(Math.min(i + batch.length, total), total);
+    for (const row of data.data ?? []) {
+      map.set(row.id, row);
+    }
+    done = Math.min(i + batch.length, total);
+    onProgress?.(done, total);
   }
 
   return map;

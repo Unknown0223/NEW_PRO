@@ -45,7 +45,7 @@ const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export async function registerOrderPatchRoutes(app: FastifyInstance) {
   app.patch(
-    "/api/:slug/orders/:id/meta",
+    "/api/:slug/orders/:id(\\d+)/meta",
     {
       preHandler: [
         jwtAccessVerify,
@@ -81,6 +81,9 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {
           return sendApiError(reply, request, 400, "OrderNotEditable");
+        }
+        if (msg === "ORDER_HEADER_LOCKED") {
+          return sendApiError(reply, request, 400, "OrderHeaderLocked");
         }
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
@@ -119,7 +122,7 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
   );
 
   app.patch(
-    "/api/:slug/orders/:id",
+    "/api/:slug/orders/:id(\\d+)",
     { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
@@ -150,6 +153,9 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "ORDER_NOT_EDITABLE") {
           return sendApiError(reply, request, 400, "OrderNotEditable");
+        }
+        if (msg === "ORDER_HEADER_LOCKED") {
+          return sendApiError(reply, request, 400, "OrderHeaderLocked");
         }
         if (msg === "FORBIDDEN_OPERATOR_ORDER_LINES_EDIT") {
           return sendApiError(reply, request, 403, "ForbiddenOperatorOrderLinesEdit");
@@ -188,6 +194,18 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
             order_total: ex.order_total
           });
         }
+        if (msg === "CONSIGNMENT_LIMIT_EXCEEDED") {
+          const ex = e as Error & {
+            consignment_limit?: string;
+            outstanding?: string;
+            order_total?: string;
+          };
+          return sendApiError(reply, request, 400, "ConsignmentLimitExceeded", undefined, {
+            consignment_limit: ex.consignment_limit,
+            outstanding: ex.outstanding,
+            order_total: ex.order_total
+          });
+        }
         if (msg === "BAD_BONUS_GIFT_OVERRIDE") {
           return sendApiError(reply, request, 400, "BadBonusGiftOverride");
         }
@@ -197,6 +215,13 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
             product_id: ex.product_id,
             available: ex.available,
             requested: ex.requested
+          });
+        }
+        if (msg === "ORDER_TOTAL_BELOW_ALLOCATED") {
+          const ex = e as Error & { allocated?: string; order_total?: string };
+          return sendApiError(reply, request, 400, "OrderTotalBelowAllocated", undefined, {
+            allocated: ex.allocated,
+            order_total: ex.order_total
           });
         }
         throw e;

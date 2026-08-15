@@ -10,6 +10,7 @@ import '../config/permissions.dart';
 import '../config/tenant_references.dart';
 import '../config/agent_cities.dart';
 import '../config/agent_limits.dart';
+import '../time/work_region_time.dart';
 
 class SessionState {
   final AuthUser? user;
@@ -146,6 +147,16 @@ class SessionManager extends StateNotifier<SessionState> {
     state = state.copyWith(lastSyncAt: v, bootstrapped: true);
   }
 
+  Future<void> setWorkRegion({String? timezoneId, num? utcOffsetHours}) async {
+    final id = timezoneId?.trim();
+    if (id != null && id.isNotEmpty) {
+      await _storage.write(key: 'uworktz', value: id);
+    }
+    if (utcOffsetHours != null && utcOffsetHours.isFinite) {
+      await _storage.write(key: 'uworkoff', value: utcOffsetHours.toString());
+    }
+  }
+
   void markBootstrapped() {
     state = state.copyWith(bootstrapped: true);
   }
@@ -168,6 +179,12 @@ class SessionManager extends StateNotifier<SessionState> {
     final limitsStr = await _storage.read(key: 'uagentlimits');
     final citiesStr = await _storage.read(key: 'uagentcities');
     final ptStr = await _storage.read(key: 'upricetypes') ?? 'default';
+    final workTz = await _storage.read(key: 'uworktz');
+    final workOffStr = await _storage.read(key: 'uworkoff');
+    applyWorkRegionFromServer(
+      timezoneId: workTz,
+      utcOffsetHours: workOffStr != null ? num.tryParse(workOffStr) : null,
+    );
 
     final perms = permsStr.isEmpty ? <String>[] : permsStr.split(',');
     MobileConfig? mobileConfig;

@@ -42,6 +42,7 @@ import {
 } from "./client-balances.delivery";
 import { mapClientRow, mapDeliveryOrderRow } from "./client-balances.mappers";
 import type { ClientBalancesReportContext } from "./client-balances.report.context";
+import { loadDebtSplitByClient } from "./client-debt-by-agent";
 
 export async function listClientBalancesReportFiltered(
   ctx: ClientBalancesReportContext
@@ -132,7 +133,7 @@ export async function listClientBalancesReportFiltered(
     const sliceRows = orderedEligible.slice((page - 1) * limit, page * limit);
     const sliceIds = sliceRows.map((r) => r.id);
 
-    const [clients, pagePayNorm, lastPays, lastOrds, pageBalAsOf] = await Promise.all([
+    const [clients, pagePayNorm, lastPays, lastOrds, pageBalAsOf, debtSplits] = await Promise.all([
       (async () => {
         if (sliceIds.length === 0) return [];
         return prisma.client.findMany({
@@ -154,7 +155,8 @@ export async function listClientBalancesReportFiltered(
       loadPaymentNetNormByClient(tenantId, sliceIds, asOfEnd, pmEntries),
       loadLastPaymentByClient(tenantId, sliceIds, asOfEnd),
       loadLastDeliveryByClient(tenantId, sliceIds),
-      asOfEnd && sliceIds.length > 0 ? loadBalancesAsOf(tenantId, sliceIds, asOfEnd) : Promise.resolve(null)
+      asOfEnd && sliceIds.length > 0 ? loadBalancesAsOf(tenantId, sliceIds, asOfEnd) : Promise.resolve(null),
+      sliceIds.length > 0 ? loadDebtSplitByClient(tenantId, sliceIds) : Promise.resolve(new Map())
     ]);
     const orderMap = new Map(clients.map((c) => [c.id, c]));
     const orderedClients = sliceIds.map((id) => orderMap.get(id)!).filter(Boolean);
@@ -169,7 +171,8 @@ export async function listClientBalancesReportFiltered(
         lastOrds.get(c.id),
         pageBalAsOf?.get(c.id) ?? null,
         null,
-        blendPass
+        blendPass,
+        debtSplits.get(c.id) ?? null
       );
     });
 

@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 import {
   resolveCurrencyEntries,
   resolvePaymentMethodEntries,
@@ -11,7 +12,10 @@ import {
   resolveIncomePaymentBucketKey
 } from "./income-report.payment-keys";
 
-export async function getIncomeReportFilterOptions(tenantId: number) {
+export async function getIncomeReportFilterOptions(
+  tenantId: number,
+  actor?: { userId: number | null; role: string }
+) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -24,9 +28,10 @@ export async function getIncomeReportFilterOptions(tenantId: number) {
   const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
   const catalogColumns = buildIncomeCatalogColumns(paymentEntries);
 
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
   const [agents, expeditors, cashDesks, categories, paymentTypes, tradeDirections, territoryRows] = await Promise.all([
     prisma.user.findMany({
-      where: { tenant_id: tenantId, is_active: true, role: { in: ["agent", "Agent", "AGENT"] } },
+      where: whereAgent,
       select: { id: true, name: true },
       orderBy: { name: "asc" }
     }),

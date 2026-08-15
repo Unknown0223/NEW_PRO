@@ -46,7 +46,9 @@ function baseRule(over: Partial<BonusRuleRow>): BonusRuleRow {
     scope_branch_codes: [],
     scope_agent_user_ids: [],
     scope_trade_direction_ids: [],
+    consignment_mode: "all",
     conditions: [],
+    clauses: [],
     ...over
   };
 }

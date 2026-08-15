@@ -9,7 +9,7 @@ type Props = {
   onKindChange: (k: "sale" | "purchase") => void;
   priceType: string;
   onPriceTypeChange: (v: string) => void;
-  priceTypes: string[];
+  priceTypes: Array<{ id: string; label: string }>;
   serverFieldErrs: Record<string, string>;
   className?: string;
 };
@@ -61,8 +61,8 @@ export function PriceMatrixFilters({
           onChange={(e) => onPriceTypeChange(e.target.value)}
         >
           {priceTypes.map((t) => (
-            <option key={t} value={t}>
-              {t}
+            <option key={t.id} value={t.id}>
+              {t.label}
             </option>
           ))}
         </FilterSelect>

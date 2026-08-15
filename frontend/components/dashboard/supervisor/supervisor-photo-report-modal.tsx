@@ -159,7 +159,7 @@ export function SupervisorPhotoReportModal({
         Клиенты: r.client_name,
         "Категория клиента": r.client_category ?? "",
         Территория: r.territory ?? "",
-        "Категория фотоотчёта": c.label,
+        "Причина фотоотчёта": c.label,
         Фото: c.count
       }))
     );
@@ -260,7 +260,7 @@ export function SupervisorPhotoReportModal({
                           Территория
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Категория фотоотчёта
+                          Причина фотоотчёта
                         </th>
                       </tr>
                     </thead>

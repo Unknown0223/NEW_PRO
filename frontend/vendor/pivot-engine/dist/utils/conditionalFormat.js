@@ -25,6 +25,15 @@ function matchRule(cell, rule) {
             return rule.threshold != null && value >= rule.threshold;
         case "lte":
             return rule.threshold != null && value <= rule.threshold;
+        case "between": {
+            const min = rule.threshold;
+            const max = rule.thresholdMax;
+            if (min == null || max == null)
+                return false;
+            const lo = Math.min(min, max);
+            const hi = Math.max(min, max);
+            return value >= lo && value <= hi;
+        }
         default:
             return false;
     }

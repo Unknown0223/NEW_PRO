@@ -6,6 +6,7 @@ import { getAccessUser } from "../auth/auth.prehandlers";
 import { mobileOrderCreateContextQuerySchema } from "./mobile.route.agent.schemas";
 import { getMobileAgentConfigPayload, getMobileOrderCreateContext } from "./mobile.service";
 import { mobileAgentConfigPreHandler, mobileOfflineOrderPreHandler } from "./mobile.route.shared";
+import { resolveRequestOrigin } from "./app-release.service";
 
 export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
   app.get(
@@ -16,7 +17,9 @@ export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
       const versionQ = z.object({ version: z.string().max(64).optional() }).safeParse(request.query);
       const clientVersion = versionQ.success ? versionQ.data.version : undefined;
       const userId = Number(getAccessUser(request).sub);
-      const result = await getMobileAgentConfigPayload(request.tenant!.id, userId, clientVersion);
+      const result = await getMobileAgentConfigPayload(request.tenant!.id, userId, clientVersion, {
+        origin: resolveRequestOrigin(request.headers)
+      });
       if (!result.ok) {
         return sendApiError(reply, request, 403, result.error);
       }

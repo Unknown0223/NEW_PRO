@@ -48,7 +48,7 @@ echo [1/5] Loyiha manbasi tekshirilmoqda...
 
 if not exist "%MOBILE_SRC%\pubspec.yaml" (
 
-  echo Xato: %MOBILE_SRC%\pubspec.yaml topilmadi.
+  echo Xato: !MOBILE_SRC!\pubspec.yaml topilmadi.
 
   pause
 
@@ -64,7 +64,7 @@ echo [2/5] Loyiha nusxasi (%BUILD_DIR%)...
 
 if not exist "%BUILD_DIR%\pubspec.yaml" (
 
-  robocopy "%MOBILE_SRC%" "%BUILD_DIR%" /E /XD build .dart_tool android\.gradle ios\Flutter\ephemeral /NFL /NDL /NJH /NJS
+  robocopy "!MOBILE_SRC!" "%BUILD_DIR%" /E /XD build .dart_tool android\.gradle ios\Flutter\ephemeral /NFL /NDL /NJH /NJS
 
   if errorlevel 8 (
 
@@ -78,15 +78,23 @@ if not exist "%BUILD_DIR%\pubspec.yaml" (
 
 ) else (
 
-  call "%REPO_ROOT%\mobile\scripts\link-build-lib.cmd"
+  call "!REPO_ROOT!\mobile\scripts\link-build-lib.cmd"
   if errorlevel 1 (
     echo Xato: link-build-lib.cmd
     pause
     exit /b 1
   )
 
-  robocopy "%MOBILE_SRC%\android" "%BUILD_DIR%\android" /E /XD .gradle /NFL /NDL /NJH /NJS >nul
+  robocopy "!MOBILE_SRC!\android" "%BUILD_DIR%\android" /E /XD .gradle /NFL /NDL /NJH /NJS >nul
 
+)
+
+echo [2b/5] OTA imzo kaliti (PC dan mustaqil)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "!REPO_ROOT!\mobile\scripts\verify-ota-signing.ps1" -MobileDir "%BUILD_DIR%"
+if errorlevel 1 (
+  echo Xato: OTA signing kaliti yo'q yoki noto'g'ri.
+  pause
+  exit /b 1
 )
 
 REM Eski native MapKit fayli (WebView xaritaga o'tgach kerak emas)
@@ -161,11 +169,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\mobile\scripts\
 
 REM Eski build qoldiqlarini tozalash (agar repo ichida qolgan bo'lsa)
 
-if exist "%MOBILE_SRC%\build" (
+if exist "!MOBILE_SRC!\build" (
 
-  echo Eski %MOBILE_SRC%\build tozalanmoqda...
+  echo Eski !MOBILE_SRC!\build tozalanmoqda...
 
-  rmdir /s /q "%MOBILE_SRC%\build" 2>nul
+  rmdir /s /q "!MOBILE_SRC!\build" 2>nul
 
 )
 

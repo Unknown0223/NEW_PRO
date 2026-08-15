@@ -2,9 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { catalogRoles } from "./products.route.shared";
 
 import {
+  bulkProductsKpiGroupBodySchema,
   createProductBodySchema,
   updateProductBodySchema
 } from "../../contracts/products.schemas";
+import { bulkSetProductsKpiGroup } from "../sales-directions/sales-directions.kpi";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
@@ -29,6 +31,8 @@ export async function registerProductWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "SKU_EXISTS") return sendApiError(reply, request, 409, "SkuExists");
+        if (msg === "NAME_EXISTS") return sendApiError(reply, request, 409, "NameExists");
+        if (msg === "BARCODE_EXISTS") return sendApiError(reply, request, 409, "BarcodeExists");
         if (msg === "BAD_CATEGORY") return sendApiError(reply, request, 400, "BadCategory");
         if (msg === "BAD_REF") return sendApiError(reply, request, 400, "BadRef");
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
@@ -65,8 +69,36 @@ export async function registerProductWriteRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "SKU_EXISTS") return sendApiError(reply, request, 409, "SkuExists");
+        if (msg === "NAME_EXISTS") return sendApiError(reply, request, 409, "NameExists");
+        if (msg === "BARCODE_EXISTS") return sendApiError(reply, request, 409, "BarcodeExists");
         if (msg === "BAD_CATEGORY") return sendApiError(reply, request, 400, "BadCategory");
         if (msg === "BAD_REF") return sendApiError(reply, request, 400, "BadRef");
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/products/bulk-kpi-group",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkProductsKpiGroupBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const result = await bulkSetProductsKpiGroup(
+          request.tenant!.id,
+          parsed.data.product_ids,
+          parsed.data.kpi_group_id,
+          actorUserIdOrNull(request)
+        );
+        return reply.send(result);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "BAD_PRODUCT_IDS") return sendApiError(reply, request, 400, "BadProductIds");
         throw e;
       }
     }

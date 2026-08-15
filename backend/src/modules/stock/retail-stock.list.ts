@@ -4,16 +4,18 @@ import { prisma } from "../../config/database";
 
 
 import type { RetailStockCategoryRow, RetailStockDetailedRow, RetailStockListQuery, RetailStockListResult } from "./retail-stock.types";
+import type { ScopedReportActor } from "../access/access-agent-scope";
 import { buildWhere, clampLimit, clampPage, toDecimal } from "./retail-stock.helpers";
 
 export async function listRetailStock(
   tenantId: number,
-  raw: RetailStockListQuery
+  raw: RetailStockListQuery,
+  actor?: ScopedReportActor
 ): Promise<RetailStockListResult> {
   const page = clampPage(raw.page);
   const limit = clampLimit(raw.limit);
   const skip = (page - 1) * limit;
-  const where = buildWhere(tenantId, raw);
+  const where = buildWhere(tenantId, raw, actor);
 
   const allForKpi = await prisma.retailOutletStock.findMany({
     where,

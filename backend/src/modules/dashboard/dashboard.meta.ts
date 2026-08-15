@@ -1,4 +1,6 @@
 import { getRedisForApp } from "../../lib/redis-cache";
+import { prisma } from "../../config/database";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 import { getClientReferences } from "../clients/clients.references";
 import {
   listProductBrands,
@@ -44,7 +46,7 @@ export async function getDashboardMeta(
   tenantId: number,
   actor?: ReportActor
 ): Promise<DashboardMetaPayload> {
-  const cacheKey = `tenant:${tenantId}:dashboard:meta:v1:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
+  const cacheKey = `tenant:${tenantId}:dashboard:meta:v2:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
   try {
     const redis = await getRedisForApp();
     const cached = await redis.get(cacheKey);
@@ -53,8 +55,10 @@ export async function getDashboardMeta(
     /* ignore */
   }
 
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+
   const [
-    agents,
+    scopedAgents,
     supervisors,
     client_references,
     product_categories_raw,
@@ -65,7 +69,11 @@ export async function getDashboardMeta(
     groupsPage,
     manufacturersPage
   ] = await Promise.all([
-    listStaff(tenantId, "agent", { is_active: true }),
+    prisma.user.findMany({
+      where: whereAgent,
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" }
+    }),
     listStaff(tenantId, "supervisor", { is_active: true }),
     getClientReferences(tenantId),
     listProductCategoriesForTenant(tenantId),
@@ -79,7 +87,11 @@ export async function getDashboardMeta(
 
   const refs = profile.references ?? {};
   const result: DashboardMetaPayload = {
-    agents: mapStaff(agents),
+    agents: scopedAgents.map((a) => ({
+      id: a.id,
+      fio: a.name,
+      code: a.code ?? null
+    })),
     supervisors: mapStaff(supervisors),
     client_references,
     product_categories: product_categories_raw.map((c) => ({ id: c.id, name: c.name })),

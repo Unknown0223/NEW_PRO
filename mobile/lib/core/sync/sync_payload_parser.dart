@@ -8,6 +8,8 @@ class ParsedSyncPayload {
   final List<Map<String, dynamic>> products;
   final List<Map<String, dynamic>> prices;
   final List<Map<String, dynamic>> orders;
+  final String? workTimezone;
+  final num? workUtcOffsetHours;
 
   const ParsedSyncPayload({
     required this.syncAt,
@@ -16,11 +18,14 @@ class ParsedSyncPayload {
     this.products = const [],
     this.prices = const [],
     this.orders = const [],
+    this.workTimezone,
+    this.workUtcOffsetHours,
   });
 }
 
 ParsedSyncPayload parseSyncPayload(String raw) {
   final j = jsonDecode(raw) as Map<String, dynamic>;
+  final offsetRaw = j['work_utc_offset_hours'];
   return ParsedSyncPayload(
     syncAt: j['sync_at']?.toString() ?? '',
     clientsReplaceAll: j['clients_replace_all'] == true,
@@ -28,6 +33,8 @@ ParsedSyncPayload parseSyncPayload(String raw) {
     products: _parseProducts(j['products']),
     prices: _parsePrices(j['prices']),
     orders: _parseOrders(j['orders']),
+    workTimezone: j['work_timezone']?.toString(),
+    workUtcOffsetHours: offsetRaw is num ? offsetRaw : num.tryParse('$offsetRaw'),
   );
 }
 

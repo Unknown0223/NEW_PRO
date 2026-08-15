@@ -1,11 +1,26 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { TENANT_ADMIN_ROLE, TENANT_USER_ROLE_KEYS_FOR_DEFAULT_COMPOSITION } from "../../lib/tenant-user-roles";
+import { isGrantDelegationKey, isMatrixOperationKey } from "./access-grant-delegation";
+import { expandPermissionKeyAliases } from "./legacy-key-map";
 
 
 export function derivePermissionModule(key: string): string {
   const raw = (key.split(".")[0] ?? "general").trim() || "general";
   return raw.slice(0, 120);
+}
+
+/** Rol / me-permissions / operations_count — faqat haqiqiy operatsiyalar (`access.grant.*` emas). */
+function addRoleOperationKey(into: Set<string>, key: string): void {
+  const k = key.trim();
+  if (!k || isGrantDelegationKey(k) || !isMatrixOperationKey(k)) return;
+  into.add(k);
+}
+
+function stripGrantDelegationKeys(keys: Set<string>): void {
+  for (const k of [...keys]) {
+    if (isGrantDelegationKey(k) || !isMatrixOperationKey(k)) keys.delete(k);
+  }
 }
 
 export type RoleWithPermKeys = {
@@ -54,21 +69,36 @@ export async function resolveUserPermissionKeysSplit(
   const fromRole = new Set<string>();
   if (roleLinks.length > 0) {
     for (const link of roleLinks) {
-      for (const row of link.role.permissions) fromRole.add(row.permission.key);
+      for (const row of link.role.permissions) {
+        for (const k of expandPermissionKeyAliases([row.permission.key])) {
+          addRoleOperationKey(fromRole, k);
+        }
+      }
     }
   } else if (fallbackRole) {
     const map = await loadRolesByKeys(tenantId, [fallbackRole]);
     const fb = map.get(fallbackRole);
-    if (fb) for (const row of fb.permissions) fromRole.add(row.permission.key);
+    if (fb) {
+      for (const row of fb.permissions) {
+        for (const k of expandPermissionKeyAliases([row.permission.key])) {
+          addRoleOperationKey(fromRole, k);
+        }
+      }
+    }
   }
 
   const effective = new Set(fromRole);
   const denied = new Set<string>();
+  const allowed = new Set<string>();
   for (const up of userPerms) {
     if (up.effect === "deny") denied.add(up.key);
-    if (up.effect === "allow") effective.add(up.key);
+    // Shaxsiy allow: alias expand (legacy ↔ structured) — deny bilan simmetrik.
+    if (up.effect === "allow") allowed.add(up.key);
   }
-  for (const k of denied) effective.delete(k);
+  for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(effective, k);
+  // Structured deny (Access UI) must also drop legacy dashboard.* keys from effective.
+  for (const k of expandPermissionKeyAliases([...denied])) effective.delete(k);
+  stripGrantDelegationKeys(effective);
   return { fromRole, effective, userPerms };
 }
 
@@ -140,18 +170,29 @@ export async function getOperationsCountsForUsers(
     const links = roleLinksByUser.get(userId) ?? [];
     if (links.length > 0) {
       for (const link of links) {
-        for (const row of link.role.permissions) rolePerms.add(row.permission.key);
+        for (const row of link.role.permissions) {
+          for (const k of expandPermissionKeyAliases([row.permission.key])) {
+            addRoleOperationKey(rolePerms, k);
+          }
+        }
       }
     } else if (fallbackRole && allRoleByKey.has(fallbackRole)) {
-      for (const row of allRoleByKey.get(fallbackRole)!.permissions) rolePerms.add(row.permission.key);
+      for (const row of allRoleByKey.get(fallbackRole)!.permissions) {
+        for (const k of expandPermissionKeyAliases([row.permission.key])) {
+          addRoleOperationKey(rolePerms, k);
+        }
+      }
     }
 
     const denied = new Set<string>();
+    const allowed = new Set<string>();
     for (const up of permsByUserId.get(userId) ?? []) {
       if (up.effect === "deny") denied.add(up.key);
-      if (up.effect === "allow") rolePerms.add(up.key);
+      if (up.effect === "allow") allowed.add(up.key);
     }
-    for (const k of denied) rolePerms.delete(k);
+    for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(rolePerms, k);
+    for (const k of expandPermissionKeyAliases([...denied])) rolePerms.delete(k);
+    stripGrantDelegationKeys(rolePerms);
     out.set(userId, rolePerms.size);
   }
   return out;

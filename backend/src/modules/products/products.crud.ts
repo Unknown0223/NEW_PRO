@@ -6,6 +6,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 
 import { productListInclude, assertProductCatalogFks, decOpt } from "./products.shared";
 import type { CreateProductInput, UpdateProductInput } from "./products.types";
+import { assertProductUniqueness } from "./products.duplicates";
 
 export async function createProduct(
   tenantId: number,
@@ -20,13 +21,11 @@ export async function createProduct(
   if (input.category_id == null || input.category_id < 1) {
     throw new Error("BAD_CATEGORY");
   }
-  const exists = await prisma.product.findUnique({
-    where: { tenant_id_sku: { tenant_id: tenantId, sku } }
+  await assertProductUniqueness(tenantId, {
+    sku,
+    name,
+    barcode: input.barcode ?? null
   });
-  if (exists) {
-    const err = new Error("SKU_EXISTS");
-    throw err;
-  }
   await assertProductCatalogFks(tenantId, {
     category_id: input.category_id ?? null,
     product_group_id: input.product_group_id ?? null,
@@ -149,14 +148,21 @@ export async function updateProduct(
   if (!existing) {
     throw new Error("NOT_FOUND");
   }
-  if (input.sku !== undefined && input.sku.trim() !== existing.sku) {
-    const clash = await prisma.product.findFirst({
-      where: { tenant_id: tenantId, sku: input.sku.trim(), NOT: { id: productId } }
-    });
-    if (clash) {
-      throw new Error("SKU_EXISTS");
-    }
-  }
+  const nextSku = input.sku !== undefined ? input.sku.trim() : existing.sku;
+  const nextName = input.name !== undefined ? input.name.trim() : existing.name;
+  const nextBarcode =
+    input.barcode !== undefined ? input.barcode?.trim() || null : existing.barcode;
+  await assertProductUniqueness(
+    tenantId,
+    {
+      sku: nextSku !== existing.sku ? nextSku : null,
+      name:
+        nextName.toLowerCase() !== existing.name.toLowerCase() ? nextName : null,
+      barcode:
+        (nextBarcode ?? "") !== (existing.barcode ?? "") ? nextBarcode : null
+    },
+    productId
+  );
   await assertProductCatalogFks(tenantId, {
     category_id:
       input.category_id !== undefined ? input.category_id : existing.category_id,

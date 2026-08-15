@@ -29,14 +29,18 @@ import { cn } from "@/lib/utils";
 import { formatGroupedInteger } from "@/lib/format-numbers";
 import type { AxiosError } from "axios";
 import {
-  RoleLinkPickerGrid,
   cloneRoleSets,
   emptySetsForRoles,
   linksFromRoleSets,
-  setsFromRoleLinks,
-  type RolePickerColumn
+  setsFromRoleLinks
 } from "@/components/role-link-picker/role-link-picker-grid";
-import { ArrowDown, ArrowUp, Pencil, RefreshCw, RotateCcw, Search, UserMinus, X } from "lucide-react";
+import {
+  ENTITY_LINK_ROLE_COLUMNS,
+  ENTITY_LINK_ROLE_KEYS,
+  ENTITY_LINK_ROLE_LABELS,
+  RoleLinkUsersModal
+} from "@/components/role-link-picker/role-link-users-modal";
+import { ArrowDown, ArrowUp, Pencil, RefreshCw, RotateCcw, UserMinus } from "lucide-react";
 
 const TABLE_ID = "warehouses.v1";
 
@@ -66,30 +70,11 @@ const COLUMN_META = COLUMN_IDS.map((id) => ({
     }[id] ?? id
 }));
 
-const WAREHOUSE_ROLE_ORDER = [
-  "agent",
-  "cashier",
-  "manager",
-  "operator",
-  "storekeeper",
-  "supervisor",
-  "expeditor"
-] as const;
-
-const WH_ROLE_KEYS = [...WAREHOUSE_ROLE_ORDER];
-
-const WH_ROLE_LABELS: Record<string, string> = {
-  agent: "Агент",
-  cashier: "Кассир",
-  manager: "Менеджер",
-  operator: "Оператор",
-  storekeeper: "Склад",
-  supervisor: "Супервайзер",
-  expeditor: "Экспедитор"
-};
+const WH_ROLE_KEYS = ENTITY_LINK_ROLE_KEYS;
+const WH_ROLE_COLUMNS = ENTITY_LINK_ROLE_COLUMNS;
 
 function roleLabel(role: string) {
-  return WH_ROLE_LABELS[role] ?? role;
+  return ENTITY_LINK_ROLE_LABELS[role] ?? role;
 }
 
 type PickerUser = { id: number; name: string; login: string };
@@ -100,16 +85,6 @@ type WarehousePickersData = {
   supervisors: PickerUser[];
   expeditors: PickerUser[];
 };
-
-const WH_ROLE_COLUMNS: RolePickerColumn[] = [
-  { role: "agent", label: WH_ROLE_LABELS.agent, pool: "agents" },
-  { role: "cashier", label: WH_ROLE_LABELS.cashier, pool: "operators" },
-  { role: "manager", label: WH_ROLE_LABELS.manager, pool: "operators" },
-  { role: "operator", label: WH_ROLE_LABELS.operator, pool: "operators" },
-  { role: "storekeeper", label: WH_ROLE_LABELS.storekeeper, pool: "operators" },
-  { role: "supervisor", label: WH_ROLE_LABELS.supervisor, pool: "supervisors" },
-  { role: "expeditor", label: WH_ROLE_LABELS.expeditor, pool: "expeditors" }
-];
 
 function emptyWhLinkSets() {
   return emptySetsForRoles(WH_ROLE_KEYS);
@@ -255,14 +230,14 @@ function WarehouseFormDialog({
   open,
   onOpenChange,
   initial,
-  canWrite,
+  canSave,
   tenantSlug,
   onSaved
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: WarehouseRow | null;
-  canWrite: boolean;
+  canSave: boolean;
   tenantSlug: string;
   onSaved: () => void;
 }) {
@@ -275,7 +250,7 @@ function WarehouseFormDialog({
 
   const pickersQ = useQuery({
     queryKey: ["warehouse-pickers", tenantSlug],
-    enabled: Boolean(tenantSlug) && open && canWrite,
+    enabled: Boolean(tenantSlug) && open && canSave,
     staleTime: STALE.reference,
     queryFn: async () => {
       const { data } = await api.get<{ data: WarehousePickersData }>(
@@ -287,7 +262,7 @@ function WarehouseFormDialog({
 
   const detailQ = useQuery({
     queryKey: ["warehouse-detail", tenantSlug, initial?.id],
-    enabled: Boolean(tenantSlug) && open && canWrite && initial != null,
+    enabled: Boolean(tenantSlug) && open && canSave && initial != null,
     staleTime: STALE.detail,
     queryFn: async () => {
       const { data } = await api.get<{ data: WarehouseDetail }>(
@@ -357,7 +332,7 @@ function WarehouseFormDialog({
     }
   });
 
-  if (!canWrite) return null;
+  if (!canSave) return null;
 
   const detailLoading = Boolean(initial?.id) && detailQ.isLoading;
 
@@ -504,96 +479,42 @@ function WarehouseFormDialog({
       </DialogContent>
     </Dialog>
 
-      <Dialog open={usersSubOpen} onOpenChange={setUsersSubOpen}>
-        <DialogContent
-          className={cn(
-            "flex max-h-[min(92vh,720px)] w-[min(100vw-1.5rem,1180px)] flex-col gap-0 overflow-x-hidden overflow-y-auto p-0",
-            "!max-w-[min(100vw-1.5rem,1180px)] sm:!max-w-[min(100vw-1.5rem,1180px)] z-[100]"
-          )}
-          showCloseButton
-        >
-          <DialogHeader className="shrink-0 border-b border-border bg-muted/20 px-4 pb-4 pt-5 pr-14 sm:pt-4">
-            <div className="flex flex-col gap-3 text-left">
-              <div className="min-w-0 pr-1">
-                <DialogTitle className="text-lg font-semibold tracking-tight">Пользователи по ролям</DialogTitle>
-                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-                  Каждая роль — отдельный блок. Длинные списки прокручиваются внутри блока. Один человек — только в
-                  одной колонке.
-                </p>
-              </div>
-              <div className="w-full max-w-2xl">
-                <div className="rounded-xl border border-border/90 bg-background p-1 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.07]">
-                  <div className="relative flex items-center">
-                    <Search
-                      className="pointer-events-none absolute left-3.5 top-1/2 size-[1.125rem] -translate-y-1/2 text-muted-foreground"
-                      aria-hidden
-                    />
-                    <Input
-                      placeholder="Поиск по имени или логину"
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      className={cn(
-                        "h-11 w-full border-0 bg-transparent pl-11 text-sm shadow-none",
-                        "placeholder:text-muted-foreground/70",
-                        "focus-visible:ring-0 focus-visible:ring-offset-0",
-                        userSearch.trim() ? "pr-11" : "pr-4"
-                      )}
-                      aria-label="Поиск пользователей"
-                    />
-                    {userSearch.trim() ? (
-                      <button
-                        type="button"
-                        className="absolute right-2 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="Очистить поиск"
-                        onClick={() => setUserSearch("")}
-                      >
-                        <X className="size-4 shrink-0" strokeWidth={2.25} />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="flex flex-col bg-muted/10 px-3 pt-2 pb-1 sm:px-4">
-            <RoleLinkPickerGrid
-              roleOrder={WH_ROLE_KEYS}
-              columns={WH_ROLE_COLUMNS}
-              pickers={pickersQ.data}
-              local={draftLinkSets}
-              setLocal={setDraftLinkSets}
-              search={userSearch}
-            />
-          </div>
-          <DialogFooter className="mx-0 mb-0 shrink-0 flex-col-reverse gap-2.5 rounded-b-xl border-t border-border bg-background px-5 pt-4 pb-5 sm:flex-row sm:justify-end sm:gap-3 sm:pb-5">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full min-h-10 sm:w-auto sm:min-w-[7.5rem]"
-              onClick={() => setUsersSubOpen(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              className="w-full min-h-10 bg-teal-600 text-white hover:bg-teal-700 sm:w-auto sm:min-w-[7.5rem] dark:bg-teal-600 dark:hover:bg-teal-500"
-              onClick={() => {
-                setLinkSets(cloneRoleSets(WH_ROLE_KEYS, draftLinkSets));
-                setUsersSubOpen(false);
-              }}
-            >
-              Готово
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RoleLinkUsersModal
+        open={usersSubOpen}
+        onOpenChange={setUsersSubOpen}
+        roleOrder={WH_ROLE_KEYS}
+        columns={WH_ROLE_COLUMNS}
+        pickers={pickersQ.data}
+        local={draftLinkSets}
+        setLocal={setDraftLinkSets}
+        search={userSearch}
+        setSearch={setUserSearch}
+        subtitle={form.name.trim() || undefined}
+        onCancel={() => setUsersSubOpen(false)}
+        onDone={() => {
+          setLinkSets(cloneRoleSets(WH_ROLE_KEYS, draftLinkSets));
+          setUsersSubOpen(false);
+        }}
+      />
     </>
   );
 }
 
-type Props = { tenantSlug: string; canWrite: boolean };
+type Props = {
+  tenantSlug: string;
+  canCreate?: boolean;
+  canUpdate?: boolean;
+  canDelete?: boolean;
+  canExport?: boolean;
+};
 
-export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
+export function WarehousesWorkspace({
+  tenantSlug,
+  canCreate = false,
+  canUpdate = false,
+  canDelete = false,
+  canExport = false
+}: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [page, setPage] = useState(1);
@@ -604,6 +525,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
   const [sortNameDir, setSortNameDir] = useState<"asc" | "desc">("asc");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<WarehouseRow | null>(null);
+  const showRowActions = canUpdate || canDelete;
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -721,11 +643,11 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
       <PageHeader
         title="Склад"
         actions={
-          canWrite ? (
-            <>
-              <Button type="button" variant="outline" size="sm" onClick={() => setColumnOpen(true)}>
-                Столбцы
-              </Button>
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setColumnOpen(true)}>
+              Столбцы
+            </Button>
+            {canCreate ? (
               <Button
                 type="button"
                 size="sm"
@@ -736,8 +658,8 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
               >
                 Добавить
               </Button>
-            </>
-          ) : null
+            ) : null}
+          </>
         }
       />
 
@@ -801,9 +723,11 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                   setPage(1);
                 }}
               />
-              <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={exportRows}>
-                Excel
-              </Button>
+              {canExport ? (
+                <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={exportRows}>
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -843,14 +767,14 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                     )}
                   </th>
                 ))}
-                {canWrite ? <th className="w-20 px-2 py-2.5 text-right"> </th> : null}
+                {showRowActions ? <th className="w-20 px-2 py-2.5 text-right"> </th> : null}
               </tr>
             </thead>
             <tbody>
               {listQ.isLoading ? (
                 <tr>
                   <td
-                    colSpan={tablePrefs.visibleColumnOrder.length + (canWrite ? 1 : 0)}
+                    colSpan={tablePrefs.visibleColumnOrder.length + (showRowActions ? 1 : 0)}
                     className="px-3 py-10 text-center text-muted-foreground"
                   >
                     Загрузка…
@@ -859,7 +783,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
               ) : rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={tablePrefs.visibleColumnOrder.length + (canWrite ? 1 : 0)}
+                    colSpan={tablePrefs.visibleColumnOrder.length + (showRowActions ? 1 : 0)}
                     className="px-3 py-10 text-center text-muted-foreground"
                   >
                     Нет данных
@@ -900,23 +824,25 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                         ) : null}
                       </td>
                     ))}
-                    {canWrite ? (
+                    {showRowActions ? (
                       <td className="px-2 py-2 text-right align-top">
                         <TableRowActionGroup className="justify-end" ariaLabel="Действия">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            className="text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-400"
-                            title="Редактировать"
-                            onClick={() => {
-                              setEditing(r);
-                              setFormOpen(true);
-                            }}
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </Button>
-                          {tab === "active" ? (
+                          {canUpdate ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              className="text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-400"
+                              title="Редактировать"
+                              onClick={() => {
+                                setEditing(r);
+                                setFormOpen(true);
+                              }}
+                            >
+                              <Pencil className="size-3.5" aria-hidden />
+                            </Button>
+                          ) : null}
+                          {canDelete && tab === "active" ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -927,7 +853,8 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                             >
                               <UserMinus className="size-3.5" aria-hidden />
                             </Button>
-                          ) : (
+                          ) : null}
+                          {canUpdate && tab === "inactive" ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -939,7 +866,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
                             >
                               <RotateCcw className="size-3.5" aria-hidden />
                             </Button>
-                          )}
+                          ) : null}
                         </TableRowActionGroup>
                       </td>
                     ) : null}
@@ -1008,7 +935,7 @@ export function WarehousesWorkspace({ tenantSlug, canWrite }: Props) {
           if (!o) setEditing(null);
         }}
         initial={editing}
-        canWrite={canWrite}
+        canSave={editing ? canUpdate : canCreate}
         tenantSlug={tenantSlug}
         onSaved={() => {}}
       />

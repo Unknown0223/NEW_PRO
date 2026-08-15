@@ -79,7 +79,12 @@ export const CLIENT_HEADERS = [
   "Долгота"
 ] as const;
 
-export const PRICE_HEADERS = ["Артикул (SKU)", "Тип цены", "Цена"] as const;
+export const PRICE_HEADERS = [
+  "Артикул (SKU)",
+  "Наличные",
+  "Терминал",
+  "Перечисление"
+] as const;
 
 export const WORK_SLOT_HEADERS = [
   "slot_code",

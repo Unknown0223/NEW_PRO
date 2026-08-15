@@ -7,7 +7,7 @@ import { History } from "lucide-react";
 import { useState } from "react";
 
 /**
- * Sahifa ichidagi "tarix" ikonkasi. `<module>.<section>.history` yoki `.view`
+ * Sahifa ichidagi "tarix" ikonkasi. Faqat `<module>.<section>.history`
  * ruxsati bo'lsa ko'rinadi; bosilganda o'ng tomonda tarix drawer ochiladi.
  */
 export function HistoryIconButton({
@@ -32,7 +32,8 @@ export function HistoryIconButton({
   const { has, isLoading } = usePermissions();
   const [open, setOpen] = useState(false);
 
-  const allowed = has(`${module}.${section}.history`) || has(`${module}.${section}.view`);
+  // Faqat `.history` — `.view` yetarli emas (aks holda soat har view userda chiqadi).
+  const allowed = has(`${module}.${section}.history`);
   if (isLoading || !allowed) return null;
 
   return (

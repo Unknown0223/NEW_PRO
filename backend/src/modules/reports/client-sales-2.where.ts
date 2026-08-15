@@ -138,7 +138,7 @@ export function buildOrderWhereSql(tenantId: number, f: ClientSales2Filters, act
     );
   }
 
-  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
+  if (actor) {
     parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`o.agent_id`, actor));
   }
 
@@ -196,7 +196,7 @@ export function buildClientScopeSql(tenantId: number, f: ClientSales2Filters, ac
     );
   }
 
-  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
+  if (actor) {
     parts.push(buildScopedAgentExistsSql(tenantId, Prisma.sql`c.agent_id`, actor));
   }
 

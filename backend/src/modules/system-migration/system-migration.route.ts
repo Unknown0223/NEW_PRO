@@ -1,28 +1,76 @@
 import type { FastifyInstance } from "fastify";
+import { unlink } from "fs/promises";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
+import { writeMigrationImportTempFile } from "../../jobs/import-temp-file";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { enqueueSystemMigrationImportJob } from "../jobs/jobs.service";
+import {
+  humanizeMigrationApplyError,
+  mapMigrationApplyError
+} from "./system-migration.apply-errors";
 import { getMigrationInventory } from "./system-migration.inventory";
 import { backupDownloadFilename, buildTenantBackupZip } from "./system-migration.export";
 import { applyBackupZip, parseBackupZip } from "./system-migration.import";
+import {
+  completeMigrationImportSession,
+  createMigrationImportSession,
+  failMigrationImportSession,
+  getMigrationImportSession,
+  reportMigrationImportProgress
+} from "./system-migration.progress";
 
 const adminRoles = ["admin"] as const;
+/** Zaxira ZIP (foto URI bilans) katta bo‘lishi mumkin. */
+const MIGRATION_UPLOAD_BYTES = 256 * 1024 * 1024;
 
 const applyBodySchema = z
   .object({
     force_nonempty: z.boolean().optional(),
-    mode: z.enum(["full", "profile_only"]).optional()
+    mode: z.enum(["full", "profile_only"]).optional(),
+    conflict_policy: z.enum(["keep", "replace"]).optional(),
+    modules: z.array(z.string()).optional(),
+    /** true = sync (test); default async + progress */
+    sync: z.boolean().optional()
   })
   .strict();
 
-async function readUploadedBuffer(
-  request: { file: () => Promise<{ toBuffer: () => Promise<Buffer> } | undefined> }
-): Promise<Buffer | null> {
-  const file = await request.file();
-  if (!file) return null;
-  return file.toBuffer();
+function parseModulesField(raw: string | undefined): string[] | undefined {
+  if (!raw?.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((x) => String(x)).filter(Boolean);
+    }
+  } catch {
+    /* comma-separated fallback */
+  }
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function readUploadedBuffer(request: {
+  parts: () => AsyncIterableIterator<{
+    type: string;
+    toBuffer?: () => Promise<Buffer>;
+  }>;
+}): Promise<Buffer | null> {
+  // apply bilan bir xil: parts() — field tartibi va Content-Type edge-case lariga chidamli.
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "file" && typeof part.toBuffer === "function") {
+        const buf = await part.toBuffer();
+        if (buf?.length) return buf;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export async function registerSystemMigrationRoutes(app: FastifyInstance) {
@@ -72,21 +120,47 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/system-migration/import/preview",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    {
+      preHandler: [jwtAccessVerify, requireRoles(...adminRoles)],
+      bodyLimit: MIGRATION_UPLOAD_BYTES
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const buf = await readUploadedBuffer(request);
       if (!buf?.length) {
-        return sendApiError(reply, request, 400, "NoFile", "ZIP fayl yuklang");
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "NoFile",
+          "ZIP fayl yuklanmadi. «ZIP tanlash» orqali zaxira arxivini tanlang."
+        );
       }
       const preview = await parseBackupZip(buf, request.tenant!.id);
       return reply.send(preview);
     }
   );
 
+  app.get(
+    "/api/:slug/system-migration/import/sessions/:sessionId",
+    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const sessionId = String((request.params as { sessionId?: string }).sessionId ?? "");
+      const session = getMigrationImportSession(sessionId, request.tenant!.id);
+      if (!session) {
+        return sendApiError(reply, request, 404, "NotFound", "Import sessiyasi topilmadi");
+      }
+      return reply.send(session);
+    }
+  );
+
   app.post(
     "/api/:slug/system-migration/import/apply",
-    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    {
+      preHandler: [jwtAccessVerify, requireRoles(...adminRoles)],
+      bodyLimit: MIGRATION_UPLOAD_BYTES
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
 
@@ -103,54 +177,97 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       }
 
       if (!fileBuf?.length) {
-        return sendApiError(reply, request, 400, "NoFile", "ZIP fayl yuklang");
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "NoFile",
+          "ZIP fayl yuklanmadi. «ZIP tanlash» orqali zaxira arxivini tanlang."
+        );
       }
 
       const parsedFields = applyBodySchema.safeParse({
         force_nonempty: fields.force_nonempty === "true" || fields.force_nonempty === "1",
-        mode: fields.mode === "profile_only" ? "profile_only" : "full"
+        mode: fields.mode === "profile_only" ? "profile_only" : "full",
+        conflict_policy: fields.conflict_policy === "replace" ? "replace" : "keep",
+        modules: parseModulesField(fields.modules),
+        sync: fields.sync === "true" || fields.sync === "1"
       });
       if (!parsedFields.success) {
         return sendApiError(reply, request, 400, "ValidationError");
       }
 
-      try {
-        const result = await applyBackupZip(fileBuf, request.tenant!.id, {
-          force_nonempty: parsedFields.data.force_nonempty ?? false,
-          mode: parsedFields.data.mode ?? "full",
-          actorUserId: actorUserIdOrNull(request)
-        });
-        return reply.send(result);
-      } catch (e) {
-        if (e instanceof Error && e.message === "TARGET_NOT_EMPTY") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "TargetNotEmpty",
-            "Maqsadli tenant bo‘sh emas. Yangi serverda bo‘sh tenant oching yoki force_nonempty=1 (xavfli)."
-          );
+      const force = parsedFields.data.force_nonempty ?? false;
+      const mode = parsedFields.data.mode ?? "full";
+      const conflict_policy = parsedFields.data.conflict_policy ?? "keep";
+      const modules = parsedFields.data.modules;
+      const actorUserId = actorUserIdOrNull(request);
+      const tenantId = request.tenant!.id;
+      const applyOpts = {
+        force_nonempty: force,
+        mode,
+        conflict_policy,
+        modules,
+        actorUserId
+      } as const;
+
+      if (parsedFields.data.sync) {
+        try {
+          const result = await applyBackupZip(fileBuf, tenantId, applyOpts);
+          return reply.send(result);
+        } catch (e) {
+          if (mapMigrationApplyError(reply, request, e)) return;
+          throw e;
         }
-        if (e instanceof Error && e.message.startsWith("IMPORT_MAP_ERROR:")) {
-          return sendApiError(
-            reply,
-            request,
-            422,
-            "ImportMapError",
-            e.message.replace("IMPORT_MAP_ERROR:", "")
-          );
-        }
-        if (e instanceof Error && e.message.startsWith("INVALID_BACKUP:")) {
-          return sendApiError(
-            reply,
-            request,
-            400,
-            "InvalidBackup",
-            e.message.replace("INVALID_BACKUP:", "")
-          );
-        }
-        throw e;
       }
+
+      // Asosiy: API process ichida sessiya + progress (worker versiyasiga bog‘lanmaydi).
+      // Ixtiyoriy: fields.use_queue=1 → BullMQ worker (prod horizontal scale).
+      const useQueue = fields.use_queue === "true" || fields.use_queue === "1";
+      if (useQueue) {
+        let tempPath: string | null = null;
+        try {
+          tempPath = await writeMigrationImportTempFile(fileBuf);
+          const { queue, jobId } = await enqueueSystemMigrationImportJob(
+            tenantId,
+            actorUserId,
+            tempPath,
+            { force_nonempty: force, mode, conflict_policy, modules }
+          );
+          tempPath = null;
+          return reply.status(202).send({
+            async: true,
+            queue,
+            jobId,
+            message: "Import navbatga qo‘yildi. Progress: GET /api/:slug/jobs/:jobId"
+          });
+        } catch (err) {
+          if (tempPath) await unlink(tempPath).catch(() => {});
+          request.log.warn({ err }, "system-migration.import.queue failed — session fallback");
+        }
+      }
+
+      const session = createMigrationImportSession(tenantId);
+      const bufCopy = fileBuf;
+      void (async () => {
+        try {
+          const result = await applyBackupZip(bufCopy, tenantId, {
+            ...applyOpts,
+            onProgress: (p) => {
+              reportMigrationImportProgress(session.id, p);
+            }
+          });
+          completeMigrationImportSession(session.id, result);
+        } catch (e) {
+          failMigrationImportSession(session.id, humanizeMigrationApplyError(e));
+        }
+      })();
+
+      return reply.status(202).send({
+        async: true,
+        sessionId: session.id,
+        message: "Import boshlandi. Progress: GET /api/:slug/system-migration/import/sessions/:sessionId"
+      });
     }
   );
 }

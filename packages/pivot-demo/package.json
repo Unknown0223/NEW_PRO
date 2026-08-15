@@ -11,6 +11,7 @@
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@salec/pivot-engine": "*",
+    "@salec/pivot-ui": "*",
     "@tanstack/react-virtual": "^3.13.24",
     "clsx": "^2.1.1",
     "lucide-react": "^0.511.0",

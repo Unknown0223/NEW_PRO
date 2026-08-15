@@ -1,22 +1,24 @@
 import 'dart:io' show Platform;
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show FlutterError, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/api/api_base_url.dart';
+import 'core/api/dio_client.dart';
 import 'core/auth/mobile_session_guard.dart';
 import 'core/config/env_loader.dart';
 import 'core/database/app_database.dart';
+import 'core/errors/error_reporter.dart';
 import 'core/notifications/mobile_local_notification_service.dart';
+import 'core/prefs/app_prefs.dart';
 import 'core/theme/app_theme.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
-import 'features/auth/auth_provider.dart';
 import 'features/auth/biometric_setup_listener.dart';
 import 'routing/app_router.dart';
 
@@ -32,6 +34,12 @@ Future<void> main() async {
     configureApiHostForAndroidEmulator(!info.isPhysicalDevice);
     debugPrint('[SalesDoc] API (resolved): ${resolveApiBaseUrl()}');
   }
+
+  // Uncaught Flutter/zone xatolari — diagnostika jurnaliga.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    ErrorReporter.instance?.reportFatal(details.exception, details.stack);
+  };
 
   runApp(const ProviderScope(child: SalesDocApp()));
 }
@@ -69,13 +77,15 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(authStateProvider.notifier).checkSession();
+      ref.read(dioProvider); // ErrorReporter.bind
+      ErrorReporter.instance?.flush();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final router = ref.read(appRouterProvider);
+    final themeMode = ref.watch(appThemeModeProvider);
 
     // Keep autoFlush alive by reading it in build
     ref.watch(autoFlushProvider);
@@ -85,6 +95,8 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         title: 'Sales Arena',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeMode,
         routerConfig: router,
         builder: (context, child) => AppUpdateListener(
           child: BiometricSetupListener(

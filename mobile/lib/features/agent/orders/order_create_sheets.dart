@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/order_config_policy.dart';
 import '../../../core/config/consignment_due_date.dart';
+import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
+import '../../../core/config/price_type_labels.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -18,6 +20,8 @@ import 'order_create_models.dart';
 class OrderSetupSheet extends StatefulWidget {
   final List<Map<String, dynamic>> warehouses;
   final List<String> priceTypes;
+  /// DB kaliti → ko‘rinadigan nom (bo‘sh bo‘lsa kalit o‘zi).
+  final Map<String, String> priceTypeLabels;
   final int? initialWarehouseId;
   final String initialPriceType;
   final String initialComment;
@@ -41,6 +45,7 @@ class OrderSetupSheet extends StatefulWidget {
     super.key,
     required this.warehouses,
     required this.priceTypes,
+    this.priceTypeLabels = const {},
     this.initialWarehouseId,
     this.initialPriceType = 'default',
     this.initialComment = '',
@@ -65,6 +70,7 @@ class OrderSetupSheet extends StatefulWidget {
     BuildContext context, {
     required List<Map<String, dynamic>> warehouses,
     required List<String> priceTypes,
+    Map<String, String> priceTypeLabels = const {},
     int? initialWarehouseId,
     String initialPriceType = 'default',
     String initialComment = '',
@@ -94,6 +100,7 @@ class OrderSetupSheet extends StatefulWidget {
       builder: (_) => OrderSetupSheet(
         warehouses: warehouses,
         priceTypes: priceTypes,
+        priceTypeLabels: priceTypeLabels,
         initialWarehouseId: initialWarehouseId,
         initialPriceType: initialPriceType,
         initialComment: initialComment,
@@ -250,58 +257,9 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
     return '$tag $base';
   }
 
-  Widget _buildLimitsPanel() {
-    if (widget.showConsignmentField) return const SizedBox.shrink();
-    final f = widget.clientFinance ?? const OrderClientFinance();
-    final cart = widget.cartTotal;
-    final rem = f.creditRemainingAfterOrder(cart);
-    final limitLabel = f.creditLimit > 0
-        ? formatOrderMoney(f.creditLimit)
-        : (widget.clientCreditLimitHint?.trim().isNotEmpty == true
-            ? widget.clientCreditLimitHint!.trim()
-            : formatOrderMoney(0));
-    final debtReason = f.regularOrderBlockReason();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _limitsBox(
-          '${S.creditLimit}: $limitLabel',
-          '${S.limitRemaining}: ${formatOrderMoney(rem)}',
-        ),
-        if (debtReason != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            debtReason,
-            style: AppTypography.caption.copyWith(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   bool get _consignmentUiEnabled {
     final f = widget.clientFinance ?? const OrderClientFinance();
     return widget.consignmentCheckboxEnabled && f.consignmentToggleEnabled;
-  }
-
-  Widget _buildRegularDebtBanner() {
-    if (_isConsignment) return const SizedBox.shrink();
-    final reason =
-        (widget.clientFinance ?? const OrderClientFinance()).regularOrderBlockReason();
-    if (reason == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        reason,
-        style: AppTypography.caption.copyWith(
-          color: AppColors.error,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
   }
 
   double? get _consignmentRemainingValue {
@@ -318,118 +276,133 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
         .consignmentLimitExceededBy(widget.cartTotal);
   }
 
-  String? _consignmentRemainingLabel() {
+  /// Limit + «Осталось» chapda, konsignatsiya switch o‘ngda — bitta blok.
+  Widget _buildLimitsAndConsignmentPanel() {
     final f = widget.clientFinance ?? const OrderClientFinance();
-    final lim = f.consignmentLimitAmount;
-    if (lim == null) return null;
-    final rem = _consignmentRemainingValue;
-    if (rem == null) return '${S.limitRemaining}: ${formatMoneyUz(lim)}';
-    return '${S.limitRemaining}: ${formatMoneyUz(rem)}';
-  }
-
-  /// «Консигнация» + qolgan limit + switch (referens pastki varaq).
-  Widget _buildConsignmentRow() {
-    if (!widget.showConsignmentField) return const SizedBox.shrink();
-    final f = widget.clientFinance ?? const OrderClientFinance();
-    final clientBlock = f.consignmentBlockReason();
-    final enabled = _consignmentUiEnabled;
-    final remainingLabel = _consignmentRemainingLabel();
+    final cart = widget.cartTotal;
+    final showToggle = widget.showConsignmentField;
+    final toggleEnabled = _consignmentUiEnabled;
     final exceeded = _consignmentLimitExceeded;
-    final disabledHint = !f.agentConsignmentEnabled
-        ? S.consignmentNotAvailable
-        : (clientBlock ?? S.consignmentNotAvailable);
+    // Konsignatsiya maydoni bor bo‘lsa — shu limit/qoldiq ko‘rsatiladi (switch bilan).
+    final useConsignmentFigures = showToggle && f.consignmentLimitAmount != null;
+
+    late final String limitLine;
+    late final String remainingLine;
+    late final Color remainingColor;
+
+    if (useConsignmentFigures) {
+      final lim = f.consignmentLimitAmount;
+      final rem = _consignmentRemainingValue;
+      limitLine = '${S.consignmentLimit}: ${formatMoneyUz(lim!)}';
+      remainingLine = rem != null
+          ? '${S.limitRemaining}: ${formatMoneyUz(rem)}'
+          : '${S.limitRemaining}: ${formatMoneyUz(lim)}';
+      remainingColor = exceeded
+          ? AppColors.error
+          : (toggleEnabled ? AppColors.agentAccent : AppColors.textMuted);
+    } else {
+      final rem = f.creditRemainingAfterOrder(cart);
+      final hint = widget.clientCreditLimitHint?.trim();
+      final limitLabel = f.creditLimit > 0
+          ? formatOrderMoney(f.creditLimit)
+          : (hint != null && hint.isNotEmpty ? hint : formatOrderMoney(0));
+      limitLine = '${S.creditLimit}: $limitLabel';
+      remainingLine = '${S.limitRemaining}: ${formatOrderMoney(rem)}';
+      remainingColor = AppColors.agentAccent;
+    }
+
+    final debtReason =
+        (_isConsignment && toggleEnabled) ? null : f.regularOrderBlockReason();
+    final clientBlock = f.consignmentBlockReason();
+    final disabledHint = showToggle && !toggleEnabled
+        ? (!f.agentConsignmentEnabled
+            ? S.consignmentNotAvailable
+            : (clientBlock ?? S.consignmentNotAvailable))
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(
-                S.orderConsignment,
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: enabled ? AppColors.textPrimary : AppColors.textMuted,
-                ),
-              ),
-            ),
-            if (remainingLabel != null)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey.shade50,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               Expanded(
-                flex: 3,
-                child: Text(
-                  remainingLabel,
-                  textAlign: TextAlign.end,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: exceeded
-                        ? AppColors.error
-                        : (enabled ? AppColors.agentAccent : AppColors.textMuted),
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (showToggle) ...[
+                      Text(
+                        S.orderConsignment,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: toggleEnabled
+                              ? AppColors.textPrimary
+                              : AppColors.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Text(limitLine, style: AppTypography.bodySmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      remainingLine,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: remainingColor,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            Switch.adaptive(
-              value: enabled ? _isConsignment : false,
-              activeColor: AppColors.primary,
-              onChanged: enabled ? _onConsignmentChanged : null,
-            ),
-          ],
+              if (showToggle)
+                Switch.adaptive(
+                  value: toggleEnabled ? _isConsignment : false,
+                  activeColor: AppColors.primary,
+                  onChanged: toggleEnabled ? _onConsignmentChanged : null,
+                ),
+            ],
+          ),
         ),
-        if (!enabled)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              disabledHint,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
+        if (disabledHint != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            disabledHint,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        if (exceeded)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              S.consignmentLimitExceeded,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _limitsBox(String line1, String? line2) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey.shade50,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(line1, style: AppTypography.bodySmall),
-          if (line2 != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              line2,
-              style: AppTypography.bodyMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.agentAccent,
-              ),
-            ),
-          ],
         ],
-      ),
+        if (debtReason != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            debtReason,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (exceeded) ...[
+          const SizedBox(height: 8),
+          Text(
+            S.consignmentLimitExceeded,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -481,13 +454,36 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
 
   bool get _canContinue =>
       _safeWarehouseId != null &&
+      widget.warehouses.isNotEmpty &&
       !(widget.photoRequired && !_hasUnlinkedPhoto) &&
       !(widget.showShipmentDateField && _shipmentDate.trim().isEmpty) &&
       !_consignmentLimitExceeded;
 
+  String? get _continueBlockReason {
+    if (widget.warehouses.isEmpty) {
+      return 'Склад не назначен. Обратитесь к администратору или синхронизируйте данные.';
+    }
+    if (_safeWarehouseId == null) return 'Выберите склад';
+    if (widget.photoRequired && !_hasUnlinkedPhoto) {
+      return 'Добавьте фотоотчёт перед заказом';
+    }
+    if (widget.showShipmentDateField && _shipmentDate.trim().isEmpty) {
+      return 'Укажите дату отгрузки';
+    }
+    if (_consignmentLimitExceeded) return 'Превышен лимит консигнации';
+    return null;
+  }
+
   void _submit() {
+    final block = _continueBlockReason;
+    if (block != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(block), backgroundColor: AppColors.error),
+      );
+      return;
+    }
     final wh = _safeWarehouseId;
-    if (wh == null || !_canContinue) return;
+    if (wh == null) return;
     final finance = widget.clientFinance;
     if (finance != null) {
       final gate = _isConsignment
@@ -523,7 +519,7 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final limitsPanel = _buildLimitsPanel();
+    final limitsPanel = _buildLimitsAndConsignmentPanel();
     final mq = MediaQuery.of(context);
     final bottom = mq.viewInsets.bottom;
     final maxHeight = (mq.size.height * 0.88 - bottom).clamp(280.0, mq.size.height * 0.88);
@@ -574,6 +570,22 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.warehouses.isEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF1F0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFFCCC7)),
+                        ),
+                        child: Text(
+                          _continueBlockReason ??
+                              'Склад не назначен. Синхронизируйте или обратитесь к администратору.',
+                          style: AppTypography.bodySmall.copyWith(color: AppColors.error),
+                        ),
+                      ),
+                      const SizedBox(height: 13),
+                    ],
                     if (widget.warehouses.isNotEmpty) ...[
                       _fieldLabel(S.orderWarehouse),
                       _dropdownBox(
@@ -614,7 +626,11 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                                 .map(
                                   (t) => DropdownMenuItem<String>(
                                     value: t,
-                                    child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      priceTypeDisplayLabel(t, widget.priceTypeLabels),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 )
                                 .toList(),
@@ -635,22 +651,14 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                       ),
                       const SizedBox(height: 13),
                     ],
-                    if (!widget.showConsignmentField) ...[
-                      limitsPanel,
-                      const SizedBox(height: 13),
-                    ],
+                    limitsPanel,
+                    const SizedBox(height: 13),
                     _fieldLabel(S.orderComment),
                     TextField(
                       controller: _commentCtrl,
                       maxLines: 2,
                       decoration: const InputDecoration(hintText: S.orderCommentHint),
                     ),
-                    if (widget.showConsignmentField) ...[
-                      const SizedBox(height: 13),
-                      _buildConsignmentRow(),
-                      const SizedBox(height: 8),
-                      _buildRegularDebtBanner(),
-                    ],
                     if (widget.showShipmentDateField) ...[
                       const SizedBox(height: 13),
                       _fieldLabel(S.orderShipmentDate),
@@ -729,12 +737,14 @@ class _OrderSetupSheetState extends State<OrderSetupSheet> {
                   height: 50,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: _canContinue
+                          ? AppColors.primary
+                          : AppColors.primary.withValues(alpha: 0.45),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: _canContinue ? _submit : null,
+                    onPressed: _submit,
                     child: const Text(
                       S.continueArrow,
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
@@ -754,6 +764,53 @@ enum BonusMode { auto, none }
 
 enum DiscountMode { auto, none, manual }
 
+/// In-memory bonus/discount sheet draft for the current order-create flow.
+class OrderBonusDraftState {
+  final BonusMode bonusMode;
+  final DiscountMode discountMode;
+  final Map<int, Map<int, int>> giftQtyByRule;
+  final Map<int, int> giftProductByRule;
+  final Set<int> expandedBonusRuleIds;
+  final int? selectedBonusRuleId;
+  final int? selectedDiscountRuleId;
+  final int activeSection;
+  final String itemsFingerprint;
+  final bool userEditedGifts;
+
+  const OrderBonusDraftState({
+    this.bonusMode = BonusMode.auto,
+    this.discountMode = DiscountMode.auto,
+    this.giftQtyByRule = const {},
+    this.giftProductByRule = const {},
+    this.expandedBonusRuleIds = const {},
+    this.selectedBonusRuleId,
+    this.selectedDiscountRuleId,
+    this.activeSection = 0,
+    this.itemsFingerprint = '',
+    this.userEditedGifts = false,
+  });
+
+  bool get hasGiftQtys =>
+      giftQtyByRule.values.any((m) => m.values.any((q) => q > 0));
+
+  static String fingerprintFor(List<OrderLineInput> items) {
+    final sorted = [...items]..sort((a, b) => a.productId.compareTo(b.productId));
+    return sorted.map((e) => '${e.productId}:${e.qty}').join('|');
+  }
+
+  /// Cart changed — keep modes, drop gift allocations so preview can recompute.
+  OrderBonusDraftState withItemsFingerprint(String fp) {
+    if (fp == itemsFingerprint) return this;
+    return OrderBonusDraftState(
+      bonusMode: bonusMode,
+      discountMode: discountMode,
+      selectedDiscountRuleId: selectedDiscountRuleId,
+      activeSection: activeSection,
+      itemsFingerprint: fp,
+    );
+  }
+}
+
 class OrderBonusDiscountResult {
   final BonusMode bonusMode;
   final DiscountMode discountMode;
@@ -761,8 +818,11 @@ class OrderBonusDiscountResult {
   final bool applyDiscount;
   final List<BonusGiftOverrideInput> giftOverrides;
   final List<BonusGiftLineInput> giftLines;
+  final List<BonusStrategySelectionInput> strategySelections;
   final String bonusShortageComment;
   final String discountShortageComment;
+  final int bonusQty;
+  final double discountPct;
   const OrderBonusDiscountResult({
     required this.bonusMode,
     required this.discountMode,
@@ -770,8 +830,11 @@ class OrderBonusDiscountResult {
     required this.applyDiscount,
     this.giftOverrides = const [],
     this.giftLines = const [],
+    this.strategySelections = const [],
     this.bonusShortageComment = '',
     this.discountShortageComment = '',
+    this.bonusQty = 0,
+    this.discountPct = 0,
   });
 }
 
@@ -786,6 +849,9 @@ class OrderBonusDiscountSheet extends StatefulWidget {
   final OrdersConfig ordersConfig;
   final BonusMode initialBonusMode;
   final DiscountMode initialDiscountMode;
+  final OrderBonusDraftState? initialDraft;
+  final ValueChanged<OrderBonusDraftState>? onDraftChanged;
+  final bool isConsignment;
 
   const OrderBonusDiscountSheet({
     super.key,
@@ -798,6 +864,9 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     this.ordersConfig = const OrdersConfig(),
     this.initialBonusMode = BonusMode.auto,
     this.initialDiscountMode = DiscountMode.auto,
+    this.initialDraft,
+    this.onDraftChanged,
+    this.isConsignment = false,
   });
 
   static Future<OrderBonusDiscountResult?> show(
@@ -811,6 +880,9 @@ class OrderBonusDiscountSheet extends StatefulWidget {
     OrdersConfig ordersConfig = const OrdersConfig(),
     BonusMode initialBonusMode = BonusMode.auto,
     DiscountMode initialDiscountMode = DiscountMode.auto,
+    OrderBonusDraftState? initialDraft,
+    ValueChanged<OrderBonusDraftState>? onDraftChanged,
+    bool isConsignment = false,
   }) {
     return showModalBottomSheet<OrderBonusDiscountResult>(
       context: context,
@@ -831,6 +903,9 @@ class OrderBonusDiscountSheet extends StatefulWidget {
         ordersConfig: ordersConfig,
         initialBonusMode: initialBonusMode,
         initialDiscountMode: initialDiscountMode,
+        initialDraft: initialDraft,
+        onDraftChanged: onDraftChanged,
+        isConsignment: isConsignment,
       ),
     );
   }
@@ -851,9 +926,12 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   final Map<int, Set<int>> _manualGiftByRule = {};
   final Set<int> _expandedBonusRuleIds = {};
   final Set<int> _expandedDiscountRuleIds = {};
+  final Map<int, List<int>> _strategyPicks = {};
   OrderBonusPreview _preview = OrderBonusPreview.empty();
   bool _loadingPreview = true;
   String? _previewError;
+  bool _userEditedGifts = false;
+  bool _restoreExpandedFromDraft = false;
 
   OrderBonusPreview get preview => _preview;
 
@@ -876,13 +954,56 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   @override
   void initState() {
     super.initState();
-    _bonusMode = widget.initialBonusMode;
+    final draft = widget.initialDraft;
+    if (draft != null) {
+      _bonusMode = draft.bonusMode;
+      _discountMode = draft.discountMode;
+      _activeSection = draft.activeSection;
+      _selectedBonusRuleId = draft.selectedBonusRuleId;
+      _selectedDiscountRuleId = draft.selectedDiscountRuleId;
+      _userEditedGifts = draft.userEditedGifts;
+      _restoreExpandedFromDraft = draft.expandedBonusRuleIds.isNotEmpty;
+      for (final e in draft.giftQtyByRule.entries) {
+        _giftQtyByRule[e.key] = Map<int, int>.from(e.value);
+      }
+      _giftProductByRule.addAll(draft.giftProductByRule);
+      _expandedBonusRuleIds.addAll(draft.expandedBonusRuleIds);
+    } else {
+      _bonusMode = widget.initialBonusMode;
+      _discountMode = widget.initialDiscountMode;
+    }
     if (!_bonusModeAllowed(_bonusMode)) {
       final fallback = defaultBonusModeKey(widget.ordersConfig);
       _bonusMode = fallback == 'none' ? BonusMode.none : BonusMode.auto;
     }
-    _discountMode = widget.initialDiscountMode;
     _loadPreview();
+  }
+
+  @override
+  void dispose() {
+    _emitDraft();
+    super.dispose();
+  }
+
+  void _emitDraft() {
+    final cb = widget.onDraftChanged;
+    if (cb == null) return;
+    cb(
+      OrderBonusDraftState(
+        bonusMode: _bonusMode,
+        discountMode: _discountMode,
+        giftQtyByRule: {
+          for (final e in _giftQtyByRule.entries) e.key: Map<int, int>.from(e.value),
+        },
+        giftProductByRule: Map<int, int>.from(_giftProductByRule),
+        expandedBonusRuleIds: Set<int>.from(_expandedBonusRuleIds),
+        selectedBonusRuleId: _selectedBonusRuleId,
+        selectedDiscountRuleId: _selectedDiscountRuleId,
+        activeSection: _activeSection,
+        itemsFingerprint: OrderBonusDraftState.fingerprintFor(widget.items),
+        userEditedGifts: _userEditedGifts,
+      ),
+    );
   }
 
   Future<void> _loadPreview() async {
@@ -893,16 +1014,25 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         warehouseId: widget.warehouseId,
         items: widget.items,
         priceType: widget.priceType,
+        isConsignment: widget.isConsignment,
       );
       if (!mounted) return;
       final parsed = OrderBonusPreview.fromJson(raw);
       final normalized = _normalizePreview(parsed);
+      _strategyPicks
+        ..clear()
+        ..addEntries(
+          normalized.strategies.map(
+            (s) => MapEntry(s.strategyId, List<int>.from(s.autoSelectedRuleIds)),
+          ),
+        );
       setState(() {
         _preview = OrderBonusPreview(
           bonusStackMode: normalized.bonusStackMode,
           eligibleBonuses: _dedupeEligibleBonuses(normalized.eligibleBonuses),
           eligibleDiscounts: normalized.eligibleDiscounts,
           linkedPairs: normalized.linkedPairs,
+          strategies: normalized.strategies,
           autoApplyRuleIds: normalized.autoApplyRuleIds,
           autoApplyGifts: normalized.autoApplyGifts,
           autoDiscountRuleId: normalized.autoDiscountRuleId,
@@ -915,11 +1045,26 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         _previewError = null;
         _applyPreviewDefaults();
       });
+      _emitDraft();
     } catch (e) {
       if (!mounted) return;
+      // Asosiy matn UX da o‘zgarmaydi; API/parse sababi debug uchun qo‘shiladi.
+      var detail = '';
+      if (e is ApiException) {
+        detail = e.message.trim();
+        if (e.code != null && e.code!.isNotEmpty && !detail.contains(e.code!)) {
+          detail = detail.isEmpty ? e.code! : '$detail (${e.code})';
+        }
+      } else {
+        detail = e.toString().trim();
+      }
+      if (detail == S.bonusPreviewFailed || detail.startsWith('ApiException')) {
+        detail = '';
+      }
       setState(() {
         _loadingPreview = false;
-        _previewError = S.bonusPreviewFailed;
+        _previewError =
+            detail.isEmpty ? S.bonusPreviewFailed : '${S.bonusPreviewFailed}\n$detail';
       });
     }
   }
@@ -930,7 +1075,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     }
     if (_bonusTabRules().isNotEmpty) {
       OrderBonusPreviewRule? focus;
-      if (_preview.autoApplyRuleIds.isNotEmpty) {
+      if (_selectedBonusRuleId != null) {
+        for (final r in _bonusTabRules()) {
+          if (r.ruleId == _selectedBonusRuleId) {
+            focus = r;
+            break;
+          }
+        }
+      }
+      if (focus == null && _preview.autoApplyRuleIds.isNotEmpty) {
         for (final r in _bonusTabRules()) {
           if (_preview.autoApplyRuleIds.contains(r.ruleId)) {
             focus = r;
@@ -941,18 +1094,51 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       final first = focus ?? _bonusTabRules().first;
       _selectedBonusRuleId = first.ruleId;
     }
-    _applyComputedBonusQty();
-    if (_bonusMode == BonusMode.auto) {
-      _applyAutoBonusSelections();
+
+    final restoreGifts = _userEditedGifts && _giftQtyByRule.values.any(
+          (m) => m.values.any((q) => q > 0),
+        );
+    if (!restoreGifts) {
+      _applyComputedBonusQty();
+      if (_bonusMode == BonusMode.auto) {
+        _applyAutoBonusSelections();
+      }
+    } else {
+      for (final rule in _preview.eligibleBonuses) {
+        final m = _qtyMapForRule(rule.ruleId);
+        for (final g in rule.giftProducts) {
+          m.putIfAbsent(g.productId, () => 0);
+        }
+      }
     }
+
     _collapseAllRuleCards();
+    if (_restoreExpandedFromDraft && widget.initialDraft != null) {
+      _expandedBonusRuleIds.addAll(widget.initialDraft!.expandedBonusRuleIds);
+    } else if (_bonusMode == BonusMode.auto) {
+      // Birinchi tahrirlanadigan bonus havzasini ochiq qoldiramiz (mahsulot/son).
+      for (final rule in _bonusTabRules()) {
+        if (!_supportsMultiGiftPick(rule) || _earnedBonusQty(rule) <= 0) continue;
+        if (!_preview.autoApplyRuleIds.contains(rule.ruleId) &&
+            _preview.autoApplyRuleIds.isNotEmpty) {
+          continue;
+        }
+        _expandedBonusRuleIds.add(rule.ruleId);
+        break;
+      }
+    }
     final linkedDiscounts = _applicableDiscounts();
     if (linkedDiscounts.isNotEmpty) {
-      final autoId = _preview.autoDiscountRuleId;
-      if (autoId != null && linkedDiscounts.any((d) => d.ruleId == autoId)) {
-        _selectedDiscountRuleId = autoId;
+      final preferred = _selectedDiscountRuleId;
+      if (preferred != null && linkedDiscounts.any((d) => d.ruleId == preferred)) {
+        _selectedDiscountRuleId = preferred;
       } else {
-        _selectedDiscountRuleId = linkedDiscounts.first.ruleId;
+        final autoId = _preview.autoDiscountRuleId;
+        if (autoId != null && linkedDiscounts.any((d) => d.ruleId == autoId)) {
+          _selectedDiscountRuleId = autoId;
+        } else {
+          _selectedDiscountRuleId = linkedDiscounts.first.ruleId;
+        }
       }
     } else {
       _selectedDiscountRuleId = null;
@@ -965,7 +1151,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     for (final g in _assortmentGiftProducts(rule)) {
       final earned = _assortmentBonusForGift(rule, g, orderQty);
       if (earned <= 0) continue;
-      m[g.productId] = earned;
+      // Yetarli qoldiqdan beramiz; yetishmaganini kommentga qoldiramiz.
+      final given = capGiftQtyByStock(stockAvailable: g.stockAvailable, requested: earned);
+      if (given <= 0) continue;
+      m[g.productId] = given;
       _giftProductByRule[rule.ruleId] = g.productId;
       assigned = true;
     }
@@ -973,7 +1162,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final earned = rule.bonusQty.round();
     if (earned <= 0 || rule.giftProducts.length != 1) return;
     final pid = rule.defaultGiftProductId ?? rule.giftProducts.first.productId;
-    m[pid] = earned;
+    final g = rule.giftProducts.first;
+    final given = capGiftQtyByStock(stockAvailable: g.stockAvailable, requested: earned);
+    if (given <= 0) return;
+    m[pid] = given;
     _giftProductByRule[rule.ruleId] = pid;
   }
 
@@ -1054,10 +1246,13 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   /// Har SKU uchun server yoki assortiment rejimi (5+1: har mahsulot alohida).
-  bool _hasPerSkuBonusPlan(OrderBonusPreviewRule rule) =>
-      rule.isAssortmentAuto ||
-      (rule.isLockedAutoGift && rule.giftProducts.length > 1) ||
-      rule.giftProducts.any((g) => g.bonusQty > 0);
+  /// Swap/multi-pick qoidalarda bu false — miqdor umumiy earned bo‘yicha taqsimlanadi.
+  bool _hasPerSkuBonusPlan(OrderBonusPreviewRule rule) {
+    if (_supportsMultiGiftPick(rule)) return false;
+    return rule.isAssortmentAuto ||
+        (rule.isLockedAutoGift && rule.giftProducts.length > 1) ||
+        rule.giftProducts.any((g) => g.bonusQty > 0);
+  }
 
   List<OrderBonusPreviewRule> _bonusTabRules() =>
       _preview.eligibleBonuses.where((r) => r.type != 'sum').toList();
@@ -1083,6 +1278,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   /// Ko‘p SKU: ombor qoldig‘i bo‘yicha bonuslarni avtomatik taqsimlash.
+  /// Yetmagan qism OOS SKU ga tashlanmaydi — faqat kommentda qoladi.
   void _distributeBonusByStock(OrderBonusPreviewRule rule, Map<int, int> m, int earned) {
     _manualGiftByRule.remove(rule.ruleId);
     for (final k in m.keys.toList()) {
@@ -1103,11 +1299,6 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       m[g.productId] = take;
       remaining -= take;
       _giftProductByRule[rule.ruleId] = g.productId;
-    }
-    if (remaining > 0) {
-      final fallback = sorted.first;
-      m[fallback.productId] = (m[fallback.productId] ?? 0) + remaining;
-      _giftProductByRule[rule.ruleId] = fallback.productId;
     }
   }
 
@@ -1178,12 +1369,12 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         m[k] = 0;
       }
 
-      if (rule.isAssortmentAuto || _hasPerSkuBonusPlan(rule)) {
-        _applyAssortmentAutoGifts(rule, m);
-        continue;
-      }
       if (_supportsMultiGiftPick(rule)) {
         _distributeBonusByStock(rule, m, earned);
+        continue;
+      }
+      if (rule.isAssortmentAuto || _hasPerSkuBonusPlan(rule)) {
+        _applyAssortmentAutoGifts(rule, m);
         continue;
       }
 
@@ -1214,18 +1405,34 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   int _giftQtyFor(OrderBonusPreviewRule rule, int productId) =>
       _qtyMapForRule(rule.ruleId)[productId] ?? 0;
 
-  int _giftStockShortage(OrderBonusPreviewRule rule, GiftProductPreview g) =>
-      bonusStockShortage(
-        stockAvailable: g.stockAvailable,
-        giftQty: _giftQtyFor(rule, g.productId),
-      );
+  int _giftStockShortage(OrderBonusPreviewRule rule, GiftProductPreview g) {
+    // Assortiment: huquq (earned) vs ombor; map da faqat beriladigan (capped) qty.
+    if (_hasPerSkuBonusPlan(rule)) {
+      final earned = _assortmentBonusForGift(rule, g, _orderQtyByProduct());
+      return bonusStockShortage(stockAvailable: g.stockAvailable, giftQty: earned);
+    }
+    return bonusStockShortage(
+      stockAvailable: g.stockAvailable,
+      giftQty: _giftQtyFor(rule, g.productId),
+    );
+  }
 
-  bool _ruleHasStockShortage(OrderBonusPreviewRule rule) => hasAnyBonusStockShortage(
-        lines: [
-          for (final g in rule.giftProducts)
-            (stockAvailable: g.stockAvailable, giftQty: _giftQtyFor(rule, g.productId)),
-        ],
-      );
+  bool _ruleHasStockShortage(OrderBonusPreviewRule rule) {
+    if (_supportsMultiGiftPick(rule) && !_hasPerSkuBonusPlan(rule)) {
+      return _earnedBonusQty(rule) > _selectedGiftTotal(rule);
+    }
+    return hasAnyBonusStockShortage(
+      lines: [
+        for (final g in rule.giftProducts)
+          (
+            stockAvailable: g.stockAvailable,
+            giftQty: _hasPerSkuBonusPlan(rule)
+                ? _assortmentBonusForGift(rule, g, _orderQtyByProduct())
+                : _giftQtyFor(rule, g.productId),
+          ),
+      ],
+    );
+  }
 
   bool _discountRuleHasWarning(OrderDiscountPreviewRule d) {
     if (_discountMode == DiscountMode.none) return false;
@@ -1336,6 +1543,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         eligibleBonuses: bonuses,
         eligibleDiscounts: parsed.eligibleDiscounts,
         linkedPairs: parsed.linkedPairs,
+        strategies: parsed.strategies,
         autoApplyRuleIds: parsed.autoApplyRuleIds,
         autoApplyGifts: parsed.autoApplyGifts,
         autoDiscountRuleId: parsed.autoDiscountRuleId,
@@ -1374,6 +1582,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       eligibleBonuses: bonuses,
       eligibleDiscounts: parsed.eligibleDiscounts,
       linkedPairs: parsed.linkedPairs,
+      strategies: parsed.strategies,
       autoApplyRuleIds: parsed.autoApplyRuleIds,
       autoApplyGifts: parsed.autoApplyGifts,
       autoDiscountRuleId: parsed.autoDiscountRuleId,
@@ -1447,6 +1656,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       _slideForward = section > _activeSection;
       _activeSection = section;
     });
+    _emitDraft();
   }
 
   void _onBonusModeChanged(BonusMode? v) {
@@ -1454,27 +1664,32 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     setState(() {
       _bonusMode = v;
       if (v == BonusMode.auto) {
-        _applyAutoBonusSelections();
+        final hasAny = _giftQtyByRule.values.any((m) => m.values.any((q) => q > 0));
+        if (!hasAny) {
+          _applyAutoBonusSelections();
+        }
         final ids = _preview.autoApplyRuleIds;
         if (ids.isNotEmpty) {
           _selectedBonusRuleId = ids.first;
         }
-      } else if (v == BonusMode.none) {
-        for (final rule in _preview.eligibleBonuses) {
-          final m = _giftQtyByRule[rule.ruleId];
-          if (m != null) {
-            for (final k in m.keys.toList()) {
-              m[k] = 0;
-            }
-          }
+        _expandedBonusRuleIds.clear();
+        for (final rule in _bonusTabRules()) {
+          if (!_supportsMultiGiftPick(rule) || _earnedBonusQty(rule) <= 0) continue;
+          if (ids.isNotEmpty && !ids.contains(rule.ruleId)) continue;
+          _expandedBonusRuleIds.add(rule.ruleId);
+          break;
         }
+      } else if (v == BonusMode.none) {
+        // Keep gift qty maps so switching back / reopening restores them.
         _selectedBonusRuleId = null;
+        _expandedBonusRuleIds.clear();
       }
       if (_discountMode == DiscountMode.manual && !_canUseBoth) {
         _discountMode = DiscountMode.auto;
         _selectedDiscountRuleId = null;
       }
     });
+    _emitDraft();
   }
 
   void _onDiscountModeChanged(DiscountMode? v) {
@@ -1487,6 +1702,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         _selectedBonusRuleId = null;
       }
     });
+    _emitDraft();
   }
 
   /// Zakaz bo‘yicha hisoblangan bonus dona (6+1 assortiment: har SKU alohida, jami yig‘indi).
@@ -1535,8 +1751,8 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         continue;
       }
       // Faqat swap ruxsat etilgan qoidalarda override yuboriladi.
-      // assortment_auto / category_stock / fixed — server o‘zi hisoblaydi;
-      // aks holda bo‘sh allowed ro‘yxat bilan BadBonusGiftOverride chiqadi.
+      // assortment_auto / fixed (swap yo‘q) — server o‘zi hisoblaydi.
+      // category_stock / pick_product (2+ SKU) — gift_lines orqali ketadi.
       if (!rule.allowGiftSwap || rule.isLockedAutoGift) continue;
       if (_supportsMultiGiftPick(rule)) continue;
       var bestPid = _giftProductByRule[rule.ruleId];
@@ -1576,16 +1792,56 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   OrderBonusDiscountResult _buildResult() {
     final applyBonus = _bonusMode != BonusMode.none;
     final applyDiscount = _discountMode != DiscountMode.none;
+    final giftLines = _buildGiftLines();
+    final bonusQty = giftLines.fold<int>(0, (s, g) => s + g.qty);
+    double discountPct = 0;
+    if (applyDiscount) {
+      final discounts = _applicableDiscounts();
+      OrderDiscountPreviewRule? activeRule;
+      if (_discountMode == DiscountMode.auto) {
+        final autoId = _preview.autoDiscountRuleId;
+        if (autoId != null) {
+          for (final d in discounts) {
+            if (d.ruleId == autoId) {
+              activeRule = d;
+              break;
+            }
+          }
+        }
+        activeRule ??= discounts.isNotEmpty ? discounts.first : null;
+      } else if (_discountMode == DiscountMode.manual && _selectedDiscountRuleId != null) {
+        for (final d in discounts) {
+          if (d.ruleId == _selectedDiscountRuleId) {
+            activeRule = d;
+            break;
+          }
+        }
+      }
+      discountPct = activeRule?.discountPct ?? _preview.autoDiscountPct ?? 0;
+    }
     return OrderBonusDiscountResult(
       bonusMode: _bonusMode,
       discountMode: _discountMode,
       applyBonus: applyBonus,
       applyDiscount: applyDiscount,
       giftOverrides: _buildGiftOverrides(),
-      giftLines: _buildGiftLines(),
+      giftLines: giftLines,
+      strategySelections: _buildStrategySelections(),
       bonusShortageComment: _buildBonusShortageComment(),
       discountShortageComment: _buildDiscountShortageComment(),
+      bonusQty: bonusQty,
+      discountPct: discountPct,
     );
+  }
+
+  List<BonusStrategySelectionInput> _buildStrategySelections() {
+    final out = <BonusStrategySelectionInput>[];
+    for (final s in _preview.strategies) {
+      final picked = _strategyPicks[s.strategyId] ?? s.autoSelectedRuleIds;
+      if (picked.isEmpty) continue;
+      out.add(BonusStrategySelectionInput(strategyId: s.strategyId, ruleIds: List<int>.from(picked)));
+    }
+    return out;
   }
 
   String _buildDiscountShortageComment() {
@@ -1647,6 +1903,18 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     if (_bonusMode == BonusMode.none) return '';
     final lines = <({String productName, int shortage})>[];
     for (final rule in _preview.eligibleBonuses) {
+      if (_supportsMultiGiftPick(rule) && !_hasPerSkuBonusPlan(rule)) {
+        final earned = _earnedBonusQty(rule);
+        final given = _selectedGiftTotal(rule);
+        final short = earned - given;
+        if (short > 0) {
+          final name = rule.giftProducts.isNotEmpty
+              ? rule.giftProducts.first.name
+              : rule.name;
+          lines.add((productName: name, shortage: short));
+        }
+        continue;
+      }
       for (final g in rule.giftProducts) {
         final shortage = _giftStockShortage(rule, g);
         if (shortage > 0) {
@@ -1908,6 +2176,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         ),
         if (_bonusMode == BonusMode.auto) ...[
           const SizedBox(height: 8),
+          if (preview.strategies.isNotEmpty) ...[
+            for (final s in preview.strategies) _buildStrategyPickBlock(s),
+            const SizedBox(height: 8),
+          ],
           if (preview.eligibleBonuses.isEmpty)
             const AgentEmptyState(message: S.emptyBonuses)
           else if (_bonusTabRules().isNotEmpty)
@@ -1922,14 +2194,70 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     );
   }
 
-  /// Faqat backend `allow_gift_swap=true` deb belgilagan holatlarda (2+ qat'iy
-  /// belgilangan `bonus_product_ids`) mijoz/agent sovg'a mahsulotini tanlashi
-  /// yoki miqdorlarni mahsulotlar orasida ko'chirishi mumkin. `assortment_auto`
-  /// (har trigger-mahsulot o'zining sovg'asiga qulflangan) va `category_stock`
-  /// (ombor qoldig'i bo'yicha avtomatik) holatlarida bu HAR DOIM `false` —
-  /// hatto bir nechta sovg'a mahsuloti ro'yxatda ko'rinsa ham, ular
-  /// o'zgartirib bo'lmaydigan (locked) qatorlar sifatida ko'rsatiladi.
+  Widget _buildStrategyPickBlock(OrderBonusStrategyPreview s) {
+    final picks = _strategyPicks[s.strategyId] ?? s.autoSelectedRuleIds;
+    String ruleName(int id) {
+      for (final b in preview.eligibleBonuses) {
+        if (b.ruleId == id) return b.name;
+      }
+      for (final d in preview.eligibleDiscounts) {
+        if (d.ruleId == id) return d.name;
+      }
+      return '#$id';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Стратегия: ${s.name}',
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Выберите до ${s.maxSelect} из ${s.eligibleRuleIds.length}',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          for (final id in s.eligibleRuleIds)
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(ruleName(id), style: AppTypography.bodySmall),
+              value: picks.contains(id),
+              onChanged: _bonusSectionDisabled
+                  ? null
+                  : (v) {
+                      setState(() {
+                        final next = List<int>.from(picks);
+                        if (v == true) {
+                          if (next.length >= s.maxSelect) return;
+                          if (!next.contains(id)) next.add(id);
+                        } else {
+                          next.remove(id);
+                        }
+                        _strategyPicks[s.strategyId] = next;
+                      });
+                    },
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Backend `allow_gift_swap=true` va 2+ `gift_products` bo‘lsa agent sovg‘a
+  /// mahsulotini tanlaydi / miqdorni taqsimlaydi (`pick_product`, `category_stock`).
+  /// `assortment_auto` doimo qulflangan (`allow_gift_swap=false`).
   bool _supportsMultiGiftPick(OrderBonusPreviewRule rule) {
+    if (rule.isAssortmentAuto || rule.isLockedAutoGift) return false;
     if (rule.giftProducts.length <= 1) return false;
     return rule.allowGiftSwap;
   }
@@ -1946,6 +2274,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
           ..add(ruleId);
       }
     });
+    _emitDraft();
   }
 
   bool _canIncreaseGiftQty(OrderBonusPreviewRule rule, int productId) {
@@ -1975,11 +2304,13 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       m[productId] = targetQty;
       if (targetQty != oldQty) {
         manual.add(productId);
+        _userEditedGifts = true;
       }
       if (targetQty > 0) {
         _giftProductByRule[rule.ruleId] = productId;
       }
     });
+    _emitDraft();
   }
 
   Widget _compactGiftLine(OrderBonusPreviewRule rule, GiftProductPreview g, int qty) {
@@ -2046,6 +2377,84 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     );
   }
 
+  /// Expanded gift editor: full height (no fixed max), scrolls with the sheet.
+  Widget _bonusGiftLinesEditor(
+    OrderBonusPreviewRule rule, {
+    required Map<String, List<GiftProductPreview>> grouped,
+    required int maxQty,
+    required int selectedTotal,
+    required bool sectionDisabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (rule.giftProducts.isEmpty)
+            Text(
+              S.emptyBonuses,
+              style: AppTypography.caption.copyWith(color: Colors.grey.shade600),
+            )
+          else ...[
+            Text(
+              S.bonusDistributeHint,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 10.5,
+              ),
+            ),
+            if (rule.isCategoryStockAuto || rule.allowGiftSwap)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  S.bonusSelectProduct,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.bonusInk,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 2),
+            for (final entry in grouped.entries) ...[
+              if (grouped.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 2),
+                  child: Text(
+                    entry.key,
+                    style: AppTypography.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.bonusInk,
+                    ),
+                  ),
+                ),
+              for (final g in entry.value)
+                _giftProductQtyRow(
+                  rule,
+                  g,
+                  maxQty,
+                  sectionDisabled: sectionDisabled,
+                  compact: true,
+                ),
+            ],
+            if (selectedTotal < maxQty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '${S.bonusEarnedHint}: ${maxQty - selectedTotal} ${S.bonusQtyShort.toLowerCase()}',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.warning,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _bonusRuleBlock(
     OrderBonusPreviewRule rule, {
     required Set<int> expandedRuleIds,
@@ -2101,65 +2510,16 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
             duration: const Duration(milliseconds: 280),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
+            clipBehavior: Clip.hardEdge,
             child: showReadOnlyLines
                 ? _bonusGiftLinesReadOnly(rule)
                 : (showEditors
-                    ? Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 140),
-                          child: rule.giftProducts.isEmpty
-                              ? Text(
-                                  S.emptyBonuses,
-                                  style: AppTypography.caption.copyWith(color: Colors.grey.shade600),
-                                )
-                              : ListView(
-                                  shrinkWrap: true,
-                                  padding: EdgeInsets.zero,
-                                  children: [
-                                    Text(
-                                      S.bonusDistributeHint,
-                                      style: AppTypography.caption.copyWith(
-                                        color: AppColors.textMuted,
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    for (final entry in grouped.entries) ...[
-                                      if (grouped.length > 1)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 2, bottom: 2),
-                                          child: Text(
-                                            entry.key,
-                                            style: AppTypography.caption.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.bonusInk,
-                                            ),
-                                          ),
-                                        ),
-                                      for (final g in entry.value)
-                                        _giftProductQtyRow(
-                                          rule,
-                                          g,
-                                          maxQty,
-                                          sectionDisabled: sectionDisabled,
-                                          compact: true,
-                                        ),
-                                      if (selectedTotal < maxQty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            '${S.bonusEarnedHint}: ${maxQty - selectedTotal} ${S.bonusQtyShort.toLowerCase()}',
-                                            style: AppTypography.caption.copyWith(
-                                              color: AppColors.warning,
-                                              fontSize: 10.5,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ],
-                                ),
-                        ),
+                    ? _bonusGiftLinesEditor(
+                        rule,
+                        grouped: grouped,
+                        maxQty: maxQty,
+                        selectedTotal: selectedTotal,
+                        sectionDisabled: sectionDisabled,
                       )
                     : const SizedBox.shrink()),
           ),
@@ -2603,11 +2963,49 @@ class AutoApplyBonusGift {
       );
 }
 
+class OrderBonusStrategyPreview {
+  final int strategyId;
+  final String name;
+  final int maxSelect;
+  final List<int> memberRuleIds;
+  final List<int> eligibleRuleIds;
+  final List<int> autoSelectedRuleIds;
+  final bool requiresChoice;
+
+  const OrderBonusStrategyPreview({
+    required this.strategyId,
+    required this.name,
+    required this.maxSelect,
+    this.memberRuleIds = const [],
+    this.eligibleRuleIds = const [],
+    this.autoSelectedRuleIds = const [],
+    this.requiresChoice = false,
+  });
+
+  factory OrderBonusStrategyPreview.fromJson(Map<String, dynamic> j) {
+    List<int> ids(dynamic v) {
+      if (v is! List) return [];
+      return v.whereType<num>().map((e) => e.toInt()).where((e) => e > 0).toList();
+    }
+
+    return OrderBonusStrategyPreview(
+      strategyId: (j['strategy_id'] as num?)?.toInt() ?? 0,
+      name: j['name']?.toString() ?? '',
+      maxSelect: (j['max_select'] as num?)?.toInt() ?? 1,
+      memberRuleIds: ids(j['member_rule_ids']),
+      eligibleRuleIds: ids(j['eligible_rule_ids']),
+      autoSelectedRuleIds: ids(j['auto_selected_rule_ids']),
+      requiresChoice: j['requires_choice'] == true,
+    );
+  }
+}
+
 class OrderBonusPreview {
   final String bonusStackMode;
   final List<OrderBonusPreviewRule> eligibleBonuses;
   final List<OrderDiscountPreviewRule> eligibleDiscounts;
   final List<LinkedBonusDiscountPair> linkedPairs;
+  final List<OrderBonusStrategyPreview> strategies;
   final List<int> autoApplyRuleIds;
   final List<AutoApplyBonusGift> autoApplyGifts;
   final int? autoDiscountRuleId;
@@ -2621,6 +3019,7 @@ class OrderBonusPreview {
     required this.eligibleBonuses,
     required this.eligibleDiscounts,
     required this.linkedPairs,
+    this.strategies = const [],
     this.autoApplyRuleIds = const [],
     this.autoApplyGifts = const [],
     this.autoDiscountRuleId,
@@ -2692,6 +3091,7 @@ class OrderBonusPreview {
       eligibleBonuses: mapList(j['eligible_bonuses'], OrderBonusPreviewRule.fromJson),
       eligibleDiscounts: mapList(j['eligible_discounts'], OrderDiscountPreviewRule.fromJson),
       linkedPairs: _parseLinkedPairs(j),
+      strategies: mapList(j['strategies'], OrderBonusStrategyPreview.fromJson),
       autoApplyRuleIds: ruleIds,
       autoApplyGifts: gifts,
       autoDiscountRuleId: autoDiscountRuleId,
@@ -2732,6 +3132,7 @@ class OrderBonusPreview {
         eligibleBonuses: [],
         eligibleDiscounts: [],
         linkedPairs: [],
+        strategies: [],
         autoApplyRuleIds: [],
         autoApplyGifts: [],
       );
@@ -2769,12 +3170,13 @@ class OrderBonusPreviewRule {
   bool get isAssortmentAuto => giftSelectionKind == 'assortment_auto';
 
   /// `category_stock`: aniq sovg'a SKU tanlanmagan, faqat kategoriya doirasi —
-  /// sovg'a ombordagi eng katta qoldiqli mahsulotdan avtomatik beriladi.
+  /// default ombordagi eng katta qoldiqli mahsulot; 2+ nomzodda swap mumkin.
   bool get isCategoryStockAuto => giftSelectionKind == 'category_stock';
 
-  /// Ikkala holatda ham tanlov to'liq avtomatik va o'zgartirib bo'lmaydi
-  /// (backend `allow_gift_swap=false`).
-  bool get isLockedAutoGift => isAssortmentAuto || isCategoryStockAuto;
+  /// Assortiment: har trigger o‘z sovg‘asiga qulflangan.
+  /// Kategoriya (`category_stock`): faqat `allow_gift_swap=false` bo‘lsa qulflangan.
+  bool get isLockedAutoGift =>
+      isAssortmentAuto || (isCategoryStockAuto && !allowGiftSwap);
 
   factory OrderBonusPreviewRule.fromJson(Map<String, dynamic> j) {
     double parseDouble(dynamic v) {
@@ -2782,20 +3184,25 @@ class OrderBonusPreviewRule {
       return double.tryParse(v?.toString() ?? '') ?? 0;
     }
 
+    int? parseInt(dynamic v) {
+      if (v is num) return v.toInt();
+      return int.tryParse(v?.toString() ?? '');
+    }
+
     return OrderBonusPreviewRule(
-      ruleId: (j['rule_id'] as num?)?.toInt() ?? 0,
+      ruleId: parseInt(j['rule_id']) ?? 0,
       name: j['name']?.toString() ?? '',
       type: j['type']?.toString() ?? 'qty',
       bonusQty: parseDouble(j['bonus_qty']),
       maxBonusQty: j['max_bonus_qty'] == null ? null : parseDouble(j['max_bonus_qty']),
-      defaultGiftProductId: (j['default_gift_product_id'] as num?)?.toInt(),
+      defaultGiftProductId: parseInt(j['default_gift_product_id']),
       giftSelectionKind: j['gift_selection_kind']?.toString() ?? 'fixed',
       allowGiftSwap: j['allow_gift_swap'] == true,
-      stepQty: (j['step_qty'] as num?)?.toInt(),
-      bonusStepQty: (j['bonus_step_qty'] as num?)?.toInt(),
+      stepQty: parseInt(j['step_qty']),
+      bonusStepQty: parseInt(j['bonus_step_qty']),
       triggerProductIds: (j['trigger_product_ids'] is List)
           ? (j['trigger_product_ids'] as List)
-              .map((e) => (e as num?)?.toInt() ?? 0)
+              .map((e) => parseInt(e) ?? 0)
               .where((id) => id > 0)
               .toList()
           : const [],

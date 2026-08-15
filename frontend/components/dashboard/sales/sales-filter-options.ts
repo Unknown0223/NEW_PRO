@@ -3,6 +3,7 @@
 import { formatStatusLabel } from "@/components/dashboard/sales/format";
 import type { SalesFilterDraft } from "@/components/dashboard/sales/types";
 import { buildPaymentMethodOptions } from "@/components/dashboard/finance/payment-method-options";
+import { cityStoredCodeToDisplayLabel } from "@/lib/city-territory-hint";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";
 import { useMemo } from "react";
 
@@ -46,6 +47,39 @@ function uniqSorted(values: string[]) {
   return [...s].sort((a, b) => a.localeCompare(b, "ru"));
 }
 
+function territoryLabelLookup(
+  options: Array<string | { value?: string; label?: string | null }> | undefined
+): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const o of options ?? []) {
+    if (typeof o === "string") {
+      const t = o.trim();
+      if (t) m.set(t, t);
+      continue;
+    }
+    const v = String(o.value ?? "").trim();
+    const lab = String(o.label ?? o.value ?? "").trim();
+    if (v) m.set(v, lab || v);
+  }
+  return m;
+}
+
+function withTerritoryLabels(
+  values: string[],
+  labelByValue: Map<string, string>,
+  asCity: boolean
+): Array<{ value: string; label: string }> {
+  return values.map((value) => {
+    const fromMap = labelByValue.get(value);
+    const label = asCity
+      ? cityStoredCodeToDisplayLabel(value, fromMap ?? value)
+      : fromMap && fromMap !== value
+        ? fromMap
+        : cityStoredCodeToDisplayLabel(value, fromMap ?? value);
+    return { value, label };
+  });
+}
+
 export function useSalesFilterOptions(args: {
   draft: SalesFilterDraft;
   supervisors: StaffPick[];
@@ -87,6 +121,9 @@ export function useSalesFilterOptions(args: {
       label: t.name
     }));
 
+    const regionLabelByValue = territoryLabelLookup(clientRefs?.region_options);
+    const cityLabelByValue = territoryLabelLookup(clientRefs?.city_options);
+
     const zoneOptions = (() => {
       const hasReport = (reportFilters?.territory_1?.length ?? 0) > 0;
       const base = hasReport ? (reportFilters?.territory_1 ?? []) : (clientRefs?.zones ?? []);
@@ -109,7 +146,8 @@ export function useSalesFilterOptions(args: {
         rows = [...set];
         if (rows.length === 0) rows = reportFilters?.territory_2 ?? clientRefs?.regions ?? [];
       }
-      return uniqSorted(rows).map((r) => ({ value: r, label: r }));
+      const labeled = withTerritoryLabels(uniqSorted(rows), regionLabelByValue, false);
+      return labeled.length ? labeled : mapTerritoryOpts(clientRefs?.region_options ?? []);
     })();
 
     const cityOptions = (() => {
@@ -126,7 +164,11 @@ export function useSalesFilterOptions(args: {
         const hasReport = (reportFilters?.territory_3?.length ?? 0) > 0;
         rows = hasReport ? (reportFilters?.territory_3 ?? []) : (clientRefs?.cities ?? []);
       }
-      return uniqSorted(rows).map((c) => ({ value: c, label: c }));
+      const labeled = withTerritoryLabels(uniqSorted(rows), cityLabelByValue, true);
+      return labeled.length ? labeled : mapTerritoryOpts(clientRefs?.city_options ?? []).map((o) => ({
+        value: o.value,
+        label: cityStoredCodeToDisplayLabel(o.value, o.label)
+      }));
     })();
 
     return {
@@ -139,8 +181,8 @@ export function useSalesFilterOptions(args: {
       brandItems,
       tradeOptions,
       zoneOptions,
-      regionOptions: regionOptions.length ? regionOptions : mapTerritoryOpts(clientRefs?.region_options ?? []),
-      cityOptions: cityOptions.length ? cityOptions : mapTerritoryOpts(clientRefs?.city_options ?? [])
+      regionOptions,
+      cityOptions
     };
   }, [
     draft.territory_1_list,

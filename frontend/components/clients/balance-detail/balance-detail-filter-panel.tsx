@@ -1,7 +1,10 @@
 "use client";
 
-import { X } from "lucide-react";
+import { filterPanelSelectClassName } from "@/components/ui/filter-select";
 import type { BalanceDetailFilters } from "@/lib/client-balance-detail/types";
+import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+import type { ReactNode } from "react";
 
 type Props = {
   filters: BalanceDetailFilters;
@@ -11,6 +14,9 @@ type Props = {
   cashboxOptions: string[];
   creatorOptions: string[];
 };
+
+const FIELD_INPUT =
+  "h-9 w-full min-w-0 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function Chip({
   label,
@@ -25,15 +31,20 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+      className={cn(
+        "h-7 shrink-0 rounded-md border px-2.5 text-xs font-medium transition-colors",
         active
-          ? "border-[#1aa096] bg-[#e6f7f5] text-[#1aa096]"
-          : "border-[#d0d5dd] bg-white text-[#666] hover:border-[#aaa]"
-      }`}
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+      )}
     >
       {label}
     </button>
   );
+}
+
+function ChipGroup({ children }: { children: ReactNode }) {
+  return <div className="flex min-h-9 flex-wrap content-center items-center gap-1.5">{children}</div>;
 }
 
 export function BalanceDetailFilterPanel({
@@ -44,7 +55,10 @@ export function BalanceDetailFilterPanel({
   cashboxOptions,
   creatorOptions
 }: Props) {
-  const toggleArr = (key: keyof Pick<BalanceDetailFilters, "types" | "paymentMethods" | "agents" | "expeditors">, val: string) => {
+  const toggleArr = (
+    key: keyof Pick<BalanceDetailFilters, "types" | "paymentMethods" | "agents" | "expeditors">,
+    val: string
+  ) => {
     const arr = filters[key];
     const next = arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
     onChange({ ...filters, [key]: next });
@@ -65,113 +79,207 @@ export function BalanceDetailFilterPanel({
     filters.paymentMax !== "" ||
     filters.rowKind !== "all";
 
+  const gridClass = "grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+
   return (
-    <div className="space-y-2 border-b border-[#e5e7eb] bg-[#f9fafb] px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Тип строки</span>
-        <Chip label="Все" active={filters.rowKind === "all"} onClick={() => onChange({ ...filters, rowKind: "all" })} />
-        <Chip label="Долг" active={filters.rowKind === "debt"} onClick={() => onChange({ ...filters, rowKind: "debt" })} />
-        <Chip label="Оплата" active={filters.rowKind === "payment"} onClick={() => onChange({ ...filters, rowKind: "payment" })} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Тип</span>
-        {["Заказ", "Оплата", "Расход"].map((t) => (
-          <Chip key={t} label={t} active={filters.types.includes(t)} onClick={() => toggleArr("types", t)} />
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Способ оплаты</span>
-        {["Наличные", "Перечисление", "Терминал"].map((t) => (
-          <Chip key={t} label={t} active={filters.paymentMethods.includes(t)} onClick={() => toggleArr("paymentMethods", t)} />
-        ))}
-      </div>
-      {agentOptions.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Агент</span>
-          {agentOptions.map((a) => (
-            <Chip key={a} label={a} active={filters.agents.includes(a)} onClick={() => toggleArr("agents", a)} />
-          ))}
+    <div className="border-b border-border/70 bg-muted/30 px-3 py-3 sm:px-4">
+      <div className={gridClass}>
+        <div className="orders-filter-field-label">
+          Тип строки
+          <ChipGroup>
+            <Chip
+              label="Все"
+              active={filters.rowKind === "all"}
+              onClick={() => onChange({ ...filters, rowKind: "all" })}
+            />
+            <Chip
+              label="Долг"
+              active={filters.rowKind === "debt"}
+              onClick={() => onChange({ ...filters, rowKind: "debt" })}
+            />
+            <Chip
+              label="Оплата"
+              active={filters.rowKind === "payment"}
+              onClick={() => onChange({ ...filters, rowKind: "payment" })}
+            />
+          </ChipGroup>
         </div>
-      ) : null}
-      {expeditorOptions.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Экспедитор</span>
-          {expeditorOptions.map((e) => (
-            <Chip key={e} label={e} active={filters.expeditors.includes(e)} onClick={() => toggleArr("expeditors", e)} />
-          ))}
+
+        <div className="orders-filter-field-label">
+          Тип
+          <ChipGroup>
+            {["Заказ", "Оплата", "Расход"].map((t) => (
+              <Chip
+                key={t}
+                label={t}
+                active={filters.types.includes(t)}
+                onClick={() => toggleArr("types", t)}
+              />
+            ))}
+          </ChipGroup>
         </div>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">Консигнация</span>
-        <Chip label="Все" active={filters.consignment === ""} onClick={() => onChange({ ...filters, consignment: "" })} />
-        <Chip label="Да" active={filters.consignment === "yes"} onClick={() => onChange({ ...filters, consignment: "yes" })} />
-        <Chip label="Нет" active={filters.consignment === "no"} onClick={() => onChange({ ...filters, consignment: "no" })} />
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
+
+        <div className="orders-filter-field-label">
+          Способ оплаты
+          <ChipGroup>
+            {["Наличные", "Перечисление", "Терминал"].map((t) => (
+              <Chip
+                key={t}
+                label={t}
+                active={filters.paymentMethods.includes(t)}
+                onClick={() => toggleArr("paymentMethods", t)}
+              />
+            ))}
+          </ChipGroup>
+        </div>
+
+        <div className="orders-filter-field-label">
+          Консигнация
+          <ChipGroup>
+            <Chip
+              label="Все"
+              active={filters.consignment === ""}
+              onClick={() => onChange({ ...filters, consignment: "" })}
+            />
+            <Chip
+              label="Да"
+              active={filters.consignment === "yes"}
+              onClick={() => onChange({ ...filters, consignment: "yes" })}
+            />
+            <Chip
+              label="Нет"
+              active={filters.consignment === "no"}
+              onClick={() => onChange({ ...filters, consignment: "no" })}
+            />
+          </ChipGroup>
+        </div>
+
+        {agentOptions.length > 0 ? (
+          <div className="orders-filter-field-label sm:col-span-2 md:col-span-1 lg:col-span-2">
+            Агент
+            <ChipGroup>
+              {agentOptions.map((a) => (
+                <Chip
+                  key={a}
+                  label={a}
+                  active={filters.agents.includes(a)}
+                  onClick={() => toggleArr("agents", a)}
+                />
+              ))}
+            </ChipGroup>
+          </div>
+        ) : null}
+
+        {expeditorOptions.length > 0 ? (
+          <div className="orders-filter-field-label sm:col-span-2 md:col-span-1 lg:col-span-2">
+            Экспедитор
+            <ChipGroup>
+              {expeditorOptions.map((e) => (
+                <Chip
+                  key={e}
+                  label={e}
+                  active={filters.expeditors.includes(e)}
+                  onClick={() => toggleArr("expeditors", e)}
+                />
+              ))}
+            </ChipGroup>
+          </div>
+        ) : null}
+
         {cashboxOptions.length > 0 ? (
-          <select
-            value={filters.cashbox}
-            onChange={(e) => onChange({ ...filters, cashbox: e.target.value })}
-            className="h-7 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-          >
-            <option value="">Все кассы</option>
-            {cashboxOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <label className="orders-filter-field-label">
+            Касса
+            <select
+              value={filters.cashbox}
+              onChange={(e) => onChange({ ...filters, cashbox: e.target.value })}
+              className={cn(filterPanelSelectClassName, "h-9 min-h-9 min-w-0 max-w-none")}
+            >
+              <option value="">Все кассы</option>
+              {cashboxOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
         ) : null}
-        <input
-          type="text"
-          placeholder="Комментарий"
-          value={filters.comment}
-          onChange={(e) => onChange({ ...filters, comment: e.target.value })}
-          className="h-7 min-w-[120px] rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-        />
+
         {creatorOptions.length > 0 ? (
-          <select
-            value={filters.createdBy}
-            onChange={(e) => onChange({ ...filters, createdBy: e.target.value })}
-            className="h-7 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-          >
-            <option value="">Все создатели</option>
-            {creatorOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <label className="orders-filter-field-label">
+            Создатель
+            <select
+              value={filters.createdBy}
+              onChange={(e) => onChange({ ...filters, createdBy: e.target.value })}
+              className={cn(filterPanelSelectClassName, "h-9 min-h-9 min-w-0 max-w-none")}
+            >
+              <option value="">Все создатели</option>
+              {creatorOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
         ) : null}
-        <input
-          type="number"
-          placeholder="Долг от"
-          value={filters.debtMin}
-          onChange={(e) => onChange({ ...filters, debtMin: e.target.value })}
-          className="h-7 w-20 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-        />
-        <input
-          type="number"
-          placeholder="Долг до"
-          value={filters.debtMax}
-          onChange={(e) => onChange({ ...filters, debtMax: e.target.value })}
-          className="h-7 w-20 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-        />
-        <input
-          type="number"
-          placeholder="Оплата от"
-          value={filters.paymentMin}
-          onChange={(e) => onChange({ ...filters, paymentMin: e.target.value })}
-          className="h-7 w-20 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-        />
-        <input
-          type="number"
-          placeholder="Оплата до"
-          value={filters.paymentMax}
-          onChange={(e) => onChange({ ...filters, paymentMax: e.target.value })}
-          className="h-7 w-20 rounded border border-[#d0d5dd] bg-white px-2 text-[11px]"
-        />
-        {hasActive ? (
+
+        <label className="orders-filter-field-label sm:col-span-2 md:col-span-1 lg:col-span-2">
+          Комментарий
+          <input
+            type="text"
+            placeholder="Поиск по комментарию"
+            value={filters.comment}
+            onChange={(e) => onChange({ ...filters, comment: e.target.value })}
+            className={FIELD_INPUT}
+          />
+        </label>
+
+        <label className="orders-filter-field-label">
+          Долг от
+          <input
+            type="number"
+            placeholder="0"
+            value={filters.debtMin}
+            onChange={(e) => onChange({ ...filters, debtMin: e.target.value })}
+            className={FIELD_INPUT}
+          />
+        </label>
+
+        <label className="orders-filter-field-label">
+          Долг до
+          <input
+            type="number"
+            placeholder="0"
+            value={filters.debtMax}
+            onChange={(e) => onChange({ ...filters, debtMax: e.target.value })}
+            className={FIELD_INPUT}
+          />
+        </label>
+
+        <label className="orders-filter-field-label">
+          Оплата от
+          <input
+            type="number"
+            placeholder="0"
+            value={filters.paymentMin}
+            onChange={(e) => onChange({ ...filters, paymentMin: e.target.value })}
+            className={FIELD_INPUT}
+          />
+        </label>
+
+        <label className="orders-filter-field-label">
+          Оплата до
+          <input
+            type="number"
+            placeholder="0"
+            value={filters.paymentMax}
+            onChange={(e) => onChange({ ...filters, paymentMax: e.target.value })}
+            className={FIELD_INPUT}
+          />
+        </label>
+      </div>
+
+      {hasActive ? (
+        <div className="mt-3 flex justify-end border-t border-border/60 pt-2.5">
           <button
             type="button"
             onClick={() =>
@@ -192,13 +300,13 @@ export function BalanceDetailFilterPanel({
                 rowKind: "all"
               })
             }
-            className="flex items-center gap-1 text-[11px] text-red-600 hover:underline"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-destructive hover:bg-destructive/10"
           >
-            <X className="h-3 w-3" />
-            Сбросить
+            <X className="h-3.5 w-3.5" />
+            Сбросить фильтры
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

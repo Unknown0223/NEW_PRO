@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/lib/auth-store";
+import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import { api } from "@/lib/api";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
@@ -9,7 +11,6 @@ import { STALE } from "@/lib/query-stale";
 import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import { AgentFormModal } from "@/components/staff/agent-form-modal";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
-import { AgentRestrictionsDialog } from "@/components/staff/agent-restrictions-dialog";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
 import {
   AgentsBulkEditDialog,
@@ -31,11 +32,12 @@ import {
   StaffWorkspaceLayout,
   StaffWorkspaceTable
 } from "@/components/staff/staff-workspace-shell";
+import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
+import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import {
   StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
   StaffKomandaAppAccessToggle,
-  StaffKomandaBranchCell,
   StaffKomandaCodeCell,
   StaffKomandaCreatedAtCell,
   StaffKomandaDeviceCell,
@@ -45,12 +47,7 @@ import {
   StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
   StaffKomandaPinflCell,
-  StaffKomandaPositionCell,
-  StaffKomandaTagList,
-  StaffKomandaTerritoryCell,
-  StaffKomandaTradeDirectionCell,
-  StaffKomandaWarehouseCell,
-  StaffKomandaYesNoCell
+  StaffKomandaPositionCell
 } from "@/components/staff/staff-komanda-table-cells";
 
 export type AgentRow = {
@@ -100,13 +97,6 @@ export type AgentRow = {
   work_slot_code?: string | null;
 };
 
-type ProductCategoryRow = {
-  id: number;
-  name: string;
-  parent_id: number | null;
-  is_active: boolean;
-};
-
 type TenantProfile = {
   references: {
     branches?: Array<{ id: string; name: string; active?: boolean }>;
@@ -127,24 +117,19 @@ const COLS = [
   "Код",
   "Продукт",
   "Тип агента",
-  "Склад",
   "Версия APK",
   "ПИНФЛ",
-  "Территория",
   "Название устройства",
   "Последняя синхронизация",
-  "Тип цены",
-  "Направление торговли",
-  "Филиал",
   "Должность",
-  "Консигнация",
   "Дата создания",
   "Доступ к приложение",
   "Количество активных сессий",
   "Максимальное количество сессий"
 ] as const;
 
-const AGENT_TABLE_ID = "staff.agents.v2";
+/** v4: Smart-kod / work_slot ustuni olib tashlandi — faqat Рабочее место sahifasida */
+const AGENT_TABLE_ID = "staff.agents.v4";
 const AGENT_COLUMN_IDS = [
   "fio",
   "login",
@@ -152,17 +137,11 @@ const AGENT_COLUMN_IDS = [
   "code",
   "product",
   "agent_type",
-  "warehouse",
   "apk_version",
   "pinfl",
-  "territory",
   "device_name",
   "last_sync",
-  "price_types",
-  "trade_direction",
-  "branch",
   "position",
-  "consignment",
   "created_at",
   "app_access",
   "active_sessions",
@@ -187,8 +166,6 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.code ?? "";
     case "pinfl":
       return r.pinfl ?? "";
-    case "territory":
-      return r.territory ?? "";
     case "consignment":
       return r.consignment ? "Да" : "Нет";
     case "apk_version":
@@ -201,14 +178,6 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.phone ?? "";
     case "login":
       return r.login;
-    case "price_types":
-      return (r.price_types?.length ? r.price_types : r.price_type ? [r.price_type] : []).join(", ");
-    case "warehouse":
-      return r.warehouse ?? "";
-    case "trade_direction":
-      return r.trade_direction ?? "";
-    case "branch":
-      return r.branch ?? "";
     case "position":
       return r.position ?? "";
     case "created_at":
@@ -245,6 +214,8 @@ function buildAgentSearchHaystack(r: AgentRow): string {
 }
 
 export function AgentsWorkspace({ tenantSlug }: Props) {
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const actorUserId = decodeAccessTokenUserId(accessToken);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftBranch, setDraftBranch] = useState("");
@@ -265,12 +236,12 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     allowedPageSizes: DEFAULT_TABLE_PAGE_SIZES
   });
   const pageSize = tablePrefs.pageSize;
+  const staffImport = useStaffExcelImport(tenantSlug, "agent");
 
   const [addOpen, setAddOpen] = useState(false);
   const [createAgentError, setCreateAgentError] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<AgentRow | null>(null);
   const [sessionAgent, setSessionAgent] = useState<AgentRow | null>(null);
-  const [restrictAgent, setRestrictAgent] = useState<AgentRow | null>(null);
   const [configAgent, setConfigAgent] = useState<AgentRow | null>(null);
   const [deactivateAgent, setDeactivateAgent] = useState<AgentRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
@@ -278,7 +249,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "clear-sessions" | null>(
     null
   );
-  const [groupDialog, setGroupDialog] = useState<null | "restrict">(null);
+  const [groupDialog, setGroupDialog] = useState<null | "config">(null);
 
   const filterOptQ = useQuery({
     queryKey: ["agents-filter-options", tenantSlug],
@@ -315,23 +286,9 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
 
   const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "agents-workspace");
   const tradeDirectionFilterOptions = tradeDirectionsCatalog.labels;
-  const tradeDirectionRows = tradeDirectionsCatalog.rows;
-
-  const tradeDirectionsWithIdQ = useQuery({
-    queryKey: ["trade-directions", tenantSlug, "agents-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: Array<{ id: number; name: string; code: string | null; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/trade-directions?is_active=true`);
-      return data.data;
-    }
-  });
-  const tradeDirectionsWithId = tradeDirectionsWithIdQ.data ?? [];
 
   const listQ = useQuery({
-    queryKey: ["agent", tenantSlug, tab, appliedBranch, appliedTd, appliedPos],
+    queryKey: ["agent", tenantSlug, actorUserId, tab, appliedBranch, appliedTd, appliedPos],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
@@ -344,40 +301,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         `/api/${tenantSlug}/agents?${params.toString()}`
       );
       return data.data;
-    }
-  });
-
-  const warehousesQ = useQuery({
-    queryKey: ["warehouses", tenantSlug, "agents-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
-        `/api/${tenantSlug}/warehouses`
-      );
-      return data.data;
-    }
-  });
-
-  const priceTypesQ = useQuery({
-    queryKey: ["price-types", tenantSlug, "agents-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types?kind=sale`);
-      return data.data;
-    }
-  });
-
-  const categoriesQ = useQuery({
-    queryKey: ["product-categories", tenantSlug, "agents-ws"],
-    enabled: Boolean(tenantSlug) && (Boolean(restrictAgent) || groupDialog === "restrict"),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: ProductCategoryRow[] }>(
-        `/api/${tenantSlug}/product-categories`
-      );
-      return data.data.filter((c) => c.is_active);
     }
   });
 
@@ -432,27 +355,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
       const ids = Array.from(selectedIds);
       if (ids.length === 0) return;
 
-      if (fields.consignment !== undefined) {
-        await api.post(`/api/${tenantSlug}/agents/bulk`, {
-          action: "set_consignment",
-          agent_ids: ids,
-          consignment: fields.consignment
-        });
-      }
-      if (fields.close_schedule) {
-        await api.post(`/api/${tenantSlug}/agents/bulk`, {
-          action: "set_consignment_close",
-          agent_ids: ids,
-          close_day: fields.close_schedule.close_day,
-          close_hour: fields.close_schedule.close_hour,
-          close_minute: fields.close_schedule.close_minute
-        });
-      }
-
       const patch: Record<string, unknown> = {};
-      if (fields.warehouse_id !== undefined) patch.warehouse_id = fields.warehouse_id;
-      if (fields.trade_direction !== undefined) patch.trade_direction = fields.trade_direction;
-      if (fields.branch !== undefined) patch.branch = fields.branch;
       if (fields.position !== undefined) patch.position = fields.position;
       if (fields.agent_type !== undefined) patch.agent_type = fields.agent_type;
 
@@ -583,7 +486,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   }
 
   function renderAgentDataCell(colId: string, r: AgentRow) {
-    const priceList = r.price_types?.length ? r.price_types : r.price_type ? [r.price_type] : [];
     switch (colId) {
       case "fio":
         return (
@@ -607,28 +509,16 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         );
       case "agent_type":
         return <span className="text-slate-600">{r.agent_type ?? "—"}</span>;
-      case "warehouse":
-        return <StaffKomandaWarehouseCell warehouse={r.warehouse} />;
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
       case "pinfl":
         return <StaffKomandaPinflCell pinfl={r.pinfl} />;
-      case "territory":
-        return <StaffKomandaTerritoryCell territory={r.territory} />;
       case "device_name":
         return <StaffKomandaDeviceCell name={r.device_name} />;
       case "last_sync":
         return <StaffKomandaLastSyncCell at={r.last_sync_at} />;
-      case "price_types":
-        return <StaffKomandaTagList items={priceList} />;
-      case "trade_direction":
-        return <StaffKomandaTradeDirectionCell value={r.trade_direction} />;
-      case "branch":
-        return <StaffKomandaBranchCell branch={r.branch} />;
       case "position":
         return <StaffKomandaPositionCell position={r.position} />;
-      case "consignment":
-        return <StaffKomandaYesNoCell value={r.consignment} />;
       case "created_at":
         return <StaffKomandaCreatedAtCell at={r.created_at} />;
       case "app_access":
@@ -703,6 +593,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             exportData
           );
         }}
+        onImport={() => staffImport.setOpen(true)}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -732,6 +623,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         isLoading={listQ.isLoading}
         selectedIds={selectedIds}
         onToggleSelection={toggleAgentSelection}
+        onToggleAllOnPage={toggleAllAgentsOnPage}
         renderCell={(colId, row) =>
           renderAgentDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
@@ -770,7 +662,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             app_access: !allAccessOn
           })
         }
-        onRestrictions={() => setGroupDialog("restrict")}
+        onConfigurations={() => setGroupDialog("config")}
         onBulkEdit={() => setBulkEditOpen(true)}
         onToggleActive={() => setConfirmBulk(tab === "active" ? "deactivate" : "activate")}
         onClearSessions={() => setConfirmBulk("clear-sessions")}
@@ -781,9 +673,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         open={bulkEditOpen}
         count={selectedIds.size}
         loading={bulkEditMut.isPending}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionRows}
         positions={filterOptQ.data?.positions ?? []}
         onClose={() => setBulkEditOpen(false)}
         onSave={async (fields) => {
@@ -826,10 +715,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         open={addOpen}
         row={null}
         tenantSlug={tenantSlug}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionsWithId}
-        priceTypes={priceTypesQ.data ?? []}
         loading={createMut.isPending}
         submitError={createAgentError}
         onClose={() => {
@@ -840,23 +725,31 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onSubmitEdit={async () => {}}
       />
 
+      <StaffImportDialog
+        open={staffImport.open}
+        onOpenChange={staffImport.setOpen}
+        title={staffImport.dialogTitle}
+        busy={staffImport.busy}
+        result={staffImport.result}
+        onClearResult={staffImport.clearResult}
+        onDownloadTemplate={staffImport.downloadTemplate}
+        onConfirm={(file) => {
+          void staffImport.runImport(file).then(() => {
+            void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
+            void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
+          });
+        }}
+      />
+
       <AgentFormModal
         mode="edit"
         open={editRow != null}
         row={editRow}
         tenantSlug={tenantSlug}
-        warehouses={warehousesQ.data ?? []}
-        branchOptions={branchOptions}
-        tradeDirections={tradeDirectionsWithId}
-        priceTypes={priceTypesQ.data ?? []}
         loading={patchMut.isPending}
         onClose={() => setEditRow(null)}
         onSubmitCreate={() => {}}
         onSubmitEdit={(id, body) => patchMut.mutateAsync({ id, body })}
-        onOpenRestrictions={(r) => {
-          setEditRow(null);
-          setRestrictAgent(r);
-        }}
       />
 
       <StaffActiveSessionsDialog
@@ -886,47 +779,26 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <AgentRestrictionsDialog
-        open={restrictAgent != null}
-        agent={restrictAgent}
-        onClose={() => setRestrictAgent(null)}
-        tenantSlug={tenantSlug}
-        categories={categoriesQ.data ?? []}
-        categoriesLoading={categoriesQ.isLoading}
-        priceTypes={priceTypesQ.data ?? []}
-        onSave={async (ent) => {
-          if (!restrictAgent) return;
-          const prev = restrictAgent.agent_entitlements ?? {};
-          await patchMut.mutateAsync({
-            id: restrictAgent.id,
-            body: {
-              agent_entitlements: {
-                ...prev,
-                price_types: ent.price_types,
-                product_rules: ent.product_rules
-              }
-            }
-          });
-        }}
-      />
-
-      <AgentRestrictionsDialog
-        open={groupDialog === "restrict"}
+      <AgentConfigurationsDialog
+        open={groupDialog === "config"}
         agent={null}
         bulkMode
-        bulkCount={selectedIds.size}
-        bulkLabel={`Выбрано агентов: ${selectedIds.size}`}
+        bulkSummary={`Выбрано агентов: ${selectedIds.size}`}
+        saving={bulkBusy}
+        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
         onClose={() => setGroupDialog(null)}
-        tenantSlug={tenantSlug}
-        categories={categoriesQ.data ?? []}
-        categoriesLoading={categoriesQ.isLoading}
-        priceTypes={priceTypesQ.data ?? []}
         onSave={async (ent) => {
+          const mc = (ent as { mobile_config?: unknown }).mobile_config;
+          if (mc == null || typeof mc !== "object") {
+            throw new Error("BAD_MOBILE_CONFIG_PATCH");
+          }
           await bulkMut.mutateAsync({
-            action: "set_agent_entitlements",
+            action: "patch_mobile_config",
             agent_ids: Array.from(selectedIds),
-            agent_entitlements: ent
+            mobile_config: mc
           });
+          setGroupDialog(null);
+          setSelectedIds(new Set());
         }}
       />
 

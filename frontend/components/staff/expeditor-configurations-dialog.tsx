@@ -28,11 +28,14 @@ import {
   type AgentMobileConfigDraft
 } from "@/components/staff/agent-mobile-config-types";
 import type { AgentConfigPaymentMethodEntry } from "@/components/staff/agent-configurations-dialog";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { Trash2 } from "lucide-react";
 
 export type ExpeditorConfigDialogRow = {
   id: number;
   fio: string;
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
   agent_entitlements: Record<string, unknown> & {
     price_types?: string[];
     product_rules?: unknown;
@@ -139,7 +142,6 @@ type Props = {
   onSave: (agentEntitlements: ExpeditorConfigDialogRow["agent_entitlements"]) => Promise<void>;
   saving?: boolean;
   paymentMethodEntries?: AgentConfigPaymentMethodEntry[];
-  tradeDirections?: Array<{ id: number; name: string; code: string | null }>;
 };
 
 export function ExpeditorConfigurationsDialog({
@@ -148,18 +150,15 @@ export function ExpeditorConfigurationsDialog({
   onClose,
   onSave,
   saving = false,
-  paymentMethodEntries,
-  tradeDirections = []
+  paymentMethodEntries
 }: Props) {
   const [draft, setDraft] = useState<AgentMobileConfigDraft>(() => emptyMobileDraft());
   const [paySearch, setPaySearch] = useState("");
-  const [tdSearch, setTdSearch] = useState("");
 
   useEffect(() => {
     if (!open || !expeditor) return;
     setDraft(cloneMobileFromRow(expeditor.agent_entitlements));
     setPaySearch("");
-    setTdSearch("");
   }, [open, expeditor]);
 
   const payItemsAll = useMemo(
@@ -177,30 +176,6 @@ export function ExpeditorConfigurationsDialog({
     [draft.expeditor?.allowed_payment_method_ids]
   );
 
-  const tdItemsAll = useMemo<SearchableMultiSelectItem<number>[]>(
-    () =>
-      tradeDirections.map((d) => ({
-        id: d.id,
-        title: d.name,
-        subtitle: d.code?.trim() || null
-      })),
-    [tradeDirections]
-  );
-  const tdItems = useMemo(() => {
-    const t = tdSearch.trim().toLowerCase();
-    if (!t) return tdItemsAll;
-    return tdItemsAll.filter(
-      (i) =>
-        i.title.toLowerCase().includes(t) ||
-        (i.subtitle != null && String(i.subtitle).toLowerCase().includes(t))
-    );
-  }, [tdItemsAll, tdSearch]);
-
-  const tdSelectedSet = useMemo(
-    () => new Set(draft.expeditor?.allowed_trade_direction_ids ?? []),
-    [draft.expeditor?.allowed_trade_direction_ids]
-  );
-
   if (!expeditor) return null;
 
   const handleReset = () => {
@@ -209,9 +184,12 @@ export function ExpeditorConfigurationsDialog({
 
   const handleSave = async () => {
     const prev = expeditor.agent_entitlements ?? {};
+    // Workplace trade directions live on the slot — do not keep editing them here.
+    const expeditorBlock = { ...(draft.expeditor ?? {}) };
+    delete (expeditorBlock as { allowed_trade_direction_ids?: unknown }).allowed_trade_direction_ids;
     await onSave({
       ...prev,
-      mobile_config: draft
+      mobile_config: { ...draft, expeditor: expeditorBlock }
     });
   };
 
@@ -229,6 +207,15 @@ export function ExpeditorConfigurationsDialog({
           <DialogTitle className="text-base">Конфигурации</DialogTitle>
           <p className="text-xs text-muted-foreground">
             {expeditor.fio.trim() || "Экспедитор"} — мобильное приложение
+          </p>
+          <WorkplaceMovedNotice
+            className="mt-2"
+            variant="expeditor"
+            workSlotId={expeditor.work_slot_id}
+            openConfig
+          />
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Здесь только настройки мобильного приложения (заказ, GPS, оплата, фото).
           </p>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-[13px]">
@@ -366,9 +353,10 @@ export function ExpeditorConfigurationsDialog({
                   label="Отслеживать"
                 />
               </div>
-              <div className="grid max-w-xl gap-3 sm:grid-cols-3">
+              <div className="space-y-4 max-w-md">
                 <ConfigTextField
-                  label="Интервал (сек.)"
+                  label="Интервал отправки координат (сек)"
+                  hint="Как часто приложение отправляет GPS-точку"
                   type="number"
                   value={draft.gps?.tracking_interval_sec ?? ""}
                   onChange={(e) =>
@@ -381,7 +369,8 @@ export function ExpeditorConfigurationsDialog({
                   }
                 />
                 <ConfigTextField
-                  label="Мин. смещение (м)"
+                  label="Минимальное смещение (м)"
+                  hint="Не отправлять точку при меньшем перемещении"
                   type="number"
                   value={draft.gps?.min_distance_m ?? ""}
                   onChange={(e) =>
@@ -394,7 +383,8 @@ export function ExpeditorConfigurationsDialog({
                   }
                 />
                 <ConfigTextField
-                  label="Точность данных (м)"
+                  label="Максимальная погрешность (м)"
+                  hint="Точки с большей погрешностью GPS отбрасываются"
                   type="number"
                   value={draft.gps?.max_accuracy_m ?? ""}
                   onChange={(e) =>
@@ -470,47 +460,19 @@ export function ExpeditorConfigurationsDialog({
                     )}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border/70 bg-muted/15 shadow-inner">
-                  <div className="border-b border-border/60 bg-muted/25 px-3 py-2">
-                    <span className="text-xs font-medium text-foreground/90">Направление торговли</span>
-                  </div>
-                  <div className="p-3">
-                    {tdItemsAll.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Справочник направлений пуст.</p>
-                    ) : (
-                      <SearchableMultiSelectPanel<number>
-                        label="Направление торговли"
-                        hideOuterLabel
-                        selectAllLabel="Выбрать все"
-                        clearVisibleLabel="Снять на экране"
-                        triggerPlaceholder="Выберите направления"
-                        searchPlaceholder="Поиск"
-                        search={tdSearch}
-                        onSearchChange={setTdSearch}
-                        items={tdItems}
-                        selected={tdSelectedSet}
-                        onSelectedChange={(updater) => {
-                          setDraft((d) => {
-                            const prev = new Set(d.expeditor?.allowed_trade_direction_ids ?? []);
-                            const next = typeof updater === "function" ? updater(prev) : updater;
-                            return setDraftPath(d, "expeditor", (x) => ({
-                              ...x,
-                              allowed_trade_direction_ids: Array.from(next)
-                            }));
-                          });
-                        }}
-                        emptyMessage="Нет строк по фильтру"
-                        triggerClassName="h-10 border-border/80 bg-background text-left text-[13px]"
-                        formatTriggerSummary={(sel) => {
-                          if (sel.size === 0) return "Выберите направления";
-                          return Array.from(sel)
-                            .map((id) => tdItemsAll.find((i) => i.id === id)?.title ?? String(id))
-                            .join(", ");
-                        }}
-                        minPopoverWidth={360}
-                      />
-                    )}
-                  </div>
+                <div className="rounded-lg border border-teal-100 bg-teal-50/60 p-3 text-xs text-teal-900">
+                  Направления торговли, склады и условия автопривязки — в{" "}
+                  <a
+                    href={
+                      expeditor.work_slot_id != null
+                        ? `/work-slots/${expeditor.work_slot_id}?openConfig=1`
+                        : "/work-slots"
+                    }
+                    className="font-semibold underline"
+                  >
+                    Рабочее место
+                  </a>
+                  {expeditor.work_slot_code ? ` (${expeditor.work_slot_code})` : ""}.
                 </div>
                 <div className="space-y-2">
                   <span className="text-[13px] font-medium text-foreground">

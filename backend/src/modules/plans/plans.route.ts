@@ -26,9 +26,19 @@ import {
   bulkSaveTargetsBodySchema,
   confirmPlansBodySchema,
   patchPlanTargetBodySchema,
-  planningCenterQuerySchema
+  planningCenterQuerySchema,
+  plansSetupImportBodySchema
 } from "./plans.setup.schema";
+import { applyPlansSetupImport } from "./plans.setup.import-excel";
 import { PLAN_APPROVER_ROLES, PLAN_SETTER_ROLES } from "./plans.setup.roles";
+import {
+  dailyKpiDayMatrixQuerySchema,
+  dailyKpiDetailQuerySchema,
+  dailyKpiOverviewQuerySchema
+} from "./plans.daily-kpi.schema";
+import { getDailyKpiOverview } from "./plans.daily-kpi.service";
+import { getDailyKpiDayMatrix } from "./plans.daily-kpi.day-matrix";
+import { getDailyKpiAgentDetail } from "./plans.daily-kpi.detail";
 
 const manageRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES] as const;
 const readRoles = [
@@ -125,6 +135,61 @@ export async function registerPlansRoutes(app: FastifyInstance) {
     }
   });
 
+  // ── Kunlik KPI planlar ──
+  // `?day=YYYY-MM-DD` → agent × KPI jadvali; aks holda eski overview.
+
+  app.get("/api/:slug/plans/daily-kpi", { preHandler: preRead }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const query = request.query as Record<string, unknown>;
+    const dayRaw = Array.isArray(query.day) ? query.day[0] : query.day;
+    const hasDay = typeof dayRaw === "string" && dayRaw.trim().length > 0;
+
+    if (hasDay) {
+      const q = dailyKpiDayMatrixQuerySchema.safeParse({
+        day: dayRaw,
+        direction_id: Array.isArray(query.direction_id) ? query.direction_id[0] : query.direction_id
+      });
+      if (!q.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
+      }
+      try {
+        const data = await getDailyKpiDayMatrix(request.tenant!.id, q.data);
+        return reply.send({ data });
+      } catch (e) {
+        return mapSetupError(reply, request, e);
+      }
+    }
+
+    const q = dailyKpiOverviewQuerySchema.safeParse(query);
+    if (!q.success) {
+      return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
+    }
+    try {
+      const data = await getDailyKpiOverview(request.tenant!.id, q.data);
+      return reply.send({ data });
+    } catch (e) {
+      return mapSetupError(reply, request, e);
+    }
+  });
+
+  app.get("/api/:slug/plans/daily-kpi/:agentId", { preHandler: preRead }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const agentId = Number((request.params as { agentId: string }).agentId);
+    if (!Number.isFinite(agentId) || agentId <= 0) {
+      return sendApiError(reply, request, 400, "ValidationError", "BAD_ID");
+    }
+    const q = dailyKpiDetailQuerySchema.safeParse(request.query);
+    if (!q.success) {
+      return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(q.error));
+    }
+    try {
+      const data = await getDailyKpiAgentDetail(request.tenant!.id, agentId, q.data);
+      return reply.send({ data });
+    } catch (e) {
+      return mapSetupError(reply, request, e);
+    }
+  });
+
   // ── Установка планов (KPI reja markazi): confirm → approve/return ──
 
   app.get("/api/:slug/plans/setup", { preHandler: preRead }, async (request, reply) => {
@@ -172,6 +237,25 @@ export async function registerPlansRoutes(app: FastifyInstance) {
     }
     try {
       const data = await bulkSavePlanTargets(
+        request.tenant!.id,
+        parsed.data,
+        actorUserIdOrNull(request)
+      );
+      return reply.send({ data });
+    } catch (e) {
+      return mapSetupError(reply, request, e);
+    }
+  });
+
+  /** Excel / virtual preview — smart kod bo‘yicha reja qiymatlarini upsert. */
+  app.post("/api/:slug/plans/setup/import", { preHandler: preWrite }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const parsed = plansSetupImportBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+    }
+    try {
+      const data = await applyPlansSetupImport(
         request.tenant!.id,
         parsed.data,
         actorUserIdOrNull(request)

@@ -20,6 +20,9 @@ export const CompositionSummaryStrip = memo(function CompositionSummaryStrip({
     isPolkiFree,
     polkiEstimatedSum,
     polkiAutoBonusDebtAmount,
+    polkiBonusCashQty,
+    polkiBonusGoodsQty,
+    polkiAutoBonusExplicitByPairKey,
     categoryFilterActive
   } = vm;
 
@@ -27,6 +30,27 @@ export const CompositionSummaryStrip = memo(function CompositionSummaryStrip({
 
   const available = polkiRowsAll.length;
   const visible = polkiDisplayRows.length;
+
+  let bonusGoodsTotal = 0;
+  let bonusCashUnits = 0;
+  let bonusCashSum = 0;
+  for (const r of polkiRowsAll) {
+    const pk = r.pair_key;
+    const ex = polkiAutoBonusExplicitByPairKey?.[pk];
+    const autoB = Math.max(0, Math.floor(ex?.bonus ?? 0));
+    if (autoB <= 0 && (polkiBonusCashQty?.[pk] ?? 0) <= 0 && (polkiBonusGoodsQty?.[pk] ?? 0) <= 0) {
+      continue;
+    }
+    const cashU = Math.min(Math.max(0, Math.floor(polkiBonusCashQty?.[pk] ?? 0)), autoB || 9999);
+    const goodsU =
+      polkiBonusGoodsQty?.[pk] != null
+        ? Math.min(Math.max(0, Math.floor(polkiBonusGoodsQty[pk]!)), Math.max(0, autoB - cashU))
+        : Math.max(0, autoB - cashU);
+    bonusGoodsTotal += goodsU;
+    bonusCashUnits += cashU;
+    const unit = r.unit_price_bonus > 0 ? r.unit_price_bonus : r.unit_price_paid;
+    bonusCashSum += cashU * unit;
+  }
 
   return (
     <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 text-xs text-slate-600 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -53,6 +77,23 @@ export const CompositionSummaryStrip = memo(function CompositionSummaryStrip({
               {" · введено всего: "}
               <span className="font-semibold text-slate-700">
                 {formatNumberGrouped(polkiEnteredTotalQtySum, { maxFractionDigits: 0 })} шт
+              </span>
+            </>
+          ) : null}
+          {bonusGoodsTotal > 0 ? (
+            <>
+              {" · бонус товаром: "}
+              <span className="font-semibold text-teal-800">
+                {formatNumberGrouped(bonusGoodsTotal, { maxFractionDigits: 0 })} шт
+              </span>
+            </>
+          ) : null}
+          {bonusCashUnits > 0 ? (
+            <>
+              {" · бонус оплатой: "}
+              <span className="font-semibold text-sky-800">
+                {formatNumberGrouped(bonusCashUnits, { maxFractionDigits: 0 })} шт ·{" "}
+                {formatNumberGrouped(bonusCashSum, { maxFractionDigits: 0 })} сум
               </span>
             </>
           ) : null}

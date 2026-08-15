@@ -8,11 +8,13 @@ import '../../../core/auth/app_lock.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/camera/photo_service.dart' show encodeClientPhotoBase64, photoServiceProvider;
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/ui/agent_ui.dart';
 
-/// Standart foto kategoriyalari (spravochnik bo‘sh bo‘lsa).
+/// Standart foto sabablari (veb spravochnik bo‘sh bo‘lsa).
+/// Asosiy ro‘yxat: Sozlamalar → Причины и категории → Причины фотоотчёта.
 const defaultPhotoReportCategories = [
   'Ёпик докон расми',
   'Буш полка',
@@ -199,7 +201,7 @@ Future<String?> pickPhotoReportCategory(BuildContext context, WidgetRef ref) asy
                     children: [
                       const Expanded(
                         child: Text(
-                          'Выберите категорию',
+                          S.selectPhotoReason,
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -237,6 +239,17 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   int? orderId,
   String? category,
 }) async {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+    if (context.mounted) {
+      showAgentToast(
+        context,
+        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        accentColor: AppColors.warning,
+      );
+    }
+    return null;
+  }
+
   final caption = category ?? await pickPhotoReportCategory(context, ref);
   if (caption == null || !context.mounted) return null;
 
@@ -306,15 +319,28 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Foto oflayn saqlandi — internet paydo bo‘lganda yuboriladi'
-            : 'Internet yo‘q — fotoni saqlab bo‘lmadi',
+            ? 'Foto oflayn saqlandi — internet paydo bo‘lganda (5 martagacha) yuboriladi'
+            : 'Sync vaqti tugagan yoki fotoni saqlab bo‘lmadi',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
     }
     return null;
   } catch (e) {
+    // Server xatosi — navbatga qo‘yib online da qayta urinish.
+    final queued = await PhotoReportQueue.enqueue(
+      clientId: clientId,
+      imagePath: photo.filePath,
+      caption: caption,
+      orderId: orderId,
+    );
     if (context.mounted) {
-      showAgentToast(context, 'Foto yuklanmadi: $e');
+      showAgentToast(
+        context,
+        queued
+            ? 'Foto saqlandi — online bo‘lganda qayta yuboriladi'
+            : 'Foto yuklanmadi: $e',
+        accentColor: queued ? AppColors.warning : AppColors.error,
+      );
     }
     return null;
   }
@@ -327,6 +353,17 @@ Future<ClientPhotoReport?> replacePhotoReport({
   required int clientId,
   required ClientPhotoReport existing,
 }) async {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+    if (context.mounted) {
+      showAgentToast(
+        context,
+        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        accentColor: AppColors.warning,
+      );
+    }
+    return null;
+  }
+
   final caption = (existing.caption ?? '').trim();
   if (caption.isEmpty) {
     if (context.mounted) {

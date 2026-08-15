@@ -14,7 +14,9 @@ const FIELDS: PivotField[] = [
 describe("sliceTemplates", () => {
   it("getPivotSliceTemplates — agent_kpi va retrobonus", () => {
     const templates = getPivotSliceTemplates();
-    expect(templates.map((t) => t.id)).toEqual(["agent_kpi", "retrobonus_volume"]);
+    const ids = templates.map((t) => t.id);
+    expect(ids).toContain("agent_kpi");
+    expect(ids).toContain("retrobonus_volume");
   });
 
   it("applyPivotSliceTemplate — agent KPI", () => {

@@ -275,6 +275,8 @@ model Client {
   client_balances                ClientBalance[]
   client_opening_balance_entries ClientOpeningBalanceEntry[]
   payments                       Payment[]
+  bank_transfers_matched         BankTransferInbox[] @relation("BankTransferMatchedClient")
+  bank_transfers_assigned        BankTransferInbox[] @relation("BankTransferAssignedClient")
   tag_links                      ClientTagLink[]
   warehouse                      Warehouse?              @relation("ClientWarehouse", fields: [warehouse_id], references: [id], onDelete: SetNull)
   cash_desk                      CashDesk?               @relation("ClientCashDesk", fields: [cash_desk_id], references: [id], onDelete: SetNull)
@@ -471,7 +473,7 @@ model ClientPhotoReport {
   @@map("client_photo_reports")
 }
 
-/// Mijozga 1..10 gacha agent slotlari (tashrif sanasi + ekspeditor telefoni).
+/// Mijozga agent «команда» slotlari (soni cheklanmagan; unique: client_id+slot).
 
 model ClientAgentAssignment {
   id                Int       @id @default(autoincrement())

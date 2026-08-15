@@ -15,6 +15,7 @@ import { bonusRuleInclude } from "./bonus-rules.types";
 import {
   fetchBonusRuleFull,
   mapBonusRuleFull,
+  normalizeBonusConsignmentMode,
   normalizeScopeBranchCodes,
   normalizeScopePositiveIds,
   parseOptionalDate
@@ -285,7 +286,12 @@ export async function updateBonusRule(
           scope_agent_user_ids: normalizeScopePositiveIds(primary.scope_agent_user_ids ?? []),
           scope_trade_direction_ids: normalizeScopePositiveIds(
             primary.scope_trade_direction_ids ?? []
-          )
+          ),
+          ...(input.consignment_mode !== undefined
+            ? {
+                consignment_mode: normalizeBonusConsignmentMode(input.consignment_mode)
+              }
+            : {})
         }
       });
     });
@@ -370,6 +376,10 @@ export async function updateBonusRule(
       input.scope_trade_direction_ids !== undefined
         ? normalizeScopePositiveIds(input.scope_trade_direction_ids)
         : normalizeScopePositiveIds(existing.scope_trade_direction_ids ?? []),
+    consignment_mode:
+      input.consignment_mode === "yes" || input.consignment_mode === "no" || input.consignment_mode === "all"
+        ? input.consignment_mode
+        : normalizeBonusConsignmentMode(existing.consignment_mode),
     sum_threshold_scope:
       type !== "sum" && type !== "qty"
         ? "order"
@@ -493,6 +503,7 @@ export async function updateBonusRule(
   if (input.scope_trade_direction_ids !== undefined) {
     data.scope_trade_direction_ids = merged.scope_trade_direction_ids;
   }
+  if (input.consignment_mode !== undefined) data.consignment_mode = merged.consignment_mode;
 
   await prisma.$transaction(async (tx) => {
     if (input.type !== undefined && type !== "qty") {

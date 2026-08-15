@@ -1,3 +1,4 @@
+import 'price_type_labels.dart';
 import 'territory_cascade.dart';
 
 /// Tenant spravochniklari (agent-config `tenant_references`).
@@ -38,6 +39,8 @@ class TenantReferences {
   final List<RefEntry> refusalReasonEntries;
   final List<RefEntry> photoCategoryEntries;
   final List<PaymentMethodRef> paymentMethods;
+  /// create-context / agent-config `price_type_options` — id → label.
+  final Map<String, String> priceTypeLabels;
   final List<String> clientCategories;
   final List<String> clientTypeCodes;
   final List<String> salesChannels;
@@ -51,6 +54,7 @@ class TenantReferences {
     this.refusalReasonEntries = const [],
     this.photoCategoryEntries = const [],
     this.paymentMethods = const [],
+    this.priceTypeLabels = const {},
     this.clientCategories = const [],
     this.clientTypeCodes = const [],
     this.salesChannels = const [],
@@ -79,6 +83,9 @@ class TenantReferences {
                   'payment_type': e.paymentType,
                   'code': e.code,
                 },)
+            .toList(),
+        'price_type_options': priceTypeLabels.entries
+            .map((e) => {'id': e.key, 'label': e.value})
             .toList(),
         'client_categories': clientCategories,
         'client_type_codes': clientTypeCodes,
@@ -110,6 +117,9 @@ class TenantReferences {
             .where((e) => e.id.isNotEmpty)
             .toList() ??
         [];
+    final priceTypeLabels = priceTypeLabelsFromOptions(
+      j['price_type_options'] as List? ?? j['price_type_entries'] as List?,
+    );
     List<String> strList(dynamic raw) => (raw as List?)
             ?.map((e) => e.toString().trim())
             .where((s) => s.isNotEmpty)
@@ -120,6 +130,7 @@ class TenantReferences {
       refusalReasonEntries: refusal,
       photoCategoryEntries: photoCats,
       paymentMethods: methods,
+      priceTypeLabels: priceTypeLabels,
       clientCategories: strList(j['client_categories']),
       clientTypeCodes: strList(j['client_type_codes']),
       salesChannels: strList(j['sales_channels']),

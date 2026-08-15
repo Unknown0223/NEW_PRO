@@ -21,8 +21,10 @@ declare global {
       balloon?: { open: () => void };
     };
     Clusterer?: new (opts?: Record<string, unknown>) => {
-      add: (items: unknown[]) => void;
+      add: (items: unknown | unknown[]) => void;
       removeAll: () => void;
+      events: { add: (name: string, fn: (e?: unknown) => void) => void };
+      getGeoObjects?: () => unknown[];
     };
     Polygon?: new (
       coords: Array<Array<[number, number]>>,
@@ -34,6 +36,29 @@ declare global {
       props?: Record<string, unknown>,
       opts?: Record<string, unknown>
     ) => unknown;
+    multiRouter?: {
+      MultiRoute: new (
+        model: {
+          referencePoints: Array<string | [number, number]>;
+          params?: Record<string, unknown>;
+        },
+        options?: Record<string, unknown>
+      ) => {
+        model: {
+          events: { add: (name: string, fn: () => void) => void };
+        };
+        options: { set: (opts: Record<string, unknown>) => void };
+      };
+    };
+    route?: (
+      points: Array<string | [number, number]>,
+      opts?: Record<string, unknown>
+    ) => Promise<{
+      getPaths: () => {
+        get: (i: number) => { options: { set: (o: Record<string, unknown>) => void } };
+        options: { set: (o: Record<string, unknown>) => void };
+      };
+    }>;
     geocode?: (
       q: string,
       opts?: Record<string, unknown>

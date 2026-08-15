@@ -55,19 +55,29 @@ export async function snapshotUserAccessGrants(
   };
 }
 
+/** Shaxsiy `user_permissions` tozalanadi; rol standarti (`user_roles` → role key) qaytariladi. */
+export async function applyAccessResetToRoleDefaultTx(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  userId: number,
+  roleKey: string
+): Promise<void> {
+  const role = await tx.role.findUnique({
+    where: { tenant_id_key: { tenant_id: tenantId, key: roleKey } }
+  });
+  await tx.userPermission.deleteMany({ where: { user_id: userId } });
+  await tx.userRole.deleteMany({ where: { user_id: userId } });
+  if (role) {
+    await tx.userRole.create({ data: { user_id: userId, role_id: role.id } });
+  }
+}
+
 export async function applyAccessResetToRoleDefault(
   tenantId: number,
   userId: number,
   roleKey: string
 ): Promise<void> {
-  const role = await prisma.role.findUnique({
-    where: { tenant_id_key: { tenant_id: tenantId, key: roleKey } }
-  });
-  await prisma.userPermission.deleteMany({ where: { user_id: userId } });
-  await prisma.userRole.deleteMany({ where: { user_id: userId } });
-  if (role) {
-    await prisma.userRole.create({ data: { user_id: userId, role_id: role.id } });
-  }
+  await prisma.$transaction((tx) => applyAccessResetToRoleDefaultTx(tx, tenantId, userId, roleKey));
 }
 
 export async function restoreAccessFromResetSnapshot(

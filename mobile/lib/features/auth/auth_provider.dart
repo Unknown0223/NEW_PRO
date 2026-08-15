@@ -35,7 +35,20 @@ import '../../core/l10n/app_strings_ru.dart';
 import '../../core/update/app_update_info.dart';
 import '../../core/update/app_update_installer.dart';
 
-enum AuthStatus { initial, loading, authenticated, pinSetup, bootstrapping, syncComplete, ready, locked, error }
+enum AuthStatus {
+  /// Cold start — sessiya/PIN tekshirilmoqda (splash).
+  initial,
+  /// Akkaunt yo‘q yoki chiqilgan — login formasi.
+  unauthenticated,
+  loading,
+  authenticated,
+  pinSetup,
+  bootstrapping,
+  syncComplete,
+  ready,
+  locked,
+  error,
+}
 
 class BootstrapStep {
   final int idx;
@@ -138,7 +151,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._authApi, this._mobileApi, this._permsApi, this._session, this._ref)
     : super(const AuthState()) {
     _ref.read(sessionExpiredBridgeProvider).register(sessionExpired);
-    _ref.read(appAccessDeniedBridgeProvider).register(appAccessRevoked);
+    _ref.read(appAccessDeniedBridgeProvider).register(
+      ({bool forceLogout = false}) => appAccessRevoked(),
+    );
+    // Birinchi kadrdan oldin sessiya tekshiruvini boshlash — login miltillamasin.
+    Future.microtask(checkSession);
   }
 
   void _setError(UserFacingError info, {AuthStatus status = AuthStatus.error}) {
@@ -251,27 +268,61 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return true;
   }
 
-  /// Mahalliy qulfdan tez ochish — API chaqiruvlari fonda.
+  /// Mahalliy qulfdan tez ochish — UI darhol ochiladi, API fonda.
   Future<void> _finishLocalUnlock() async {
     if (_session.state.bootstrapped && _session.state.user != null) {
-      await restoreTokens(_ref);
-      _resumeAfterRestore();
+      // PIN/biometric faqat telefonda — server kutmasdan darhol ready.
       state = const AuthState(status: AuthStatus.ready);
-      unawaited(_backgroundAfterUnlock());
+      unawaited(_afterInstantLocalUnlock());
       return;
     }
     state = const AuthState(status: AuthStatus.loading);
     await _unlockSessionAfterLocalAuth();
   }
 
+  Future<void> _afterInstantLocalUnlock() async {
+    try {
+      await restoreTokens(_ref);
+      _resumeAfterRestore();
+      await _backgroundAfterUnlock();
+      // Sinхron oynasi ochiq bo‘lsa — ma’lumotlarni fonda yangilaymiz (UI allaqachon ochiq).
+      final sync = _session.state.mobileConfig?.sync ?? const SyncConfig();
+      if (evaluateSyncPolicy(sync).allowed) {
+        unawaited(_softPullAfterUnlock());
+      }
+    } catch (_) {
+      // Sessiya allaqachon ochiq; fon xatolari PIN ekraniga qaytarmaydi.
+    }
+  }
+
+  Future<void> _softPullAfterUnlock() async {
+    try {
+      final role = _session.state.user?.role ?? 'agent';
+      if (role == 'expeditor') {
+        await _resyncExpeditor();
+        return;
+      }
+      if (role == 'supervisor') {
+        await _resyncSupervisor();
+        return;
+      }
+      if (BootstrapSyncPlan.isCashDeskRole(role)) {
+        return;
+      }
+      await resync();
+    } catch (_) {}
+  }
+
   Future<void> _backgroundAfterUnlock() async {
     try {
       await ensureAuthTokens(_ref);
+      // Access muddati tugagan bo‘lsa — parallel so‘rovlardan oldin silent refresh.
+      await refreshAccessToken(_ref);
       final storage = _ref.read(secureStorageProvider);
       final refresh = await storage.read(key: 'refresh_token');
       if (refresh == null || refresh.isEmpty) return;
 
-      final me = await _tryFetchMe(refresh);
+      final me = await _tryFetchMe();
       if (me?.appAccess == false) {
         await _wipeLocalAuth();
         state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
@@ -326,17 +377,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final refresh = await storage.read(key: 'refresh_token');
       if (refresh == null || refresh.isEmpty) {
         await _wipeLocalAuth();
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
 
-      var me = await _tryFetchMe(refresh);
+      await refreshAccessToken(_ref);
+      var me = await _tryFetchMe();
       if (me == null) {
         if (_session.state.bootstrapped && _session.state.user != null) {
           me = _session.state.user!;
         } else {
+          // Faqat refresh aniq o‘lik bo‘lsa — login. Oflayn/timeout — tokenlar saqlanadi.
+          final outcome = await refreshAccessToken(_ref);
+          if (outcome != RefreshOutcome.definitiveFailure) {
+            state = const AuthState(
+              status: AuthStatus.error,
+              error: 'Сервер временно недоступен. Повторите позже.',
+            );
+            return;
+          }
           await _wipeLocalAuth();
-          state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
+          state = const AuthState(
+            status: AuthStatus.error,
+            error: 'Sessiya tugadi. Qayta kiring.',
+          );
           return;
         }
       }
@@ -384,6 +448,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
       state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+    } on UserNotOnSlotException {
+      await _wipeLocalAuth();
+      state = const AuthState(
+        status: AuthStatus.error,
+        error: 'Не назначен на рабочее место',
+      );
     } on NetworkException {
       if (_session.state.bootstrapped) {
         _resumeAfterRestore();
@@ -397,28 +467,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Avval saqlangan access token; faqat 401 da refresh (biometrik ma’lumot serverga ketmaydi).
-  Future<AuthUser?> _tryFetchMe(String refreshToken) async {
+  /// `/me` + mutex refresh. Tarmoq/timeout — mahalliy userni qaytaradi (chiqarmaydi).
+  Future<AuthUser?> _tryFetchMe() async {
     try {
+      await ensureAuthTokens(_ref);
       return await _authApi.me();
     } on UnauthorizedException {
-      try {
-        final tokens = await _authApi.refresh(refreshToken);
-        await saveTokens(
-          _ref,
-          tokens.accessToken,
-          tokens.refreshToken.isNotEmpty ? tokens.refreshToken : refreshToken,
-        );
-        return await _authApi.me();
-      } on UnauthorizedException {
-        return null;
+      final outcome = await refreshAccessToken(_ref);
+      if (outcome == RefreshOutcome.success) {
+        try {
+          return await _authApi.me();
+        } on UnauthorizedException {
+          return null;
+        } on NetworkException {
+          return _session.state.user;
+        }
       }
+      if (outcome == RefreshOutcome.transientFailure) {
+        return _session.state.user;
+      }
+      return null;
     } on NetworkException {
       return _session.state.user;
     }
   }
 
   Future<void> checkSession() async {
-    state = const AuthState(status: AuthStatus.loading);
+    // Status `initial` qoladi → splash (login miltillamasin).
     try {
       await _ref.read(appPinStoreProvider).warmCache();
       final hasTokens = await restoreTokens(_ref);
@@ -432,24 +507,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
             await _wipeLocalAuth();
           }
         }
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
       final restored = await _session.restore();
       if (!restored) {
         await clearAuthTokens(_ref);
-        state = const AuthState();
+        state = const AuthState(status: AuthStatus.unauthenticated);
         return;
       }
+
+      // Akkaunt bor — login o‘rniga darhol PIN (yoki pin setup).
+      if (await _canAppLock()) {
+        await _lockForApp();
+        return;
+      }
+      if (await _needsPinSetup()) {
+        state = const AuthState(status: AuthStatus.pinSetup);
+        return;
+      }
+
       if (_session.state.bootstrapped) {
-        if (await _canAppLock()) {
-          await _lockForApp();
-          return;
-        }
-        if (await _needsPinSetup()) {
-          state = const AuthState(status: AuthStatus.pinSetup);
-          return;
-        }
         state = const AuthState(status: AuthStatus.loading);
         try {
           final me = await _authApi.me();
@@ -467,6 +545,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _wipeLocalAuth();
           state = AuthState(status: AuthStatus.error, error: e.message);
           return;
+        } on UserNotOnSlotException catch (e) {
+          await _wipeLocalAuth();
+          state = AuthState(status: AuthStatus.error, error: e.message);
+          return;
         } on NetworkException {
           // Oflayn — saqlangan sessiya bilan davom etamiz
         } catch (_) {}
@@ -474,15 +556,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.ready);
         unawaited(_backgroundAfterUnlock());
       } else {
-        if (await _needsPinSetup()) {
-          state = const AuthState(status: AuthStatus.pinSetup);
-          return;
-        }
         await _bootstrap();
       }
     } catch (_) {
       await _wipeLocalAuth();
-      state = const AuthState();
+      state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }
 
@@ -502,6 +580,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
       } on NetworkException {
         // Login davom etadi — oflayn rejim
+      } on ApiException {
+        // TenantNotFound / ApkNotFound — login o‘zi tekshiradi; yangilash tekshiruvi loginni to‘xtatmasin
       }
 
       final device = await MobileDeviceInfo.authPayload();
@@ -510,6 +590,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         login: login,
         password: password,
         deviceName: device['device_name'],
+        deviceId: device['device_id'],
         userAgent: device['user_agent'],
         apkVersion: device['apk_version'],
       );
@@ -542,19 +623,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _bootstrap();
     } on NetworkException {
       _setError(UserFacingError.serverUnreachable(context: 'Не удалось войти в систему.'));
-    } on UnauthorizedException {
+    } on InvalidCredentialsException {
       await _wipeLocalAuth();
-      _setError(const UserFacingError(
-        title: 'Неверный логин или пароль',
-        message: 'Проверьте код компании, логин и пароль.',
-        steps: ['Убедитесь, что Caps Lock выключен', 'Обратитесь к администратору, если забыли пароль'],
-      ),);
+      _setError(UserFacingError.invalidCredentials);
+    } on SessionLimitException {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionLimitReached);
+    } on SessionRevokedException {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionExpiredOrRevoked);
+    } on UnauthorizedException {
+      // Noma'lum 401 — login/parol deb ko'rsatmaslik (tarmoq/server xabari).
+      await _wipeLocalAuth();
+      _setError(UserFacingError.sessionExpiredOrRevoked);
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
       _setError(const UserFacingError(
         title: 'Доступ к приложению отключён',
         message: 'Администратор запретил вход с этого аккаунта.',
         steps: ['Обратитесь к администратору для включения доступа'],
+      ),);
+    } on UserNotOnSlotException {
+      await _wipeLocalAuth();
+      _setError(const UserFacingError(
+        title: 'Нет рабочего места',
+        message:
+            'Аккаунт не назначен на рабочее место по вашей роли. Без назначения вход в систему запрещён.',
+        steps: [
+          'Попросите администратора: Пользователи → Рабочее место',
+          'После назначения войдите снова',
+        ],
       ),);
     } on ApiException catch (e) {
       _setError(UserFacingError.fromApi(e));
@@ -570,29 +668,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
         AppUpdateInstaller.canInstallInApp(info) ||
         (info.effectiveApkUrl != null && info.effectiveApkUrl!.isNotEmpty);
     if (info.required && !hasTarget) {
+      // APK/havola yo‘q — loginni o‘lik holatda bloklamaymiz (yuklab bo‘lmaydi).
       if (kDebugMode) {
         debugPrint(
-          '[SalesDoc] Dev: majburiy yangilanish (${info.latestVersion}), APK URL yo\'q — login ruxsat',
+          '[SalesDoc] Majburiy yangilanish (${info.latestVersion}), APK URL yo\'q — o‘tkazib yuborildi',
         );
-        return false;
       }
-      return true;
+      return false;
     }
 
     await _flushPendingBeforeAppUpdate();
 
     final inForeground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (!inForeground) {
-      unawaited(
-        MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
-          info: info,
-          afterSync: afterSync,
-        ),
-      );
-      if (!info.required) return false;
+      // Faqat majburiy yangilashda fonda bildirishnoma — ixtiyoriyni spam qilmaymiz.
+      if (info.required) {
+        unawaited(
+          MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
+            info: info,
+            afterSync: afterSync,
+          ),
+        );
+        _deferredAppUpdate = info;
+        _deferredAfterSync = afterSync;
+        return true;
+      }
       _deferredAppUpdate = info;
       _deferredAfterSync = afterSync;
-      return true;
+      return false;
     }
 
     _appUpdateGate?.complete(false);
@@ -797,6 +900,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final perms = await _permsApi.getMyPermissions(slug);
       await _session.setPermissions(perms);
 
+      // Step 5–6: config + sync — kassa rollari uchun yengil bootstrap (agent-config kerak emas)
+      final role = _session.state.user?.role ?? 'agent';
+      if (BootstrapSyncPlan.isCashDeskRole(role)) {
+        state = state.copyWith(bootstrapStep: BootstrapStep.sync, syncPhaseIndex: 0);
+        _session.markBootstrapped();
+        await AppDatabase().recordSyncToday();
+        state = state.copyWith(bootstrapStep: BootstrapStep.done, status: AuthStatus.syncComplete);
+        return;
+      }
+
       // Step 5: config
       state = state.copyWith(bootstrapStep: BootstrapStep.config);
       final config = await _mobileApi.getAgentConfig(slug);
@@ -814,6 +927,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         tenantReferences: config.tenantReferences,
         agentLimits: config.agentLimits,
         agentCities: config.agentCities,
+      );
+      applyWorkRegionFromServer(
+        timezoneId: config.workTimezone,
+        utcOffsetHours: config.workUtcOffsetHours,
+      );
+      await _session.setWorkRegion(
+        timezoneId: config.workTimezone,
+        utcOffsetHours: config.workUtcOffsetHours,
       );
       final u = _session.state.user;
       if (u != null && (config.workSlotCode != null || config.workSlotId != null)) {
@@ -836,7 +957,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       // Step 6: sync — rol bo‘yicha (agent: to‘liq katalog; ekspeditor/supervisor: yengil, sync policy dan mustaqil)
       state = state.copyWith(bootstrapStep: BootstrapStep.sync, syncPhaseIndex: 0);
-      final role = _session.state.user?.role ?? 'agent';
       if (role == 'expeditor') {
         await _bootstrapExpeditorSync();
       } else if (role == 'supervisor') {
@@ -857,6 +977,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
     } on AppAccessDeniedException catch (e) {
+      await _wipeLocalAuth();
+      _setError(UserFacingError.fromApi(e));
+    } on UserNotOnSlotException catch (e) {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
     } on NetworkException {
@@ -950,6 +1073,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _setSyncPhase(2);
     await api.getAgentLocations(slug);
     _setSyncPhase(3);
+    // Config bootstrapda allaqachon yuklangan; yana bir marta yangilab qo‘yamiz.
+    await refreshMobileConfig();
     await _session.setLastSyncAt(serverNowUtcIso());
     _session.markBootstrapped();
   }
@@ -1016,6 +1141,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _resyncSupervisor() async {
     final slug = _session.state.tenantSlug ?? '';
     final api = _ref.read(supervisorApiProvider);
+    await refreshMobileConfig();
     await Future.wait([
       api.getSummary(slug),
       api.getVisits(slug, limit: 50),
@@ -1099,6 +1225,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final slug = _session.state.tenantSlug ?? '';
     if (slug.isEmpty) return;
     await ensureAuthTokens(_ref);
+    final refreshOutcome = await refreshAccessToken(_ref);
+    if (refreshOutcome == RefreshOutcome.definitiveFailure) {
+      await sessionExpired(forceLogout: true);
+      return;
+    }
     try {
       final config = await _mobileApi.getAgentConfig(slug);
       if (config.tenantName != null && config.tenantName!.trim().isNotEmpty) {
@@ -1117,6 +1248,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         tenantReferences: config.tenantReferences,
         agentLimits: config.agentLimits,
         agentCities: config.agentCities,
+      );
+      applyWorkRegionFromServer(
+        timezoneId: config.workTimezone,
+        utcOffsetHours: config.workUtcOffsetHours,
+      );
+      await _session.setWorkRegion(
+        timezoneId: config.workTimezone,
+        utcOffsetHours: config.workUtcOffsetHours,
       );
     } on UnauthorizedException {
       await sessionExpired();
@@ -1187,6 +1326,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
             agentLimits: config.agentLimits,
             agentCities: config.agentCities,
           );
+          applyWorkRegionFromServer(
+            timezoneId: config.workTimezone,
+            utcOffsetHours: config.workUtcOffsetHours,
+          );
+          await _session.setWorkRegion(
+            timezoneId: config.workTimezone,
+            utcOffsetHours: config.workUtcOffsetHours,
+          );
           final u = _session.state.user;
           if (u != null && (config.workSlotCode != null || config.workSlotId != null)) {
             await _session.setUser(
@@ -1227,6 +1374,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await checkForAppUpdate(afterSync: true);
         return const AgentSyncResult(ok: true);
       }
+      if (BootstrapSyncPlan.isCashDeskRole(role)) {
+        await AppDatabase().recordSyncToday();
+        return const AgentSyncResult(ok: true);
+      }
 
       var policy = evaluateSyncPolicy(_syncCfg);
       if (!policy.allowed) {
@@ -1252,6 +1403,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
           forceClientsCatalog: forceCatalog,
         );
         await _session.setLastSyncAt(payload.syncAt);
+        applyWorkRegionFromServer(
+          timezoneId: payload.workTimezone,
+          utcOffsetHours: payload.workUtcOffsetHours,
+        );
+        await _session.setWorkRegion(
+          timezoneId: payload.workTimezone,
+          utcOffsetHours: payload.workUtcOffsetHours,
+        );
         clients = payload.clients.length;
         products = payload.products.length;
         prices = payload.prices.length;
@@ -1271,6 +1430,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
           forceClientCatalog: forceCatalog,
         );
         await _session.setLastSyncAt(payload.syncAt);
+        applyWorkRegionFromServer(
+          timezoneId: payload.workTimezone,
+          utcOffsetHours: payload.workUtcOffsetHours,
+        );
+        await _session.setWorkRegion(
+          timezoneId: payload.workTimezone,
+          utcOffsetHours: payload.workUtcOffsetHours,
+        );
         clients = payload.clients.length;
         products = payload.products.length;
         prices = payload.prices.length;
@@ -1318,7 +1485,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    state = const AuthState();
+    state = const AuthState(status: AuthStatus.unauthenticated);
     _session.state = const SessionState();
 
     final rt = _ref.read(refreshTokenProvider);
@@ -1327,20 +1494,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {}
 
     await _wipeLocalAuth();
-    state = const AuthState();
+    state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
-  /// Web «Завершить все сессии» yoki sessiya muddati — login ekraniga.
+  /// Web «Завершить все сессии» — login. Tarmoq uzilishi / timeout — chiqarmaydi.
   Future<void> validateActiveSession() async {
     if (state.status != AuthStatus.ready) return;
     if (_session.state.user == null) return;
     try {
       await ensureAuthTokens(_ref);
+      // Access muddati tugagan bo‘lsa — avval silent refresh (mutex).
+      final outcome = await refreshAccessToken(_ref);
+      if (outcome == RefreshOutcome.definitiveFailure) {
+        await sessionExpired(forceLogout: true);
+        return;
+      }
+      if (outcome == RefreshOutcome.transientFailure &&
+          _ref.read(accessTokenProvider) == null) {
+        // Oflayn va access yo‘q — mahalliy sessiya saqlanadi.
+        return;
+      }
       await _authApi.me();
     } on UnauthorizedException {
       await sessionExpired();
     } on AppAccessDeniedException {
       await appAccessRevoked();
+    } on UserNotOnSlotException {
+      await workSlotRevoked();
     } on NetworkException {
       // Oflayn — mahalliy kesh bilan davom
     } catch (_) {}
@@ -1354,25 +1534,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
   }
 
-  /// JWT/refresh tugagan — login ekraniga (PIN qulfi emas).
+  /// Ishchi o‘rnidan yechilganda — login ekraniga.
+  Future<void> workSlotRevoked() async {
+    const msg = 'Не назначен на рабочее место';
+    state = const AuthState(status: AuthStatus.error, error: msg);
+    _session.state = const SessionState();
+    await _wipeLocalAuth();
+    state = const AuthState(status: AuthStatus.error, error: msg);
+  }
+
+  /// Faqat aniq bekor qilingan / refresh yaroqsiz sessiyada — login.
+  /// Tarmoq xatosi yoki muvaffaqiyatli refresh — chiqarmaydi.
   Future<void> sessionExpired({bool forceLogout = false}) async {
     if (!forceLogout && state.status == AuthStatus.ready) {
       try {
         await ensureAuthTokens(_ref);
-        await _authApi.me();
-        return;
-      } on UnauthorizedException {
-        // pastda to‘liq chiqish
+        final outcome = await refreshAccessToken(_ref);
+        if (outcome == RefreshOutcome.transientFailure) {
+          return;
+        }
+        if (outcome == RefreshOutcome.success) {
+          try {
+            await _authApi.me();
+            return;
+          } on NetworkException {
+            return;
+          } on UnauthorizedException {
+            // refresh muvaffaqiyatli, lekin /me 401 — pastda chiqish
+          } catch (_) {
+            return;
+          }
+        }
+        // definitiveFailure yoki Unauthorized — chiqish
       } on NetworkException {
         return;
       } catch (_) {
         return;
       }
     }
-    state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
     _session.state = const SessionState();
     await _wipeLocalAuth();
-    state = const AuthState(status: AuthStatus.error, error: 'Sessiya tugadi. Qayta kiring.');
+    _setError(UserFacingError.sessionExpiredOrRevoked);
   }
 }
 

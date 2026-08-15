@@ -40,6 +40,10 @@ function NewOrderContent() {
 
   const orderType = (searchParams.get("type") ?? "order").trim();
   const isPolkiReturn = orderType === "return" || orderType === "return_by_order";
+  const editRaw = searchParams.get("edit_order_id")?.trim() ?? "";
+  const editParsed = Number.parseInt(editRaw, 10);
+  const editOrderId =
+    Number.isFinite(editParsed) && editParsed > 0 ? editParsed : null;
 
   return (
     <div
@@ -53,6 +57,7 @@ function NewOrderContent() {
         onCreated={() => router.push("/orders")}
         onCancel={() => router.push("/orders")}
         orderType={orderType}
+        editOrderId={editOrderId}
       />
     </div>
   );

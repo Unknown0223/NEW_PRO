@@ -89,4 +89,10 @@ void main() {
     expect(m[2], 4);
     expect(m[3], 12);
   });
+
+  test('capGiftQtyByStock caps to available', () {
+    expect(capGiftQtyByStock(stockAvailable: 5, requested: 12), 5);
+    expect(capGiftQtyByStock(stockAvailable: 0, requested: 12), 0);
+    expect(capGiftQtyByStock(stockAvailable: 20, requested: 12), 12);
+  });
 }

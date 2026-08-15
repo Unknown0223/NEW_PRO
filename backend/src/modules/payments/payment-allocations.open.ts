@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
-import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import {
+  ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE,
+  ORDER_STATUSES_OUTSTANDING_RECEIVABLE
+} from "../orders/order-status";
 import {
   orderMerchandiseNetReceivable,
   sqlOrderMerchandiseNetReceivable,
@@ -24,6 +27,7 @@ export type AllocationCandidateOrder = {
   created_at: Date;
   consignment_due_date: Date | null;
   is_consignment: boolean;
+  agent_id: number | null;
 };
 
 
@@ -53,6 +57,13 @@ export async function listOpenOrdersForAllocation(
   const andAgent =
     agentId != null ? Prisma.sql`AND o.agent_id = ${agentId}` : Prisma.empty;
 
+  // Konsignatsiya: limit `new`…`delivered` ni band qiladi — to‘lov ham shu statuslarga yopilishi kerak.
+  // Naqd / umumiy open-orders: klassik debitor — faqat delivered.
+  const statusList =
+    mode === "consignment"
+      ? ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE
+      : ORDER_STATUSES_OUTSTANDING_RECEIVABLE;
+
   const rows = await prisma.$queryRaw<
     Array<{
       order_id: number;
@@ -69,7 +80,7 @@ export async function listOpenOrdersForAllocation(
       WHERE o.tenant_id = ${tenantId}
         AND o.client_id = ${clientId}
         AND o.order_type = 'order'
-        AND o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})
+        AND o.status IN (${Prisma.join([...statusList])})
         ${andMode}
         ${andAgent}
     ),
@@ -115,11 +126,17 @@ export async function getCandidateOrdersForAllocation(
 ): Promise<AllocationCandidateOrder[]> {
   const mode = normalizeAllocationMode(args.mode);
   const orderIds = (args.order_ids ?? []).filter((id) => Number.isFinite(id) && id > 0);
+  // Explicit order_ids yoki consignment mode: limit band qilgan statuslar (new…delivered).
+  // Aks holda (cash FIFO): faqat delivered debitor.
+  const statusList =
+    orderIds.length > 0 || mode === "consignment"
+      ? ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE
+      : ORDER_STATUSES_OUTSTANDING_RECEIVABLE;
   const where: Prisma.OrderWhereInput = {
     tenant_id: tenantId,
     client_id: args.client_id,
     order_type: "order",
-    status: { in: [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE] }
+    status: { in: [...statusList] }
   };
 
   if (args.agent_id != null && Number.isFinite(args.agent_id) && args.agent_id > 0) {
@@ -139,7 +156,8 @@ export async function getCandidateOrdersForAllocation(
       applied_auto_bonus_rule_ids: true,
       created_at: true,
       consignment_due_date: true,
-      is_consignment: true
+      is_consignment: true,
+      agent_id: true
     }
   });
 
@@ -197,4 +215,30 @@ export async function getCandidateOrdersForAllocation(
   }
 
   return out;
+}
+
+/** Legacy (boshqa agent) buyurtmalar birinchi, keyin joriy agent — har guruh ichida FIFO. */
+export function sortCandidatesLegacyFirst(
+  orders: AllocationCandidateOrder[],
+  currentAgentId: number | null | undefined
+): AllocationCandidateOrder[] {
+  const cur =
+    currentAgentId != null && Number.isFinite(currentAgentId) && currentAgentId > 0
+      ? Number(currentAgentId)
+      : null;
+  if (cur == null) return orders;
+
+  const isCurrent = (o: AllocationCandidateOrder) => o.agent_id === cur;
+  const fifoCmp = (a: AllocationCandidateOrder, b: AllocationCandidateOrder) => {
+    const d = dueSortTime(a) - dueSortTime(b);
+    if (d !== 0) return d;
+    if (a.created_at.getTime() !== b.created_at.getTime()) {
+      return a.created_at.getTime() - b.created_at.getTime();
+    }
+    return a.id - b.id;
+  };
+
+  const legacy = orders.filter((o) => !isCurrent(o)).sort(fifoCmp);
+  const current = orders.filter((o) => isCurrent(o)).sort(fifoCmp);
+  return [...legacy, ...current];
 }

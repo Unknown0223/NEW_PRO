@@ -163,7 +163,7 @@ export function buildOrderWhereSql4(tenantId: number, f: ClientSales4Filters, ac
     );
   }
 
-  if (actor?.userId && (actor.role === "agent" || actor.role === "supervisor" || actor.role === "manager" || actor.role === "regional_manager")) {
+  if (actor) {
     parts.push(
       buildScopedAgentExistsSql(tenantId, Prisma.sql`COALESCE(o.agent_id, c.agent_id)`, actor)
     );

@@ -59,7 +59,39 @@ describe("getUserFacingError", () => {
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toContain("Сессия");
+    expect(getUserFacingError(e)).toContain("Sessiya");
+  });
+
+  it("409 DuplicateName / NameExists / SkuExists / BarcodeExists", () => {
+    const cases: Array<{ error: string; expect: string }> = [
+      { error: "DuplicateName", expect: "nomdagi" },
+      { error: "NameExists", expect: "nomdagi" },
+      { error: "SkuExists", expect: "SKU" },
+      { error: "BarcodeExists", expect: "shtrixkod" }
+    ];
+    for (const c of cases) {
+      const e = new AxiosError("fail");
+      e.response = {
+        status: 409,
+        data: { error: c.error },
+        statusText: "Conflict",
+        headers: {},
+        config: {} as never
+      };
+      expect(getUserFacingError(e)).toContain(c.expect);
+    }
+  });
+
+  it("409 DuplicateName uses server message when present", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 409,
+      data: { error: "DuplicateName", message: "Custom name clash" },
+      statusText: "Conflict",
+      headers: {},
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toBe("Custom name clash");
   });
 
   it("fallback", () => {

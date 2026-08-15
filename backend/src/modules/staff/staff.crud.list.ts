@@ -59,7 +59,9 @@ import {
 export async function listStaff(
   tenantId: number,
   kind: StaffKind,
-  filters?: ListStaffFilters
+  filters?: ListStaffFilters,
+  /** Extra Prisma constraints (e.g. Access agent directory scope). Merged via AND. */
+  accessScope?: Prisma.UserWhereInput | null
 ): Promise<StaffRow[]> {
   const roleFilter: Prisma.StringFilter | string =
     kind === "operator" ? { in: [...OPERATOR_LIKE_WEB_ROLES] } : kindRole(kind);
@@ -71,7 +73,28 @@ export async function listStaff(
     where.branch = { equals: filters.branch.trim(), mode: "insensitive" };
   }
   if (filters?.trade_direction?.trim()) {
-    where.trade_direction = { equals: filters.trade_direction.trim(), mode: "insensitive" };
+    const td = filters.trade_direction.trim();
+    const tdClause: Prisma.UserWhereInput = {
+      OR: [
+        { trade_direction: { equals: td, mode: "insensitive" } },
+        {
+          trade_direction_row: {
+            is: {
+              OR: [
+                { code: { equals: td, mode: "insensitive" } },
+                { name: { equals: td, mode: "insensitive" } }
+              ]
+            }
+          }
+        }
+      ]
+    };
+    if (where.AND) {
+      const existing = Array.isArray(where.AND) ? where.AND : [where.AND];
+      where.AND = [...existing, tdClause];
+    } else {
+      where.AND = [tdClause];
+    }
   }
   if (filters?.position?.trim()) {
     where.position = { equals: filters.position.trim(), mode: "insensitive" };
@@ -88,7 +111,8 @@ export async function listStaff(
     territoryAnd.push({ territory: { contains: filters.territory_city.trim(), mode: "insensitive" } });
   }
   if (territoryAnd.length > 0) {
-    where.AND = territoryAnd;
+    const existing = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+    where.AND = [...existing, ...territoryAnd];
   }
 
   if (
@@ -114,6 +138,11 @@ export async function listStaff(
     } else {
       where.AND = [whClause];
     }
+  }
+
+  if (accessScope) {
+    const existing = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+    where.AND = [...existing, accessScope];
   }
 
   const users = await prisma.user.findMany({

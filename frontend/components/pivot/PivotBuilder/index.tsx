@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  closestCenter,
   DndContext,
   DragEndEvent,
   DragOverlay,
@@ -19,6 +18,14 @@ import { FilterEditor } from "@/components/pivot/PivotFilters";
 import { cn } from "@/lib/utils";
 import { FieldChip, ValueZoneChip, ZoneChip } from "./FieldChip";
 import { DropZone, type BuilderZone } from "./DropZone";
+import {
+  PALETTE_PREFIX,
+  parsePaletteId,
+  parseSortableZoneId,
+  pivotFieldsCollisionDetection,
+  resolveDropZone,
+  sortableZoneId
+} from "@/lib/pivot-fields-dnd";
 
 type Zone = BuilderZone;
 
@@ -35,25 +42,6 @@ type Props = {
   onReorderFields?: (zone: "rows" | "columns" | "reportFilters", fieldIds: string[]) => void;
   layout?: "stacked" | "wdr";
 };
-
-const PALETTE_PREFIX = "palette:";
-const SORT_PREFIX = "sort:";
-const DROP_ZONES: Zone[] = ["reportFilters", "columns", "rows", "values"];
-const SORTABLE_ZONES = new Set<"rows" | "columns" | "reportFilters">(["rows", "columns", "reportFilters"]);
-
-function sortableId(zone: "rows" | "columns" | "reportFilters", fieldId: string) {
-  return `${SORT_PREFIX}${zone}:${fieldId}`;
-}
-
-function parseSortableId(id: string): { zone: "rows" | "columns" | "reportFilters"; fieldId: string } | null {
-  if (!id.startsWith(SORT_PREFIX)) return null;
-  const rest = id.slice(SORT_PREFIX.length);
-  const sep = rest.indexOf(":");
-  if (sep < 0) return null;
-  const zone = rest.slice(0, sep) as "rows" | "columns" | "reportFilters";
-  if (!SORTABLE_ZONES.has(zone)) return null;
-  return { zone, fieldId: rest.slice(sep + 1) };
-}
 
 function usedFieldIds(config: PivotConfig): Set<string> {
   return new Set([
@@ -167,10 +155,22 @@ export function PivotBuilder({
 
     const activeStr = String(active.id);
     const overStr = String(over.id);
+    const targetZone =
+      resolveDropZone(overStr) ??
+      resolveDropZone(over.data.current?.zone as string | undefined);
 
-    const sorted = parseSortableId(activeStr);
-    if (sorted && onReorderFields) {
-      const overSorted = parseSortableId(overStr);
+    const sorted = parseSortableZoneId(activeStr);
+    if (sorted) {
+      if (targetZone && targetZone !== sorted.zone) {
+        if (config.reportFilters.includes(sorted.fieldId)) onRemoveField("reportFilters", sorted.fieldId);
+        if (config.rows.includes(sorted.fieldId)) onRemoveField("rows", sorted.fieldId);
+        if (config.columns.includes(sorted.fieldId)) onRemoveField("columns", sorted.fieldId);
+        if (config.values.some((v) => v.fieldId === sorted.fieldId)) onRemoveField("values", sorted.fieldId);
+        onAddField(targetZone, sorted.fieldId);
+        return;
+      }
+      if (!onReorderFields) return;
+      const overSorted = parseSortableZoneId(overStr);
       if (overSorted && overSorted.zone === sorted.zone) {
         const items = [...config[sorted.zone]];
         const oldIndex = items.indexOf(sorted.fieldId);
@@ -182,29 +182,10 @@ export function PivotBuilder({
       return;
     }
 
-    if (!activeStr.startsWith(PALETTE_PREFIX)) return;
-
-    const fieldId = activeStr.slice(PALETTE_PREFIX.length);
-    const zone = overStr.replace("-zone", "") as Zone;
-    if (!DROP_ZONES.includes(zone)) return;
-
-    if (zone === "values") {
-      const field = fieldMap.get(fieldId);
-      if (field && (field.dataType === "number" || field.dataType === "currency")) {
-        onAddField("values", fieldId);
-      }
-      return;
-    }
-
-    if (zone === "reportFilters") {
-      onAddField("reportFilters", fieldId);
-      return;
-    }
-
-    const field = fieldMap.get(fieldId);
-    if (field && (field.dataType === "string" || field.dataType === "date")) {
-      onAddField(zone, fieldId);
-    }
+    const fieldId = parsePaletteId(activeStr);
+    if (!fieldId || !targetZone) return;
+    if (!fieldMap.has(fieldId)) return;
+    onAddField(targetZone, fieldId);
   }
 
   const editingField = editingFilterFieldId ? fieldMap.get(editingFilterFieldId) : undefined;
@@ -213,7 +194,7 @@ export function PivotBuilder({
     <div className={cn("grid gap-2", layout === "wdr" ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4")}>
       <DropZone zone="reportFilters">
         <SortableContext
-          items={config.reportFilters.map((id) => sortableId("reportFilters", id))}
+          items={config.reportFilters.map((id) => sortableZoneId("reportFilters", id))}
           strategy={verticalListSortingStrategy}
         >
           {config.reportFilters.map((id) => (
@@ -222,7 +203,7 @@ export function PivotBuilder({
               id={id}
               label={fieldMap.get(id)?.label ?? id}
               filter={filterMap.get(id)}
-              sortableId={onReorderFields ? sortableId("reportFilters", id) : undefined}
+              sortableId={onReorderFields ? sortableZoneId("reportFilters", id) : undefined}
               onConfigure={() => setEditingFilterFieldId(id)}
               onRemove={() => onRemoveField("reportFilters", id)}
             />
@@ -235,7 +216,7 @@ export function PivotBuilder({
 
       <DropZone zone="columns">
         <SortableContext
-          items={config.columns.map((id) => sortableId("columns", id))}
+          items={config.columns.map((id) => sortableZoneId("columns", id))}
           strategy={verticalListSortingStrategy}
         >
           {config.columns.map((id) => (
@@ -244,7 +225,7 @@ export function PivotBuilder({
               id={id}
               label={fieldMap.get(id)?.label ?? id}
               filter={filterMap.get(id)}
-              sortableId={onReorderFields ? sortableId("columns", id) : undefined}
+              sortableId={onReorderFields ? sortableZoneId("columns", id) : undefined}
               onConfigure={onSetFilter ? () => setEditingFilterFieldId(id) : undefined}
               onRemove={() => onRemoveField("columns", id)}
             />
@@ -257,7 +238,7 @@ export function PivotBuilder({
 
       <DropZone zone="rows">
         <SortableContext
-          items={config.rows.map((id) => sortableId("rows", id))}
+          items={config.rows.map((id) => sortableZoneId("rows", id))}
           strategy={verticalListSortingStrategy}
         >
           {config.rows.map((id) => (
@@ -266,7 +247,7 @@ export function PivotBuilder({
               id={id}
               label={fieldMap.get(id)?.label ?? id}
               filter={filterMap.get(id)}
-              sortableId={onReorderFields ? sortableId("rows", id) : undefined}
+              sortableId={onReorderFields ? sortableZoneId("rows", id) : undefined}
               onConfigure={onSetFilter ? () => setEditingFilterFieldId(id) : undefined}
               onRemove={() => onRemoveField("rows", id)}
             />
@@ -332,7 +313,7 @@ export function PivotBuilder({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={pivotFieldsCollisionDetection}
       onDragStart={(e) => setActiveId(String(e.active.id))}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}

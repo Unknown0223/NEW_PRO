@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { displayAccessDescriptionShort } from "@/lib/access-display";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,8 @@ const ACTION_COLUMNS: { action: string; labelRu: string; short: string }[] = [
   { action: "create", labelRu: "Создание", short: "Созд." },
   { action: "update", labelRu: "Изменение", short: "Изм." },
   { action: "delete", labelRu: "Удаление", short: "Удал." },
+  { action: "void", labelRu: "Аннулирование", short: "Аннул." },
+  { action: "restore", labelRu: "Восстановление", short: "Восст." },
   { action: "copy", labelRu: "Копирование/Выгрузка", short: "Копир." },
   { action: "activate", labelRu: "Активация", short: "Актив." },
   { action: "deactivate", labelRu: "Деактивация", short: "Деакт." },
@@ -194,6 +197,8 @@ export function AccessRoleDefaultsWorkspace({
             : r
         );
       });
+      // Rol default o‘zgarsa barcha shu rol sessiyalari menyuni yangilashi kerak.
+      invalidateMePermissionsQueries(qc, tenantSlug);
     }
   });
 
@@ -315,15 +320,25 @@ export function AccessRoleDefaultsWorkspace({
     [gridGroups, groupExpanded]
   );
 
-  /** Bir bo'lim qatoridagi mavjud amallarni hammasini yoqish/o'chirish. */
+  /**
+   * Bo‘lim qatori: yoqilganda faqat view (va list) — to‘liq CRUD emas.
+   * O‘chirilganda bo‘limdagi barcha amallar olib tashlanadi.
+   */
   const toggleSectionRow = (section: GridSection, checked: boolean) => {
     if (!selectedRole) return;
     captureTableScroll();
     setLocalPermissions((prev) => {
       const n = new Set(prev);
-      for (const key of section.keyByAction.values()) {
-        if (checked) n.add(key);
-        else n.delete(key);
+      if (checked) {
+        const viewKey = section.keyByAction.get("view");
+        const listKey = section.keyByAction.get("list");
+        if (viewKey) n.add(viewKey);
+        if (listKey) n.add(listKey);
+        // Agar view yo‘q bo‘lsa (kamdan-kam) — hech narsa qo‘shilmaydi; alohida toggle ishlatilsin.
+      } else {
+        for (const key of section.keyByAction.values()) {
+          n.delete(key);
+        }
       }
       schedulePersist(selectedRole.id, n);
       return n;
@@ -534,9 +549,12 @@ export function AccessRoleDefaultsWorkspace({
                             </tr>
                             {open
                               ? grp.sections.map((section) => {
-                                  const allOn =
-                                    section.keyByAction.size > 0 &&
-                                    [...section.keyByAction.values()].every((k) => localPermissions.has(k));
+                                  const viewKey = section.keyByAction.get("view");
+                                  const listKey = section.keyByAction.get("list");
+                                  const sectionEnabled = Boolean(
+                                    (viewKey && localPermissions.has(viewKey)) ||
+                                      (listKey && localPermissions.has(listKey))
+                                  );
                                   return (
                                     <tr
                                       key={`${grp.parent}::${section.sectionLabel}`}
@@ -553,8 +571,8 @@ export function AccessRoleDefaultsWorkspace({
                                           <input
                                             type="checkbox"
                                             className="h-3.5 w-3.5 accent-teal-600"
-                                            checked={allOn}
-                                            title="Все доступные операции этого раздела"
+                                            checked={sectionEnabled}
+                                            title="Включить раздел (только просмотр)"
                                             onChange={(e) => toggleSectionRow(section, e.target.checked)}
                                           />
                                           <span>{section.sectionLabel}</span>

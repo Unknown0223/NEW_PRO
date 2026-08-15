@@ -51,7 +51,15 @@ export function currentMonthEndIsoDate(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function unitPriceForType(p: ProductRow, priceTypeKey: string): string | null {
+export function unitPriceForType(
+  p: ProductRow,
+  priceTypeKey: string,
+  oldPriceByProductId?: Record<number, string> | null
+): string | null {
+  if (oldPriceByProductId && Object.prototype.hasOwnProperty.call(oldPriceByProductId, p.id)) {
+    const ov = oldPriceByProductId[p.id];
+    return ov != null && String(ov).trim() !== "" ? String(ov) : null;
+  }
   const list = p.prices ?? [];
   if (list.length === 0) return null;
   const want = priceTypeKey.trim().toLowerCase();

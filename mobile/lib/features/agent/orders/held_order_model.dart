@@ -20,11 +20,15 @@ class HeldOrder {
   final String? shipmentDate;
   final double estimatedTotal;
   final int itemCount;
+  final int bonusQty;
+  final double discountPct;
   final DateTime createdAt;
   final DateTime submitAt;
+  /// Foto olish muddati — retry da o‘zgarmaydi (submitAt esa surilishi mumkin).
+  final DateTime captureDeadline;
   final String status; // pending | cancelled | submitted
 
-  const HeldOrder({
+  HeldOrder({
     required this.id,
     required this.clientId,
     required this.clientName,
@@ -41,12 +45,38 @@ class HeldOrder {
     this.shipmentDate,
     this.estimatedTotal = 0,
     this.itemCount = 0,
+    this.bonusQty = 0,
+    this.discountPct = 0,
     required this.createdAt,
     required this.submitAt,
+    DateTime? captureDeadline,
     this.status = 'pending',
-  });
+  }) : captureDeadline = captureDeadline ?? submitAt;
 
   bool get isPending => status == 'pending';
+
+  int get effectiveBonusQty {
+    if (bonusQty > 0) return bonusQty;
+    return giftLines.fold<int>(0, (s, g) => s + g.qty);
+  }
+
+  String get bonusLabel {
+    final q = effectiveBonusQty;
+    if (q > 0) return 'бонус +$q';
+    if (!applyBonus) return 'бонус —';
+    return 'бонус 0';
+  }
+
+  String get discountLabel {
+    if (discountPct > 0) {
+      final pct = discountPct == discountPct.roundToDouble()
+          ? discountPct.toStringAsFixed(0)
+          : discountPct.toStringAsFixed(1);
+      return 'скидка -$pct%';
+    }
+    if (!applyDiscount) return 'скидка —';
+    return 'скидка ✓';
+  }
 
   Duration remaining([DateTime? now]) {
     final n = now ?? DateTime.now();
@@ -108,8 +138,13 @@ class HeldOrder {
       shipmentDate: m['shipment_date']?.toString(),
       estimatedTotal: (m['estimated_total'] as num?)?.toDouble() ?? 0,
       itemCount: (m['item_count'] as num?)?.toInt() ?? items.fold<int>(0, (s, i) => s + i.qty.round()),
+      bonusQty: (m['bonus_qty'] as num?)?.toInt() ?? 0,
+      discountPct: (m['discount_pct'] as num?)?.toDouble() ?? 0,
       createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ?? DateTime.now(),
       submitAt: DateTime.tryParse(m['submit_at']?.toString() ?? '') ?? DateTime.now(),
+      captureDeadline: DateTime.tryParse(m['capture_deadline']?.toString() ?? '') ??
+          DateTime.tryParse(m['submit_at']?.toString() ?? '') ??
+          DateTime.now(),
       status: m['status']?.toString() ?? 'pending',
     );
   }
@@ -139,8 +174,11 @@ class HeldOrder {
       'shipment_date': shipmentDate,
       'estimated_total': estimatedTotal,
       'item_count': itemCount,
+      'bonus_qty': bonusQty,
+      'discount_pct': discountPct,
       'created_at': createdAt.toIso8601String(),
       'submit_at': submitAt.toIso8601String(),
+      'capture_deadline': captureDeadline.toIso8601String(),
       'status': status,
     };
   }

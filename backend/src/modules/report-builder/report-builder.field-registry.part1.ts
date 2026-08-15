@@ -49,6 +49,12 @@ export const FIELD_REGISTRY_PART1: Record<
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(agent.name, '')`
   },
+  agent_branch: {
+    label: "Дилер",
+    allowRow: true,
+    allowCol: true,
+    expr: () => Prisma.sql`COALESCE(NULLIF(TRIM(agent.branch), ''), '')`
+  },
   agent_code: {
     label: "Код агента",
     allowRow: true,
@@ -98,7 +104,7 @@ export const FIELD_REGISTRY_PART1: Record<
     expr: () => Prisma.sql`COALESCE(p.name, '')`
   },
   product_sku: {
-    label: "Код товара",
+    label: "ИД Продукта",
     allowRow: true,
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(p.sku, '')`
@@ -116,7 +122,7 @@ export const FIELD_REGISTRY_PART1: Record<
     expr: () => Prisma.sql`COALESCE(pc.name, '')`
   },
   brand_name: {
-    label: "Бренд товара",
+    label: "Бренд",
     allowRow: true,
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(pb.name, '')`
@@ -128,7 +134,7 @@ export const FIELD_REGISTRY_PART1: Record<
     expr: () => Prisma.sql`COALESCE(o.status, '')`
   },
   order_number: {
-    label: "Визуальный идентификатор заказа",
+    label: "ИД заявки",
     allowRow: true,
     allowCol: false,
     expr: () => Prisma.sql`COALESCE(o.number, '')`
@@ -158,7 +164,7 @@ export const FIELD_REGISTRY_PART1: Record<
     expr: () => Prisma.sql`c.id::text`
   },
   client_code: {
-    label: "Код клиента",
+    label: "ИД клиента",
     allowRow: true,
     allowCol: true,
     expr: () => Prisma.sql`COALESCE(c.client_code, '')`

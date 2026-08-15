@@ -60,6 +60,7 @@ class _ExpeditorClientLedgerPageState
             range: _range,
             onPresetTap: _openPreset,
             onRangeTap: _openCalendar,
+            onReset: () => setState(() => _range = HistoryPreset.last6Months.resolve()),
           ),
           Expanded(
             child: ledger.when(

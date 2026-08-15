@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Default: Asia/Tashkent (UTC+5) — Railway/container UTC bo‘lsa ham
+export TZ="${TZ:-Asia/Tashkent}"
+
 echo "[start] prisma migrate deploy..."
 npx prisma migrate deploy
 

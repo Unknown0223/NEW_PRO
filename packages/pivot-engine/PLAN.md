@@ -5,16 +5,15 @@
 
 ---
 
-## Hozirgi holat (2026-07-09) — **100%**
+**Hozirgi holat (2026-07-19):** yadro tayyor; **product/embed** — [`docs/PIVOT_PRODUCT_ROADMAP.md`](../../docs/PIVOT_PRODUCT_ROADMAP.md).
 
 | Qatlam | % |
 |--------|---|
 | Yadro (Phase 0–1) | **100%** |
-| Frontend UI (Phase 2) | **100%** |
-| Export & Charts (Phase 3) | **100%** |
-| Performance (Phase 4) | **100%** |
-| SavdoDesk integratsiya (Phase 5) | **100%** |
-| **WebDataRocks parity (umumiy)** | **100%** |
+| Frontend UI (product wiring) | **~95%** |
+| Export & Charts (+ CSV) | **100%** |
+| Embed `@salec/pivot-ui` | **0.2.0** |
+| WDR cutover | **dependency removed** |
 
 **Testlar:** `npm run test:pivot-engine` (130+ test)
 
@@ -88,10 +87,40 @@ Batafsil ro'yxat: avvalgi PLAN.md versiyasi va master reja §16.
 
 ## Post-100% (ixtiyoriy)
 
-- To'liq `@webdatarocks/*` paket olib tashlash (barcha tenantlar migratsiya qilgandan keyin)
+- To'liq `@webdatarocks/*` paket olib tashlash (barcha tenantlar migratsiya qilgandan keyin) — **checklist quyida**
 - SQL pre-aggregation endpoint (katta dataset)
 - Mobile-optimized pivot view
 - AI-assisted slice tavsiyasi
+
+---
+
+## Staging tekshiruv (foydalanuvchi qadami)
+
+Quyidagilarni `start-dev` + `/reports/builder` da qo'lda tekshiring:
+
+1. **Ma'lumot yuklash** — filtrlar + «Загрузить данные» / «Ma'lumotni yuklash»
+2. **Uslanish ogohlantirishi** — 50k+ qator bo'lsa sariq banner (WDR parity)
+3. **Saqlash/yuklash** — hisobot nomi, filtrlar va slice saqlanadi
+4. **WDR migratsiya** — eski saqlangan WDR hisobot ochiladi
+5. **Export** — Excel, PDF, HTML, grafik PNG
+6. **Filtrlar** — 20 ta dataset filtri + qator/ustun ierarxiya filtrlari
+
+**Huquqiy review** — formal tasdiq (kod tashqarisida).
+
+---
+
+## `@webdatarocks` olib tashlash checklist (hozircha bajarilmagan)
+
+> Paket **qoldirilgan** — `/reports/builder/wdr` rollback marshruti uchun.
+
+Barcha shartlar bajarilguncha paketni olib tashlamang:
+
+- [ ] Barcha tenantlarda saqlangan WDR hisobotlar virtual builderda ochiladi (smoke)
+- [ ] Stagingda 1 hafta virtual pivot default, kritik xato yo'q
+- [ ] `/reports/builder/wdr` rollback linki arxivlandi yoki CDN ga ko'chirildi
+- [ ] `frontend/package.json` dan `@webdatarocks/*` olib tashlandi
+- [ ] `wdr-report-builder.tsx` va bog'liq fayllar o'chirildi yoki arxivlandi
+- [ ] Bundle hajmi va build CI yashil
 
 ---
 

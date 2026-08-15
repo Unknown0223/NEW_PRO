@@ -9,10 +9,14 @@ import {
   resolvePaymentMethodEntries,
   resolvePaymentMethodRefToLabel
 } from "../tenant-settings/finance-refs";
+import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
 import { buildTerritoryIndexFromNodes, parseTerritoryNodes } from "./agent-orders.helpers";
 
-export async function getAgentOrdersFilterOptions(tenantId: number) {
+export async function getAgentOrdersFilterOptions(
+  tenantId: number,
+  actor?: { userId: number | null; role: string }
+) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -24,9 +28,10 @@ export async function getAgentOrdersFilterOptions(tenantId: number) {
   const currencyEntries = resolveCurrencyEntries(refs);
   const paymentEntries = resolvePaymentMethodEntries(refs, currencyEntries);
 
+  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
   const [agents, categories, products, groups, segments, tradeDirections] = await Promise.all([
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: "agent", is_active: true },
+      where: whereAgent,
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -144,6 +149,18 @@ export async function getAgentOrdersFilterOptions(tenantId: number) {
   const normalizedPriceTypes = [...new Set(settingsPriceTypeEntries.map((entry) => priceTypeKey(entry).trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "ru")
   );
+  // UI uchun: id — DB kaliti (kod), label — spravochnikdagi nom
+  const priceTypeOptions = settingsPriceTypeEntries
+    .map((entry) => {
+      const id = priceTypeKey(entry).trim();
+      return { id, label: entry.name.trim() || id };
+    })
+    .filter((x) => x.id)
+    .reduce<Array<{ id: string; label: string }>>((acc, cur) => {
+      if (!acc.some((x) => x.id === cur.id)) acc.push(cur);
+      return acc;
+    }, [])
+    .sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
   return {
     date_types: [
@@ -161,6 +178,7 @@ export async function getAgentOrdersFilterOptions(tenantId: number) {
     trade_directions: tradeDirections.map((d) => ({ id: d.code || d.name, name: d.name })),
     client_categories: clientCats.map((x) => x.v),
     price_types: normalizedPriceTypes,
+    price_type_options: priceTypeOptions,
     payment_methods: paymentMethods,
     territory_1: territoryFromSettings.territory_1.length > 0 ? territoryFromSettings.territory_1 : t1,
     territory_2: territoryFromSettings.territory_2.length > 0 ? territoryFromSettings.territory_2 : t2,

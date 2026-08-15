@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { ORDER_STATUSES_EXCLUDED_FROM_CREDIT_EXPOSURE } from "../orders/order-status";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import {
   agentScopedClientWhere,
   agentScopedOrderWhere,
@@ -10,6 +11,10 @@ import {
   type CompactClientRow,
   type PresenceOpts
 } from "./mobile-agent-sync.config.service";
+import {
+  loadTenantTimezone,
+  utcOffsetHoursForTimezone
+} from "../tenant-settings/tenant-timezone";
 
 const MOBILE_SYNC_CLIENT_BATCH = 500;
 const MOBILE_SYNC_CLIENT_MAX = 20_000;
@@ -21,19 +26,21 @@ export async function fetchSyncClients(
 ): Promise<ReturnType<typeof compactClient>[]> {
   const out: ReturnType<typeof compactClient>[] = [];
   let skip = 0;
+  const slotMap = await loadActiveWorkSlotsByUserIds([agentId]);
+  const workSlotId = slotMap.get(agentId)?.slot_id ?? null;
 
   while (out.length < MOBILE_SYNC_CLIENT_MAX) {
     const take = Math.min(MOBILE_SYNC_CLIENT_BATCH, MOBILE_SYNC_CLIENT_MAX - out.length);
     const rows = await prisma.client.findMany({
       where: {
-        ...agentScopedClientWhere(tenantId, agentId),
+        ...agentScopedClientWhere(tenantId, agentId, workSlotId),
         is_active: true,
         ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
       },
       orderBy: { id: "asc" },
       skip,
       take,
-      select: clientSyncSelectForAgent(agentId)
+      select: clientSyncSelectForAgent(agentId, workSlotId)
     });
     if (rows.length === 0) break;
     out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow)));
@@ -190,12 +197,15 @@ export async function syncFull(
     data: { last_sync_at: now }
   });
 
+  const workTimezone = await loadTenantTimezone(tenantId);
   return {
     sync_at: now.toISOString(),
     clients_replace_all: clientsReplaceAll,
     clients,
     products: products.map(compactProduct),
     prices: productPrices.map(compactPrice),
-    orders
+    orders,
+    work_timezone: workTimezone,
+    work_utc_offset_hours: utcOffsetHoursForTimezone(workTimezone)
   };
 }

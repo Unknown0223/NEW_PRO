@@ -17,7 +17,8 @@ import {
   computeMetricColumnWidths,
   formatNumber,
   getPlanningRoleLabel,
-  canEmployeeSetPlan
+  canEmployeeSetPlan,
+  sumDescendantAgentMetric
 } from "./planning-utils";
 import { buildPlanningTreeHelpers, defaultExpandedPlanningNodes } from "./planning-tree";
 
@@ -255,7 +256,7 @@ function StatusButton({
   );
 }
 
-interface ColumnConfig {
+export interface PlanningColumnConfig {
   groupId: number;
   metrics: string[];
 }
@@ -266,6 +267,8 @@ interface PlanningTableProps {
   kpiTargets: PlanningTarget[];
   plans: PlanningPlan[];
   canWrite: boolean;
+  columnConfigs: Record<number, PlanningColumnConfig>;
+  onColumnConfigsChange: (next: Record<number, PlanningColumnConfig>) => void;
   onUpdateTarget: (target: PlanningTarget, field: MetricField, value: string) => void;
   onUpdateStatus: (target: PlanningTarget, status: string) => void;
   onUpdateComment: (target: PlanningTarget, comment: string) => void;
@@ -277,6 +280,8 @@ export function PlanningTable({
   kpiTargets,
   plans,
   canWrite,
+  columnConfigs,
+  onColumnConfigsChange,
   onUpdateTarget,
   onUpdateStatus,
   onUpdateComment
@@ -284,23 +289,6 @@ export function PlanningTable({
   const visibleGroups = kpiGroups;
   const [openFilter, setOpenFilter] = useState<number | null>(null);
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
-  const [columnConfigs, setColumnConfigs] = useState<Record<number, ColumnConfig>>(() => {
-    const configs: Record<number, ColumnConfig> = {};
-    kpiGroups.forEach((group) => {
-      configs[group.id] = { groupId: group.id, metrics: ["Сумма"] };
-    });
-    return configs;
-  });
-
-  useEffect(() => {
-    setColumnConfigs((prev) => {
-      const next = { ...prev };
-      for (const g of kpiGroups) {
-        if (!next[g.id]) next[g.id] = { groupId: g.id, metrics: ["Сумма"] };
-      }
-      return next;
-    });
-  }, [kpiGroups]);
 
   const { getChildren, rootEmployees } = useMemo(
     () => buildPlanningTreeHelpers(employees),
@@ -355,46 +343,46 @@ export function PlanningTable({
   };
 
   const toggleMetric = (groupId: number, metric: string) => {
-    setColumnConfigs((previous) => {
-      const current = getConfig(groupId).metrics;
-      const updated = current.includes(metric)
-        ? current.filter((item) => item !== metric)
-        : [...current, metric];
-      return {
-        ...previous,
-        [groupId]: { groupId, metrics: updated.length > 0 ? updated : ["Сумма"] }
-      };
+    const current = getConfig(groupId).metrics;
+    const updated = current.includes(metric)
+      ? current.filter((item) => item !== metric)
+      : [...current, metric];
+    onColumnConfigsChange({
+      ...columnConfigs,
+      [groupId]: { groupId, metrics: updated.length > 0 ? updated : ["Сумма"] }
     });
   };
 
   const selectAllMetrics = (groupId: number) => {
-    setColumnConfigs((previous) => ({
-      ...previous,
+    onColumnConfigsChange({
+      ...columnConfigs,
       [groupId]: { groupId, metrics: [...metricOptions] }
-    }));
+    });
   };
 
   const clearMetrics = (groupId: number) => {
-    setColumnConfigs((previous) => ({
-      ...previous,
+    onColumnConfigsChange({
+      ...columnConfigs,
       [groupId]: { groupId, metrics: ["Сумма"] }
-    }));
+    });
   };
 
   const rootEmployeesList = rootEmployees;
 
   const getChildrenOf = getChildren;
 
-  const childrenSum = useCallback(
+  /** Agentlar yig‘indisi (SVR/filial rollup) — to‘g‘ridan-to‘g‘ri bolalar emas, butun pastki daraxt. */
+  const agentSubtreeSum = useCallback(
     (planId: number, empId: number, metric: string): number => {
       const field = metricFields[metric];
-      return getChildrenOf(empId).reduce((sum, child) => {
-        const childTarget = getTarget(planId, child.id);
+      if (!field) return 0;
+      return sumDescendantAgentMetric(empId, employees, (agentId) => {
+        const childTarget = getTarget(planId, agentId);
         const val = childTarget?.[field];
-        return sum + (typeof val === "number" ? val : numericValue(val));
-      }, 0);
+        return typeof val === "number" ? val : numericValue(val);
+      });
     },
-    [getChildrenOf, getTarget]
+    [employees, getTarget]
   );
 
   const allEmployeesFlat = useMemo(() => {
@@ -468,10 +456,14 @@ export function PlanningTable({
               const field = metricFields[metric];
               const targetVal = target?.[field];
               const val = typeof targetVal === "number" ? String(targetVal) : String(targetVal ?? "0");
-              const childSumVal = plan ? childrenSum(plan.id, emp.id, metric) : 0;
+              const rollupVal = plan ? agentSubtreeSum(plan.id, emp.id, metric) : 0;
               const targetNum = numericValue(val);
-              const hasMismatch = hasChildren && targetNum !== 0 && childSumVal !== targetNum;
-              const isTarget = hasChildren && targetNum !== 0;
+              // Ota qator: o‘z qiymati 0 bo‘lsa — agentlar yig‘indisini ko‘rsatamiz
+              const displayVal =
+                hasChildren && targetNum === 0 ? String(rollupVal) : val;
+              const hasMismatch =
+                hasChildren && targetNum !== 0 && Math.abs(targetNum - rollupVal) > 0.001;
+              const isTarget = hasChildren && (targetNum !== 0 || rollupVal !== 0);
               const colKey = `${group.id}:${metric}`;
               const colW = colWidths[colKey] ?? 88;
 
@@ -482,7 +474,7 @@ export function PlanningTable({
                   style={{ minWidth: colW, width: colW }}
                 >
                   <KpiCell
-                    value={val}
+                    value={displayVal}
                     onChange={(value) => target && updateTargetValue(target, field, value)}
                     disabled={!rowCanEdit || !target}
                     hasMismatch={hasMismatch}

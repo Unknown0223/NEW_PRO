@@ -1,23 +1,31 @@
-import dynamic from "next/dynamic";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-const WdrReportBuilder = dynamic(() => import("@/components/reports/wdr-report-builder"), {
-  ssr: false,
-  loading: () => <p className="p-4 text-sm text-muted-foreground">Загрузка конструктора WebDataRocks…</p>
-});
+/**
+ * WebDataRocks cutover — arxiv sahifa.
+ * Query `?keep=1` bilan redirect o‘rniga xabar ko‘rsatiladi.
+ */
+export default function ReportBuilderWdrArchivedPage({
+  searchParams
+}: {
+  searchParams?: { keep?: string };
+}) {
+  if (searchParams?.keep !== "1") {
+    redirect("/reports/builder/pivot");
+  }
 
-/** WebDataRocks fallback — rollback uchun saqlangan. */
-export default function ReportBuilderWdrPage() {
   return (
-    <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
-      <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-        WebDataRocks arxivlangan rollback marshruti. Yangi hisobotlar uchun{" "}
-        <Link href="/reports/builder/pivot" className="font-medium underline">
-          Virtual Pivot konstruktor
-        </Link>{" "}
-        dan foydalaning.
-      </div>
-      <WdrReportBuilder />
+    <div className="mx-auto max-w-lg p-8 text-center">
+      <h1 className="text-lg font-semibold">WebDataRocks архив</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Конструктор переведён на SavdoDesk Virtual Pivot. Пакет @webdatarocks удалён из зависимостей.
+      </p>
+      <Link
+        href="/reports/builder/pivot"
+        className="mt-4 inline-block text-sm font-medium text-primary underline"
+      >
+        Открыть конструктор сводной таблицы
+      </Link>
     </div>
   );
 }

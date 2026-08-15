@@ -17,6 +17,7 @@ export const uz: PivotStrings = {
     table: "Jadval",
     chart: "Grafik",
     excel: "Excel",
+    csv: "CSV",
     pdf: "PDF",
     html: "HTML",
     fullscreen: "To'liq ekran",
@@ -32,6 +33,7 @@ export const uz: PivotStrings = {
   chart: {
     bar: "Ustun",
     line: "Chiziq",
+    pie: "Doira",
     noData: "Grafik uchun ma'lumot yo'q.",
     truncatedCategories: (shown, total) =>
       `Grafikda faqat birinchi ${shown} ta kategoriya ko'rsatiladi (jami ${total}).`,
@@ -52,6 +54,7 @@ export const uz: PivotStrings = {
     progress: (processed, total) =>
       `Eksport: ${processed.toLocaleString("uz-UZ")} / ${total.toLocaleString("uz-UZ")} qator`,
     exportingExcel: "Excel eksport qilinmoqda…",
+    exportingCsv: "CSV eksport qilinmoqda…",
     exportingPdf: "PDF eksport qilinmoqda…",
     exportingHtml: "HTML eksport qilinmoqda…"
   },
@@ -98,7 +101,12 @@ export const uz: PivotStrings = {
     remove: "Olib tashlash",
     reorder: "Qayta tartiblash",
     filter: "Filtr",
-    selectedCount: (count) => `${count} ta`
+    filterByValues: "Qiymatlar bo‘yicha filtr",
+    selectAll: "Hammasini belgilash",
+    selectedOfTotal: (selected, total) => `${selected} / ${total} tanlangan`,
+    selectedCount: (count) => `${count} ta`,
+    reportFiltersLabel: "Hisobot filtrlari",
+    activeFiltersCount: (count) => `Faol: ${count}`
   },
   aggregations: {
     SUM: "Yig'indi",
@@ -133,7 +141,7 @@ export const uz: PivotStrings = {
     addMetric: "Qiymatlar zonasiga metrika qo'shing."
   },
   reportBuilder: {
-    title: "Pivot konstruktor",
+    title: "Jadval konstruktor",
     subtitle: "SavdoDesk Virtual Pivot Engine — mustaqil pivot UI",
     fullDemo: "To'liq demo",
     datasetFilters: "Dataset filtrlari",
@@ -151,7 +159,16 @@ export const uz: PivotStrings = {
     jsonReadError: "JSON o'qib bo'lmadi.",
     savePrompt: "Hisobot nomi:",
     savedReportWdrSuffix: " (WDR)",
-    sliceTemplatesLabel: "Slice shablonlari"
+    sliceTemplatesLabel: "Slice shablonlari",
+    datasetTruncated: (cap, total) =>
+      `Ko'pi bilan ${cap} qator ko'rsatildi (jami ${total}). Filtrlarni toraytiring yoki «Eksport» (Excel) orqali yuklab oling.`,
+    pivotRowsTruncated: (shown, total) =>
+      `Pivot jadvalda ${shown} / ${total} qator ko'rsatildi (limit). Filtrlarni toraytiring yoki sxemani o'zgartiring.`,
+    computeFailed: (detail) =>
+      `Pivot hisoblanmadi${detail ? `: ${detail}` : "."}`,
+    largeDatasetHint: (rows) =>
+      `Katta to'plam (${rows} qator): hisoblash vaqt olishi mumkin. Interfeys osilib qolmagan — tugashini kuting.`,
+    exportDocumentTitle: "Jadval konstruktor"
   },
   sliceTemplates: [
     {
@@ -163,6 +180,16 @@ export const uz: PivotStrings = {
       id: "retrobonus_volume",
       label: "Retrobonus hajm",
       description: "Agent bo'yicha hajm — RETROBONUS_TIER_PRESETS bilan mos"
+    },
+    {
+      id: "flat_sales_detail",
+      label: "Tekis (batafsil)",
+      description: "Jadvalli forma: diler, brend, agent, hajm, sanalar — agregatsiyasiz"
+    },
+    {
+      id: "classic_branch_brand",
+      label: "Klassik (diler → brend)",
+      description: "Klassik forma: diler, brend, SKU + hajm/summa; ota kataklar takrorlanmaydi"
     }
   ],
   calculatedMeasurePresets: [

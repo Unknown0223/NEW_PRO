@@ -7,28 +7,89 @@ import { FileSpreadsheet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+/** Drill-through da birinchi ko‘rsatiladigan ustunlar (savdo qatori). */
+const DRILL_PREFERRED_IDS = [
+  "client_name",
+  "agent_name",
+  "category_name",
+  "product_name",
+  "product_sku",
+  "brand_name",
+  "is_bonus",
+  "bonus_qty",
+  "amount",
+  "qty",
+  "volume",
+  "order_number",
+  "order_status"
+] as const;
+
+/** Joy egallab, mahsulot/qiymatni siqib chiqaradigan shovqinli o‘lchovlar. */
+const DRILL_EXCLUDED_IDS = new Set([
+  "client_category",
+  "client_zone",
+  "client_region",
+  "client_city",
+  "agent_branch",
+  "agent_code",
+  "work_slot_code"
+]);
+
+const DRILL_MAX_COLUMNS = 14;
+
 type Props = {
   open: boolean;
   records: Record<string, unknown>[];
   fields: PivotField[];
   cellContext?: PivotCellDrillContext;
+  /** Optional explicit column order (field ids). */
+  columnIds?: string[];
   onClose: () => void;
   className?: string;
 };
 
-export function PivotDrillThrough({ open, records, fields, cellContext, onClose, className }: Props) {
+function resolveDrillThroughColumns(
+  records: Record<string, unknown>[],
+  fields: PivotField[],
+  valueFieldId?: string,
+  columnIds?: string[]
+): string[] {
+  if (columnIds?.length) {
+    return columnIds.filter((id) => records.some((r) => id in r) || fields.some((f) => f.id === id));
+  }
+  const present = new Set<string>();
+  for (const row of records.slice(0, 80)) {
+    for (const key of Object.keys(row)) {
+      if (!DRILL_EXCLUDED_IDS.has(key)) present.add(key);
+    }
+  }
+
+  const ordered: string[] = [];
+  const push = (id: string) => {
+    if (!present.has(id) || ordered.includes(id)) return;
+    ordered.push(id);
+  };
+
+  if (valueFieldId) push(valueFieldId);
+  for (const id of DRILL_PREFERRED_IDS) push(id);
+  for (const f of fields) {
+    if (ordered.length >= DRILL_MAX_COLUMNS) break;
+    push(f.id);
+  }
+  for (const id of present) {
+    if (ordered.length >= DRILL_MAX_COLUMNS) break;
+    push(id);
+  }
+
+  return ordered.slice(0, DRILL_MAX_COLUMNS);
+}
+
+export function PivotDrillThrough({ open, records, fields, cellContext, columnIds, onClose, className }: Props) {
   const t = getPivotStrings().drillThrough;
-  const displayFields = useMemo(() => {
-    const ids = new Set<string>();
-    for (const row of records.slice(0, 50)) {
-      for (const key of Object.keys(row)) ids.add(key);
-    }
-    const ordered = fields.filter((f) => ids.has(f.id)).map((f) => f.id);
-    for (const id of ids) {
-      if (!ordered.includes(id)) ordered.push(id);
-    }
-    return ordered.slice(0, 12);
-  }, [records, fields]);
+  const displayFields = useMemo(
+    () => resolveDrillThroughColumns(records, fields, cellContext?.valueFieldId, columnIds),
+    [records, fields, cellContext?.valueFieldId, columnIds]
+  );
 
   const exportColumns = useMemo(
     () =>
@@ -53,7 +114,7 @@ export function PivotDrillThrough({ open, records, fields, cellContext, onClose,
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center">
       <div
         className={cn(
-          "flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg",
+          "flex max-h-[80vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg",
           className
         )}
         role="dialog"

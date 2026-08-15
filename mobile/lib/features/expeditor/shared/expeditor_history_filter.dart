@@ -29,7 +29,7 @@ class HistoryDateRange {
   }
 }
 
-const _off = Duration(hours: kWorkRegionUtcOffsetHours);
+Duration get _off => Duration(hours: kWorkRegionUtcOffsetHours);
 
 DateTime _dayStartUtc(DateTime wrWall) =>
     DateTime.utc(wrWall.year, wrWall.month, wrWall.day).subtract(_off);
@@ -469,17 +469,19 @@ class _RangeCalendarDialogState extends State<_RangeCalendarDialog> {
   }
 }
 
-/// Filtr paneli: «Выбрать» (presetlar) + sana oralig'i (kalendar).
+/// Filtr paneli: «Выбрать» (presetlar) + sana oralig'i (kalendar) + ixtiyoriy Сброс.
 class HistoryFilterBar extends StatelessWidget {
   final HistoryDateRange range;
   final VoidCallback onPresetTap;
   final VoidCallback onRangeTap;
+  final VoidCallback? onReset;
 
   const HistoryFilterBar({
     super.key,
     required this.range,
     required this.onPresetTap,
     required this.onRangeTap,
+    this.onReset,
   });
 
   @override
@@ -541,6 +543,16 @@ class HistoryFilterBar extends StatelessWidget {
               ),
             ),
           ),
+          if (onReset != null) ...[
+            const SizedBox(width: 4),
+            TextButton(
+              onPressed: onReset,
+              child: const Text(
+                'Сброс',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
         ],
       ),
     );

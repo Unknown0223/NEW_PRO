@@ -139,6 +139,28 @@ export async function tradeDirectionForCreate(
   return { label: input.trade_direction?.trim() || null, connectId: null };
 }
 
+/**
+ * Login o‘zgartirish: trim + lowerCase, bo‘sh emas, tenant ichida unique.
+ * O‘zgarish yo‘q bo‘lsa `undefined` (data ga yozilmasin).
+ */
+export async function resolveLoginForPatch(
+  tenantId: number,
+  userId: number,
+  currentLogin: string,
+  rawLogin: string | undefined
+): Promise<string | undefined> {
+  if (rawLogin === undefined) return undefined;
+  const login = rawLogin.trim().toLowerCase();
+  if (!login) throw new Error("BAD_LOGIN");
+  if (login === currentLogin.trim().toLowerCase()) return undefined;
+  const exists = await prisma.user.findFirst({
+    where: { tenant_id: tenantId, login, NOT: { id: userId } },
+    select: { id: true }
+  });
+  if (exists) throw new Error("LOGIN_EXISTS");
+  return login;
+}
+
 export function toFio(u: { first_name: string | null; last_name: string | null; middle_name: string | null; name: string }) {
   const parts = [u.last_name, u.first_name, u.middle_name].filter((x) => x && x.trim().length > 0);
   return parts.length > 0 ? parts.join(" ") : u.name;

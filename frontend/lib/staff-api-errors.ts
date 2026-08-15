@@ -41,6 +41,9 @@ export function messageFromSupervisorPatchError(err: unknown): string {
   const ax = err as AxiosError<{ error?: string; message?: string }>;
   const status = ax.response?.status;
   const code = ax.response?.data?.error;
+  if (status === 409 && code === "LoginExists") {
+    return withApiSupportLine("Этот логин уже занят. Укажите другой логин.", err);
+  }
   if (status === 409 && code === "AgentAlreadyAssigned") {
     return withApiSupportLine(
       "Bu agent allaqachon boshqa supervizorga bog‘langan. Avval u yerdan ajrating.",

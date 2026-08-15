@@ -6,12 +6,18 @@ String? roleGuard(String role, String location) {
     '/home', '/profile', '/clients', '/clients/new', '/orders', '/visits',
     '/report', '/warehouse-stock', '/sync-success', '/manual-sync', '/debtors',
     '/debtors-by-orders', '/route', '/map', '/search', '/settings',
-    '/draft', '/orders/create', '/client-location',
+    '/draft', '/notifications', '/tabel', '/kpi', '/kpi/calc', '/orders/create',
+    '/client-location',
   };
   const expeditorRoutes = {
     '/home', '/profile', '/visits', '/debtors', '/invoices',
     '/deliveries', '/payments', '/returns', '/exp-return-by-order',
     '/exp-unfinished', '/payments-info', '/exp-client-map', '/exp-visits-map',
+  };
+  const cashierRoutes = {
+    '/home',
+    '/profile',
+    '/bank-transfers',
   };
 
   Set<String> allowed;
@@ -19,17 +25,26 @@ String? roleGuard(String role, String location) {
     case 'expeditor':
       allowed = expeditorRoutes;
       break;
+    case 'cashier':
+    case 'operator':
+      allowed = cashierRoutes;
+      break;
     default:
       allowed = agentRoutes;
   }
 
   if (location == '/home' || location == '/profile') return null;
   if (role == 'agent' && location.startsWith('/clients/')) return null;
+  if (role == 'agent' && location.startsWith('/kpi')) return null;
   if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
   if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-debtor-client/')) return null;
   if (role == 'expeditor' && location.startsWith('/exp-return-by-order/')) return null;
+  if ((role == 'cashier' || role == 'operator') &&
+      location.startsWith('/bank-transfers/')) {
+    return null;
+  }
   if (allowed.contains(location)) return null;
   return '/home';
 }
@@ -62,6 +77,21 @@ void main() {
 
     test('agent cannot access expeditor deliveries', () {
       expect(roleGuard('agent', '/deliveries'), '/home');
+    });
+
+    test('agent can access notifications', () {
+      expect(roleGuard('agent', '/notifications'), isNull);
+    });
+
+    test('agent can access kpi', () {
+      expect(roleGuard('agent', '/kpi'), isNull);
+      expect(roleGuard('agent', '/kpi/calc'), isNull);
+    });
+
+    test('cashier can access bank transfers', () {
+      expect(roleGuard('cashier', '/bank-transfers'), isNull);
+      expect(roleGuard('cashier', '/bank-transfers/12'), isNull);
+      expect(roleGuard('cashier', '/clients'), '/home');
     });
   });
 }

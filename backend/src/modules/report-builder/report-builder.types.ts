@@ -94,6 +94,10 @@ export type ReportBuilderDatasetRequest = {
   agentIds: number[];
   statuses: string[];
   orderTypes: string[];
+  /** Sahifa hajmi (default: PAGE_SIZE). max = DATASET_ROW_CAP. */
+  pageLimit?: number;
+  /** Sahifa offset (default: 0). */
+  pageOffset?: number;
 } & ReportBuilderExtraFilters;
 
 export type ReportBuilderFilterOptionRef = { id: string; label: string };
@@ -143,4 +147,8 @@ export type ReportBuilderDatasetResponse = {
   truncated: boolean;
   totalRowCount: number;
   cap: number;
+  /** Keyingi sahifa bor (scroll load-more). */
+  hasMore: boolean;
+  pageOffset: number;
+  pageLimit: number;
 };

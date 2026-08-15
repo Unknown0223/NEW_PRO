@@ -1,4 +1,5 @@
-import { DEFAULT_PIVOT_CONFIG } from "../core/PivotEngine.js";
+import { DEFAULT_PIVOT_CONFIG } from "../core/defaults.js";
+import { isWdrMeasuresFieldId } from "../utils/valuesPosition.js";
 const WDR_AGG_MAP = {
     sum: "SUM",
     count: "COUNT",
@@ -34,11 +35,22 @@ export function parseWdrFieldId(uniqueName) {
 function fieldIds(fields) {
     if (!fields?.length)
         return [];
-    return fields.map((f) => parseWdrFieldId(f.uniqueName)).filter(Boolean);
+    return fields
+        .map((f) => parseWdrFieldId(f.uniqueName))
+        .filter((id) => Boolean(id) && !isWdrMeasuresFieldId(id));
+}
+function detectValuesPosition(slice) {
+    const inRows = (slice.rows ?? []).some((f) => isWdrMeasuresFieldId(parseWdrFieldId(f.uniqueName)));
+    if (inRows)
+        return "rows";
+    const inColumns = (slice.columns ?? []).some((f) => isWdrMeasuresFieldId(parseWdrFieldId(f.uniqueName)));
+    if (inColumns)
+        return "columns";
+    return "columns";
 }
 function wdrFilterToPivot(field) {
     const fieldId = parseWdrFieldId(field.uniqueName);
-    if (!fieldId)
+    if (!fieldId || isWdrMeasuresFieldId(fieldId))
         return null;
     const members = field.filter?.members;
     if (!members?.length) {
@@ -72,10 +84,12 @@ function measuresToValues(measures) {
 /**
  * WDR `slice` JSON → `PivotConfig`.
  * `reportFilters` va slice ichidagi `filter.members` qo'llab-quvvatlanadi.
+ * Virtual `Measures` → `options.valuesPosition`.
  */
 export function wdrSliceToPivotConfig(slice, base = {}) {
     const reportFilterIds = fieldIds(slice.reportFilters);
     const filters = [];
+    const valuesPosition = detectValuesPosition(slice);
     for (const zone of [slice.reportFilters, slice.rows, slice.columns]) {
         for (const field of zone ?? []) {
             const pf = wdrFilterToPivot(field);
@@ -93,7 +107,8 @@ export function wdrSliceToPivotConfig(slice, base = {}) {
         filters: filters.length > 0 ? filters : base.filters ?? [],
         options: {
             ...DEFAULT_PIVOT_CONFIG.options,
-            ...base.options
+            ...base.options,
+            valuesPosition: base.options?.valuesPosition ?? valuesPosition
         }
     };
 }

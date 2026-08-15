@@ -322,6 +322,31 @@ function ClientProfileRequisitesAside({
               {formatNumberGrouped(c.delivered_unpaid_total ?? "0", { maxFractionDigits: 2 })}
             </span>
           </div>
+          {c.legacy_debt_show_on_card !== false &&
+          Number(String(c.legacy_debt ?? "0").replace(/\s/g, "").replace(",", ".")) > 0.01 ? (
+            <div className="flex items-baseline justify-between gap-2 border-t border-border/50 pt-1.5">
+              <span className="text-[10px] text-muted-foreground">Долг старого агента</span>
+              <span className="text-right">
+                <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
+                  {formatNumberGrouped(c.legacy_debt ?? "0", { maxFractionDigits: 2 })}
+                </span>
+                {c.legacy_agent_names?.trim() ? (
+                  <p className="text-[9px] font-normal text-muted-foreground">{c.legacy_agent_names}</p>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-baseline justify-between gap-2 border-t border-border/50 pt-1.5">
+            <span className="text-[10px] text-muted-foreground">Долг текущего агента</span>
+            <span className="text-right">
+              <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
+                {formatNumberGrouped(c.current_debt ?? "0", { maxFractionDigits: 2 })}
+              </span>
+              {c.current_agent_name?.trim() ? (
+                <p className="text-[9px] font-normal text-muted-foreground">{c.current_agent_name}</p>
+              ) : null}
+            </span>
+          </div>
           <div className="flex items-baseline justify-between gap-2 border-t border-border/50 pt-1.5">
             <span className="text-[10px] text-muted-foreground">Откр. заказы (конвейер)</span>
             <span className="font-mono text-xs font-semibold tabular-nums text-foreground">

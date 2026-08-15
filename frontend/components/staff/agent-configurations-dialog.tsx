@@ -30,7 +30,7 @@ import {
   emptyMobileDraft,
   type AgentMobileConfigDraft
 } from "@/components/staff/agent-mobile-config-types";
-import { defaultAgentMobileDraft } from "@/components/staff/agent-mobile-config-defaults-draft";
+import { defaultAgentMobileDraft, defaultSupervisorMobileDraft } from "@/components/staff/agent-mobile-config-defaults-draft";
 import {
   countMobileConfigPatchSections,
   diffMobileConfigDraft
@@ -98,24 +98,35 @@ function filterPaymentItemsBySearch(
   );
 }
 
-/** Chap panel — reference «Конфигурации» tartibi */
+/** Chap panel — tartib «Конфигурации» */
 const CONFIG_TABS = [
   { id: "client", label: "Клиент" },
-  { id: "gps", label: "Gps" },
-  { id: "outlet", label: "Outlet (План)" },
+  { id: "gps", label: "GPS" },
+  { id: "outlet", label: "План Outlet" },
   { id: "route", label: "Маршрут" },
-  { id: "product_list", label: "Настройки список продуктов" },
+  { id: "product_list", label: "Список товаров" },
   { id: "photo", label: "Фото" },
   { id: "misc", label: "Прочие настройки" },
   { id: "sync", label: "Синхронизация" },
-  { id: "orders", label: "Добавления заказа" },
+  { id: "orders", label: "Создание заказа" },
   { id: "supervision", label: "Аудит" },
-  { id: "van_selling", label: "ВанСеллинг" }
+  { id: "van_selling", label: "Ван-селлинг" }
 ] as const;
 
 type TabId = (typeof CONFIG_TABS)[number]["id"];
 
-const SUPERVISOR_TAB_IDS = new Set<TabId>(["client", "gps", "misc"]);
+/** Супервайзер: agent bilan bir xil mobil siyosat (van-selling / заказы emas). */
+const SUPERVISOR_TAB_IDS = new Set<TabId>([
+  "client",
+  "gps",
+  "outlet",
+  "route",
+  "product_list",
+  "photo",
+  "misc",
+  "sync",
+  "supervision"
+]);
 
 export type AgentConfigurationsVariant = "agent" | "supervisor";
 
@@ -203,7 +214,7 @@ type Props = {
   saving?: boolean;
   /** Ro‘yxat bo‘lmasa, to‘lov tanlovlari bo‘sh + qisqa izoh */
   paymentMethodEntries?: AgentConfigPaymentMethodEntry[];
-  /** Супервайзер: только «Клиент», «Gps», «Прочие настройки» */
+  /** Супервайзер: полный набор мобильных настроек (без ван-селлинга / заказов) */
   variant?: AgentConfigurationsVariant;
   /** Guruh: standart ko‘rinish, faqat o‘zgartirilgan maydonlar saqlanadi */
   bulkMode?: boolean;
@@ -237,19 +248,31 @@ export function AgentConfigurationsDialog({
   useEffect(() => {
     if (!open) return;
     if (bulkMode) {
-      const baseline = defaultAgentMobileDraft();
+      const baseline = isSupervisorUi ? defaultSupervisorMobileDraft() : defaultAgentMobileDraft();
       setBaselineDraft(baseline);
       setDraft(baseline);
     } else if (agent) {
       const fromRow = cloneMobileFromRow(agent.agent_entitlements);
-      setBaselineDraft(fromRow);
-      setDraft(fromRow);
+      const hasStored =
+        fromRow.client != null ||
+        fromRow.gps != null ||
+        fromRow.misc != null ||
+        fromRow.supervision != null ||
+        fromRow.sync != null ||
+        fromRow.outlet != null ||
+        fromRow.route != null ||
+        fromRow.photo != null ||
+        fromRow.product_list != null;
+      const seeded =
+        isSupervisorUi && !hasStored ? defaultSupervisorMobileDraft() : fromRow;
+      setBaselineDraft(seeded);
+      setDraft(seeded);
     }
     setTab("client");
     setMiscPaySearch("");
     setVanPaySearch("");
     setLocalSaveError(null);
-  }, [open, agent, bulkMode]);
+  }, [open, agent, bulkMode, isSupervisorUi]);
 
   useEffect(() => {
     if (!open || variant !== "supervisor") return;
@@ -305,7 +328,7 @@ export function AgentConfigurationsDialog({
     : agent?.fio?.trim() || "Без имени";
 
   const handleReset = () => {
-    setDraft(bulkMode ? defaultAgentMobileDraft() : cloneMobileFromRow(agent!.agent_entitlements));
+    setDraft(baselineDraft);
   };
 
   const handleSave = async () => {
@@ -453,9 +476,10 @@ export function AgentConfigurationsDialog({
                 ))}
               </div>
             </div>
-            <div className="grid max-w-xl gap-4 sm:grid-cols-3">
+            <div className="space-y-4 max-w-md">
               <ConfigTextField
-                label="Интервальные секунды"
+                label="Интервал отправки координат (сек)"
+                hint="Как часто приложение отправляет GPS-точку"
                 type="number"
                 value={draft.gps?.tracking_interval_sec ?? ""}
                 onChange={(e) =>
@@ -468,7 +492,8 @@ export function AgentConfigurationsDialog({
                 }
               />
               <ConfigTextField
-                label="Мин. расстояние (м)"
+                label="Минимальное смещение (м)"
+                hint="Не отправлять точку, если агент сдвинулся меньше этого расстояния"
                 type="number"
                 value={draft.gps?.min_distance_m ?? ""}
                 onChange={(e) =>
@@ -481,7 +506,8 @@ export function AgentConfigurationsDialog({
                 }
               />
               <ConfigTextField
-                label="Точность (м)"
+                label="Максимальная погрешность (м)"
+                hint="Точки с большей погрешностью GPS отбрасываются"
                 type="number"
                 value={draft.gps?.max_accuracy_m ?? ""}
                 onChange={(e) =>
@@ -509,7 +535,8 @@ export function AgentConfigurationsDialog({
               />
             </div>
             <ConfigTextField
-              label="Версия Outlet"
+              label="Версия плана Outlet"
+              hint="Идентификатор версии плана для мобильного приложения"
               value={draft.outlet?.plan_version ?? ""}
               onChange={(e) =>
                 setDraft((d) => setDraftPath(d, "outlet", (o) => ({ ...o, plan_version: e.target.value })))
@@ -524,28 +551,28 @@ export function AgentConfigurationsDialog({
           return (
           <div className="space-y-6 text-[13px]">
             <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 px-4 py-3 text-[12px] leading-relaxed text-foreground/90">
-              <p className="font-medium text-teal-800 dark:text-teal-200">Qanday ishlaydi</p>
+              <p className="font-medium text-teal-800 dark:text-teal-200">Как это работает</p>
               <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
                 <li>
-                  <strong>0</strong> — klient har kuni avtomatik marshrut xaritasida (pauza yo‘q).
+                  <strong>0</strong> — клиент каждый день снова появляется на карте маршрута (без паузы).
                 </li>
                 <li>
-                  <strong>7</strong> (yoki boshqa) — klient faqat xaritadan yashiriladi; buyurtma «Все» ro‘yxatidan
-                  berish mumkin.
+                  <strong>7</strong> (или другое значение) — клиент скрывается только с карты; заказ
+                  можно оформить из списка «Все».
                 </li>
                 <li>
-                  Mobil ilovada sinxronizatsiya qiling — o‘zgarishlar keyin qo‘llanadi.
+                  После изменения выполните синхронизацию в мобильном приложении.
                 </li>
               </ul>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Hozir telefonda: pauza <strong>{appliedCooldown}</strong> kun, limit{" "}
-                <strong>{appliedLimit === 0 ? "cheksiz" : appliedLimit}</strong> nuqta/kun.
+                Сейчас на телефоне: пауза <strong>{appliedCooldown}</strong> дн., лимит{" "}
+                <strong>{appliedLimit === 0 ? "без ограничений" : appliedLimit}</strong> точек/день.
               </p>
             </div>
-            <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+            <div className="space-y-4 max-w-md">
               <ConfigTextField
-                label="Макс. точек в маршруте за день"
-                hint={`Standart: ${AGENT_ROUTE_DEFAULTS.daily_visit_limit}. 0 — без лимита`}
+                label="Максимум точек маршрута в день"
+                hint={`По умолчанию: ${AGENT_ROUTE_DEFAULTS.daily_visit_limit}. Значение 0 — без лимита`}
                 type="number"
                 value={draft.route?.daily_visit_limit ?? ""}
                 placeholder={String(AGENT_ROUTE_DEFAULTS.daily_visit_limit)}
@@ -559,7 +586,12 @@ export function AgentConfigurationsDialog({
                 }
               />
               <div className="space-y-1.5">
-                <span className="text-[13px] font-medium text-foreground">Пауза перед повторным добавлением (дней)</span>
+                <span className="text-[13px] font-medium text-foreground">
+                  Пауза перед повторным добавлением в маршрут (дней)
+                </span>
+                <p className="text-xs text-muted-foreground">
+                  Сколько дней клиент не возвращается на карту после визита
+                </p>
                 <Select
                   value={String(appliedCooldown)}
                   onValueChange={(v) =>
@@ -572,7 +604,7 @@ export function AgentConfigurationsDialog({
                   }
                 >
                   <SelectTrigger className="h-10 border-border/80 bg-background text-[13px]">
-                    <SelectValue placeholder="Tanlang" />
+                    <SelectValue placeholder="Выберите" />
                   </SelectTrigger>
                   <SelectContent>
                     {ROUTE_COOLDOWN_OPTIONS.map((opt) => (
@@ -583,7 +615,8 @@ export function AgentConfigurationsDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] leading-snug text-muted-foreground">
-                  Ro‘yxatdan tanlang va «Сохранить» bosing. Bo‘sh qoldirish — standart {AGENT_ROUTE_DEFAULTS.readd_cooldown_days} kun.
+                  Выберите значение и нажмите «Применить». Пустое поле = по умолчанию{" "}
+                  {AGENT_ROUTE_DEFAULTS.readd_cooldown_days} дн.
                 </p>
               </div>
             </div>
@@ -598,7 +631,7 @@ export function AgentConfigurationsDialog({
               onChange={(v) =>
                 setDraft((d) => setDraftPath(d, "product_list", (p) => ({ ...p, show_out_of_stock: v })))
               }
-              label="Показать предметы не в наличии"
+              label="Показывать товары не в наличии"
             />
             <ConfigCheckRow
               checked={Boolean(draft.product_list?.allow_submit_for_new_client)}
@@ -607,7 +640,7 @@ export function AgentConfigurationsDialog({
                   setDraftPath(d, "product_list", (p) => ({ ...p, allow_submit_for_new_client: v }))
                 )
               }
-              label="Разрешение на отправку для нового клиента"
+              label="Разрешить отправку заказа для нового клиента"
             />
           </div>
         );
@@ -620,58 +653,62 @@ export function AgentConfigurationsDialog({
                 onChange={(v) =>
                   setDraft((d) => setDraftPath(d, "client", (c) => ({ ...c, show_photos: v })))
                 }
-                label="Показать фото клиента в мобильном приложении"
+                label="Показывать фото клиента в мобильном приложении"
               />
               <ConfigCheckRow
                 checked={Boolean(draft.photo?.required_for_order)}
                 onChange={(v) =>
                   setDraft((d) => setDraftPath(d, "photo", (p) => ({ ...p, required_for_order: v })))
                 }
-                label="Обязательная фото-фиксация для добавления заказа"
+                label="Обязательная фотофиксация при создании заказа"
               />
             </div>
-            <div className="grid max-w-2xl gap-4 sm:grid-cols-3">
-              <ConfigTextField
-                label="Макс. ширина (px)"
-                hint="4032 — полное разрешение камеры (до 10 MB)"
-                type="number"
-                value={draft.photo?.max_width_px ?? ""}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    setDraftPath(d, "photo", (p) => ({
-                      ...p,
-                      max_width_px: e.target.value === "" ? null : Number(e.target.value)
-                    }))
-                  )
-                }
-              />
-              <ConfigTextField
-                label="Макс. высота (px)"
-                type="number"
-                value={draft.photo?.max_height_px ?? ""}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    setDraftPath(d, "photo", (p) => ({
-                      ...p,
-                      max_height_px: e.target.value === "" ? null : Number(e.target.value)
-                    }))
-                  )
-                }
-              />
-              <ConfigTextField
-                label="Сжатие JPEG (1–100)"
-                hint="92–100, лимит файла 10 MB (Android/iOS)"
-                type="number"
-                value={draft.photo?.jpeg_quality ?? ""}
-                onChange={(e) =>
-                  setDraft((d) =>
-                    setDraftPath(d, "photo", (p) => ({
-                      ...p,
-                      jpeg_quality: e.target.value === "" ? null : Number(e.target.value)
-                    }))
-                  )
-                }
-              />
+            <div>
+              <ConfigSectionTitle>Параметры сжатия фото</ConfigSectionTitle>
+              <div className="space-y-4 max-w-md">
+                <ConfigTextField
+                  label="Максимальная ширина (px)"
+                  hint="Рекомендуется 4032 — полное разрешение камеры (файл до 10 МБ)"
+                  type="number"
+                  value={draft.photo?.max_width_px ?? ""}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      setDraftPath(d, "photo", (p) => ({
+                        ...p,
+                        max_width_px: e.target.value === "" ? null : Number(e.target.value)
+                      }))
+                    )
+                  }
+                />
+                <ConfigTextField
+                  label="Максимальная высота (px)"
+                  hint="Рекомендуется 4032 — обычно совпадает с шириной"
+                  type="number"
+                  value={draft.photo?.max_height_px ?? ""}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      setDraftPath(d, "photo", (p) => ({
+                        ...p,
+                        max_height_px: e.target.value === "" ? null : Number(e.target.value)
+                      }))
+                    )
+                  }
+                />
+                <ConfigTextField
+                  label="Качество JPEG (1–100)"
+                  hint="Обычно 92–100. Лимит файла — 10 МБ (Android / iOS)"
+                  type="number"
+                  value={draft.photo?.jpeg_quality ?? ""}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      setDraftPath(d, "photo", (p) => ({
+                        ...p,
+                        jpeg_quality: e.target.value === "" ? null : Number(e.target.value)
+                      }))
+                    )
+                  }
+                />
+              </div>
             </div>
           </div>
         );
@@ -876,7 +913,10 @@ export function AgentConfigurationsDialog({
                   { label: "Сразу", value: 0 },
                   { label: "5 мин", value: 5 },
                   { label: "10 мин", value: 10 },
-                  { label: "15 мин", value: 15 }
+                  { label: "15 мин", value: 15 },
+                  { label: "30 мин", value: 30 },
+                  { label: "45 мин", value: 45 },
+                  { label: "59 мин", value: 59 }
                 ].map((opt) => {
                   const active = (draft.sync?.post_order_delay_minutes ?? 0) === opt.value;
                   return (
@@ -905,17 +945,22 @@ export function AgentConfigurationsDialog({
               </div>
               <ConfigTextField
                 label="Свой интервал (минуты)"
-                hint="0 — без задержки, максимум 120"
+                hint="0 — без задержки, максимум 59 (меньше часа)"
                 type="number"
                 min={0}
-                max={120}
+                max={59}
                 value={draft.sync?.post_order_delay_minutes ?? ""}
                 onChange={(e) =>
                   setDraft((d) =>
-                    setDraftPath(d, "sync", (s) => ({
-                      ...s,
-                      post_order_delay_minutes: e.target.value === "" ? null : Number(e.target.value)
-                    }))
+                    setDraftPath(d, "sync", (s) => {
+                      if (e.target.value === "") {
+                        return { ...s, post_order_delay_minutes: null };
+                      }
+                      const n = Number(e.target.value);
+                      if (!Number.isFinite(n)) return s;
+                      const clamped = Math.min(59, Math.max(0, Math.trunc(n)));
+                      return { ...s, post_order_delay_minutes: clamped };
+                    })
                   )
                 }
               />
@@ -1127,6 +1172,21 @@ export function AgentConfigurationsDialog({
           </DialogTitle>
           {bulkMode && bulkSummary ? (
             <p className="mt-1 text-xs text-muted-foreground">{bulkSummary}</p>
+          ) : null}
+          {!bulkMode ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {variant === "supervisor"
+                ? "Эти настройки синхронизируются с мобильным приложением супервайзера (Настройки)."
+                : (
+                  <>
+                    Склад, филиал и территория — в{" "}
+                    <a href="/work-slots" className="font-semibold text-teal-700 underline">
+                      Рабочее место
+                    </a>
+                    . Здесь только настройки мобильного приложения.
+                  </>
+                )}
+            </p>
           ) : null}
           {bulkMode ? (
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

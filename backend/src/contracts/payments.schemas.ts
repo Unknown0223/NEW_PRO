@@ -94,6 +94,12 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
     application_channel = acRaw;
   }
 
+  const tcRaw = q.transfer_channel?.trim().toLowerCase();
+  let transfer_channel: PaymentListQuery["transfer_channel"] | undefined;
+  if (tcRaw === "manual" || tcRaw === "bank_verified") {
+    transfer_channel = tcRaw;
+  }
+
   const cash_desk_ids = parseCommaSeparatedIds(q.cash_desk_ids);
 
   const ekRaw = q.entry_kind?.trim();
@@ -144,6 +150,7 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
     ...(deal_type !== undefined && deal_type !== "both" ? { deal_type } : {}),
     ...(payment_status !== undefined ? { payment_status } : {}),
     ...(application_channel !== undefined ? { application_channel } : {}),
+    ...(transfer_channel !== undefined ? { transfer_channel } : {}),
     ...(cash_desk_ids !== undefined ? { cash_desk_ids } : {}),
     ...(entry_kind !== undefined ? { entry_kind } : {}),
     ...(date_field !== undefined ? { date_field } : {}),
@@ -227,14 +234,24 @@ export const createPaymentEditGrantBodySchema = z.object({
 });
 
 /** GET `/api/:slug/payments/order-cash-in/context` */
-export const orderCashInContextQuerySchema = z.object({
-  client_id: z.coerce.number().int().positive(),
-  order_ids: z.string().max(8000).optional()
-});
+export const orderCashInContextQuerySchema = z
+  .object({
+    // z.coerce.number().optional() — queryda kalit yo‘q bo‘lsa Number(undefined)=NaN (zod gotcha)
+    client_id: z.preprocess((val) => {
+      if (val === undefined || val === null || val === "") return undefined;
+      const n = typeof val === "number" ? val : Number.parseInt(String(val), 10);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    }, z.number().int().positive().optional()),
+    order_ids: z.string().max(8000).optional()
+  })
+  .refine((d) => Boolean(d.client_id) || Boolean(d.order_ids?.trim()), {
+    message: "client_id yoki order_ids majburiy"
+  });
 
 /** POST `/api/:slug/payments/order-cash-in` */
 export const createOrderCashInBodySchema = z.object({
-  client_id: z.number().int().positive(),
+  /** Ixtiyoriy (eski klientlar); har qator zakazning client_id si ishlatiladi. */
+  client_id: z.number().int().positive().optional(),
   cash_desk_id: z.number().int().positive().nullable().optional(),
   paid_at: z.string().max(48).optional().nullable(),
   lines: z

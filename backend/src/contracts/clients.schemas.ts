@@ -20,7 +20,7 @@ const visitWeekdaysSchema = z.preprocess((v) => {
 
 /** PATCH `/api/:slug/clients/:id` — agent slotlari */
 export const clientAgentAssignmentSlotSchema = z.object({
-  slot: z.number().int().min(1).max(10),
+  slot: z.number().int().min(1).max(100),
   agent_id: optionalPositiveIntId,
   visit_date: z.string().nullable().optional(),
   expeditor_phone: z.string().nullable().optional(),
@@ -81,7 +81,7 @@ export const patchClientBodySchema = z
     warehouse_id: z.number().int().positive().nullable().optional(),
     cash_desk_id: z.number().int().positive().nullable().optional(),
     agent_id: z.number().int().positive().nullable().optional(),
-    agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(10).optional(),
+    agent_assignments: z.array(clientAgentAssignmentSlotSchema).max(100).optional(),
     contact_persons: z.array(clientContactSlotSchema).max(10).optional(),
     is_active: z.boolean().optional(),
     price_type: z.string().max(128).nullable().optional(),

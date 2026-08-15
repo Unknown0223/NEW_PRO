@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import type { ReportActor } from "../reports/client-sales-4-report.service";
-import { REPORT_BUILDER_DATASET_ROW_CAP } from "./report-builder.constants";
+import { REPORT_BUILDER_DATASET_ROW_CAP, REPORT_BUILDER_DATASET_PAGE_SIZE } from "./report-builder.constants";
 import { REPORT_BUILDER_FIELD_IDS, fieldExprSql, listWdrFieldsForDataset } from "./report-builder.metadata";
 import {
   buildReportBuilderWhereSql,
@@ -126,7 +126,18 @@ export async function runReportBuilderDataset(
 
   const totalRowCount = Number(countRows[0]?.cnt ?? 0);
 
-  const limit = cap + 1;
+  const requestedLimit = Number(filters.pageLimit);
+  const requestedOffset = Number(filters.pageOffset);
+  const pageOffset =
+    Number.isFinite(requestedOffset) && requestedOffset > 0 ? Math.floor(requestedOffset) : 0;
+  const pageLimitRaw =
+    Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.floor(requestedLimit)
+      : REPORT_BUILDER_DATASET_PAGE_SIZE;
+  // Cap ichida; +1 bilan hasMore aniqlanadi
+  const pageLimit = Math.min(pageLimitRaw, cap);
+  const fetchLimit = pageLimit + 1;
+
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
     WITH ${REPORT_BUILDER_STATUS_LOGS_CTE}
     SELECT
@@ -134,17 +145,24 @@ export async function runReportBuilderDataset(
     ${reportBuilderJoinSql(tenantId)}
     WHERE ${whereSql}
     ORDER BY o.id ASC, oi.id ASC
-    LIMIT ${limit}
+    LIMIT ${fetchLimit}
+    OFFSET ${pageOffset}
   `;
 
-  const truncated = rows.length > cap;
-  const dataRows = truncated ? rows.slice(0, cap) : rows;
+  const hasMoreInPage = rows.length > pageLimit;
+  const dataRows = hasMoreInPage ? rows.slice(0, pageLimit) : rows;
+  const loadedThrough = pageOffset + dataRows.length;
+  const truncated = totalRowCount > cap;
+  const hasMore = Boolean(hasMoreInPage && loadedThrough < cap);
 
   return {
     fields: listWdrFieldsForDataset(filters.datasetId),
     rows: dataRows,
     truncated,
     totalRowCount,
-    cap
+    cap,
+    hasMore,
+    pageOffset,
+    pageLimit
   };
 }

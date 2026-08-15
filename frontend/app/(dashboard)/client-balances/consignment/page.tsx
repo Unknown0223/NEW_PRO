@@ -1,7 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { ConsignmentBalancesWorkspace } from "@/components/client-balances/consignment-balances-workspace";
-
+/** Eski alohida sahifa → asosiy «Балансы клиентов» ichidagi «По консигнации» tab. */
 export default function ConsignmentClientBalancesPage() {
-  return <ConsignmentBalancesWorkspace />;
+  redirect("/client-balances?view=clients_consignment");
 }

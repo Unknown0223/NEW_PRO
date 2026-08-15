@@ -1,5 +1,9 @@
 import { prisma } from "../../config/database";
 import {
+  loadTenantTimezone,
+  utcOffsetHoursForTimezone
+} from "../tenant-settings/tenant-timezone";
+import {
   agentScopedOrderWhere,
   applyMobileSyncGate,
   assertAgentScopedClient,
@@ -81,7 +85,13 @@ export async function syncDelta(
     data: { last_sync_at: now }
   });
 
-  return { sync_at: now.toISOString(), ...result };
+  const workTimezone = await loadTenantTimezone(tenantId);
+  return {
+    sync_at: now.toISOString(),
+    work_timezone: workTimezone,
+    work_utc_offset_hours: utcOffsetHoursForTimezone(workTimezone),
+    ...result
+  };
 }
 
 export async function enqueueOrder(

@@ -12,8 +12,8 @@ export default function SystemMigrationPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Tizim migratsiyasi</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            To‘liq zaxira olish va boshqa serverga ko‘chirish. Format v4 — spravochniklar, operatsion tarix,
-            bonus/KPI rejalar va mijoz fotolari bitta arxivda.
+            To‘liq zaxira olish va boshqa serverga ko‘chirish. Format v5 — spravochniklar, operatsion tarix,
+            bonus/KPI, RBAC/katalog va mijoz fotolari bitta arxivda.
           </p>
         </div>
         <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>

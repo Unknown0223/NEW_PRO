@@ -18,7 +18,7 @@ class AppDatabase {
     final path = p.join(dbPath, 'salesdoc.db');
     return openDatabase(
       path,
-      version: 15,
+      version: 18,
       onOpen: (db) async {
         // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
         try {
@@ -26,6 +26,9 @@ class AppDatabase {
           await db.rawQuery('PRAGMA synchronous=NORMAL');
         } catch (_) {}
         await _ensureClientColumns(db);
+        await _ensureHeldOrderSummaryColumns(db);
+        await _ensurePhotoRetryColumn(db);
+        await _ensurePerfIndexes(db);
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -146,7 +149,8 @@ class AppDatabase {
             caption TEXT NOT NULL,
             order_id INTEGER,
             created_at TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending'
+            status TEXT NOT NULL DEFAULT 'pending',
+            retry_count INTEGER NOT NULL DEFAULT 0
           )
         ''');
         await db.execute('''
@@ -167,11 +171,15 @@ class AppDatabase {
             shipment_date TEXT,
             estimated_total REAL NOT NULL DEFAULT 0,
             item_count INTEGER NOT NULL DEFAULT 0,
+            bonus_qty INTEGER NOT NULL DEFAULT 0,
+            discount_pct REAL NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             submit_at TEXT NOT NULL,
+            capture_deadline TEXT,
             status TEXT NOT NULL DEFAULT 'pending'
           )
         ''');
+        await _ensurePerfIndexes(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -261,11 +269,22 @@ class AppDatabase {
               shipment_date TEXT,
               estimated_total REAL NOT NULL DEFAULT 0,
               item_count INTEGER NOT NULL DEFAULT 0,
+              bonus_qty INTEGER NOT NULL DEFAULT 0,
+              discount_pct REAL NOT NULL DEFAULT 0,
               created_at TEXT NOT NULL,
               submit_at TEXT NOT NULL,
               status TEXT NOT NULL DEFAULT 'pending'
             )
           ''');
+        }
+        if (oldVersion < 16) {
+          await _ensureHeldOrderSummaryColumns(db);
+        }
+        if (oldVersion < 17) {
+          await _ensurePhotoRetryColumn(db);
+        }
+        if (oldVersion < 18) {
+          await _ensurePerfIndexes(db);
         }
         if (oldVersion < 5) {
           await db.execute('''
@@ -287,6 +306,51 @@ class AppDatabase {
         }
       },
     );
+  }
+
+  static Future<void> _ensureHeldOrderSummaryColumns(Database db) async {
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN bonus_qty INTEGER NOT NULL DEFAULT 0');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+    } catch (_) {}
+  }
+
+  static Future<void> _ensurePhotoRetryColumn(Database db) async {
+    try {
+      await db.execute(
+        'ALTER TABLE pending_photo_reports ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE held_orders ADD COLUMN capture_deadline TEXT');
+    } catch (_) {}
+    try {
+      await db.execute(
+        "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
+      );
+    } catch (_) {}
+  }
+
+  /// Ro‘yxat/qidiruv/vizit metrikalarini tezlashtirish.
+  static Future<void> _ensurePerfIndexes(Database db) async {
+    const stmts = <String>[
+      'CREATE INDEX IF NOT EXISTS idx_clients_active_name ON clients(is_active, name COLLATE NOCASE)',
+      'CREATE INDEX IF NOT EXISTS idx_clients_code ON clients(client_code)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_day ON agent_visits(visit_day)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_client ON agent_visits(client_id)',
+      'CREATE INDEX IF NOT EXISTS idx_visits_client_status ON agent_visits(client_id, status)',
+      'CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client_id)',
+      'CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_prices_type ON prices(price_type)',
+      'CREATE INDEX IF NOT EXISTS idx_products_name ON products(name COLLATE NOCASE)',
+    ];
+    for (final sql in stmts) {
+      try {
+        await db.execute(sql);
+      } catch (_) {}
+    }
   }
 
   static Future<void> _ensureClientColumns(Database db) async {
@@ -367,7 +431,7 @@ class AppDatabase {
     Transaction txn,
     String table,
     List<Map<String, dynamic>> rows, {
-    int chunkSize = 1000,
+    int chunkSize = 400,
   }) async {
     if (rows.isEmpty) return;
     for (var i = 0; i < rows.length; i += chunkSize) {
@@ -377,9 +441,7 @@ class AppDatabase {
         batch.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
-      if (i + chunkSize < rows.length) {
-        await Future<void>.delayed(Duration.zero);
-      }
+      await Future<void>.delayed(Duration.zero);
     }
   }
 
@@ -517,18 +579,21 @@ class AppDatabase {
       if (prev == null || d.isAfter(prev)) out[clientId] = d;
     }
 
-    final visits = await db.query(
-      'agent_visits',
-      columns: ['client_id', 'visit_day'],
-      where: "client_id IS NOT NULL AND status IN ('completed', 'in_progress', 'refused')",
+    final visits = await db.rawQuery(
+      "SELECT client_id, MAX(visit_day) AS d FROM agent_visits "
+      "WHERE client_id IS NOT NULL AND status IN ('completed', 'in_progress', 'refused') "
+      "GROUP BY client_id",
     );
     for (final r in visits) {
-      consider((r['client_id'] as num?)?.toInt(), r['visit_day']?.toString());
+      consider((r['client_id'] as num?)?.toInt(), r['d']?.toString());
     }
 
-    final orders = await db.query('orders', columns: ['client_id', 'created_at']);
+    final orders = await db.rawQuery(
+      'SELECT client_id, MAX(created_at) AS d FROM orders '
+      'WHERE client_id IS NOT NULL GROUP BY client_id',
+    );
     for (final r in orders) {
-      consider((r['client_id'] as num?)?.toInt(), r['created_at']?.toString());
+      consider((r['client_id'] as num?)?.toInt(), r['d']?.toString());
     }
 
     return out;
@@ -555,9 +620,9 @@ class AppDatabase {
     await db.update('agent_visits', row, where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Eski mobil katalog (50 ta limit) yoki `visit_weekdays` yo‘q — qayta to‘liq yuklash.
+  /// Eski katalog versiyasi yoki visit_weekdays yo‘q — qayta to‘liq yuklash.
+  /// Eslatma: ≤50 mijoz «stale» deb hisoblanmasin — bu har ochilishda full sync qilardi.
   static const agentClientsCatalogVersion = '6';
-  static const legacyClientCatalogCap = 50;
 
   Future<bool> needsAgentClientCatalogUpgrade() async {
     final db = await database;
@@ -569,9 +634,8 @@ class AppDatabase {
   Future<bool> needsFullClientCatalogResync() async {
     if (await needsAgentClientCatalogUpgrade()) return true;
     final n = await clientCount();
-    if (n > 0 && n <= legacyClientCatalogCap) return true;
     // Delta-sync eski katalog: mijozlar bor, lekin tashrif kunlari SQLite da saqlanmagan.
-    if (n >= 100 && await clientsWithVisitWeekdaysCount() == 0) return true;
+    if (n >= 20 && await clientsWithVisitWeekdaysCount() == 0) return true;
     return false;
   }
 
@@ -809,8 +873,40 @@ class AppDatabase {
     final db = await database;
     return db.query(
       'pending_photo_reports',
-      where: "status = 'pending'",
+      where: "status = 'pending' AND retry_count < 5",
       orderBy: 'created_at ASC',
+    );
+  }
+
+  /// Bugun ushbu mijoz uchun oflayn navbatda (hali order_id bog‘lanmagan) foto bormi.
+  Future<bool> hasPendingUnlinkedPhotoReportToday(int clientId) async {
+    final db = await database;
+    final dayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final rows = await db.query(
+      'pending_photo_reports',
+      where:
+          "status = 'pending' AND retry_count < 5 AND client_id = ? AND order_id IS NULL AND created_at >= ?",
+      whereArgs: [clientId, dayStart.toIso8601String()],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<void> bumpPendingPhotoRetry(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE pending_photo_reports SET retry_count = retry_count + 1 WHERE id = ?',
+      [id],
+    );
+  }
+
+  Future<void> markPendingPhotoFailed(int id) async {
+    final db = await database;
+    await db.update(
+      'pending_photo_reports',
+      {'status': 'failed'},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 
@@ -822,9 +918,19 @@ class AppDatabase {
   Future<int> pendingPhotoReportCount() async {
     final db = await database;
     final r = await db.rawQuery(
-      "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending'",
+      "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending' AND retry_count < 5",
     );
     return r.first['cnt'] as int? ?? 0;
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingHeldOrdersForClient(int clientId) async {
+    final db = await database;
+    return db.query(
+      'held_orders',
+      where: "status = 'pending' AND client_id = ?",
+      whereArgs: [clientId],
+      orderBy: 'submit_at ASC',
+    );
   }
 
   Future<void> setLastSyncAt(String value) async {
@@ -872,10 +978,34 @@ class AppDatabase {
     return r.first['cnt'] as int? ?? 0;
   }
 
+  /// Chernovik TTL — [OrderDraft.ttl] bilan bir xil (1 kun saved_at dan).
+  static const _orderDraftTtl = Duration(days: 1);
+
   Future<void> purgeExpiredOrderDrafts() async {
     final db = await database;
-    final now = DateTime.now().toIso8601String();
-    await db.delete('order_drafts', where: 'expires_at <= ?', whereArgs: [now]);
+    final rows = await db.query('order_drafts', columns: ['client_id', 'saved_at', 'expires_at']);
+    final now = DateTime.now();
+    for (final row in rows) {
+      final clientId = (row['client_id'] as num?)?.toInt();
+      if (clientId == null) continue;
+      final savedAt = DateTime.tryParse(row['saved_at']?.toString() ?? '') ?? now;
+      final expiresAt = savedAt.add(_orderDraftTtl);
+      if (!now.isBefore(expiresAt)) {
+        await db.delete('order_drafts', where: 'client_id = ?', whereArgs: [clientId]);
+        continue;
+      }
+      // Migrate legacy short expires_at (e.g. 1h) to 1-day TTL.
+      final stored = row['expires_at']?.toString();
+      final iso = expiresAt.toIso8601String();
+      if (stored != iso) {
+        await db.update(
+          'order_drafts',
+          {'expires_at': iso},
+          where: 'client_id = ?',
+          whereArgs: [clientId],
+        );
+      }
+    }
   }
 
   Future<void> upsertOrderDraft(Map<String, dynamic> row) async {

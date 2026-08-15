@@ -5,12 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
 import {
   AgentFormField,
   AgentFormSelect,
   agentModalInputClass,
   parseAgentFio
 } from "@/components/staff/agent-workspace-template-ui";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 
 export type SupervisorFormRow = {
@@ -214,8 +216,8 @@ export function SupervisorFormModal({
   const validate = (): Record<string, string> => {
     const errs: Record<string, string> = {};
     if (!first_name.trim()) errs.first_name = "Имя обязательно.";
+    if (!login.trim()) errs.login = "Логин обязателен.";
     if (isNew) {
-      if (!login.trim()) errs.login = "Логин обязателен.";
       if (password.length < 6) errs.password = "Пароль — минимум 6 символов.";
     } else if (password.trim().length > 0 && password.trim().length < 6) {
       errs.password = "Пароль — минимум 6 символов.";
@@ -237,7 +239,7 @@ export function SupervisorFormModal({
       phone: phone.trim() || null,
       code: code.trim() || null,
       pinfl: pinfl.trim() || null,
-      branch: branch.trim() || null,
+      branch: null,
       position: position.trim() || null,
       kpi_color: kpi_color || null,
       is_active,
@@ -258,9 +260,14 @@ export function SupervisorFormModal({
     }
     if (!r) return;
     body.supervisee_agent_ids = Array.from(agSel);
+    body.login = login.trim().toLowerCase();
     if (password.trim().length >= 6) body.password = password.trim();
-    await onSubmitEdit(r.id, body);
-    onClose();
+    try {
+      await onSubmitEdit(r.id, body);
+      onClose();
+    } catch (e: unknown) {
+      setFieldErrors({ login: messageFromSupervisorPatchError(e) });
+    }
   };
 
   const handleDetachInactive = async () => {
@@ -301,6 +308,8 @@ export function SupervisorFormModal({
               {errorMessage}
             </p>
           ) : null}
+
+          <WorkplaceMovedNotice />
 
           <AgentFormField label="Имя *">
             <input
@@ -362,15 +371,6 @@ export function SupervisorFormModal({
               onChange={(e) => setPinfl(e.target.value)}
               className={agentModalInputClass}
               placeholder="ПИНФЛ"
-            />
-          </AgentFormField>
-
-          <AgentFormField label="Филиал">
-            <AgentFormSelect
-              value={branch}
-              onChange={setBranch}
-              emptyLabel="Филиал"
-              options={branchOptions.map((b) => ({ value: b, label: b }))}
             />
           </AgentFormField>
 
@@ -457,8 +457,7 @@ export function SupervisorFormModal({
                 value={login}
                 onChange={(e) => setLogin(e.target.value.toLowerCase())}
                 maxLength={20}
-                disabled={!isNew}
-                className={`${agentModalInputClass} pr-14 disabled:bg-muted disabled:text-slate-500 ${inputErr("login")}`}
+                className={`${agentModalInputClass} pr-14 ${inputErr("login")}`}
                 placeholder="Логин"
                 autoComplete="off"
               />
@@ -539,7 +538,7 @@ export function SupervisorFormModal({
         <div className="border-t border-border bg-muted/40 px-5 py-4">
           <button
             type="button"
-            disabled={loading || !first_name.trim() || (isNew && (!login.trim() || password.length < 6))}
+            disabled={loading || !first_name.trim() || !login.trim() || (isNew && password.length < 6)}
             onClick={() => void handleSave()}
             className="flex w-full items-center justify-center rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"
           >

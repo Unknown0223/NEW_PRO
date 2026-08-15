@@ -18,9 +18,11 @@ import {
   QTY_AGGREGATE_PURCHASED_PID,
   resolveQtyGiftProductId,
   resolveSumRuleGiftProductId,
+  bonusRoomAfterPaidQty,
   ruleBlockedByOncePerClient,
   ruleHasPurchaseScope,
   ruleMatchesClient,
+  ruleMatchesConsignment,
   ruleMatchesOrderAgentScope,
   ruleMatchesOrderProductScope,
   ruleRelatesToOrderSelection,
@@ -154,6 +156,8 @@ export async function findQtyBonusPeeks(
   let availableByProductId =
     engineOpts?.availableByProductId ??
     (await loadAvailableQtyByProductId(tx, tenantId, warehouseId, stockProductIds));
+  /** Sovg‘a tanlash: pullik savatdan keyin qolgan joy. */
+  let giftPickAvail = bonusRoomAfterPaidQty(availableByProductId, qtyByProduct);
 
   const peeks: QtyBonusPeek[] = [];
 
@@ -164,6 +168,7 @@ export async function findQtyBonusPeeks(
 
   const orderAgentQty =
     engineOpts?.prereqEnv?.orderAgent ?? engineOpts?.orderAgent ?? null;
+  const isConsignment = engineOpts?.prereqEnv?.is_consignment === true;
 
   for (const rule of filtered) {
     const hasClauses = (rule.clauses?.length ?? 0) > 0;
@@ -174,10 +179,12 @@ export async function findQtyBonusPeeks(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       } else {
         if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesConsignment(rule, isConsignment)) continue;
         if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       }
     } else {
       if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesConsignment(rule, isConsignment)) continue;
       if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
       if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
@@ -198,7 +205,7 @@ export async function findQtyBonusPeeks(
       const bonusUnits = computeQtyBonusForRuleRow(view, effAgg);
       if (bonusUnits <= 0) continue;
 
-      const ctx: QtyGiftResolveContext = { availableByProductId, minUnits: bonusUnits };
+      const ctx: QtyGiftResolveContext = { availableByProductId: giftPickAvail, minUnits: bonusUnits };
 
       if (view.bonus_product_ids.length === 0) {
         let heroPid = 0;
@@ -264,6 +271,7 @@ export async function findQtyBonusPeeks(
   if (missingStockIds.size > 0) {
     const extraStock = await loadAvailableQtyByProductId(tx, tenantId, warehouseId, missingStockIds);
     availableByProductId = new Map([...availableByProductId, ...extraStock]);
+    giftPickAvail = bonusRoomAfterPaidQty(availableByProductId, qtyByProduct);
   }
 
   for (const rule of scopedRules) {
@@ -273,10 +281,12 @@ export async function findQtyBonusPeeks(
         if (!(await ruleTreeSatisfiedForOrder(rule, engineOpts.prereqEnv, now, new Set()))) continue;
       } else {
         if (!ruleMatchesClient(rule, client)) continue;
+        if (!ruleMatchesConsignment(rule, isConsignment)) continue;
         if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       }
     } else {
       if (!ruleMatchesClient(rule, client)) continue;
+      if (!ruleMatchesConsignment(rule, isConsignment)) continue;
       if (!ruleMatchesOrderAgentScope(rule, orderAgentQty)) continue;
       if (!ruleMatchesOrderProductScope(rule, orderedProductIds, productById)) continue;
       if (!ruleRelatesToOrderSelection(rule, orderedProductIds, productById)) continue;
@@ -310,7 +320,7 @@ export async function findQtyBonusPeeks(
         if (bonusUnits <= 0) continue;
 
         const giftPid = resolveQtyGiftProductId(view, purchasedPid, giftOverrides, {
-          availableByProductId,
+          availableByProductId: giftPickAvail,
           minUnits: bonusUnits,
           categoryCandidateIds
         });
@@ -337,9 +347,9 @@ export async function materializeQtyPeeks(
   const out: BonusLineDraft[] = [];
   for (const [giftPid, qty] of giftQtyByProduct) {
     if (qty.lte(0)) continue;
+    // Retail yo‘q bo‘lsa ham qator saqlanadi (web `bonus_qty` ko‘rinsin); summa 0.
     const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-    if (priceStr == null) continue;
-    const price = new PrismaClient.Decimal(priceStr);
+    const price = new PrismaClient.Decimal(priceStr ?? "0");
     const total = roundMoney(qty.mul(price));
     out.push({
       product_id: giftPid,
@@ -363,8 +373,7 @@ export async function materializeGiftSplits(
     if (units <= 0) continue;
     const qty = new PrismaClient.Decimal(units);
     const priceStr = await getProductPrice(tenantId, giftPid, "retail");
-    if (priceStr == null) continue;
-    const price = new PrismaClient.Decimal(priceStr);
+    const price = new PrismaClient.Decimal(priceStr ?? "0");
     const total = roundMoney(qty.mul(price));
     out.push({
       product_id: giftPid,

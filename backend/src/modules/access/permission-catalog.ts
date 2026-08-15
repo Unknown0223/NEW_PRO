@@ -34,5 +34,9 @@ export const DEFAULT_PERMISSION_METADATA: Record<string, { description: string; 
   "access.upravlenie.history": { description: "Доступ: история изменений", section: "Доступ" },
   "audit.view": { description: "Аудит: просмотр", section: "Аудит" },
   "audit.log.view": { description: "Журнал аудита: просмотр", section: "Аудит" },
-  "audit.log.copy": { description: "Журнал аудита: выгрузка", section: "Аудит" }
+  "audit.log.copy": { description: "Журнал аудита: выгрузка", section: "Аудит" },
+  "diagnostics.error_logs.view": {
+    description: "Диагностика: журнал ошибок (просмотр)",
+    section: "Диагностика"
+  }
 };

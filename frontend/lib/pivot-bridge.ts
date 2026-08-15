@@ -59,6 +59,9 @@ export type ReportBuilderMetadata = {
 export type ReportBuilderDatasetRequest = DatasetFiltersPayload & {
   rowFieldIds?: string[];
   colFieldIds?: string[];
+  /** Sahifa: boshlang‘ich 1000, scroll bilan keyingisi 500. */
+  pageLimit?: number;
+  pageOffset?: number;
 };
 
 export function isVirtualPivotActive(): boolean {
@@ -74,19 +77,120 @@ export async function fetchReportBuilderMetadata(
   return data.data;
 }
 
+/** Ekran: birinchi sahifa 1000, scroll bilan keyingisi 500. */
+export const DATASET_DISPLAY_PAGE_SIZE = 1000;
+export const DATASET_SCROLL_PAGE_SIZE = 500;
+
+export type ReportBuilderDatasetResult = {
+  rows: Record<string, unknown>[];
+  truncated: boolean;
+  totalRowCount: number;
+  cap: number;
+  hasMore: boolean;
+  pageOffset: number;
+  pageLimit: number;
+};
+
 export async function fetchReportBuilderDataset(
   tenantSlug: string,
   payload: ReportBuilderDatasetRequest
-): Promise<Record<string, unknown>[]> {
-  const { data } = await api.post<{ data: { rows: Record<string, unknown>[] } }>(
-    `/api/${tenantSlug}/reports/report-builder/dataset`,
-    payload
-  );
-  return normalizeSalecDatasetRows(data.data.rows ?? []);
+): Promise<ReportBuilderDatasetResult> {
+  const { data } = await api.post<{
+    data: {
+      rows: Record<string, unknown>[];
+      truncated?: boolean;
+      totalRowCount?: number;
+      cap?: number;
+      hasMore?: boolean;
+      pageOffset?: number;
+      pageLimit?: number;
+    };
+  }>(`/api/${tenantSlug}/reports/report-builder/dataset`, payload);
+  const body = data.data;
+  const rows = normalizeSalecDatasetRows(body.rows ?? []);
+  const pageLimit = body.pageLimit ?? payload.pageLimit ?? rows.length;
+  const pageOffset = body.pageOffset ?? payload.pageOffset ?? 0;
+  return {
+    rows,
+    truncated: Boolean(body.truncated),
+    totalRowCount: body.totalRowCount ?? rows.length,
+    cap: body.cap ?? rows.length,
+    hasMore: Boolean(body.hasMore),
+    pageOffset,
+    pageLimit
+  };
+}
+
+/**
+ * Excel/to‘liq hisob uchun barcha sahifalarni 0-dan yuklaydi (cap ichida).
+ * Sliding window ekranida `existing` ishonchsiz — shuning uchun doim boshidan.
+ */
+export async function fetchAllReportBuilderDatasetPages(
+  tenantSlug: string,
+  base: ReportBuilderDatasetRequest,
+  _existing: Record<string, unknown>[] = [],
+  meta?: { totalRowCount: number; cap: number; hasMore: boolean }
+): Promise<ReportBuilderDatasetResult> {
+  let rows: Record<string, unknown>[] = [];
+  let offset = 0;
+  let hasMore = true;
+  let totalRowCount = meta?.totalRowCount ?? 0;
+  let cap = meta?.cap ?? 50_000;
+  let truncated = false;
+
+  const first = await fetchReportBuilderDataset(tenantSlug, {
+    ...base,
+    pageLimit: DATASET_DISPLAY_PAGE_SIZE,
+    pageOffset: 0
+  });
+  rows = first.rows;
+  offset = rows.length;
+  hasMore = first.hasMore;
+  totalRowCount = first.totalRowCount;
+  cap = first.cap;
+  truncated = first.truncated;
+
+  while (hasMore && rows.length < cap) {
+    const page = await fetchReportBuilderDataset(tenantSlug, {
+      ...base,
+      pageLimit: DATASET_SCROLL_PAGE_SIZE,
+      pageOffset: offset
+    });
+    if (!page.rows.length) {
+      hasMore = false;
+      break;
+    }
+    rows = rows.concat(page.rows);
+    offset = rows.length;
+    hasMore = page.hasMore;
+    totalRowCount = page.totalRowCount;
+    cap = page.cap;
+    truncated = page.truncated;
+  }
+
+  return {
+    rows,
+    truncated,
+    totalRowCount,
+    cap,
+    hasMore: false,
+    pageOffset: 0,
+    pageLimit: rows.length
+  };
 }
 
 export function metadataToPivotFields(metadata: ReportBuilderMetadata): PivotField[] {
-  return salecFieldsToPivotFields(metadata.fields, metadata.metrics);
+  /** Legacy id → bonus miqdori (Σ / Значения). */
+  const fields = metadata.fields.map((f) =>
+    f.id === "order_bonuses_display" ? { ...f, id: "bonus_qty", label: f.label || "Бонусы" } : f
+  );
+  const seen = new Set<string>();
+  const deduped = fields.filter((f) => {
+    if (seen.has(f.id)) return false;
+    seen.add(f.id);
+    return true;
+  });
+  return salecFieldsToPivotFields(deduped, metadata.metrics);
 }
 
 /** Saqlangan hisobot konfigini Virtual Pivot `PivotConfig` ga aylantiradi. */

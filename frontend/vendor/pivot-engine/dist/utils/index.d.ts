@@ -10,4 +10,10 @@ export * from "./defaultConfig.js";
 export * from "./customizeCell.js";
 export * from "./filterSummary.js";
 export * from "./sliceTemplates.js";
+export * from "./layoutForm.js";
+export * from "./buildFlatPivotData.js";
+export * from "./sliceFilters.js";
+export * from "./valueLabels.js";
+export * from "./valuesPosition.js";
+export { resolveRowAxisHeaderLabel } from "./rowAxisHeader.js";
 //# sourceMappingURL=index.d.ts.map

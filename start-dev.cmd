@@ -4,11 +4,11 @@ REM Check: netsh interface ipv4 show excludedportrange protocol=tcp
 REM Fix (Admin CMD): net stop winnat
 REM              then: net start winnat
 REM              Re-check netsh; reboot if 3000 still excluded.
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 if not exist "package.json" (
   echo.
-  echo [XATO] package.json topilmadi. Papka: %CD%
+  echo [XATO] package.json topilmadi. Papka: !CD!
   echo Loyiha ildizi D:\SALESDOC bo'lishi kerak ^(ichida backend, frontend, package.json^).
   echo.
   pause

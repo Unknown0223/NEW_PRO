@@ -4,14 +4,18 @@ import { Input } from "@/components/ui/input";
 import type { SettingsItem } from "@/lib/settings-structure";
 import {
   filterSettingsSectionsByRole,
+  findSettingsItemRequiringRolesForPath,
+  isSettingsItemAllowedForRole,
   resolveSettingsItemHref,
   settingsSections
 } from "@/lib/settings-structure";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
+import { TimezoneSettingsDialog } from "@/components/settings/timezone-settings-dialog";
 import { useEffectiveRole } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -89,6 +93,7 @@ export function shouldShowSettingsSecondaryAside(pathname: string): boolean {
 
 export function SettingsShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
   const hideSettingsAside = !shouldShowSettingsSecondaryAside(pathname);
@@ -96,6 +101,32 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   const role = useEffectiveRole();
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("open") === "timezone") {
+      setTimezoneModalOpen(true);
+      return;
+    }
+    if (normalizeSettingsPathname(pathname) === "/settings/timezone") {
+      setTimezoneModalOpen(true);
+    }
+  }, [searchParams, pathname]);
+
+  const closeTimezoneModal = (open: boolean) => {
+    setTimezoneModalOpen(open);
+    if (open) return;
+    if (searchParams.get("open") === "timezone") {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("open");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      return;
+    }
+    if (normalizeSettingsPathname(pathname) === "/settings/timezone") {
+      router.replace("/settings", { scroll: false });
+    }
+  };
 
   const roleFilteredSections = useMemo(
     () => filterSettingsSectionsByRole(settingsSections, role),
@@ -148,17 +179,41 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       .filter((s) => s.items.length > 0);
   }, [search, roleFilteredSections]);
 
+  const settingsRoleGate = useMemo(() => {
+    const item = findSettingsItemRequiringRolesForPath(pathname);
+    if (!item) return null;
+    if (isSettingsItemAllowedForRole(item, role)) return null;
+    return item;
+  }, [pathname, role]);
+
+  const gatedChildren = settingsRoleGate ? (
+    <div className="flex flex-1 items-start justify-center py-8">
+      <AccessDeniedBanner
+        title="Нет доступа / Ruxsat yo‘q"
+        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли. / Bu sozlama bo‘limi sizning rolingiz uchun yopiq.`}
+        primaryHref="/settings"
+        primaryLabel="К настройкам / Sozlamalar"
+      />
+    </div>
+  ) : (
+    children
+  );
+
   if (hideSettingsAside) {
     return (
-      <div className="min-w-0">
-        <main className={cn("min-w-0", isGeoBoundariesPage ? "p-0" : "px-3 py-4 md:px-4 md:py-5")}>
-          {children}
-        </main>
-      </div>
+      <>
+        <div className="min-w-0">
+          <main className={cn("min-w-0", isGeoBoundariesPage ? "p-0" : "px-3 py-4 md:px-4 md:py-5")}>
+            {gatedChildren}
+          </main>
+        </div>
+        <TimezoneSettingsDialog open={timezoneModalOpen} onOpenChange={closeTimezoneModal} />
+      </>
     );
   }
 
   return (
+    <>
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:items-stretch">
       <aside
         className={cn(
@@ -261,6 +316,27 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                   }
 
                   const href = resolveSettingsItemHref(item);
+                  if (item.opensModal === "timezone") {
+                    return (
+                      <li key={item.slug}>
+                        <button
+                          type="button"
+                          title={item.description}
+                          onClick={() => setTimezoneModalOpen(true)}
+                          className={cn(
+                            "relative block w-full rounded-md py-1.5 pl-6 pr-2 text-left text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
+                            "before:absolute before:left-2 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",
+                            timezoneModalOpen &&
+                              "bg-primary/10 font-medium text-foreground before:bg-primary",
+                            timezoneModalOpen &&
+                              "after:pointer-events-none after:absolute after:right-0 after:top-1.5 after:bottom-1.5 after:w-0.5 after:rounded-l-sm after:bg-primary"
+                          )}
+                        >
+                          {item.title}
+                        </button>
+                      </li>
+                    );
+                  }
                   const active = isItemActive(pathname, currentSearch, href);
                   return (
                     <li key={item.slug}>
@@ -287,8 +363,10 @@ export function SettingsShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-4 md:py-5">
-        {children}
+        {gatedChildren}
       </main>
     </div>
+    <TimezoneSettingsDialog open={timezoneModalOpen} onOpenChange={closeTimezoneModal} />
+    </>
   );
 }

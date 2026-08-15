@@ -31,6 +31,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Ish mintaqasi UTC+5 (O‘zbekiston) — SSR Date local + log
+ENV TZ=Asia/Tashkent
 
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 

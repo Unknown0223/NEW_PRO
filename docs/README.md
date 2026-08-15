@@ -45,6 +45,10 @@ Bu katalog mavjud hujjatlarga havolalar. Eski reja fayllari (`API-reference.md`,
 | [../mobile/E2E_CHECKLIST.md](../mobile/E2E_CHECKLIST.md) | E2E checklist |
 | [../mobile/MOBILE_APP_TOLOQ_REJA_UZ.md](../mobile/MOBILE_APP_TOLOQ_REJA_UZ.md) | Mobile to‘liq reja |
 | [../mobile/STORE_RELEASE_PLAN.md](../mobile/STORE_RELEASE_PLAN.md) | Store release reja |
+| [bank-transfer-inbox-go-live-checklist.md](./bank-transfer-inbox-go-live-checklist.md) | Bank transfer inbox go-live |
+| [bank-transfer-inbox-kassir-sop.md](./bank-transfer-inbox-kassir-sop.md) | Kassir SOP (perechisleniya) |
+| [bank-transfer-inbox-adapter-contract.md](./bank-transfer-inbox-adapter-contract.md) | Fake/1C adapter shartnomasi |
+| [bank-transfer-inbox-uat-results.md](./bank-transfer-inbox-uat-results.md) | UAT natija shabloni |
 
 ## Audit / refaktoring handoff
 

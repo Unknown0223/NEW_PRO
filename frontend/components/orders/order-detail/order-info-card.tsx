@@ -1,9 +1,10 @@
 "use client";
 
-import { DiscountAlertIcon } from "@/components/orders/discount-alert-icon";
+import { OrderPromoAlertIcon } from "@/components/orders/discount-alert-icon";
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { bonusAlertLabel } from "@/lib/bonus-alert";
 import { discountAlertLabel } from "@/lib/discount-alert";
+import { orderHasPromoAlert, orderPromoAlertTitle } from "@/lib/order-alert";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { Button } from "@/components/ui/button";
 import {
@@ -147,13 +148,23 @@ export function OrderInfoCard({
               {Number(data.discount_sum ?? 0) > 0 ? (
                 <span className="font-medium tabular-nums">
                   {formatNumberGrouped(Number(data.discount_sum), { maxFractionDigits: 2 })}
+                  {Number(data.total_sum) > 0 ? (
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      (
+                      {Math.round(
+                        (Number(data.discount_sum) /
+                          (Number(data.total_sum) + Number(data.discount_sum))) *
+                          100
+                      )}
+                      %)
+                    </span>
+                  ) : null}
                 </span>
               ) : data.discount_alert ? (
                 <span className="text-amber-700 dark:text-amber-300">Не применена</span>
               ) : (
                 <span className="text-muted-foreground">Без скидки</span>
               )}
-              {data.discount_alert ? <DiscountAlertIcon code={data.discount_alert} size={16} /> : null}
             </span>
             {data.discount_alert ? (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
@@ -202,7 +213,6 @@ export function OrderInfoCard({
                   ({formatNumberGrouped(Number(data.bonus_qty), { maxFractionDigits: 0 })} шт.)
                 </span>
               ) : null}
-              {data.bonus_alert ? <DiscountAlertIcon code={data.bonus_alert} size={16} /> : null}
             </span>
             {data.bonus_alert ? (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
@@ -233,20 +243,29 @@ export function OrderInfoCard({
         ) : null}
 
         <div className="sm:col-span-2">
-          {data.bonus_alert || data.discount_alert ? (
-            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-              {data.bonus_alert ? (
-                <p>
-                  <span className="font-medium">Бонус: </span>
-                  {bonusAlertLabel(data.bonus_alert)}
-                </p>
-              ) : null}
-              {data.discount_alert ? (
-                <p className={data.bonus_alert ? "mt-1" : undefined}>
-                  <span className="font-medium">Скидка: </span>
-                  {discountAlertLabel(data.discount_alert)}
-                </p>
-              ) : null}
+          {orderHasPromoAlert(data.discount_alert, data.bonus_alert) ? (
+            <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              <OrderPromoAlertIcon
+                discountAlert={data.discount_alert}
+                bonusAlert={data.bonus_alert}
+                size={16}
+                className="mt-0.5"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{orderPromoAlertTitle(data.discount_alert, data.bonus_alert)}</p>
+                {data.bonus_alert && data.discount_alert ? (
+                  <div className="mt-1 space-y-0.5 opacity-90">
+                    <p>
+                      <span className="font-medium">Бонус: </span>
+                      {bonusAlertLabel(data.bonus_alert)}
+                    </p>
+                    <p>
+                      <span className="font-medium">Скидка: </span>
+                      {discountAlertLabel(data.discount_alert)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

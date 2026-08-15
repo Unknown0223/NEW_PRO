@@ -240,3 +240,48 @@ export async function patchKpiGroup(
   if (!detail) throw new Error("NOT_FOUND");
   return detail;
 }
+
+/** Tanlangan mahsulotlarni bitta KPI guruhiga biriktirish (oldingi KPI bog‘lanishlari olib tashlanadi). */
+export async function bulkSetProductsKpiGroup(
+  tenantId: number,
+  productIds: number[],
+  kpiGroupId: number | null,
+  actorUserId: number | null
+): Promise<{ updated: number }> {
+  const uniq = [...new Set(productIds)];
+  if (uniq.length === 0) return { updated: 0 };
+  await assertKpiProductIds(tenantId, uniq);
+
+  if (kpiGroupId != null) {
+    const group = await prisma.kpiGroup.findFirst({
+      where: { id: kpiGroupId, tenant_id: tenantId }
+    });
+    if (!group) throw new Error("NOT_FOUND");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.kpiGroupProduct.deleteMany({
+      where: {
+        product_id: { in: uniq },
+        product: { tenant_id: tenantId }
+      }
+    });
+    if (kpiGroupId != null) {
+      await tx.kpiGroupProduct.createMany({
+        data: uniq.map((product_id) => ({ kpi_group_id: kpiGroupId, product_id })),
+        skipDuplicates: true
+      });
+    }
+  });
+
+  await appendTenantAuditEvent({
+    tenantId,
+    actorUserId,
+    entityType: "kpi_group",
+    entityId: kpiGroupId ?? 0,
+    action: "bulk_assign_products",
+    payload: { product_ids: uniq, kpi_group_id: kpiGroupId }
+  });
+
+  return { updated: uniq.length };
+}

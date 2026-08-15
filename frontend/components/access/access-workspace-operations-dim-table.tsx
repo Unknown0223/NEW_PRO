@@ -218,12 +218,20 @@ export function AccessWorkspaceOperationsDimTable({ ws }: { ws: UseAccessWorkspa
                           className="h-6 min-w-0 border-orange-600/45 px-1.5 text-[10px] text-orange-950 hover:bg-orange-500/10 dark:text-orange-100"
                           disabled={ws.accessBulkSavePending || rowOpAccessBusy}
                           title={
-                            u.from_direct_allow || u.from_direct_deny
-                              ? "Снять личную настройку"
-                              : "Запретить для этого пользователя (роль не меняется)"
+                            u.from_role
+                              ? "Запретить для этого пользователя (роль не меняется)"
+                              : u.from_direct_allow || u.from_direct_deny
+                                ? "Снять личную настройку"
+                                : "Запретить для этого пользователя (роль не меняется)"
                           }
                           onClick={() => {
                             const key = ws.selectedDimension!.key;
+                            // Личный allow поверх роли: remove вернёт доступ из роли — нужен deny.
+                            if (u.from_role) {
+                              const body = ws.getOpPatchBodyForToggle(u, false, key);
+                              if (body) void ws.operationAccessMut.mutateAsync({ userId: u.id, body });
+                              return;
+                            }
                             if (u.from_direct_allow || u.from_direct_deny) {
                               void ws.operationAccessMut.mutateAsync({
                                 userId: u.id,
@@ -235,7 +243,7 @@ export function AccessWorkspaceOperationsDimTable({ ws }: { ws: UseAccessWorkspa
                             if (body) void ws.operationAccessMut.mutateAsync({ userId: u.id, body });
                           }}
                         >
-                          {u.from_direct_allow || u.from_direct_deny ? "Открепить" : "Снять"}
+                          {u.from_role ? "Снять" : u.from_direct_allow || u.from_direct_deny ? "Открепить" : "Снять"}
                         </Button>
                       ) : (
                         <span className="text-muted-foreground">—</span>

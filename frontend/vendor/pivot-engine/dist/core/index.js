@@ -4,4 +4,5 @@ export { CubeStore, hashAggregationConfig, hashFullConfig, hashPivotData, isAppe
 export { FilterEngine } from "./FilterEngine.js";
 export { DataTransformer } from "./DataTransformer.js";
 export { SortEngine } from "./SortEngine.js";
-export { PivotEngine, DEFAULT_PIVOT_CONFIG, DEFAULT_PIVOT_OPTIONS } from "./PivotEngine.js";
+export { DEFAULT_PIVOT_CONFIG, DEFAULT_PIVOT_OPTIONS } from "./defaults.js";
+export { PivotEngine } from "./PivotEngine.js";

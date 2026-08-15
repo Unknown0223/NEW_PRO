@@ -45,6 +45,13 @@ export type PaymentListRow = {
   deleted_by_user_id: number | null;
   deleted_by_name: string | null;
   delete_reason_ref: string | null;
+  /**
+   * Перечисление kanali: `manual` (qo‘lda) | `bank_verified` (1C/bank/excel).
+   * Oddiy naqd / boshqa to‘lovlarda null.
+   */
+  transfer_channel: "manual" | "bank_verified" | null;
+  transfer_source: string | null;
+  bank_transfer_inbox_id: number | null;
 };
 
 export type PaymentDetailRow = PaymentListRow & {
@@ -110,6 +117,8 @@ export type PaymentListQuery = {
    * `expeditor` — zakaz yoki to‘lovdagi ekspeditor bog‘langan.
    */
   application_channel?: "expeditor" | "collector" | "van" | "bank";
+  /** Inbox-dan yaratilgan перечисление: qo‘lda vs bank/1C/excel */
+  transfer_channel?: "manual" | "bank_verified";
   cash_desk_ids?: number[];
   warehouse_ids?: number[];
   /** payment — faqat to‘lovlar; client_expense — «расходы клиента» */

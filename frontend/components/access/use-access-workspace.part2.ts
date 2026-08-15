@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TableSortDir } from "@/components/ui/table-sort-button";
 import type { SearchableMultiSelectItem } from "@/components/ui/searchable-multi-select-panel";
 import { api } from "@/lib/api";
+import { invalidateMePermissionsQueries } from "@/lib/me-permissions";
 import { filterAccessWebPanelUsers } from "@/lib/access-web-users";
 import {
   ACCESS_DIM_TABLE_ROW_ESTIMATE_PX,
@@ -67,7 +68,8 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
         qc.setQueryData(c.qk, c.previous);
       }
     },
-    onSuccess: async (_data, _vars, ctx) => {
+    onSuccess: async (_data, vars, ctx) => {
+      invalidateMePermissionsQueries(qc, tenantSlug, { userId: vars.userId });
       const c = ctx as OpAccessMutCtx | undefined;
       if (c?.qk[2] === "operations") {
         /** Modal yopiq bo‘lsa — qo‘shimcha GET shart emas. */
@@ -142,7 +144,7 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
         meta: r.is_active ? "Активный" : "Неактивный",
         idLine: null as string | null,
         is_active: r.is_active,
-        group: operationLabel ? operationLabel.group : "common",
+        group: operationLabel ? operationLabel.group : "Общее",
         subgroup: operationLabel?.subgroup ?? null
       };
     });

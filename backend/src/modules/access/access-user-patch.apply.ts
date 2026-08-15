@@ -5,6 +5,7 @@ import {
   normalizeGrantDelegationOperationKey,
   toGrantDelegationKey
 } from "./access-grant-delegation";
+import { expandPermissionKeyAliases } from "./legacy-key-map";
 import {
   AccessManageRequiredError,
   derivePermissionModule,
@@ -110,7 +111,12 @@ export async function applyAccessUserPatchBodyTx(
   }
 
   if (body.remove_permission_keys?.length) {
-    await removeUserPermissionsByKeys(tx, tenantId, userId, body.remove_permission_keys);
+    await removeUserPermissionsByKeys(
+      tx,
+      tenantId,
+      userId,
+      expandPermissionKeyAliases(body.remove_permission_keys)
+    );
   }
 
   if (grantDelegationRevoke.length > 0) {
@@ -134,8 +140,12 @@ export async function applyAccessUserPatchBodyTx(
   }
 
   if (permDefined) {
-    const allow = [...new Set((body.permissions ?? []).map((x) => x.trim()).filter(Boolean))];
-    const deny = [...new Set((body.denied_permissions ?? []).map((x) => x.trim()).filter(Boolean))];
+    const allow = expandPermissionKeyAliases(
+      (body.permissions ?? []).map((x) => x.trim()).filter(Boolean)
+    );
+    const deny = expandPermissionKeyAliases(
+      (body.denied_permissions ?? []).map((x) => x.trim()).filter(Boolean)
+    );
     if (body.merge_permissions) {
       await mergeUserPermissionKeys(tx, tenantId, userId, allow, deny, txOpts?.permissionIdByKey, rbacRole);
     } else {

@@ -4,18 +4,18 @@ export const PRODUCT_CATALOG_HEADERS = [
   "Название *",
   "Код",
   "Категория *",
-  "Единица измерения(код) *",
-  "Группа(код)",
-  "Сегмент(код)",
-  "Штрих код",
-  "ТНВЭД код",
-  "Бренд(код)",
+  "Единица измерения (название) *",
+  "Группа (код)",
+  "Сегмент (код)",
+  "Штрихкод",
+  "ТН ВЭД код",
+  "Бренд (код)",
   "Сортировка",
-  "Вес(кг)",
+  "Вес (кг)",
   "Количество в блоке",
-  "Длина(м)",
-  "Ширина(м)",
-  "Толщина(м)"
+  "Длина (м)",
+  "Ширина (м)",
+  "Толщина (м)"
 ] as const;
 
 export const CLIENT_IMPORT_HEADERS = [
@@ -36,7 +36,13 @@ export const CLIENT_IMPORT_HEADERS = [
   "Долгота"
 ] as const;
 
-export const PRICE_IMPORT_HEADERS = ["Артикул (SKU)", "Тип цены", "Цена"] as const;
+/** Keng format: Артикул | <тип цены 1> | <тип цены 2> | … */
+export const PRICE_IMPORT_HEADERS = [
+  "Артикул (SKU)",
+  "Наличные",
+  "Терминал",
+  "Перечисление"
+] as const;
 
 export const STOCK_RECEIPT_HEADERS = [
   "№",
@@ -50,13 +56,13 @@ export const STOCK_RECEIPT_HEADERS = [
 ] as const;
 
 export const WORK_SLOT_HEADERS = [
-  "slot_code",
-  "label",
-  "branch_code",
-  "slot_type",
-  "is_active",
-  "sort_order",
-  "assign_login"
+  "Код слота",
+  "Название",
+  "Код филиала",
+  "Тип слота",
+  "Активен (да/нет)",
+  "Сортировка",
+  "Логин агента"
 ] as const;
 
 export type BundleTemplateSheet = {
@@ -95,15 +101,17 @@ export const BUNDLE_REFERENCE_SHEETS: BundleTemplateSheet[] = [
     rows: [
       ["Название", "Код", "Валюта (код)", "Сортировка"],
       ["Наличные", "CASH", "UZS", "1"],
-      ["Перечисление", "BANK", "UZS", "2"]
+      ["Терминал", "TERM", "UZS", "2"],
+      ["Перечисление", "BANK", "UZS", "3"]
     ]
   },
   {
     sheetName: "price-types",
     rows: [
-      ["Название", "Код", "Сортировка"],
-      ["Розница", "RETAIL", "1"],
-      ["Опт", "OPT", "2"]
+      ["Название", "Код", "Способ оплаты", "Вид (продажа/закупка)", "Сортировка"],
+      ["Наличные", "CASH", "Наличные", "продажа", "1"],
+      ["Терминал", "TERM", "Терминал", "продажа", "2"],
+      ["Перечисление", "BANK", "Перечисление", "продажа", "3"]
     ]
   },
   {
@@ -133,10 +141,10 @@ export const BUNDLE_REFERENCE_SHEETS: BundleTemplateSheet[] = [
   {
     sheetName: "territory",
     rows: [
-      ["Название", "Уровень", "Родитель", "Код"],
-      ["Узбекистан", "зона", "", "UZ"],
-      ["Ташкент", "регион", "Узбекистан", "TASH"],
-      ["Чиланзар", "город", "Ташкент", "CHIL"]
+      ["Город", "Код города", "Название региона", "Зона"],
+      ["Андижан", "AD_SHAXAR", "Андижанская область", "Фергана"],
+      ["Бектемир", "TSH_BEKTEMIR", "г. Ташкент", "Ташкент"],
+      ["Ангрен", "TV_ANGREN", "Ташкентская область", "Ташобл"]
     ]
   },
   {
@@ -190,7 +198,7 @@ export const BUNDLE_IMPORT_SHEETS_FALLBACK: BundleTemplateSheet[] = [
         "Пример товара",
         "SKU-001",
         "Напитки",
-        "SHT",
+        "dona",
         "",
         "",
         "8600000000001",
@@ -209,8 +217,8 @@ export const BUNDLE_IMPORT_SHEETS_FALLBACK: BundleTemplateSheet[] = [
     sheetName: "product-prices",
     rows: [
       [...PRICE_IMPORT_HEADERS],
-      ["SKU-001", "RETAIL", "15000"],
-      ["SKU-001", "OPT", "12000"]
+      ["SKU-001", "15000", "15000", "15000"],
+      ["SKU-002", "12000", "12500", "12000"]
     ]
   },
   {
@@ -240,7 +248,7 @@ export const BUNDLE_IMPORT_SHEETS_FALLBACK: BundleTemplateSheet[] = [
     sheetName: "work-slots",
     rows: [
       [...WORK_SLOT_HEADERS],
-      ["SLOT-01", "Зона 1", "HQ", "agent", "yes", "1", ""]
+      ["SLOT-01", "Зона 1", "HQ", "агент", "да", "1", ""]
     ]
   },
   {

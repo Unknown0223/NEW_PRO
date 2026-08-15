@@ -43,10 +43,14 @@ import {
   tradeDirectionOptionsFromProfile
 } from "../view/polki-shelf-return/polki-trade-direction-options";
 import type { PolkiPriceTypeEntryRef } from "../view/polki-shelf-return/polki-price-type-options";
+import { useOldPrices } from "./use-old-prices";
+import { buildPriceTypeLabelMap } from "@/lib/price-type-label";
+import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import {
   parsePriceAmount,
   availableOrderQty,
   currentMonthEndIsoDate,
+  formatQtyState,
   unitPriceForType,
   buildPolkiPairRows,
   polkiSplitTotal,
@@ -62,7 +66,13 @@ import { computePolkiDebtHintSum, parsePolkiQty } from "../polki-bonus-balance.l
 
 const EMPTY_CREATE_PRODUCTS: ProductRow[] = [];
 
-export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: OrderCreateProps) {
+export function useOrderCreate({
+  tenantSlug,
+  onCreated,
+  onCancel,
+  orderType,
+  editOrderId: editOrderIdProp
+}: OrderCreateProps) {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const normalizedType = (orderType ?? "order").trim();
@@ -72,6 +82,23 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const isPolkiSheet = isPolkiFree || isPolkiByOrder;
   /** Oddiy zakaz: katalog va kategoriyalar faqat agent tanlangandan keyin (API `selected_agent_id`). */
   const requiresAgentForProductCatalog = !isPolkiSheet && !isExchangeFlow;
+
+  const editOrderIdFromUrl = useMemo(() => {
+    const raw = searchParams.get("edit_order_id")?.trim() ?? "";
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [searchParams]);
+  const editOrderId =
+    editOrderIdProp != null && editOrderIdProp > 0 ? editOrderIdProp : editOrderIdFromUrl;
+  const isEditMode = editOrderId != null && !isPolkiSheet && !isExchangeFlow;
+  const editPrefillDoneRef = useRef(false);
+  const skipNextWarehouseQtyClearRef = useRef(false);
+  /** Tahrirdagi eski rezerv — qoldiq tekshiruviga qo‘shiladi (ombor o‘zgarmaganda). */
+  const [editReservedQtyByProduct, setEditReservedQtyByProduct] = useState<Record<number, number>>(
+    {}
+  );
+  const [editSourceWarehouseId, setEditSourceWarehouseId] = useState<number | null>(null);
+  const [editOrderNumber, setEditOrderNumber] = useState<string | null>(null);
 
   const [clientId, setClientId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -85,10 +112,53 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   /** Mahsulot qadoqlari (bloklar); kartotekada qty_per_block bo‘lsa Miqdor = blok × dona/blok */
   const [blockByProductId, setBlockByProductId] = useState<Record<number, string>>({});
   const [localError, setLocalError] = useState<string | null>(null);
+  const [errorTarget, setErrorTarget] = useState<
+    | "client"
+    | "warehouse"
+    | "agent"
+    | "payment"
+    | "price"
+    | "catalog"
+    | "polki-orders"
+    | "polki-lines"
+    | null
+  >(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [expeditorUserId, setExpeditorUserId] = useState("");
   const [priceType, setPriceType] = useState("retail");
   const [orderComment, setOrderComment] = useState("");
+
+  const reportLocalError = useCallback(
+    (
+      message: string,
+      target:
+        | "client"
+        | "warehouse"
+        | "agent"
+        | "payment"
+        | "price"
+        | "catalog"
+        | "polki-orders"
+        | "polki-lines"
+        | null = null
+    ) => {
+      setLocalError(message);
+      setErrorTarget(target);
+      if (typeof document === "undefined") return;
+      requestAnimationFrame(() => {
+        const sel = target ? `[data-oc-error="${target}"]` : '[role="alert"]';
+        const el = document.querySelector(sel);
+        if (el instanceof HTMLElement) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          const focusable = el.querySelector<HTMLElement>(
+            "input:not([type=hidden]), select, textarea, button"
+          );
+          focusable?.focus?.({ preventScroll: true });
+        }
+      });
+    },
+    []
+  );
   const [requestTypeRef, setRequestTypeRef] = useState("");
   const [orderNotePreset, setOrderNotePreset] = useState("");
   const [refSelectKey, setRefSelectKey] = useState(0);
@@ -116,6 +186,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const [polkiTotalQty, setPolkiTotalQty] = useState<Record<string, string>>({});
   const [polkiBonusToBalance, setPolkiBonusToBalance] = useState<Record<string, boolean>>({});
   const [polkiBonusCash, setPolkiBonusCash] = useState<Record<string, string>>({});
+  /** Auto-bonus: tovar (dona) vs to‘lov (dona → summa). */
+  const [polkiBonusGoodsQty, setPolkiBonusGoodsQty] = useState<Record<string, number>>({});
+  const [polkiBonusCashQty, setPolkiBonusCashQty] = useState<Record<string, number>>({});
   const [refusalReasonRefPolki, setRefusalReasonRefPolki] = useState("");
   const [polkiHeaderDate, setPolkiHeaderDate] = useState("");
   const [polkiTradeDirection, setPolkiTradeDirection] = useState("");
@@ -171,6 +244,10 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const polkiOrderIdSet = useMemo(() => new Set(polkiOrderIds), [polkiOrderIds]);
 
   useEffect(() => {
+    if (skipNextWarehouseQtyClearRef.current) {
+      skipNextWarehouseQtyClearRef.current = false;
+      return;
+    }
     setQtyByProductId({});
     setBlockByProductId({});
   }, [warehouseId]);
@@ -182,6 +259,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     setPolkiTotalQty({});
     setPolkiBonusToBalance({});
     setPolkiBonusCash({});
+    setPolkiBonusGoodsQty({});
+    setPolkiBonusCashQty({});
   }, [isPolkiSheet, polkiDateFrom, polkiDateTo, clientId]);
 
   useEffect(() => {
@@ -274,6 +353,70 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       return data;
     }
   });
+
+  const editOrderQ = useQuery({
+    queryKey: ["order", tenantSlug, editOrderId, "edit-form"],
+    enabled: Boolean(tenantSlug) && isEditMode && editOrderId != null,
+    staleTime: STALE.detail,
+    queryFn: async () => {
+      const { data } = await api.get<OrderDetailRow>(`/api/${tenantSlug}/orders/${editOrderId}`);
+      return data;
+    }
+  });
+
+  useEffect(() => {
+    if (!isEditMode) {
+      editPrefillDoneRef.current = false;
+      return;
+    }
+    if (editPrefillDoneRef.current) return;
+    if (editOrderQ.isError) {
+      const msg = getUserFacingError(editOrderQ.error, "Zakazni yuklab bo‘lmadi.");
+      reportLocalError(msg, null);
+      return;
+    }
+    const row = editOrderQ.data;
+    if (!row) return;
+    if (row.status !== "new") {
+      editPrefillDoneRef.current = true;
+      reportLocalError("Tahrirlash faqat «Новый» statusidagi zakazlar uchun.", null);
+      return;
+    }
+    editPrefillDoneRef.current = true;
+    setEditOrderNumber(row.number?.trim() || `#${row.id}`);
+    setClientId(String(row.client_id));
+    setAgentId(row.agent_id != null && row.agent_id > 0 ? String(row.agent_id) : "");
+    skipNextWarehouseQtyClearRef.current = true;
+    setWarehouseId(row.warehouse_id != null && row.warehouse_id > 0 ? String(row.warehouse_id) : "");
+    setEditSourceWarehouseId(
+      row.warehouse_id != null && row.warehouse_id > 0 ? row.warehouse_id : null
+    );
+    setPaymentMethodRef((row.payment_method_ref ?? "").trim());
+    setExpeditorUserId(
+      row.expeditor_id != null && row.expeditor_id > 0 ? String(row.expeditor_id) : "__none__"
+    );
+    setApplyBonus(Boolean(row.apply_bonus));
+    setOrderIsConsignment(Boolean(row.is_consignment));
+    setConsignmentDueDate((row.consignment_due_date ?? "").trim().slice(0, 10));
+    setRequestTypeRef((row.request_type_ref ?? "").trim());
+    setOrderComment((row.comment ?? "").trim());
+    const pt = (row.price_type ?? "").trim();
+    if (pt) setPriceType(pt);
+    const qtyMap: Record<number, string> = {};
+    const reserved: Record<number, number> = {};
+    for (const it of row.items ?? []) {
+      if (it.is_bonus) continue;
+      const q = Number.parseFloat(String(it.qty).replace(",", "."));
+      if (!Number.isFinite(q) || q <= 0) continue;
+      qtyMap[it.product_id] = formatQtyState(q);
+      reserved[it.product_id] = (reserved[it.product_id] ?? 0) + q;
+    }
+    setQtyByProductId(qtyMap);
+    setBlockByProductId({});
+    setEditReservedQtyByProduct(reserved);
+    setSelectionNotice(null);
+    setLocalError(null);
+  }, [isEditMode, editOrderQ.data, editOrderQ.isError, editOrderQ.error, reportLocalError]);
 
   /** Agent tanlanganda katalog `create-context` javobida ham bor — alohida `create-catalog` chaqirilmasin (2× DB + 2× tarmoq). */
   const useSplitOrderCatalog = requiresAgentForProductCatalog && hasAgentSelected;
@@ -495,6 +638,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setPolkiPeresortByPairKey({});
       setPolkiBonusToBalance({});
       setPolkiBonusCash({});
+      setPolkiBonusGoodsQty({});
+      setPolkiBonusCashQty({});
       setSelectionNotice(null);
 
       const order = polkiOrdersForPick.find((o) => o.id === id);
@@ -795,18 +940,73 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     if (fromList) {
       return orderClientPickerDisplayName(fromList);
     }
+    if (isEditMode && editOrderQ.data?.client_id === id) {
+      const name =
+        editOrderQ.data.client_name?.trim() ||
+        editOrderQ.data.client_legal_name?.trim() ||
+        null;
+      if (name) return orderClientPickerDisplayName({ id, name });
+    }
     if (clientSummaryQ.isFetching) return "Загрузка…";
     const d = clientSummaryQ.data;
     if (d?.name) {
       return orderClientPickerDisplayName({ id, name: d.name });
     }
     return `Клиент #${id}`;
-  }, [clientId, eligibleClientById, clientSummaryQ.data, clientSummaryQ.isFetching]);
+  }, [
+    clientId,
+    eligibleClientById,
+    clientSummaryQ.data,
+    clientSummaryQ.isFetching,
+    isEditMode,
+    editOrderQ.data
+  ]);
   const products = useMemo(
     () => (agentCatalogReady ? (createCtxQ.data?.products ?? EMPTY_CREATE_PRODUCTS) : EMPTY_CREATE_PRODUCTS),
     [agentCatalogReady, createCtxQ.data?.products]
   );
-  const warehouses = useMemo(() => createCtxQ.data?.warehouses ?? [], [createCtxQ.data?.warehouses]);
+  const oldPricesPriceTypeLabels = useMemo(
+    () =>
+      buildPriceTypeLabelMap(
+        createCtxQ.data?.settings_profile?.references?.price_type_entries ?? []
+      ),
+    [createCtxQ.data?.settings_profile?.references?.price_type_entries]
+  );
+  const oldPricesProductIds = useMemo(() => products.map((p) => p.id), [products]);
+  const oldPrices = useOldPrices({
+    tenantSlug,
+    productIds: oldPricesProductIds,
+    priceTypeLabels: oldPricesPriceTypeLabels,
+    currentPriceType: priceType,
+    orderComment,
+    setPriceType,
+    setOrderComment,
+    setLocalError
+  });
+  const {
+    oldPriceByProductId,
+    priceAsOf,
+    oldPricesEnabled,
+    clearOldPrices
+  } = oldPrices;
+  const warehouses = useMemo(() => {
+    const base = createCtxQ.data?.warehouses ?? [];
+    if (
+      isEditMode &&
+      editOrderQ.data?.warehouse_id != null &&
+      editOrderQ.data.warehouse_id > 0 &&
+      !base.some((w) => w.id === editOrderQ.data!.warehouse_id)
+    ) {
+      return [
+        {
+          id: editOrderQ.data.warehouse_id,
+          name: editOrderQ.data.warehouse_name?.trim() || `Ombor #${editOrderQ.data.warehouse_id}`
+        },
+        ...base
+      ];
+    }
+    return base;
+  }, [createCtxQ.data?.warehouses, isEditMode, editOrderQ.data]);
   const users = useMemo(() => createCtxQ.data?.users ?? [], [createCtxQ.data?.users]);
   const categories = useMemo(
     () => (agentCatalogReady ? (createCtxQ.data?.product_categories ?? []) : []),
@@ -839,6 +1039,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     /** Kalit o‘zgaganda `placeholderData: previous` — yangi klient eski `clients` ro‘yxatida bo‘lmasligi mumkin; fetch tugaguncha tekshirma. */
     if (createCtxQ.isPlaceholderData) return;
     if (!clientId.trim()) return;
+    /** Tahrir: klient/agent qulflangan — eligibility reset qilmaymiz. */
+    if (isEditMode) return;
     const id = Number.parseInt(clientId.trim(), 10);
     if (!Number.isFinite(id) || id < 1) {
       setClientId("");
@@ -877,7 +1079,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     selectedAgentIdNum,
     selectedWarehouseIdNum,
     selectedExpeditorIdNum,
-    createCtxQ.isPlaceholderData
+    createCtxQ.isPlaceholderData,
+    isEditMode
   ]);
 
   const warehouseIdSet = useMemo(() => new Set(warehouses.map((w) => w.id)), [warehouses]);
@@ -886,6 +1089,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     if (!createCtxQ.data) return;
     if (createCtxQ.isPlaceholderData) return;
     if (!warehouseId.trim()) return;
+    /** Tahrir: ombor ro‘yxati agent/klient filter bilan bo‘sh bo‘lishi mumkin — prefill saqlansin. */
+    if (isEditMode) return;
     const id = Number.parseInt(warehouseId.trim(), 10);
     if (!Number.isFinite(id) || id < 1 || !warehouseIdSet.has(id)) {
       debugOrderCreate("warehouse.reset.invalid", {
@@ -897,7 +1102,15 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setBlockByProductId({});
       setSelectionNotice("Ombor tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
     }
-  }, [warehouseId, warehouses, warehouseIdSet, debugOrderCreate, createCtxQ.data, createCtxQ.isPlaceholderData]);
+  }, [
+    warehouseId,
+    warehouses,
+    warehouseIdSet,
+    debugOrderCreate,
+    createCtxQ.data,
+    createCtxQ.isPlaceholderData,
+    isEditMode
+  ]);
 
   useEffect(() => {
     if (!createCtxQ.data) return;
@@ -950,15 +1163,32 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     });
   }, [users]);
   const agentUserIdSet = useMemo(() => new Set(agentUsers.map((u) => u.id)), [agentUsers]);
-  const agentFilterOptions = useMemo(
-    () => agentUsers.map((u) => orderAgentFilterOption({ id: u.id, name: u.name, login: u.login })),
-    [agentUsers]
-  );
+  const agentFilterOptions = useMemo(() => {
+    const opts = agentUsers.map((u) =>
+      orderAgentFilterOption({ id: u.id, name: u.name, login: u.login })
+    );
+    if (isEditMode && agentId.trim()) {
+      const aid = Number.parseInt(agentId.trim(), 10);
+      if (Number.isFinite(aid) && aid > 0 && !opts.some((o) => o.value === String(aid))) {
+        const label =
+          editOrderQ.data?.agent_display?.trim() ||
+          editOrderQ.data?.agent_name?.trim() ||
+          `Agent #${aid}`;
+        opts.unshift({
+          value: String(aid),
+          label,
+          searchText: label.toLowerCase()
+        });
+      }
+    }
+    return opts;
+  }, [agentUsers, isEditMode, agentId, editOrderQ.data]);
 
   useEffect(() => {
     if (!createCtxQ.data) return;
     if (createCtxQ.isPlaceholderData) return;
     if (!agentId.trim()) return;
+    if (isEditMode) return;
     const id = Number.parseInt(agentId.trim(), 10);
     if (!Number.isFinite(id) || id < 1 || !agentUserIdSet.has(id)) {
       debugOrderCreate("agent.reset.invalid", {
@@ -969,7 +1199,15 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setAgentId("");
       setSelectionNotice("Agent tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
     }
-  }, [agentId, agentUsers, agentUserIdSet, createCtxQ.data, createCtxQ.isPlaceholderData, debugOrderCreate]);
+  }, [
+    agentId,
+    agentUsers,
+    agentUserIdSet,
+    createCtxQ.data,
+    createCtxQ.isPlaceholderData,
+    debugOrderCreate,
+    isEditMode
+  ]);
 
   const filteredExpeditors = useMemo(() => {
     const base = createCtxQ.data?.expeditors ?? [];
@@ -992,6 +1230,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   useEffect(() => {
     if (createCtxQ.isPlaceholderData) return;
+    if (isEditMode) return;
     if (agentUsers.length !== 1) return;
     /** Tanlangan agent bor-yo‘qligida majburiylama — placeholder/stale ro‘yxat boshqa agentni yo‘qotmasin. */
     if (agentId.trim()) return;
@@ -1003,7 +1242,14 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     });
     setAgentId(String(onlyAgentId));
     setSelectionNotice("Agent klient kartasiga mos ravishda avtomatik tanlandi.");
-  }, [createCtxQ.isPlaceholderData, agentUsers, agentId, debugOrderCreate, selectedClientRow?.id]);
+  }, [
+    createCtxQ.isPlaceholderData,
+    agentUsers,
+    agentId,
+    debugOrderCreate,
+    selectedClientRow?.id,
+    isEditMode
+  ]);
 
   useEffect(() => {
     debugOrderCreate("selection.snapshot", {
@@ -1365,10 +1611,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   const polkiEstimatedSum = useMemo(() => {
     if (!isPolkiSheet) return 0;
-    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals.refund_amount) {
-      return Number.parseFloat(polkiAutoBonusPreviewQ.data.totals.refund_amount) || 0;
-    }
     let t = 0;
+    if (polkiUsesAutoBonus && polkiAutoBonusPreviewQ.data?.totals.refund_amount) {
+      t = Number.parseFloat(polkiAutoBonusPreviewQ.data.totals.refund_amount) || 0;
+      // Preview odatda paid refund; bonus-cash qo‘shimcha.
+      for (const r of polkiRowsAll) {
+        const pk = r.pair_key;
+        const cashUnits = Math.max(0, Math.floor(polkiBonusCashQty[pk] ?? 0));
+        if (cashUnits <= 0) continue;
+        const unit = r.unit_price_bonus > 0 ? r.unit_price_bonus : r.unit_price_paid;
+        t += cashUnits * unit;
+      }
+      return t;
+    }
     for (const r of polkiRowsAll) {
       const pk = r.pair_key;
       const total = parsePolkiQty(polkiTotalQty[pk] ?? "");
@@ -1385,19 +1640,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             : Math.max(0, (r.max_bonus - bq) * r.unit_price_bonus)
           : 0;
       const cash = r.max_bonus > 0 ? Math.min(parsePriceAmount(polkiBonusCash[pk] ?? ""), maxCash) : 0;
-      t += effPaid * r.unit_price_paid;
-      t += cash;
+      t += effPaid * r.unit_price_paid + cash;
     }
     return t;
   }, [
     isPolkiSheet,
     polkiUsesAutoBonus,
-    polkiAutoBonusPreviewQ.data,
+    polkiAutoBonusPreviewQ.data?.totals.refund_amount,
     polkiAutoBonusExplicitByPairKey,
     polkiRowsAll,
     polkiTotalQty,
     polkiBonusToBalance,
-    polkiBonusCash
+    polkiBonusCash,
+    polkiBonusCashQty
   ]);
 
   const polkiVolumeM3 = useMemo(() => {
@@ -1411,7 +1666,16 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         ? { effPaid: ex.paid, effBonus: ex.bonus }
         : polkiSplitTotal(r, total);
       const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
-      const physBonus = defer ? 0 : effBonus;
+      let physBonus = defer ? 0 : effBonus;
+      if (polkiUsesAutoBonus && !defer) {
+        const autoB = Math.max(0, Math.floor(effBonus));
+        const cashUnits = Math.min(Math.max(0, Math.floor(polkiBonusCashQty[pk] ?? 0)), autoB);
+        const goodsRaw = polkiBonusGoodsQty[pk];
+        physBonus =
+          goodsRaw != null
+            ? Math.min(Math.max(0, Math.floor(goodsRaw)), autoB - cashUnits)
+            : Math.max(0, autoB - cashUnits);
+      }
       const vol = r.volume_m3 != null ? Number.parseFloat(String(r.volume_m3)) : NaN;
       if (Number.isFinite(vol) && effPaid + physBonus > 0) v += (effPaid + physBonus) * vol;
     }
@@ -1422,7 +1686,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiAutoBonusExplicitByPairKey,
     polkiRowsAll,
     polkiTotalQty,
-    polkiBonusToBalance
+    polkiBonusToBalance,
+    polkiBonusCashQty,
+    polkiBonusGoodsQty
   ]);
 
   const catalogProducts = useMemo(() => {
@@ -1486,12 +1752,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       const lineQ = Number.parseFloat((raw ?? "").replace(",", "."));
       if (!Number.isFinite(lineQ) || lineQ <= 0) continue;
       const avail = availableOrderQty(stockMap.get(p.id));
-      const missingPrice = unitPriceForType(p, priceType) == null;
+      const missingPrice = unitPriceForType(p, priceType, oldPriceByProductId) == null;
       const overQty = lineQ > avail;
       if (missingPrice || overQty) counts.set(cid, (counts.get(cid) ?? 0) + 1);
     }
     return counts;
-  }, [products, warehouseId, stockQ.data, qtyByProductId, priceType]);
+  }, [products, warehouseId, stockQ.data, qtyByProductId, priceType, oldPriceByProductId]);
 
   useEffect(() => {
     if (categoryIdsWithPositiveStock == null) return;
@@ -1569,35 +1835,48 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
   const hasQtyOverStock = useMemo(() => {
     const rows = stockQ.data ?? [];
     const map = new Map(rows.map((s) => [s.product_id, s]));
+    const sameWh =
+      isEditMode &&
+      editSourceWarehouseId != null &&
+      selectedWarehouseIdNum === editSourceWarehouseId;
     for (const p of catalogProducts) {
       const raw = qtyByProductId[p.id];
       if (!raw?.trim()) continue;
       const lineQ = Number.parseFloat(raw.replace(",", "."));
       if (!Number.isFinite(lineQ) || lineQ <= 0) continue;
-      const avail = availableOrderQty(map.get(p.id));
-      if (lineQ > avail) return true;
+      let avail = availableOrderQty(map.get(p.id));
+      if (sameWh) avail += editReservedQtyByProduct[p.id] ?? 0;
+      if (lineQ > avail + 1e-9) return true;
     }
     return false;
-  }, [catalogProducts, qtyByProductId, stockQ.data]);
+  }, [
+    catalogProducts,
+    qtyByProductId,
+    stockQ.data,
+    isEditMode,
+    editSourceWarehouseId,
+    selectedWarehouseIdNum,
+    editReservedQtyByProduct
+  ]);
   const hasMissingPriceForSelected = useMemo(() => {
     for (const p of catalogProducts) {
       const raw = qtyByProductId[p.id];
       const q = Number.parseFloat((raw ?? "").replace(",", "."));
       if (!Number.isFinite(q) || q <= 0) continue;
-      if (unitPriceForType(p, priceType) == null) return true;
+      if (unitPriceForType(p, priceType, oldPriceByProductId) == null) return true;
     }
     return false;
-  }, [catalogProducts, qtyByProductId, priceType]);
+  }, [catalogProducts, qtyByProductId, priceType, oldPriceByProductId]);
   const missingPriceProductNames = useMemo(() => {
     const names: string[] = [];
     for (const p of catalogProducts) {
       const raw = qtyByProductId[p.id];
       const q = Number.parseFloat((raw ?? "").replace(",", "."));
       if (!Number.isFinite(q) || q <= 0) continue;
-      if (unitPriceForType(p, priceType) == null) names.push(p.name);
+      if (unitPriceForType(p, priceType, oldPriceByProductId) == null) names.push(p.name);
     }
     return names.slice(0, 3);
-  }, [catalogProducts, qtyByProductId, priceType]);
+  }, [catalogProducts, qtyByProductId, priceType, oldPriceByProductId]);
 
   const selectedItemsCount = catalogProducts.reduce((acc, p) => {
     const raw = qtyByProductId[p.id];
@@ -1629,11 +1908,11 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       const avail = availableOrderQty(map.get(p.id));
       const effective = Math.min(q, avail);
       if (effective <= 0) continue;
-      const up = unitPriceForType(p, priceType);
+      const up = unitPriceForType(p, priceType, oldPriceByProductId);
       if (up != null) t += effective * parsePriceAmount(up);
     }
     return t;
-  }, [catalogProducts, qtyByProductId, priceType, stockQ.data]);
+  }, [catalogProducts, qtyByProductId, priceType, stockQ.data, oldPriceByProductId]);
 
   const exchangePairRows = useMemo(
     () => buildExchangePairRows(exchangeReturnsQ.data?.items),
@@ -1687,7 +1966,13 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     Boolean(createCtxQ.data) &&
     !createCtxQ.isPlaceholderData;
 
-  const loadingLists = createCtxQ.isPending && !createCtxQ.data;
+  const loadingLists =
+    (createCtxQ.isPending && !createCtxQ.data) ||
+    (isEditMode && editOrderQ.isLoading && !editOrderQ.data);
+
+  const editFormBlocked =
+    isEditMode &&
+    (editOrderQ.isError || (editOrderQ.data != null && editOrderQ.data.status !== "new"));
 
   const polkiDebtHintSum = useMemo(() => {
     if (!isPolkiSheet) return 0;
@@ -1792,9 +2077,26 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             : polkiSplitTotal(r, totalParsed);
           const defer = polkiUsesAutoBonus ? false : Boolean(polkiBonusToBalance[pk]);
           const pq = effPaid;
-          const bq = defer ? 0 : effBonus;
-          let cash = polkiUsesAutoBonus ? 0 : parsePriceAmount(polkiBonusCash[pk] ?? "");
-          if (!polkiUsesAutoBonus) {
+
+          let bq = defer ? 0 : effBonus;
+          let cash = 0;
+          if (polkiUsesAutoBonus) {
+            const autoB = Math.max(0, Math.floor(effBonus));
+            const cashUnitsRaw = polkiBonusCashQty[pk];
+            const goodsUnitsRaw = polkiBonusGoodsQty[pk];
+            const cashUnits =
+              cashUnitsRaw != null
+                ? Math.min(Math.max(0, Math.floor(cashUnitsRaw)), autoB)
+                : 0;
+            const goodsUnits =
+              goodsUnitsRaw != null
+                ? Math.min(Math.max(0, Math.floor(goodsUnitsRaw)), autoB - cashUnits)
+                : Math.max(0, autoB - cashUnits);
+            bq = goodsUnits;
+            const unit = r.unit_price_bonus > 0 ? r.unit_price_bonus : r.unit_price_paid;
+            cash = cashUnits > 0 && unit > 0 ? cashUnits * unit : 0;
+          } else {
+            cash = parsePriceAmount(polkiBonusCash[pk] ?? "");
             const maxCash =
               r.max_bonus > 0
                 ? defer
@@ -1919,8 +2221,22 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           if (noteJoined) body.note = noteJoined;
           if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
           if (polkiSubmitBonusDebt > 0) body.bonus_debt_amount = polkiSubmitBonusDebt;
-          await api.post(`/api/${tenantSlug}/returns/period-batch`, body);
-          return { bonusDebtApplied: polkiSubmitBonusDebt };
+          const batchRes = await api.post<{
+            returns?: Array<{ discount_debt_amount?: string | null; discount_debt_note?: string | null }>;
+          }>(`/api/${tenantSlug}/returns/period-batch`, body);
+          const batchData = batchRes.data;
+          const discDebt = (batchData.returns ?? []).reduce((a, r) => {
+            const n = Number.parseFloat(String(r.discount_debt_amount ?? "").replace(/\s/g, ""));
+            return a + (Number.isFinite(n) && n > 0 ? n : 0);
+          }, 0);
+          const discNote = (batchData.returns ?? [])
+            .map((r) => r.discount_debt_note)
+            .find((n) => n && String(n).trim());
+          return {
+            bonusDebtApplied: polkiSubmitBonusDebt,
+            discountDebtApplied: discDebt,
+            discountDebtNote: discNote ?? null
+          };
         }
 
         submitBonusDebt = polkiSubmitBonusDebt;
@@ -1953,8 +2269,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         if (noteJoined) body.note = noteJoined;
         if (refusalReasonRefPolki.trim()) body.refusal_reason_ref = refusalReasonRefPolki.trim();
         if (submitBonusDebt > 0) body.bonus_debt_amount = submitBonusDebt;
-        await api.post(`/api/${tenantSlug}/returns/period`, body);
-        return { bonusDebtApplied: submitBonusDebt };
+        const periodRes = await api.post<{
+          discount_debt_amount?: string | null;
+          discount_debt_note?: string | null;
+        }>(`/api/${tenantSlug}/returns/period`, body);
+        const periodData = periodRes.data;
+        const discOne = Number.parseFloat(
+          String(periodData.discount_debt_amount ?? "").replace(/\s/g, "")
+        );
+        return {
+          bonusDebtApplied: submitBonusDebt,
+          discountDebtApplied: Number.isFinite(discOne) && discOne > 0 ? discOne : 0,
+          discountDebtNote: periodData.discount_debt_note ?? null
+        };
       }
 
       if (isExchangeFlow) {
@@ -2031,6 +2358,11 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
       const stockRows = stockQ.data ?? [];
       const stockMap = new Map(stockRows.map((s) => [s.product_id, s]));
+      const sameWh =
+        isEditMode &&
+        editSourceWarehouseId != null &&
+        Number.isFinite(wid) &&
+        wid === editSourceWarehouseId;
       const qtyAgg = new Map<number, number>();
       for (const p of catalogProducts) {
         const raw = qtyByProductId[p.id];
@@ -2044,8 +2376,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       for (const [productId, totalQ] of Array.from(qtyAgg.entries())) {
         if (totalQ <= 0) continue;
         if (!Number.isFinite(totalQ)) throw new Error("qty");
-        const avail = availableOrderQty(stockMap.get(productId));
-        if (totalQ > avail) throw new Error("qty_over_stock");
+        let avail = availableOrderQty(stockMap.get(productId));
+        if (sameWh) avail += editReservedQtyByProduct[productId] ?? 0;
+        if (totalQ > avail + 1e-9) throw new Error("qty_over_stock");
         items.push({ product_id: productId, qty: totalQ });
       }
       if (items.length === 0) throw new Error("nolines");
@@ -2059,6 +2392,32 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
           presetStored;
         commentOut = freeComment ? `${presetLabel}\n${freeComment}` : presetLabel;
       }
+
+      if (isEditMode && editOrderId != null) {
+        const linesBody: Record<string, unknown> = {
+          warehouse_id: wid,
+          price_type: priceType.trim() || "retail",
+          apply_bonus: applyBonus,
+          items
+        };
+        if (validatedOrderType === "order" && showOrderPaymentMethodSelector) {
+          linesBody.payment_method_ref = paymentMethodRef.trim().slice(0, 64);
+        }
+        await api.patch(`/api/${tenantSlug}/orders/${editOrderId}`, linesBody);
+
+        const metaBody: Record<string, unknown> = {
+          comment: commentOut
+        };
+        const expRaw = expeditorUserId.trim();
+        if (expRaw === "__none__") metaBody.expeditor_user_id = null;
+        else if (expRaw !== "") {
+          const eid = Number.parseInt(expRaw, 10);
+          if (Number.isFinite(eid) && eid > 0) metaBody.expeditor_user_id = eid;
+        }
+        await api.patch(`/api/${tenantSlug}/orders/${editOrderId}/meta`, metaBody);
+        return;
+      }
+
       const body: Record<string, unknown> = {
         client_id: cid,
         warehouse_id: wid,
@@ -2070,6 +2429,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         request_type_ref: requestTypeRef.trim() || null,
         items
       };
+      if (priceAsOf && oldPricesEnabled) {
+        body.price_as_of = priceAsOf;
+      }
       if (validatedOrderType === "order" && orderIsConsignment) {
         body.is_consignment = true;
         const due = consignmentDueDate.trim() || currentMonthEndIsoDate();
@@ -2090,6 +2452,9 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["orders", "create-context", tenantSlug] });
+      if (isEditMode && editOrderId != null) {
+        void qc.invalidateQueries({ queryKey: ["order", tenantSlug, editOrderId] });
+      }
       if (isPolkiSheet || isExchangeFlow) {
         void qc.invalidateQueries({ queryKey: ["returns", tenantSlug] });
         void qc.invalidateQueries({ queryKey: ["returns-client-data", tenantSlug] });
@@ -2113,11 +2478,34 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         Number((result as { bonusDebtApplied?: number }).bonusDebtApplied) > 0
           ? Number((result as { bonusDebtApplied: number }).bonusDebtApplied)
           : 0;
+      const discountDebtApplied =
+        result &&
+        typeof result === "object" &&
+        "discountDebtApplied" in result &&
+        Number((result as { discountDebtApplied?: number }).discountDebtApplied) > 0
+          ? Number((result as { discountDebtApplied: number }).discountDebtApplied)
+          : 0;
+      const discountDebtNote =
+        result &&
+        typeof result === "object" &&
+        "discountDebtNote" in result &&
+        typeof (result as { discountDebtNote?: unknown }).discountDebtNote === "string"
+          ? String((result as { discountDebtNote: string }).discountDebtNote).trim()
+          : "";
+      const notices: string[] = [];
       if (debtApplied > 0) {
-        setSelectionNotice(
-          `Долг бонус ${Math.round(debtApplied).toLocaleString("ru-RU")} сум записан в баланс клиента (карточка → Балансы).`
+        notices.push(
+          `Долг бонус ${Math.round(debtApplied).toLocaleString("ru-RU")} сум — в «Балансы клиентов».`
         );
       }
+      if (discountDebtApplied > 0) {
+        notices.push(
+          discountDebtNote
+            ? discountDebtNote
+            : `Долг скидка ${Math.round(discountDebtApplied).toLocaleString("ru-RU")} сум — в «Балансы клиентов» (после приёмки на складе).`
+        );
+      }
+      if (notices.length > 0) setSelectionNotice(notices.join(" "));
       setRequestTypeRef("");
       setOrderNotePreset("");
       setRefSelectKey((k) => k + 1);
@@ -2125,111 +2513,136 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       setConsignmentDueDate("");
       setConsignmentDueOpen(false);
       setPaymentMethodRef("");
+      clearOldPrices();
       onCreated();
     },
     onError: (e: Error) => {
+      const fail = (
+        message: string,
+        target:
+          | "client"
+          | "warehouse"
+          | "agent"
+          | "payment"
+          | "price"
+          | "catalog"
+          | "polki-orders"
+          | "polki-lines"
+          | null = null
+      ) => {
+        reportLocalError(message, target);
+      };
       if (isPolkiSheet) {
         if (e.message === "warehouse") {
-          setLocalError("Выберите склад возврата.");
+          fail("Выберите склад возврата.", "warehouse");
           return;
         }
         if (e.message === "client") {
-          setLocalError("Выберите клиента.");
+          fail("Выберите клиента.", "client");
           return;
         }
         if (e.message === "polki_order") {
-          setLocalError(
-            "Отметьте хотя бы один заказ со статусом «Доставлен» (доступны только такие заказы)."
+          fail(
+            "Отметьте хотя бы один заказ со статусом «Доставлен» (доступны только такие заказы).",
+            "polki-orders"
           );
           return;
         }
         if (e.message === "polki_missing_order") {
-          setLocalError("Для строки не указан заказ — обновите страницу.");
+          fail("Для строки не указан заказ — обновите страницу.", "polki-lines");
           return;
         }
         if (e.message === "polki_qty_over") {
-          setLocalError("Количество возврата не больше проданного.");
+          fail("Количество возврата не больше проданного.", "polki-lines");
           return;
         }
         if (e.message === "polki_over_max") {
-          setLocalError(
-            "Количество к возврату не может превышать остаток по заказу (см. «макс. всего» в строке)."
+          fail(
+            "Количество к возврату не может превышать остаток по заказу (см. «макс. всего» в строке).",
+            "polki-lines"
           );
           return;
         }
         if (e.message === "nolines") {
-          setLocalError("Укажите хотя бы одну позицию с количеством или компенсацией бонуса.");
+          fail(
+            "Укажите хотя бы одну позицию с количеством или компенсацией бонуса.",
+            "polki-lines"
+          );
           return;
         }
         if (e.message === "polki_bonus_preview_pending") {
-          setLocalError("Дождитесь окончания расчёта бонуса (колонка «Бонус / баланс»).");
+          fail("Дождитесь окончания расчёта бонуса (колонка «Бонус / баланс»).", "polki-lines");
           return;
         }
         if (e.message === "polki_bonus_preview_error") {
-          setLocalError("Не удалось рассчитать бонус. Проверьте сеть и количества в таблице.");
+          fail("Не удалось рассчитать бонус. Проверьте сеть и количества в таблице.", "polki-lines");
           return;
         }
         if (e.message === "polki_bonus_preview") {
-          setLocalError(
-            "Сначала дождитесь авто-расчёта бонуса по всем строкам с количеством."
+          fail(
+            "Сначала дождитесь авто-расчёта бонуса по всем строкам с количеством.",
+            "polki-lines"
           );
           return;
         }
         if (e.message === "qty") {
-          setLocalError("Во всех строках количество должно быть положительным.");
+          fail("Во всех строках количество должно быть положительным.", "polki-lines");
           return;
         }
         if (e.message === "qty_over_stock") {
-          setLocalError("Количество не больше остатка по каждой позиции.");
+          fail("Количество не больше остатка по каждой позиции.", "polki-lines");
           return;
         }
       }
       if (e.message === "warehouse") {
-        setLocalError("Omborni tanlash shart.");
+        fail("Omborni tanlash shart.", "warehouse");
         return;
       }
       if (e.message === "agent") {
-        setLocalError("Savdo zakazi uchun agentni tanlang.");
+        fail("Savdo zakazi uchun agentni tanlang.", "agent");
         return;
       }
       if (e.message === "payment_method") {
-        setLocalError("To‘lov usulini tanlang.");
+        fail("To‘lov usulini tanlang.", "payment");
         return;
       }
       if (e.message === "payment_method_empty") {
-        setLocalError("To‘lov usullari ro‘yxati bo‘sh. Agent/dastavchi yoki sozlamalarni tekshiring.");
+        fail("To‘lov usullari ro‘yxati bo‘sh. Agent/dastavchi yoki sozlamalarni tekshiring.", "payment");
         return;
       }
       if (e.message === "client") {
-        setLocalError("Klientni tanlang.");
+        fail("Klientni tanlang.", "client");
         return;
       }
       if (e.message === "polki_order") {
-        setLocalError("«Zakaz bo‘yicha» rejimida kamida bitta zakazni tanlang.");
+        fail("«Zakaz bo‘yicha» rejimida kamida bitta zakazni tanlang.", "polki-orders");
         return;
       }
       if (e.message === "polki_missing_order") {
-        setLocalError("Qator uchun zakaz identifikatori yo‘q — qayta yuklang.");
+        fail("Qator uchun zakaz identifikatori yo‘q — qayta yuklang.", "polki-lines");
         return;
       }
       if (e.message === "polki_qty_over") {
-        setLocalError("Qaytarish miqdori sotilgan miqdordan oshmasin.");
+        fail("Qaytarish miqdori sotilgan miqdordan oshmasin.", "polki-lines");
         return;
       }
       if (e.message === "polki_over_max") {
-        setLocalError("Qaytarish miqdori zakaz qoldig‘idan oshmasin.");
+        fail("Qaytarish miqdori zakaz qoldig‘idan oshmasin.", "polki-lines");
         return;
       }
       if (e.message === "nolines") {
-        setLocalError("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.");
+        fail("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.", "catalog");
         return;
       }
       if (e.message === "qty") {
-        setLocalError("Barcha qatorlarda miqdor musbat bo‘lsin.");
+        fail("Barcha qatorlarda miqdor musbat bo‘lsin.", "catalog");
         return;
       }
       if (e.message === "qty_over_stock") {
-        setLocalError("Miqdor qoldiqdan oshmasin — har bir mahsulot uchun «Qoldiq» ustunidagi miqdordan ko‘p bo‘lmasin.");
+        fail(
+          "Miqdor qoldiqdan oshmasin — har bir mahsulot uchun «Qoldiq» ustunidagi miqdordan ko‘p bo‘lmasin.",
+          "catalog"
+        );
         return;
       }
       const ax = e as AxiosError<{
@@ -2246,7 +2659,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
       const d = ax.response?.data;
       if (code === "DatabaseSchemaMismatch") {
         const msg = d?.message?.trim();
-        setLocalError(
+        fail(
           msg ||
             "Bazada kerakli ustunlar yo‘q (migratsiya qo‘llanmagan). Backend papkasida: npm run db:deploy"
         );
@@ -2256,71 +2669,83 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         const flat = getZodFlattenFromApiErrorBody(d);
         if (flat) {
           const hint = firstValidationUserHint(flat);
-          setLocalError(
+          fail(
             hint
               ? withApiSupportLine(`Server tekshiruvi: ${hint}`, e)
               : withApiSupportLine(getUserFacingError(e, "Server tekshiruvi xatosi."), e)
           );
         } else {
-          setLocalError(
+          fail(
             `Server tekshiruvi: ${typeof d.details === "string" ? d.details : JSON.stringify(d.details)}`
           );
         }
         return;
       }
       if (code === "BadQty") {
-        setLocalError("Miqdor noto‘g‘ri (musbat son bo‘lsin).");
+        fail("Miqdor noto‘g‘ri (musbat son bo‘lsin).", "catalog");
         return;
       }
       if (code === "BadWarehouse") {
-        setLocalError("Tanlangan ombor topilmadi.");
+        fail("Tanlangan ombor topilmadi.", "warehouse");
         return;
       }
       if (code === "BadAgent") {
-        setLocalError("Tanlangan agent topilmadi yoki faol emas.");
+        fail("Tanlangan agent topilmadi yoki faol emas.", "agent");
         return;
       }
       if (code === "OrderRequiresAgent") {
-        setLocalError("Savdo zakazi uchun agent majburiy.");
+        fail("Savdo zakazi uchun agent majburiy.", "agent");
+        return;
+      }
+      if (code === "AgentNotOnSlot") {
+        fail(
+          d?.message?.trim() ||
+            "Agent ish joyiga biriktirilmagan — yangi zakaz taqiqlangan (faqat qarz yig‘ish).",
+          "agent"
+        );
         return;
       }
       if (code === "OrderRequiresWarehouse") {
-        setLocalError("Savdo zakazi uchun ombor majburiy.");
+        fail("Savdo zakazi uchun ombor majburiy.", "warehouse");
         return;
       }
       if (code === "OrderRequiresPaymentMethod") {
-        setLocalError("To‘lov usuli majburiy.");
+        fail("To‘lov usuli majburiy.", "payment");
         return;
       }
       if (code === "NoRetailPrice" || code === "NoPrice") {
         const id = ax.response?.data?.product_id as number | undefined;
         const pt = (ax.response?.data as { price_type?: string } | undefined)?.price_type ?? "retail";
-        setLocalError(
-          id != null
-            ? `Mahsulot #${id} uchun «${pt}» narxi yo‘q.`
-            : `Narx yo‘q («${pt}»).`
+        fail(
+          id != null ? `Mahsulot #${id} uchun «${pt}» narxi yo‘q.` : `Narx yo‘q («${pt}»).`,
+          "price"
         );
         return;
       }
       if (code === "InsufficientStock") {
-        const d = ax.response?.data as { product_id?: number; available?: string; requested?: string };
-        setLocalError(
-          d?.product_id != null
-            ? `Mahsulot #${d.product_id}: omborda yetarli emas (mavjud ${d.available ?? "—"}, kerak ${d.requested ?? "—"}).`
-            : "Omborda yetarli mahsulot yo‘q."
+        const stockErr = ax.response?.data as {
+          product_id?: number;
+          available?: string;
+          requested?: string;
+        };
+        fail(
+          stockErr?.product_id != null
+            ? `Mahsulot #${stockErr.product_id}: omborda yetarli emas (mavjud ${stockErr.available ?? "—"}, kerak ${stockErr.requested ?? "—"}).`
+            : "Omborda yetarli mahsulot yo‘q.",
+          "catalog"
         );
         return;
       }
       if (code === "BadExpeditor") {
-        setLocalError("Tanlangan ekspeditor topilmadi yoki faol emas.");
+        fail("Tanlangan ekspeditor topilmadi yoki faol emas.");
         return;
       }
       if (code === "BadClient") {
-        setLocalError("Klient topilmadi yoki faol emas.");
+        fail("Klient topilmadi yoki faol emas.", "client");
         return;
       }
       if (code === "BadProduct") {
-        setLocalError("Mahsulot topilmadi yoki faol emas.");
+        fail("Mahsulot topilmadi yoki faol emas.", "catalog");
         return;
       }
       if (code === "ReturnNotInterchangeable") {
@@ -2407,11 +2832,19 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
         setLocalError("Konsignatsiya muddatini tekshiring (YYYY-MM-DD yoki to‘liq sana).");
         return;
       }
-      if (ax.response?.status === 403) {
-        setLocalError("Zakaz yaratish huquqi yo‘q (faqat admin / operator).");
+      if (code === "OrderNotEditable" || code === "ORDER_NOT_EDITABLE") {
+        fail("Zakaz endi tahrirlanmaydi (status «Новый» emas).");
         return;
       }
-      setLocalError(getUserFacingError(e, "Xato"));
+      if (code === "OrderHeaderLocked" || code === "ORDER_HEADER_LOCKED") {
+        fail("Klient va agentni o‘zgartirib bo‘lmaydi. Boshqa maydonlarni saqlang.");
+        return;
+      }
+      if (ax.response?.status === 403) {
+        fail("Zakaz yaratish huquqi yo‘q (faqat admin / operator).");
+        return;
+      }
+      fail(getUserFacingError(e, "Xato"));
     }
   });
 
@@ -2460,6 +2893,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
             selectedItemsCount > 0 &&
             !mutation.isPending &&
             !loadingLists &&
+            !editFormBlocked &&
             stockReadyForLines &&
             !hasQtyOverStock &&
             !hasMissingPriceForSelected &&
@@ -2543,6 +2977,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
 
   useEffect(() => {
     setLocalError(null);
+    setErrorTarget(null);
   }, [
     clientId,
     warehouseId,
@@ -2570,6 +3005,11 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     onCreated,
     onCancel,
     orderType,
+    isEditMode,
+    editOrderId,
+    editOrderNumber,
+    editFormBlocked,
+    headerClientAgentLocked: isEditMode,
     ORDER_CREATE_DEBUG,
     activeCatalogCategoryId,
     agentCatalogReady,
@@ -2610,6 +3050,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     eligibleClientById,
     eligibleClientIdSet,
     eligibleClients,
+    errorTarget,
     estimatedSum,
     exMinusKey,
     exMinusQty,
@@ -2650,6 +3091,8 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     paymentMethodRef,
     paymentMethodSelectOptions,
     polkiBonusCash,
+    polkiBonusGoodsQty,
+    polkiBonusCashQty,
     polkiBonusToBalance,
     polkiExpandedOrderId,
     setPolkiExpandedOrderId,
@@ -2703,7 +3146,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     polkiTotalReturnQtySum,
     polkiTradeDirection,
     polkiVolumeM3,
+    priceAsOf,
     priceType,
+    oldPriceByProductId,
+    oldPrices,
+    oldPricesEnabled,
+    oldPricesPriceTypeLabels,
     productSearch,
     productSearchNorm,
     products,
@@ -2748,6 +3196,12 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     setOrderNotePreset,
     setPaymentMethodRef,
     setPolkiBonusCash,
+    setPolkiBonusGoodsQty,
+    setPolkiBonusCashQty,
+    setPolkiBonusSplit: (pairKey: string, next: { goodsQty: number; cashQty: number }) => {
+      setPolkiBonusGoodsQty((prev) => ({ ...prev, [pairKey]: next.goodsQty }));
+      setPolkiBonusCashQty((prev) => ({ ...prev, [pairKey]: next.cashQty }));
+    },
     setPolkiBonusToBalance,
     setPolkiDateFrom,
     setPolkiDateTo,
@@ -2758,6 +3212,7 @@ export function useOrderCreate({ tenantSlug, onCreated, onCancel, orderType }: O
     setPolkiTotalQty,
     setPolkiTradeDirection,
     setPriceType,
+    clearOldPrices,
     setProductSearch,
     setQtyByProductId,
     setRefSelectKey,

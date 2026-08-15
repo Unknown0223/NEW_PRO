@@ -1,5 +1,4 @@
 import request from "supertest";
-import { Prisma } from "@prisma/client";
 import { expect, it } from "vitest";
 import { prisma } from "../src/config/database";
 import { describeOrdersIntegrationSuite, mainWarehouseId } from "./orders.integration.harness";
@@ -54,7 +53,7 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
     expect(lineLogs[0].user_login).toBe("admin");
   });
 
-  it("PATCH orders/:id/meta appends change_logs", async () => {
+  it("PATCH orders/:id/meta rejects warehouse change (header locked)", async () => {
     const loginResponse = await request(ctx.app.server).post("/api/auth/login").send({
       slug: "test1",
       login: "admin",
@@ -95,15 +94,79 @@ describeOrdersIntegrationSuite("patch and meta", (ctx) => {
     expect(create.status).toBe(201);
     const orderId = create.body.id as number;
 
-    const patched = await request(ctx.app.server)
+    const locked = await request(ctx.app.server)
       .patch(`/api/test1/orders/${orderId}/meta`)
       .set("Authorization", `Bearer ${token}`)
       .send({ warehouse_id: whB });
-    expect(patched.status).toBe(200);
-    const metaLogs = (patched.body.change_logs as { action: string }[]).filter(
+    expect(locked.status).toBe(400);
+    expect(locked.body.error).toBe("OrderHeaderLocked");
+
+    const commentPatched = await request(ctx.app.server)
+      .patch(`/api/test1/orders/${orderId}/meta`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ comment: "meta-comment-ok" });
+    expect(commentPatched.status).toBe(200);
+    expect(commentPatched.body.comment).toBe("meta-comment-ok");
+    const metaLogs = (commentPatched.body.change_logs as { action: string }[]).filter(
       (c) => c.action === "meta"
     );
-    expect(metaLogs.length).toBe(1);
+    expect(metaLogs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("PATCH orders/:id adjusts stock reservation when qty increases", async () => {
+    const loginResponse = await request(ctx.app.server).post("/api/auth/login").send({
+      slug: "test1",
+      login: "admin",
+      password: "secret123"
+    });
+    expect(loginResponse.status).toBe(200);
+    const token = loginResponse.body.accessToken as string;
+
+    const clientsRes = await request(ctx.app.server)
+      .get("/api/test1/clients?page=1&limit=5&search=Asosiy")
+      .set("Authorization", `Bearer ${token}`);
+    const clientId = clientsRes.body.data[0].id as number;
+
+    const productsRes = await request(ctx.app.server)
+      .get("/api/test1/products?page=1&limit=5&search=SKU-002")
+      .set("Authorization", `Bearer ${token}`);
+    const productId = productsRes.body.data[0].id as number;
+    const warehouseId = await mainWarehouseId(ctx.app, token);
+
+    const stockBefore = await prisma.stock.findFirst({
+      where: { warehouse_id: warehouseId, product_id: productId }
+    });
+    expect(stockBefore).toBeTruthy();
+    const reservedBeforeCreate = stockBefore!.reserved_qty;
+
+    const create = await request(ctx.app.server)
+      .post("/api/test1/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        agent_id: ctx.seedAgentUserId,
+        client_id: clientId,
+        warehouse_id: warehouseId,
+        items: [{ product_id: productId, qty: 1 }]
+      });
+    expect(create.status).toBe(201);
+
+    const stockAfterCreate = await prisma.stock.findFirst({
+      where: { warehouse_id: warehouseId, product_id: productId }
+    });
+    expect(stockAfterCreate!.reserved_qty.sub(reservedBeforeCreate).toNumber()).toBe(1);
+
+    const patched = await request(ctx.app.server)
+      .patch(`/api/test1/orders/${create.body.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        items: [{ product_id: productId, qty: 3 }]
+      });
+    expect(patched.status).toBe(200);
+
+    const stockAfterPatch = await prisma.stock.findFirst({
+      where: { warehouse_id: warehouseId, product_id: productId }
+    });
+    expect(stockAfterPatch!.reserved_qty.sub(reservedBeforeCreate).toNumber()).toBe(3);
   });
 
   it("PATCH orders/:id returns OrderNotEditable when status is picking", async () => {

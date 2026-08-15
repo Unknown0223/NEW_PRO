@@ -55,7 +55,7 @@ class ExpeditorSyncNotifier extends StateNotifier<ExpeditorSyncState> {
 
     final result = await _ref.read(authStateProvider.notifier).resync(
           full: full,
-          refreshConfig: full,
+          refreshConfig: true,
           onPhase: (phase) {
             if (!mounted) return;
             if (state.status != ExpeditorSyncStatus.running) return;

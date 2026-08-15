@@ -27,6 +27,15 @@ function truthy01(v: string): boolean {
   return s === "1" || s === "true" || s === "да" || s === "ha" || s === "yes";
 }
 
+/** Import qadamidan keyin cache yangilash */
+const IMPORT_STEP_QUERY_KEYS: Record<string, string[]> = {
+  "products-catalog": ["products"],
+  "product-prices": ["products", "product-prices"],
+  clients: ["clients", "clients-references"],
+  "work-slots": ["work-slots"],
+  "stock-receipts": ["stock", "warehouses"]
+};
+
 async function invalidateAfterApply(tenantSlug: string, qc: QueryClient | undefined, extra: string[] = []) {
   const keys = [
     ["settings", "profile", tenantSlug],
@@ -123,14 +132,72 @@ export async function applyProfileRows(
       active: true
     }));
   } else if (profileRefKey === "price_type_entries") {
-    payload = preview.rows.map((r) => ({
-      id: cell(r, "_id") || newId("pt"),
-      name: cell(r, "name"),
-      code: cell(r, "code").toUpperCase(),
-      sort_order: parseSort(cell(r, "sort_order")),
-      comment: cell(r, "comment") || null,
-      active: true
-    }));
+    const profile = await api.get<{
+      references?: {
+        payment_method_entries?: {
+          id: string;
+          name: string;
+          code?: string | null;
+          active?: boolean;
+        }[];
+      };
+    }>(`/api/${tenantSlug}/settings/profile`);
+    const payMethods = (profile.data.references?.payment_method_entries ?? []).filter(
+      (p) => p.active !== false && p.id
+    );
+    if (!payMethods.length) {
+      throw new Error("Avval «Способы оплаты» qadamini bajaring — narx turi to‘lov usuliga bog‘lanadi");
+    }
+
+    const resolvePayId = (raw: string): string | null => {
+      const s = raw.trim();
+      if (!s) return null;
+      const lower = s.toLowerCase();
+      const byId = payMethods.find((p) => p.id === s);
+      if (byId) return byId.id;
+      const byCode = payMethods.find((p) => (p.code ?? "").trim().toLowerCase() === lower);
+      if (byCode) return byCode.id;
+      const byName = payMethods.find((p) => p.name.trim().toLowerCase() === lower);
+      if (byName) return byName.id;
+      return null;
+    };
+
+    const parseKind = (raw: string): "sale" | "purchase" => {
+      const s = raw.trim().toLowerCase();
+      if (
+        s === "purchase" ||
+        s === "закуп" ||
+        s === "закупка" ||
+        s === "xarid" ||
+        s === "покупка"
+      ) {
+        return "purchase";
+      }
+      return "sale";
+    };
+
+    payload = preview.rows.map((r, i) => {
+      const rawPay = cell(r, "payment_method");
+      const payment_method_id = resolvePayId(rawPay) ?? (!rawPay ? payMethods[0]!.id : null);
+      if (!payment_method_id) {
+        throw new Error(
+          `Qator ${i + 1}: способ оплаты topilmadi («${rawPay}»). «Способ оплаты» qadamidagi nom yoki kodni yozing`
+        );
+      }
+      const codeRaw = cell(r, "code").toUpperCase().replace(/[^A-Z0-9_]/g, "").slice(0, 20);
+      return {
+        id: cell(r, "_id") || newId("pt"),
+        name: cell(r, "name"),
+        code: codeRaw || null,
+        payment_method_id,
+        kind: parseKind(cell(r, "kind")),
+        sort_order: parseSort(cell(r, "sort_order")),
+        comment: cell(r, "comment") || null,
+        active: true,
+        manual: false,
+        attached_clients_only: false
+      };
+    });
   } else if (profileRefKey === "branches") {
     payload = preview.rows.map((r) => ({
       id: cell(r, "_id") || newId("b"),
@@ -149,37 +216,93 @@ export async function applyProfileRows(
       active?: boolean;
       children: Node[];
     };
-    const byName = new Map<string, Node>();
-    const roots: Node[] = [];
+
     const ordered = preview.rows.filter((r) => cell(r, "name"));
-    for (const r of ordered) {
-      const name = cell(r, "name");
-      const node: Node = {
-        id: cell(r, "_id") || newId("terr"),
-        name,
-        code: cell(r, "code") || null,
-        comment: cell(r, "level") || null,
-        sort_order: parseSort(cell(r, "sort_order")),
-        active: true,
-        children: []
-      };
-      byName.set(name.toLowerCase(), node);
-    }
-    for (const r of ordered) {
-      const name = cell(r, "name");
-      const parentName = cell(r, "parent");
-      const node = byName.get(name.toLowerCase());
-      if (!node) continue;
-      if (parentName) {
-        const parent = byName.get(parentName.toLowerCase());
-        if (parent && parent !== node) {
-          parent.children.push(node);
-          continue;
+    const looksFlat = ordered.some((r) => cell(r, "region") || cell(r, "zone"));
+
+    if (looksFlat) {
+      const zones = new Map<string, Node>();
+      const regions = new Map<string, Node>();
+
+      for (const r of ordered) {
+        const city = cell(r, "name");
+        const cityCode = cell(r, "code");
+        const regionName = cell(r, "region");
+        const zoneName = cell(r, "zone");
+        if (!city || !regionName || !zoneName) continue;
+
+        const zk = zoneName.toLowerCase();
+        let zoneNode = zones.get(zk);
+        if (!zoneNode) {
+          zoneNode = {
+            id: newId("terr"),
+            name: zoneName,
+            code: null,
+            comment: "зона",
+            active: true,
+            children: []
+          };
+          zones.set(zk, zoneNode);
         }
+
+        const rk = `${zk}|${regionName.toLowerCase()}`;
+        let regionNode = regions.get(rk);
+        if (!regionNode) {
+          regionNode = {
+            id: newId("terr"),
+            name: regionName,
+            code: null,
+            comment: "регион",
+            active: true,
+            children: []
+          };
+          regions.set(rk, regionNode);
+          zoneNode.children.push(regionNode);
+        }
+
+        regionNode.children.push({
+          id: cell(r, "_id") || newId("terr"),
+          name: city,
+          code: cityCode || null,
+          comment: "город",
+          active: true,
+          children: []
+        });
       }
-      roots.push(node);
+      payload = Array.from(zones.values());
+    } else {
+      const byName = new Map<string, Node>();
+      const roots: Node[] = [];
+      for (const r of ordered) {
+        const name = cell(r, "name");
+        const node: Node = {
+          id: cell(r, "_id") || newId("terr"),
+          name,
+          code: cell(r, "code") || null,
+          comment: cell(r, "level") || null,
+          sort_order: parseSort(cell(r, "sort_order")),
+          active: true,
+          children: []
+        };
+        byName.set(name.toLowerCase(), node);
+      }
+      for (const r of ordered) {
+        const name = cell(r, "name");
+        const parentName = cell(r, "parent");
+        const node = byName.get(name.toLowerCase());
+        if (!node) continue;
+        if (parentName) {
+          const parent = byName.get(parentName.toLowerCase());
+          if (parent && parent !== node) {
+            parent.children.push(node);
+            continue;
+          }
+        }
+        roots.push(node);
+      }
+      payload = roots;
     }
-    payload = roots;
+
     await api.patch(`/api/${tenantSlug}/settings/profile`, {
       references: { territory_nodes: payload }
     });
@@ -320,11 +443,13 @@ export async function applyImportStep(
   tenantSlug: string,
   step: InitialSetupStep,
   preview: InitialSetupPreviewState,
+  qc?: QueryClient,
   callbacks?: ImportAsyncCallbacks
 ): Promise<string> {
   if (!step.importApi) throw new Error("Import API yo‘q");
-  const blob = buildXlsxBlobFromPreview(preview, getStepTableConfig(step.id));
-  return runImportStep(
+  const config = getStepTableConfig(step.id);
+  const blob = buildXlsxBlobFromPreview(preview, config);
+  const result = await runImportStep(
     tenantSlug,
     step.importApi.importPath,
     step.importApi.importAsyncPath,
@@ -332,6 +457,9 @@ export async function applyImportStep(
     preview.fileName,
     callbacks
   );
+  const keys = IMPORT_STEP_QUERY_KEYS[step.id] ?? [];
+  await invalidateAfterApply(tenantSlug, qc, keys);
+  return result;
 }
 
 export async function applyStepPreview(
@@ -343,7 +471,7 @@ export async function applyStepPreview(
 ): Promise<string> {
   const config = getStepTableConfig(step.id);
   if (!config) {
-    if (step.importApi) return applyImportStep(tenantSlug, step, preview);
+    if (step.importApi) return applyImportStep(tenantSlug, step, preview, qc);
     throw new Error("Qo‘llash usuli aniqlanmadi");
   }
 
@@ -360,7 +488,7 @@ export async function applyStepPreview(
       if (!config.entityKind) throw new Error("entityKind yo‘q");
       return applyEntityRows(tenantSlug, config.entityKind, preview, qc);
     case "import":
-      return applyImportStep(tenantSlug, step, preview, callbacks);
+      return applyImportStep(tenantSlug, step, preview, qc, callbacks);
     case "readonly-api":
       throw new Error("Bu qadam faqat asosiy sozlamalarda tahrirlanadi");
     default:

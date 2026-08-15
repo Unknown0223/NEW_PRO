@@ -9,6 +9,8 @@ export type ProfilePaymentMethodEntry = {
   code: string | null;
   active?: boolean;
   sort_order?: number | null;
+  /** Перечисление ↔ 1C / bank inbox */
+  sync_with_1c?: boolean;
 };
 
 export function paymentMethodDbValue(e: ProfilePaymentMethodEntry): string {

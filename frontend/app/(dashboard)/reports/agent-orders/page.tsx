@@ -27,6 +27,7 @@ type FilterOptions = {
   trade_directions: Array<{ id: string; name: string }>;
   client_categories: string[];
   price_types: string[];
+  price_type_options?: Array<{ id: string; label: string }>;
   payment_methods: Array<{ id: string; label: string }>;
   territory_1: string[];
   territory_2: string[];
@@ -248,7 +249,9 @@ export default function ReportAgentOrdersPage() {
   const categoryItems = (opts?.categories ?? []).map((x) => ({ id: String(x.id), title: x.name }));
   const statusItems = (opts?.statuses ?? []).map((x) => ({ id: x.id, title: ORDER_STATUS_LABELS[x.id] ?? x.label ?? x.id }));
   const clientCategoryItems = (opts?.client_categories ?? []).map((x) => ({ id: x, title: x }));
-  const priceTypeItems = (opts?.price_types ?? []).map((x) => ({ id: x, title: x }));
+  const priceTypeItems = opts?.price_type_options?.length
+    ? opts.price_type_options.map((x) => ({ id: x.id, title: x.label }))
+    : (opts?.price_types ?? []).map((x) => ({ id: x, title: x }));
   const paymentMethodItems = (opts?.payment_methods ?? []).map((x) => ({ id: x.id, title: x.label }));
   const orderTypeItems = (opts?.order_types ?? []).map((x) => ({ id: x.id, title: orderTypeLabel(x.id) }));
   const groupItems = (opts?.groups ?? []).map((x) => ({ id: String(x.id), title: x.name }));

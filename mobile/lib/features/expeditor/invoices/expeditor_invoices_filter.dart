@@ -246,6 +246,19 @@ class _InvoiceFilterSheetState extends State<_InvoiceFilterSheet> {
                 trailing: Icons.keyboard_arrow_down,
               ),
               const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    final d = InvoiceFilterState.defaults();
+                    _range = d.dateRange;
+                    _warehouseId = null;
+                    _warehouseName = null;
+                    _statuses = {};
+                  });
+                },
+                child: const Text('Сброс', style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   Expanded(

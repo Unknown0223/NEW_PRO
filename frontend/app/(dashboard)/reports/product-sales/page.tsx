@@ -31,6 +31,7 @@ type FilterOptions = {
   warehouses: Array<{ id: number; name: string; code: string }>;
   trade_directions: Array<{ id: number; name: string; code: string }>;
   price_types: string[];
+  price_type_options?: Array<{ id: string; label: string }>;
   payment_methods: Array<{ id: string; label: string }>;
   payment_type_columns: Array<{ key: string; label: string }>;
   territory_1: string[];
@@ -344,7 +345,9 @@ export default function ReportProductSalesPage() {
     id: String(x.id),
     title: x.code ? `${x.name} (${x.code})` : x.name
   }));
-  const priceTypeItems = (opts?.price_types ?? []).map((x) => ({ id: x, title: x }));
+  const priceTypeItems = opts?.price_type_options?.length
+    ? opts.price_type_options.map((x) => ({ id: x.id, title: x.label }))
+    : (opts?.price_types ?? []).map((x) => ({ id: x, title: x }));
   const paymentMethodItems = (opts?.payment_methods ?? []).map((x) => ({ id: x.id, title: x.label }));
   const brandItems = (opts?.brands ?? []).map((x) => ({
     id: String(x.id),

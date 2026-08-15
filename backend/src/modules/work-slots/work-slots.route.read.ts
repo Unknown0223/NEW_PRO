@@ -3,7 +3,7 @@ import { z } from "zod";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
+import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   assignUserBodySchema,
@@ -32,6 +32,7 @@ import {
   unassignUserFromSlot,
   getWorkSlotActivityReport
 } from "./work-slots.service";
+import { getWorkSlotPlanPolicy, setWorkSlotPlanPolicy } from "./work-slots.plan-policy.service";
 import { buildWorkSlotsExportBuffer, importWorkSlotsFromBuffer } from "./work-slots-io.service";
 
 async function readWorkSlotsImportBuffer(
@@ -77,6 +78,41 @@ function mapAssignError(reply: Parameters<typeof sendApiError>[0], request: Para
 export async function registerWorkSlotListRoutes(app: FastifyInstance) {
   const preRead = [jwtAccessVerify, requireRoles(...readRoles)];
   const preManage = [jwtAccessVerify, requireRoles(...manageRoles)];
+  const preAdmin = [jwtAccessVerify, requireRoles(TENANT_ADMIN_ROLE)];
+
+  app.get("/api/:slug/work-slots/plan-policy", { preHandler: preManage }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    try {
+      const data = await getWorkSlotPlanPolicy(request.tenant!.id);
+      return reply.send({ data });
+    } catch (e) {
+      return mapAssignError(reply, request, e);
+    }
+  });
+
+  app.patch("/api/:slug/work-slots/plan-policy", { preHandler: preAdmin }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const body = z
+      .object({
+        plan_policy: z.enum([
+          "full_for_starter_prorata_for_new",
+          "prorata_both",
+          "full_both"
+        ])
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(body.error));
+    }
+    try {
+      const data = await setWorkSlotPlanPolicy(request.tenant!.id, body.data.plan_policy);
+      return reply.send({ data });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "BAD_PLAN_POLICY") return sendApiError(reply, request, 400, "ValidationError", msg);
+      return mapAssignError(reply, request, e);
+    }
+  });
 
   app.get("/api/:slug/work-slots/suggest-code", { preHandler: preManage }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
@@ -166,6 +202,9 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       }
       if (msg === "TOO_MANY") return sendApiError(reply, request, 400, "TooManySlots");
       if (msg === "BAD_SLOT_IDS") return sendApiError(reply, request, 400, "BadSlotIds");
+      if (msg === "BAD_DIRECTION") return sendApiError(reply, request, 400, "BadDirection");
+      if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+      if (msg === "BAD_CASH_DESK") return sendApiError(reply, request, 400, "BadCashDesk");
       if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
       if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");

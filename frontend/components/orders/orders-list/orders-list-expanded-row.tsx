@@ -3,20 +3,25 @@
 import type { OrderDetailRow } from "@/components/orders/order-detail-view";
 import { ORDERS_LIST_EXPANDED_PANEL_CLASS } from "@/components/orders/orders-list/orders-list-expand-layout";
 import { OrdersProductsByCategoryView } from "@/components/orders/orders-list/orders-products-by-category-view";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Package } from "lucide-react";
+import { Package, Pencil } from "lucide-react";
+import Link from "next/link";
 import type { CSSProperties } from "react";
 
 function OrdersListExpandedBody({
   tenantSlug,
   orderId,
-  orderNumber
+  orderNumber,
+  orderStatus
 }: {
   tenantSlug: string;
   orderId: number;
   orderNumber?: string;
+  orderStatus?: string;
 }) {
   const q = useQuery({
     queryKey: ["order", tenantSlug, orderId],
@@ -28,12 +33,32 @@ function OrdersListExpandedBody({
   });
 
   const items = q.data?.items ?? [];
+  const status = q.data?.status ?? orderStatus ?? "";
+  /** Tahrirlash faqat «Новый» — Sozdat zakaz formasiga o‘tadi. */
+  const canEditHint = status === "new";
+
   return (
     <div
       role="region"
       aria-label={orderNumber ? `Товары заказа ${orderNumber}` : "Товары заказа"}
       className="min-w-0 max-w-full"
     >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">Состав заявки</p>
+        {canEditHint ? (
+          <Link
+            href={`/orders/new?edit_order_id=${orderId}`}
+            className={cn(
+              buttonVariants({ variant: "secondary", size: "sm" }),
+              "h-8 gap-1.5 text-xs"
+            )}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Pencil className="size-3.5" aria-hidden />
+            Редактировать заказ
+          </Link>
+        ) : null}
+      </div>
       {q.isLoading ? (
         <p className="text-xs text-muted-foreground">Загрузка товаров…</p>
       ) : q.isError ? (
@@ -44,7 +69,13 @@ function OrdersListExpandedBody({
           Нет строк товаров
         </p>
       ) : (
-        <OrdersProductsByCategoryView items={items} discount_sum={q.data?.discount_sum} />
+        <OrdersProductsByCategoryView
+          items={items}
+          discount_sum={q.data?.discount_sum}
+          total_sum={q.data?.total_sum}
+          order_type={q.data?.order_type}
+          discount_debt_note={q.data?.discount_debt_note}
+        />
       )}
     </div>
   );

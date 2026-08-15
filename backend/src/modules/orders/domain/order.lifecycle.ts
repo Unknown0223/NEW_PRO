@@ -90,13 +90,21 @@ const MILESTONE_RANK: Record<string, number> = {
   returned: 5
 };
 
+export type UpdateOrderStatusOptions = {
+  /** Guruh yangilash: SSE / cache / notify oxirida bir marta. */
+  deferSideEffects?: boolean;
+  /** Natija ishlatilmasa — enrich o‘tkazib yuboriladi. */
+  skipEnrich?: boolean;
+};
+
 export async function updateOrderStatus(
   tenantId: number,
   orderId: number,
   nextStatus: string,
   actorUserId: number | null,
   actorRole: string,
-  occurredAtRaw?: string
+  occurredAtRaw?: string,
+  opts?: UpdateOrderStatusOptions
 ): Promise<OrderDetailRow> {
   const trimmed = nextStatus.trim();
   if (!isValidOrderStatus(trimmed)) {
@@ -330,24 +338,6 @@ export async function updateOrderStatus(
     });
   });
 
-  emitOrderUpdated(tenantId, orderId);
-  void invalidateOrdersListCache(tenantId);
-  void invalidateDashboard(tenantId);
-  void enqueueOrderStatusNotifyJob({
-    tenant_id: tenantId,
-    order_id: orderId,
-    order_number: o.number,
-    client_name: o.client.name,
-    from_status: fromStatus,
-    to_status: trimmed,
-    actor_user_id: actorUserId,
-    agent_id: o.agent_id,
-    expeditor_user_id: o.expeditor_user_id
-  });
-  if (o.warehouse_id != null) {
-    void invalidateStock(tenantId, o.warehouse_id);
-  }
-
   const auditAction = trimmed === "cancelled" ? "order.cancel" : "order.status";
   void appendTenantAuditEvent({
     tenantId,
@@ -363,6 +353,29 @@ export async function updateOrderStatus(
     }
   });
 
+  if (!opts?.deferSideEffects) {
+    emitOrderUpdated(tenantId, orderId);
+    void invalidateOrdersListCache(tenantId);
+    void invalidateDashboard(tenantId);
+    void enqueueOrderStatusNotifyJob({
+      tenant_id: tenantId,
+      order_id: orderId,
+      order_number: o.number,
+      client_name: o.client.name,
+      from_status: fromStatus,
+      to_status: trimmed,
+      actor_user_id: actorUserId,
+      agent_id: o.agent_id,
+      expeditor_user_id: o.expeditor_user_id
+    });
+    if (o.warehouse_id != null) {
+      void invalidateStock(tenantId, o.warehouse_id);
+    }
+  }
+
+  if (opts?.skipEnrich) {
+    return updated as unknown as OrderDetailRow;
+  }
   return enrichOrderDetailRow(tenantId, updated as unknown as OrderDetailLoaded, actorRole);
 }
 
@@ -372,7 +385,8 @@ export async function updateOrderMilestoneAt(
   orderId: number,
   milestone: string,
   occurredAtRaw: string,
-  actorRole: string
+  actorRole: string,
+  opts?: UpdateOrderStatusOptions
 ): Promise<OrderDetailRow> {
   const milestoneStatus = milestone.trim();
   if (!isValidOrderStatus(milestoneStatus)) {
@@ -405,9 +419,11 @@ export async function updateOrderMilestoneAt(
     data: { created_at: occurredAt }
   });
 
-  emitOrderUpdated(tenantId, orderId);
-  void invalidateOrdersListCache(tenantId);
-  void invalidateDashboard(tenantId);
+  if (!opts?.deferSideEffects) {
+    emitOrderUpdated(tenantId, orderId);
+    void invalidateOrdersListCache(tenantId);
+    void invalidateDashboard(tenantId);
+  }
 
   const refreshed = await prisma.order.findFirstOrThrow({
     where: { id: orderId, tenant_id: tenantId },
@@ -421,7 +437,10 @@ export type BulkOrderStatusResult = {
   failed: { id: number; error: string; from?: string; to?: string }[];
 };
 
-/** Bir nechta zakaz uchun ketma-ket `updateOrderStatus` (har biri o‘z logi / socket bilan). */
+/**
+ * Guruh status: bitta HTTP → ketma-ket domain yangilash, lekin SSE/cache/notify bir marta.
+ * (Har bir zakaz uchun alohida HTTP yo‘q — front `POST /orders/bulk/status` ishlatadi.)
+ */
 export async function bulkUpdateOrderStatus(
   tenantId: number,
   orderIds: number[],
@@ -434,23 +453,51 @@ export async function bulkUpdateOrderStatus(
   const updated: number[] = [];
   const failed: BulkOrderStatusResult["failed"] = [];
   const trimmed = nextStatus.trim();
+  const defer = { deferSideEffects: true, skipEnrich: true } as const;
+
+  const existingRows = await prisma.order.findMany({
+    where: { id: { in: ids }, tenant_id: tenantId },
+    select: {
+      id: true,
+      status: true,
+      number: true,
+      agent_id: true,
+      expeditor_user_id: true,
+      warehouse_id: true,
+      client: { select: { name: true } }
+    }
+  });
+  const byId = new Map(existingRows.map((r) => [r.id, r]));
+  const notifyJobs: Parameters<typeof enqueueOrderStatusNotifyJob>[0][] = [];
+  const warehouseIds = new Set<number>();
+
   for (const id of ids) {
     try {
-      // Agar zakaz allaqachon shu statusda bo'lsa, status o'zgarmaydi (early-return).
-      // Bunday holda foydalanuvchi sana/vaqt bergan bo'lsa — o'sha bosqich (milestone)
-      // sanasini tahrirlaymiz, masalan "Отгружен" zakazlar uchun "Дата отгрузки" ni guruh bilan.
-      const existing = await prisma.order.findFirst({
-        where: { id, tenant_id: tenantId },
-        select: { status: true }
-      });
+      const existing = byId.get(id);
       if (!existing) {
         throw new Error("NOT_FOUND");
       }
-      if (existing.status === trimmed && occurredAtRaw) {
-        await updateOrderMilestoneAt(tenantId, id, trimmed, occurredAtRaw, actorRole);
-      } else {
-        await updateOrderStatus(tenantId, id, trimmed, actorUserId, actorRole, occurredAtRaw);
+      const fromStatus = existing.status;
+      if (fromStatus === trimmed) {
+        if (occurredAtRaw) {
+          await updateOrderMilestoneAt(tenantId, id, trimmed, occurredAtRaw, actorRole, defer);
+        }
+        updated.push(id);
+        continue;
       }
+      await updateOrderStatus(tenantId, id, trimmed, actorUserId, actorRole, occurredAtRaw, defer);
+      notifyJobs.push({
+        tenant_id: tenantId,
+        order_id: id,
+        order_number: existing.number,
+        client_name: existing.client.name,
+        from_status: fromStatus,
+        to_status: trimmed,
+        actor_user_id: actorUserId,
+        agent_id: existing.agent_id,
+        expeditor_user_id: existing.expeditor_user_id
+      });
+      if (existing.warehouse_id != null) warehouseIds.add(existing.warehouse_id);
       updated.push(id);
     } catch (e) {
       const code = getErrorCode(e) ?? "UNKNOWN";
@@ -462,6 +509,20 @@ export async function bulkUpdateOrderStatus(
       });
     }
   }
+
+  if (updated.length > 0) {
+    // Bitta SSE — front debounce bilan bir refetch; har bir id uchun alohida emas.
+    emitOrderUpdated(tenantId, updated[0]!);
+    void invalidateOrdersListCache(tenantId);
+    void invalidateDashboard(tenantId);
+    for (const whId of warehouseIds) {
+      void invalidateStock(tenantId, whId);
+    }
+    for (const job of notifyJobs) {
+      void enqueueOrderStatusNotifyJob(job);
+    }
+  }
+
   return { updated, failed };
 }
 
@@ -550,7 +611,9 @@ export async function bulkUpdateOrderConsignment(
           order_type: true,
           is_consignment: true,
           consignment_due_date: true,
-          comment: true
+          comment: true,
+          agent_id: true,
+          total_sum: true
         }
       });
       if (!existing) {
@@ -565,6 +628,44 @@ export async function bulkUpdateOrderConsignment(
       if (ot !== "order") {
         failed.push({ id, error: "BAD_ORDER_TYPE" });
         continue;
+      }
+
+      // Konsignatsiyaga o‘tkazishda ham limit (включая `new`) tekshiriladi
+      if (isConsignment && !existing.is_consignment) {
+        if (existing.agent_id == null || existing.agent_id <= 0) {
+          failed.push({ id, error: "CONSIGNMENT_REQUIRES_AGENT" });
+          continue;
+        }
+        const ag = await prisma.user.findFirst({
+          where: { id: existing.agent_id, tenant_id: tenantId, is_active: true },
+          select: {
+            consignment: true,
+            consignment_limit_amount: true,
+            consignment_ignore_previous_months_debt: true
+          }
+        });
+        if (!ag?.consignment) {
+          failed.push({ id, error: "CONSIGNMENT_AGENT_DISABLED" });
+          continue;
+        }
+        const lim = ag.consignment_limit_amount;
+        if (lim != null) {
+          const { year, month } = parseYearMonth(undefined);
+          const outstanding = await computeAgentConsignmentOutstanding(
+            prisma,
+            tenantId,
+            existing.agent_id,
+            {
+              ignorePreviousMonthsDebt: ag.consignment_ignore_previous_months_debt === true,
+              monthStartsAt: utcMonthStart(year, month),
+              excludeOrderId: id
+            }
+          );
+          if (outstanding.add(existing.total_sum).gt(lim)) {
+            failed.push({ id, error: "CONSIGNMENT_LIMIT_EXCEEDED" });
+            continue;
+          }
+        }
       }
 
       const now = new Date();

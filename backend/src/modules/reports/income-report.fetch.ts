@@ -1,21 +1,17 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import {
+  enrichScopedReportActor,
+  resolveAllowedAgentIdsForActor
+} from "../access/access-agent-scope";
 import type { AccessCtx, IncomeReportQuery, IncomeRow } from "./income-report.types";
 
 async function resolveAllowedAgentIds(tenantId: number, ctx: AccessCtx): Promise<number[] | null> {
-  const role = (ctx.role || "").toLowerCase();
-  if (role === "admin" || role.includes("director") || role.includes("директор") || role.includes("финанс")) {
-    return null;
-  }
-  if (!ctx.userId) return [];
-  if (role.includes("supervisor") || role.includes("супервайзер")) {
-    const rows = await prisma.user.findMany({
-      where: { tenant_id: tenantId, OR: [{ id: ctx.userId }, { supervisor_user_id: ctx.userId }] },
-      select: { id: true }
-    });
-    return rows.map((r) => r.id);
-  }
-  return [ctx.userId];
+  const actor = await enrichScopedReportActor(tenantId, {
+    userId: ctx.userId ?? null,
+    role: ctx.role || ""
+  });
+  return resolveAllowedAgentIdsForActor(actor);
 }
 
 export async function fetchIncomeRows(tenantId: number, query: IncomeReportQuery, ctx: AccessCtx): Promise<IncomeRow[]> {

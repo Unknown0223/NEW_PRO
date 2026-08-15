@@ -381,10 +381,16 @@ export default function TerritoriesSettingsPage() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!tenantSlug) throw new Error("Tenant yo'q");
+      const sorted = sortForest(nodes);
+      if (sorted.length === 0) {
+        throw new Error(
+          "Bo‘sh daraxt saqlanmaydi — territoriya o‘chib ketmasin. Avval «Test ma’lumot» yoki Excel import qiling."
+        );
+      }
       await api.patch(`/api/${tenantSlug}/settings/profile`, {
         references: {
           territory_levels: levels.map((x) => x.trim()).filter(Boolean),
-          territory_nodes: sortForest(nodes),
+          territory_nodes: sorted,
           territory_tree: []
         }
       });
@@ -398,6 +404,8 @@ export default function TerritoriesSettingsPage() {
       setServerFieldErrs({});
       setMsg("Saqlandi.");
       await qc.invalidateQueries({ queryKey: ["settings", "profile", tenantSlug] });
+      /** Доступ → Прикрепить территории shu keshdan o‘qiydi */
+      await qc.invalidateQueries({ queryKey: ["access-territories", tenantSlug] });
     },
     onError: (e: unknown) => {
       if (isAxiosError(e)) {

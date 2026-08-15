@@ -10,10 +10,16 @@ import {
   resolvePaymentMethodRefToLabel
 } from "../tenant-settings/finance-refs";
 import type { AgentOrdersFilters, TerritoryNode } from "./agent-orders.types";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 import { buildFilterSql } from "./agent-orders.helpers";
 
-export async function getAgentOrdersReport(tenantId: number, f: AgentOrdersFilters) {
-  const whereSql = buildFilterSql(tenantId, f);
+export async function getAgentOrdersReport(
+  tenantId: number,
+  f: AgentOrdersFilters,
+  actor?: { userId: number | null; role: string }
+) {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
+  const whereSql = buildFilterSql(tenantId, f, scopedActor);
 
   const summary = await prisma.$queryRaw<Array<{ status: string; amount: Prisma.Decimal; qty: bigint; akb: bigint }>>`
     WITH status_logs AS (

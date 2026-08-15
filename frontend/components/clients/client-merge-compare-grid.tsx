@@ -167,6 +167,10 @@ export function MergeCompareGrid(props: {
         latitude: p.latitude,
         longitude: p.longitude,
         zone: p.zone,
+        warehouse_id: null,
+        warehouse_name: null,
+        cash_desk_id: null,
+        cash_desk_name: null,
         agent_id: null,
         agent_name: null,
         agent_assignments: [],
@@ -174,7 +178,7 @@ export function MergeCompareGrid(props: {
         created_at: p.updated_at,
         lat,
         lon
-      } as ClientMapPoint);
+      } satisfies ClientMapPoint);
     }
     return out;
   }, [visible]);

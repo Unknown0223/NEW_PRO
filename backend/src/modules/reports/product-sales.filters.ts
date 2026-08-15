@@ -16,7 +16,7 @@ import { KNOWN_ORDER_TYPES, ORDER_STATUS_LABEL_RU, orderTypeLabelRu } from "./pr
 import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
 
 export async function getProductSalesReportFilterOptions(tenantId: number, actor?: ReportActor) {
-  const cacheKey = `tenant:${tenantId}:reports:product-sales:filter-options:v1:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
+  const cacheKey = `tenant:${tenantId}:reports:product-sales:filter-options:v2:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
   try {
     const redis = await getRedisForApp();
     const cached = await redis.get(cacheKey);
@@ -42,6 +42,18 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
   const price_types = [
     ...new Set(settingsPriceTypeEntries.map((entry) => priceTypeKey(entry).trim()).filter(Boolean))
   ].sort((a, b) => a.localeCompare(b, "ru"));
+  // UI uchun: id — DB kaliti (kod), label — spravochnikdagi nom
+  const price_type_options = settingsPriceTypeEntries
+    .map((entry) => {
+      const id = priceTypeKey(entry).trim();
+      return { id, label: entry.name.trim() || id };
+    })
+    .filter((x) => x.id)
+    .reduce<Array<{ id: string; label: string }>>((acc, cur) => {
+      if (!acc.some((x) => x.id === cur.id)) acc.push(cur);
+      return acc;
+    }, [])
+    .sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
   const paymentMethodsFromSettings = paymentEntries
     .filter((e) => e.active !== false)
@@ -154,6 +166,7 @@ export async function getProductSalesReportFilterOptions(tenantId: number, actor
     warehouses: warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code ?? "" })),
     trade_directions: tradeDirections.map((d) => ({ id: d.id, name: d.name, code: d.code ?? "" })),
     price_types,
+    price_type_options,
     payment_methods,
     payment_type_columns,
     territory_1: territoryOpts.territory_1,

@@ -3,4 +3,6 @@
     <cache-path name="apk_cache" path="." />
     <external-cache-path name="external_apk_cache" path="." />
     <files-path name="apk_files" path="." />
+    <!-- Signature-mismatch recovery: APK copied to public Downloads -->
+    <external-path name="downloads" path="Download" />
 </paths>

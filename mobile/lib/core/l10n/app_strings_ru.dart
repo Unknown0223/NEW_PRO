@@ -2,7 +2,9 @@
 abstract final class S {
   static const navHome = 'Главная';
   static const navVisits = 'Визиты';
+  static const navOrders = 'Заказы';
   static const navKpi = 'KPI';
+  static const navDailyPlan = 'Дневной план';
   static const navReports = 'Отчёты';
   static const navPoints = 'Тор. точки';
   static const outlets = 'Торговые точки';
@@ -33,6 +35,7 @@ abstract final class S {
   static const noOrderToday = 'сегодня нет заказа';
   static const photoReport = 'Фотоотчёт';
   static const createOrderAction = 'Создать заказ';
+  static const sendHeldOrderNow = 'Отправить сейчас';
   static const refusalAction = 'Отказ (rad etish)';
   static const supervisionChecklist = 'Чек-лист супервизии';
   static const draftBadge = 'Черновик';
@@ -61,14 +64,14 @@ abstract final class S {
   /// O‘ng: noyob mijozlar — 30 kun ichida tashrifsiz (ОКБ).
   static const dormantNotVisitedMonth = 'Не посещ., 1 мес';
   static const syncWindowEndsIn = 'До конца синхронизации';
-  static const syncWindowStartsIn = 'Синхронизация через';
+  static const syncWindowStartsIn = 'До включения синхронизации';
   static const syncWindowEndsShort = 'до откл.';
-  static const syncWindowStartsShort = 'через';
+  static const syncWindowStartsShort = 'до вкл.';
   static const syncIn = 'до откл.';
   static const syncWindowTooltipEnds =
       'Осталось времени до отключения синхронизации. Успейте отправить данные.';
   static const syncWindowTooltipStarts =
-      'Синхронизация будет доступна через указанное время.';
+      'Синхронизация сейчас выключена. Через указанное время снова станет доступна.';
   static const syncWindowAlertTitle = 'Синхронизация';
   static const syncWindowTenMinAlert =
       'До отключения синхронизации осталось 10 минут. Отправьте данные сейчас.';
@@ -166,7 +169,7 @@ abstract final class S {
   static const syncDataUpdated = 'Данные обновлены';
   static const syncAllDone = '100% · все 847 записи';
   static const syncProgressHint =
-      'Статус badges pulse · progress never jumps backward';
+      'Данные отправляются на сервер. Не закрывайте приложение до завершения.';
   static const syncOrdersSent = 'Заказы отправлено';
   static const syncPhotosUpload = 'Фото выгрузка';
   static const syncClients = 'Клиенты';
@@ -259,4 +262,6 @@ abstract final class S {
   static const exclusiveBonusDiscountHint =
       'Можно выбрать только бонус или скидку';
   static const selectCategory = 'Выберите категорию';
+  /** Fotootchet: spravochnik «Причины фотоотчёта». */
+  static const selectPhotoReason = 'Выберите причину фото';
 }

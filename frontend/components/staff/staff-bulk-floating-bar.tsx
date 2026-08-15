@@ -13,6 +13,8 @@ export type StaffBulkFloatingBarProps = {
   onClearSelection: () => void;
   /** Agent bo‘limi: ommaviy cheklovlar */
   onRestrictions?: () => void;
+  /** Agent bo‘limi: mobil konfiguratsiya (shu jumladan kechiktirilgan sinxron) */
+  onConfigurations?: () => void;
   /** Agent bo‘limi: umumiy maydonlarni tahrirlash */
   onBulkEdit?: () => void;
   clearSessionsLabel?: string;
@@ -29,6 +31,7 @@ export function StaffBulkFloatingBar({
   onClearSessions,
   onClearSelection,
   onRestrictions,
+  onConfigurations,
   onBulkEdit,
   clearSessionsLabel = "Очистить сессии"
 }: StaffBulkFloatingBarProps) {
@@ -73,7 +76,7 @@ export function StaffBulkFloatingBar({
           </span>
         </button>
 
-        {onRestrictions || onBulkEdit ? (
+        {onRestrictions || onConfigurations || onBulkEdit ? (
           <>
             <span className="mx-1 h-6 w-px bg-slate-200" />
 
@@ -86,6 +89,18 @@ export function StaffBulkFloatingBar({
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
                 ⚙
+              </button>
+            ) : null}
+
+            {onConfigurations ? (
+              <button
+                type="button"
+                onClick={onConfigurations}
+                disabled={busy}
+                title="Конфигурация приложения (синхронизация, задержка заказа…)"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-teal-600 hover:bg-teal-50 disabled:opacity-50"
+              >
+                📱
               </button>
             ) : null}
 

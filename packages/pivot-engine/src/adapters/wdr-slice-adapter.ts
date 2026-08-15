@@ -1,5 +1,6 @@
 import type { AggregationType, PivotConfig, PivotFilter, PivotValue } from "../types/pivot.types.js";
-import { DEFAULT_PIVOT_CONFIG } from "../core/PivotEngine.js";
+import { DEFAULT_PIVOT_CONFIG } from "../core/defaults.js";
+import { isWdrMeasuresFieldId, type PivotValuesPosition } from "../utils/valuesPosition.js";
 
 /** WebDataRocks slice minimal shakli (clean-room, hujjat asosida). */
 export type WdrSliceField = {
@@ -60,12 +61,24 @@ export function parseWdrFieldId(uniqueName?: string): string {
 
 function fieldIds(fields?: WdrSliceField[]): string[] {
   if (!fields?.length) return [];
-  return fields.map((f) => parseWdrFieldId(f.uniqueName)).filter(Boolean);
+  return fields
+    .map((f) => parseWdrFieldId(f.uniqueName))
+    .filter((id) => Boolean(id) && !isWdrMeasuresFieldId(id));
+}
+
+function detectValuesPosition(slice: WdrSliceJson): PivotValuesPosition {
+  const inRows = (slice.rows ?? []).some((f) => isWdrMeasuresFieldId(parseWdrFieldId(f.uniqueName)));
+  if (inRows) return "rows";
+  const inColumns = (slice.columns ?? []).some((f) =>
+    isWdrMeasuresFieldId(parseWdrFieldId(f.uniqueName))
+  );
+  if (inColumns) return "columns";
+  return "columns";
 }
 
 function wdrFilterToPivot(field: WdrSliceField): PivotFilter | null {
   const fieldId = parseWdrFieldId(field.uniqueName);
-  if (!fieldId) return null;
+  if (!fieldId || isWdrMeasuresFieldId(fieldId)) return null;
 
   const members = field.filter?.members;
   if (!members?.length) {
@@ -103,6 +116,7 @@ function measuresToValues(measures?: WdrSliceMeasure[]): PivotValue[] {
 /**
  * WDR `slice` JSON → `PivotConfig`.
  * `reportFilters` va slice ichidagi `filter.members` qo'llab-quvvatlanadi.
+ * Virtual `Measures` → `options.valuesPosition`.
  */
 export function wdrSliceToPivotConfig(
   slice: WdrSliceJson,
@@ -110,6 +124,7 @@ export function wdrSliceToPivotConfig(
 ): PivotConfig {
   const reportFilterIds = fieldIds(slice.reportFilters);
   const filters: PivotFilter[] = [];
+  const valuesPosition = detectValuesPosition(slice);
 
   for (const zone of [slice.reportFilters, slice.rows, slice.columns]) {
     for (const field of zone ?? []) {
@@ -128,7 +143,8 @@ export function wdrSliceToPivotConfig(
     filters: filters.length > 0 ? filters : base.filters ?? [],
     options: {
       ...DEFAULT_PIVOT_CONFIG.options,
-      ...base.options
+      ...base.options,
+      valuesPosition: base.options?.valuesPosition ?? valuesPosition
     }
   };
 }

@@ -2,26 +2,68 @@ import 'package:intl/intl.dart';
 
 import 'server_clock.dart';
 
-/// Ish mintaqasi vaqti — server bilan bir xil (Asia/Tashkent, UTC+5).
-/// Qurilma vaqti noto‘g‘ri bo‘lsa ham sinхron oynasi va «oxirgi sinхрон» to‘g‘ri ko‘rinadi.
-const int kWorkRegionUtcOffsetHours = 5;
-const String kWorkRegionTimezoneId = 'Asia/Tashkent';
+/// Ish mintaqasi vaqti — server bilan bir xil (default Asia/Tashkent, UTC+5).
+/// Tenant sozlamasidan [applyWorkRegionFromServer] orqali yangilanadi.
+const int kDefaultWorkRegionUtcOffsetHours = 5;
+const String kDefaultWorkRegionTimezoneId = 'Asia/Tashkent';
 
-/// Hozirgi vaqt ish mintaqasida (UTC+5).
+int _workRegionUtcOffsetHours = kDefaultWorkRegionUtcOffsetHours;
+String _workRegionTimezoneId = kDefaultWorkRegionTimezoneId;
+
+int get kWorkRegionUtcOffsetHours => _workRegionUtcOffsetHours;
+String get kWorkRegionTimezoneId => _workRegionTimezoneId;
+
+/// Server `work_timezone` / `work_utc_offset_hours` (agent-config).
+void applyWorkRegionFromServer({
+  String? timezoneId,
+  num? utcOffsetHours,
+}) {
+  final id = timezoneId?.trim();
+  if (id != null && id.isNotEmpty) {
+    _workRegionTimezoneId = id;
+  }
+  if (utcOffsetHours != null && utcOffsetHours.isFinite) {
+    final h = utcOffsetHours.round();
+    if (h >= -14 && h <= 14) {
+      _workRegionUtcOffsetHours = h;
+    }
+  }
+}
+
+/// UTC instant → ish mintaqasi **devor soati** (timezone-siz, local-naive).
+///
+/// Faqat soat/minut/kun komponentlari olinadi — `isUtc` qolmaydi.
+/// Aks holda `DateFormat` / `difference` qurilma TZ da yana +offset qo‘shadi
+/// (12:00 Toshkent → 17:00 ko‘rinishi).
+DateTime workRegionWallClockFromUtc(DateTime utc) {
+  final u = utc.toUtc();
+  final shifted = u.add(Duration(hours: _workRegionUtcOffsetHours));
+  // Aniq local-naive (isUtc: false).
+  return DateTime(
+    shifted.year,
+    shifted.month,
+    shifted.day,
+    shifted.hour,
+    shifted.minute,
+    shifted.second,
+    shifted.millisecond,
+    shifted.microsecond,
+  );
+}
+
+/// Hozirgi vaqt ish mintaqasida, local-naive wall-clock.
 ///
 /// Server bilan langarlangan ishonchli vaqt mavjud bo‘lsa — o‘sha ishlatiladi
 /// (qurilma soatiga tayanmaydi). Aks holda (hali server bilan bog‘lanmagan)
 /// qurilma vaqtiga qaytadi.
 DateTime workRegionNow([DateTime? reference]) {
   if (reference != null) {
-    return reference.toUtc().add(const Duration(hours: kWorkRegionUtcOffsetHours));
+    return workRegionWallClockFromUtc(reference.toUtc());
   }
   // `bestEffortNowUtc`: jonli langar > saqlangan floor (orqaga ketmaydi) >
   // qurilma soati. Shu sabab telefon soati/mintaqasini o‘zgartirib aldab
   // bo‘lmaydi (kamida oxirgi ko‘rilgan server vaqtidan orqaga ketmaydi).
-  return ServerClock.instance
-      .bestEffortNowUtc()
-      .add(const Duration(hours: kWorkRegionUtcOffsetHours));
+  return workRegionWallClockFromUtc(ServerClock.instance.bestEffortNowUtc());
 }
 
 /// Server-langarlangan hozirgi UTC (saqlangan floor bilan — orqaga ketmaydi).
@@ -30,8 +72,14 @@ DateTime serverNowUtc() => ServerClock.instance.bestEffortNowUtc();
 /// Server-langarlangan hozirgi UTC, ISO8601 ko‘rinishida (yozuvlar uchun).
 String serverNowUtcIso() => serverNowUtc().toIso8601String();
 
-/// Ish mintaqasi (UTC+5) bo‘yicha bugungi sana kaliti: `yyyy-MM-dd`.
-String serverTodayKey() => workRegionNow().toIso8601String().substring(0, 10);
+/// Ish mintaqasi bo‘yicha bugungi sana kaliti: `yyyy-MM-dd`.
+String serverTodayKey() {
+  final wr = workRegionNow();
+  final y = wr.year.toString().padLeft(4, '0');
+  final m = wr.month.toString().padLeft(2, '0');
+  final d = wr.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
 
 /// Ish mintaqasi bo‘yicha bugungi hafta kuni (1=Dushanba … 7=Yakshanba).
 int serverTodayWeekday() => workRegionNow().weekday;
@@ -39,9 +87,9 @@ int serverTodayWeekday() => workRegionNow().weekday;
 /// Server bilan vaqt jonli langarlanganmi (qat'iy gating uchun).
 bool isServerTimeReady() => ServerClock.instance.hasAnchor;
 
-/// Sinхron oynasi soati — ishonchli (serverdan langarlangan) vaqtga tayanadi.
+/// Sinхрон oynasi soati — ishonchli (serverdan langarlangan) vaqtga tayanadi.
 ///
-/// Agent konfigidagi «08:00–17:30» ish mintaqasi (UTC+5) soatiga nisbatan
+/// Agent konfigidagi «08:00–17:30» ish mintaqasi soatiga nisbatan
 /// qo‘llaniladi. Qurilma soati o‘zgartirilsa ham sinxron oynasi buzilmaydi:
 /// server bilan bog‘langach vaqt server bo‘yicha hisoblanadi.
 ///
@@ -63,11 +111,11 @@ DateTime? parseUtcIso(String? iso) {
   }
 }
 
-/// ISO (UTC) → ish mintaqasi.
+/// ISO (UTC) → ish mintaqasi wall-clock (local-naive).
 DateTime? toWorkRegionFromIso(String? iso) {
   final utc = parseUtcIso(iso);
   if (utc == null) return null;
-  return utc.add(const Duration(hours: kWorkRegionUtcOffsetHours));
+  return workRegionWallClockFromUtc(utc);
 }
 
 /// Foydalanuvchiga ko‘rsatish: `14.06.2026 07:58`
@@ -80,7 +128,7 @@ String formatWorkRegionDateTime(
   return DateFormat(pattern).format(wr);
 }
 
-/// Sinхron oynasi HH:mm — ish mintaqasi bo‘yicha daqiqalar.
+/// Sinхрон oynasi HH:mm — ish mintaqasi bo‘yicha daqiqalar.
 int workRegionMinutesOfDay([DateTime? reference]) {
   final wr = reference ?? workRegionNow();
   return wr.hour * 60 + wr.minute;

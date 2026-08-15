@@ -132,6 +132,8 @@ export type PeriodReturnResult = {
   id: number;
   number: string;
   refund_amount: string | null;
+  discount_debt_amount?: string | null;
+  discount_debt_note?: string | null;
   lines: {
     product_id: number;
     sku: string;

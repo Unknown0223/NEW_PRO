@@ -8,7 +8,8 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Upload
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentFilterSelect, AgentTabButton } from "@/components/staff/agent-workspace-template-ui";
@@ -26,13 +27,19 @@ export function StaffWorkspaceHeader({
   subtitle,
   addLabel,
   onAdd,
-  onColumnSettings
+  onColumnSettings,
+  extraActions,
+  canAdd = true
 }: {
   title: string;
   subtitle: string;
   addLabel: string;
   onAdd: () => void;
   onColumnSettings?: () => void;
+  /** Qatorning o‘ng tomonida (ko‘rinish, eksport va h.k.) */
+  extraActions?: ReactNode;
+  /** false bo‘lsa «Добавить» yashirinadi */
+  canAdd?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-5 shadow-sm ring-1 ring-slate-200">
@@ -40,15 +47,18 @@ export function StaffWorkspaceHeader({
         <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
-        >
-          <Plus className="h-4 w-4" />
-          {addLabel}
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        {canAdd ? (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+          >
+            <Plus className="h-4 w-4" />
+            {addLabel}
+          </button>
+        ) : null}
+        {extraActions}
         {onColumnSettings ? (
           <button
             type="button"
@@ -78,6 +88,7 @@ export function StaffWorkspaceFilterPanel({
   onSearch,
   searchPlaceholder = "Поиск…",
   onExport,
+  onImport,
   onRefresh,
   isFetching,
   bulkMenu,
@@ -96,11 +107,13 @@ export function StaffWorkspaceFilterPanel({
   onSearch: (value: string) => void;
   searchPlaceholder?: string;
   onExport?: () => void;
+  /** Открыть диалог импорта Excel */
+  onImport?: () => void;
   onRefresh: () => void;
   isFetching?: boolean;
   bulkMenu?: ReactNode;
-  /** Klientlar sahifasi kabi bitta qator grid */
-  filtersLayout?: "default" | "clients-row";
+  /** Klientlar sahifasi kabi bitta qator grid; stacked — filtrlar ustida, tugmalar pastda */
+  filtersLayout?: "default" | "clients-row" | "stacked";
 }) {
   const panelClass =
     filtersLayout === "clients-row"
@@ -153,6 +166,11 @@ export function StaffWorkspaceFilterPanel({
           {filters}
           {filterActionsClientsRow}
         </div>
+      ) : filtersLayout === "stacked" ? (
+        <div className="space-y-2">
+          {filters}
+          <div className="flex justify-end border-t border-border/60 pt-2">{filterActionsDefault}</div>
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           {filters}
@@ -170,15 +188,16 @@ export function StaffWorkspaceFilterPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button type="button" className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted">
           <input
             type="checkbox"
-            className="h-4 w-4 rounded border-border"
+            className="h-4 w-4 rounded border-border accent-primary"
             checked={allOnPageSelected}
             onChange={(e) => onToggleAllOnPage(e.target.checked)}
             aria-label="Выбрать всех на странице"
           />
-        </button>
+          <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все</span>
+        </label>
         <button
           type="button"
           title="Управление столбцами"
@@ -206,6 +225,16 @@ export function StaffWorkspaceFilterPanel({
             className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted"
           >
             <FileSpreadsheet className="h-4 w-4" /> Excel
+          </button>
+        ) : null}
+        {onImport ? (
+          <button
+            type="button"
+            onClick={onImport}
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-slate-700 hover:bg-muted"
+            title="Импорт Excel"
+          >
+            <Upload className="h-4 w-4" /> Импорт Excel
           </button>
         ) : null}
         <button
@@ -278,6 +307,7 @@ export function StaffWorkspaceTable({
   renderActions,
   selectedIds,
   onToggleSelection,
+  onToggleAllOnPage,
   rowKey = (id: number) => id
 }: {
   columnOrder: readonly string[];
@@ -293,6 +323,8 @@ export function StaffWorkspaceTable({
   renderActions: (row: { id: number }) => ReactNode;
   selectedIds: Set<number>;
   onToggleSelection: (id: number, checked: boolean) => void;
+  /** Jadval headeridagi «hammasini belgilash» */
+  onToggleAllOnPage?: (checked: boolean) => void;
   rowKey?: (id: number) => number | string;
 }) {
   const paginationPages = (() => {
@@ -303,13 +335,31 @@ export function StaffWorkspaceTable({
     return pages;
   })();
 
+  const allOnPageSelected =
+    pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
+  const someOnPageSelected = pageRows.some((r) => selectedIds.has(r.id));
+
   return (
     <div className="overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-slate-200">
       <div className="scrollbar-none overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-muted text-xs uppercase tracking-wider text-slate-500">
             <tr>
-              <th className="w-10 px-3 py-3" />
+              <th className="w-10 px-3 py-3">
+                {onToggleAllOnPage ? (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border accent-primary"
+                    checked={allOnPageSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
+                    }}
+                    onChange={(e) => onToggleAllOnPage(e.target.checked)}
+                    aria-label="Выбрать все на странице"
+                    title="Выбрать все на странице"
+                  />
+                ) : null}
+              </th>
               {columnOrder.map((colId) => (
                 <th key={colId} className="px-3 py-3 text-left font-medium">
                   {columnLabelById.get(colId) ?? colId}

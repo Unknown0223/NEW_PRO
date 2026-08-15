@@ -56,7 +56,8 @@ import {
   tradeDirectionDisplayFromRef,
   tradeDirectionForCreate,
   validateAgentEntitlements,
-  validateExpeditorAssignmentRules
+  validateExpeditorAssignmentRules,
+  resolveLoginForPatch
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 export async function applyAgentPatchInDb(
@@ -101,6 +102,9 @@ export async function applyAgentPatchInDb(
   }
 
   const data: Prisma.UserUpdateInput = {};
+
+  const nextLogin = await resolveLoginForPatch(tenantId, agentId, existing.login, input.login);
+  if (nextLogin !== undefined) data.login = nextLogin;
 
   if (input.first_name !== undefined) data.first_name = input.first_name.trim();
   if (input.last_name !== undefined) data.last_name = input.last_name?.trim() || null;

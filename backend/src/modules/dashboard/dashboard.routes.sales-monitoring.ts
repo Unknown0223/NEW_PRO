@@ -9,6 +9,7 @@ import {
   getSalesMonitoringTables
 } from "./sales-monitoring.snapshot.partials";
 import {
+  applyAccessAgentIdsScope,
   applySalesMonitoringSupervisorScope,
   dashboardSalesMonitoringPreHandler
 } from "./dashboard.routes.shared";
@@ -22,6 +23,8 @@ export function registerDashboardSalesMonitoringRoutes(app: FastifyInstance) {
       const parsed = parseSalesMonitoringFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySalesMonitoringSupervisorScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesMonitoringSummary(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -42,6 +45,7 @@ export function registerDashboardSalesMonitoringRoutes(app: FastifyInstance) {
       const parsed = parseSalesMonitoringFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySalesMonitoringSupervisorScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesMonitoringCharts(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -63,6 +67,7 @@ export function registerDashboardSalesMonitoringRoutes(app: FastifyInstance) {
       const parsed = parseSalesMonitoringFilters(q);
       const accessUser = getAccessUser(request);
       applySalesMonitoringSupervisorScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "50", 10);
       const tableRaw = (q.table ?? "all").trim();
@@ -93,6 +98,7 @@ export function registerDashboardSalesMonitoringRoutes(app: FastifyInstance) {
       const parsed = parseSalesMonitoringFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySalesMonitoringSupervisorScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesMonitoringSnapshot(request.tenant!.id, parsed);
       reply.header("X-Deprecated-Endpoint", "use /dashboard/sales-monitoring/summary,/charts,/tables");

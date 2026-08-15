@@ -317,6 +317,14 @@ export function ProductForm({
         setLocalError("Bu SKU allaqachon mavjud.");
         return;
       }
+      if (ax.response?.data?.error === "NameExists") {
+        setLocalError("Bu nomdagi mahsulot allaqachon mavjud.");
+        return;
+      }
+      if (ax.response?.data?.error === "BarcodeExists") {
+        setLocalError("Bu shtrixkod allaqachon band.");
+        return;
+      }
       if (ax.response?.status === 401) {
         setLocalError("Sessiya yo‘q yoki muddati tugagan — /login sahifasidan qayta kiring.");
         return;

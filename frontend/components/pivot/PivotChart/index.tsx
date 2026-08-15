@@ -6,14 +6,17 @@ import {
   type PivotChartData,
   type PivotChartType
 } from "@salec/pivot-engine";
-import { forwardRef } from "react";
+import { forwardRef, useMemo } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,27 +39,29 @@ export const PivotChart = forwardRef<HTMLDivElement, Props>(function PivotChart(
 ) {
   const t = getPivotStrings();
   const rows = pivotChartDataToRechartsRows(data);
-  const ChartComponent = chartType === "line" ? LineChart : BarChart;
+  const pieRows = useMemo(() => {
+    if (!data.series[0]) return [];
+    return data.categories.map((category, idx) => ({
+      name: category,
+      value: data.series[0]?.data[idx] ?? 0
+    }));
+  }, [data]);
 
   return (
     <div ref={ref} className={className}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         {onChartTypeChange && (
           <div className="inline-flex rounded-md border border-border bg-background p-0.5 text-xs">
-            <button
-              type="button"
-              className={`rounded px-2 py-1 ${chartType === "bar" ? "bg-muted font-medium" : ""}`}
-              onClick={() => onChartTypeChange("bar")}
-            >
-              {t.chart.bar}
-            </button>
-            <button
-              type="button"
-              className={`rounded px-2 py-1 ${chartType === "line" ? "bg-muted font-medium" : ""}`}
-              onClick={() => onChartTypeChange("line")}
-            >
-              {t.chart.line}
-            </button>
+            {(["bar", "line", "pie"] as PivotChartType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                className={`rounded px-2 py-1 ${chartType === type ? "bg-muted font-medium" : ""}`}
+                onClick={() => onChartTypeChange(type)}
+              >
+                {t.chart[type]}
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -72,14 +77,24 @@ export const PivotChart = forwardRef<HTMLDivElement, Props>(function PivotChart(
       )}
 
       <ResponsiveContainer width="100%" height={360}>
-        <ChartComponent data={rows} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="category" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          <Legend />
-          {data.series.map((series, idx) =>
-            chartType === "line" ? (
+        {chartType === "pie" ? (
+          <PieChart>
+            <Tooltip />
+            <Legend />
+            <Pie data={pieRows} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label>
+              {pieRows.map((_, idx) => (
+                <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        ) : chartType === "line" ? (
+          <LineChart data={rows} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis dataKey="category" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend />
+            {data.series.map((series, idx) => (
               <Line
                 key={series.id}
                 type="monotone"
@@ -90,7 +105,16 @@ export const PivotChart = forwardRef<HTMLDivElement, Props>(function PivotChart(
                 dot={{ r: 3 }}
                 connectNulls
               />
-            ) : (
+            ))}
+          </LineChart>
+        ) : (
+          <BarChart data={rows} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis dataKey="category" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Legend />
+            {data.series.map((series, idx) => (
               <Bar
                 key={series.id}
                 dataKey={series.id}
@@ -98,9 +122,9 @@ export const PivotChart = forwardRef<HTMLDivElement, Props>(function PivotChart(
                 fill={CHART_COLORS[idx % CHART_COLORS.length]}
                 radius={[4, 4, 0, 0]}
               />
-            )
-          )}
-        </ChartComponent>
+            ))}
+          </BarChart>
+        )}
       </ResponsiveContainer>
     </div>
   );

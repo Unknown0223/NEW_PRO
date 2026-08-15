@@ -16,6 +16,7 @@ import {
   syncTenantUserRolesFromProfile
 } from "../../src/modules/access/rbac.roles";
 import { setRolePermissions } from "../../src/modules/access/rbac.permissions";
+import { buildRoleDefaultKeys } from "../../src/modules/access/role-permission-presets";
 
 const MOBILE_ROLE_PERMISSION_KEYS = [
   "orders.view",
@@ -73,11 +74,7 @@ async function seedMobileRolePermissions(tenantId: number) {
   const adminRole = await ensureRoleByKey(tenantId, "admin");
   await setRolePermissions(tenantId, adminRole.id, allKeys);
   const operatorRole = await ensureRoleByKey(tenantId, "operator");
-  await setRolePermissions(
-    tenantId,
-    operatorRole.id,
-    allKeys.filter((k) => k !== "access.manage")
-  );
+  await setRolePermissions(tenantId, operatorRole.id, buildRoleDefaultKeys("operator"));
   for (const roleKey of ["agent", "supervisor", "expeditor"] as const) {
     const role = await ensureRoleByKey(tenantId, roleKey);
     await setRolePermissions(tenantId, role.id, [...MOBILE_ROLE_PERMISSION_KEYS]);

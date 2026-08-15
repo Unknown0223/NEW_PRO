@@ -15,23 +15,25 @@ import {
   ordersCoreCte,
   sortOrdersSql
 } from "./expeditor-returns.helpers";
+import { enrichScopedReportActor } from "../access/access-agent-scope";
 
 export async function getExpeditorReturnsOrders(
   tenantId: number,
   f: ExpeditorReturnsFilters,
   actor?: ReportActor
 ) {
+  const scopedActor = actor ? await enrichScopedReportActor(tenantId, actor) : undefined;
   const offset = (f.page - 1) * f.limit;
   const sortSql = sortOrdersSql(f.sort_by);
 
   const countRows = await prisma.$queryRaw<Array<{ total: bigint }>>`
-    WITH ${ordersCoreCte(tenantId, f, actor)}
+    WITH ${ordersCoreCte(tenantId, f, scopedActor)}
     SELECT COUNT(*)::bigint AS total FROM base_orders
   `;
   const total = Number(countRows[0]?.total ?? 0);
 
   const rows = await prisma.$queryRaw<OrderRowRaw[]>`
-    WITH ${ordersCoreCte(tenantId, f, actor)}
+    WITH ${ordersCoreCte(tenantId, f, scopedActor)}
     SELECT * FROM base_orders bo
     ORDER BY ${sortSql}
     LIMIT ${f.limit} OFFSET ${offset}

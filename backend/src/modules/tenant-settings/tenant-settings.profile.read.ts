@@ -2,7 +2,7 @@ import { prisma } from "../../config/database";
 import { getAppCache, setAppCache, tenantSettingsCacheKey } from "../../lib/redis-cache";
 import { asRecord } from "./tenant-settings.shared";
 import type { BranchDto, TenantProfileDto } from "./tenant-settings.types";
-import type { PaymentMethodEntryDto } from "./finance-refs";
+import type { PaymentMethodEntryDto, PriceTypeEntryDto } from "./finance-refs";
 import {
   defaultCurrencyCodeFromEntries,
   paymentTypeStorageKeysFromMethodEntries,
@@ -30,6 +30,10 @@ import {
   territoryRegionPickerNames
 } from "./tenant-settings.territory";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
+import {
+  loadTimezoneFromSettingsJson,
+  utcOffsetHoursForTimezone
+} from "./tenant-timezone";
 
 export async function getTenantDefaultCurrencyCode(tenantId: number): Promise<string> {
   const row = await prisma.tenant.findUnique({
@@ -51,6 +55,17 @@ export async function loadPaymentMethodEntriesForResolve(tenantId: number): Prom
   const ref = asRecord(st.references);
   const currency_entries = resolveCurrencyEntries(ref);
   return resolvePaymentMethodEntries(ref, currency_entries);
+}
+
+/** Jadval/hisobot: `price_type` kaliti → nom (barcha yozuvlar, jumladan nofaol). */
+export async function loadPriceTypeEntriesForResolve(tenantId: number): Promise<PriceTypeEntryDto[]> {
+  const row = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true }
+  });
+  const st = asRecord(row?.settings);
+  const ref = asRecord(st.references);
+  return priceTypeEntriesFromUnknown(ref.price_type_entries);
 }
 
 /** «Доступ» → филиалы: `tenant.settings.references.branches` (аналог `CashDesk` для касс). */
@@ -96,6 +111,7 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
     listActiveTradeDirectionLabels(tenantId)
   ]);
 
+  const timezone = loadTimezoneFromSettingsJson(st);
   const profile: TenantProfileDto = {
     name: row.name,
     phone: row.phone,
@@ -103,6 +119,8 @@ export async function getTenantProfile(tenantId: number): Promise<TenantProfileD
     logo_url: row.logo_url,
     feature_flags: ff,
     return_filter: normalizeReturnFilterSettings(st.return_filter),
+    timezone,
+    utc_offset_hours: utcOffsetHoursForTimezone(timezone),
     references: {
       payment_types:
         payment_method_entries.length > 0

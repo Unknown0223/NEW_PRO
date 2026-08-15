@@ -539,6 +539,16 @@ components:
           maxItems: 10
         is_active:
           type: boolean
+        price_type:
+          type: string
+          maxLength: 128
+          nullable: true
+        allow_order_with_debt:
+          type: boolean
+        allow_consignment:
+          type: boolean
+        allow_consignment_with_debt:
+          type: boolean
       additionalProperties: false
     CreatePaymentBody:
       type: object
@@ -1199,6 +1209,8 @@ components:
           type: string
           minLength: 1
           nullable: true
+        force_clients_catalog:
+          type: boolean
         device_name:
           type: string
           maxLength: 255

@@ -73,8 +73,8 @@ Write-Host "Keyingi qadamlar:" -ForegroundColor Yellow
 Write-Host "  1) Railway dashboard: backend/frontend public URL tekshiring"
 Write-Host "  2) Backend CORS_ALLOWED_ORIGINS = frontend URL"
 Write-Host "  3) Frontend API_INTERNAL_ORIGIN = backend URL (kerak bo'lsa frontend redeploy)"
-Write-Host "  4) Mobil: .\deploy-mobile-prod.cmd  (APK yig'ish + serverga yuklash)"
-Write-Host "     Veb: /settings/mobile-app"
+Write-Host "  4) To'liq deploy (mobil bilan): .\deploy-prod.cmd  yoki  .\deploy-all.cmd"
+Write-Host "     Mobil OTA: /settings/mobile-app"
 Write-Host ""
-Write-Host "Eslatma: veb/API deploy bilan yangilanadi; mobil APK alohida (qo'lda o'rnatish)." -ForegroundColor DarkYellow
+Write-Host "Eslatma: deploy-prod.cmd = veb + mobil APK (server OTA). Faqat veb: -SkipMobile" -ForegroundColor DarkYellow
 Write-Host "Batafsil: docs/PROD_DEPLOY_YAKUNLANDI.md"

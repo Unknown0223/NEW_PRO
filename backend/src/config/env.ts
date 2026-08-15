@@ -96,6 +96,9 @@ const envSchema = z.object({
   /** UserActivityEvent yozuvlarining saqlash muddati (kun). Eskilari cron bilan tozalanadi. */
   ACTIVITY_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
 
+  /** ErrorEvent (diagnostika) saqlash muddati (kun). */
+  ERROR_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+
   /** Audit / jurnal store lar saqlash muddati (kun). */
   AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().default(730),
 

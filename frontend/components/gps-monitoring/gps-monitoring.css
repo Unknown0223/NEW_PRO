@@ -1,0 +1,203 @@
+/* GPS monitoring skin — Leaflet markers + design tokens helpers */
+
+.gps-mon {
+  --gps-pine-950: #06231f;
+  --gps-pine-900: #0a332e;
+  --gps-pine-800: #0e453e;
+  --gps-pine-700: #11564d;
+  --gps-teal-brand: #0f9e8e;
+  --gps-teal-deep: #0b7c70;
+  --gps-paper: #eef2f0;
+  --gps-card: #fbfdfc;
+  --gps-ink: #122421;
+  --gps-ink-soft: #5b6f6a;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  color: var(--gps-ink);
+}
+
+.gps-mon .scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.gps-mon .scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gps-mon .scroll-slim::-webkit-scrollbar-thumb {
+  background: #c3d2cd;
+  border-radius: 99px;
+}
+.gps-mon .scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: #c3d2cd transparent;
+}
+
+.gps-mon .leaflet-container {
+  font-family: inherit;
+  background: #dde7e4;
+  height: 100%;
+  width: 100%;
+}
+.gps-mon .leaflet-control-zoom a {
+  color: #0e453e !important;
+  border-color: #d7e2de !important;
+}
+.gps-mon .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(6, 35, 31, 0.22);
+  border: 1px solid #e2eae7;
+}
+.gps-mon .leaflet-popup-content {
+  margin: 12px 14px;
+}
+.gps-mon .leaflet-bar {
+  border: 1px solid #d7e2de !important;
+  box-shadow: 0 4px 14px rgba(6, 35, 31, 0.12) !important;
+}
+
+.gps-mon .mk {
+  background: transparent;
+  border: none;
+}
+.gps-mon .mk-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font: 700 11px/1 inherit;
+  color: #fff;
+  border: 2.5px solid #fff;
+  box-shadow: 0 3px 10px rgba(6, 35, 31, 0.35);
+  transition: transform 0.15s ease;
+}
+.gps-mon .mk-num:hover {
+  transform: scale(1.15);
+}
+.gps-mon .mk-num.future {
+  box-shadow: 0 1px 6px rgba(6, 35, 31, 0.18);
+}
+.gps-mon .mk-trade {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #0f9e8e;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 5px rgba(6, 35, 31, 0.3);
+}
+.gps-mon .mk-cluster {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #b429f9;
+  color: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #d15bff, 0 5px 13px rgba(93, 25, 137, 0.34);
+  font: 800 12px/1 inherit;
+  position: relative;
+}
+.gps-mon .mk-cluster small {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 5px;
+  border-radius: 5px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3c4d49;
+  font: 700 9px/1 inherit;
+  box-shadow: 0 1px 4px rgba(6, 35, 31, 0.16);
+}
+.gps-mon .mk-agent {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #0b7c70;
+  color: #fff;
+  font: 800 10px/1 inherit;
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 3px rgba(15, 158, 142, 0.3), 0 4px 12px rgba(6, 35, 31, 0.35);
+  position: relative;
+}
+.gps-mon .mk-agent.off {
+  background: #8aa09a;
+}
+.gps-mon .mk-agent.on::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  border: 2px solid rgba(15, 158, 142, 0.5);
+  animation: gps-ping-soft 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.gps-mon .mk-current {
+  position: relative;
+  width: 18px;
+  height: 18px;
+}
+.gps-mon .mk-current .dot {
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: #0b7c70;
+  border: 2.5px solid #fff;
+  box-shadow: 0 2px 8px rgba(6, 35, 31, 0.4);
+}
+.gps-mon .mk-current .ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(15, 158, 142, 0.45);
+  animation: gps-ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes gps-ping-soft {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.9;
+  }
+  80%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.gps-mon .cur-tip {
+  background: #ffffff;
+  border: 1px solid #d7e2de;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(6, 35, 31, 0.18);
+  padding: 3px 8px;
+}
+.gps-mon .cur-tip::before {
+  display: none;
+}
+.gps-mon .rise {
+  animation: gps-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes gps-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.gps-mon .modal-in {
+  animation: gps-modal-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes gps-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

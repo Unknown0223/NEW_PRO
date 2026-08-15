@@ -2,9 +2,11 @@
 
 import { OrdersFiltersGrid } from "@/components/orders/orders-list/orders-filters-grid";
 import { OrdersFiltersVisibilityMenu } from "@/components/orders/orders-list/orders-filters-visibility-menu";
+import { Can } from "@/components/access/can";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
-import { DateRangePopover, formatDateRangeButton, localYmd } from "@/components/ui/date-range-popover";
+import { DateRangePopover, formatDateRangeButton, localYmd, parseDatePeriods, serializeDatePeriods } from "@/components/ui/date-range-popover";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
@@ -26,7 +28,7 @@ function shiftDraftDateRange(
   from: string,
   to: string,
   deltaDays: number
-): { date_from: string; date_to: string } {
+): { date_from: string; date_to: string; date_periods: string } {
   let a = parseIsoDate(from);
   let b = parseIsoDate(to);
   if (!a || !b) {
@@ -37,7 +39,7 @@ function shiftDraftDateRange(
     a = new Date(a.getFullYear(), a.getMonth(), a.getDate() + deltaDays);
     b = new Date(b.getFullYear(), b.getMonth(), b.getDate() + deltaDays);
   }
-  return { date_from: localYmd(a), date_to: localYmd(b) };
+  return { date_from: localYmd(a), date_to: localYmd(b), date_periods: "" };
 }
 
 type OrdersFiltersPanelProps = Pick<
@@ -110,9 +112,10 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
     setFilterDraft((cur) => ({ ...cur, ...patch }));
   };
 
+  const draftPeriods = parseDatePeriods(filterDraft.date_periods);
   const dateRangeLabel =
-    filterDraft.date_from && filterDraft.date_to
-      ? formatDateRangeButton(filterDraft.date_from, filterDraft.date_to)
+    filterDraft.date_from || filterDraft.date_to
+      ? formatDateRangeButton(filterDraft.date_from, filterDraft.date_to, draftPeriods)
       : "Выберите период";
 
   if (!tenantSlug) return null;
@@ -235,15 +238,17 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
                 Применить
               </button>
 
-              <Link
-                className={cn(
-                  buttonVariants({ size: "sm" }),
-                  "h-9 shrink-0 border-0 bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
-                )}
-                href="/orders/new"
-              >
-                + Создать заказ
-              </Link>
+              <Can anyOf={[...NAV_PERM.ordersCreate]}>
+                <Link
+                  className={cn(
+                    buttonVariants({ size: "sm" }),
+                    "h-9 shrink-0 border-0 bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  )}
+                  href="/orders/new"
+                >
+                  + Создать заказ
+                </Link>
+              </Can>
             </div>
           </div>
 
@@ -276,9 +281,15 @@ export function OrdersFiltersPanel(props: OrdersFiltersPanelProps) {
         anchorRef={ordersDateRangeAnchorRef}
         dateFrom={filterDraft.date_from}
         dateTo={filterDraft.date_to}
-        autoSave
-        onApply={({ dateFrom, dateTo }) => {
-          patchDraft({ date_from: dateFrom, date_to: dateTo });
+        datePeriods={draftPeriods.length > 1 ? draftPeriods : null}
+        onApply={({ dateFrom, dateTo, datePeriods }) => {
+          // Faqat draft — ma’lumot «Применить» tugmasidan keyin yuklanadi.
+          patchDraft({
+            date_from: dateFrom,
+            date_to: dateTo,
+            date_periods:
+              datePeriods && datePeriods.length > 1 ? serializeDatePeriods(datePeriods) : ""
+          });
         }}
       />
     </div>

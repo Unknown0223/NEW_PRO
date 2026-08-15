@@ -10,7 +10,7 @@ import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../config/expeditor_config_enforcement.dart';
 
-/// Ekspeditor menyu / profil ekrani (shablon MenuScreen — orange accent).
+/// Ekspeditor menyu / profil ekrani (shablon MenuScreen — green brand accent).
 class ExpeditorDrawer extends ConsumerStatefulWidget {
   const ExpeditorDrawer({super.key});
 

@@ -19,6 +19,16 @@ type LoginInput = {
 };
 type RefreshInput = { refreshToken: string };
 
+/** Access JWT — kamroq refresh race (mobil uzoq ochiq qoladi). */
+const ACCESS_TOKEN_TTL = "24h";
+/** Refresh sliding TTL — foydalanuvchi chiqmaguncha sessiya yashaydi. */
+const REFRESH_TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+/**
+ * Parallel refresh (bir nechta 401 bir vaqtda) — eski token rotate qilinganidan
+ * keyin qisqa oynada qayta ishlatilsa INVALID_REFRESH emas, yangi juftlik beriladi.
+ */
+const REFRESH_REUSE_GRACE_MS = 30_000;
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -38,10 +48,14 @@ function buildTokens(
       tenantSlug,
       ...(deviceId ? { did: deviceId } : {})
     },
-    { expiresIn: "15m" }
+    { expiresIn: ACCESS_TOKEN_TTL }
   );
   const refreshToken = randomBytes(48).toString("hex");
   return { accessToken, refreshToken };
+}
+
+function refreshExpiresAt(): Date {
+  return new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 }
 
 export async function login(app: FastifyInstance, input: LoginInput) {
@@ -65,6 +79,12 @@ export async function login(app: FastifyInstance, input: LoginInput) {
 
   if (MOBILE_FIELD_ROLES.has(user.role) && user.app_access === false) {
     throw new Error("APP_ACCESS_DENIED");
+  }
+
+  /* Admin mustasno: WorkSlot rollari tenantda slotlar bo‘lsa — faol ishchi o‘rni shart. */
+  {
+    const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+    await assertUserOnWorkSlot(tenantId, user.id, user.role);
   }
 
   const deviceId = input.device_id?.trim().slice(0, 64) || null;
@@ -106,7 +126,7 @@ export async function login(app: FastifyInstance, input: LoginInput) {
       tenant_id: tenantId,
       user_id: user.id,
       token_hash: hashToken(tokens.refreshToken),
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expires_at: refreshExpiresAt(),
       device_name: deviceName,
       device_id: deviceId,
       user_agent: userAgent,
@@ -157,7 +177,15 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
     include: { user: true, tenant: true }
   });
 
-  if (!existing || existing.revoked_at || existing.expires_at < new Date()) {
+  if (!existing || existing.expires_at < new Date()) {
+    throw new Error("INVALID_REFRESH");
+  }
+
+  const recentlyRotated =
+    existing.revoked_at != null &&
+    Date.now() - existing.revoked_at.getTime() <= REFRESH_REUSE_GRACE_MS;
+
+  if (existing.revoked_at && !recentlyRotated) {
     throw new Error("INVALID_REFRESH");
   }
   if (!existing.tenant.is_active || !existing.user.is_active) {
@@ -168,10 +196,17 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
     throw new Error("APP_ACCESS_DENIED");
   }
 
-  await prisma.refreshToken.update({
-    where: { id: existing.id },
-    data: { revoked_at: new Date() }
-  });
+  {
+    const { assertUserOnWorkSlot } = await import("../work-slots/work-slots.access-gate");
+    await assertUserOnWorkSlot(existing.tenant_id, existing.user.id, existing.user.role);
+  }
+
+  if (!existing.revoked_at) {
+    await prisma.refreshToken.update({
+      where: { id: existing.id },
+      data: { revoked_at: new Date() }
+    });
+  }
 
   const tokens = buildTokens(app, existing.user, existing.tenant.slug, existing.device_id);
   await prisma.refreshToken.create({
@@ -179,7 +214,7 @@ export async function refresh(app: FastifyInstance, input: RefreshInput) {
       tenant_id: existing.tenant_id,
       user_id: existing.user_id,
       token_hash: hashToken(tokens.refreshToken),
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expires_at: refreshExpiresAt(),
       device_name: existing.device_name,
       device_id: existing.device_id,
       user_agent: existing.user_agent,

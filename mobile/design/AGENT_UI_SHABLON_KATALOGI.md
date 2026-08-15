@@ -59,10 +59,10 @@
 | 31 | Order Lifecycle | ҚАРЗЛАР · Agent debts | `features/agent/clients/agent_debtors_by_orders_page.dart` | `/debtors-by-orders` | ⚠️ | — |
 | 32 | Order Lifecycle | МОИ БОНУСЫ · Agent bonuses | — | — | 🔜 | — |
 | 33 | Order Lifecycle | ORDER DETAIL · read-only | `agent_orders_page.dart` (expand) | `/orders` | ⚠️ | — |
-| 34 | KPI Dashboard | KPI · Bugungi KPI | — | — | 🔜 | — |
-| 35 | KPI Dashboard | KPI · Oylik hisobot | — | — | 🔜 | — |
+| 34 | KPI Dashboard | KPI · Bugungi KPI | `features/agent/kpi/agent_kpi_page.dart` | `/kpi` | ✅ | — |
+| 35 | KPI Dashboard | KPI · Oylik hisobot | `features/agent/kpi/agent_kpi_calc_page.dart` | `/kpi/calc` | ✅ | — |
 | 36 | KPI Dashboard | KPI · Маршрут KPI | `features/agent/route/agent_route_page.dart` | `/route` | ⚠️ | — |
-| 37 | KPI Dashboard | ТАБЕЛЬ · Detail | — | — | 🔜 | — |
+| 37 | KPI Dashboard | ТАБЕЛЬ · Detail | `features/agent/tabel/agent_tabel_detail_page.dart` | `/tabel` | ✅ | — |
 | 38 | Order Lifecycle | EDIT WINDOW · 5min timer | — | — | 🔜 | — |
 
 ---
@@ -77,15 +77,15 @@
 
 ## Menyuda «Скоро» (hozir)
 
-`agent_menu_config.dart` da allaqachon belgilangan:
+`agent_menu_config.dart` da:
 
-- KPI → `soon: true`
 - Зарплата → `soon: true`
 - Диагностика → `soon: true`
 - Задачи → `soon: true`
-- Табель · jadval → `soon: true`
 
-Qolgan 🔜 ekranlar (28, 32, 34–35, 37–38) keyingi bosqichda qo‘shiladi.
+KPI va Табель ulangan (`/kpi`, `/tabel`).
+
+Qolgan 🔜 ekranlar (28, 32, 38) keyingi bosqichda qo‘shiladi.
 
 ## Shablon zip joylashuvi
 

@@ -22,11 +22,12 @@ import {
   toClientRefEntryDto
 } from "./tenant-settings.refs";
 import { territoryRegionPickerNames } from "./tenant-settings.territory";
-import { getRedisForApp, tenantSettingsCacheKey } from "../../lib/redis-cache";
+import { invalidateTenantSettingsCache } from "../../lib/redis-cache";
 import { getTenantProfile } from "./tenant-settings.profile.read";
 import { normalizeReturnFilterSettings } from "../returns/returns-filter.settings";
 import type { ReturnFilterSettings } from "../returns/returns-filter.types";
 import { mergeProfilePatchIntoSettings } from "./tenant-settings.merge-patch";
+import { normalizeTenantTimezone } from "./tenant-timezone";
 
 type ClientRefEntryPatch = {
   id: string;
@@ -56,6 +57,7 @@ type PaymentMethodEntryPatch = {
   comment?: string | null;
   color?: string | null;
   active?: boolean;
+  sync_with_1c?: boolean;
 };
 
 type PriceTypeEntryPatch = {
@@ -80,6 +82,7 @@ export async function patchTenantProfile(
     logo_url: string | null;
     feature_flags: Record<string, unknown>;
     return_filter?: ReturnFilterSettings;
+    timezone?: string;
     references: {
       payment_types?: string[];
       return_reasons?: string[];
@@ -142,10 +145,13 @@ export async function patchTenantProfile(
     await assertBranchCashDeskAssignments(tenantId, patch.references.branches);
   }
 
-  if (patch.feature_flags != null || patch.references != null || patch.return_filter != null) {
+  if (patch.feature_flags != null || patch.references != null || patch.return_filter != null || patch.timezone != null) {
     const nextSettings = { ...asRecord(row.settings) };
     if (patch.return_filter != null) {
       nextSettings.return_filter = normalizeReturnFilterSettings(patch.return_filter);
+    }
+    if (patch.timezone != null) {
+      nextSettings.timezone = normalizeTenantTimezone(patch.timezone);
     }
     if (patch.feature_flags != null) {
       nextSettings.feature_flags = {
@@ -203,14 +209,30 @@ export async function patchTenantProfile(
         }
       }
       if (patch.references.territory_nodes != null) {
-        merged.territory_nodes = patch.references.territory_nodes;
+        const incoming = patch.references.territory_nodes;
+        const prevNodes = merged.territory_nodes;
+        const prevLen = Array.isArray(prevNodes) ? prevNodes.length : 0;
+        if (Array.isArray(incoming) && incoming.length === 0 && prevLen > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:territory_nodes");
+        }
+        merged.territory_nodes = incoming;
         merged.regions = territoryRegionPickerNames(merged as Record<string, unknown>);
       }
       if (patch.references.unit_measures != null) {
-        merged.unit_measures = patch.references.unit_measures;
+        const incoming = patch.references.unit_measures;
+        const prev = merged.unit_measures;
+        if (Array.isArray(incoming) && incoming.length === 0 && Array.isArray(prev) && prev.length > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:unit_measures");
+        }
+        merged.unit_measures = incoming;
       }
       if (patch.references.branches != null) {
-        merged.branches = patch.references.branches;
+        const incoming = patch.references.branches;
+        const prev = merged.branches;
+        if (Array.isArray(incoming) && incoming.length === 0 && Array.isArray(prev) && prev.length > 0) {
+          throw new Error("REF_EMPTY_WIPE_REJECTED:branches");
+        }
+        merged.branches = incoming;
       }
       if (patch.references.client_format_entries != null) {
         const norm = patch.references.client_format_entries.map(toClientRefEntryDto);
@@ -281,7 +303,8 @@ export async function patchTenantProfile(
             sort_order: e.sort_order ?? null,
             comment: e.comment?.trim() || null,
             color: e.color?.trim().slice(0, 32) || null,
-            active: e.active ?? true
+            active: e.active ?? true,
+            sync_with_1c: e.sync_with_1c === true
           };
         });
         merged.payment_method_entries = asDto;
@@ -312,6 +335,7 @@ export async function patchTenantProfile(
     if (data.settings !== undefined) {
       const settingsOnlyPatch = {
         ...(patch.return_filter != null ? { return_filter: patch.return_filter } : {}),
+        ...(patch.timezone != null ? { timezone: normalizeTenantTimezone(patch.timezone) } : {}),
         ...(patch.feature_flags != null ? { feature_flags: patch.feature_flags } : {}),
         ...(patch.references != null ? { references: patch.references } : {})
       };
@@ -363,8 +387,7 @@ export async function patchTenantProfile(
   }
 
   try {
-    const redis = await getRedisForApp();
-    await redis.del(tenantSettingsCacheKey(tenantId));
+    await invalidateTenantSettingsCache(tenantId);
   } catch {
     /* ignore */
   }

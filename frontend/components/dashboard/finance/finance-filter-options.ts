@@ -2,6 +2,7 @@
 
 import { buildPaymentMethodOptions } from "@/components/dashboard/finance/payment-method-options";
 import type { FinanceFilterDraft } from "@/components/dashboard/finance/types";
+import { cityStoredCodeToDisplayLabel } from "@/lib/city-territory-hint";
 import { staffDashboardMultiItem } from "@/lib/order-picker-labels";
 import { ORDER_STATUS_FILTER_OPTIONS } from "@/lib/order-status";
 import { useMemo } from "react";
@@ -33,6 +34,39 @@ function mapTerritoryOpts(
   return items.map((r) =>
     typeof r === "string" ? { value: r, label: r } : { value: String(r.value ?? ""), label: String(r.label ?? r.value ?? "") }
   );
+}
+
+function territoryLabelLookup(
+  options: Array<string | { value?: string; label?: string | null }> | undefined
+): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const o of options ?? []) {
+    if (typeof o === "string") {
+      const t = o.trim();
+      if (t) m.set(t, t);
+      continue;
+    }
+    const v = String(o.value ?? "").trim();
+    const lab = String(o.label ?? o.value ?? "").trim();
+    if (v) m.set(v, lab || v);
+  }
+  return m;
+}
+
+function withTerritoryLabels(
+  values: string[],
+  labelByValue: Map<string, string>,
+  asCity: boolean
+): Array<{ value: string; label: string }> {
+  return values.map((value) => {
+    const fromMap = labelByValue.get(value);
+    const label = asCity
+      ? cityStoredCodeToDisplayLabel(value, fromMap ?? value)
+      : fromMap && fromMap !== value
+        ? fromMap
+        : cityStoredCodeToDisplayLabel(value, fromMap ?? value);
+    return { value, label };
+  });
 }
 
 export function useFinanceFilterOptions(args: {
@@ -70,6 +104,9 @@ export function useFinanceFilterOptions(args: {
       label: t.name
     }));
 
+    const regionLabelByValue = territoryLabelLookup(clientRefs?.region_options);
+    const cityLabelByValue = territoryLabelLookup(clientRefs?.city_options);
+
     const zoneOptions = (clientRefs?.zones ?? []).map((z) => ({ value: z, label: z }));
 
     const regionOptions = (() => {
@@ -78,7 +115,7 @@ export function useFinanceFilterOptions(args: {
       if (zones.length && map) {
         const set = new Set<string>();
         for (const z of zones) for (const r of map[z] ?? []) set.add(r);
-        return Array.from(set).map((r) => ({ value: r, label: r }));
+        return withTerritoryLabels(Array.from(set), regionLabelByValue, false);
       }
       return mapTerritoryOpts(clientRefs?.region_options ?? []);
     })();
@@ -89,9 +126,12 @@ export function useFinanceFilterOptions(args: {
       if (regions.length && map) {
         const set = new Set<string>();
         for (const r of regions) for (const c of map[r] ?? []) set.add(c);
-        return Array.from(set).map((c) => ({ value: c, label: c }));
+        return withTerritoryLabels(Array.from(set), cityLabelByValue, true);
       }
-      return mapTerritoryOpts(clientRefs?.city_options ?? []);
+      return mapTerritoryOpts(clientRefs?.city_options ?? []).map((o) => ({
+        value: o.value,
+        label: cityStoredCodeToDisplayLabel(o.value, o.label)
+      }));
     })();
 
     return {

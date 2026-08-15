@@ -200,7 +200,7 @@ class _ExpeditorClientDetailPageState
     _timer?.cancel();
     if (!mounted) return;
     _toast('Визит завершён', color: AppColors.success);
-    context.pop();
+    if (context.canPop()) context.pop();
   }
 
   Future<void> _confirmCancel() async {
@@ -217,7 +217,7 @@ class _ExpeditorClientDetailPageState
     _timer?.cancel();
     if (!mounted) return;
     _toast('Визит отменён');
-    context.pop();
+    if (context.canPop()) context.pop();
   }
 
   Future<bool?> _confirmDialog({

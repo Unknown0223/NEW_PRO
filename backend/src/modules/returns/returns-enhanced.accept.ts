@@ -5,6 +5,7 @@ import { invalidateDashboard, invalidateStock } from "../../lib/redis-cache";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-status";
 import { applyClientBonusDebt } from "./returns-enhanced.bonus-debt";
+import { applyClientDiscountDebt } from "./returns-enhanced.discount-debt";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 
 /**
@@ -40,6 +41,10 @@ export async function acceptSalesReturn(
   const bonusDebt =
     ret.bonus_debt_amount != null
       ? new Prisma.Decimal(ret.bonus_debt_amount)
+      : new Prisma.Decimal(0);
+  const discountDebt =
+    ret.discount_debt_amount != null
+      ? new Prisma.Decimal(ret.discount_debt_amount)
       : new Prisma.Decimal(0);
 
   await prisma.$transaction(async (tx) => {
@@ -81,6 +86,23 @@ export async function acceptSalesReturn(
     if (bonusDebt.gt(0) && ret.client_id != null) {
       await applyClientBonusDebt(tx, tenantId, ret.client_id, bonusDebt, uid, {
         returnNumber: ret.number
+      });
+    }
+
+    // 3b) Skidka qarzi (min_sum buzilishi — qolgan tovar uchun)
+    if (discountDebt.gt(0) && ret.client_id != null) {
+      await applyClientDiscountDebt(tx, tenantId, ret.client_id, discountDebt, uid, {
+        returnNumber: ret.number,
+        orderId: ret.order_id,
+        note: ret.discount_debt_note,
+        newDiscountSum: ret.discount_sum_after
+      });
+    } else if (ret.order_id != null && ret.discount_sum_after != null) {
+      // Proporsional: balans qarzi yo‘q, faqat zakaz discount_sum yangilanadi
+      const nd = new Prisma.Decimal(ret.discount_sum_after);
+      await tx.order.update({
+        where: { id: ret.order_id },
+        data: { discount_sum: nd.gt(0) ? nd : new Prisma.Decimal(0) }
       });
     }
 
@@ -144,7 +166,8 @@ export async function acceptSalesReturn(
       number: ret.number,
       warehouse_id: ret.warehouse_id,
       refund: refund.toString(),
-      bonus_debt: bonusDebt.toString()
+      bonus_debt: bonusDebt.toString(),
+      discount_debt: discountDebt.toString()
     }
   });
 

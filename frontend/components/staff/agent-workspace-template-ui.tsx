@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import { formatAppDate, formatAppDateTime } from "@/lib/app-timezone";
 import { parseStoredFio } from "@/lib/person-display";
 import { cn } from "@/lib/utils";
 
@@ -10,21 +11,11 @@ export function parseAgentFio(fio: string) {
 }
 
 export function formatAgentDateTime(d?: string | null) {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
+  return formatAppDateTime(d, "—");
 }
 
 export function formatAgentCreatedDate(d?: string | null) {
-  if (!d) return "—";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+  return formatAppDate(d, "—");
 }
 
 export const agentModalInputClass =
@@ -427,6 +418,7 @@ export function AgentRestrictionsPanelShell({
   search,
   onSearchChange,
   searchPlaceholder = "Поиск...",
+  listClassName,
   children
 }: {
   icon: string;
@@ -437,6 +429,8 @@ export function AgentRestrictionsPanelShell({
   search: string;
   onSearchChange: (v: string) => void;
   searchPlaceholder?: string;
+  /** Ro‘yxat scroll zonasi (masalan max-h-64) */
+  listClassName?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -470,7 +464,9 @@ export function AgentRestrictionsPanelShell({
           />
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5">{children}</div>
+      <div className={cn("min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5", listClassName)}>
+        {children}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { isOperatorLikeWebRole } from "../../lib/tenant-user-roles";
 import { buildScopedAgentExistsSql } from "../access/access-agent-scope";
 import type { ReportActor } from "./client-sales-4-report.service";
 import { mergeTerritoryFilterOptions } from "./territory-nodes";
@@ -88,10 +89,7 @@ export function buildActorClientScopeSql(tenantId: number, actor?: ReportActor):
       )
     )`;
   }
-  if (
-    actor?.userId &&
-    (actor.role === "manager" || actor.role === "regional_manager")
-  ) {
+  if (actor?.userId && isOperatorLikeWebRole(actor.role)) {
     const primary = buildScopedAgentExistsSql(tenantId, Prisma.sql`c.agent_id`, actor);
     const assign = Prisma.sql`EXISTS (
       SELECT 1 FROM client_agent_assignments caa_m

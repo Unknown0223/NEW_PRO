@@ -8,7 +8,7 @@ import {
   getSalesDashboardBreakdown,
   getSalesDashboardSummary
 } from "./dashboard.sales.snapshot.partials";
-import { applySupervisorSelfScope, dashboardSalesPreHandler } from "./dashboard.routes.shared";
+import { applyAccessAgentIdsScope, applySupervisorSelfScope, dashboardSalesPreHandler } from "./dashboard.routes.shared";
 
 export function registerDashboardSalesRoutes(app: FastifyInstance) {
   app.get(
@@ -19,6 +19,7 @@ export function registerDashboardSalesRoutes(app: FastifyInstance) {
       const parsed = parseSalesDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesDashboardSummary(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -39,6 +40,7 @@ export function registerDashboardSalesRoutes(app: FastifyInstance) {
       const parsed = parseSalesDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesDashboardAnalytics(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {
@@ -60,6 +62,7 @@ export function registerDashboardSalesRoutes(app: FastifyInstance) {
       const parsed = parseSalesDashboardFilters(q);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "50", 10);
       const t0 = Date.now();
@@ -82,6 +85,7 @@ export function registerDashboardSalesRoutes(app: FastifyInstance) {
       const parsed = parseSalesDashboardFilters(request.query as Record<string, string | undefined>);
       const accessUser = getAccessUser(request);
       applySupervisorSelfScope(accessUser, parsed);
+      await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const t0 = Date.now();
       const data = await getSalesDashboardSnapshot(request.tenant!.id, parsed);
       recordDashboardPerf(request.log, reply, {

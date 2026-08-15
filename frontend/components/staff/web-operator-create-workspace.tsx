@@ -18,6 +18,7 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WEB_PANEL_ACCESS_ROLE_OPTIONS } from "@/lib/distribution-roles";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 function FieldHint({ name, errors }: { name: string; errors: Record<string, string> }) {
@@ -56,13 +57,10 @@ export function WebOperatorCreateWorkspace({
     email: "",
     code: "",
     pinfl: "",
-    branch: "",
     position: "",
     max_sessions: "1",
     app_access: false,
     can_authorize: true,
-    cash_desk_id: null as number | null,
-    cash_desk_link_role: "" as "" | "cashier" | "manager" | "operator",
     web_access_role: "operator" as (typeof WEB_PANEL_ACCESS_ROLE_OPTIONS)[number]["value"]
   });
   const [localError, setLocalError] = useState<string | null>(null);
@@ -80,22 +78,6 @@ export function WebOperatorCreateWorkspace({
     }
   });
 
-  const desksQ = useQuery({
-    queryKey: ["cash-desks", tenantSlug, layout === "embedded" ? "operator-create-dialog" : "operator-create-page"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: { id: number; name: string }[] }>(
-        `/api/${tenantSlug}/cash-desks?is_active=true&limit=200&page=1`
-      );
-      return data.data;
-    }
-  });
-
-  const isOperatorRole = form.web_access_role === "operator";
-  const deskLinkIncomplete =
-    isOperatorRole && form.cash_desk_id != null && form.cash_desk_link_role === "";
-
   const createMut = useMutation({
     mutationFn: async () => {
       const max_sessions = Number.parseInt(form.max_sessions, 10);
@@ -109,7 +91,6 @@ export function WebOperatorCreateWorkspace({
         email: form.email.trim() || null,
         code: form.code.trim() || null,
         pinfl: form.pinfl.trim() || null,
-        branch: form.branch.trim() || null,
         position: form.position.trim() || null,
         max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
         app_access: form.app_access,
@@ -118,10 +99,6 @@ export function WebOperatorCreateWorkspace({
       };
       if (form.web_access_role !== "operator") {
         body.web_access_role = form.web_access_role;
-      }
-      if (form.cash_desk_id != null && form.cash_desk_link_role) {
-        body.cash_desk_id = form.cash_desk_id;
-        body.cash_desk_link_role = form.cash_desk_link_role;
       }
       await api.post(`/api/${tenantSlug}/operators`, body);
     },
@@ -148,7 +125,6 @@ export function WebOperatorCreateWorkspace({
     }
   });
 
-  const branches = filterOptsQ.data?.branches ?? [];
   const positions = filterOptsQ.data?.positions ?? [];
 
   const submitCreate = () => {
@@ -159,18 +135,19 @@ export function WebOperatorCreateWorkspace({
 
   const formCard = (
     <div className="grid gap-4 rounded-xl border border-border bg-card p-5 text-sm shadow-sm sm:p-6">
+          <WorkplaceMovedNotice />
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Ism *</span>
+            <span className="text-xs text-muted-foreground">Имя *</span>
             <Input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
             <FieldHint name="first_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Familiya</span>
+            <span className="text-xs text-muted-foreground">Фамилия</span>
             <Input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
             <FieldHint name="last_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Otasining ismi</span>
+            <span className="text-xs text-muted-foreground">Отчество</span>
             <Input
               value={form.middle_name}
               onChange={(e) => setForm((f) => ({ ...f, middle_name: e.target.value }))}
@@ -178,18 +155,14 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="middle_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Tizim roli *</span>
+            <span className="text-xs text-muted-foreground">Системная роль *</span>
             <select
               className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              aria-label="Tizim roli"
+              aria-label="Системная роль"
               value={form.web_access_role}
               onChange={(e) => {
                 const v = e.target.value as (typeof form)["web_access_role"];
-                setForm((f) => ({
-                  ...f,
-                  web_access_role: v,
-                  ...(v !== "operator" ? { cash_desk_id: null, cash_desk_link_role: "" as const } : {})
-                }));
+                setForm((f) => ({ ...f, web_access_role: v }));
               }}
             >
               {WEB_PANEL_ACCESS_ROLE_OPTIONS.map((o) => (
@@ -198,13 +171,10 @@ export function WebOperatorCreateWorkspace({
                 </option>
               ))}
             </select>
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Kassa bog‘lanishi faqat «Operator» uchun.
-            </span>
             <FieldHint name="web_access_role" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Login *</span>
+            <span className="text-xs text-muted-foreground">Логин *</span>
             <Input
               className="font-mono"
               value={form.login}
@@ -214,7 +184,7 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="login" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Parol * (min 6)</span>
+            <span className="text-xs text-muted-foreground">Пароль * (мин. 6)</span>
             <Input
               type="password"
               value={form.password}
@@ -224,7 +194,7 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="password" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Telefon</span>
+            <span className="text-xs text-muted-foreground">Телефон</span>
             <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             <FieldHint name="phone" errors={fieldErrors} />
           </label>
@@ -234,38 +204,21 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Kod</span>
+            <span className="text-xs text-muted-foreground">Код</span>
             <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
             <FieldHint name="code" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">PINFL</span>
+            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Filial</span>
+            <span className="text-xs text-muted-foreground">Должность</span>
             <FilterSelect
               className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              emptyLabel="— Tanlanmagan —"
-              aria-label="Filial"
-              value={form.branch}
-              onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
-            >
-              {branches.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </FilterSelect>
-            <FieldHint name="branch" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Lavozim</span>
-            <FilterSelect
-              className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              emptyLabel="— Tanlanmagan —"
-              aria-label="Lavozim"
+              emptyLabel="— Не выбрано —"
+              aria-label="Должность"
               value={form.position}
               onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
             >
@@ -276,16 +229,16 @@ export function WebOperatorCreateWorkspace({
               ))}
             </FilterSelect>
             <span className="text-[11px] leading-snug text-muted-foreground">
-              Shablonlar:{" "}
+              Шаблоны:{" "}
               <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                sozlamalar
+                настройки
               </Link>
               .
             </span>
             <FieldHint name="position" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Parallel veb-sessiyalar (maks.)</span>
+            <span className="text-xs text-muted-foreground">Параллельные веб-сессии (макс.)</span>
             <Input
               inputMode="numeric"
               value={form.max_sessions}
@@ -293,64 +246,13 @@ export function WebOperatorCreateWorkspace({
             />
             <FieldHint name="max_sessions" errors={fieldErrors} />
           </label>
-          {isOperatorRole ? (
-            <>
-              <label className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Kassa (ixtiyoriy)</span>
-                <select
-                  className={cn(filterSelectClassName, "h-10 w-full text-sm")}
-                  value={form.cash_desk_id == null ? "" : String(form.cash_desk_id)}
-                  disabled={desksQ.isLoading}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setForm((f) => ({
-                      ...f,
-                      cash_desk_id: v === "" ? null : Number.parseInt(v, 10),
-                      cash_desk_link_role: v === "" ? "" : f.cash_desk_link_role
-                    }));
-                  }}
-                >
-                  <option value="">— Tanlanmagan —</option>
-                  {(desksQ.data ?? []).map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                {desksQ.isError ? (
-                  <span className="text-[11px] text-destructive">Kassalar ro‘yxati yuklanmadi</span>
-                ) : null}
-                <FieldHint name="cash_desk_id" errors={fieldErrors} />
-              </label>
-              <label className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Kassadagi rol</span>
-                <select
-                  className={cn(filterSelectClassName, "h-10 w-full text-sm")}
-                  value={form.cash_desk_link_role}
-                  disabled={form.cash_desk_id == null}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      cash_desk_link_role: (e.target.value || "") as typeof f.cash_desk_link_role
-                    }))
-                  }
-                >
-                  <option value="">—</option>
-                  <option value="cashier">Kassir</option>
-                  <option value="manager">Menejer</option>
-                  <option value="operator">Kassa operatori</option>
-                </select>
-                <FieldHint name="cash_desk_link_role" errors={fieldErrors} />
-              </label>
-            </>
-          ) : null}
           <label className="flex items-center gap-2 text-xs">
             <input
               type="checkbox"
               checked={form.app_access}
               onChange={(e) => setForm((f) => ({ ...f, app_access: e.target.checked }))}
             />
-            Mobil ilovaga ruxsat
+            Доступ к мобильному приложению
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -358,7 +260,7 @@ export function WebOperatorCreateWorkspace({
               checked={form.can_authorize}
               onChange={(e) => setForm((f) => ({ ...f, can_authorize: e.target.checked }))}
             />
-            Tizimga kirish mumkin
+            Разрешить вход в систему
           </label>
         </div>
   );
@@ -373,10 +275,10 @@ export function WebOperatorCreateWorkspace({
   const embeddedFooter = (
     <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
       <Button type="button" variant="outline" onClick={() => onCancel?.()} disabled={createMut.isPending}>
-        Bekor
+        Отмена
       </Button>
-      <Button type="button" disabled={createMut.isPending || deskLinkIncomplete} onClick={submitCreate}>
-        {createMut.isPending ? "…" : "Yaratish"}
+      <Button type="button" disabled={createMut.isPending} onClick={submitCreate}>
+        {createMut.isPending ? "…" : "Создать"}
       </Button>
     </div>
   );
@@ -394,23 +296,23 @@ export function WebOperatorCreateWorkspace({
   return (
     <PageShell>
       <PageHeader
-        title="Yangi veb xodim"
-        description="Login va parol noyob bo‘lishi kerak. Filial va lavozim ro‘yxatdan tanlanadi."
+        title="Новый веб-сотрудник"
+        description="Логин и пароль должны быть уникальными. Должность выбирается из списка."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link
               href="/settings/spravochnik/operators"
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
-              ← Ro‘yxat
+              ← К списку
             </Link>
             <Button
               type="button"
               size="sm"
-              disabled={createMut.isPending || deskLinkIncomplete}
+              disabled={createMut.isPending}
               onClick={submitCreate}
             >
-              {createMut.isPending ? "…" : "Yaratish"}
+              {createMut.isPending ? "…" : "Создать"}
             </Button>
           </div>
         }
@@ -424,10 +326,10 @@ export function WebOperatorCreateWorkspace({
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.push("/settings/spravochnik/operators")}>
-            Bekor
+            Отмена
           </Button>
-          <Button type="button" disabled={createMut.isPending || deskLinkIncomplete} onClick={submitCreate}>
-            {createMut.isPending ? "…" : "Yaratish"}
+          <Button type="button" disabled={createMut.isPending} onClick={submitCreate}>
+            {createMut.isPending ? "…" : "Создать"}
           </Button>
         </div>
       </div>

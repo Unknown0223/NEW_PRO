@@ -1,9 +1,7 @@
 /**
- * Mobil ekspeditor — qaytarish hujjatlari va «Возврат с полки по заказу».
+ * Mobil ekspeditor — qaytarish hujjatlari va «Возврат с полки по заказу» ro‘yxat/tarkib.
  */
 import { prisma } from "../../config/database";
-import { createPeriodReturn } from "../returns/returns-enhanced.create-period";
-import { previewPolkiAutoBonusReverse } from "../returns/returns-bonus-reverse.preview";
 import { loadInterchangeableSiblingsByProductId } from "../returns/returns-bonus-reverse.peresort";
 import {
   getClientReturnsData,
@@ -13,12 +11,12 @@ import {
   assertExpeditorOwnsOrder,
   loadExpeditorMobileConfig
 } from "./mobile.expeditor.orders.service";
-import {
-  buildPeresortOptionsForOrder,
-  mergeReturnByOrderQtyMaps,
-  parseReturnByOrderLineRequests,
-  type ReturnByOrderLineInput
-} from "./mobile.expeditor.peresort";
+import { buildPeresortOptionsForOrder } from "./mobile.expeditor.peresort";
+
+export {
+  createMobileExpeditorReturnByOrder,
+  previewMobileExpeditorReturnByOrder
+} from "./mobile.expeditor.returns.by-order";
 
 /**
  * Ekspeditor o'zi shakllantirgan qaytarish hujjatlari (vozvratnaya nakladnaya).
@@ -284,106 +282,4 @@ export async function getMobileExpeditorReturnByOrderComposition(
     peresort_enabled: peresortEnabled,
     peresort
   };
-}
-
-/**
- * «Возврат с полки по заказу» yaratish — web bilan bir xil logika
- * (`createPeriodReturn`, order-scoped): SalesReturn + mirror order, savdo/bonus
- * hisobi, balansga refund, filter/qty validatsiyalari.
- */
-export async function createMobileExpeditorReturnByOrder(
-  tenantId: number,
-  expeditorUserId: number,
-  orderId: number,
-  input: {
-    lines: ReturnByOrderLineInput[];
-    note?: string | null;
-    reason?: string | null;
-  }
-) {
-  const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
-  if (cfg.orders?.allow_return_from_shelf !== true) throw new Error("RETURN_DISABLED");
-
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
-  if (order.status !== "delivered") throw new Error("BAD_STATUS");
-
-  const { autoReq, manualReq, targetByProduct } = parseReturnByOrderLineRequests(input.lines);
-  if (autoReq.size === 0 && manualReq.size === 0) throw new Error("EMPTY_LINES");
-
-  let previewLines: Awaited<ReturnType<typeof previewPolkiAutoBonusReverse>>["lines"] = [];
-  if (autoReq.size > 0) {
-    const preview = await previewPolkiAutoBonusReverse(tenantId, {
-      client_id: order.client_id,
-      order_id: orderId,
-      lines: Array.from(autoReq.entries()).map(([product_id, v]) => ({
-        product_id,
-        return_qty: v.return_qty
-      }))
-    });
-    previewLines = preview.lines;
-  }
-
-  const { merged, totalDebt } = mergeReturnByOrderQtyMaps(manualReq, previewLines);
-
-  const lines = Array.from(merged.entries())
-    .filter(([, v]) => v.paid + v.bonus > 0)
-    .map(([product_id, v]) => {
-      const tgt = targetByProduct.get(product_id);
-      return {
-        product_id,
-        paid_qty: v.paid,
-        bonus_qty: v.bonus,
-        ...(tgt != null ? { return_as_product_id: tgt } : {})
-      };
-    });
-  if (lines.length === 0) throw new Error("EMPTY_LINES");
-
-  return createPeriodReturn(
-    tenantId,
-    {
-      client_id: order.client_id,
-      order_id: orderId,
-      lines,
-      note: input.note ?? null,
-      refusal_reason_ref: input.reason ?? null,
-      bonus_debt_amount: totalDebt > 0 ? totalDebt : undefined,
-      skip_order_scoped_reconcile: true
-    },
-    expeditorUserId
-  );
-}
-
-/** «Возврат с полки по заказу» oldindan hisoblash (bonus mexanizmi). */
-export async function previewMobileExpeditorReturnByOrder(
-  tenantId: number,
-  expeditorUserId: number,
-  orderId: number,
-  lines: Array<{ product_id: number; return_qty: number }>
-) {
-  const cfg = await loadExpeditorMobileConfig(tenantId, expeditorUserId);
-  if (cfg.orders?.allow_return_from_shelf !== true) throw new Error("RETURN_DISABLED");
-
-  const order = await assertExpeditorOwnsOrder(tenantId, expeditorUserId, orderId);
-  if (order.status !== "delivered") throw new Error("BAD_STATUS");
-
-  const effective = lines.filter((l) => l.return_qty > 0);
-  if (effective.length === 0) {
-    return {
-      lines: [],
-      totals: {
-        paid_qty: 0,
-        bonus_qty: 0,
-        bonus_debt_qty: 0,
-        bonus_debt_amount: "0",
-        refund_amount: "0"
-      },
-      warnings: [] as string[]
-    };
-  }
-
-  return previewPolkiAutoBonusReverse(tenantId, {
-    client_id: order.client_id,
-    order_id: orderId,
-    lines: effective
-  });
 }

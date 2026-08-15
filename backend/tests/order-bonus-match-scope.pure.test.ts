@@ -44,20 +44,9 @@ function rule(over: Partial<BonusRuleRow>): BonusRuleRow {
     scope_agent_user_ids: [],
     scope_branch_codes: [],
     scope_trade_direction_ids: [],
-    scope_warehouse_ids: [],
-    scope_territory_refs: [],
-    scope_zones: [],
-    scope_regions: [],
-    scope_cities: [],
-    payment_method_ref: null,
-    trade_direction_ref: null,
-    scope_trade_direction_refs: [],
-    consignment_mode: null,
-    request_type_refs: [],
-    source_channels: [],
-    execution_type: null,
-    execution_time: null,
-    n_value: null,
+    consignment_mode: "all",
+    conditions: [],
+    clauses: [],
     ...over
   };
 }
@@ -119,6 +108,36 @@ describe("order-bonus-context.match-scope", () => {
     const assortmentRule = rule({ product_ids: [1, 2], bonus_product_ids: [] });
     expect(resolveQtyGiftProductId(assortmentRule, 1, new Map(), { minUnits: 3 })).toBe(1);
     expect(resolveQtyGiftProductId(assortmentRule, 2, new Map(), { minUnits: 2 })).toBe(2);
+  });
+
+  it("bonusRoomAfterPaidQty — pullik savatdan keyin bonus joyi", async () => {
+    const { bonusRoomAfterPaidQty } = await import(
+      "../src/modules/orders/order-bonus-context.match-scope"
+    );
+    const room = bonusRoomAfterPaidQty(
+      new Map([
+        [1, 51],
+        [2, 87]
+      ]),
+      new Map([
+        [1, 22],
+        [2, 87]
+      ])
+    );
+    expect(room.get(1)).toBe(29);
+    expect(room.get(2)).toBe(0);
+  });
+
+  it("pickGiftFromAllowedList — pullik yegan SKU o‘rniga qolgan joyi borini tanlaydi", async () => {
+    const { pickGiftFromAllowedList } = await import(
+      "../src/modules/orders/order-bonus-context.match-scope"
+    );
+    // Ombor: M2=87, M1=51; savatdan keyin room: M2=0, M1=29
+    const room = new Map([
+      [1, 29],
+      [2, 0]
+    ]);
+    expect(pickGiftFromAllowedList([1, 2], 2, room, 10)).toBe(1);
   });
 
   it("resolveQtyGiftProductId — category_stock: ombordagi eng ko‘p qoldiqli mahsulotdan", () => {
