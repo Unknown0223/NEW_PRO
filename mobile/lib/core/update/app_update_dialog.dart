@@ -90,7 +90,9 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.inApp) {
+    // Faqat majburiy yangilashda avtomatik yuklash.
+    // Ixtiyoriyda foydalanuvchi «Обновить» / «Позже» tanlaydi.
+    if (widget.inApp && widget.blocking) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_busy && !_waitingInstall && !_signatureRecovery) {
           unawaited(_startUpdate());

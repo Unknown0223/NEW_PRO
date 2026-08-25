@@ -90,6 +90,12 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("POST", "/api/:slug/orders/bulk/nakladnoy")?.anyOf).toContain("orders.zakaz.copy");
   });
 
+  it("aniq URL (Fastify 5 fallback) ham :id qoidasiga mos keladi", () => {
+    expect(matchRule("DELETE", "/api/acme/orders/5")?.anyOf).toContain("orders.zakaz.delete");
+    expect(matchRule("PATCH", "/api/acme/payments/9")?.anyOf).toContain("cash.oplaty_klientov.update");
+    expect(matchRule("POST", "/api/acme/orders/12/status")?.anyOf).toContain("orders.zakaz.status");
+  });
+
   it("clients bulk-active → activate/deactivate", () => {
     const rule = matchRule("POST", "/api/:slug/clients/bulk-active");
     expect(rule?.anyOf).toContain("clients.klient.activate");
@@ -122,7 +128,8 @@ describe("role-permission-presets", () => {
     expect(op).toContain("clients.klient.view");
     expect(op.some((k) => k.startsWith("cash."))).toBe(false);
     expect(op.some((k) => k.startsWith("warehouse."))).toBe(false);
-    expect(op.some((k) => k.startsWith("staff."))).toBe(false);
+    expect(op.filter((k) => k.startsWith("staff.") && k !== "staff.konsignatsiya.view")).toEqual([]);
+    expect(op).toContain("staff.konsignatsiya.view");
     expect(op.some((k) => k.startsWith("access."))).toBe(false);
     expect(op).not.toContain("access.manage");
   });

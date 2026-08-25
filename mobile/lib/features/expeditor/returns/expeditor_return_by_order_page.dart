@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
+import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import 'expeditor_bonus_calc_sheet.dart';
 
@@ -1934,6 +1936,18 @@ class _ExpeditorReturnByOrderPageState
 
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
+
+    final policy = ExpeditorConfigPolicy.fromMobileConfig(
+      ref.read(sessionProvider).mobileConfig,
+    );
+    final confirmed = await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: 'Подтвердите возврат',
+    );
+    if (!confirmed) return;
+
     setState(() => _submitting = true);
     try {
       final res = await ref.read(expeditorApiProvider).createReturnByOrder(

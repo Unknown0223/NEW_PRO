@@ -24,6 +24,7 @@ import { EditSlotDialog } from "./edit-slot-dialog";
 import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
 import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
+import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 
 export function WorkSlotDetail({ slotId }: { slotId: number }) {
   const router = useRouter();
@@ -242,16 +243,41 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         <CardHeader>
           <CardTitle className="text-base">Hozirgi mas’ul</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            <span className="text-muted-foreground">Xodim:</span>{" "}
-            {slot.active_user_name ?? <span className="italic text-muted-foreground">Bo‘sh</span>}
-          </p>
-          {slot.active_since ? (
+        <CardContent className="space-y-3 text-sm">
+          {slot.active_user_id && slot.active_user_name && tenant ? (
+            <div className="flex items-center gap-4">
+              <StaffFaceAvatar
+                tenantSlug={tenant}
+                userId={slot.active_user_face_user_id ?? slot.active_user_id}
+                initials={slot.active_user_name
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p) => p[0] ?? "")
+                  .join("")}
+                alt={slot.active_user_name}
+                size="lg"
+                hasPhoto={Boolean(slot.active_user_has_face_reference)}
+                className="border-[3px] border-teal-100 shadow-md"
+              />
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-slate-900">{slot.active_user_name}</p>
+                {slot.active_since ? (
+                  <p className="text-xs text-muted-foreground">
+                    Biriktirish: {formatSlotDate(slot.active_since)}
+                  </p>
+                ) : null}
+                {!slot.active_user_has_face_reference ? (
+                  <p className="mt-1 text-xs text-amber-700">Etalon foto yuklanmagan</p>
+                ) : null}
+              </div>
+            </div>
+          ) : (
             <p>
-              <span className="text-muted-foreground">Biriktirish:</span> {formatSlotDate(slot.active_since)}
+              <span className="text-muted-foreground">Xodim:</span>{" "}
+              <span className="italic text-muted-foreground">Bo‘sh</span>
             </p>
-          ) : null}
+          )}
           <p className="text-xs text-muted-foreground">
             Mijoz qulflashi — mijoz kartasida (slot 1). Zakazlar shartnoma qulfiga bo‘ysunadi.
           </p>
@@ -362,15 +388,12 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         clientRefs={clientRefs}
         territoryNodes={territoryNodes}
         onSaved={() => void load()}
-        onOpenConfig={() => {
-          setEditOpen(false);
-          setConfigOpen(true);
-        }}
       />
       <SlotWorkplaceConfigDialog
         open={configOpen}
         onOpenChange={setConfigOpen}
         tenant={tenant}
+        section="main"
         slotId={slotId}
         warehouses={warehouses}
         onSaved={() => void load()}

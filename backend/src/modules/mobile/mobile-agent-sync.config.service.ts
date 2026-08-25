@@ -98,6 +98,16 @@ export async function loadAgentMobileConfig(
   tenantId: number,
   userId: number
 ): Promise<AgentMobileConfigV1 | null> {
+  const slotMap = await loadActiveWorkSlotsByUserIds([userId]);
+  const slotInfo = slotMap.get(userId);
+  if (slotInfo) {
+    const slot = await prisma.workSlot.findFirst({
+      where: { id: slotInfo.slot_id, tenant_id: tenantId },
+      select: { entitlements: true }
+    });
+    const fromSlot = extractMobileConfigFromEntitlementsUnknown(slot?.entitlements);
+    if (fromSlot) return fromSlot;
+  }
   const u = await prisma.user.findFirst({
     where: { id: userId, tenant_id: tenantId, is_active: true },
     select: { agent_entitlements: true }
@@ -433,6 +443,45 @@ export async function getMobileAgentConfigPayload(
 
   const slotMap = await loadActiveWorkSlotsByUserIds([userId]);
   const slot = slotMap.get(userId) ?? null;
+
+  let entitlementsForMobile = u.agent_entitlements;
+  let consignment = u.consignment === true;
+  let consignmentLimit = u.consignment_limit_amount?.toString() ?? null;
+
+  if (slot) {
+    const slotRow = await prisma.workSlot.findFirst({
+      where: { id: slot.slot_id, tenant_id: tenantId },
+      select: {
+        entitlements: true,
+        consignment: true,
+        consignment_limit_amount: true
+      }
+    });
+    if (slotRow) {
+      const slotMc = extractMobileConfigFromEntitlementsUnknown(slotRow.entitlements);
+      const userMc = extractMobileConfigFromEntitlementsUnknown(u.agent_entitlements);
+      const slotEntObj =
+        slotRow.entitlements != null &&
+        typeof slotRow.entitlements === "object" &&
+        !Array.isArray(slotRow.entitlements)
+          ? (slotRow.entitlements as Record<string, unknown>)
+          : {};
+      const userEntObj =
+        u.agent_entitlements != null &&
+        typeof u.agent_entitlements === "object" &&
+        !Array.isArray(u.agent_entitlements)
+          ? (u.agent_entitlements as Record<string, unknown>)
+          : {};
+      entitlementsForMobile = {
+        ...userEntObj,
+        ...slotEntObj,
+        ...(slotMc || userMc ? { mobile_config: slotMc ?? userMc } : {})
+      };
+      consignment = slotRow.consignment === true;
+      consignmentLimit = slotRow.consignment_limit_amount?.toString() ?? null;
+    }
+  }
+
   const profile = await getTenantProfile(tenantId);
   const refInner = profile.references as unknown as Record<string, unknown>;
   const refT = referencesWithResolvedTerritoryNodes(refInner);
@@ -471,11 +520,11 @@ export async function getMobileAgentConfigPayload(
     ok: true as const,
     user_id: u.id,
     /** Rol defaultlari + saqlangan patch — mobil «Настройки» / enforcement bilan bir xil. */
-    mobile_config: resolveMobileConfigForUser(u.role, u.agent_entitlements),
-    agent_entitlements: u.agent_entitlements,
+    mobile_config: resolveMobileConfigForUser(u.role, entitlementsForMobile),
+    agent_entitlements: entitlementsForMobile,
     agent_limits: {
-      consignment: u.consignment === true,
-      consignment_limit_amount: u.consignment_limit_amount?.toString() ?? null
+      consignment,
+      consignment_limit_amount: consignmentLimit
     },
     work_slot_id: slot?.slot_id ?? null,
     work_slot_code: slot?.slot_code ?? null,

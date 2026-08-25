@@ -8,7 +8,6 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -16,6 +15,12 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog,
+  WorkplaceMovedNotice
+} from "@/components/staff/workplace-moved-notice";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
@@ -67,6 +72,8 @@ type AuditorRow = {
   max_sessions: number;
   is_active: boolean;
   agent_entitlements?: Record<string, unknown> & { mobile_config?: unknown };
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
 };
 
 const COLS = [
@@ -113,6 +120,7 @@ type Props = { tenantSlug: string };
 
 export function AuditorsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
   const [draftPos, setDraftPos] = useState("");
@@ -126,7 +134,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [sessionRow, setSessionRow] = useState<AuditorRow | null>(null);
   const [deactivateRow, setDeactivateRow] = useState<AuditorRow | null>(null);
-  const [configRow, setConfigRow] = useState<AuditorRow | null>(null);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const tablePrefs = useUserTablePrefs({
@@ -482,7 +490,12 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+              <AgentIconButton
+                title="Конфигурации"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings2 className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
@@ -534,36 +547,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
           createMut.mutate(body);
         }}
       />
-      <AuditorConfigDialog
-        row={configRow}
-        onClose={() => setConfigRow(null)}
-        onSave={async (id, photoRequired) => {
-          const prevEnt = (configRow?.agent_entitlements ?? {}) as Record<string, unknown>;
-          const prevMc =
-            prevEnt.mobile_config && typeof prevEnt.mobile_config === "object" && !Array.isArray(prevEnt.mobile_config)
-              ? (prevEnt.mobile_config as Record<string, unknown>)
-              : {};
-          await patchMut.mutateAsync({
-            id,
-            body: {
-              agent_entitlements: {
-                ...prevEnt,
-                mobile_config: {
-                  ...prevMc,
-                  schema_version: 1,
-                  photo: {
-                    ...(prevMc.photo && typeof prevMc.photo === "object" && !Array.isArray(prevMc.photo)
-                      ? (prevMc.photo as Record<string, unknown>)
-                      : {}),
-                    required_for_order: photoRequired
-                  }
-                }
-              }
-            }
-          });
-          setConfigRow(null);
-        }}
-      />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <StaffActiveSessionsDialog
         open={sessionRow != null}
@@ -633,9 +617,7 @@ function AuditorEditDialog({
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
 
   useEffect(() => {
@@ -647,9 +629,7 @@ function AuditorEditDialog({
     setPhone(row.phone ?? "");
     setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
-    setTerritory(row.territory ?? "");
     setLogin(row.login);
   }, [row]);
 
@@ -728,9 +708,7 @@ function AuditorAddDialog({
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [can_authorize, setCanAuthorize] = useState(true);
@@ -742,6 +720,7 @@ function AuditorAddDialog({
         <DialogHeader>
           <DialogTitle>Добавить аудитор</DialogTitle>
         </DialogHeader>
+        <WorkplaceMovedNotice className="mb-1" />
         <div className="grid gap-3 sm:grid-cols-2">
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
@@ -749,10 +728,8 @@ function AuditorAddDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Филиал" value={branch} onChange={(e) => setBranch(e.target.value)} />
           <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
-          <Input className="sm:col-span-2" placeholder="Территория" value={territory} onChange={(e) => setTerritory(e.target.value)} />
-          <Input className="sm:col-span-2 font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
+          <Input className="font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
           <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuthorize(e.target.checked)} />
@@ -787,67 +764,6 @@ function AuditorAddDialog({
             }
           >
             {loading ? "Сохранение..." : "Сохранить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AuditorConfigDialog({
-  row,
-  onClose,
-  onSave
-}: {
-  row: AuditorRow | null;
-  onClose: () => void;
-  onSave: (id: number, photoRequired: boolean) => Promise<void>;
-}) {
-  const [photoRequired, setPhotoRequired] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!row) return;
-    const mc = row.agent_entitlements?.mobile_config;
-    const photo =
-      mc && typeof mc === "object" && !Array.isArray(mc) ? (mc as Record<string, unknown>).photo : undefined;
-    const required =
-      photo && typeof photo === "object" && !Array.isArray(photo)
-        ? Boolean((photo as Record<string, unknown>).required_for_order)
-        : false;
-    setPhotoRequired(required);
-  }, [row]);
-
-  return (
-    <Dialog open={Boolean(row)} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Прикрепить/открепить все конфигурации</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="rounded border border-border p-2 text-sm font-medium">Фото</div>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={photoRequired} onChange={(e) => setPhotoRequired(e.target.checked)} />
-            Обязательная фотофиксация при создании заказа
-          </label>
-        </div>
-        <DialogFooter className="justify-between">
-          <Button variant="outline" className="border-red-500 text-red-600" onClick={() => setPhotoRequired(false)}>
-            Сбросить настройки
-          </Button>
-          <Button
-            disabled={saving || !row}
-            onClick={async () => {
-              if (!row) return;
-              setSaving(true);
-              try {
-                await onSave(row.id, photoRequired);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "Сохранение..." : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -14,6 +14,7 @@ import {
   parseAgentFio
 } from "@/components/staff/agent-workspace-template-ui";
 import type { AgentRow } from "@/components/staff/agents-workspace";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 
 function randomPassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -204,6 +205,13 @@ export function AgentFormModal({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <StaffFaceReferencePanel
+            tenantSlug={tenantSlug}
+            userId={r?.id ?? 0}
+            enabled={!isNew && Boolean(r?.id)}
+            displayName={[last_name, first_name, middle_name].filter(Boolean).join(" ") || r?.fio}
+          />
+
           <AgentFormSection title="Личные данные" icon={<Tag className="h-4 w-4" />}>
             <div className="grid grid-cols-2 gap-3">
               <AgentFormField label="Имя">

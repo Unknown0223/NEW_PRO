@@ -285,4 +285,16 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
       throw e;
     }
   });
+
+  app.get("/api/:slug/staff/users/:userId/face-reference", { preHandler: preRead }, async (request, reply) => {
+    if (!ensureTenantContext(request, reply)) return;
+    const userId = Number.parseInt(String((request.params as { userId: string }).userId), 10);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return sendApiError(reply, request, 400, "ValidationError");
+    }
+    const { readFaceReferenceBuffer } = await import("../mobile/mobile-face.service");
+    const buf = await readFaceReferenceBuffer(request.tenant!.id, userId);
+    if (!buf) return sendApiError(reply, request, 404, "NotFound");
+    return reply.header("Content-Type", "image/jpeg").header("Cache-Control", "private, max-age=60").send(buf);
+  });
 }

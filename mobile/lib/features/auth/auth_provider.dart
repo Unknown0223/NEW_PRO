@@ -681,21 +681,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     final inForeground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (!inForeground) {
-      // Faqat majburiy yangilashda fonda bildirishnoma — ixtiyoriyni spam qilmaymiz.
-      if (info.required) {
-        unawaited(
-          MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
-            info: info,
-            afterSync: afterSync,
-          ),
-        );
-        _deferredAppUpdate = info;
-        _deferredAfterSync = afterSync;
-        return true;
-      }
+      // Ixtiyoriy ham fonda eslatiladi (spam emas — bitta deferred).
+      unawaited(
+        MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
+          info: info,
+          afterSync: afterSync,
+        ),
+      );
       _deferredAppUpdate = info;
       _deferredAfterSync = afterSync;
-      return false;
+      // Majburiy: login/bootstrap kutadi. Ixtiyoriy: davom etadi, keyin dialog.
+      return info.required;
     }
 
     _appUpdateGate?.complete(false);
@@ -1473,6 +1469,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _ref.read(gpsTrackerProvider.notifier).stopTracking();
     await clearAuthTokens(_ref);
     await _ref.read(appPinStoreProvider).clear();
+    await _ref.read(biometricPreferencesProvider).clearAll();
     await AppDatabase().clearAgentScopedCache();
     await _session.clear();
     invalidateAuthScopedData(_ref.invalidate);

@@ -18,7 +18,7 @@ export async function createSkladchikStaff(
   login: string,
   firstName: string
 ): Promise<StaffRow> {
-  const passwordHashSk = await bcrypt.hash(input.password, 10);
+  const passwordHashSk = await bcrypt.hash(input.password, 12);
   const ms =
     input.max_sessions != null && Number.isInteger(input.max_sessions) && input.max_sessions >= 1
       ? input.max_sessions

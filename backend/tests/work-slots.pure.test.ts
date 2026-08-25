@@ -61,13 +61,18 @@ describe("work-slots.config-territory", () => {
     expect(hasSlotConfigPatch({ cash_desk_id: 1 })).toBe(true);
   });
 
-  it("mergeSlotEntitlementsPreservingMobileConfig keeps user mobile_config", async () => {
+  it("mergeSlotEntitlementsPreservingMobileConfig prefers slot mobile_config", async () => {
     const {
       mergeSlotEntitlementsPreservingMobileConfig,
-      slotEntitlementsFromUserEntitlements
+      slotEntitlementsFromUserEntitlements,
+      personalEntitlementsAfterClearWorkplace
     } = await import("../src/modules/work-slots/work-slots.config-mirror");
     const merged = mergeSlotEntitlementsPreservingMobileConfig(
-      { price_types: ["A"], product_rules: [], mobile_config: { schema_version: 1 } },
+      {
+        price_types: ["A"],
+        product_rules: [],
+        mobile_config: { schema_version: 1, gps: { required_for_order: false } }
+      },
       {
         price_types: ["OLD"],
         mobile_config: {
@@ -79,7 +84,16 @@ describe("work-slots.config-territory", () => {
     expect(merged.price_types).toEqual(["A"]);
     expect(merged.mobile_config).toMatchObject({
       schema_version: 1,
-      gps: { required_for_order: true }
+      gps: { required_for_order: false }
+    });
+
+    const fallback = mergeSlotEntitlementsPreservingMobileConfig(
+      { price_types: ["A"] },
+      { mobile_config: { schema_version: 1, sync: { block_sync: true } } }
+    );
+    expect(fallback.mobile_config).toMatchObject({
+      schema_version: 1,
+      sync: { block_sync: true }
     });
 
     const forSlot = slotEntitlementsFromUserEntitlements({
@@ -87,7 +101,31 @@ describe("work-slots.config-territory", () => {
       mobile_config: { schema_version: 1, sync: { block_sync: true } }
     });
     expect(forSlot.price_types).toEqual(["B"]);
-    expect(forSlot.mobile_config).toBeUndefined();
+    expect(forSlot.mobile_config).toMatchObject({ schema_version: 1, sync: { block_sync: true } });
+
+    expect(personalEntitlementsAfterClearWorkplace({ mobile_config: { schema_version: 1 } })).toEqual(
+      {}
+    );
+  });
+
+  it("inputHasWorkplaceStaffFields detects workplace patch keys", async () => {
+    const { inputHasWorkplaceStaffFields } = await import(
+      "../src/modules/work-slots/work-slots.staff-guard"
+    );
+    expect(inputHasWorkplaceStaffFields({ first_name: "A" })).toBe(false);
+    expect(inputHasWorkplaceStaffFields({ warehouse_id: 1 })).toBe(true);
+    expect(inputHasWorkplaceStaffFields({ agent_entitlements: {} })).toBe(true);
+  });
+});
+
+describe("work-slots.permission-reset-notes", () => {
+  it("assign audit note documents permission reset intent", () => {
+    const swapNote = [
+      "manual",
+      "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
+    ].join(" · ");
+    expect(swapNote).toContain("стандарту роли");
+    expect(swapNote).toContain("предшественник не копируется");
   });
 });
 

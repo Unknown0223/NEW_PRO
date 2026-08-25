@@ -22,13 +22,15 @@ describe("expandPermissionKeyAliases — allow/deny juftliklar", () => {
     expect(expanded).toContain("staff.agent.view");
   });
 
-  it("dashboard structured ↔ legacy simmetrik", () => {
+  it("dashboard section view sibling `dashboard.view` ni ochmaydi", () => {
     expect(expandPermissionKeyAliases(["dashboard.supervayzer.view"])).toEqual(
-      expect.arrayContaining(["dashboard.supervayzer.view", "dashboard.supervayzer", "dashboard.view"])
+      expect.arrayContaining(["dashboard.supervayzer.view", "dashboard.supervayzer"])
     );
+    expect(expandPermissionKeyAliases(["dashboard.supervayzer.view"])).not.toContain("dashboard.view");
     expect(expandPermissionKeyAliases(["dashboard.supervayzer"])).toEqual(
-      expect.arrayContaining(["dashboard.supervayzer", "dashboard.supervayzer.view", "dashboard.view"])
+      expect.arrayContaining(["dashboard.supervayzer", "dashboard.supervayzer.view"])
     );
+    expect(expandPermissionKeyAliases(["dashboard.view"])).toContain("dashboard.view");
   });
 
   it("orders.view ↔ orders.zakaz.view companion", () => {

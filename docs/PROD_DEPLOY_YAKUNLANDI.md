@@ -1,6 +1,6 @@
 # SALEC — production deploy va yangilash
 
-**Oxirgi yangilanish:** 2026-07-21 (deploy-prod = veb + API + mobil OTA)
+**Oxirgi yangilanish:** 2026-08-25 (face A+B, work-slots ikonlar, **ixtiyoriy** mobil OTA)
 
 ## Loyiha papkasi (shu nusxa)
 
@@ -41,7 +41,8 @@ cd "D:\SALEC — копия"
 Bu buyruq:
 1. Backend + Frontend → Railway
 2. Mobil release APK yig‘adi
-3. APK ni serverga yuklaydi (`force_update`) — agentlar ilova ichida yangilaydi
+3. APK ni serverga yuklaydi — **sukutda ixtiyoriy** (`force_update=false`): agentlar «Обновить» / «Позже»
+   Majburiy uchun: `upload-mobile-apk-prod.ps1 -ForceUpdate` yoki vebda checkbox.
 
 Faqat veb (mobilni o‘tkazib yuborish):
 
@@ -67,10 +68,11 @@ npx @railway/cli whoami
 1. `backend\` → Railway **backend** servisiga build + deploy  
 2. `frontend\` → Railway **frontend** servisiga build + deploy  
 3. Migratsiyalar Dockerfile ichida (`prisma migrate deploy`) avtomatik ishlaydi  
-4. Mobil release APK yig‘iladi va serverga yuklanadi (OTA)  
+4. Mobil release APK yig‘iladi va serverga yuklanadi (**ixtiyoriy OTA**, `force_update=false`)  
 
 `-SkipBootstrap` — mavjud DB va adminni **o‘chirmaydi** (oddiy yangilash uchun).  
-`-SkipMobile` — faqat veb/API (APK yig‘ishni o‘tkazib yuborish).
+`-SkipMobile` — faqat veb/API (APK yig‘ishni o‘tkazib yuborish).  
+Majburiy mobil: `.\scripts\railway\upload-mobile-apk-prod.ps1 -ForceUpdate`
 
 ### Ma’lumotni boshqa serverga ko‘chirish
 
@@ -89,8 +91,10 @@ cd "D:\SALEC — копия"
 ```
 
 Bu buyruq:
-1. Production APK yig‘adi (`pubspec.yaml` versiyasi, masalan `3.1.5+306`)
+1. Production APK yig‘adi (`pubspec.yaml` versiyasi, masalan `3.1.21+330`)
 2. Railway API ga **avtomatik yuklaydi** (`/api/mobile/apk-download`)
+3. Siyosat: **ixtiyoriy** yangilash (`force_update=false`) — dialog «Обновить» / «Позже»  
+   Majburiy kerak bo‘lsa: `upload-mobile-apk-prod.ps1 -ForceUpdate`
 3. Versiya siyosatini o‘rnatadi (`force_update`) — agentlar **ilova ichida** yangilaydi
 
 Yoki alohida:

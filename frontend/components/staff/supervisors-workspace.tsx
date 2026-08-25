@@ -19,7 +19,11 @@ import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
-import { AgentConfigurationsDialog } from "@/components/staff/agent-configurations-dialog";
+import { useRouter } from "next/navigation";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog
+} from "@/components/staff/workplace-moved-notice";
 import { SupervisorFormModal } from "@/components/staff/supervisor-form-modal";
 import { messageFromStaffCreateError, messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
@@ -84,6 +88,8 @@ export type SupervisorRow = {
     product_rules?: unknown;
     mobile_config?: unknown;
   };
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
 };
 
 type TenantProfile = {
@@ -185,6 +191,7 @@ function SuperviseeCell({ list }: { list: SuperviseeRow[] }) {
 
 export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: Props) {
   const qc = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftPos, setDraftPos] = useState("");
   const [appliedPos, setAppliedPos] = useState("");
@@ -212,8 +219,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [sessionSup, setSessionSup] = useState<SupervisorRow | null>(null);
-  const [configSup, setConfigSup] = useState<SupervisorRow | null>(null);
-  const [configSaving, setConfigSaving] = useState(false);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [deactivateRow, setDeactivateRow] = useState<SupervisorRow | null>(null);
 
   const filterOptQ = useQuery({
@@ -438,6 +444,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
+            face={{ tenantSlug, userId: r.id }}
           />
         );
       case "supervisees":
@@ -563,7 +570,12 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigSup(r)}>
+              <AgentIconButton
+                title="Конфигурации"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings2 className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Сессии" onClick={() => setSessionSup(r)}>
@@ -601,34 +613,7 @@ export function SupervisorsWorkspace({ tenantSlug, initialCreateOpen = false }: 
         onConfirm={bulk.handleConfirmBulk}
       />
 
-      <AgentConfigurationsDialog
-        open={configSup != null}
-        agent={
-          configSup
-            ? {
-                id: configSup.id,
-                fio: configSup.fio,
-                code: configSup.code,
-                login: configSup.login,
-                agent_entitlements: configSup.agent_entitlements ?? {}
-              }
-            : null
-        }
-        variant="supervisor"
-        saving={configSaving}
-        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        onClose={() => setConfigSup(null)}
-        onSave={async (ent) => {
-          if (!configSup) return;
-          setConfigSaving(true);
-          try {
-            await patchMut.mutateAsync({ id: configSup.id, body: { agent_entitlements: ent } });
-            setConfigSup(null);
-          } finally {
-            setConfigSaving(false);
-          }
-        }}
-      />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <SupervisorFormModal
         mode="create"

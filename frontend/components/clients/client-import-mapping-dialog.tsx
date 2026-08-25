@@ -209,12 +209,9 @@ export function ClientImportMappingDialog({
       ? headerCells.map((c) => (c == null ? "" : String(c)))
       : [];
     const merged = mergeAutoClientImportColumns(headers, columnMap);
-    if (importMode === "create" && merged.client_db_id !== undefined) {
-      delete merged.client_db_id;
-    }
     if (importMode === "update") {
       if (merged.client_db_id === undefined) {
-        setLocalErr('Укажите столбец «ИД» (внутренний id клиента в системе) — обязательно для обновления.');
+        setLocalErr('Укажите столбец «ИД» / id (внутренний id клиента в системе) — обязательно для обновления.');
         return;
       }
       if (restrictUpdate && updateApplySet.size === 0) {
@@ -255,7 +252,7 @@ export function ClientImportMappingDialog({
                   Файл: <strong>{file.name}</strong>
                   {importMode === "update"
                     ? " — строки с «ИД» из системы; пустые ячейки в сопоставленных столбцах очищают поле в базе. Несуществующие коды справочника и агентов тоже очищаются. Столбцы «Агент N / Агент N день / Экспедитор N» подхватываются автоматически только если найдены в шапке."
-                    : " — для каждого поля системы выберите столбец. «Агент 1…10 / день / Экспедитор» можно не мапить вручную: если таких столбцов нет, они будут пропущены."}
+                    : " — для каждого поля системы выберите столбец. Опционально «ИД» / id / ИД: если указан — клиент создаётся с этим id или обновляется (в рамках tenant). «Агент 1…10 / день / Экспедитор» можно не мапить вручную."}
                 </span>
               ) : (
                 "Файл не выбран."

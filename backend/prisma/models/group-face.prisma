@@ -1,0 +1,42 @@
+/// Yuz tasdiqlash: etalon rasm va tekshiruv snapshotlari audit jurnali.
+model FaceVerificationLog {
+  id                     Int       @id @default(autoincrement())
+  tenant_id              Int
+  user_id                Int
+  work_slot_id           Int?
+  context                String    @db.VarChar(32)
+  snapshot_storage_key   String    @db.VarChar(512)
+  reference_storage_key  String?   @db.VarChar(512)
+  order_id               Int?
+  client_id              Int?
+  /// recorded — saqlandi; approved — avtomatik/qo‘lda; rejected — rad
+  status                 String    @default("recorded") @db.VarChar(24)
+  meta                   Json      @default("{}")
+  created_at             DateTime  @default(now())
+  tenant                 Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user                   User      @relation("FaceVerificationLogs", fields: [user_id], references: [id], onDelete: Cascade)
+  work_slot              WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
+
+  @@index([tenant_id, user_id, created_at])
+  @@index([tenant_id, user_id, context, created_at])
+  @@map("face_verification_logs")
+}
+
+/// Kunlik random tekshiruv hisoblagichi (buyurtma № checkpoint).
+model FaceVerificationDailyState {
+  id                   Int      @id @default(autoincrement())
+  tenant_id            Int
+  user_id              Int
+  work_date            DateTime @db.Date
+  order_action_count   Int      @default(0)
+  order_verify_count   Int      @default(0)
+  daily_login_verified Boolean  @default(false)
+  checkpoint_order_nos Json     @default("[]")
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user                 User     @relation("FaceVerificationDailyStates", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, user_id, work_date])
+  @@map("face_verification_daily_states")
+}

@@ -60,6 +60,7 @@ import {
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 import { applyAgentPatchInDb } from "./staff.patches.field.agent";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchSupervisorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
   /** Bu supervisor ostidagi agentlar ro‘yxati (to‘liq almashtirish). */
@@ -103,6 +104,8 @@ export async function patchSupervisor(
   input: PatchSupervisorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(supervisorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: supervisorId, tenant_id: tenantId, role: "supervisor" }
   });
@@ -173,7 +176,7 @@ export async function patchSupervisor(
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.agent_entitlements !== undefined) {

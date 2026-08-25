@@ -474,11 +474,38 @@ export function buildAgentAssignmentPatchesFromImportRow(
   return { createPatches, updatePatches, touched };
 }
 
+/** Excel `ИД` / `id` katakchasini tahlil qilish: yo‘q / yaroqli / yaroqsiz. */
+export type ImportClientDbIdParse =
+  | { kind: "absent" }
+  | { kind: "ok"; id: number }
+  | { kind: "invalid"; detail: string };
+
+export function classifyImportClientDbId(raw: string | null): ImportClientDbIdParse {
+  if (raw == null || isPlaceholderCell(raw)) return { kind: "absent" };
+  const s = String(raw).trim().replace(/\u00a0/g, " ");
+  if (!s) return { kind: "absent" };
+  /** Excel ba’zan `12.0` yozadi; faqat butun musbat son. */
+  const m = /^(\d+)(?:\.0+)?$/.exec(s);
+  if (!m) {
+    return {
+      kind: "invalid",
+      detail: `«${s.slice(0, 40)}» — id faqat musbat butun son bo‘lishi kerak (masalan 12)`
+    };
+  }
+  const n = Number.parseInt(m[1]!, 10);
+  if (!Number.isFinite(n) || n < 1) {
+    return {
+      kind: "invalid",
+      detail: `«${s.slice(0, 40)}» — id 1 dan katta yoki teng musbat butun son bo‘lishi kerak`
+    };
+  }
+  if (n > 2_147_483_647) {
+    return { kind: "invalid", detail: `id ${n} juda katta (maks. 2147483647)` };
+  }
+  return { kind: "ok", id: n };
+}
+
 export function parseClientDbIdFromCell(raw: string | null): number | null {
-  if (raw == null || isPlaceholderCell(raw)) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  const n = Number.parseInt(s, 10);
-  if (!Number.isFinite(n) || n < 1) return null;
-  return n;
+  const r = classifyImportClientDbId(raw);
+  return r.kind === "ok" ? r.id : null;
 }

@@ -184,6 +184,15 @@ export async function registerStaffSkladchikRoutes(app: FastifyInstance) {
         if (msg === "BAD_FIRST_NAME") return sendApiError(reply, request, 400, "BadFirstName");
         if (msg === "LOGIN_EXISTS") return sendApiError(reply, request, 409, "LoginExists");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "WORK_SLOT_REQUIRED") {
           return sendApiError(
             reply,

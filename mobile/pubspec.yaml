@@ -1,7 +1,7 @@
 name: salesdoc_mobile
 description: Sales Arena mobil ilova — agent, ekspeditor, supervayzer uchun
 publish_to: "none"
-version: 3.1.20+329
+version: 3.1.21+330
 
 environment:
   sdk: ">=3.2.0 <4.0.0"
@@ -37,6 +37,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
 
   local_auth_android: any
+  local_auth_darwin: any
   webview_flutter_android: any
 dev_dependencies:
   flutter_test:

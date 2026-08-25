@@ -5,7 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api/expeditor_api.dart';
-import '../../../core/auth/biometric_service.dart';
+import '../../../core/face/face_verification_flow.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -24,24 +25,27 @@ class ExpeditorDeliveryDetailPage extends ConsumerStatefulWidget {
 class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryDetailPage> {
   bool _busy = false;
 
-  Future<bool> _confirmDeliveredIfNeeded(ExpeditorConfigPolicy policy) async {
-    if (!policy.fingerprintRequired) return true;
-    final bio = ref.read(biometricServiceProvider);
-    if (!await bio.isAvailable()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Barmoq izi mavjud emas — admin sozlamasini o\'chiring')),
-        );
-      }
-      return false;
-    }
-    return bio.authenticate(reason: 'Yetkazishni tasdiqlang');
+  Future<bool> _confirmSensitiveIfNeeded(ExpeditorConfigPolicy policy, String reason) async {
+    return BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: reason,
+    );
   }
 
   Future<void> _setStatus(String status, ExpeditorConfigPolicy policy) async {
     if (status == 'delivered') {
-      final ok = await _confirmDeliveredIfNeeded(policy);
-      if (!ok) return;
+      final okBio = await _confirmSensitiveIfNeeded(policy, 'Подтвердите доставку');
+      if (!okBio) return;
+      final okFace = await FaceVerificationFlow.ensure(
+        context,
+        ref,
+        verifyContext: 'delivery_confirm',
+        orderId: widget.orderId,
+        title: 'Подтверждение лица при доставке',
+      );
+      if (!okFace) return;
     }
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;

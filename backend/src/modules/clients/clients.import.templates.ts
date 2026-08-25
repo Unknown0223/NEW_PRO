@@ -19,6 +19,8 @@ export function lalakuNewClientTemplateHeaders(): string[] {
     agentCols.push(`Агент ${i}`, `Агент ${i} день`, `Экспедитор ${i}`);
   }
   return [
+    /** Ixtiyoriy: berilsa shu `clients.id` bilan yaratiladi yoki yangilanadi */
+    "ИД",
     "Наименование",
     "Юридическое название",
     "Адрес",
@@ -92,6 +94,7 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
     };
   });
   const example: string[] = headers.map((h) => {
+    if (h === "ИД") return "";
     if (h === "Наименование") return "Misol do'kon";
     if (h === "Телефон") return "+998901112233";
     if (h === "Город (код)") return "ANDIJON SHAXAR";

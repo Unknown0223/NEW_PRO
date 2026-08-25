@@ -1,9 +1,62 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { chunkNumericIds } from "./clients.import.runtime";
+import { classifyImportClientDbId } from "./clients.import.assign";
+import { readArrayCell } from "./clients.import.parse";
 
 /** PostgreSQL `ANY(int[])` — bitta bind; 50k+ ID uchun ham xavfsiz. */
 export const IMPORT_ID_ANY_CHUNK = 50_000;
+
+/** Explicit `id` bilan create qilingandan keyin Postgres sequence ni MAX(id) ga sinxronlash. */
+export async function syncClientsIdSequence(
+  tx: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<void> {
+  await tx.$executeRaw`
+    SELECT setval(
+      pg_get_serial_sequence('clients', 'id'),
+      (SELECT COALESCE(MAX(id), 1) FROM clients)
+    )
+  `;
+}
+
+/** Fayldagi explicit id lar: boshqa tenant yoki birlashtirilgan yozuvlar. */
+export async function loadImportExplicitIdConflicts(
+  tenantId: number,
+  rows: unknown[][],
+  firstDataRow: number,
+  lastRowIdx: number,
+  colIndexByKey: Record<string, number>
+): Promise<{ foreignIdSet: Set<number>; mergedIdSet: Set<number> }> {
+  const foreignIdSet = new Set<number>();
+  const mergedIdSet = new Set<number>();
+  if (!Object.prototype.hasOwnProperty.call(colIndexByKey, "client_db_id")) {
+    return { foreignIdSet, mergedIdSet };
+  }
+  const candidateIds = new Set<number>();
+  for (let r = firstDataRow; r <= lastRowIdx; r++) {
+    const row = rows[r];
+    if (!Array.isArray(row)) continue;
+    const parsed = classifyImportClientDbId(readArrayCell(row, colIndexByKey.client_db_id));
+    if (parsed.kind === "ok") candidateIds.add(parsed.id);
+  }
+  if (candidateIds.size === 0) return { foreignIdSet, mergedIdSet };
+  const idList = Array.from(candidateIds);
+  const foreign = await prisma.client.findMany({
+    where: { id: { in: idList }, NOT: { tenant_id: tenantId } },
+    select: { id: true }
+  });
+  for (const f of foreign) foreignIdSet.add(f.id);
+  const merged = await prisma.client.findMany({
+    where: {
+      tenant_id: tenantId,
+      id: { in: idList },
+      merged_into_client_id: { not: null }
+    },
+    select: { id: true }
+  });
+  for (const m of merged) mergedIdSet.add(m.id);
+  return { foreignIdSet, mergedIdSet };
+}
 
 export type ImportExistingClientRow = {
   id: number;

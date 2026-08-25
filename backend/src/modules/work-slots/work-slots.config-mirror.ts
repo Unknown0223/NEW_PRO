@@ -7,7 +7,10 @@ import {
   parseUserTerritoryPartsFromHelpers
 } from "./work-slots.config-territory";
 
-/** Slot entitlements (narx/mahsulot) + userning `mobile_config` (shaxsiy). */
+/**
+ * Slot entitlements → user mirror.
+ * `mobile_config` endi joy manbasi; slotda yo‘q bo‘lsa vaqtincha user fallback.
+ */
 export function mergeSlotEntitlementsPreservingMobileConfig(
   slotEntitlements: Prisma.JsonValue | null | undefined,
   userEntitlements: Prisma.JsonValue | null | undefined
@@ -16,13 +19,18 @@ export function mergeSlotEntitlementsPreservingMobileConfig(
     slotEntitlements && typeof slotEntitlements === "object" && !Array.isArray(slotEntitlements)
       ? { ...(slotEntitlements as Record<string, unknown>) }
       : {};
-  delete slotObj.mobile_config;
-  const mobile = extractMobileConfigFromEntitlementsUnknown(userEntitlements);
-  if (mobile) slotObj.mobile_config = mobile;
+  const slotMobile = extractMobileConfigFromEntitlementsUnknown(slotEntitlements);
+  if (slotMobile) {
+    slotObj.mobile_config = slotMobile;
+    return slotObj;
+  }
+  const userMobile = extractMobileConfigFromEntitlementsUnknown(userEntitlements);
+  if (userMobile) slotObj.mobile_config = userMobile;
+  else delete slotObj.mobile_config;
   return slotObj;
 }
 
-/** User → slot backfill: mobile_config joyga ko‘chirilmasin. */
+/** User → slot backfill: mobile_config ham joyga ko‘chiriladi. */
 export function slotEntitlementsFromUserEntitlements(
   userEntitlements: Prisma.JsonValue | null | undefined
 ): Record<string, unknown> {
@@ -30,8 +38,15 @@ export function slotEntitlementsFromUserEntitlements(
     userEntitlements && typeof userEntitlements === "object" && !Array.isArray(userEntitlements)
       ? { ...(userEntitlements as Record<string, unknown>) }
       : {};
-  delete obj.mobile_config;
   return obj;
+}
+
+/** Slotdan chiqganda user entitlements dan joy (shu jumladan mobile_config) tozalanadi. */
+export function personalEntitlementsAfterClearWorkplace(
+  userEntitlements: Prisma.JsonValue | null | undefined
+): Record<string, unknown> {
+  void userEntitlements;
+  return {};
 }
 
 export type Tx = Prisma.TransactionClient;
@@ -205,7 +220,7 @@ export async function clearWorkplaceFieldsOnUser(
   });
   if (!user) return;
 
-  const mobileOnly = mergeSlotEntitlementsPreservingMobileConfig({}, user.agent_entitlements);
+  const clearedEntitlements = personalEntitlementsAfterClearWorkplace(user.agent_entitlements);
 
   await tx.user.update({
     where: { id: userId },
@@ -215,7 +230,7 @@ export async function clearWorkplaceFieldsOnUser(
       trade_direction: null,
       price_type: null,
       agent_price_types: [],
-      agent_entitlements: mobileOnly as Prisma.InputJsonValue,
+      agent_entitlements: clearedEntitlements as Prisma.InputJsonValue,
       consignment: false,
       consignment_limit_amount: null,
       consignment_ignore_previous_months_debt: false,

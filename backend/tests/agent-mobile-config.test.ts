@@ -108,6 +108,19 @@ describe("agent-mobile-config", () => {
     validateAgentMobileConfig(1, mc);
   });
 
+  it("parseMobileConfigV1 reads misc biometric confirm flags", () => {
+    const mc = parseMobileConfigV1({
+      schema_version: 1,
+      misc: {
+        biometric_confirm_for_order_submit: true,
+        biometric_confirm_for_payment_accept: true
+      }
+    });
+    expect(mc?.misc?.biometric_confirm_for_order_submit).toBe(true);
+    expect(mc?.misc?.biometric_confirm_for_payment_accept).toBe(true);
+    validateAgentMobileConfig(1, mc);
+  });
+
   it("parseMobileConfigV1 reads expeditor + order flags for field delivery", () => {
     const mc = parseMobileConfigV1({
       schema_version: 1,

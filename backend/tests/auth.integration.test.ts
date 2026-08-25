@@ -47,6 +47,9 @@ const { state, mockPrisma } = vi.hoisted(() => {
           return null;
         })
       },
+      workSlot: {
+        count: vi.fn(async () => 0)
+      },
       user: {
         findUnique: vi.fn(
           async ({

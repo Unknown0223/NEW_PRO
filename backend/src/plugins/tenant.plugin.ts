@@ -1,6 +1,7 @@
 import fp from "fastify-plugin";
 import { prisma } from "../config/database";
 import { sendApiError } from "../lib/api-error";
+import { getAppCache, setAppCache } from "../lib/redis-cache";
 
 function requestPath(url: string): string {
   const q = url.indexOf("?");
@@ -39,10 +40,16 @@ export const tenantPlugin = fp(async (app) => {
       return;
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { slug },
-      select: { id: true, slug: true, name: true, is_active: true }
-    });
+    const cacheKey = `tenant:slug:${slug}`;
+    type TenantRow = { id: number; slug: string; name: string; is_active: boolean };
+    let tenant = await getAppCache<TenantRow>(cacheKey);
+    if (!tenant) {
+      tenant = await prisma.tenant.findUnique({
+        where: { slug },
+        select: { id: true, slug: true, name: true, is_active: true }
+      });
+      if (tenant) await setAppCache(cacheKey, tenant, 60);
+    }
 
     if (!tenant || !tenant.is_active) {
       return sendApiError(reply, request, 404, "TenantNotFound", undefined, {

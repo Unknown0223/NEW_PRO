@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/lib/auth-store";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
@@ -21,7 +22,6 @@ import { formatPersonDisplayName } from "@/lib/person-display";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
-import { AgentConfigurationsDialog } from "@/components/staff/agent-configurations-dialog";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -34,6 +34,10 @@ import {
 } from "@/components/staff/staff-workspace-shell";
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog
+} from "@/components/staff/workplace-moved-notice";
 import {
   StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
@@ -214,6 +218,7 @@ function buildAgentSearchHaystack(r: AgentRow): string {
 }
 
 export function AgentsWorkspace({ tenantSlug }: Props) {
+  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const actorUserId = decodeAccessTokenUserId(accessToken);
   const qc = useQueryClient();
@@ -242,14 +247,13 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const [createAgentError, setCreateAgentError] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<AgentRow | null>(null);
   const [sessionAgent, setSessionAgent] = useState<AgentRow | null>(null);
-  const [configAgent, setConfigAgent] = useState<AgentRow | null>(null);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [deactivateAgent, setDeactivateAgent] = useState<AgentRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "clear-sessions" | null>(
     null
   );
-  const [groupDialog, setGroupDialog] = useState<null | "config">(null);
 
   const filterOptQ = useQuery({
     queryKey: ["agents-filter-options", tenantSlug],
@@ -342,7 +346,6 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["consignment"] });
-      setGroupDialog(null);
       setSelectedIds(new Set());
     },
     onError: (e: unknown) => {
@@ -495,6 +498,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
+            face={{ tenantSlug, userId: r.id }}
           />
         );
       case "login":
@@ -631,7 +635,12 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурация" onClick={() => setConfigAgent(r)}>
+              <AgentIconButton
+                title="Конфигурация"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings2 className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Активные сессии" onClick={() => setSessionAgent(r)}>
@@ -662,7 +671,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             app_access: !allAccessOn
           })
         }
-        onConfigurations={() => setGroupDialog("config")}
+        onConfigurations={() => setNeedSlotOpen(true)}
         onBulkEdit={() => setBulkEditOpen(true)}
         onToggleActive={() => setConfirmBulk(tab === "active" ? "deactivate" : "activate")}
         onClearSessions={() => setConfirmBulk("clear-sessions")}
@@ -766,41 +775,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <AgentConfigurationsDialog
-        open={configAgent != null}
-        agent={configAgent}
-        saving={patchMut.isPending}
-        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        onClose={() => setConfigAgent(null)}
-        onSave={async (ent) => {
-          if (!configAgent) return;
-          await patchMut.mutateAsync({ id: configAgent.id, body: { agent_entitlements: ent } });
-          void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
-        }}
-      />
-
-      <AgentConfigurationsDialog
-        open={groupDialog === "config"}
-        agent={null}
-        bulkMode
-        bulkSummary={`Выбрано агентов: ${selectedIds.size}`}
-        saving={bulkBusy}
-        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        onClose={() => setGroupDialog(null)}
-        onSave={async (ent) => {
-          const mc = (ent as { mobile_config?: unknown }).mobile_config;
-          if (mc == null || typeof mc !== "object") {
-            throw new Error("BAD_MOBILE_CONFIG_PATCH");
-          }
-          await bulkMut.mutateAsync({
-            action: "patch_mobile_config",
-            agent_ids: Array.from(selectedIds),
-            mobile_config: mc
-          });
-          setGroupDialog(null);
-          setSelectedIds(new Set());
-        }}
-      />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <AgentTemplateConfirmDialog
         open={Boolean(deactivateAgent)}

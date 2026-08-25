@@ -22,7 +22,7 @@ type RefreshInput = { refreshToken: string };
 /** Access JWT — kamroq refresh race (mobil uzoq ochiq qoladi). */
 const ACCESS_TOKEN_TTL = "24h";
 /** Refresh sliding TTL — foydalanuvchi chiqmaguncha sessiya yashaydi. */
-const REFRESH_TOKEN_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /**
  * Parallel refresh (bir nechta 401 bir vaqtda) — eski token rotate qilinganidan
  * keyin qisqa oynada qayta ishlatilsa INVALID_REFRESH emas, yangi juftlik beriladi.

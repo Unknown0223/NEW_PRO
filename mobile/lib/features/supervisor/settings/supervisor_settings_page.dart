@@ -5,6 +5,7 @@ import '../../../core/auth/session.dart';
 import '../../../core/prefs/app_prefs.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../auth/biometric_quick_login_tile.dart';
 import '../../auth/auth_provider.dart';
 import '../shared/supervisor_ui.dart';
 
@@ -81,6 +82,11 @@ class SupervisorSettingsPage extends ConsumerWidget {
               onTap: () => _pickTheme(context, ref),
             ),
           ]),
+          SvCard(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: BiometricQuickLoginTile(accentColor: _accent),
+          ),
+          const SizedBox(height: 12),
           _group('КЛИЕНТ', [
             _ToggleRow(label: 'Создать клиента', value: c?.canCreate ?? false),
             _ToggleRow(label: 'Редактировать клиента', value: c?.canEdit ?? false),

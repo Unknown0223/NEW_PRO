@@ -8,7 +8,7 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/api/field_api.dart';
 import '../../../core/api/mobile_api.dart';
-import '../../../core/auth/biometric_service.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
@@ -739,19 +739,19 @@ class _ExpeditorClientDetailPageState
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
 
-    if (status == 'delivered') {
+    if (status == 'delivered' || status == 'returned') {
       final policy = ExpeditorConfigPolicy.fromMobileConfig(
           ref.read(sessionProvider).mobileConfig,);
-      if (policy.fingerprintRequired) {
-        final bio = ref.read(biometricServiceProvider);
-        if (!await bio.isAvailable()) {
-          _toast('Отпечаток недоступен — отключите в настройках администратора',
-              color: AppColors.error,);
-          return;
-        }
-        final ok = await bio.authenticate(reason: 'Подтвердите доставку');
-        if (!ok) return;
-      }
+      final reason = status == 'delivered'
+          ? 'Подтвердите доставку'
+          : 'Подтвердите возврат';
+      final ok = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: policy.fingerprintRequired,
+        reason: reason,
+      );
+      if (!ok) return;
     }
 
     setState(() => _busy = true);

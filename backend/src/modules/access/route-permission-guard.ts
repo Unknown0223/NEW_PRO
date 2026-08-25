@@ -305,11 +305,22 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 ];
 
 function matchRule(method: string, routePath: string): RoutePermissionRule | null {
-  for (const rule of ROUTE_PERMISSION_RULES) {
-    if (!rule.methods.includes(method as Method)) continue;
-    if (rule.test.test(routePath)) return rule;
+  for (const candidate of pathsToMatch(routePath)) {
+    for (const rule of ROUTE_PERMISSION_RULES) {
+      if (!rule.methods.includes(method as Method)) continue;
+      if (rule.test.test(candidate)) return rule;
+    }
   }
   return null;
+}
+
+/** Fastify 4 pattern (`/orders/:id`) va aniq URL (`/orders/5`) ni bir xil qoida bilan solishtirish. */
+function pathsToMatch(routePath: string): string[] {
+  const path = (routePath.split("?")[0] ?? "").trim();
+  if (!path) return [];
+  const asParam = path.replace(/\/\d+(?=\/|$)/g, "/:id");
+  const asShift = asParam.replace(/\/:id\/shifts\/:id(?=\/|$)/, "/:id/shifts/:shiftId");
+  return [...new Set([path, asParam, asShift])];
 }
 
 /** Test/diagnostika uchun eksport. */
@@ -320,8 +331,13 @@ export function registerRoutePermissionGuard(app: FastifyInstance) {
     if (env.RBAC_ENFORCE_PERMISSIONS !== "1") return;
 
     const method = request.method.toUpperCase();
-    const routePath = (request as { routerPath?: string }).routerPath ?? request.url.split("?")[0] ?? "";
-    if (!routePath.startsWith("/api/")) return;
+    const routePath =
+      (request as { routeOptions?: { url?: string } }).routeOptions?.url ??
+      (request as { routerPath?: string }).routerPath ??
+      "";
+    if (!routePath) {
+      return sendApiError(reply, request, 403, "ForbiddenPermission");
+    }
 
     const rule = matchRule(method, routePath);
     if (!rule) return;

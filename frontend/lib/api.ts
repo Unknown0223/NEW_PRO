@@ -112,7 +112,6 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
     const store = useAuthStore.getState();
     const disk = readPersistedAuth();
     const refreshToken = store.refreshToken ?? disk.refreshToken;
-    if (!refreshToken) return null;
     try {
       const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
         authRefreshAbsoluteUrl(),
@@ -146,6 +145,11 @@ async function refreshAccessTokenSingleFlight(): Promise<string | null> {
     }
   })();
   return refreshInFlight;
+}
+
+/** Sahifa yangilanganda HttpOnly cookie orqali access token tiklash. */
+export async function restoreSessionFromCookie(): Promise<string | null> {
+  return refreshAccessTokenSingleFlight();
 }
 
 function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied" | "user_not_on_slot") {

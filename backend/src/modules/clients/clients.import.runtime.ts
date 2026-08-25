@@ -193,8 +193,10 @@ export type ClientXlsxImportOptions = {
   /** Tizim maydoni → fayldagi ustun indeksi (0 dan). */
   columnMap?: Record<string, number>;
   /**
-   * UI rejimi: `create` bo‘lsa `client_db_id` ustuni e’tiborsiz (faqat yangi yozuvlar).
-   * Berilmasa — avvalgidek: xaritada `client_db_id` bo‘lsa «yangilash» rejimi.
+   * UI rejimi:
+   * - `create` — yangi yozuvlar; `client_db_id`/`ИД`/`id` bo‘lsa tenant ichida upsert (bor → update, yo‘q → create with id).
+   * - `update` — faqat mavjudlarni yangilash (`client_db_id` majburiy).
+   * - berilmasa — xaritada `client_db_id` bo‘lsa «yangilash» rejimi.
    */
   importMode?: "create" | "update";
   /**

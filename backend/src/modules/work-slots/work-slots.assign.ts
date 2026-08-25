@@ -85,6 +85,13 @@ export async function assignUserToSlot(
     await resetLeavingUserAccess(tx, tenantId, newUserId);
     await mirrorSlotConfigToUser(tx, tenantId, slotId, newUserId);
 
+    const auditNoteParts = [
+      note?.trim() || null,
+      current
+        ? "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
+        : "Права нового сотрудника сброшены к стандарту роли"
+    ].filter(Boolean);
+
     await tx.slotAuditEntry.create({
       data: {
         tenant_id: tenantId,
@@ -93,7 +100,7 @@ export async function assignUserToSlot(
         next_user_id: newUserId,
         action: current ? "swap" : "assign",
         actor_id: actorId,
-        note: note?.trim() || null
+        note: auditNoteParts.join(" · ") || null
       }
     });
 
@@ -137,6 +144,11 @@ export async function unassignUserFromSlot(
     await clearWorkplaceFieldsOnUser(tx, tenantId, current.user_id);
     await resetLeavingUserAccess(tx, tenantId, current.user_id);
 
+    const auditNoteParts = [
+      note?.trim() || null,
+      "Права снятого сотрудника сброшены к стандарту роли"
+    ].filter(Boolean);
+
     await tx.slotAuditEntry.create({
       data: {
         tenant_id: tenantId,
@@ -145,7 +157,7 @@ export async function unassignUserFromSlot(
         next_user_id: null,
         action: "unassign",
         actor_id: actorId,
-        note: note?.trim() || null
+        note: auditNoteParts.join(" · ") || null
       }
     });
   });

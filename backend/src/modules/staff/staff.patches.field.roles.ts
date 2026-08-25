@@ -59,6 +59,7 @@ import {
   resolveLoginForPatch
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchOperatorInput = {
   first_name?: string;
@@ -115,7 +116,7 @@ export async function patchOperator(
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (Object.keys(data).length > 0) {
@@ -181,6 +182,8 @@ export async function patchSkladchik(
   input: PatchSkladchikInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(skladchikId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: skladchikId, tenant_id: tenantId, role: "skladchik" }
   });
@@ -212,7 +215,7 @@ export async function patchSkladchik(
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.warehouse_ids !== undefined) {

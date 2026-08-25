@@ -529,7 +529,8 @@ export default function MobileAppSettingsPage() {
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Yoqilsa: oxirgi versiyadan past APK da login bloklanadi, yangilash dialogi majburiy.
-                    O‘chirilsa: faqat ixtiyoriy eslatma.
+                    O‘chirilsa (tavsiya, oddiy deploy): ixtiyoriy dialog — «Обновить» yoki «Позже»;
+                    login ishlayveradi, agentlar o‘zlari yangilaydi.
                   </p>
                 </div>
               </label>

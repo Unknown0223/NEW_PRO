@@ -7,10 +7,7 @@ gradle-wrapper.jar
 GeneratedPluginRegistrant.java
 .cxx/
 
-# Shaxsiy/local keystorelar — OTA kaliti (salesdoc-ota.jks) REPO DA saqlanadi.
-# PC o‘zgarsa ham bir xil imzo bilan yangilash ishlashi shart.
+# Imzo kaliti va parol hech qachon git'ga tushmasin (GitHub Secrets / local seyf).
 *.keystore
 *.jks
-!keystore/salesdoc-ota.jks
 key.properties
-!key.properties

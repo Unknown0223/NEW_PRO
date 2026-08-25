@@ -40,7 +40,7 @@ export async function createFieldStaff(
   // work_slot_id ixtiyoriy: xodimni joyga «Рабочее место» dan bog‘lash.
   // Agar create da berilsa (masalan Excel import) — pastda assign qilinadi.
 
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  const passwordHash = await bcrypt.hash(input.password, 12);
   const priceTypesArr = normalizePriceTypes(input.agent_price_types ?? []);
   const legacyPrice = input.price_type?.trim() || null;
   const ent = normalizeAgentEntitlementsInput(input.agent_entitlements ?? {});

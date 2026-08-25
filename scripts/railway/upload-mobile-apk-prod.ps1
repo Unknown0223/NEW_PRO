@@ -33,7 +33,7 @@ if (-not (Test-Path $ApkPath)) {
 }
 
 if (-not $LatestVersion) { $LatestVersion = Get-PubspecVersion }
-# Default: ixtiyoriy yangilash (dialog + avto-yuklash). Majburiy bloklash uchun -ForceUpdate.
+# Default: ixtiyoriy yangilash (dialog + «Обновить»). Majburiy bloklash: -ForceUpdate.
 $force = $false
 if ($ForceUpdate) { $force = $true }
 if ($NoForce) { $force = $false }
@@ -41,10 +41,17 @@ if ($NoForce) { $force = $false }
 Write-Host "=== APK yuklash (production) ===" -ForegroundColor Cyan
 Write-Host "API: $Api"
 Write-Host "APK: $ApkPath"
-Write-Host "Versiya: $LatestVersion  force=$force"
+Write-Host "Versiya: $LatestVersion  force=$force (ixtiyoriy=$([bool](-not $force)))"
 
 $loginBody = @{ slug = $Slug; login = $AdminLogin; password = $AdminPassword } | ConvertTo-Json
 $token = (Invoke-RestMethod -Uri "$Api/api/auth/login" -Method POST -Body $loginBody -ContentType "application/json").accessToken
+
+# Joriy siyosat — soft OTA da min_version ni saqlab qolamiz
+$prevPolicy = $null
+try {
+  $prevPolicy = Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
+    -Method GET -Headers @{ Authorization = "Bearer $token" }
+} catch { }
 
 $boundary = [guid]::NewGuid().ToString()
 $fileBytes = [System.IO.File]::ReadAllBytes($ApkPath)
@@ -67,19 +74,38 @@ $upload = Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release/upl
   -Body $bodyStream.ToArray()
 
 $minParts = $LatestVersion -split '\.'
-$minVer = if ($minParts.Length -ge 2) { "$($minParts[0]).$($minParts[1]).0" } else { $LatestVersion }
+$minFloor = if ($minParts.Length -ge 2) { "$($minParts[0]).$($minParts[1]).0" } else { $LatestVersion }
+$prevMin = $null
+if ($prevPolicy -and $prevPolicy.policy -and $prevPolicy.policy.min_version) {
+  $prevMin = [string]$prevPolicy.policy.min_version
+}
+# Soft: eski min saqlanadi (yoki null). Force: past versiyalarni bloklash uchun floor.
+$minVer = if ($force) { $minFloor } else { if ($prevMin) { $prevMin } else { $null } }
+
+$notes = if ($force) {
+  "Production majburiy yangilash $LatestVersion"
+} else {
+  "Production ixtiyoriy yangilash $LatestVersion — ilova ichida «Обновить» yoki «Позже»"
+}
+
 $policy = @{
-  min_version    = $minVer
   latest_version = $LatestVersion
   force_update   = $force
   download_url   = "$Api/api/mobile/apk-download?slug=$Slug"
-  release_notes  = "Production yangilash $LatestVersion — serverdan ilova ichida o'rnatish"
-} | ConvertTo-Json
+  release_notes  = $notes
+}
+if ($null -ne $minVer -and $minVer -ne "") {
+  $policy.min_version = $minVer
+} else {
+  $policy.min_version = $null
+}
+$policyJson = $policy | ConvertTo-Json
 Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
   -Method PATCH `
   -Headers @{ Authorization = "Bearer $token" } `
-  -Body $policy -ContentType "application/json" | Out-Null
+  -Body $policyJson -ContentType "application/json" | Out-Null
 
 Write-Host "Yuklandi: $($upload.bytes) bayt" -ForegroundColor Green
+Write-Host "latest=$LatestVersion min=$minVer force=$force" -ForegroundColor DarkGray
 Write-Host "download_url: $Api/api/mobile/apk-download?slug=$Slug"
 Write-Host "Veb: https://sales-arena.up.railway.app/settings/mobile-app"

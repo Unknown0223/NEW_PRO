@@ -33,7 +33,15 @@ export async function getWorkSlotDetail(tenantId: number, slotId: number): Promi
     where: { id: slotId, tenant_id: tenantId },
     include: slotInclude
   });
-  return row ? mapSlotRow(row) : null;
+  if (!row) return null;
+  const mapped = mapSlotRow(row);
+  if (mapped.active_user_id != null) {
+    const { getFaceReferenceMeta } = await import("../mobile/mobile-face.service");
+    const face = await getFaceReferenceMeta(tenantId, mapped.active_user_id);
+    mapped.active_user_has_face_reference = face.has_reference;
+    mapped.active_user_face_user_id = face.has_reference ? mapped.active_user_id : null;
+  }
+  return mapped;
 }
 
 export async function getSlotHistory(

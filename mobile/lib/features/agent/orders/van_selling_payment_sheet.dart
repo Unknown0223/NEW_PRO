@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/mobile_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/order_config_policy.dart';
+import '../../../core/config/security_config_policy.dart';
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -126,6 +128,16 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
     }
     setState(() => _submitting = true);
     try {
+      final security = SecurityConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: security.confirmPaymentAccept,
+        reason: 'Подтвердите приём оплаты',
+      );
+      if (!confirmed) return;
       await ref.read(mobileApiProvider).postOrderCashIn(
         slug,
         clientId: widget.clientId,

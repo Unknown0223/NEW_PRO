@@ -23,7 +23,7 @@ export async function createWebStaff(
   ) {
     throw new Error("CASH_DESK_OPERATOR_ONLY");
   }
-  const passwordHashOp = await bcrypt.hash(input.password, 10);
+  const passwordHashOp = await bcrypt.hash(input.password, 12);
   const ms =
     input.max_sessions != null && Number.isInteger(input.max_sessions) && input.max_sessions >= 1
       ? input.max_sessions

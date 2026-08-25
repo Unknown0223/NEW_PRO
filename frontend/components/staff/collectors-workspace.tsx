@@ -8,7 +8,6 @@ import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/ap
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
@@ -16,6 +15,12 @@ import { TableColumnSettingsDialog } from "@/components/data-table/table-column-
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
 import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog,
+  WorkplaceMovedNotice
+} from "@/components/staff/workplace-moved-notice";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
@@ -68,6 +73,8 @@ type CollectorRow = {
   max_sessions: number;
   cash_desks?: Array<{ id: number; name: string }>;
   is_active: boolean;
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
 };
 
 const COLS = [
@@ -116,6 +123,7 @@ type Props = { tenantSlug: string };
 
 export function CollectorsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
   const [draftPos, setDraftPos] = useState("");
@@ -128,7 +136,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
   const [editRow, setEditRow] = useState<CollectorRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [sessionRow, setSessionRow] = useState<CollectorRow | null>(null);
-  const [configRow, setConfigRow] = useState<CollectorRow | null>(null);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [deactivateRow, setDeactivateRow] = useState<CollectorRow | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -492,7 +500,12 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+              <AgentIconButton
+                title="Конфигурации"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings2 className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
@@ -531,7 +544,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
       />
 
       <CollectorEditDialog row={editRow} onClose={() => setEditRow(null)} onPatch={(id, body) => patchMut.mutateAsync({ id, body })} />
-      <CollectorConfigModal row={configRow} open={configRow != null} onOpenChange={(o) => !o && setConfigRow(null)} />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
       <CollectorAddDialog
         open={addOpen}
         onOpenChange={(o) => {
@@ -598,37 +611,6 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
   );
 }
 
-function CollectorConfigModal({
-  row,
-  open,
-  onOpenChange
-}: {
-  row: CollectorRow | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  if (!row) return null;
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Конфигурации</DialogTitle>
-          <p className="text-sm text-muted-foreground">{row.fio}</p>
-        </DialogHeader>
-        <WorkplaceMovedNotice />
-        <p className="text-sm text-muted-foreground">
-          Цены, лимиты и привязки инкассатора настраиваются на рабочем месте типа «collector».
-        </p>
-        <DialogFooter>
-          <Button type="button" onClick={() => onOpenChange(false)}>
-            Закрыть
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function CollectorEditDialog({
   row,
   onClose,
@@ -645,9 +627,7 @@ function CollectorEditDialog({
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
   const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
 
   useEffect(() => {
@@ -659,9 +639,7 @@ function CollectorEditDialog({
     setPhone(row.phone ?? "");
     setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setBranch(row.branch ?? "");
     setPosition(row.position ?? "");
-    setTerritory(row.territory ?? "");
     setLogin(row.login);
   }, [row]);
 

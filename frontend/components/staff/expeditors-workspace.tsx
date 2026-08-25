@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -22,8 +23,12 @@ import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessi
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { Eye, Link2, MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
 import Link from "next/link";
-import { ExpeditorConfigurationsDialog } from "@/components/staff/expeditor-configurations-dialog";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog,
+  WorkplaceMovedNotice
+} from "@/components/staff/workplace-moved-notice";
 import { ExpeditorsFiltersRow } from "@/components/staff/expeditors-filters-row";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
@@ -180,6 +185,7 @@ function randomPassword(len = 10) {
 type Props = { tenantSlug: string };
 
 export function ExpeditorsWorkspace({ tenantSlug }: Props) {
+  const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftBranch, setDraftBranch] = useState("");
@@ -209,8 +215,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   const [sessionExpeditor, setSessionExpeditor] = useState<ExpeditorRow | null>(null);
   const [assignRow, setAssignRow] = useState<ExpeditorRow | null>(null);
   const [deactivateExpeditor, setDeactivateExpeditor] = useState<ExpeditorRow | null>(null);
-  const [configRow, setConfigRow] = useState<ExpeditorRow | null>(null);
-  const [configSaving, setConfigSaving] = useState(false);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [draftOblast, setDraftOblast] = useState("");
   const [draftCity, setDraftCity] = useState("");
   const [appliedOblast, setAppliedOblast] = useState("");
@@ -500,6 +505,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
+            face={{ tenantSlug, userId: r.id }}
           />
         );
       case "login":
@@ -641,7 +647,12 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+              <AgentIconButton
+                title="Конфигурации"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings2 className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Активные сессии" onClick={() => setSessionExpeditor(r)}>
@@ -712,23 +723,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
       />
 
-      <ExpeditorConfigurationsDialog
-        open={configRow != null}
-        expeditor={configRow}
-        onClose={() => setConfigRow(null)}
-        saving={configSaving}
-        paymentMethodEntries={profileQ.data?.references?.payment_method_entries}
-        onSave={async (ent) => {
-          if (!configRow) return;
-          setConfigSaving(true);
-          try {
-            await patchMut.mutateAsync({ id: configRow.id, body: { agent_entitlements: ent } });
-            setConfigRow(null);
-          } finally {
-            setConfigSaving(false);
-          }
-        }}
-      />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <StaffActiveSessionsDialog
         open={sessionExpeditor != null}
@@ -1081,6 +1076,12 @@ function AgentEditDialog({
           openConfig
         />
         <div className="grid max-h-[calc(92vh-8rem)] gap-3 overflow-y-auto pr-1">
+          <StaffFaceReferencePanel
+            tenantSlug={tenantSlug}
+            userId={r.id}
+            enabled
+            displayName={r.fio}
+          />
           <Input placeholder="Имя *" value={first_name} onChange={(e) => setFirst(e.target.value)} />
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />

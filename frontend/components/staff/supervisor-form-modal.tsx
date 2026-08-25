@@ -13,6 +13,7 @@ import {
   parseAgentFio
 } from "@/components/staff/agent-workspace-template-ui";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 
 export type SupervisorFormRow = {
@@ -310,6 +311,15 @@ export function SupervisorFormModal({
           ) : null}
 
           <WorkplaceMovedNotice />
+
+          <StaffFaceReferencePanel
+            tenantSlug={tenantSlug}
+            userId={r?.id ?? 0}
+            enabled={!isNew && Boolean(r?.id)}
+            displayName={
+              [last_name, first_name, middle_name].filter(Boolean).join(" ") || r?.fio
+            }
+          />
 
           <AgentFormField label="Имя *">
             <input

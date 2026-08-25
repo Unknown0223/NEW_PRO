@@ -3,8 +3,7 @@ import { ClientImportRefResolver } from "./client-import-ref-resolve";
 import { normalizeDuplicateKeyFields, normalizeUpdateApplyFields } from "./client-import-masks";
 import {
   buildManualColumnMap,
-  loadImportStaffLookup,
-  parseClientDbIdFromCell
+  loadImportStaffLookup
 } from "./clients.import.assign";
 import { importClientDataRows } from "./clients.import.rows-create";
 import { importClientUpdateRows } from "./clients.import.rows-update";
@@ -156,14 +155,12 @@ export async function importClientsFromXlsx(
 
   let manualMap = buildManualColumnMap(opts?.columnMap);
   if (manualMap != null && opts?.importMode === "create") {
-    manualMap = { ...manualMap };
-    delete manualMap.client_db_id;
     if (!Object.prototype.hasOwnProperty.call(manualMap, "name")) {
       return {
         created: 0,
         updated: 0,
         errors: [
-          "Yangi import (importMode=create): xaritada «Наименование» (name) ustuni bo‘lishi kerak; ichki ИД ustuni ishlatilmaydi."
+          "Yangi import (importMode=create): xaritada «Наименование» (name) ustuni bo‘lishi kerak. Ixtiyoriy «ИД» / id ustuni berilsa, shu id bilan yaratiladi yoki yangilanadi."
         ]
       };
     }
@@ -212,7 +209,9 @@ export async function importClientsFromXlsx(
       writeMs: 0,
       actorUserId: opts?.actorUserId ?? null
     };
-    const isUpdate = Object.prototype.hasOwnProperty.call(manualMap, "client_db_id");
+    const hasDbId = Object.prototype.hasOwnProperty.call(manualMap, "client_db_id");
+    const isUpdate =
+      opts?.importMode === "update" || (opts?.importMode !== "create" && hasDbId);
     if (isUpdate) {
       const r = await importClientUpdateRows(
         tenantId,
@@ -257,7 +256,7 @@ export async function importClientsFromXlsx(
     return finalizeResult(
       {
         created: r.created,
-        updated: 0,
+        updated: r.updated,
         errors: r.errors,
         importStats: {
           totalRows: ctx.totalRows,
@@ -312,7 +311,9 @@ export async function importClientsFromXlsx(
     writeMs: 0,
     actorUserId: opts?.actorUserId ?? null
   };
-  const isUpdate = Object.prototype.hasOwnProperty.call(colIndexByKey, "client_db_id");
+  const hasDbId = Object.prototype.hasOwnProperty.call(colIndexByKey, "client_db_id");
+  const isUpdate =
+    opts?.importMode === "update" || (opts?.importMode !== "create" && hasDbId);
   if (isUpdate) {
     const r = await importClientUpdateRows(
       tenantId,
@@ -357,7 +358,7 @@ export async function importClientsFromXlsx(
   return finalizeResult(
     {
       created: r.created,
-      updated: 0,
+      updated: r.updated,
       errors: r.errors,
       importStats: {
         totalRows: ctx.totalRows,

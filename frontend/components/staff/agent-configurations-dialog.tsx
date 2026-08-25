@@ -760,6 +760,67 @@ export function AgentConfigurationsDialog({
                     }
                     label="Разрешить создание заявки на обмен"
                   />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.biometric_confirm_for_order_submit)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({
+                          ...m,
+                          biometric_confirm_for_order_submit: v
+                        }))
+                      )
+                    }
+                    label="Face ID / отпечаток при отправке заказа"
+                  />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.biometric_confirm_for_payment_accept)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({
+                          ...m,
+                          biometric_confirm_for_payment_accept: v
+                        }))
+                      )
+                    }
+                    label="Face ID / отпечаток при приёме оплаты"
+                  />
+                  <ConfigCheckRow
+                    checked={Boolean(draft.misc?.face_verification_enabled)}
+                    onChange={(v) =>
+                      setDraft((d) =>
+                        setDraftPath(d, "misc", (m) => ({ ...m, face_verification_enabled: v }))
+                      )
+                    }
+                    label="Проверка лица (селфи на сервере)"
+                  />
+                  {draft.misc?.face_verification_enabled ? (
+                    <>
+                      <ConfigCheckRow
+                        checked={draft.misc?.face_verification_daily_login !== false}
+                        onChange={(v) =>
+                          setDraft((d) =>
+                            setDraftPath(d, "misc", (m) => ({
+                              ...m,
+                              face_verification_daily_login: v
+                            }))
+                          )
+                        }
+                        label="Ежедневно при входе в приложение"
+                      />
+                      <ConfigCheckRow
+                        checked={draft.misc?.face_verification_on_territory_check !== false}
+                        onChange={(v) =>
+                          setDraft((d) =>
+                            setDraftPath(d, "misc", (m) => ({
+                              ...m,
+                              face_verification_on_territory_check: v
+                            }))
+                          )
+                        }
+                        label="Супервайзер: при проверке на территории"
+                      />
+                    </>
+                  ) : null}
                 </>
               ) : null}
             </div>

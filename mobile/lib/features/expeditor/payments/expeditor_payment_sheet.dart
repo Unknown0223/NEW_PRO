@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
+import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 
 /// Pastdan tepaga suriladigan to'lov oynasi (Добавить оплату uslubida).
@@ -90,6 +92,19 @@ class _ExpeditorPaymentSheetState extends ConsumerState<ExpeditorPaymentSheet> {
       _submitting = true;
       _error = null;
     });
+    final policy = ExpeditorConfigPolicy.fromMobileConfig(
+      ref.read(sessionProvider).mobileConfig,
+    );
+    final confirmed = await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: 'Подтвердите оплату',
+    );
+    if (!confirmed) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
     final note = [
       if (_consignment) '[Консигнация]',
       _comment.text.trim(),

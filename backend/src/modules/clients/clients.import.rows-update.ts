@@ -9,8 +9,8 @@ import { replaceClientAgentAssignments } from "./clients.agent-assignments";
 import { appendClientAuditLogsBatch } from "./clients.audit";
 import {
   buildAgentAssignmentPatchesFromImportRow,
+  classifyImportClientDbId,
   colMapHasAgentSlots,
-  parseClientDbIdFromCell,
   type ImportStaffLookup
 } from "./clients.import.assign";
 import {
@@ -91,8 +91,8 @@ export async function importClientUpdateRows(
   for (let r = firstDataRow; r <= lastRowIdx; r++) {
     const row = rows[r];
     if (!Array.isArray(row)) continue;
-    const idVal = parseClientDbIdFromCell(readArrayCell(row, colIndexByKey.client_db_id));
-    if (idVal != null) candidateIds.add(idVal);
+    const idParse = classifyImportClientDbId(readArrayCell(row, colIndexByKey.client_db_id));
+    if (idParse.kind === "ok") candidateIds.add(idParse.id);
   }
   const candidateIdList = Array.from(candidateIds);
   const idChunks = Math.max(1, Math.ceil(candidateIdList.length / 50_000));
@@ -155,13 +155,20 @@ export async function importClientUpdateRows(
       continue;
     }
 
-    const idVal = parseClientDbIdFromCell(readArrayCell(row, colIndexByKey.client_db_id));
-    if (idVal == null) {
+    const idParse = classifyImportClientDbId(readArrayCell(row, colIndexByKey.client_db_id));
+    if (idParse.kind === "absent") {
       skippedEmpty += 1;
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "parsing");
       continue;
     }
+    if (idParse.kind === "invalid") {
+      pushErr(`Qator ${r + 1} (Excel): noto‘g‘ri ИД — ${idParse.detail}`);
+      ctx.processedRows += 1;
+      await reportImportRowProgress(ctx, "parsing");
+      continue;
+    }
+    const idVal = idParse.id;
 
     try {
       const resolveStarted = Date.now();

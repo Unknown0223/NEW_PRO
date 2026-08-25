@@ -65,43 +65,61 @@ export type SlotWorkplaceConfigTabId =
   | "main"
   | "prices"
   | "limits"
+  | "mobile"
   | "skladchik"
   | "expeditor";
 
+export type SlotWorkplaceConfigTab = {
+  id: SlotWorkplaceConfigTabId;
+  label: string;
+  icon: "layout" | "tags" | "shield" | "smartphone" | "truck" | "warehouse";
+};
+
 /**
  * Har rol o‘ziga xos sozlamalar:
- * - agent: narx, mahsulot cheklovi (konsignatsiya — /settings/spravochnik/consignment)
- * - expeditor: yetkazib berish qoidalari
+ * - agent: narx, mahsulot cheklovi, mobil ilova
+ * - expeditor: yetkazib berish qoidalari + mobil
  * - skladchik: ombor ruxsatlari
  * - boshqalar: asosiy (yo‘nalish / ombor qaytarish)
  */
 export function slotWorkplaceConfigTabs(
   slotType: WorkSlotType | string | undefined
-): { id: SlotWorkplaceConfigTabId; label: string }[] {
+): SlotWorkplaceConfigTab[] {
   switch (slotType) {
     case "agent":
       return [
-        { id: "main", label: "Основное" },
-        { id: "prices", label: "Типы цен" },
-        { id: "limits", label: "Ограничения" }
+        { id: "main", label: "Основное", icon: "layout" },
+        { id: "prices", label: "Типы цен", icon: "tags" },
+        { id: "limits", label: "Ограничения", icon: "shield" },
+        { id: "mobile", label: "Мобильное", icon: "smartphone" }
       ];
     case "expeditor":
       return [
-        { id: "main", label: "Основное" },
-        { id: "expeditor", label: "Экспедитор" }
+        { id: "main", label: "Основное", icon: "layout" },
+        { id: "expeditor", label: "Экспедитор", icon: "truck" },
+        { id: "mobile", label: "Мобильное", icon: "smartphone" }
       ];
     case "skladchik":
       return [
-        { id: "main", label: "Основное" },
-        { id: "skladchik", label: "Складчик" }
+        { id: "main", label: "Основное", icon: "layout" },
+        { id: "skladchik", label: "Складчик", icon: "warehouse" }
       ];
     case "collector":
+      return [{ id: "main", label: "Основное", icon: "layout" }];
     case "supervisor":
     case "auditor":
-      return [{ id: "main", label: "Основное" }];
+      return [
+        { id: "main", label: "Основное", icon: "layout" },
+        { id: "mobile", label: "Мобильное", icon: "smartphone" }
+      ];
     default:
-      return [{ id: "main", label: "Основное" }];
+      return [{ id: "main", label: "Основное", icon: "layout" }];
   }
+}
+
+/** Guruhli mobil sozlamalar — agent / expeditor / supervisor joylari. */
+export function slotSupportsBulkMobileConfig(slotType: string | undefined): boolean {
+  return slotType === "agent" || slotType === "expeditor" || slotType === "supervisor";
 }
 
 /** Narx turlari + mahsulot bog‘lanishi — faqat agent joyi. */
@@ -187,19 +205,21 @@ export function buildWorkSlotsQuery(filters: WorkSlotsQueryFilters): string {
 
 export type ViewMode = "grid" | "list";
 
-export const WORK_SLOTS_TABLE_ID = "work-slots.list.v1";
+/** v2: jadval birinchi (Agents/Expeditors kabi); status ustuni. */
+export const WORK_SLOTS_TABLE_ID = "work-slots.list.v2";
 
 export const WORK_SLOTS_COLUMN_IDS = [
   "code",
   "label",
+  "role",
+  "branch",
   "employee",
+  "warehouse",
   "territory_zone",
   "territory_oblast",
   "territory_city",
-  "warehouse",
   "cash_desk",
-  "branch",
-  "role"
+  "status"
 ] as const;
 
 export type WorkSlotsColumnId = (typeof WORK_SLOTS_COLUMN_IDS)[number];
@@ -207,25 +227,49 @@ export type WorkSlotsColumnId = (typeof WORK_SLOTS_COLUMN_IDS)[number];
 export const WORK_SLOTS_COLUMNS: { id: WorkSlotsColumnId; label: string }[] = [
   { id: "code", label: "Код" },
   { id: "label", label: "Название" },
+  { id: "role", label: "Роль" },
+  { id: "branch", label: "Филиал" },
   { id: "employee", label: "Сотрудник" },
+  { id: "warehouse", label: "Склад" },
   { id: "territory_zone", label: "Зона" },
   { id: "territory_oblast", label: "Область" },
   { id: "territory_city", label: "Город" },
-  { id: "warehouse", label: "Склад" },
   { id: "cash_desk", label: "Касса" },
-  { id: "branch", label: "Филиал" },
-  { id: "role", label: "Роль" }
+  { id: "status", label: "Статус" }
 ];
 
 export const WORK_SLOTS_COLUMN_LABEL_BY_ID = new Map<string, string>(
   WORK_SLOTS_COLUMNS.map((c) => [c.id, c.label])
 );
 
+/**
+ * Rolga mos boshlang‘ich yashirin ustunlar (Agents vs Expeditors farqi kabi).
+ * Foydalanuvchi «Столбцы» orqali o‘zgartirishi mumkin.
+ */
+export function workSlotsDefaultHiddenColumns(slotType: WorkSlotType | string): string[] {
+  switch (slotType) {
+    case "agent":
+      return [];
+    case "expeditor":
+      return ["cash_desk"];
+    case "skladchik":
+      return ["cash_desk", "territory_zone", "territory_oblast", "territory_city"];
+    case "collector":
+      return ["warehouse"];
+    case "supervisor":
+    case "auditor":
+      return ["cash_desk", "warehouse"];
+    default:
+      return ["cash_desk"];
+  }
+}
+
 const VIEW_KEY = "savdo.work-slots.view";
 
-/** Eski localStorage — birinchi marta server prefs yo‘q bo‘lsa. */
+/** Jadval — asosiy ko‘rinish (Agents/Expeditors). */
 export function loadViewMode(): ViewMode {
-  if (typeof window === "undefined") return "grid";
+  if (typeof window === "undefined") return "list";
   const v = localStorage.getItem(VIEW_KEY);
-  return v === "list" ? "list" : "grid";
+  if (v === "grid") return "grid";
+  return "list";
 }

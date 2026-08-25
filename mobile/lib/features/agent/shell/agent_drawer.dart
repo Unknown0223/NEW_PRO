@@ -160,30 +160,8 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        const AgentRoleBadge(label: 'Агент'),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: _soonSnack,
-                          icon: const Icon(Icons.add_rounded, size: 14),
-                          label: const Text(
-                            'Добавить аккаунт',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 36),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            foregroundColor: AppColors.primaryDark,
-                            side: const BorderSide(color: AppColors.primary),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  const Center(child: AgentRoleBadge(label: 'Агент')),
+                ],
                 ),
               ),
             const SizedBox(height: 14),

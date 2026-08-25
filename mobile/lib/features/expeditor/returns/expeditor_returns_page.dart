@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -70,6 +71,16 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     }
     setState(() => _submitting = true);
     try {
+      final policy = ExpeditorConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: policy.fingerprintRequired,
+        reason: 'Подтвердите возврат',
+      );
+      if (!confirmed) return;
       final lines = _collectReturnItems(items);
       await ref.read(expeditorApiProvider).partialReturn(
             slug,
@@ -100,6 +111,16 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
   Future<void> _submitReload(int orderId, String slug) async {
     setState(() => _submitting = true);
     try {
+      final policy = ExpeditorConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: policy.fingerprintRequired,
+        reason: 'Подтвердите догруз',
+      );
+      if (!confirmed) return;
       await ref.read(expeditorApiProvider).reloadFromVehicle(
             slug,
             orderId,

@@ -9,10 +9,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/agent/outlet_radius.dart';
 import '../../../core/config/agent_action_guards.dart';
 import '../../../core/config/gps_config_policy.dart';
+import '../../../core/config/security_config_policy.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../config/agent_config_enforcement.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
@@ -1137,6 +1140,29 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
     }
 
     if (!await _ensureOrderPolicy()) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+
+    final security = SecurityConfigPolicy.fromMobileConfig(
+      ref.read(sessionProvider).mobileConfig,
+    );
+    if (!await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: security.confirmOrderSubmit,
+      reason: 'Подтвердите отправку заказа',
+    )) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+
+    if (!await FaceVerificationFlow.ensure(
+      context,
+      ref,
+      verifyContext: 'order_submit',
+      title: 'Подтверждение лица перед заказом',
+    )) {
       if (mounted) setState(() => _submitting = false);
       return;
     }

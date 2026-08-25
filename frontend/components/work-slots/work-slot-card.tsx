@@ -10,9 +10,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
 import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
 import { LockStatusBadge, SlotBadge } from "./slot-badge";
+import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 
 type Props = {
   slot: WorkSlotListItem;
+  tenantSlug?: string;
   resolveTerritoryLabel?: (raw: string) => string;
   expanded: boolean;
   selected?: boolean;
@@ -32,6 +34,7 @@ function terrLabel(raw: string | null | undefined, resolve?: (s: string) => stri
 
 export function WorkSlotCard({
   slot,
+  tenantSlug,
   resolveTerritoryLabel,
   expanded,
   selected = false,
@@ -81,13 +84,30 @@ export function WorkSlotCard({
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {slot.active_user_name ? (
+        <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
+          {slot.active_user_name && slot.active_user_id ? (
             <>
-              <span className="text-foreground">{slot.active_user_name}</span>
-              {slot.active_since ? (
-                <span> ({formatSlotDate(slot.active_since)} dan)</span>
+              {tenantSlug ? (
+                <StaffFaceAvatar
+                  tenantSlug={tenantSlug}
+                  userId={slot.active_user_face_user_id ?? slot.active_user_id}
+                  initials={slot.active_user_name
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((p) => p[0] ?? "")
+                    .join("")}
+                  alt={slot.active_user_name}
+                  size="sm"
+                  hasPhoto={Boolean(slot.active_user_has_face_reference)}
+                />
               ) : null}
+              <span>
+                <span className="text-foreground">{slot.active_user_name}</span>
+                {slot.active_since ? (
+                  <span> ({formatSlotDate(slot.active_since)} dan)</span>
+                ) : null}
+              </span>
             </>
           ) : (
             <span className="italic">Bo‘sh</span>

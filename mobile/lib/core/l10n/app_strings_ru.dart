@@ -161,7 +161,6 @@ abstract final class S {
 
   static const pinEnter = 'Введите PIN';
   static const touchId = 'Touch ID';
-  static const loginOtherAccount = 'Войти другим аккаунтом';
 
   static const fullSync = 'Полная синхронизация';
   static const firstLaunch = 'Первый запуск';

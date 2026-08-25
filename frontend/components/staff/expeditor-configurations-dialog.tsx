@@ -516,7 +516,7 @@ export function ExpeditorConfigurationsDialog({
                       }))
                     )
                   }
-                  label="Отпечаток пальца обязательно при подтверждении накладной"
+                  label="Face ID / отпечаток при доставке, оплате, возврате и накладных"
                 />
               </div>
             </div>

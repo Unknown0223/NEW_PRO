@@ -1,6 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { cn } from "@/lib/utils";
+
+/** Staff «Конфигурация» — joy yo‘q bo‘lsa. */
+export const STAFF_NO_WORK_SLOT_MSG = "Avval rabochee mesto biriktiring";
 
 type Props = {
   className?: string;
@@ -46,5 +59,62 @@ export function WorkplaceMovedNotice({
       </Link>
       .
     </p>
+  );
+}
+
+/**
+ * Staff qatoridagi «Конфигурация»:
+ * - faol slot → `/work-slots/:id?openConfig=1`
+ * - yo‘q → `onMissingSlot` (odatda NeedWorkSlotDialog)
+ */
+export function goToStaffWorkplaceConfig(
+  router: { push: (href: string) => void },
+  workSlotId: number | null | undefined,
+  onMissingSlot: () => void
+): void {
+  if (workSlotId != null && workSlotId > 0) {
+    router.push(`/work-slots/${workSlotId}?openConfig=1`);
+    return;
+  }
+  onMissingSlot();
+}
+
+type NeedSlotProps = {
+  open: boolean;
+  onClose: () => void;
+  message?: string;
+};
+
+/** Joy biriktirilmaganda konfiguratsiya o‘rniga. */
+export function NeedWorkSlotDialog({
+  open,
+  onClose,
+  message = STAFF_NO_WORK_SLOT_MSG
+}: NeedSlotProps) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Конфигурация</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-slate-700">{message}</p>
+        <p className="text-xs text-muted-foreground">
+          Avval xodimni «Рабочее место» sahifasida joyga biriktiring — so‘ng Settings orqali
+          konfiguratsiyani oching.
+        </p>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Yopish
+          </Button>
+          <Link
+            href="/work-slots"
+            className={cn(buttonVariants({ className: "bg-teal-700 hover:bg-teal-800" }))}
+            onClick={onClose}
+          >
+            Рабочее место
+          </Link>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

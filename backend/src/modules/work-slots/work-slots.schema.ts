@@ -49,7 +49,6 @@ export const slotConfigPatchSchema = z.object({
 
 export const patchWorkSlotBodySchema = z
   .object({
-    slot_code: z.string().trim().min(1).max(32).optional(),
     label: z.string().trim().max(128).nullable().optional(),
     branch_code: z.string().trim().max(120).nullable().optional(),
     direction_id: z.number().int().positive().nullable().optional(),

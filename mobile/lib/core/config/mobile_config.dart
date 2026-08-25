@@ -183,6 +183,14 @@ class MiscConfig {
   final bool requireShipmentDate;
   final bool allowExchangeRequest;
   final List<String> disallowedPaymentMethodCodes;
+  /// Agent: buyurtma yuborishdan oldin Face ID / PIN.
+  final bool biometricConfirmForOrderSubmit;
+  /// Agent: to'lov qabul qilishdan oldin Face ID / PIN.
+  final bool biometricConfirmForPaymentAccept;
+  final bool faceVerificationEnabled;
+  final bool faceVerificationDailyLogin;
+  final int faceVerificationMaxRandomOrdersPerDay;
+  final bool faceVerificationOnTerritoryCheck;
 
   const MiscConfig({
     this.visitStartEndEnabled = true,
@@ -191,6 +199,12 @@ class MiscConfig {
     this.requireShipmentDate = false,
     this.allowExchangeRequest = false,
     this.disallowedPaymentMethodCodes = const [],
+    this.biometricConfirmForOrderSubmit = false,
+    this.biometricConfirmForPaymentAccept = false,
+    this.faceVerificationEnabled = false,
+    this.faceVerificationDailyLogin = true,
+    this.faceVerificationMaxRandomOrdersPerDay = 5,
+    this.faceVerificationOnTerritoryCheck = true,
   });
 
   factory MiscConfig.fromJson(Map<String, dynamic> j) => MiscConfig(
@@ -204,6 +218,18 @@ class MiscConfig {
                 .where((s) => s.isNotEmpty)
                 .toList() ??
             const [],
+        biometricConfirmForOrderSubmit:
+            j['biometric_confirm_for_order_submit'] ?? false,
+        biometricConfirmForPaymentAccept:
+            j['biometric_confirm_for_payment_accept'] ?? false,
+        faceVerificationEnabled: j['face_verification_enabled'] ?? false,
+        faceVerificationDailyLogin: j['face_verification_daily_login'] ?? true,
+        faceVerificationMaxRandomOrdersPerDay: () {
+          final n = (j['face_verification_max_random_orders_per_day'] as num?)?.toInt() ?? 5;
+          return n.clamp(0, 5);
+        }(),
+        faceVerificationOnTerritoryCheck:
+            j['face_verification_on_territory_check'] ?? true,
       );
 }
 

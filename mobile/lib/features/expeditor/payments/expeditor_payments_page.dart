@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/expeditor_api.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -50,6 +51,16 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     }
     setState(() => _submitting = true);
     try {
+      final policy = ExpeditorConfigPolicy.fromMobileConfig(
+        ref.read(sessionProvider).mobileConfig,
+      );
+      final confirmed = await BiometricTransactionConfirm.confirm(
+        ref,
+        context: context,
+        required: policy.fingerprintRequired,
+        reason: 'Подтвердите оплату',
+      );
+      if (!confirmed) return;
       await ref.read(expeditorApiProvider).createPayment(
             slug,
             orderId,

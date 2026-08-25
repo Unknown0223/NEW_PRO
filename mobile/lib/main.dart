@@ -20,6 +20,7 @@ import 'core/time/server_clock.dart';
 import 'core/time/work_region_time.dart';
 import 'core/update/app_update_listener.dart';
 import 'features/auth/biometric_setup_listener.dart';
+import 'features/auth/face_verification_listener.dart';
 import 'routing/app_router.dart';
 
 Future<void> main() async {
@@ -100,7 +101,9 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         routerConfig: router,
         builder: (context, child) => AppUpdateListener(
           child: BiometricSetupListener(
-            child: child ?? const SizedBox.shrink(),
+            child: FaceVerificationListener(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         ),
       ),

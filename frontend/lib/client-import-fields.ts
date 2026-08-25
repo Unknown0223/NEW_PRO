@@ -1,6 +1,6 @@
 /** Поля системы — порядок в модалке импорта клиентов (совпадает с таблицей). */
 export const CLIENT_IMPORT_MAPPABLE_FIELDS: { key: string; label: string }[] = [
-  { key: "client_db_id", label: "ИД в системе (только обновление по Excel)" },
+  { key: "client_db_id", label: "ИД / id (создание с заданным id или обновление)" },
   { key: "name", label: "Наименование (новый клиент — обязательно)" },
   { key: "legal_name", label: "Юридическое название" },
   { key: "client_code", label: "Код клиента (короткий)" },

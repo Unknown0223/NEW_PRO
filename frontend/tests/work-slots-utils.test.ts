@@ -4,6 +4,7 @@ import {
   buildWorkSlotsQuery,
   parseUserTerritoryParts,
   slotTypeLabel,
+  slotWorkplaceConfigTabs,
   staffApiPath
 } from "../components/work-slots/work-slots-utils";
 
@@ -52,5 +53,14 @@ describe("work-slots-utils", () => {
     expect(p.get("q")).toBe("T-12");
     expect(p.get("page")).toBe("2");
     expect(p.get("limit")).toBe("50");
+  });
+
+  it("slotWorkplaceConfigTabs includes mobile for agent, expeditor, supervisor, auditor", () => {
+    expect(slotWorkplaceConfigTabs("agent").map((t) => t.id)).toContain("mobile");
+    expect(slotWorkplaceConfigTabs("expeditor").map((t) => t.id)).toContain("mobile");
+    expect(slotWorkplaceConfigTabs("supervisor").map((t) => t.id)).toContain("mobile");
+    expect(slotWorkplaceConfigTabs("auditor").map((t) => t.id)).toContain("mobile");
+    expect(slotWorkplaceConfigTabs("skladchik").map((t) => t.id)).not.toContain("mobile");
+    expect(slotWorkplaceConfigTabs("collector").map((t) => t.id)).not.toContain("mobile");
   });
 });

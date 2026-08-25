@@ -18,6 +18,7 @@ import {
 } from "./staff.shared";
 import { applyAgentPatchInDb } from "./staff.patches.field";
 import { listStaff, type PatchAgentInput } from "./staff.crud";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchExpeditorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
   expeditor_assignment_rules?: ExpeditorAssignmentRules;
@@ -29,6 +30,8 @@ export async function patchExpeditor(
   input: PatchExpeditorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(expeditorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: expeditorId, tenant_id: tenantId, role: "expeditor" }
   });
@@ -99,7 +102,7 @@ export async function patchExpeditor(
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (input.expeditor_assignment_rules !== undefined) {
@@ -173,6 +176,8 @@ export async function patchCollector(
   input: PatchCollectorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(collectorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: collectorId, tenant_id: tenantId, role: "collector" }
   });
@@ -236,7 +241,7 @@ export async function patchCollector(
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);
@@ -289,6 +294,8 @@ export async function patchAuditor(
   input: PatchAuditorInput,
   actorUserId: number | null = null
 ): Promise<StaffRow> {
+  await assertWorkplaceStaffPatchAllowed(auditorId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: auditorId, tenant_id: tenantId, role: "auditor" }
   });
@@ -320,7 +327,7 @@ export async function patchAuditor(
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
   if (input.agent_entitlements !== undefined) {
     const prev = parseEntitlements(existing.agent_entitlements);

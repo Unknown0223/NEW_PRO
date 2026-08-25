@@ -160,19 +160,6 @@ class SupervisorMenuPage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 16),
-          SvCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                tile(
-                  icon: Icons.person_add_alt_1_outlined,
-                  title: 'Добавить аккаунт',
-                  soon: true,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
           Builder(
             builder: (_) {
               final policy = SupervisorConfigPolicy(session.mobileConfig);

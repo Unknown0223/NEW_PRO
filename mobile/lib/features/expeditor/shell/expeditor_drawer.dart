@@ -92,38 +92,6 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                     style: AppTypography.bodyMedium
                         .copyWith(fontSize: 16, color: AppColors.textMuted),
                   ),
-                  const SizedBox(height: 16),
-                  Material(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Добавление аккаунта — скоро'),),
-                        );
-                      },
-                      child: const SizedBox(
-                        height: 46,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add,
-                                color: AppColors.expeditorAccent, size: 24,),
-                            SizedBox(width: 8),
-                            Text(
-                              'Добавить аккаунт',
-                              style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.expeditorAccent,),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),

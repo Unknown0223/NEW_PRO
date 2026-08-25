@@ -228,7 +228,7 @@ class _PinUnlockScreenState extends ConsumerState<PinUnlockScreen> {
                     ? null
                     : () => ref.read(authStateProvider.notifier).logout(),
                 child: Text(
-                  S.loginOtherAccount,
+                  'Выйти',
                   style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
                 ),
               ),

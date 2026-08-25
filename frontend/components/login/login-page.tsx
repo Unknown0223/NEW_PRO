@@ -250,11 +250,14 @@ export function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [time, setTime] = useState(() => new Date());
+  /** SSR va client vaqti farq qilmasin — faqat mount dan keyin yangilanadi. */
+  const [timeLabel, setTimeLabel] = useState("");
   const sessionEnded = searchParams.get("reason") === "session_ended";
 
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const tick = () => setTimeLabel(new Date().toLocaleTimeString("ru-RU", { hour12: false }));
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -357,7 +360,7 @@ export function LoginPage() {
             <div className="hidden text-right sm:block">
               <div className="text-[10px] uppercase tracking-wider text-slate-500">Время сервера</div>
               <div className="font-mono text-sm font-semibold tabular-nums text-cyan-400">
-                {time.toLocaleTimeString("ru-RU", { hour12: false })}
+                {timeLabel || "—:—:—"}
               </div>
             </div>
           </div>

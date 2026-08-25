@@ -231,15 +231,17 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
         const origin = `${proto || "https"}://${host}`;
         const downloadUrl = buildMobileApkDownloadUrl(origin, request.tenant!.slug);
         const verFromFilename = filename.match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
+        const prev = await getMobileAppReleasePolicy(request.tenant!.id);
         const policy = await patchMobileAppReleasePolicy(request.tenant!.id, {
           download_url: downloadUrl,
-          // Majburiy bloklash — alohida PATCH / force flag orqali.
-          // Har yuklashda force=true qilish loginni berkitib qo‘yardi.
+          // Soft OTA: majburiy emas — faqat latest yangilanadi; min saqlanadi.
+          // Majburiy bloklash: vebda «Majburiy yangilash» yoki PATCH force_update=true.
           force_update: false,
           ...(verFromFilename
             ? {
                 latest_version: verFromFilename,
-                min_version: verFromFilename.replace(/\.\d+$/, ".0")
+                // min_version ni avtomatik ko‘tarmaymiz — aks holda hammaga «required» bo‘ladi.
+                ...(prev.min_version ? {} : { min_version: null })
               }
             : {})
         });

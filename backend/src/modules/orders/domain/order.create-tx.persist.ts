@@ -81,6 +81,15 @@ export async function persistCreateOrderInTransaction(
       ? await buildAppliedBonusRulesSnapshotForOrder(tx, tenantId, appliedAutoBonusRuleIds)
       : [];
 
+  let workSlotId: number | null = null;
+  if (input.agent_id != null && input.agent_id > 0) {
+    const link = await tx.slotUserLink.findFirst({
+      where: { tenant_id: tenantId, user_id: input.agent_id, ended_at: null },
+      select: { slot_id: true }
+    });
+    workSlotId = link?.slot_id ?? null;
+  }
+
   const created = await tx.order.create({
     data: {
       tenant_id: tenantId,
@@ -88,6 +97,7 @@ export async function persistCreateOrderInTransaction(
       client_id: input.client_id,
       warehouse_id: input.warehouse_id,
       agent_id: input.agent_id ?? null,
+      work_slot_id: workSlotId,
       expeditor_user_id: expeditorUserId,
       order_type: orderType,
       status: statusForType,

@@ -17,7 +17,10 @@ import { formatApkVersion, formatDeviceName } from "@/lib/mobile-device-display"
 import { cn } from "@/lib/utils";
 
 export function StaffKomandaFioCell(
-  props: PersonNameParts & { kpiColor?: string | null }
+  props: PersonNameParts & {
+    kpiColor?: string | null;
+    face?: { tenantSlug: string; userId: number } | null;
+  }
 ) {
   return (
     <StaffFioCell
@@ -26,6 +29,7 @@ export function StaffKomandaFioCell(
       middle_name={props.middle_name}
       fio={props.fio}
       kpiColor={props.kpiColor}
+      face={props.face}
       showAvatar
     />
   );

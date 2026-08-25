@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
+import '../../auth/biometric_quick_login_tile.dart';
 
 /// «Настройки» — ekspeditor. Veb «Конфигурации» bilan to'liq bog'langan:
 /// barcha qiymatlar `session.mobileConfig` (serverdan sinxron) dan o'qiladi,
@@ -48,6 +49,11 @@ class ExpeditorSettingsPage extends ConsumerWidget {
                 onTap: () => _pickLocale(context, ref, prefs),
               ),
             ]),
+            AgentSurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: BiometricQuickLoginTile(accentColor: AppColors.expeditorAccent),
+            ),
+            const SizedBox(height: 12),
             _group('ЗАКАЗ', [
               _ToggleRow(
                 label: 'Показывать предложение о бонусе',
@@ -94,7 +100,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
             ]),
             _group('НАКЛАДНЫЕ', [
               _ToggleRow(
-                label: 'Отпечаток при подтверждении',
+                label: 'Face ID / отпечаток при важных действиях',
                 value:
                     cfg?.expeditor?.fingerprintRequiredForShipmentConfirm ??
                         false,

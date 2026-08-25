@@ -28,7 +28,12 @@ import {
   UserRoundX
 } from "lucide-react";
 import Link from "next/link";
-import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { useRouter } from "next/navigation";
+import {
+  goToStaffWorkplaceConfig,
+  NeedWorkSlotDialog,
+  WorkplaceMovedNotice
+} from "@/components/staff/workplace-moved-notice";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
@@ -94,6 +99,8 @@ type WebStaffRow = {
   max_sessions: number;
   warehouses: Array<{ id: number; name: string }>;
   warehouse_staff_entitlements: Record<string, boolean>;
+  work_slot_id?: number | null;
+  work_slot_code?: string | null;
 };
 
 type FilterOptions = { branches: string[]; positions: string[]; position_presets: string[] };
@@ -217,6 +224,7 @@ type Props = { tenantSlug: string };
 
 export function SkladchikWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
+  const router = useRouter();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
   const [filterBranch, setFilterBranch] = useState("");
@@ -239,7 +247,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
   const [page, setPage] = useState(1);
   const [sessionRow, setSessionRow] = useState<WebStaffRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [configRow, setConfigRow] = useState<WebStaffRow | null>(null);
+  const [needSlotOpen, setNeedSlotOpen] = useState(false);
 
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
@@ -608,7 +616,12 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Конфигурации" onClick={() => setConfigRow(r)}>
+              <AgentIconButton
+                title="Конфигурации"
+                onClick={() =>
+                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
+                }
+              >
                 <Settings className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Активные сессии" onClick={() => setSessionRow(r)}>
@@ -733,13 +746,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <SkladchikConfigModal
-        row={configRow}
-        open={configRow != null}
-        onOpenChange={(o) => {
-          if (!o) setConfigRow(null);
-        }}
-      />
+      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <Dialog
         open={bulkRevokeOpen}
@@ -1133,38 +1140,6 @@ function SkladchikCreateModal({
             }}
           >
             {createMut.isPending ? "…" : "Добавить"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SkladchikConfigModal({
-  row,
-  open,
-  onOpenChange
-}: {
-  row: WebStaffRow | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  if (!row) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Конфигурации</DialogTitle>
-          <p className="text-sm text-muted-foreground">{row.fio}</p>
-        </DialogHeader>
-        <WorkplaceMovedNotice />
-        <p className="text-sm text-muted-foreground">
-          Разрешения панели складчика настраиваются на рабочем месте типа «skladchik».
-        </p>
-        <DialogFooter>
-          <Button type="button" onClick={() => onOpenChange(false)}>
-            Закрыть
           </Button>
         </DialogFooter>
       </DialogContent>

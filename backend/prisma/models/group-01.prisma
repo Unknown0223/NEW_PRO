@@ -92,6 +92,8 @@ model Tenant {
   sales_kpi_plan_targets        SalesKpiPlanTarget[]
   job_logs                      JobLog[]
   agent_consignment_month_status AgentConsignmentMonthStatus[]
+  face_verification_logs        FaceVerificationLog[]
+  face_verification_daily_states FaceVerificationDailyState[]
 
   @@map("tenants")
 }
@@ -247,6 +249,8 @@ model User {
   sales_kpi_plan_targets              SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetUser")
   sales_kpi_plan_targets_edited       SalesKpiPlanTarget[] @relation("SalesKpiPlanTargetEditor")
   consignment_month_status            AgentConsignmentMonthStatus[]
+  face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
+  face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])

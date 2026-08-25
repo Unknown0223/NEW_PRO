@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../config/supervisor_config_enforcement.dart';
@@ -7,7 +9,8 @@ import 'supervisor_api_parse.dart';
 
 /// Agent vizit hisoboti + config checklist.
 Future<void> showSupervisorVisitDetailSheet(
-  BuildContext context, {
+  BuildContext context,
+  WidgetRef ref, {
   required SupervisorVisitAgentRow row,
   required SupervisorConfigPolicy policy,
 }) {
@@ -68,7 +71,14 @@ Future<void> showSupervisorVisitDetailSheet(
                   ],
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      final ok = await FaceVerificationFlow.ensure(
+                        context,
+                        ref,
+                        verifyContext: 'territory_check',
+                        title: 'Проверка лица супервайзера',
+                      );
+                      if (!ok || !context.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Tekshiruv qayd etildi')),

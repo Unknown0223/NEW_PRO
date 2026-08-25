@@ -60,12 +60,16 @@ import {
   resolveLoginForPatch
 } from "./staff.shared";
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
+import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
+
 export async function applyAgentPatchInDb(
   tenantId: number,
   agentId: number,
   input: PatchAgentInput,
   actorUserId: number | null = null
 ): Promise<void> {
+  await assertWorkplaceStaffPatchAllowed(agentId, input as Record<string, unknown>);
+
   const existing = await prisma.user.findFirst({
     where: { id: agentId, tenant_id: tenantId, role: "agent" }
   });
@@ -220,7 +224,7 @@ export async function applyAgentPatchInDb(
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
     if (input.password.length < 6) throw new Error("BAD_PASSWORD");
-    data.password_hash = await bcrypt.hash(input.password, 10);
+    data.password_hash = await bcrypt.hash(input.password, 12);
   }
 
   if (Object.keys(data).length > 0) {

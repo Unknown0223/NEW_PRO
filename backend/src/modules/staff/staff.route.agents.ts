@@ -237,6 +237,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
           );
         }
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Настройки места меняются в «Рабочее место», не в карточке сотрудника"
+          );
+        }
         if (msg === "BAD_RETURN_WAREHOUSE") return sendApiError(reply, request, 400, "BadReturnWarehouse");
         if (msg === "BAD_TRADE_DIRECTION") return sendApiError(reply, request, 400, "BadTradeDirection");
         if (msg === "BAD_PASSWORD") return sendApiError(reply, request, 400, "BadPassword");
@@ -286,6 +295,15 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
         if (msg === "BAD_CLOSE_HOUR") return sendApiError(reply, request, 400, "BadCloseHour");
         if (msg === "BAD_CLOSE_MINUTE") return sendApiError(reply, request, 400, "BadCloseMinute");
         if (msg === "BAD_MOBILE_CONFIG_PATCH") return sendApiError(reply, request, 400, "BadMobileConfigPatch");
+        if (msg === "WORKPLACE_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "WorkplaceOnSlot",
+            "Workplace fields are managed on the work slot. Open Рабочее место → Конфигурация."
+          );
+        }
         if (msg === "BAD_MOBILE_CONFIG_SYNC_WINDOW") {
           return sendApiError(reply, request, 400, "BadMobileConfigSyncWindow");
         }

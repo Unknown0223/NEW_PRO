@@ -47,6 +47,9 @@ export type WorkSlotRow = {
   active_since: string | null;
   created_at: string;
   updated_at: string;
+  active_user_has_face_reference?: boolean;
+  /** Faol xodim yuz etalon rasmi bor — web `/staff/users/{id}/face-reference` */
+  active_user_face_user_id?: number | null;
 };
 
 export type SlotHistoryRow = {

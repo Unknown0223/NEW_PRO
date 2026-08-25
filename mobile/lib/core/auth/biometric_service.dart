@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
 
 /// Biometric service — telefon qulfida ishlatiladigan barmoq izi / Face ID.
 class BiometricService {
@@ -39,8 +40,14 @@ class BiometricService {
         authMessages: const [
           AndroidAuthMessages(
             signInTitle: 'Sales Arena',
-            biometricHint: 'Barmoq izini skanerlang',
-            cancelButton: 'Bekor qilish',
+            biometricHint: 'Подтвердите отпечаток',
+            cancelButton: 'Отмена',
+          ),
+          IOSAuthMessages(
+            cancelButton: 'Отмена',
+            goToSettingsButton: 'Настройки',
+            goToSettingsDescription: 'Включите Face ID или Touch ID в настройках телефона.',
+            lockOut: 'Биометрия временно недоступна',
           ),
         ],
         options: AuthenticationOptions(
@@ -71,7 +78,10 @@ class BiometricService {
 
   /// UI matni: «отпечаток пальца», «Face ID» yoki ikkalasi.
   Future<String> getBiometricLabel({String locale = 'ru'}) async {
-    final types = await getBiometricTypes();
+    return labelForTypes(await getBiometricTypes(), locale: locale);
+  }
+
+  static String labelForTypes(List<BiometricType> types, {String locale = 'ru'}) {
     final hasFace = types.contains(BiometricType.face) || types.contains(BiometricType.iris);
     final hasFinger = types.contains(BiometricType.fingerprint);
     final hasStrong = types.contains(BiometricType.strong) || types.contains(BiometricType.weak);

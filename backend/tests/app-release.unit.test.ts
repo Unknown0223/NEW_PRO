@@ -76,4 +76,23 @@ describe("app-release.service", () => {
     expect(block.required).toBe(false);
     expect(block.optional).toBe(true);
   });
+
+  it("resolveAppUpdateBlock stays optional when force_update is off and above min", () => {
+    const block = resolveAppUpdateBlock(
+      "3.1.10",
+      {
+        min_version: "3.1.0",
+        latest_version: "3.1.21",
+        force_update: false,
+        download_url: "https://example.com/app.apk",
+        store_url_android: null,
+        store_url_ios: null,
+        release_notes: "Soft OTA"
+      },
+      "android"
+    );
+    expect(block.required).toBe(false);
+    expect(block.optional).toBe(true);
+    expect(block.apk_url).toContain("app.apk");
+  });
 });

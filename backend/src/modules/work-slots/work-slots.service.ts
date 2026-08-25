@@ -105,7 +105,6 @@ export async function patchWorkSlot(
   tenantId: number,
   slotId: number,
   body: {
-    slot_code?: string;
     label?: string | null;
     branch_code?: string | null;
     direction_id?: number | null;
@@ -122,11 +121,6 @@ export async function patchWorkSlot(
   });
   if (!existing) throw new Error("NOT_FOUND");
 
-  if (body.slot_code !== undefined) {
-    const code = body.slot_code.trim().toUpperCase();
-    if (!code || !/^[A-Z0-9-]{1,32}$/.test(code)) throw new Error("BAD_CODE");
-  }
-
   if (body.direction_id !== undefined && body.direction_id != null) {
     const dir = await prisma.tradeDirection.findFirst({
       where: { id: body.direction_id, tenant_id: tenantId },
@@ -136,7 +130,6 @@ export async function patchWorkSlot(
   }
 
   const slotData: Prisma.WorkSlotUpdateInput = {
-    ...(body.slot_code !== undefined ? { slot_code: body.slot_code.trim().toUpperCase() } : {}),
     ...(body.label !== undefined ? { label: body.label?.trim() || null } : {}),
     ...(body.branch_code !== undefined ? { branch_code: body.branch_code?.trim() || null } : {}),
     ...(body.direction_id !== undefined ? { direction_id: body.direction_id } : {}),
@@ -438,9 +431,8 @@ export async function bulkPatchWorkSlots(
             !Array.isArray(entitlementsPatch)
               ? (entitlementsPatch as Record<string, unknown>)
               : {};
-          delete prev.mobile_config;
+          // mobile_config joy manbasi — bulk merge saqlaydi (next ustun).
           const merged = { ...prev, ...next };
-          delete merged.mobile_config;
           entitlementsPatch = merged;
         }
 

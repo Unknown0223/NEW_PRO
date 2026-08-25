@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/expeditor_api.dart';
-import '../../../core/auth/biometric_service.dart';
+import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -25,13 +25,13 @@ class _ExpeditorInvoiceDetailPageState
   bool _busy = false;
 
   Future<void> _confirm(ExpeditorConfigPolicy policy) async {
-    if (policy.fingerprintRequired) {
-      final bio = ref.read(biometricServiceProvider);
-      if (!await bio.isAvailable() ||
-          !await bio.authenticate(reason: 'Подтвердите отгрузку')) {
-        return;
-      }
-    }
+    final ok = await BiometricTransactionConfirm.confirm(
+      ref,
+      context: context,
+      required: policy.fingerprintRequired,
+      reason: 'Подтвердите отгрузку',
+    );
+    if (!ok) return;
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) return;
     setState(() => _busy = true);

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { registerMobileFaceRoutes } from "./mobile.route.face";
 import { registerMobilePaymentRoutes } from "./mobile.route.payments";
 import { registerMobilePhotoRoutes } from "./mobile.route.photos";
 import { registerMobileProfileRoutes } from "./mobile.route.profile";
@@ -7,6 +8,7 @@ import { registerMobileSyncRoutes } from "./mobile.route.sync";
 
 export async function registerMobileCommonRoutes(app: FastifyInstance) {
   await registerMobileProfileRoutes(app);
+  await registerMobileFaceRoutes(app);
   await registerMobileSyncRoutes(app);
   await registerMobilePhotoRoutes(app);
   await registerMobilePaymentRoutes(app);

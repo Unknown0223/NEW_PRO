@@ -20,6 +20,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo Tayyor: agentlar ilova ichida yangilash dialogini oladi.
+echo Tayyor: agentlar ixtiyoriy yangilash dialogini oladi (Обновить / Позже).
+echo Majburiy kerak bo'lsa: upload-mobile-apk-prod.ps1 -ForceUpdate
 echo.
 endlocal
