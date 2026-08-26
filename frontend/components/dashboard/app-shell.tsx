@@ -3,6 +3,7 @@
 import { OrderSseListener } from "@/components/dashboard/order-sse-listener";
 import { SalesArenaLogo } from "@/components/brand/sales-arena-logo";
 import {
+  ALL_DASHBOARD_NAV_PATHS,
   dashboardClientsNav,
   dashboardHomeNav,
   dashboardInvoicesNav,
@@ -83,12 +84,47 @@ const NAV_ACTIVE_EXACT_ONLY = new Set([
   "/reports/gps" // Jadval hisobot ≠ /reports/gps/map (header GPS)
 ]);
 
+/**
+ * Pastki «Настройки» — faqat haqiqiy sozlamalar sahifalarida sariq.
+ * Пользователи/Касса ichidagi `/settings/spravochnik/*`, cash-desks, payroll va h.k. da yoqilmasin.
+ */
+function isSettingsRootNavActive(pathname: string): boolean {
+  const raw = pathname.split("?")[0] ?? "";
+  const path = raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  if (path === "/settings") return true;
+  if (!path.startsWith("/settings/")) return false;
+  if (path.startsWith("/settings/spravochnik")) return false;
+  if (path.startsWith("/settings/cash-desks")) return false;
+  if (path.startsWith("/settings/payroll")) return false;
+  if (path.startsWith("/settings/reasons/task-types")) return false;
+  return true;
+}
+
+function normalizeNavPathname(pathname: string): string {
+  const raw = pathname.split("?")[0] ?? "";
+  return raw.length > 1 && raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+function pathMatchesNavHref(path: string, hrefPath: string): boolean {
+  return path === hrefPath || path.startsWith(`${hrefPath}/`);
+}
+
 function isNavActive(pathname: string, href: string): boolean {
   const pathOnly = href.split("?")[0] ?? href;
-  if (NAV_ACTIVE_EXACT_ONLY.has(pathOnly)) {
-    return pathname === pathOnly || pathname === `${pathOnly}/`;
+  if (pathOnly === "/settings") {
+    return isSettingsRootNavActive(pathname);
   }
-  return pathname === pathOnly || pathname.startsWith(`${pathOnly}/`);
+  const path = normalizeNavPathname(pathname);
+  if (NAV_ACTIVE_EXACT_ONLY.has(pathOnly)) {
+    return path === pathOnly;
+  }
+  if (!pathMatchesNavHref(path, pathOnly)) return false;
+  // Aniqroq (uzunroq) menyu bandi shu URL ni egallasa — qisqa ota active emas
+  for (const other of ALL_DASHBOARD_NAV_PATHS) {
+    if (other === pathOnly || other.length <= pathOnly.length) continue;
+    if (pathMatchesNavHref(path, other)) return false;
+  }
+  return true;
 }
 
 /** Заявки: `/orders?status=…`, `/returns/new?…` va boshqalar */
@@ -117,7 +153,7 @@ function orderNavItemActive(pathname: string, searchParams: URLSearchParams, hre
   }
 
   if (pathPart === "/settings") {
-    return pathname === "/settings" || pathname.startsWith("/settings/");
+    return isSettingsRootNavActive(pathname);
   }
 
   if (qs) {
@@ -129,7 +165,7 @@ function orderNavItemActive(pathname: string, searchParams: URLSearchParams, hre
     return true;
   }
 
-  return pathname === pathPart || pathname.startsWith(`${pathPart}/`);
+  return isNavActive(pathname, pathPart);
 }
 
 /** Bir xil queryKey uchun eski keshda `Set` ham bo‘lishi mumkin — `string[]` / `Set` → `Set`. */

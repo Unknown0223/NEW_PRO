@@ -15,6 +15,7 @@ import {
 } from "@/components/staff/agent-workspace-template-ui";
 import type { AgentRow } from "@/components/staff/agents-workspace";
 import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 function randomPassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -330,11 +331,12 @@ export function AgentFormModal({
                 </div>
               </AgentFormField>
               <AgentFormField label="Должность">
-                <input
+                <StaffPositionSelect
+                  tenantSlug={tenantSlug}
                   value={position}
-                  onChange={(e) => setPos(e.target.value)}
+                  onChange={setPos}
+                  roleFilter="agent"
                   className={agentModalInputClass}
-                  placeholder="Торговый представитель"
                 />
               </AgentFormField>
               {formErr ? (

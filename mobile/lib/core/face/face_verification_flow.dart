@@ -85,6 +85,17 @@ class FaceVerificationFlow {
     );
   }
 
+  /// Face yoqilgan va bugun hali tasdiqlanmagan — UI bloklash uchun.
+  static Future<bool> isDailyLoginBlocking(WidgetRef ref) async {
+    final slug = ref.read(sessionProvider).tenantSlug ?? '';
+    if (slug.isEmpty) return false;
+    final misc = ref.read(sessionProvider).mobileConfig?.misc;
+    if (misc?.faceVerificationEnabled != true) return false;
+    if (misc?.faceVerificationDailyLogin == false) return false;
+    final status = await ref.read(faceVerificationApiProvider).getStatus(slug);
+    return status.needsDailyLogin;
+  }
+
   static Future<bool> _captureReference(
     BuildContext context,
     WidgetRef ref,

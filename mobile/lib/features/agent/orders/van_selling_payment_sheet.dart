@@ -9,6 +9,7 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/config/order_config_policy.dart';
 import '../../../core/config/security_config_policy.dart';
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 
@@ -138,6 +139,16 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
         reason: 'Подтвердите приём оплаты',
       );
       if (!confirmed) return;
+      if (!await FaceVerificationFlow.ensure(
+        context,
+        ref,
+        verifyContext: 'payment_accept',
+        orderId: widget.orderId,
+        clientId: widget.clientId,
+        title: 'Подтверждение лица при приёме оплаты',
+      )) {
+        return;
+      }
       await ref.read(mobileApiProvider).postOrderCashIn(
         slug,
         clientId: widget.clientId,

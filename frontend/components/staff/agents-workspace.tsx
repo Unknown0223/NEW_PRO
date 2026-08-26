@@ -682,7 +682,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         open={bulkEditOpen}
         count={selectedIds.size}
         loading={bulkEditMut.isPending}
-        positions={filterOptQ.data?.positions ?? []}
+        tenantSlug={tenantSlug}
         onClose={() => setBulkEditOpen(false)}
         onSave={async (fields) => {
           await bulkEditMut.mutateAsync(fields);

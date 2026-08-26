@@ -64,6 +64,9 @@ import {
   StaffKomandaTerritoryCell,
   StaffKomandaWarehouseCell
 } from "@/components/staff/staff-komanda-table-cells";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
+
+const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 export type ExpeditorAssignmentRules = {
   price_types?: string[];
@@ -702,6 +705,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           setAddOpen(o);
           if (!o) setCreateExpeditorError(null);
         }}
+        tenantSlug={tenantSlug}
         loading={createMut.isPending}
         submitError={createExpeditorError}
         onSubmit={(body) => {
@@ -857,12 +861,14 @@ function mergeTerritorySelectOptions(current: string, base: string[]): string[] 
 function AgentAddDialog({
   open,
   onOpenChange,
+  tenantSlug,
   loading,
   submitError,
   onSubmit
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  tenantSlug: string;
   loading: boolean;
   submitError: string | null;
   onSubmit: (body: Record<string, unknown>) => void;
@@ -926,7 +932,22 @@ function AgentAddDialog({
               <option value="Водитель">Водитель</option>
             </select>
           </label>
-          <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            Должность
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
+              value={position}
+              onChange={setPos}
+              roleFilter="expeditor"
+            />
+            <span className="text-[11px] leading-snug">
+              Шаблоны:{" "}
+              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
+                Должности
+              </Link>
+              .
+            </span>
+          </label>
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
@@ -1090,7 +1111,22 @@ function AgentEditDialog({
           <Input placeholder="Должность / тип" value={agent_type} onChange={(e) => setAgentType(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Должность" value={position} onChange={(e) => setPos(e.target.value)} />
+          <label className="grid gap-1 text-xs text-muted-foreground">
+            Должность
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
+              value={position}
+              onChange={setPos}
+              roleFilter="expeditor"
+            />
+            <span className="text-[11px] leading-snug">
+              Шаблоны:{" "}
+              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
+                Должности
+              </Link>
+              .
+            </span>
+          </label>
           <Input
             placeholder="Логин *"
             value={login}

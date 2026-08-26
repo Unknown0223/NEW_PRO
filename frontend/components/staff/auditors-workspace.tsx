@@ -25,6 +25,8 @@ import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessi
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
+import Link from "next/link";
 import {
   StaffFilterSelect,
   StaffWorkspaceFilterPanel,
@@ -533,9 +535,15 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onConfirm={bulk.handleConfirmBulk}
       />
 
-      <AuditorEditDialog row={editRow} onClose={() => setEditRow(null)} onPatch={(id, body) => patchMut.mutateAsync({ id, body })} />
+      <AuditorEditDialog
+        row={editRow}
+        tenantSlug={tenantSlug}
+        onClose={() => setEditRow(null)}
+        onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
+      />
       <AuditorAddDialog
         open={addOpen}
+        tenantSlug={tenantSlug}
         onOpenChange={(o) => {
           setAddOpen(o);
           if (!o) setCreateError(null);
@@ -603,10 +611,12 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
 
 function AuditorEditDialog({
   row,
+  tenantSlug,
   onClose,
   onPatch
 }: {
   row: AuditorRow | null;
+  tenantSlug: string;
   onClose: () => void;
   onPatch: (id: number, body: Record<string, unknown>) => Promise<unknown>;
 }) {
@@ -647,7 +657,22 @@ function AuditorEditDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">
+            Должность
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
+              value={position}
+              onChange={setPosition}
+              roleFilter="auditor"
+            />
+            <span className="text-[11px] leading-snug">
+              Шаблоны:{" "}
+              <Link href="/settings/web-staff-position-presets" className="text-primary underline underline-offset-2">
+                Должности
+              </Link>
+              .
+            </span>
+          </label>
           <Input
             className="font-mono sm:col-span-2"
             placeholder="Логин *"
@@ -692,12 +717,14 @@ function AuditorEditDialog({
 function AuditorAddDialog({
   open,
   onOpenChange,
+  tenantSlug,
   loading,
   submitError,
   onSubmit
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tenantSlug: string;
   loading: boolean;
   submitError: string | null;
   onSubmit: (body: Record<string, unknown>) => void;
@@ -728,7 +755,22 @@ function AuditorAddDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <Input placeholder="Должность" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">
+            Должность
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
+              value={position}
+              onChange={setPosition}
+              roleFilter="auditor"
+            />
+            <span className="text-[11px] leading-snug">
+              Шаблоны:{" "}
+              <Link href="/settings/web-staff-position-presets" className="text-primary underline underline-offset-2">
+                Должности
+              </Link>
+              .
+            </span>
+          </label>
           <Input className="font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
           <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">

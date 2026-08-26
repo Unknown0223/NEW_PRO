@@ -99,11 +99,14 @@ if ($null -ne $minVer -and $minVer -ne "") {
 } else {
   $policy.min_version = $null
 }
-$policyJson = $policy | ConvertTo-Json
+# PowerShell string Body ba'zan Content-Length nomuvofiqligiga olib keladi — UTF-8 bayt yuboramiz
+$policyJson = $policy | ConvertTo-Json -Compress
+$policyBytes = [System.Text.Encoding]::UTF8.GetBytes($policyJson)
 Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
   -Method PATCH `
   -Headers @{ Authorization = "Bearer $token" } `
-  -Body $policyJson -ContentType "application/json" | Out-Null
+  -Body $policyBytes `
+  -ContentType "application/json; charset=utf-8" | Out-Null
 
 Write-Host "Yuklandi: $($upload.bytes) bayt" -ForegroundColor Green
 Write-Host "latest=$LatestVersion min=$minVer force=$force" -ForegroundColor DarkGray

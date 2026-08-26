@@ -7,8 +7,6 @@ import { api } from "@/lib/api";
 import { firstMessagePerField, firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
-import { cn } from "@/lib/utils";
-import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +64,7 @@ import {
   StaffKomandaTagList,
   StaffKomandaYesNoCell
 } from "@/components/staff/staff-komanda-table-cells";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
@@ -686,7 +685,6 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
       <WebStaffEditDialog
         row={editRow}
         tenantSlug={tenantSlug}
-        filterOptions={filterOptsQ.data}
         onClose={() => setEditRow(null)}
         onDone={async () => {
           await qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
@@ -1012,7 +1010,6 @@ function SkladchikCreateModal({
   });
 
   const branches = filterOptions?.branches ?? [];
-  const positions = filterOptions?.positions ?? [];
   const tealPrimaryLocal =
     "bg-teal-600 text-white shadow-sm hover:bg-teal-700 focus-visible:ring-teal-600/40 disabled:opacity-60";
 
@@ -1084,19 +1081,19 @@ function SkladchikCreateModal({
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>
-            <FilterSelect
-              className={cn(filterSelectClassName, "h-9 w-full max-w-none")}
-              emptyLabel="—"
-              aria-label="Lavozim"
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
               value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-            >
-              {positions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </FilterSelect>
+              onChange={(v) => setForm((f) => ({ ...f, position: v }))}
+              roleFilter="skladchik"
+            />
+            <span className="text-[11px] leading-snug text-muted-foreground">
+              Shablonlar:{" "}
+              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
+                Должности
+              </Link>
+              .
+            </span>
             <FieldHint name="position" errors={fieldErrors} />
           </label>
           <WorkplaceMovedNotice />
@@ -1231,13 +1228,11 @@ function WebStaffEditDialog({
   row,
   onClose,
   tenantSlug,
-  filterOptions,
   onDone
 }: {
   row: WebStaffRow | null;
   onClose: () => void;
   tenantSlug: string;
-  filterOptions: FilterOptions | undefined;
   onDone: () => void;
 }) {
   const [first_name, setFirst] = useState("");
@@ -1399,16 +1394,12 @@ function WebStaffEditDialog({
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>
-            <Input
-              list="webstaff-positions-edit"
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
               value={position}
-              onChange={(e) => setPosition(e.target.value)}
+              onChange={setPosition}
+              roleFilter="skladchik"
             />
-            <datalist id="webstaff-positions-edit">
-              {(filterOptions?.positions ?? []).map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
             <span className="text-[11px] leading-snug text-muted-foreground">
               Shablonlar ro‘yxatini{" "}
               <Link

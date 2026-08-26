@@ -90,9 +90,10 @@ export const settingsSections: SettingsSection[] = [
       {
         title: "Должности",
         slug: "dolzhnosti-osnovnye",
-        href: "/settings/catalog/osnovnye-nastroiki/dolzhnosti-osnovnye",
+        href: "/settings/web-staff-position-presets",
         status: "available",
-        requiredRoles: ["admin"] as const
+        requiredRoles: ["admin"] as const,
+        description: "Lavozimlar katalogi (rol, kod, tartib)"
       }
     ]
   },
@@ -233,7 +234,14 @@ export const settingsSections: SettingsSection[] = [
     slug: "kompaniya-personal",
     items: [
       makeItem("kompaniya-personal", "Компания", "available", 0),
-      makeItem("kompaniya-personal", "Должности веб-сотрудников", "available", 1, ["admin"] as const)
+      {
+        title: "Должности",
+        slug: "dolzhnosti-personal",
+        href: "/settings/web-staff-position-presets",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "Lavozimlar katalogi — rol, kod, tartib; xodimlar bilan bog‘langan"
+      }
     ]
   },
   {
@@ -278,6 +286,14 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/initial-setup",
         status: "available",
         requiredRoles: ["admin"] as const
+      },
+      {
+        title: "Должности",
+        slug: "dolzhnosti-sistema",
+        href: "/settings/web-staff-position-presets",
+        status: "available",
+        requiredRoles: ["admin"] as const,
+        description: "Tizim lavozimlari va rollar bog‘lanishi"
       },
       {
         title: "Tizim migratsiyasi",
@@ -328,6 +344,9 @@ const existingHrefByItemTitle: Record<string, string> = {
   "должности веб сотрудников": "/settings/web-staff-position-presets",
   "lavozimlar": "/settings/web-staff-position-presets",
   "веб ходим лавозимлари": "/settings/web-staff-position-presets",
+  "dolzhnosti-sistema": "/settings/web-staff-position-presets",
+  "dolzhnosti-personal": "/settings/web-staff-position-presets",
+  "dolzhnosti-osnovnye": "/settings/web-staff-position-presets",
   "причины заявок": "/settings/reasons/request-types",
   "причины отмены оплаты": "/settings/reasons/cancel-payment-reasons",
   "примечание к заказу": "/settings/reasons/order-notes",

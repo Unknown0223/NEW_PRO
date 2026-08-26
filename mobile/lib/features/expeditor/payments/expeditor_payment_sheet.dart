@@ -6,6 +6,7 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
@@ -102,6 +103,16 @@ class _ExpeditorPaymentSheetState extends ConsumerState<ExpeditorPaymentSheet> {
       reason: 'Подтвердите оплату',
     );
     if (!confirmed) {
+      if (mounted) setState(() => _submitting = false);
+      return;
+    }
+    if (!await FaceVerificationFlow.ensure(
+      context,
+      ref,
+      verifyContext: 'payment_accept',
+      orderId: widget.orderId,
+      title: 'Подтверждение лица при оплате',
+    )) {
       if (mounted) setState(() => _submitting = false);
       return;
     }

@@ -39,6 +39,7 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { filterSelectClassName } from "@/components/ui/filter-select";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
@@ -608,7 +609,6 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
       <WebStaffEditDialog
         row={editRow}
         tenantSlug={tenantSlug}
-        filterOptions={filterOptsQ.data}
         onClose={() => setEditRow(null)}
         onDone={async () => {
           await qc.invalidateQueries({ queryKey: ["operators", tenantSlug] });
@@ -876,13 +876,11 @@ function WebStaffEditDialog({
   row,
   onClose,
   tenantSlug,
-  filterOptions,
   onDone
 }: {
   row: WebStaffRow | null;
   onClose: () => void;
   tenantSlug: string;
-  filterOptions: FilterOptions | undefined;
   onDone: () => void;
 }) {
   const [first_name, setFirst] = useState("");
@@ -984,16 +982,12 @@ function WebStaffEditDialog({
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Lavozim</span>
-            <Input
-              list="webstaff-positions-edit"
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
               value={position}
-              onChange={(e) => setPosition(e.target.value)}
+              onChange={setPosition}
+              roleFilter="operator"
             />
-            <datalist id="webstaff-positions-edit">
-              {(filterOptions?.positions ?? []).map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
             <span className="text-[11px] leading-snug text-muted-foreground">
               Shablonlar ro‘yxatini{" "}
               <Link

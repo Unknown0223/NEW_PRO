@@ -576,6 +576,10 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   return out;
 })();
 
+/** Sidebar active: eng uzun mos `path` g‘olib chiqishi uchun (prefix to‘qnashuvi). */
+export const ALL_DASHBOARD_NAV_PATHS: readonly string[] = Object.freeze(
+  [...new Set(BREADCRUMB_ENTRIES.map((e) => e.path))]
+);
 /**
  * Joriy `pathname` uchun eng aniq (eng uzun prefiksli) menyu bandini topadi.
  * Topilmasa `null` — tepa header chap qismi bo'sh qoladi.

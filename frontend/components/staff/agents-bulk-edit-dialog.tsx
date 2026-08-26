@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AgentFormField,
@@ -11,6 +12,7 @@ import {
   agentModalBtnPrimary,
   agentModalInputClass
 } from "@/components/staff/agent-workspace-template-ui";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 const AGENT_TYPE_OPTIONS = [
   { value: "Торговый представитель", label: "Торговый представитель" },
@@ -29,7 +31,7 @@ type Props = {
   open: boolean;
   count: number;
   loading: boolean;
-  positions: string[];
+  tenantSlug: string;
   onClose: () => void;
   onSave: (fields: AgentsBulkEditFields) => Promise<void>;
 };
@@ -38,7 +40,7 @@ export function AgentsBulkEditDialog({
   open,
   count,
   loading,
-  positions,
+  tenantSlug,
   onClose,
   onSave
 }: Props) {
@@ -74,18 +76,24 @@ export function AgentsBulkEditDialog({
         />
         <div className="space-y-3 px-6 py-4">
           <AgentFormField label="Должность">
-            <input
-              list="bulk-agent-positions"
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
               value={position}
-              onChange={(e) => setPosition(e.target.value)}
+              onChange={setPosition}
+              roleFilter="agent"
               className={agentModalInputClass}
-              placeholder="Не менять"
+              emptyLabel="Не менять"
             />
-            <datalist id="bulk-agent-positions">
-              {positions.map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
+            <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
+              Шаблоны:{" "}
+              <Link
+                href="/settings/web-staff-position-presets"
+                className="text-primary underline underline-offset-2"
+              >
+                Должности
+              </Link>
+              .
+            </span>
           </AgentFormField>
           <AgentFormField label="Тип агента">
             <AgentFormSelect
@@ -98,16 +106,11 @@ export function AgentsBulkEditDialog({
           {error ? <p className="text-xs text-red-600">{error}</p> : null}
         </div>
         <AgentTemplateModalFooter>
-          <button type="button" className={agentModalBtnCancel} onClick={onClose}>
+          <button type="button" className={agentModalBtnCancel} onClick={onClose} disabled={loading}>
             Отмена
           </button>
-          <button
-            type="button"
-            className={agentModalBtnPrimary}
-            disabled={loading}
-            onClick={() => void handleSave()}
-          >
-            {loading ? "Сохранение…" : "Сохранить"}
+          <button type="button" className={agentModalBtnPrimary} onClick={() => void handleSave()} disabled={loading}>
+            {loading ? "…" : "Сохранить"}
           </button>
         </AgentTemplateModalFooter>
       </DialogContent>

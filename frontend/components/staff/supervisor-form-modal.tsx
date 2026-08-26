@@ -8,12 +8,12 @@ import { STALE } from "@/lib/query-stale";
 import { messageFromSupervisorPatchError } from "@/lib/staff-api-errors";
 import {
   AgentFormField,
-  AgentFormSelect,
   agentModalInputClass,
   parseAgentFio
 } from "@/components/staff/agent-workspace-template-ui";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 
 export type SupervisorFormRow = {
@@ -208,11 +208,7 @@ export function SupervisorFormModal({
     return base.filter((a) => `${a.fio} ${a.code ?? ""} ${a.id}`.toLowerCase().includes(q));
   }, [pickableAgents, agSearch]);
 
-  const positionOptions = useMemo(() => {
-    const set = new Set(positionSuggestions.map((p) => p.trim()).filter(Boolean));
-    if (position.trim()) set.add(position.trim());
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [positionSuggestions, position]);
+  void positionSuggestions;
 
   const validate = (): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -385,24 +381,13 @@ export function SupervisorFormModal({
           </AgentFormField>
 
           <AgentFormField label="Должность">
-            {positionOptions.length === 0 ? (
-              <input
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-                className={agentModalInputClass}
-                placeholder="Должность"
-              />
-            ) : (
-              <AgentFormSelect
-                value={position}
-                onChange={setPosition}
-                emptyLabel="Должность"
-                options={positionOptions.map((p) => ({ value: p, label: p }))}
-              />
-            )}
-            {positionOptions.length === 0 ? (
-              <p className="mt-1 text-xs text-muted-foreground">Информация не найдена — введите вручную.</p>
-            ) : null}
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
+              value={position}
+              onChange={setPosition}
+              roleFilter="supervisor"
+              className={agentModalInputClass}
+            />
           </AgentFormField>
 
           <SearchableMultiSelectPanel

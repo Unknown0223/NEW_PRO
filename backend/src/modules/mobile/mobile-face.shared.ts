@@ -60,6 +60,18 @@ export function facePolicyFromMobileConfig(mc: AgentMobileConfigV1 | undefined):
   };
 }
 
+/** Keyingi buyurtma (action_count+1) checkpointmi — side-effect yo‘q. */
+export function isOrderSubmitFaceCheckpoint(input: {
+  orderActionCount: number;
+  orderVerifyCount: number;
+  maxRandomOrdersPerDay: number;
+  checkpoints: number[];
+}): boolean {
+  if (input.orderVerifyCount >= input.maxRandomOrdersPerDay) return false;
+  const nextCount = input.orderActionCount + 1;
+  return input.checkpoints.includes(nextCount);
+}
+
 export function decodeBase64Image(b64: string): { buf: Buffer; contentType: string } {
   const trimmed = b64.trim();
   let contentType = "image/jpeg";

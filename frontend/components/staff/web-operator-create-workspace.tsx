@@ -2,15 +2,14 @@
 
 import type { AxiosError } from "axios";
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { firstMessagePerField, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { withApiSupportLine } from "@/lib/error-utils";
-import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
-import { FilterSelect, filterSelectClassName } from "@/components/ui/filter-select";
+import { filterSelectClassName } from "@/components/ui/filter-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -19,6 +18,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WEB_PANEL_ACCESS_ROLE_OPTIONS } from "@/lib/distribution-roles";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 function FieldHint({ name, errors }: { name: string; errors: Record<string, string> }) {
@@ -26,8 +26,6 @@ function FieldHint({ name, errors }: { name: string; errors: Record<string, stri
   if (!t) return null;
   return <p className="text-xs text-destructive">{t}</p>;
 }
-
-type FilterOptions = { branches: string[]; positions: string[]; position_presets: string[] };
 
 type Props = {
   tenantSlug: string;
@@ -65,18 +63,6 @@ export function WebOperatorCreateWorkspace({
   });
   const [localError, setLocalError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const filterOptsQ = useQuery({
-    queryKey: ["operators", tenantSlug, "filter-options"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: FilterOptions }>(
-        `/api/${tenantSlug}/operators/meta/filter-options`
-      );
-      return data.data;
-    }
-  });
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -124,8 +110,6 @@ export function WebOperatorCreateWorkspace({
       }
     }
   });
-
-  const positions = filterOptsQ.data?.positions ?? [];
 
   const submitCreate = () => {
     setLocalError(null);
@@ -215,23 +199,16 @@ export function WebOperatorCreateWorkspace({
           </label>
           <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">Должность</span>
-            <FilterSelect
-              className={cn(filterSelectClassName, "h-10 w-full max-w-none")}
-              emptyLabel="— Не выбрано —"
-              aria-label="Должность"
+            <StaffPositionSelect
+              tenantSlug={tenantSlug}
               value={form.position}
-              onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-            >
-              {positions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </FilterSelect>
+              onChange={(v) => setForm((f) => ({ ...f, position: v }))}
+              roleFilter={form.web_access_role}
+            />
             <span className="text-[11px] leading-snug text-muted-foreground">
               Шаблоны:{" "}
               <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                настройки
+                Должности
               </Link>
               .
             </span>

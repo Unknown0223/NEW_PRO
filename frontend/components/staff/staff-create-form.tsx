@@ -12,6 +12,8 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
+import Link from "next/link";
 
 type Kind = "agent" | "expeditor" | "supervisor" | "collector" | "auditor" | "skladchik";
 
@@ -432,11 +434,22 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           </div>
         ) : null}
         <div className="flex flex-col gap-1">
-          <Input
-            placeholder="Должность"
+          <StaffPositionSelect
+            tenantSlug={tenantSlug}
             value={form.position}
-            onChange={(e) => setForm((p) => ({ ...p, position: e.target.value }))}
+            onChange={(v) => setForm((p) => ({ ...p, position: v }))}
+            roleFilter={kind}
           />
+          <span className="text-[11px] leading-snug text-muted-foreground">
+            Шаблоны:{" "}
+            <Link
+              href="/settings/web-staff-position-presets"
+              className="text-primary underline underline-offset-2"
+            >
+              Должности
+            </Link>
+            .
+          </span>
           <FieldHint name="position" errors={fieldErrors} />
         </div>
         <div className="flex flex-col gap-1">

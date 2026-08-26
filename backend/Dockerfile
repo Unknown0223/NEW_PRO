@@ -40,7 +40,8 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
 COPY shared ./shared
 COPY scripts/docker-start.sh ./scripts/docker-start.sh
-RUN chmod +x scripts/docker-start.sh
+# Windows checkout CRLF bo‘lsa ham Linux shebang ishlashi uchun
+RUN sed -i 's/\r$//' scripts/docker-start.sh && chmod +x scripts/docker-start.sh
 
 RUN mkdir -p uploads tmp && chown -R node:node /app
 

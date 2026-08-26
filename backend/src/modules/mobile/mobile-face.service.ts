@@ -16,11 +16,12 @@ import {
   readUiPrefs,
   storagePrefix,
   workRegionDateString,
+  isOrderSubmitFaceCheckpoint,
   type FaceVerifyContext
 } from "./mobile-face.shared";
 
 export type { FaceVerifyContext, FaceVerificationPolicy } from "./mobile-face.shared";
-export { facePolicyFromMobileConfig, workRegionDateString } from "./mobile-face.shared";
+export { facePolicyFromMobileConfig, workRegionDateString, isOrderSubmitFaceCheckpoint } from "./mobile-face.shared";
 export {
   deleteFaceReference,
   getFaceReferenceKey,
@@ -47,7 +48,7 @@ export function pickDailyOrderCheckpoints(userId: number, dateStr: string, max: 
   return [...set].sort((a, b) => a - b);
 }
 
-async function getOrCreateDailyState(
+export async function getOrCreateDailyState(
   tenantId: number,
   userId: number,
   dateStr: string,
@@ -91,7 +92,6 @@ export async function getFaceVerificationStatus(
     needs_daily_login:
       policy.enabled &&
       policy.dailyLogin &&
-      ref.has_reference &&
       daily != null &&
       !daily.daily_login_verified,
     order_checkpoints_today: (daily?.checkpoint_order_nos as number[]) ?? [],
@@ -132,21 +132,17 @@ export async function checkFaceVerificationRequired(
   }
 
   if (context === "order_submit") {
-    const nextCount = daily.order_action_count + 1;
-    const checkpoints = (daily.checkpoint_order_nos as number[]) ?? [];
-    const max = policy.maxRandomOrdersPerDay;
-    if (daily.order_verify_count >= max) return { required: false };
-    if (!checkpoints.includes(nextCount)) {
-      await prisma.faceVerificationDailyState.update({
-        where: { id: daily.id },
-        data: { order_action_count: nextCount }
-      });
+    // Side-effect yo‘q: count faqat buyurtma yaratilgach bump qilinadi (face gate + bumpOrderFaceActionCount).
+    if (
+      !isOrderSubmitFaceCheckpoint({
+        orderActionCount: daily.order_action_count,
+        orderVerifyCount: daily.order_verify_count,
+        maxRandomOrdersPerDay: policy.maxRandomOrdersPerDay,
+        checkpoints: (daily.checkpoint_order_nos as number[]) ?? []
+      })
+    ) {
       return { required: false };
     }
-    await prisma.faceVerificationDailyState.update({
-      where: { id: daily.id },
-      data: { order_action_count: nextCount }
-    });
     return { required: true, reason: "random_order" };
   }
 

@@ -190,12 +190,30 @@ export const bulkWebPanelMaxSessionsBody = z.object({
 });
 
 export const createWebStaffPositionPresetBody = z.object({
-  label: z.string().min(1).max(128)
+  label: z.string().min(1).max(128),
+  role: z.string().min(1).max(64).nullable().optional(),
+  code: z.string().max(20).nullable().optional(),
+  comment: z.string().max(500).nullable().optional(),
+  sort_order: z.number().int().min(0).max(99999).nullable().optional(),
+  is_active: z.boolean().optional()
 });
 
 export const patchWebStaffPositionPresetBody = z
   .object({
     label: z.string().min(1).max(128).optional(),
+    role: z.string().min(1).max(64).nullable().optional(),
+    code: z.string().max(20).nullable().optional(),
+    comment: z.string().max(500).nullable().optional(),
+    sort_order: z.number().int().min(0).max(99999).nullable().optional(),
     is_active: z.boolean().optional()
   })
-  .refine((o) => o.label !== undefined || o.is_active !== undefined, { message: "empty" });
+  .refine(
+    (o) =>
+      o.label !== undefined ||
+      o.role !== undefined ||
+      o.code !== undefined ||
+      o.comment !== undefined ||
+      o.sort_order !== undefined ||
+      o.is_active !== undefined,
+    { message: "empty" }
+  );

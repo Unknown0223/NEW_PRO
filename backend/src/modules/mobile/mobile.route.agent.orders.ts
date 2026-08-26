@@ -20,13 +20,19 @@ import {
 } from "./mobile.route.agent.schemas";
 import {
   createMobileOrder, enqueueOrder, getMobileAgentOrderDetail, getMobileOrderStock,
-  getMobileWarehouseStockView, getPendingCount, listMobileAgentOrdersHistory, syncOrders
+  getMobileWarehouseStockView, listMobileAgentOrdersHistory
 } from "./mobile.service";
 import {
   mobileAgentConfigPreHandler,
   mobileOfflineOrderPreHandler,
   parseDateLike
 } from "./mobile.route.shared";
+import {
+  assertFaceGateForAction,
+  bumpOrderFaceActionCount,
+  isFaceGateError,
+  loadMobileConfigForFaceGate
+} from "./mobile-face.guard";
 
 export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
 
@@ -138,9 +144,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 403, "ForbiddenRole");
       }
       try {
+        const mc = await loadMobileConfigForFaceGate(request.tenant!.id, userId);
+        await assertFaceGateForAction(request.tenant!.id, userId, "order_submit", mc);
         const row = await createMobileOrder(request.tenant!.id, userId, viewer.role, parsed.data);
+        await bumpOrderFaceActionCount(request.tenant!.id, userId, mc);
         return reply.status(201).send(row);
       } catch (e) {
+        if (isFaceGateError(e)) {
+          return sendApiError(reply, request, 403, e.code, e.message);
+        }
         const msg = getErrorCode(e) ?? "";
         if (msg === "PHOTO_REPORT_REQUIRED") {
           return sendApiError(reply, request, 400, "PhotoReportRequired");
@@ -366,29 +378,4 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
     }
   );
 
-  app.get(
-    "/api/:slug/mobile/orders/pending",
-    { preHandler: [...mobileOfflineOrderPreHandler] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const userId = Number(getAccessUser(request).sub);
-      const result = await getPendingCount(request.tenant!.id, userId);
-      return reply.send(result);
-    },
-  );
-
-  app.post(
-    "/api/:slug/mobile/orders/sync-flush",
-    { preHandler: [...mobileOfflineOrderPreHandler] },
-    async (request, reply) => {
-      if (!ensureTenantContext(request, reply)) return;
-      const viewer = getAccessUser(request);
-      if (viewer.role !== "agent") {
-        return sendApiError(reply, request, 403, "ForbiddenRole");
-      }
-      const userId = Number(getAccessUser(request).sub);
-      const result = await syncOrders(request.tenant!.id, userId);
-      return reply.send(result);
-    }
-  );
 }

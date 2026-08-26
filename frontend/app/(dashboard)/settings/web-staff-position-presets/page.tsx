@@ -18,7 +18,7 @@ export default function WebStaffPositionPresetsPage() {
       <div className="space-y-2">
         <p className="text-sm text-destructive">Bu bo‘lim faqat administrator uchun.</p>
         <Link href="/settings" className="text-sm text-primary underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
     );
@@ -27,18 +27,18 @@ export default function WebStaffPositionPresetsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">Veb xodim lavozimlari</h1>
+        <h1 className="text-lg font-semibold">Должности</h1>
         <Link href="/settings" className="text-sm text-primary underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Yuqoridagi yorliqlar orqali faol va nofaol ro‘yxatni almashtirasiz. Yaratish va nofaollashtirish vaqti hamda
-        kim qilgani ko‘rsatiladi. Yangi nom modaldan, tahrirlash jadvalda. Ro‘yxat{" "}
+        Lavozim nomi xodim kartasidagi «Должность» maydoniga yoziladi; «Роль» tizim roli bilan bog‘lanadi
+        (agent, ekspeditor, ofis…). Nom o‘zgartirilsa, bog‘langan xodimlar avtomatik yangilanadi. Ro‘yxat{" "}
         <Link href="/settings/spravochnik/operators" className="text-primary underline">
-          Veb xodimlar
+          Пользователи
         </Link>{" "}
-        sahifasida ham ishlatiladi.
+        va KOMANDA formalarida tanlov sifatida ishlatiladi.
       </p>
       <WebStaffPositionPresetsWorkspace tenantSlug={tenantSlug} />
     </div>
