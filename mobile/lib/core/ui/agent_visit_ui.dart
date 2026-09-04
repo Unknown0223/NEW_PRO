@@ -11,6 +11,7 @@ import '../l10n/app_strings_ru.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'agent_ui.dart';
+import 'client_photo_thumb.dart';
 
 /// Shablon Screen 7: hafta kunlari (Все + Пн–Вс).
 class AgentVisitsWeekTabs extends ConsumerWidget {
@@ -135,6 +136,8 @@ class AgentVisitOutletCard extends StatelessWidget {
   final String name;
   final String code;
   final String grade;
+  final String? visitDays;
+  final String? photoUrl;
   final double? balanceAmount;
   final bool hasDraft;
   final bool visited;
@@ -145,6 +148,8 @@ class AgentVisitOutletCard extends StatelessWidget {
     required this.name,
     required this.code,
     required this.grade,
+    this.visitDays,
+    this.photoUrl,
     this.balanceAmount,
     this.hasDraft = false,
     this.visited = false,
@@ -163,7 +168,13 @@ class AgentVisitOutletCard extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.all(13),
-              child: Column(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClientPhotoThumb(source: photoUrl, size: 52, radius: 12),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -202,10 +213,20 @@ class AgentVisitOutletCard extends StatelessWidget {
                     name,
                     style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, height: 1.2),
                   ),
+                  if (visitDays != null && visitDays!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      visitDays!,
+                      style: AppTypography.captionSmall.copyWith(color: AppColors.textMuted),
+                    ),
+                  ],
                   if (balanceAmount != null) ...[
                     const SizedBox(height: 6),
                     ClientBalanceText(amount: balanceAmount!),
                   ],
+                ],
+                    ),
+                  ),
                 ],
               ),
             ),

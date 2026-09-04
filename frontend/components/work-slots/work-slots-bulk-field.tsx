@@ -11,6 +11,8 @@ type Props = {
   mode: BulkFieldMode;
   onModeChange: (mode: BulkFieldMode) => void;
   disabled?: boolean;
+  /** false — «Очистить» tugmasi yashirin (status / slot_type). */
+  allowClear?: boolean;
   children?: ReactNode;
 };
 
@@ -20,7 +22,15 @@ const MODE_BUTTONS: { value: BulkFieldMode; label: string }[] = [
   { value: "set", label: "Задать" }
 ];
 
-export function WorkSlotsBulkField({ label, mode, onModeChange, disabled, children }: Props) {
+export function WorkSlotsBulkField({
+  label,
+  mode,
+  onModeChange,
+  disabled,
+  allowClear = true,
+  children
+}: Props) {
+  const buttons = allowClear ? MODE_BUTTONS : MODE_BUTTONS.filter((b) => b.value !== "clear");
   return (
     <div
       className={cn(
@@ -32,11 +42,14 @@ export function WorkSlotsBulkField({ label, mode, onModeChange, disabled, childr
     >
       <Label className="mb-2 block text-sm font-medium">{label}</Label>
       <div
-        className="grid w-full grid-cols-3 gap-1.5 rounded-lg border border-border/60 bg-muted/40 p-1.5"
+        className={cn(
+          "grid w-full gap-1.5 rounded-lg border border-border/60 bg-muted/40 p-1.5",
+          buttons.length === 2 ? "grid-cols-2" : "grid-cols-3"
+        )}
         role="group"
         aria-label={`${label}: режим`}
       >
-        {MODE_BUTTONS.map((b) => (
+        {buttons.map((b) => (
           <button
             key={b.value}
             type="button"

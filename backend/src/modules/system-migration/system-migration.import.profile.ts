@@ -1,7 +1,28 @@
-import type { TenantProfileDto } from "../tenant-settings/tenant-settings.types";
+import type { BranchDto, TenantProfileDto } from "../tenant-settings/tenant-settings.types";
 import { prisma } from "../../config/database";
 
+/**
+ * Backup profil patch.
+ * Filial cash_desk_id(lar)i hozircha olib tashlanadi — ular eski tenant ID;
+ * kassalar importidan keyin `remapBranchIdsInTenantSettings` qayta bog‘laydi.
+ * Aks holda assertBranchCashDeskAssignments → INVALID_BRANCH_CASH_DESK.
+ */
 export function profilePatchFromBackup(profile: TenantProfileDto) {
+  const references = profile.references
+    ? {
+        ...profile.references,
+        branches: Array.isArray(profile.references.branches)
+          ? profile.references.branches.map((b: BranchDto) => {
+              const { cash_desk_id: _c, cash_desk_ids: _cs, ...rest } = b as BranchDto & {
+                cash_desk_id?: unknown;
+                cash_desk_ids?: unknown;
+              };
+              return { ...rest, cash_desk_id: null, cash_desk_ids: [] } as BranchDto;
+            })
+          : profile.references.branches
+      }
+    : profile.references;
+
   return {
     name: profile.name,
     phone: profile.phone,
@@ -9,7 +30,7 @@ export function profilePatchFromBackup(profile: TenantProfileDto) {
     logo_url: profile.logo_url,
     feature_flags: profile.feature_flags,
     return_filter: profile.return_filter,
-    references: profile.references
+    references
   };
 }
 

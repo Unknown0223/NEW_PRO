@@ -16,8 +16,16 @@ export const ALLOWED_DUPLICATE_KEY_FIELDS = [
 
 export type AllowedDuplicateKeyField = (typeof ALLOWED_DUPLICATE_KEY_FIELDS)[number];
 
-/** Telefon/INN/PINFL majburiy emas — default: kod + shahar (filial farqi). */
-export const DEFAULT_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = ["client_code", "city"];
+/** Telefon/INN/PINFL majburiy emas — default: kod (asosiy biznes id). */
+export const DEFAULT_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = ["client_code"];
+
+/** Maslahat: eng ishonchli unikal kalitlar (UI yordam matni). */
+export const RECOMMENDED_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = [
+  "client_code",
+  "inn",
+  "client_pinfl",
+  "phone"
+];
 
 const DUP_SET = new Set<string>(ALLOWED_DUPLICATE_KEY_FIELDS);
 

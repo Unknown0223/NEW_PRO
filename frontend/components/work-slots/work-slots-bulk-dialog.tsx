@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers3, Trash2, UserMinus } from "lucide-react";
+import { Layers3, LogOut, Trash2, UserMinus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AgentFormField,
@@ -9,6 +9,11 @@ import {
   agentModalInputClass
 } from "@/components/staff/agent-workspace-template-ui";
 import { apiFetch } from "@/lib/api-client";
+import {
+  UNLIMITED_MAX_SESSIONS,
+  clampFiniteMaxSessions,
+  isUnlimitedMaxSessions
+} from "@/lib/max-sessions";
 import { messageFromWorkSlotsBulkError } from "@/lib/work-slots-bulk-errors";
 import type { WorkSlotType } from "@/lib/work-slots-types";
 import type { RefSelectOption } from "@/lib/ref-select-options";
@@ -23,7 +28,9 @@ import {
   bulkDestructiveActionsForSlotType,
   bulkFieldsForSlotType,
   buildBulkRequestBody,
+  bulkFieldAllowsClear,
   countBulkFormChanges,
+  slotLocationBindingFields,
   validateBulkForm,
   type WorkSlotsBulkDestructiveAction,
   type WorkSlotsBulkFormModes,
@@ -32,6 +39,7 @@ import {
 import {
   EMPTY_LOCATION_BULK_MODES,
   WorkSlotsLocationFields,
+  emptyLocationValues,
   type WorkSlotsLocationBulkModes,
   type WorkSlotsLocationValues
 } from "./work-slots-location-fields";
@@ -45,6 +53,8 @@ export type WorkSlotsBulkResult = {
   unassigned?: number;
   users_updated?: number;
   skipped_no_user?: number;
+  sessions_revoked?: number;
+  users_revoked?: number;
 };
 
 type PickerOpt = { id: number; name: string };
@@ -69,25 +79,7 @@ type Props = {
   onDone: (result: WorkSlotsBulkResult) => void;
 };
 
-const emptyLocation = (): WorkSlotsLocationValues => ({
-  territoryZone: "",
-  territoryOblast: "",
-  territoryCity: "",
-  territoryZoneList: [],
-  territoryOblastList: [],
-  territoryCityList: [],
-  warehouseId: null,
-  returnWarehouseId: null,
-  cashDeskId: null
-});
-
-function bindingFieldsForRole(fields: ReturnType<typeof bulkFieldsForSlotType>) {
-  const out: Array<"warehouse" | "return_warehouse" | "cash_desk"> = [];
-  if (fields.includes("warehouse_id")) out.push("warehouse");
-  if (fields.includes("return_warehouse_id")) out.push("return_warehouse");
-  if (fields.includes("cash_desk_id")) out.push("cash_desk");
-  return out;
-}
+const emptyLocation = (): WorkSlotsLocationValues => emptyLocationValues();
 
 export function WorkSlotsBulkDialog({
   open,
@@ -106,7 +98,7 @@ export function WorkSlotsBulkDialog({
 }: Props) {
   const fields = useMemo(() => bulkFieldsForSlotType(slotType), [slotType]);
   const destructiveActions = useMemo(() => bulkDestructiveActionsForSlotType(slotType), [slotType]);
-  const bindingFields = useMemo(() => bindingFieldsForRole(fields), [fields]);
+  const bindingFields = useMemo(() => slotLocationBindingFields(slotType), [slotType]);
 
   const [formModes, setFormModes] = useState<WorkSlotsBulkFormModes>(EMPTY_BULK_FORM_MODES());
   const [formValues, setFormValues] = useState<WorkSlotsBulkFormValues>({
@@ -114,13 +106,15 @@ export function WorkSlotsBulkDialog({
     branchCodeList: [],
     directionId: "",
     label: "",
-    slotType: "agent"
+    slotType: "agent",
+    maxSessions: 1
   });
   const [location, setLocation] = useState<WorkSlotsLocationValues>(emptyLocation());
   const [locationModes, setLocationModes] = useState<WorkSlotsLocationBulkModes>(EMPTY_LOCATION_BULK_MODES());
   const [destructive, setDestructive] = useState<WorkSlotsBulkDestructiveAction | null>(null);
   const [unassignConfirmed, setUnassignConfirmed] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [revokeConfirmed, setRevokeConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -143,13 +137,15 @@ export function WorkSlotsBulkDialog({
       branchCodeList: [],
       directionId: "",
       label: "",
-      slotType
+      slotType,
+      maxSessions: 1
     });
     setLocation(emptyLocation());
     setLocationModes(EMPTY_LOCATION_BULK_MODES());
     setDestructive(null);
     setUnassignConfirmed(false);
     setDeleteConfirmed(false);
+    setRevokeConfirmed(false);
     setError(null);
   }, [open, slotType]);
 
@@ -162,6 +158,10 @@ export function WorkSlotsBulkDialog({
     }
     if (destructive === "unassign" && !unassignConfirmed) {
       setError("Подтвердите снятие сотрудника");
+      return;
+    }
+    if (destructive === "revoke_sessions" && !revokeConfirmed) {
+      setError("Подтвердите завершение сессий");
       return;
     }
 
@@ -270,10 +270,12 @@ export function WorkSlotsBulkDialog({
 
   const isDelete = destructive === "delete";
   const isUnassign = destructive === "unassign";
+  const isRevoke = destructive === "revoke_sessions";
   const submitDisabled =
     selectedIds.length === 0 ||
     (isDelete && !deleteConfirmed) ||
-    (isUnassign && !unassignConfirmed);
+    (isUnassign && !unassignConfirmed) ||
+    (isRevoke && !revokeConfirmed);
 
   const submitLabel = saving
     ? "Сохранение…"
@@ -281,7 +283,9 @@ export function WorkSlotsBulkDialog({
       ? "Удалить"
       : isUnassign
         ? "Снять"
-        : "Применить";
+        : isRevoke
+          ? "Завершить сессии"
+          : "Применить";
 
   return (
     <WorkSlotFormDrawer
@@ -333,8 +337,8 @@ export function WorkSlotsBulkDialog({
       <div className="space-y-5">
         <p className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
           Для каждого поля выберите «Не менять», «Очистить» или «Задать». Можно изменить несколько
-          полей за один раз. Типы цен и консигнация — только в карточке места (групповая обработка
-          пока не поддерживается).
+          полей за один раз. Типы цен, ограничения, мобильные и спец. правила роли — через иконки на
+          нижней панели при выборе 2+ мест.
         </p>
 
         <AgentFormSection title="Поля места" icon={<Layers3 className="h-4 w-4" />}>
@@ -345,6 +349,7 @@ export function WorkSlotsBulkDialog({
                 mode={formModes.isActive}
                 onModeChange={(m) => setFormModes((prev) => ({ ...prev, isActive: m }))}
                 disabled={Boolean(destructive) || saving}
+                allowClear={bulkFieldAllowsClear("is_active")}
               >
                 <WorkSlotsMultiSelect
                   variant="bulk"
@@ -374,7 +379,7 @@ export function WorkSlotsBulkDialog({
                 disabled={Boolean(destructive) || saving}
               >
                 <p className="mb-2 text-[11px] text-muted-foreground">
-                  Несколько филиалов распределяются по местам по очереди.
+                  Несколько филиалов сохраняются на каждом выбранном месте.
                 </p>
                 <WorkSlotsMultiSelect
                   variant="bulk"
@@ -435,6 +440,7 @@ export function WorkSlotsBulkDialog({
                 mode={formModes.slotType}
                 onModeChange={(m) => setFormModes((prev) => ({ ...prev, slotType: m }))}
                 disabled={Boolean(destructive) || saving}
+                allowClear={bulkFieldAllowsClear("slot_type")}
               >
                 <WorkSlotsMultiSelect
                   variant="bulk"
@@ -448,6 +454,60 @@ export function WorkSlotsBulkDialog({
                   }}
                   disabled={Boolean(destructive) || saving}
                 />
+              </WorkSlotsBulkField>
+            ) : null}
+
+            {fields.includes("max_sessions") ? (
+              <WorkSlotsBulkField
+                label="Максимальное количество сессий"
+                mode={formModes.maxSessions}
+                onModeChange={(m) => setFormModes((prev) => ({ ...prev, maxSessions: m }))}
+                disabled={Boolean(destructive) || saving}
+                allowClear={bulkFieldAllowsClear("max_sessions")}
+              >
+                <AgentFormField label="">
+                  <input
+                    className={agentModalInputClass}
+                    inputMode="numeric"
+                    value={
+                      isUnlimitedMaxSessions(formValues.maxSessions)
+                        ? "∞"
+                        : String(formValues.maxSessions)
+                    }
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value.replace(/\D/g, ""), 10);
+                      setFormValues((prev) => ({
+                        ...prev,
+                        maxSessions: clampFiniteMaxSessions(n)
+                      }));
+                    }}
+                    placeholder="1–99"
+                    disabled={
+                      Boolean(destructive) ||
+                      saving ||
+                      isUnlimitedMaxSessions(formValues.maxSessions)
+                    }
+                  />
+                </AgentFormField>
+                <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="accent-teal-600"
+                    checked={isUnlimitedMaxSessions(formValues.maxSessions)}
+                    disabled={Boolean(destructive) || saving}
+                    onChange={(e) =>
+                      setFormValues((prev) => ({
+                        ...prev,
+                        maxSessions: e.target.checked ? UNLIMITED_MAX_SESSIONS : 1
+                      }))
+                    }
+                  />
+                  Неограниченно — для всех выбранных мест отдела
+                </label>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Применяется к сотруднику, назначенному на место. Пустые места пропускаются.
+                  0 = без лимита сессий.
+                </p>
               </WorkSlotsBulkField>
             ) : null}
           </div>
@@ -492,6 +552,7 @@ export function WorkSlotsBulkDialog({
                     setDestructive(null);
                     setUnassignConfirmed(false);
                     setDeleteConfirmed(false);
+                    setRevokeConfirmed(false);
                     setError(null);
                   }}
                 >
@@ -508,10 +569,29 @@ export function WorkSlotsBulkDialog({
                     onClick={() => {
                       setDestructive("unassign");
                       setDeleteConfirmed(false);
+                      setRevokeConfirmed(false);
                       setError(null);
                     }}
                   >
                     Снять сотрудника
+                  </button>
+                ) : null}
+                {destructiveActions.includes("revoke_sessions") ? (
+                  <button
+                    type="button"
+                    className={
+                      destructive === "revoke_sessions"
+                        ? "rounded-lg border border-teal-700 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-800"
+                        : "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                    }
+                    onClick={() => {
+                      setDestructive("revoke_sessions");
+                      setUnassignConfirmed(false);
+                      setDeleteConfirmed(false);
+                      setError(null);
+                    }}
+                  >
+                    Завершить все сессии
                   </button>
                 ) : null}
                 {destructiveActions.includes("delete") ? (
@@ -525,6 +605,7 @@ export function WorkSlotsBulkDialog({
                     onClick={() => {
                       setDestructive("delete");
                       setUnassignConfirmed(false);
+                      setRevokeConfirmed(false);
                       setError(null);
                     }}
                   >
@@ -552,6 +633,30 @@ export function WorkSlotsBulkDialog({
                     <span className="text-sm leading-snug">
                       Подтверждаю снятие с{" "}
                       <span className="font-semibold tabular-nums">{selectedIds.length}</span> мест
+                    </span>
+                  </label>
+                </div>
+              ) : null}
+
+              {isRevoke ? (
+                <div className="space-y-3 rounded-xl border border-teal-200/80 bg-teal-50/80 p-4">
+                  <div className="flex items-start gap-2 text-sm text-foreground">
+                    <LogOut className="mt-0.5 size-4 shrink-0 text-teal-700" aria-hidden />
+                    <p>
+                      У сотрудников на выбранных местах будут завершены все активные сессии
+                      (вход на устройствах потребуется заново). Пустые места пропускаются.
+                    </p>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-teal-200/60 bg-background/80 p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 rounded border-input accent-teal-600"
+                      checked={revokeConfirmed}
+                      onChange={(e) => setRevokeConfirmed(e.target.checked)}
+                    />
+                    <span className="text-sm leading-snug">
+                      Подтверждаю завершение сессий на{" "}
+                      <span className="font-semibold tabular-nums">{selectedIds.length}</span> местах
                     </span>
                   </label>
                 </div>

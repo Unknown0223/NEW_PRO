@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import type { CityTerritoryHint } from "@/lib/city-territory-hint";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -10,21 +10,23 @@ import {
 } from "./work-slots-multi-select";
 import { WorkSlotsBulkField, type BulkFieldMode } from "./work-slots-bulk-field";
 import {
-  WorkSlotsTerritoryBulkPicker,
-  WorkSlotsTerritoryCascadePicker
+  WorkSlotsTerritoryBulkPicker
 } from "./work-slots-territory-cascade-picker";
 
 export type WorkSlotsLocationValues = {
   territoryZone: string;
   territoryOblast: string;
   territoryCity: string;
-  /** Guruhli qayta ishlash: zona / viloyat / shahar — ko‘p tanlov */
+  /** Guruhli / multi: zona / viloyat / shahar — ko‘p tanlov */
   territoryZoneList: string[];
   territoryOblastList: string[];
   territoryCityList: string[];
+  /** Birinchi ombor — compat; asosiy qiymat warehouseIds */
   warehouseId: number | null;
+  warehouseIds: number[];
   returnWarehouseId: number | null;
   cashDeskId: number | null;
+  cashDeskIds: number[];
 };
 
 export type WorkSlotsLocationBulkModes = {
@@ -43,6 +45,20 @@ export const EMPTY_LOCATION_BULK_MODES = (): WorkSlotsLocationBulkModes => ({
   warehouseId: "keep",
   returnWarehouseId: "keep",
   cashDeskId: "keep"
+});
+
+export const emptyLocationValues = (): WorkSlotsLocationValues => ({
+  territoryZone: "",
+  territoryOblast: "",
+  territoryCity: "",
+  territoryZoneList: [],
+  territoryOblastList: [],
+  territoryCityList: [],
+  warehouseId: null,
+  warehouseIds: [],
+  returnWarehouseId: null,
+  cashDeskId: null,
+  cashDeskIds: []
 });
 
 type PickerOpt = { id: number; name: string };
@@ -65,8 +81,10 @@ type Props = {
   onBulkModesChange?: (patch: Partial<WorkSlotsLocationBulkModes>) => void;
   /** Guruhli qayta ishlash: faqat territoriya, faqat ombor/kassa yoki ikkalasi */
   bulkSection?: "territory" | "bindings" | "all";
-  /** Guruhli: qaysi bog‘lanish maydonlari ko‘rinsin */
+  /** Qaysi bog‘lanish maydonlari ko‘rinsin (edit + bulk) */
   bulkBindingFields?: Array<"warehouse" | "return_warehouse" | "cash_desk">;
+  /** Edit rejimida territoriya bloki */
+  showTerritory?: boolean;
   disabled?: boolean;
 };
 
@@ -125,12 +143,34 @@ export function buildBindingsPatchFromBulk(
   modes: WorkSlotsLocationBulkModes
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {};
-  if (modes.warehouseId === "clear") body.warehouse_id = null;
-  else if (modes.warehouseId === "set") body.warehouse_id = values.warehouseId;
+  if (modes.warehouseId === "clear") {
+    body.warehouse_id = null;
+    body.warehouse_ids = [];
+  } else if (modes.warehouseId === "set") {
+    const ids =
+      values.warehouseIds.length > 0
+        ? values.warehouseIds
+        : values.warehouseId != null
+          ? [values.warehouseId]
+          : [];
+    body.warehouse_ids = ids;
+    body.warehouse_id = ids[0] ?? null;
+  }
   if (modes.returnWarehouseId === "clear") body.return_warehouse_id = null;
   else if (modes.returnWarehouseId === "set") body.return_warehouse_id = values.returnWarehouseId;
-  if (modes.cashDeskId === "clear") body.cash_desk_id = null;
-  else if (modes.cashDeskId === "set") body.cash_desk_id = values.cashDeskId;
+  if (modes.cashDeskId === "clear") {
+    body.cash_desk_id = null;
+    body.cash_desk_ids = [];
+  } else if (modes.cashDeskId === "set") {
+    const ids =
+      values.cashDeskIds.length > 0
+        ? values.cashDeskIds
+        : values.cashDeskId != null
+          ? [values.cashDeskId]
+          : [];
+    body.cash_desk_ids = ids;
+    body.cash_desk_id = ids[0] ?? null;
+  }
   return body;
 }
 
@@ -168,13 +208,21 @@ export function validateBulkBindingsSet(
   values: WorkSlotsLocationValues,
   modes: WorkSlotsLocationBulkModes
 ): string | null {
-  if (modes.warehouseId === "set" && values.warehouseId == null) {
+  if (
+    modes.warehouseId === "set" &&
+    values.warehouseIds.length === 0 &&
+    values.warehouseId == null
+  ) {
     return "Склад: выберите значение";
   }
   if (modes.returnWarehouseId === "set" && values.returnWarehouseId == null) {
     return "Склад возврата: выберите значение";
   }
-  if (modes.cashDeskId === "set" && values.cashDeskId == null) {
+  if (
+    modes.cashDeskId === "set" &&
+    values.cashDeskIds.length === 0 &&
+    values.cashDeskId == null
+  ) {
     return "Касса: выберите значение";
   }
   return null;
@@ -220,6 +268,18 @@ function setCombinedTerritoryMode(
   });
 }
 
+function parseIdList(next: string[]): number[] {
+  const out: number[] = [];
+  const seen = new Set<number>();
+  for (const v of next) {
+    const n = Number.parseInt(v, 10);
+    if (!Number.isFinite(n) || n <= 0 || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
 export function WorkSlotsLocationFields({
   mode,
   values,
@@ -233,6 +293,7 @@ export function WorkSlotsLocationFields({
   onBulkModesChange,
   bulkSection = "territory",
   bulkBindingFields = ["warehouse", "cash_desk"],
+  showTerritory = true,
   disabled
 }: Props) {
   if (mode === "bulk" && bulkModes && onBulkModesChange) {
@@ -281,8 +342,8 @@ export function WorkSlotsLocationFields({
                 disabled={disabled}
               />
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Зона → область → город из дерева территорий. Выбор зоны отмечает все области и
-                города внутри. Город необязателен.
+                Несколько зон/областей/городов сохраняются на каждое выбранное место (полный список).
+                Город необязателен.
               </p>
             </WorkSlotsBulkField>
           </section>
@@ -304,14 +365,20 @@ export function WorkSlotsLocationFields({
               >
                 <WorkSlotsMultiSelect
                   variant="bulk"
-                  multiple={false}
-                  placeholder="Склад"
+                  multiple={true}
+                  placeholder="Склады"
                   items={entitiesToItems(warehouses)}
-                  selectedValues={values.warehouseId != null ? [String(values.warehouseId)] : []}
+                  selectedValues={(values.warehouseIds.length
+                    ? values.warehouseIds
+                    : values.warehouseId != null
+                      ? [values.warehouseId]
+                      : []
+                  ).map(String)}
                   onChange={(next) => {
-                    const last = next[0];
+                    const warehouseIds = parseIdList(next);
                     onChange({
-                      warehouseId: last != null && last !== "" ? Number.parseInt(last, 10) : null
+                      warehouseIds,
+                      warehouseId: warehouseIds[0] ?? null
                     });
                   }}
                   disabled={disabled}
@@ -353,14 +420,20 @@ export function WorkSlotsLocationFields({
               >
                 <WorkSlotsMultiSelect
                   variant="bulk"
-                  multiple={false}
-                  placeholder="Касса"
+                  multiple={true}
+                  placeholder="Кассы"
                   items={entitiesToItems(cashDesks)}
-                  selectedValues={values.cashDeskId != null ? [String(values.cashDeskId)] : []}
+                  selectedValues={(values.cashDeskIds.length
+                    ? values.cashDeskIds
+                    : values.cashDeskId != null
+                      ? [values.cashDeskId]
+                      : []
+                  ).map(String)}
                   onChange={(next) => {
-                    const last = next[0];
+                    const cashDeskIds = parseIdList(next);
                     onChange({
-                      cashDeskId: last != null && last !== "" ? Number.parseInt(last, 10) : null
+                      cashDeskIds,
+                      cashDeskId: cashDeskIds[0] ?? null
                     });
                   }}
                   disabled={disabled}
@@ -374,73 +447,167 @@ export function WorkSlotsLocationFields({
     );
   }
 
+  const editWarehouseIds =
+    values.warehouseIds.length > 0
+      ? values.warehouseIds
+      : values.warehouseId != null
+        ? [values.warehouseId]
+        : [];
+  const editCashDeskIds =
+    values.cashDeskIds.length > 0
+      ? values.cashDeskIds
+      : values.cashDeskId != null
+        ? [values.cashDeskId]
+        : [];
+  const showWarehouse = bulkBindingFields.includes("warehouse");
+  const showReturnWarehouse = bulkBindingFields.includes("return_warehouse");
+  const showCashDesk = bulkBindingFields.includes("cash_desk");
+  const showBindings = showWarehouse || showReturnWarehouse || showCashDesk;
+
   return (
     <div className="space-y-4">
-      <WorkSlotsTerritoryCascadePicker
-        values={{
-          zone: values.territoryZone,
-          region: values.territoryOblast,
-          city: values.territoryCity
-        }}
-        onChange={(patch) =>
-          onChange({
-            ...(patch.zone !== undefined ? { territoryZone: patch.zone } : {}),
-            ...(patch.region !== undefined ? { territoryOblast: patch.region } : {}),
-            ...(patch.city !== undefined ? { territoryCity: patch.city } : {})
-          })
-        }
-        cascade={territoryCascade}
-        cityTerritoryHints={cityTerritoryHints}
-        disabled={disabled}
-      />
+      {showTerritory ? (
+        <section className="space-y-2">
+          <WorkSlotsTerritoryBulkPicker
+            zoneList={
+              values.territoryZoneList.length
+                ? values.territoryZoneList
+                : values.territoryZone
+                  ? [values.territoryZone]
+                  : []
+            }
+            regionList={
+              values.territoryOblastList.length
+                ? values.territoryOblastList
+                : values.territoryOblast
+                  ? [values.territoryOblast]
+                  : []
+            }
+            cityList={
+              values.territoryCityList.length
+                ? values.territoryCityList
+                : values.territoryCity
+                  ? [values.territoryCity]
+                  : []
+            }
+            onZoneListChange={(territoryZoneList) =>
+              onChange({
+                territoryZoneList,
+                territoryZone: territoryZoneList[0] ?? ""
+              })
+            }
+            onRegionListChange={(territoryOblastList) =>
+              onChange({
+                territoryOblastList,
+                territoryOblast: territoryOblastList[0] ?? ""
+              })
+            }
+            onCityListChange={(territoryCityList) =>
+              onChange({
+                territoryCityList,
+                territoryCity: territoryCityList[0] ?? ""
+              })
+            }
+            onCascadeListsChange={(patch) =>
+              onChange({
+                ...patch,
+                territoryZone: patch.territoryZoneList?.[0] ?? values.territoryZone,
+                territoryOblast: patch.territoryOblastList?.[0] ?? values.territoryOblast,
+                territoryCity: patch.territoryCityList?.[0] ?? values.territoryCity
+              })
+            }
+            cascade={territoryCascade}
+            territoryNodes={territoryNodes}
+            cityTerritoryHints={cityTerritoryHints}
+            disabled={disabled}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Можно выбрать несколько территорий — все сохранятся на этом месте.
+          </p>
+        </section>
+      ) : null}
 
-      <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Wallet className="size-3.5 shrink-0" aria-hidden />
-          Привязки
-        </div>
-        <p className="text-xs text-muted-foreground">Склад и касса сотрудника на месте.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-500">
-              Склад
-            </span>
-            <WorkSlotsMultiSelect
-              variant="form"
-              multiple={false}
-              placeholder="Склад"
-              items={entitiesToItems(warehouses)}
-              selectedValues={values.warehouseId != null ? [String(values.warehouseId)] : []}
-              onChange={(next) => {
-                const last = next[0];
-                onChange({
-                  warehouseId: last != null && last !== "" ? Number.parseInt(last, 10) : null
-                });
-              }}
-              disabled={disabled}
-            />
+      {showBindings ? (
+        <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Wallet className="size-3.5 shrink-0" aria-hidden />
+            Привязки
           </div>
-          <div className="space-y-1">
-            <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-500">
-              Касса
-            </span>
-            <WorkSlotsMultiSelect
-              variant="form"
-              multiple={false}
-              placeholder="Касса"
-              items={entitiesToItems(cashDesks)}
-              selectedValues={values.cashDeskId != null ? [String(values.cashDeskId)] : []}
-              onChange={(next) => {
-                const last = next[0];
-                onChange({
-                  cashDeskId: last != null && last !== "" ? Number.parseInt(last, 10) : null
-                });
-              }}
-              disabled={disabled}
-            />
+          <p className="text-xs text-muted-foreground">
+            Склады и кассы сотрудника на месте (несколько).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {showWarehouse ? (
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                  Склад
+                </span>
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={true}
+                  placeholder="Склады"
+                  items={entitiesToItems(warehouses)}
+                  selectedValues={editWarehouseIds.map(String)}
+                  onChange={(next) => {
+                    const warehouseIds = parseIdList(next);
+                    onChange({
+                      warehouseIds,
+                      warehouseId: warehouseIds[0] ?? null
+                    });
+                  }}
+                  disabled={disabled}
+                />
+              </div>
+            ) : null}
+            {showReturnWarehouse ? (
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                  Склад возврата
+                </span>
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={false}
+                  placeholder="Склад возврата"
+                  items={entitiesToItems(warehouses)}
+                  selectedValues={
+                    values.returnWarehouseId != null ? [String(values.returnWarehouseId)] : []
+                  }
+                  onChange={(next) => {
+                    const last = next[0];
+                    onChange({
+                      returnWarehouseId:
+                        last != null && last !== "" ? Number.parseInt(last, 10) : null
+                    });
+                  }}
+                  disabled={disabled}
+                />
+              </div>
+            ) : null}
+            {showCashDesk ? (
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                  Касса
+                </span>
+                <WorkSlotsMultiSelect
+                  variant="form"
+                  multiple={true}
+                  placeholder="Кассы"
+                  items={entitiesToItems(cashDesks)}
+                  selectedValues={editCashDeskIds.map(String)}
+                  onChange={(next) => {
+                    const cashDeskIds = parseIdList(next);
+                    onChange({
+                      cashDeskIds,
+                      cashDeskId: cashDeskIds[0] ?? null
+                    });
+                  }}
+                  disabled={disabled}
+                />
+              </div>
+            ) : null}
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }

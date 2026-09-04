@@ -2,6 +2,8 @@ import type { PaymentAllocationRow } from "./payment-allocations.service";
 
 export type PaymentListRow = {
   id: number;
+  /** Ko‘rinadigan hujjat ID; yo‘q bo‘lsa UI odatda `#${id}` ishlatadi */
+  number: string | null;
   client_id: number;
   client_name: string;
   /** Yuridik nom */

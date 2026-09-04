@@ -6,10 +6,33 @@ export const WORK_SLOT_TYPES = [
   "expeditor",
   "skladchik",
   "supervisor",
-  "auditor"
+  "auditor",
+  "operator",
+  "director",
+  "sales_director",
+  "manager",
+  "regional_manager",
+  "accountant",
+  "warehouse_manager"
 ] as const;
 
 export type WorkSlotType = (typeof WORK_SLOT_TYPES)[number];
+
+export const OPERATOR_LIKE_SLOT_TYPES = [
+  "operator",
+  "director",
+  "sales_director",
+  "manager",
+  "regional_manager",
+  "accountant",
+  "warehouse_manager"
+] as const;
+
+export type OperatorLikeSlotType = (typeof OPERATOR_LIKE_SLOT_TYPES)[number];
+
+export function isOperatorLikeSlotType(value: string): value is OperatorLikeSlotType {
+  return (OPERATOR_LIKE_SLOT_TYPES as readonly string[]).includes(value);
+}
 
 export type WorkSlotEntitlements = {
   price_types?: string[];
@@ -23,6 +46,7 @@ export type WorkSlotListItem = {
   slot_code: string;
   label: string | null;
   branch_code: string | null;
+  branch_codes?: string[];
   direction_id: number | null;
   direction_name: string | null;
   slot_type: string;
@@ -31,14 +55,23 @@ export type WorkSlotListItem = {
   active_user_id: number | null;
   active_user_name: string | null;
   active_user_territory: string | null;
+  /** Occupant User fields — edited on slot main config, write-through to user. */
+  active_user_position?: string | null;
+  active_user_app_access?: boolean | null;
+  active_user_max_sessions?: number | null;
+  /** Occupant’s live (unrevoked, unexpired) session count. */
+  active_user_active_session_count?: number;
   active_territory_zone: string | null;
   active_territory_oblast: string | null;
   active_territory_city: string | null;
+  active_territories?: string[];
   active_warehouse_id: number | null;
+  active_warehouse_ids?: number[];
   active_warehouse_name: string | null;
   return_warehouse_id: number | null;
   return_warehouse_name: string | null;
   active_cash_desk_id: number | null;
+  active_cash_desk_ids?: number[];
   active_cash_desk_names: string | null;
   price_type: string | null;
   price_types: string[];
@@ -51,6 +84,7 @@ export type WorkSlotListItem = {
   consignment_close_minute: number;
   warehouse_staff_entitlements: Record<string, boolean>;
   expeditor_assignment_rules: Record<string, unknown>;
+  supervisee_agent_slot_ids?: number[];
   active_since: string | null;
   created_at: string;
   updated_at: string;
@@ -85,6 +119,8 @@ export type StaffPick = {
   id: number;
   fio: string;
   code: string | null;
+  /** operators list: actual User.role in `kind` */
+  kind?: string | null;
 };
 
 export type WorkSlotsFilters = {

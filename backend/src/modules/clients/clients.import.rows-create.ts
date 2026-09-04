@@ -5,10 +5,11 @@ import { replaceClientAgentAssignments } from "./clients.agent-assignments";
 import { appendClientAuditLogsBatch } from "./clients.audit";
 import {
   buildAgentAssignmentPatchesFromImportRow,
-  classifyImportClientDbId,
   colMapHasAgentSlots,
   type ImportStaffLookup
 } from "./clients.import.assign";
+import { classifyFlexibleImportId, MAX_CLIENT_CODE_ID_LEN } from "./clients.import.flexible-id";
+import { filterImportAgentPatchesByWorkSlot } from "./clients.import.agent-slot-gate";
 import {
   loadImportExplicitIdConflicts,
   syncClientsIdSequence
@@ -83,7 +84,14 @@ export async function importClientDataRows(
     }
   });
   const existingById = new Map(existingClients.map((c) => [c.id, c]));
+  const existingByCode = new Map<string, (typeof existingClients)[number]>();
+  for (const c of existingClients) {
+    const code = c.client_code?.trim();
+    if (code) existingByCode.set(code, c);
+  }
   const seenDuplicateKeys = new Set<string>();
+  const seenExplicitIds = new Set<number>();
+  const seenExplicitCodes = new Set<string>();
   for (const c of existingClients) {
     const k = duplicateKeyFromExistingRow(c, duplicateKeyFields);
     if (k) seenDuplicateKeys.add(k);
@@ -102,7 +110,6 @@ export async function importClientDataRows(
   );
 
   const BATCH_SIZE = 50;
-  const seenExplicitIds = new Set<number>();
   let createdWithExplicitId = false;
   const writeStarted = Date.now();
 
@@ -126,13 +133,17 @@ export async function importClientDataRows(
           }
 
           let explicitId: number | null = null;
+          let idCode: string | null = null;
           if (hasIdCol) {
-            const idParse = classifyImportClientDbId(readArrayCell(row, colIndexByKey.client_db_id));
+            const idParse = classifyFlexibleImportId(readArrayCell(row, colIndexByKey.client_db_id), {
+              maxCodeLen: MAX_CLIENT_CODE_ID_LEN,
+              label: "ИД"
+            });
             if (idParse.kind === "invalid") {
               pushErr(`Qator ${excelRow}: noto‘g‘ri id — ${idParse.detail}`);
               continue;
             }
-            if (idParse.kind === "ok") {
+            if (idParse.kind === "ok_db") {
               if (foreignIdSet.has(idParse.id)) {
                 pushErr(
                   `Qator ${excelRow}: id=${idParse.id} boshqa tenantga tegishli — cross-tenant id taqiqlangan.`
@@ -151,12 +162,21 @@ export async function importClientDataRows(
               }
               seenExplicitIds.add(idParse.id);
               explicitId = idParse.id;
+            } else if (idParse.kind === "ok_code") {
+              if (seenExplicitCodes.has(idParse.code)) {
+                pushErr(`Qator ${excelRow}: ИД/kod «${idParse.code}» faylda takrorlanmoqda.`);
+                continue;
+              }
+              seenExplicitCodes.add(idParse.code);
+              idCode = idParse.code;
+              const byCode = existingByCode.get(idParse.code);
+              if (byCode) explicitId = byCode.id;
             }
           }
 
           const nameTrimmed = nameRaw.trim();
           const built = buildImportCreateRowScalar(nameTrimmed, row, colIndexByKey, refResolver);
-          const {
+          let {
             scalarData,
             client_code,
             client_pinfl,
@@ -165,6 +185,11 @@ export async function importClientDataRows(
             phoneNormalized,
             cityNorm
           } = built;
+          /** ИД matn bo‘lsa — u client_code sifatida ustun ustidan ustunlik qiladi */
+          if (idCode) {
+            client_code = idCode;
+            scalarData = { ...scalarData, client_code: idCode };
+          }
           const existingForId = explicitId != null ? existingById.get(explicitId) : undefined;
           const isUpsertUpdate = existingForId != null;
 
@@ -193,13 +218,22 @@ export async function importClientDataRows(
                 ctx.warnings.push
               )
             : { createPatches: [], updatePatches: [], touched: false };
-          const agentPatches = assignOutcome.createPatches;
+          const agentPatches = await filterImportAgentPatchesByWorkSlot(
+            tenantId,
+            assignOutcome.createPatches,
+            { excelRow, warn: ctx.warnings.push }
+          );
 
           if (isUpsertUpdate && explicitId != null) {
             await tx.client.update({ where: { id: explicitId }, data: scalarData });
             if (agentPatches.length > 0) {
               await replaceClientAgentAssignments(tx, tenantId, explicitId, agentPatches, {
-                skipStaffDbValidation: true
+                skipStaffDbValidation: true,
+                softPreserveDebtLockedStaff: true
+              }).then((res) => {
+                for (const b of res.debtBlocks) {
+                  ctx.warnings.push(`Qator ${excelRow}: ${b.messageRu}`);
+                }
               });
             }
             batchUpdatedIds.push(explicitId);
@@ -227,11 +261,37 @@ export async function importClientDataRows(
               inn,
               city
             });
+          } else if (client_code) {
+            existingByCode.set(client_code, {
+              id: client.id,
+              name: nameTrimmed,
+              phone_normalized: phoneNormalized,
+              client_code,
+              client_pinfl,
+              inn,
+              city
+            });
+            existingById.set(client.id, {
+              id: client.id,
+              name: nameTrimmed,
+              phone_normalized: phoneNormalized,
+              client_code,
+              client_pinfl,
+              inn,
+              city
+            });
           }
 
           if (agentPatches.length > 0) {
             await replaceClientAgentAssignments(tx, tenantId, client.id, agentPatches, {
-              skipStaffDbValidation: true
+              skipStaffDbValidation: true,
+              softPreserveDebtLockedStaff: true
+            }).then((res) => {
+              for (const b of res.debtBlocks) {
+                ctx.warnings.push(
+                  `Qator ${excelRow}: ${b.messageRu}`
+                );
+              }
             });
           }
 

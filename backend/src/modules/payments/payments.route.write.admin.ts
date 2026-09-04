@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
+  batchDeletePaymentsBodySchema,
+  batchRestorePaymentsBodySchema,
   createPaymentEditGrantBodySchema,
   deletePaymentQuerySchema,
   restorePaymentBodySchema
@@ -15,12 +17,85 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
-import { deletePayment, restorePayment } from "./payments.service";
+import {
+  deletePayment,
+  deletePaymentsBatch,
+  restorePayment,
+  restorePaymentsBatch
+} from "./payments.service";
 import { createPaymentEditGrant } from "./payment-edit-grants.service";
 
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 export function registerPaymentAdminWriteRoutes(app: FastifyInstance): void {
+  app.post(
+    "/api/:slug/payments/batch-delete",
+    { preHandler: [jwtAccessVerify, requireRoles("admin")], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = batchDeletePaymentsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Invalid request body",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        for (const paymentId of parsed.data.ids) {
+          await assertDocWritableById(request, "payments", paymentId);
+        }
+        const result = await deletePaymentsBatch(
+          request.tenant!.id,
+          parsed.data.ids,
+          actorUserIdOrNull(request),
+          parsed.data.cancel_reason_ref?.trim() || null
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/payments/batch-restore",
+    { preHandler: [jwtAccessVerify, requireRoles("admin")], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = batchRestorePaymentsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Invalid request body",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      try {
+        for (const paymentId of parsed.data.ids) {
+          await assertDocWritableById(request, "payments", paymentId);
+        }
+        const result = await restorePaymentsBatch(
+          request.tenant!.id,
+          parsed.data.ids,
+          actorUserIdOrNull(request),
+          parsed.data.comment
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
   app.delete(
     "/api/:slug/payments/:id",
     { preHandler: [jwtAccessVerify, requireRoles("admin")], ...writeApiRateLimitRouteOpts },

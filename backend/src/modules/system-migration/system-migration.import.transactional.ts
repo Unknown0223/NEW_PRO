@@ -13,6 +13,7 @@ import {
   hydrateDecimals,
   readZipJson,
   remapId,
+  remapIntArray,
   stripIdTenant
 } from "./system-migration.parse";
 type ZipLike = JSZip;
@@ -80,7 +81,8 @@ export async function importTransactionalTables(
           hydrateDates(stripIdTenant(row), [
             "created_at",
             "updated_at",
-            "consignment_due_date"
+            "consignment_due_date",
+            "consignment_moved_at"
           ]),
           ["total_sum", "bonus_sum", "discount_sum"]
         );
@@ -98,6 +100,14 @@ export async function importTransactionalTables(
             agent_id: remapId(maps.user, data.agent_id) ?? null,
             warehouse_id: remapId(maps.warehouse, data.warehouse_id) ?? null,
             expeditor_user_id: remapId(maps.user, data.expeditor_user_id) ?? null,
+            work_slot_id: remapId(maps.workSlot, data.work_slot_id) ?? null,
+            consignment_moved_by_user_id:
+              remapId(maps.user, data.consignment_moved_by_user_id) ?? null,
+            applied_auto_bonus_rule_ids: remapIntArray(
+              maps.bonusRule,
+              data.applied_auto_bonus_rule_ids
+            ),
+            // warehouse_block — extended phase 3 dan keyin second-pass
             warehouse_block_id: null
           }
         });
@@ -223,7 +233,7 @@ export async function importTransactionalTables(
             ...(data as Prisma.GoodsReceiptUncheckedCreateInput),
             tenant_id: tenantId,
             warehouse_id: warehouseId,
-            supplier_id: null,
+            supplier_id: remapId(maps.supplier, data.supplier_id) ?? null,
             created_by_user_id: remapId(maps.user, data.created_by_user_id) ?? null,
             deleted_by_user_id: remapId(maps.user, data.deleted_by_user_id) ?? null
           }

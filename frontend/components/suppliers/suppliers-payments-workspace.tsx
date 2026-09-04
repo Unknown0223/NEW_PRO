@@ -17,6 +17,7 @@ import {
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
@@ -114,6 +115,7 @@ export function SuppliersPaymentsWorkspace() {
   const role = useEffectiveRole();
   const qc = useQueryClient();
   const isAdmin = isAdminOrOperatorLikeRole(role);
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const prefs = useUserTablePrefs({
     tenantSlug,
@@ -434,14 +436,23 @@ export function SuppliersPaymentsWorkspace() {
             size="icon-sm"
             title="Сторно"
             onClick={() => {
-              if (window.confirm("Сторнировать оплату? Средства вернутся в кассу.")) reverseMut.mutate(r.id);
+              void (async () => {
+                const ok = await confirm({
+                  title: "Сторно",
+                  message: "Сторнировать оплату? Средства вернутся в кассу.",
+                  confirmLabel: "Да",
+                  cancelLabel: "Нет",
+                  destructive: true
+                });
+                if (ok) reverseMut.mutate(r.id);
+              })();
             }}
           >
             <RotateCcw className="size-3.5" />
           </Button>
         ) : null
     }),
-    [isAdmin, reverseMut]
+    [isAdmin, reverseMut, confirm]
   );
 
   if (!hydrated) {
@@ -881,6 +892,7 @@ export function SuppliersPaymentsWorkspace() {
           </div>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </PageShell>
   );
 }

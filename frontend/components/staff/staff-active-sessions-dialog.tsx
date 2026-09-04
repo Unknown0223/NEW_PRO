@@ -7,6 +7,11 @@ import { LogOut } from "lucide-react";
 import { api } from "@/lib/api";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
+import {
+  UNLIMITED_MAX_SESSIONS,
+  clampFiniteMaxSessions,
+  isUnlimitedMaxSessions
+} from "@/lib/max-sessions";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +23,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { slotTypeLabel } from "@/components/work-slots/work-slots-utils";
 
 export type StaffSessionsKind = "agent" | "supervisor" | "expeditor" | "collector" | "auditor" | "operator" | "skladchik";
 
@@ -70,6 +76,9 @@ type Props = {
   onPatched: () => void;
   /** DialogContent qo‘shimcha klasslari (masalan keng modal) */
   contentClassName?: string;
+  /** Ishchi o‘rni — sessiyalar work-slots API orqali (operators admin-only emas). */
+  slotId?: number | null;
+  slotType?: string | null;
 };
 
 /**
@@ -83,39 +92,52 @@ export function StaffActiveSessionsDialog({
   userId,
   maxSessions,
   onPatched,
-  contentClassName
+  contentClassName,
+  slotId = null,
+  slotType = null
 }: Props) {
   const [maxDraft, setMaxDraft] = useState(1);
+  const [applyToDepartment, setApplyToDepartment] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState<string | null>(null);
   const seg = segment(staffKind);
+  const unlimited = isUnlimitedMaxSessions(maxDraft);
+  const useSlotApi = slotId != null && slotId > 0;
 
   const sessionsQ = useQuery({
-    queryKey: ["staff-active-sessions", tenantSlug, staffKind, userId],
-    enabled: open && userId != null,
+    queryKey: ["staff-active-sessions", tenantSlug, staffKind, userId, slotId],
+    enabled: open && (useSlotApi || userId != null),
     staleTime: STALE.live,
     queryFn: async () => {
-      const { data } = await api.get<{ data: SessionRow[] }>(
-        `/api/${tenantSlug}/${seg}/${userId}/sessions`
-      );
+      const url = useSlotApi
+        ? `/api/${tenantSlug}/work-slots/${slotId}/sessions`
+        : `/api/${tenantSlug}/${seg}/${userId}/sessions`;
+      const { data } = await api.get<{ data: SessionRow[] }>(url);
       return data.data;
     }
   });
 
   useEffect(() => {
-    if (open && userId != null) {
-      setMaxDraft(maxSessions);
+    if (open && (useSlotApi || userId != null)) {
+      setMaxDraft(isUnlimitedMaxSessions(maxSessions) ? UNLIMITED_MAX_SESSIONS : clampFiniteMaxSessions(maxSessions));
+      setApplyToDepartment(false);
       setSelected(new Set());
       setActionError(null);
+      setSaveOk(null);
     }
-  }, [open, userId, maxSessions]);
+  }, [open, userId, maxSessions, useSlotApi]);
 
   const revokeMut = useMutation({
     mutationFn: async (body: { all?: true; token_ids?: number[] }) => {
-      await api.post(`/api/${tenantSlug}/${seg}/${userId}/sessions/revoke`, body);
+      const url = useSlotApi
+        ? `/api/${tenantSlug}/work-slots/${slotId}/sessions/revoke`
+        : `/api/${tenantSlug}/${seg}/${userId}/sessions/revoke`;
+      await api.post(url, body);
     },
     onMutate: () => {
       setActionError(null);
+      setSaveOk(null);
     },
     onSuccess: () => {
       setActionError(null);
@@ -130,19 +152,39 @@ export function StaffActiveSessionsDialog({
 
   const saveMax = useMutation({
     mutationFn: async () => {
+      if (applyToDepartment && slotType) {
+        const { data } = await api.post<{ data: { updated: number } }>(
+          `/api/${tenantSlug}/work-slots/sessions/max-by-type`,
+          { slot_type: slotType, max_sessions: maxDraft }
+        );
+        return data.data;
+      }
+      if (useSlotApi) {
+        await api.patch(`/api/${tenantSlug}/work-slots/${slotId}`, { max_sessions: maxDraft });
+        return { updated: 1 };
+      }
       await api.patch(`/api/${tenantSlug}/${seg}/${userId}`, { max_sessions: maxDraft });
+      return { updated: 1 };
     },
     onMutate: () => {
       setActionError(null);
+      setSaveOk(null);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       setActionError(null);
+      if (applyToDepartment) {
+        setSaveOk(
+          `Лимит сохранён для ${res.updated} сотрудник(ов) отдела «${slotTypeLabel(slotType ?? "")}».`
+        );
+      }
       onPatched();
     },
     onError: (e: unknown) => {
       setActionError(sessionActionErrorText(e, "Лимит не удалось сохранить."));
     }
   });
+
+  const canSave = useSlotApi || userId != null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -155,7 +197,7 @@ export function StaffActiveSessionsDialog({
         <DialogHeader>
           <DialogTitle>Активные сессии</DialogTitle>
         </DialogHeader>
-        {userId == null ? (
+        {!canSave ? (
           <p className="text-sm text-muted-foreground">Пользователь не выбран.</p>
         ) : (
           <>
@@ -164,48 +206,82 @@ export function StaffActiveSessionsDialog({
                 {actionError}
               </p>
             ) : null}
-            <div className="flex flex-wrap items-center gap-2 border-b pb-3">
-              <span className="text-sm">Максимальное количество сессий</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setMaxDraft((m) => Math.max(1, m - 1))}
-              >
-                −
-              </Button>
-              <Input
-                className="h-8 w-14 text-center"
-                value={maxDraft}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10);
-                  if (!Number.isNaN(n)) setMaxDraft(Math.min(99, Math.max(1, n)));
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setMaxDraft((m) => Math.min(99, m + 1))}
-              >
-                +
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="bg-teal-600 text-white hover:bg-teal-700"
-                disabled={saveMax.isPending}
-                onClick={() => saveMax.mutate()}
-              >
-                Сохранить
-              </Button>
+            {saveOk ? (
+              <p className="text-sm text-emerald-700" role="status">
+                {saveOk}
+              </p>
+            ) : null}
+            <div className="space-y-2 border-b pb-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm">Максимальное количество сессий</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={unlimited}
+                  onClick={() => setMaxDraft((m) => clampFiniteMaxSessions(m - 1))}
+                >
+                  −
+                </Button>
+                <Input
+                  className="h-8 w-14 text-center"
+                  value={unlimited ? "∞" : String(maxDraft)}
+                  disabled={unlimited}
+                  onChange={(e) => {
+                    const n = Number.parseInt(e.target.value, 10);
+                    if (!Number.isNaN(n)) setMaxDraft(clampFiniteMaxSessions(n));
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={unlimited}
+                  onClick={() => setMaxDraft((m) => clampFiniteMaxSessions(m + 1))}
+                >
+                  +
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-teal-600 text-white hover:bg-teal-700"
+                  disabled={saveMax.isPending}
+                  onClick={() => saveMax.mutate()}
+                >
+                  Сохранить
+                </Button>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-teal-600"
+                  checked={unlimited}
+                  onChange={(e) => {
+                    setMaxDraft(e.target.checked ? UNLIMITED_MAX_SESSIONS : 1);
+                  }}
+                />
+                Неограниченно
+              </label>
+              {slotType ? (
+                <label className="flex cursor-pointer items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-teal-600"
+                    checked={applyToDepartment}
+                    onChange={(e) => setApplyToDepartment(e.target.checked)}
+                  />
+                  <span>
+                    Применить ко всем сотрудникам отдела «{slotTypeLabel(slotType)}»
+                  </span>
+                </label>
+              ) : null}
             </div>
             <div className="max-h-[45vh] overflow-auto rounded-md border">
               {sessionsQ.isLoading ? (
                 <p className="p-4 text-sm text-muted-foreground">Загрузка сессий…</p>
               ) : sessionsQ.isError ? (
                 <p className="p-4 text-sm text-destructive">
-                  {getUserFacingError(sessionsQ.error, "Не удалось загрузить сессии. Нужны права администратора.")}
+                  {getUserFacingError(sessionsQ.error, "Не удалось загрузить сессии.")}
                 </p>
               ) : null}
               {!sessionsQ.isLoading && !sessionsQ.isError ? (

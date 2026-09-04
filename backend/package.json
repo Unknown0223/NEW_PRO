@@ -63,6 +63,8 @@
     "agents:enable-create": "tsx scripts/enable-agent-client-create-once.ts",
     "backfill:work-slots": "tsx scripts/backfill-work-slots.ts",
     "backfill:work-slots-config": "tsx scripts/backfill-work-slots-config.ts",
+    "backfill:work-slot-p1-links": "tsx scripts/backfill-work-slot-p1-links.ts",
+    "backfill:supervisee-agent-slots": "tsx scripts/backfill-supervisee-agent-slots.ts",
     "db:zero-reset": "tsx scripts/db-zero-reset.ts",
     "db:wipe:all-once": "node scripts/db-wipe-all-once.cjs",
     "import:bundle": "tsx scripts/load-import-bundle.ts",

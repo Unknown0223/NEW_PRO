@@ -49,7 +49,7 @@ export async function listClientBalancesReportFiltered(
 ): Promise<ClientBalanceListResponse> {
   const { tenantId, q, perf, page, limit, asOfEnd, odFrom, odTo } = ctx;
   const bfEarly = q.balance_filter?.trim() ?? "";
-  const whereBase = buildClientWhere(tenantId, q, { skipBalanceFilter: true });
+  const whereBase = await buildClientWhere(tenantId, q, { skipBalanceFilter: true });
     const allMinimal = await prisma.client.findMany({
       where: whereBase,
       select: {

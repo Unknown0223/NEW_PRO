@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,15 +23,28 @@ import type { SlotHistoryItem, WorkSlotListItem } from "@/lib/work-slots-types";
 import { AssignUserDialog } from "./assign-user-dialog";
 import { EditSlotDialog } from "./edit-slot-dialog";
 import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
-import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
+import { formatSlotDate, formatSlotBranches, slotTypeLabel, type SlotWorkplaceConfigTabId } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
 import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
+
+const CONFIG_SECTIONS = new Set<string>([
+  "main",
+  "prices",
+  "limits",
+  "mobile",
+  "skladchik",
+  "expeditor",
+  "team"
+]);
 
 export function WorkSlotDetail({ slotId }: { slotId: number }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant, ready, hydrated } = useTenantReady();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [slot, setSlot] = useState<WorkSlotListItem | null>(null);
+  const [configSection, setConfigSection] = useState<SlotWorkplaceConfigTabId>("main");
+  const [configOpen, setConfigOpen] = useState(false);
   const [history, setHistory] = useState<SlotHistoryItem[]>([]);
   const [debtCollectors, setDebtCollectors] = useState<
     Array<{
@@ -43,7 +57,6 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
   >([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]);
@@ -109,6 +122,9 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       setDebtCollectors(debtCol.data ?? []);
       const branches = new Set<string>();
       for (const r of list.data ?? []) {
+        for (const code of r.branch_codes ?? []) {
+          if (code.trim()) branches.add(code.trim());
+        }
         if (r.branch_code?.trim()) branches.add(r.branch_code.trim());
       }
       setBranchOptions([...branches].sort());
@@ -124,15 +140,27 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     void load();
   }, [load, ready]);
 
-  // Экспедитор / агент sahifasidan: /work-slots/:id?openConfig=1
+  // Staff sahifasidan: /work-slots/:id?openConfig=1&section=team
   useEffect(() => {
     if (searchParams.get("openConfig") !== "1") return;
+    const raw = searchParams.get("section")?.trim() ?? "main";
+    setConfigSection(
+      CONFIG_SECTIONS.has(raw) ? (raw as SlotWorkplaceConfigTabId) : "main"
+    );
     setConfigOpen(true);
     router.replace(`/work-slots/${slotId}`, { scroll: false });
   }, [searchParams, slotId, router]);
 
   const unassign = async () => {
-    if (!tenant || !confirm("Hozirgi xodimni ajratishni tasdiqlaysizmi?")) return;
+    if (!tenant) return;
+    const ok = await confirm({
+      title: "Открепить",
+      message: "Hozirgi xodimni ajratishni tasdiqlaysizmi?",
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: true
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/${tenant}/work-slots/${slotId}/unassign`, {
         method: "POST",
@@ -170,7 +198,15 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             Tahrirlash
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setConfigSection("main");
+              setConfigOpen(true);
+            }}
+          >
             Конфигурация места
           </Button>
           <Button type="button" size="sm" onClick={() => setAssignOpen(true)}>
@@ -196,7 +232,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             <span className="text-muted-foreground">Nomi:</span> {slot.label ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">Filial:</span> {slot.branch_code ?? "—"}
+            <span className="text-muted-foreground">Filial:</span> {formatSlotBranches(slot)}
           </p>
           <p>
             <span className="text-muted-foreground">Направление:</span> {slot.direction_name ?? "—"}
@@ -393,7 +429,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         open={configOpen}
         onOpenChange={setConfigOpen}
         tenant={tenant}
-        section="main"
+        section={configSection}
         slotId={slotId}
         warehouses={warehouses}
         onSaved={() => void load()}
@@ -405,6 +441,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
         slotId={slotId}
         onAssigned={() => void load()}
       />
+      {confirmDialog}
     </div>
   );
 }

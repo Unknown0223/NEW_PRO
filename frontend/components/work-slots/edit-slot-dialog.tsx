@@ -17,9 +17,15 @@ import type { TerritoryNode } from "@/lib/territory-tree";
 import type { WorkSlotListItem, WorkSlotType } from "@/lib/work-slots-types";
 import {
   WorkSlotsLocationFields,
+  emptyLocationValues,
   type WorkSlotsLocationValues
 } from "./work-slots-location-fields";
-import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS } from "./work-slots-utils";
+import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS, parseUserTerritoryParts } from "./work-slots-utils";
+import {
+  slotLocationBindingFields,
+  slotSupportsDirection,
+  slotSupportsTerritory
+} from "./work-slots-bulk-actions";
 
 type PickerOpt = { id: number; name: string };
 type TradeDirectionOpt = { id: number; name: string; code: string | null };
@@ -45,17 +51,59 @@ type Props = {
   onSaved: () => void;
 };
 
-const emptyLocation = (): WorkSlotsLocationValues => ({
-  territoryZone: "",
-  territoryOblast: "",
-  territoryCity: "",
-  territoryZoneList: [],
-  territoryOblastList: [],
-  territoryCityList: [],
-  warehouseId: null,
-  returnWarehouseId: null,
-  cashDeskId: null
-});
+const emptyLocation = (): WorkSlotsLocationValues => emptyLocationValues();
+
+function locationFromSlot(d: WorkSlotListItem): WorkSlotsLocationValues {
+  const warehouseIds =
+    d.active_warehouse_ids?.length
+      ? d.active_warehouse_ids
+      : d.active_warehouse_id != null
+        ? [d.active_warehouse_id]
+        : [];
+  const cashDeskIds =
+    d.active_cash_desk_ids?.length
+      ? d.active_cash_desk_ids
+      : d.active_cash_desk_id != null
+        ? [d.active_cash_desk_id]
+        : [];
+  const territories = d.active_territories?.length
+    ? d.active_territories
+    : d.active_user_territory
+      ? [d.active_user_territory]
+      : [];
+  const zoneList: string[] = [];
+  const oblastList: string[] = [];
+  const cityList: string[] = [];
+  for (const t of territories) {
+    const p = parseUserTerritoryParts(t);
+    if (p.zone && !zoneList.includes(p.zone)) zoneList.push(p.zone);
+    if (p.oblast && !oblastList.includes(p.oblast)) oblastList.push(p.oblast);
+    if (p.city && !cityList.includes(p.city)) cityList.push(p.city);
+  }
+  return {
+    territoryZone: d.active_territory_zone ?? zoneList[0] ?? "",
+    territoryOblast: d.active_territory_oblast ?? oblastList[0] ?? "",
+    territoryCity: d.active_territory_city ?? cityList[0] ?? "",
+    territoryZoneList: zoneList,
+    territoryOblastList: oblastList,
+    territoryCityList: cityList,
+    warehouseId: warehouseIds[0] ?? null,
+    warehouseIds,
+    returnWarehouseId: d.return_warehouse_id ?? null,
+    cashDeskId: cashDeskIds[0] ?? null,
+    cashDeskIds
+  };
+}
+
+function branchesFromSlot(d: WorkSlotListItem): string[] {
+  const codes = (d.branch_codes ?? []).map((c) => c.trim()).filter(Boolean);
+  if (codes.length) return codes;
+  return d.branch_code?.trim() ? [d.branch_code.trim()] : [];
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
 
 export function EditSlotDialog({
   open,
@@ -73,7 +121,7 @@ export function EditSlotDialog({
   const [original, setOriginal] = useState<WorkSlotListItem | null>(null);
   const [slotCode, setSlotCode] = useState("");
   const [label, setLabel] = useState("");
-  const [branchCode, setBranchCode] = useState("");
+  const [branchCodeList, setBranchCodeList] = useState<string[]>([]);
   const [directionId, setDirectionId] = useState("");
   const [slotType, setSlotType] = useState<WorkSlotType>("agent");
   const [isActive, setIsActive] = useState(true);
@@ -123,21 +171,11 @@ export function EditSlotDialog({
         setOriginal(d);
         setSlotCode(d.slot_code ?? "");
         setLabel(d.label ?? "");
-        setBranchCode(d.branch_code ?? "");
+        setBranchCodeList(branchesFromSlot(d));
         setDirectionId(d.direction_id != null ? String(d.direction_id) : "");
         setSlotType(d.slot_type as WorkSlotType);
         setIsActive(d.is_active);
-        setLocation({
-          territoryZone: d.active_territory_zone ?? "",
-          territoryOblast: d.active_territory_oblast ?? "",
-          territoryCity: d.active_territory_city ?? "",
-          territoryZoneList: [],
-          territoryOblastList: [],
-          territoryCityList: [],
-          warehouseId: d.active_warehouse_id,
-          returnWarehouseId: d.return_warehouse_id ?? null,
-          cashDeskId: d.active_cash_desk_id
-        });
+        setLocation(locationFromSlot(d));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
       .finally(() => setLoading(false));
@@ -157,57 +195,84 @@ export function EditSlotDialog({
 
     const changes: Record<string, unknown> = {};
     const l = label.trim() || null;
-    const b = branchCode.trim() || null;
     if (code !== (original.slot_code ?? "").trim().toUpperCase()) changes.slot_code = code;
     if (l !== (original.label ?? null)) changes.label = l;
-    if (b !== (original.branch_code ?? null)) changes.branch_code = b;
+    const origBranches = branchesFromSlot(original);
+    if (!sameStringList(branchCodeList, origBranches)) {
+      changes.branch_codes = branchCodeList;
+      changes.branch_code = branchCodeList[0] ?? null;
+    }
     const dirParsed = directionId.trim() ? Number.parseInt(directionId.trim(), 10) : null;
     if (dirParsed !== (original.direction_id ?? null)) changes.direction_id = dirParsed;
     if (slotType !== original.slot_type) changes.slot_type = slotType;
     if (isActive !== original.is_active) changes.is_active = isActive;
 
-    const origLoc: WorkSlotsLocationValues = {
-      territoryZone: original.active_territory_zone ?? "",
-      territoryOblast: original.active_territory_oblast ?? "",
-      territoryCity: original.active_territory_city ?? "",
-      territoryZoneList: [],
-      territoryOblastList: [],
-      territoryCityList: [],
-      warehouseId: original.active_warehouse_id,
-      returnWarehouseId: original.return_warehouse_id ?? null,
-      cashDeskId: original.active_cash_desk_id
-    };
+    const origLoc = locationFromSlot(original);
 
-    if (location.territoryZone !== origLoc.territoryZone) {
-      changes.territory_zone = location.territoryZone.trim() || null;
+    const sameIds = (a: number[], b: number[]) =>
+      a.length === b.length && a.every((id, i) => id === b[i]);
+
+    const hasTerritoryLists =
+      location.territoryZoneList.length > 0 ||
+      location.territoryOblastList.length > 0 ||
+      location.territoryCityList.length > 0;
+    const origHasTerritoryLists =
+      origLoc.territoryZoneList.length > 0 ||
+      origLoc.territoryOblastList.length > 0 ||
+      origLoc.territoryCityList.length > 0;
+
+    if (
+      hasTerritoryLists ||
+      origHasTerritoryLists ||
+      location.territoryZone !== origLoc.territoryZone ||
+      location.territoryOblast !== origLoc.territoryOblast ||
+      location.territoryCity !== origLoc.territoryCity
+    ) {
+      if (
+        location.territoryZoneList.length > 1 ||
+        location.territoryOblastList.length > 1 ||
+        location.territoryCityList.length > 1 ||
+        (hasTerritoryLists &&
+          (location.territoryZoneList.length !== origLoc.territoryZoneList.length ||
+            location.territoryOblastList.length !== origLoc.territoryOblastList.length ||
+            location.territoryCityList.length !== origLoc.territoryCityList.length ||
+            location.territoryZoneList.some((z, i) => z !== origLoc.territoryZoneList[i]) ||
+            location.territoryOblastList.some((z, i) => z !== origLoc.territoryOblastList[i]) ||
+            location.territoryCityList.some((z, i) => z !== origLoc.territoryCityList[i])))
+      ) {
+        if (location.territoryZoneList.length) changes.territory_zones = location.territoryZoneList;
+        if (location.territoryOblastList.length) changes.territory_oblasts = location.territoryOblastList;
+        if (location.territoryCityList.length) changes.territory_cities = location.territoryCityList;
+        if (
+          !location.territoryZoneList.length &&
+          !location.territoryOblastList.length &&
+          !location.territoryCityList.length
+        ) {
+          changes.territories = [];
+        }
+      } else {
+        if (location.territoryZone !== origLoc.territoryZone) {
+          changes.territory_zone = location.territoryZone.trim() || null;
+        }
+        if (location.territoryOblast !== origLoc.territoryOblast) {
+          changes.territory_oblast = location.territoryOblast.trim() || null;
+        }
+        if (location.territoryCity !== origLoc.territoryCity) {
+          changes.territory_city = location.territoryCity.trim() || null;
+        }
+      }
     }
-    if (location.territoryOblast !== origLoc.territoryOblast) {
-      changes.territory_oblast = location.territoryOblast.trim() || null;
-    }
-    if (location.territoryCity !== origLoc.territoryCity) {
-      changes.territory_city = location.territoryCity.trim() || null;
-    }
-    if (location.warehouseId !== origLoc.warehouseId) {
-      changes.warehouse_id = location.warehouseId;
+
+    if (!sameIds(location.warehouseIds, origLoc.warehouseIds)) {
+      changes.warehouse_ids = location.warehouseIds;
+      changes.warehouse_id = location.warehouseIds[0] ?? null;
     }
     if (location.returnWarehouseId !== origLoc.returnWarehouseId) {
       changes.return_warehouse_id = location.returnWarehouseId;
     }
-    if (location.cashDeskId !== origLoc.cashDeskId) {
-      changes.cash_desk_id = location.cashDeskId;
-    }
-
-    const hasUserAttrs =
-      changes.territory_zone !== undefined ||
-      changes.territory_oblast !== undefined ||
-      changes.territory_city !== undefined ||
-      changes.warehouse_id !== undefined ||
-      changes.return_warehouse_id !== undefined ||
-      changes.cash_desk_id !== undefined;
-
-    if (hasUserAttrs && !original.active_user_id) {
-      setError("Нет сотрудника на месте — сначала назначьте сотрудника");
-      return;
+    if (!sameIds(location.cashDeskIds, origLoc.cashDeskIds)) {
+      changes.cash_desk_ids = location.cashDeskIds;
+      changes.cash_desk_id = location.cashDeskIds[0] ?? null;
     }
 
     if (Object.keys(changes).length === 0) {
@@ -342,50 +407,45 @@ export function EditSlotDialog({
               <AgentFormField label="Филиал">
                 <WorkSlotsMultiSelect
                   variant="form"
-                  multiple={false}
-                  placeholder="Филиал"
-                  items={[
-                    { id: "__none__", title: "—" },
-                    ...branchOptions.map((b) => ({ id: b, title: b }))
-                  ]}
-                  selectedValues={branchCode ? [branchCode] : []}
-                  onChange={(next) => {
-                    const v = next[0] ?? "";
-                    setBranchCode(v === "__none__" ? "" : v);
-                  }}
+                  placeholder="Филиалы"
+                  items={branchOptions.map((b) => ({ id: b, title: b }))}
+                  selectedValues={branchCodeList}
+                  onChange={setBranchCodeList}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">Можно выбрать несколько филиалов</p>
               </AgentFormField>
-              <AgentFormField label="Направление торговли">
-                <WorkSlotsMultiSelect
-                  variant="form"
-                  multiple={false}
-                  placeholder="Направление"
-                  items={[
-                    { id: "__none__", title: "—" },
-                    ...tradeDirections.map((t) => ({
-                      id: String(t.id),
-                      title: t.code ? `${t.name} (${t.code})` : t.name
-                    }))
-                  ]}
-                  selectedValues={directionId ? [directionId] : []}
-                  onChange={(next) => {
-                    const v = next[0] ?? "";
-                    setDirectionId(v === "__none__" ? "" : v);
-                  }}
-                />
-              </AgentFormField>
+              {slotSupportsDirection(slotType) ? (
+                <AgentFormField label="Направление торговли">
+                  <WorkSlotsMultiSelect
+                    variant="form"
+                    multiple={false}
+                    placeholder="Направление"
+                    items={[
+                      { id: "__none__", title: "—" },
+                      ...tradeDirections.map((t) => ({
+                        id: String(t.id),
+                        title: t.code ? `${t.name} (${t.code})` : t.name
+                      }))
+                    ]}
+                    selectedValues={directionId ? [directionId] : []}
+                    onChange={(next) => {
+                      const v = next[0] ?? "";
+                      setDirectionId(v === "__none__" ? "" : v);
+                    }}
+                  />
+                </AgentFormField>
+              ) : null}
             </div>
           </AgentFormSection>
 
           <AgentFormSection title="Сотрудник на месте" icon={<UserRound className="h-4 w-4" />}>
             {!original?.active_user_id ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                На месте нет сотрудника. Территория и привязки (склад, касса) станут доступны после
-                назначения.
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                На месте нет сотрудника — территория и привязки всё равно сохранятся на уровне места.
               </p>
             ) : (
               <p className="mb-3 text-xs text-muted-foreground">
-                Территория и привязки сохраняются в профиле сотрудника на этом месте.
+                Территория и привязки сохраняются на месте и зеркалятся сотруднику.
               </p>
             )}
             <WorkSlotsLocationFields
@@ -393,10 +453,12 @@ export function EditSlotDialog({
               values={location}
               onChange={(patch) => setLocation((prev) => ({ ...prev, ...patch }))}
               territoryCascade={territoryCascade}
+              territoryNodes={territoryNodes}
               cityTerritoryHints={clientRefs?.city_territory_hints as Record<string, import("@/lib/city-territory-hint").CityTerritoryHint> | undefined}
               warehouses={warehouses}
               cashDesks={cashDesks}
-              disabled={!original?.active_user_id}
+              showTerritory={slotSupportsTerritory(slotType)}
+              bulkBindingFields={slotLocationBindingFields(slotType)}
             />
           </AgentFormSection>
         </div>

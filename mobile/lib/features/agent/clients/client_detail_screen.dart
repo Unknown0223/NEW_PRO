@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/media_url.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
@@ -14,12 +15,15 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/errors/user_facing_error.dart';
 import '../../../core/format/money_display.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/orders/order_status_labels.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/utils/external_actions.dart';
 import '../../../core/ui/agent_ui_extended.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../shell/agent_app_bar.dart';
 import '../orders/order_draft_model.dart';
 import '../orders/order_draft_provider.dart';
@@ -79,11 +83,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     if (mounted) setState(() => _photosLoading = true);
     try {
       final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, widget.clientId);
-      if (mounted) setState(() => _photos = photos);
+      // Server todayOnly + ish mintaqasi filtri — kechagi qoldiqlar ko‘rinmasin.
+      if (mounted) setState(() => _photos = photoReportsForToday(photos));
     } catch (e) {
       if (mounted && _photos.isEmpty) {
-        _toast('Фотоотчёты не загрузились: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось загрузить фотоотчёты'));
       }
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.photos,
+        code: 'PhotoListFailed',
+        message: 'Фотоотчёт: список не загрузился',
+        path: '/mobile/clients/photo-reports',
+        payload: {'client_id': widget.clientId},
+      );
     } finally {
       if (mounted) setState(() => _photosLoading = false);
     }
@@ -91,7 +104,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   void _mergePhotoRow(ClientPhotoReport row) {
     setState(() {
-      _photos = [row, ..._photos.where((p) => p.id != row.id)];
+      final next = [row, ..._photos.where((p) => p.id != row.id)];
+      _photos = photoReportsForToday(next);
     });
   }
 
@@ -192,7 +206,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       unawaited(_loadPhotos());
     } catch (e) {
       if (mounted) {
-        _toast('Ошибка удаления: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось удалить фото'));
       }
     }
   }
@@ -340,7 +354,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     } catch (e) {
       await _load();
       if (mounted) {
-        _toast('Ошибка сохранения: $e');
+        _toast(UserFacingError.toast(e, action: 'Не удалось сохранить клиента'));
       }
     }
   }
@@ -365,7 +379,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final appBarTitle = clientName.length > 18 ? '${clientName.substring(0, 16)}…' : clientName;
     final clientCfg = config?.client ?? const ClientConfig();
     final detailFields = clientDetailFieldKeys(clientCfg);
-    final todayPhotos = photoReportsForToday(_photos);
+    final headerPhoto = firstClientPhotoUrl(c) ??
+        (_photos.isNotEmpty && _photos.first.imageUrl.trim().isNotEmpty ? _photos.first.imageUrl : null);
     final draft = ref.watch(orderDraftForClientProvider(widget.clientId)).valueOrNull;
     final showBalance = config?.client.showBalance ?? true;
     final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
@@ -436,20 +451,34 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    clientName,
-                    style: AppTypography.titleMedium.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 4),
-                  if (showBalance)
-                    Text(
-                      balanceText,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: colorForClientBalance(balanceAmount ?? 0),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClientPhotoThumb(source: headerPhoto, size: 72, radius: 14),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              clientName,
+                              style: AppTypography.titleMedium.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 4),
+                            if (showBalance)
+                              Text(
+                                balanceText,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: colorForClientBalance(balanceAmount ?? 0),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -498,8 +527,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const Spacer(),
-                      if (!_photoUploading && todayPhotos.isNotEmpty)
-                        _ClientCountBadge('${todayPhotos.length}'),
+                      if (!_photoUploading && _photos.isNotEmpty)
+                        _ClientCountBadge('${_photos.length}'),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -508,7 +537,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                       height: 78,
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                     )
-                  else if (_photosLoading && todayPhotos.isEmpty)
+                  else if (_photosLoading && _photos.isEmpty)
                     const SizedBox(
                       height: 78,
                       child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -516,7 +545,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   else
                     _PhotoReportStrip(
                       clientId: widget.clientId,
-                      photos: todayPhotos,
+                      photos: _photos,
                       onView: _viewPhoto,
                       onReplace: _replacePhoto,
                       onDelete: _deletePhoto,

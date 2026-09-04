@@ -9,6 +9,7 @@ import '../../../core/config/mobile_config.dart';
 import '../../../core/config/order_config_policy.dart';
 import '../../../core/config/security_config_policy.dart';
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -101,7 +102,16 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
           if (methods.isNotEmpty) _selectedPaymentType = methods.first.paymentType;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'PaymentContextLoadFailed',
+        message: 'Оплата: контекст заказа не загрузился',
+        path: '/mobile/payments',
+        payload: {'order_id': widget.orderId, 'client_id': widget.clientId},
+      );
       if (mounted) {
         setState(() {
           _loading = false;
@@ -157,7 +167,16 @@ class _VanSellingPaymentSheetState extends ConsumerState<VanSellingPaymentSheet>
         amount: amount,
       );
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'PaymentSubmitFailed',
+        message: 'Оплата: приём платежа не удался',
+        path: '/mobile/payments',
+        payload: {'order_id': widget.orderId, 'client_id': widget.clientId},
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -23,6 +23,13 @@ export type DashboardMetaPayload = {
   product_categories: Array<{ id: number; name: string }>;
   profile_refs: {
     payment_method_entries?: Array<{ id: string; name: string; active?: boolean; code?: string | null }>;
+    price_type_entries?: Array<{
+      id: string;
+      name: string;
+      code?: string | null;
+      payment_method_id?: string;
+      active?: boolean;
+    }>;
     payment_types?: string[];
     trade_directions?: string[];
     territory_nodes?: unknown[];
@@ -46,7 +53,7 @@ export async function getDashboardMeta(
   tenantId: number,
   actor?: ReportActor
 ): Promise<DashboardMetaPayload> {
-  const cacheKey = `tenant:${tenantId}:dashboard:meta:v2:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
+  const cacheKey = `tenant:${tenantId}:dashboard:meta:v3:${actor?.role ?? "none"}:${actor?.userId ?? 0}`;
   try {
     const redis = await getRedisForApp();
     const cached = await redis.get(cacheKey);
@@ -97,6 +104,7 @@ export async function getDashboardMeta(
     product_categories: product_categories_raw.map((c) => ({ id: c.id, name: c.name })),
     profile_refs: {
       payment_method_entries: refs.payment_method_entries as DashboardMetaPayload["profile_refs"]["payment_method_entries"],
+      price_type_entries: refs.price_type_entries as DashboardMetaPayload["profile_refs"]["price_type_entries"],
       payment_types: refs.payment_types as string[] | undefined,
       trade_directions: refs.trade_directions as string[] | undefined,
       territory_nodes: refs.territory_nodes as unknown[] | undefined

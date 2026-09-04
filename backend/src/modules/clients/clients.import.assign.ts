@@ -6,6 +6,7 @@ import { CONTACT_SLOTS } from "./clients.helpers";
 import { VALID_IMPORT_KEYS } from "./clients.import.keys";
 import { isPlaceholderCell, readArrayCell } from "./clients.import.parse";
 import type { ImportWarningCollector } from "./clients.import.runtime";
+import { parseVisitWeekdaysFromCell } from "./clients.visit-weekdays";
 
 export function buildManualColumnMap(raw: Record<string, number> | undefined): Record<string, number> | null {
   if (raw == null) return null;
@@ -26,58 +27,6 @@ function isAssignmentClearToken(raw: string | null): boolean {
   if (raw == null) return false;
   const t = raw.trim().toLocaleLowerCase("ru-RU");
   return t !== "" && IMPORT_ASSIGNMENT_CLEAR_TOKENS.has(t);
-}
-
-/** «Пн», «Вт» … yoki raqam 1..7 (1=Du … 7=Ya); «1,2;3» vergul/bo‘shliq bilan. */
-function parseRussianVisitDaysDetailed(raw: string | null): { days: number[]; unknownTokens: string[] } {
-  if (raw == null || isPlaceholderCell(raw)) return { days: [], unknownTokens: [] };
-  const tokenMap: Record<string, number> = {
-    пн: 1,
-    понедельник: 1,
-    вт: 2,
-    вторник: 2,
-    ср: 3,
-    среда: 3,
-    чт: 4,
-    четверг: 4,
-    четвер: 4,
-    пт: 5,
-    пятница: 5,
-    сб: 6,
-    суббота: 6,
-    вс: 7,
-    воскресенье: 7,
-    вск: 7
-  };
-  let normalized = String(raw).trim().replace(/\u00a0/g, " ").replace(/;+/g, ",");
-  const compact = normalized.replace(/\s/g, "");
-  /** Excel: `1.2` matn sifatida ikki kun (1 va 2); `12` yoki `1.25` bundan mustasno. */
-  const dotPair = /^([1-7])\.([1-7])$/.exec(compact);
-  if (dotPair) {
-    normalized = `${dotPair[1]},${dotPair[2]}`;
-  }
-  const parts = normalized
-    .split(/[,|/]+|\s+/)
-    .map((x) => x.trim().toLowerCase().replace(/\./g, ""))
-    .filter(Boolean);
-  const out: number[] = [];
-  const unknownTokens: string[] = [];
-  for (const p of parts) {
-    if (/^\d{1,2}$/.test(p)) {
-      const num = Number.parseInt(p, 10);
-      if (num >= 1 && num <= 7) {
-        out.push(num);
-        continue;
-      }
-    }
-    const n = tokenMap[p];
-    if (n != null && n >= 1 && n <= 7) out.push(n);
-    else unknownTokens.push(p);
-  }
-  return {
-    days: [...new Set(out)].sort((a, b) => a - b),
-    unknownTokens: [...new Set(unknownTokens)]
-  };
 }
 
 type ImportStaffRole = "agent" | "expeditor";
@@ -360,12 +309,17 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (agentMapped) {
       slotTouched = true;
       const agentRaw = readArrayCell(row, colIndexByKey[agentKey]);
-      if (
-        agentRaw == null ||
-        isPlaceholderCell(String(agentRaw)) ||
-        isAssignmentClearToken(agentRaw)
-      ) {
+      const clearAgent = isAssignmentClearToken(agentRaw);
+      const emptyAgent =
+        agentRaw == null || isPlaceholderCell(String(agentRaw));
+      if (clearAgent) {
         next.agent_id = null;
+      } else if (emptyAgent) {
+        /**
+         * Yangilash: bo‘sh / «---» → avvalgi agent saqlanadi (faqat tanlangan ustunlar).
+         * Yangi import: bo‘sh → agent yo‘q.
+         */
+        if (currentAssignments == null) next.agent_id = null;
       } else {
         const resolved = resolveStaffByRefForImport(staffLookup, agentRaw, ["agent"]);
         if (resolved.id != null) {
@@ -390,9 +344,16 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (expMapped) {
       slotTouched = true;
       const expRaw = readArrayCell(row, colIndexByKey[expKey]);
-      if (expRaw == null || isPlaceholderCell(String(expRaw)) || isAssignmentClearToken(expRaw)) {
+      const clearExp = isAssignmentClearToken(expRaw);
+      const emptyExp = expRaw == null || isPlaceholderCell(String(expRaw));
+      if (clearExp) {
         next.expeditor_user_id = null;
         next.expeditor_phone = null;
+      } else if (emptyExp) {
+        if (currentAssignments == null) {
+          next.expeditor_user_id = null;
+          next.expeditor_phone = null;
+        }
       } else {
         const expLabel = expRaw.trim();
         const resolved = resolveStaffByRefForImport(staffLookup, expRaw, ["expeditor", "agent"]);
@@ -423,10 +384,14 @@ export function buildAgentAssignmentPatchesFromImportRow(
     if (daysMapped) {
       slotTouched = true;
       const daysRaw = readArrayCell(row, colIndexByKey[daysKey]);
-      if (daysRaw == null || isPlaceholderCell(String(daysRaw)) || isAssignmentClearToken(daysRaw)) {
+      const clearDays = isAssignmentClearToken(daysRaw);
+      const emptyDays = daysRaw == null || isPlaceholderCell(String(daysRaw));
+      if (clearDays) {
         next.visit_weekdays = [];
+      } else if (emptyDays) {
+        if (currentAssignments == null) next.visit_weekdays = [];
       } else {
-        const parsedDays = parseRussianVisitDaysDetailed(daysRaw);
+        const parsedDays = parseVisitWeekdaysFromCell(daysRaw);
         next.visit_weekdays = parsedDays.days;
         if (parsedDays.unknownTokens.length > 0) {
           warn(
@@ -469,43 +434,21 @@ export function buildAgentAssignmentPatchesFromImportRow(
   }
   const updatePatches =
     currentAssignments != null
-      ? mergeAssignmentPatchesForImportReplace(updateBySlot, currentAssignments)
+      ? updateBySlot.size > 0
+        ? mergeAssignmentPatchesForImportReplace(updateBySlot, currentAssignments)
+        : []
       : [...updateBySlot.values()].sort((a, b) => a.slot - b.slot);
   return { createPatches, updatePatches, touched };
 }
 
-/** Excel `ИД` / `id` katakchasini tahlil qilish: yo‘q / yaroqli / yaroqsiz. */
-export type ImportClientDbIdParse =
-  | { kind: "absent" }
-  | { kind: "ok"; id: number }
-  | { kind: "invalid"; detail: string };
+export {
+  classifyFlexibleImportId,
+  classifyImportClientDbId,
+  parseClientDbIdFromCell,
+  normalizeExternalDocNumber,
+  MAX_CLIENT_CODE_ID_LEN,
+  type ImportFlexibleIdParse,
+  type ImportClientDbIdParse
+} from "./clients.import.flexible-id";
 
-export function classifyImportClientDbId(raw: string | null): ImportClientDbIdParse {
-  if (raw == null || isPlaceholderCell(raw)) return { kind: "absent" };
-  const s = String(raw).trim().replace(/\u00a0/g, " ");
-  if (!s) return { kind: "absent" };
-  /** Excel ba’zan `12.0` yozadi; faqat butun musbat son. */
-  const m = /^(\d+)(?:\.0+)?$/.exec(s);
-  if (!m) {
-    return {
-      kind: "invalid",
-      detail: `«${s.slice(0, 40)}» — id faqat musbat butun son bo‘lishi kerak (masalan 12)`
-    };
-  }
-  const n = Number.parseInt(m[1]!, 10);
-  if (!Number.isFinite(n) || n < 1) {
-    return {
-      kind: "invalid",
-      detail: `«${s.slice(0, 40)}» — id 1 dan katta yoki teng musbat butun son bo‘lishi kerak`
-    };
-  }
-  if (n > 2_147_483_647) {
-    return { kind: "invalid", detail: `id ${n} juda katta (maks. 2147483647)` };
-  }
-  return { kind: "ok", id: n };
-}
-
-export function parseClientDbIdFromCell(raw: string | null): number | null {
-  const r = classifyImportClientDbId(raw);
-  return r.kind === "ok" ? r.id : null;
-}
+/** Excel `ИД` / `id` — raqam (DB id) yoki matn (client_code), masalan ks_1652. */

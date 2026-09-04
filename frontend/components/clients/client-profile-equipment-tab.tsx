@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusCircle } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -35,6 +36,7 @@ function fmtShort(iso: string) {
 
 export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug: string; clientId: number }) {
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [inventoryType, setInventoryType] = useState("");
@@ -234,7 +236,16 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
                           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}
                           disabled={removeM.isPending}
                           onClick={() => {
-                            if (confirm("Отметить изъятием?")) void removeM.mutateAsync(r.id);
+                            void (async () => {
+                              const ok = await confirm({
+                                title: "Изъять",
+                                message: "Отметить изъятием?",
+                                confirmLabel: "Да",
+                                cancelLabel: "Нет",
+                                destructive: true
+                              });
+                              if (ok) void removeM.mutateAsync(r.id);
+                            })();
                           }}
                         >
                           Изъять
@@ -298,6 +309,7 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
           </div>
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 }

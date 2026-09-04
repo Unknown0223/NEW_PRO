@@ -1,5 +1,4 @@
 import { prisma } from "../../config/database";
-import { isOperatorLikeWebRole } from "../../lib/tenant-user-roles";
 
 export type DirectoryScopeActor = {
   userId: number | null;
@@ -7,16 +6,15 @@ export type DirectoryScopeActor = {
 };
 
 /**
- * Staff directory Access binds for operator-like roles.
- * Admin / other roles → `null` (full catalog).
- * Operator-like → linked ids; zero links → `[]` (empty list, safer than all).
+ * Staff directory Access binds.
+ * Admin → `null` (full catalog).
+ * Boshqa rollar → linked ids; zero links → `[]` (empty list, safer than all).
  */
 export async function resolveActorCashDeskDirectoryIds(
   _tenantId: number,
   actor?: DirectoryScopeActor
 ): Promise<number[] | null> {
   if (!actor?.userId || actor.role === "admin") return null;
-  if (!isOperatorLikeWebRole(actor.role)) return null;
   const links = await prisma.cashDeskUserLink.findMany({
     where: { user_id: actor.userId },
     select: { cash_desk_id: true },
@@ -30,7 +28,6 @@ export async function resolveActorWarehouseDirectoryIds(
   actor?: DirectoryScopeActor
 ): Promise<number[] | null> {
   if (!actor?.userId || actor.role === "admin") return null;
-  if (!isOperatorLikeWebRole(actor.role)) return null;
   const links = await prisma.warehouseUserLink.findMany({
     where: { user_id: actor.userId },
     select: { warehouse_id: true },
@@ -44,7 +41,6 @@ export async function resolveActorTradeDirectionDirectoryIds(
   actor?: DirectoryScopeActor
 ): Promise<number[] | null> {
   if (!actor?.userId || actor.role === "admin") return null;
-  if (!isOperatorLikeWebRole(actor.role)) return null;
   const links = await prisma.userTradeDirectionLink.findMany({
     where: { tenant_id: tenantId, user_id: actor.userId },
     select: { trade_direction_id: true },

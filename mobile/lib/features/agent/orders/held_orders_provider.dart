@@ -1,36 +1,35 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
-import '../../../core/api/mobile_api.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/notifications/mobile_local_notification_service.dart';
-import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/sync/sync_data_refresh.dart';
-import '../../auth/auth_provider.dart';
 import '../visits/visit_stats_helper.dart';
+import '../home/last_created_order_banner.dart';
 import 'held_order_model.dart';
 import 'held_order_repository.dart';
+import 'held_order_timing.dart';
 import 'order_create_models.dart';
 import 'orders_providers.dart';
 
 final heldOrderRepositoryProvider = Provider((ref) => HeldOrderRepository());
 
+/// Faqat countdown UI uchun — SQLite qayta o‘qilmasin.
 final heldOrderTickProvider = StreamProvider<int>((ref) {
   return Stream.periodic(const Duration(seconds: 1), (i) => i);
 });
 
+/// Held ro‘yxat: faqat insert/update/cancel/submit da invalidate.
 final heldOrdersProvider = FutureProvider<List<HeldOrder>>((ref) async {
-  ref.watch(heldOrderTickProvider);
   return ref.read(heldOrderRepositoryProvider).listPending();
 });
 
 final heldOrderCountProvider = FutureProvider<int>((ref) async {
-  ref.watch(heldOrderTickProvider);
   return ref.read(heldOrderRepositoryProvider).pendingCount();
 });
 
@@ -155,25 +154,30 @@ class HeldOrderScheduler {
         clientName: order.clientName,
         orderNumber: row['number']?.toString() ?? (orderId?.toString() ?? ''),
       );
-      // Taymer tugagach ham navbatdagi fotolarni online da yuborish (5 urinishgacha).
-      try {
-        final photoCfg = _ref.read(sessionProvider).mobileConfig?.photo;
-        await PhotoReportQueue.flush(
-          api: _ref.read(mobileApiProvider),
-          slug: slug,
-          photoConfig: photoCfg,
+      final createdNumber = row['number']?.toString() ?? (orderId?.toString() ?? '');
+      if (createdNumber.isNotEmpty) {
+        _ref.read(lastCreatedOrderBannerProvider.notifier).state = LastCreatedOrderBanner(
+          number: createdNumber,
+          orderId: orderId,
+          clientName: order.clientName,
         );
-      } catch (_) {}
+      }
+      // Zakaz o‘zi yuborildi — fotolarni to‘liq sinxron bilan aralashtirmaymiz.
       _ref.invalidate(heldOrdersProvider);
       _ref.invalidate(heldOrderCountProvider);
       _ref.invalidate(ordersListProvider);
       refreshVisitStatsProviders(_ref.invalidate);
-      invalidateSyncedData(_ref.invalidate);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _ref.read(authStateProvider.notifier).resync();
-      });
+      invalidateAfterOrderSubmit(_ref.invalidate);
       return true;
-    } on ApiException {
+    } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.heldOrders,
+        code: 'HeldOrderSubmitFailed',
+        message: 'Отложенный заказ: отправка на сервер не удалась',
+        path: '/mobile/orders',
+        payload: {'held_order_id': heldOrderId, 'client_id': order.clientId},
+      );
       final retryAt = DateTime.now().add(const Duration(seconds: 30));
       await repo.update(HeldOrder(
         id: order.id,
@@ -202,7 +206,16 @@ class HeldOrderScheduler {
       _ref.invalidate(heldOrdersProvider);
       if (reportFailure) rethrow;
       return false;
-    } catch (_) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.heldOrders,
+        code: 'HeldOrderSubmitUnexpected',
+        message: 'Отложенный заказ: неожиданная ошибка отправки',
+        path: '/mobile/orders',
+        payload: {'held_order_id': heldOrderId},
+      );
       final retryAt = DateTime.now().add(const Duration(seconds: 30));
       await AppDatabase().updateHeldOrder(heldOrderId, {'submit_at': retryAt.toIso8601String()});
       final refreshed = await repo.getById(heldOrderId);
@@ -224,6 +237,47 @@ class HeldOrderScheduler {
   Future<void> submitNow(int heldOrderId) async {
     final ok = await _submit(heldOrderId, reportFailure: true);
     if (!ok) throw StateError('Заказ уже отправлен или не найден');
+  }
+
+  /// Sync oynasini web `post_order_delay_minutes` bo‘yicha yana kechiktirish.
+  Future<HeldOrder?> postponeSync(int heldOrderId, {required int delayMinutes}) async {
+    final repo = _ref.read(heldOrderRepositoryProvider);
+    final order = await repo.getById(heldOrderId);
+    if (order == null || !order.isPending) return null;
+
+    final now = DateTime.now();
+    final base = order.submitAt.isAfter(now) ? order.submitAt : now;
+    final nextSubmit = postponeHeldSubmitAt(from: base, delayMinutes: delayMinutes);
+    final updated = HeldOrder(
+      id: order.id,
+      clientId: order.clientId,
+      clientName: order.clientName,
+      warehouseId: order.warehouseId,
+      priceType: order.priceType,
+      comment: order.comment,
+      items: order.items,
+      applyBonus: order.applyBonus,
+      applyDiscount: order.applyDiscount,
+      giftOverrides: order.giftOverrides,
+      giftLines: order.giftLines,
+      isConsignment: order.isConsignment,
+      consignmentDueDate: order.consignmentDueDate,
+      shipmentDate: order.shipmentDate,
+      estimatedTotal: order.estimatedTotal,
+      itemCount: order.itemCount,
+      bonusQty: order.bonusQty,
+      discountPct: order.discountPct,
+      createdAt: order.createdAt,
+      submitAt: nextSubmit,
+      captureDeadline: order.captureDeadline,
+      status: order.status,
+    );
+    await repo.update(updated);
+    cancelTimer(heldOrderId);
+    _schedule(updated, now);
+    _ref.invalidate(heldOrdersProvider);
+    _ref.invalidate(heldOrderCountProvider);
+    return updated;
   }
 
   void dispose() {
@@ -262,8 +316,9 @@ Future<HeldOrder> saveHeldOrder({
 }) async {
   final repo = ref.read(heldOrderRepositoryProvider);
   final now = DateTime.now();
-  final delay = delayMinutes <= 0 ? 0 : (delayMinutes > 59 ? 59 : delayMinutes);
-  final submitAt = now.add(Duration(minutes: delay));
+  final window = refreshHeldEditWindow(now: now, delayMinutes: delayMinutes);
+  final createdAt = window.createdAt;
+  final submitAt = window.submitAt;
   final itemCount = items.fold<double>(0, (s, i) => s + i.qty).round();
   final resolvedBonus = bonusQty > 0
       ? bonusQty
@@ -290,7 +345,7 @@ Future<HeldOrder> saveHeldOrder({
       itemCount: itemCount,
       bonusQty: resolvedBonus,
       discountPct: discountPct,
-      createdAt: now,
+      createdAt: createdAt,
       submitAt: submitAt,
     );
     await repo.update(order);
@@ -314,7 +369,7 @@ Future<HeldOrder> saveHeldOrder({
       itemCount: itemCount,
       bonusQty: resolvedBonus,
       discountPct: discountPct,
-      createdAt: now,
+      createdAt: createdAt,
       submitAt: submitAt,
     ));
     order = (await repo.getById(id))!;

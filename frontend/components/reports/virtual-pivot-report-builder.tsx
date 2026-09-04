@@ -54,6 +54,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { cn } from "@/lib/utils";
 import { usePivot } from "@/hooks/pivot/usePivot";
 import { usePivotExport } from "@/hooks/pivot/usePivotExport";
@@ -252,6 +253,7 @@ export function VirtualPivotReportBuilder() {
   const rb = getPivotStrings().reportBuilder;
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [filters, setFilters] = useState<DatasetFiltersPayload>(() => defaultDatasetFilters());
   const [datasetRows, setDatasetRows] = useState<Record<string, unknown>[]>([]);
   const [datasetMeta, setDatasetMeta] = useState<Pick<
@@ -463,7 +465,7 @@ export function VirtualPivotReportBuilder() {
     [pivotData, expandedRows, datasetRows.length]
   );
 
-  const confirmLargeExport = useCallback(() => {
+  const confirmLargeExport = useCallback(async () => {
     if (!pivotData) return false;
     if (
       !shouldConfirmLargeExport(pivotData, {
@@ -474,12 +476,18 @@ export function VirtualPivotReportBuilder() {
       return true;
     }
     const rows = countPivotExportRows(pivotData, { expandedRows });
-    return window.confirm(getPivotStrings().export.confirmLargeExport(rows));
-  }, [pivotData, expandedRows, datasetRows.length]);
+    return confirm({
+      title: "Экспорт",
+      message: getPivotStrings().export.confirmLargeExport(rows),
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: false
+    });
+  }, [pivotData, expandedRows, datasetRows.length, confirm]);
 
   const handleExportExcel = useCallback(async () => {
     if (!pivotData) return;
-    if (!confirmLargeExport()) return;
+    if (!(await confirmLargeExport())) return;
 
     let dataForExport = pivotData;
 
@@ -545,7 +553,7 @@ export function VirtualPivotReportBuilder() {
   ]);
 
   const handleExportPdf = useCallback(async () => {
-    if (!confirmLargeExport()) return;
+    if (!(await confirmLargeExport())) return;
     const exported = await exportPdf(pivotData, {
       filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.pdf`,
       title: "Сводная таблица",
@@ -555,7 +563,7 @@ export function VirtualPivotReportBuilder() {
   }, [confirmLargeExport, exportPdf, pivotData, expandedRows]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!confirmLargeExport()) return;
+    if (!(await confirmLargeExport())) return;
     const exported = await exportHtml(pivotData, {
       filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.html`,
       title: "Сводная таблица",
@@ -572,7 +580,7 @@ export function VirtualPivotReportBuilder() {
   }, [exportChartPng]);
 
   const handleExportCsv = useCallback(async () => {
-    if (!confirmLargeExport()) return;
+    if (!(await confirmLargeExport())) return;
     const exported = await exportCsv(pivotData, {
       filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.csv`,
       expandedRows
@@ -1705,6 +1713,7 @@ export function VirtualPivotReportBuilder() {
             </div>
           </div>
         ) : null}
+        {confirmDialog}
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ import {
   revokeStaffSessions,
   type StaffKind
 } from "./staff.service";
-import { catalogRoles, adminRoles } from "./staff.route.shared";
+import { catalogRoles, adminRoles, accessStaffDirectoryWhere } from "./staff.route.shared";
 import {
   agentEntitlementsPayloadSchema,
   agentEntitlementsSchema,
@@ -67,8 +67,11 @@ import {
   createWebStaffPositionPresetBody,
   patchWebStaffPositionPresetBody
 } from "./staff.route.schemas";
+import { registerKomandaBulkRoute } from "./staff.route.komanda-bulk";
 
 export async function registerStaffExpeditorRoutes(app: FastifyInstance) {
+  registerKomandaBulkRoute(app, "expeditor");
+
   app.get(
     "/api/:slug/expeditors/filter-options",
     { preHandler: [jwtAccessVerify, requireRoles(...DIRECTORY_READ_ROLES)] },
@@ -86,7 +89,18 @@ export async function registerStaffExpeditorRoutes(app: FastifyInstance) {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
       const filters = parseExpeditorListFilters(q);
-      const data = await listStaff(request.tenant!.id, "expeditor", filters);
+      const accessScope = await accessStaffDirectoryWhere(request, request.tenant!.id);
+      let data = await listStaff(request.tenant!.id, "expeditor", filters, accessScope);
+      const forNewWork = q.for_new_work === "1" || q.for_new_work === "true";
+      if (forNewWork) {
+        const { filterStaffOnActiveWorkSlot, tenantUsesExpeditorWorkSlots } = await import(
+          "../work-slots/work-slots.expeditor-gate"
+        );
+        data = await filterStaffOnActiveWorkSlot(
+          await tenantUsesExpeditorWorkSlots(request.tenant!.id),
+          data
+        );
+      }
       return reply.send({ data });
     }
   );
@@ -155,7 +169,12 @@ export async function registerStaffExpeditorRoutes(app: FastifyInstance) {
       if (Number.isNaN(id)) {
         return sendApiError(reply, request, 400, "InvalidId");
       }
-      const row = await getStaffRow(request.tenant!.id, "expeditor", id);
+      const row = await getStaffRow(
+        request.tenant!.id,
+        "expeditor",
+        id,
+        await accessStaffDirectoryWhere(request, request.tenant!.id)
+      );
       if (!row) {
         return sendApiError(reply, request, 404, "NotFound");
       }

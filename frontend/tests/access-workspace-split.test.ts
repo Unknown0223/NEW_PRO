@@ -41,6 +41,16 @@ describe("access-workspace split", () => {
     expect(filtered.map((r) => r.role)).toEqual(["admin", "supervisor"]);
   });
 
+  it("isWebPanelDeniedRole blocks field roles from the web panel", async () => {
+    const { isWebPanelDeniedRole } = await import("../lib/access-web-users");
+    expect(isWebPanelDeniedRole("agent")).toBe(true);
+    expect(isWebPanelDeniedRole("expeditor")).toBe(true);
+    expect(isWebPanelDeniedRole("collector")).toBe(true);
+    expect(isWebPanelDeniedRole("vanseller")).toBe(true);
+    expect(isWebPanelDeniedRole("supervisor")).toBe(false);
+    expect(isWebPanelDeniedRole("admin")).toBe(false);
+  });
+
   it("granted matrix shows only effective permissions", async () => {
     const { isGrantedMatrixRow, permissionSourceLabel, matchesPermissionSourceFilter } = await import(
       "../lib/access-user-permission-matrix"

@@ -214,6 +214,18 @@ export type ClientReferences = {
 
 /** JSON / massivdan 1..7 (Du..Ya) butun sonlarni ajratadi */
 export function parseVisitWeekdaysJson(raw: unknown): number[] {
+  if (raw == null) return [];
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return [];
+    try {
+      const parsed: unknown = JSON.parse(t);
+      if (typeof parsed === "string") return [];
+      return parseVisitWeekdaysJson(parsed);
+    } catch {
+      return [];
+    }
+  }
   if (!Array.isArray(raw)) return [];
   const out: number[] = [];
   for (const x of raw) {

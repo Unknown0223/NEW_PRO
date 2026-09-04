@@ -7,7 +7,7 @@ class ApiException implements Exception {
   final String? code;
   const ApiException({required this.message, this.statusCode, this.code});
   @override
-  String toString() => 'ApiException($statusCode${code != null ? ', $code' : ''}): $message';
+  String toString() => message;
 
   factory ApiException.fromStatusCode(int statusCode, String message, {String? code}) {
     switch (code) {
@@ -82,8 +82,8 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
     'APP_ACCESS_DENIED': 'Ilova kirish o\'chirilgan',
     'USER_NOT_ON_SLOT':
         'Не назначен на рабочее место. Обратитесь к администратору.',
-    'ForbiddenRole': 'Ruxsat yo\'q',
-    'ForbiddenPermission': 'Mobil ruxsatlar yo\'q',
+    'ForbiddenRole': 'Это действие недоступно для вашей роли. Обратитесь к администратору.',
+    'ForbiddenPermission': 'Нет доступа к этому действию. Обратитесь к администратору.',
     'DuplicatePhone': 'Bu telefon allaqachon mavjud',
     'DuplicateName': 'Shu nomdagi mijoz mavjud',
     'TENANT_NOT_FOUND': 'Неверный код компании',
@@ -132,7 +132,29 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
       statusCode: status > 0 ? status : null,
     );
   }
-  return ApiException(message: dioMsg.isEmpty ? 'Noma\'lum xato' : dioMsg, statusCode: status > 0 ? status : null);
+  if (dioMsg.isEmpty) {
+    final kind = e.type.name;
+    if (e.type == DioExceptionType.cancel) {
+      return const ApiException(message: 'So‘rov bekor qilindi — qayta urinib ko‘ring');
+    }
+    if (e.type == DioExceptionType.badResponse) {
+      return ApiException(
+        message: status > 0 ? 'Server javobi xato ($status)' : 'Server javobi xato',
+        statusCode: status > 0 ? status : null,
+      );
+    }
+    if (e.type == DioExceptionType.unknown) {
+      return ApiException(
+        message: 'Tarmoq yoki server bilan bog‘lanish uzildi ($kind)',
+        statusCode: status > 0 ? status : null,
+      );
+    }
+    return ApiException(
+      message: 'Sinxronlash uzildi — internetni tekshirib qayta urinib ko‘ring',
+      statusCode: status > 0 ? status : null,
+    );
+  }
+  return ApiException(message: dioMsg, statusCode: status > 0 ? status : null);
 }
 
 String? _formatLimitError(String apiCode, Map<dynamic, dynamic>? data) {

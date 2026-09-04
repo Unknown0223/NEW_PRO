@@ -50,6 +50,12 @@ export function messageFromSupervisorPatchError(err: unknown): string {
       err
     );
   }
+  if (status === 409 && code === "WorkplaceOnSlot") {
+    return withApiSupportLine(
+      "Настройки места меняются в «Рабочее место», не в карточке сотрудника.",
+      err
+    );
+  }
   if (typeof ax.response?.data?.message === "string" && ax.response.data.message.trim()) {
     return withApiSupportLine(ax.response.data.message.trim(), err);
   }

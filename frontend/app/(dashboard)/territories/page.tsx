@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { apiFetch, useTenant } from "@/lib/api-client";
 import { isDatabaseSchemaMismatchError } from "@/lib/api-errors";
 import { DatabaseSchemaMismatchCallout } from "@/components/system/database-schema-mismatch-callout";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 
 interface Territory {
   id: number;
@@ -23,6 +24,7 @@ interface Territory {
 
 export default function TerritoriesPage() {
   const tenant = useTenant();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Territory[]>([]);
   const [activeFilter, setActiveFilter] = useState("all");
@@ -56,7 +58,14 @@ export default function TerritoriesPage() {
   }, [tenant, activeFilter, archiveOnly]);
 
   const handleRestoreTerritory = async (id: number) => {
-    if (!confirm(`Hudud #${id} ni tiklash?`)) return;
+    const ok = await confirm({
+      title: "Восстановить",
+      message: `Восстановить территорию #${id}?`,
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: false
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/${tenant}/territories/${id}/restore`, { method: "POST" });
       await fetchTerritories();
@@ -140,6 +149,7 @@ export default function TerritoriesPage() {
           )}
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 }

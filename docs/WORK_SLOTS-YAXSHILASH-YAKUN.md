@@ -1,94 +1,75 @@
 # Рабочее место — yaxshilash yakuni
 
-**Sana:** 2026-08-25 (UI: Config / Edit ajratildi, staff redirect)  
-**Holat:** Faza 1–3 + Faza 4 (orders.work_slot_id) + Faza 5 (slot-first mobile) + UI to‘liq ajratish
+**Sana:** 2026-08-26 (P1 bog‘lanishlar yakunlandi)  
+**Holat:** Faza 1–5 + P1 (KPI / marshrut / guruh / orders backfill) — **to‘liq**
 
 ---
 
-## Foiz holati (taxminiy)
+## Foiz holati
 
 | Faza | Holat | % |
 |------|-------|---|
-| 1 UI (**jadval** — Agents/Expeditors kabi) | Tayyor | 100% |
-| 2 mobile_config → slot + staff redirect/block | Tayyor | 100% |
-| 3 Permission reset (swap) + audit note | Tayyor + test | 100% |
-| 4 P1 schema | `orders.work_slot_id` qo‘shildi; KPI target — keyingi | ~60% |
+| 1 UI (jadval) | Tayyor | 100% |
+| 2 mobile_config → slot + staff redirect | Tayyor | 100% |
+| 3 Permission reset (swap) | Tayyor | 100% |
+| 4 P1 schema | KPI target + route + kpi group + orders | **100%** |
 | 5 Mobile API slot-first | Tayyor | 100% |
-| 6 Testlar / hujjat | Shu hujjat | — |
-| **Umumiy (reja bo‘yicha)** | | **~90%** |
+| **Umumiy** | | **~100%** (kod) |
 
 ---
 
-## 2026-08-25 (kechki) — Config / Edit / Staff to‘liq ajratish
+## 2026-08-26 — P1 bog‘lanishlar
 
-### `/work-slots` qator amallari (aniq)
+| Jadval | Maydon | Yozish |
+|--------|--------|--------|
+| `sales_kpi_plan_targets` | `work_slot_id` | `ensurePlansAndTargets`, Excel create |
+| `kpi_group_agents` | `work_slot_id` | KPI guruh create/patch |
+| `agent_route_days` | `work_slot_id` | marshrut create (snapshot) |
+| `orders` | `work_slot_id` | allaqachon create; + tarixiy backfill |
 
-| Icon | Amal | Nima ochiladi |
-|------|------|----------------|
-| Settings | **Конфигурация** | `SlotWorkplaceConfigDialog` — narx, limit, mobile, expeditor rules, skladchik… |
-| Eye | **Подробнее** | detail sahifa |
-| Pencil | **Редактировать** | faqat asosiy maydonlar (kod, nom, rol, filial, territory/sklad/kassa) — **config yo‘q** |
-| User | **Сменить сотрудника** | yangilangan «Xodim almashtirish» modal |
+Assign/swap/unassign: `syncUserLinksToWorkSlotTx` — KPI target/guruh yangilanadi; marshrut faqat `NULL` larni to‘ldiradi.
 
-### Staff (agent / expeditor / supervisor / skladchik / collector / auditor)
+Migratsiya: `20260826120000_work_slot_p1_links`
 
-- «Конфигурация» tugmasi: faol `work_slot_id` → `/work-slots/:id?openConfig=1`
-- Slot yo‘q → dialog: **«Avval rabochee mesto biriktiring»** (+ link `/work-slots`)
-- Staff form/edit: faqat shaxsiy ma’lumot (FIO, login, parol, telefon, rol, app_access…)
-- User workplace editor (yarim ishlaydigan duplicate) **olib tashlandi**
+### Backfill
 
-### Backend
+```powershell
+cd backend
+npx.cmd tsx scripts/backfill-work-slot-p1-links.ts --tenant=test1 --dry-run
+npx.cmd tsx scripts/backfill-work-slot-p1-links.ts --tenant=test1
+# yoki barcha tenant:
+npm run backfill:work-slot-p1-links
+```
 
-- `WORKPLACE_STAFF_PATCH_KEYS` + `cash_desk_id`
-- Individual staff PATCH: faol slotda joy maydonlari → `WORKPLACE_ON_SLOT` (409)
-- Agents bulk (`set_agent_entitlements`, trade_direction, consignment, product_list): faol slot bor bo‘lsa → `WORKPLACE_ON_SLOT`
-- `patch_mobile_config` bulk: slot bo‘lsa → slot entitlements ga yozadi (oldingidek)
-
-### Swap modal
-
-- «Xodim almashtirish»: SalesArena uslubida (hozirgi/yangi kartochka, qidiruv, ixcham checklist)
+`test1` (2026-08-26): targets=32, groups=32, routes=1, orders=12.
 
 ---
 
-## Nima qilindi (oldingi fazalar)
+## Qator amallari (`/work-slots`)
 
-### Faza 1 (UI — **table-first**)
+| Icon | Amal |
+|------|------|
+| Settings | To‘liq konfiguratsiya |
+| Eye | Подробнее |
+| Pencil | Faqat asosiy maydonlar |
+| User | Xodim almashtirish |
 
-- `/work-slots` asosiy ko‘rinish: `StaffWorkspaceTable`
-- Ustunlar: kod, nomi, rol, filial, xodim, ombor, zona/oblast/shahar, kassa, status
-- Detail sahifa; konfiguratsiya modal — rol tablar
-
-### Faza 2
-
-- `WorkSlot.entitlements.mobile_config` — **manba**
-- Staff joy maydonlari PATCH: `WORKPLACE_ON_SLOT`
-- Slot «Мобильное» tab
-
-### Faza 3–5
-
-- Assign/swap/unassign: ruxsat reset + audit
-- `orders.work_slot_id`
-- Mobile API slot-first
+Staff «Конфигурация» → `/work-slots/:id?openConfig=1` (slot yo‘q → ogohlantirish).
 
 ---
 
-## Qolgan (tashqi / keyingi)
+## Qolgan (ixtiyoriy / keyinroq)
 
-1. `SalesKpiPlanTarget.work_slot_id` + plan UI «по месту»
-2. Marshrut kunlari (`agent_route_days`) → slot
-3. KPI guruh bog‘lanishi slotga
-4. Eski zakazlarga `work_slot_id` backfill (ixtiyoriy)
-5. User dagi joy maydonlarini P2 da to‘liq o‘qish-only / o‘chirish
-6. `npx prisma migrate deploy` / generate — `20260825120000_orders_work_slot_id`
+1. Plan UI da «по месту» filtr (ustun allaqachon DB da)
+2. `prisma generate` — `start-dev` band qilsa, to‘xtatib qayta generate
+3. P2: User joy maydonlarini butunlay o‘qish-only / olib tashlash
 
 ---
 
-## Backfill (bir marta)
+## Backfill (config)
 
 ```powershell
 cd backend
 npx.cmd tsx scripts/backfill-work-slots-config.ts --dry-run
 npx.cmd tsx scripts/backfill-work-slots-config.ts
 ```
-
-Endi backfill `mobile_config` ni ham slotga ko‘chiradi.

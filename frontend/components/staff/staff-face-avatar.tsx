@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const SIZE_CLASS = {
@@ -25,8 +26,72 @@ type Props = {
   ringColor?: string | null;
 };
 
+const blobUrlByKey = new Map<string, string>();
+const failedKeys = new Set<string>();
+const inflightByKey = new Map<string, Promise<string | null>>();
+
+function cacheKey(tenantSlug: string, userId: number): string {
+  return `${tenantSlug}:${userId}`;
+}
+
 /**
- * Dumaloq xodim rasmi — etalon face-reference; yo‘q bo‘lsa initials.
+ * Upload/delete dan keyin yangi rasm ko‘rinsin.
+ * Object URL cache ni tozalaydi.
+ */
+export function invalidateStaffFaceAvatarCache(tenantSlug: string, userId: number): void {
+  const key = cacheKey(tenantSlug, userId);
+  failedKeys.delete(key);
+  const old = blobUrlByKey.get(key);
+  if (old) {
+    URL.revokeObjectURL(old);
+    blobUrlByKey.delete(key);
+  }
+  inflightByKey.delete(key);
+}
+
+async function loadFaceBlobUrl(tenantSlug: string, userId: number): Promise<string | null> {
+  const key = cacheKey(tenantSlug, userId);
+  if (failedKeys.has(key)) return null;
+  const cached = blobUrlByKey.get(key);
+  if (cached) return cached;
+  const inflight = inflightByKey.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    try {
+      const res = await api.get<Blob>(`/api/${tenantSlug}/staff/users/${userId}/face-reference`, {
+        responseType: "blob",
+        headers: { Accept: "image/jpeg,image/png,image/webp,image/*" }
+      });
+      const blob = res.data;
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        failedKeys.add(key);
+        return null;
+      }
+      const type = (blob.type || "").toLowerCase();
+      if (type.includes("application/json") || type.startsWith("text/")) {
+        failedKeys.add(key);
+        return null;
+      }
+      const url = URL.createObjectURL(blob);
+      blobUrlByKey.set(key, url);
+      return url;
+    } catch {
+      failedKeys.add(key);
+      return null;
+    } finally {
+      inflightByKey.delete(key);
+    }
+  })();
+
+  inflightByKey.set(key, promise);
+  return promise;
+}
+
+/**
+ * Dumaloq xodim rasmi — etalon face-reference (auth orqali blob);
+ * yo‘q / xato bo‘lsa initials. `<img src="/api/...">` ishlatilmaydi —
+ * brauzer Authorization yubormaydi va 401 flood + sekinlashish chiqadi.
  */
 export function StaffFaceAvatar({
   tenantSlug,
@@ -38,9 +103,54 @@ export function StaffFaceAvatar({
   hasPhoto = true,
   ringColor
 }: Props) {
-  const [failed, setFailed] = useState(false);
-  const showImg = hasPhoto && userId > 0 && !failed;
-  const src = `/api/${tenantSlug}/staff/users/${userId}/face-reference`;
+  const [objectUrl, setObjectUrl] = useState<string | null>(() => {
+    if (!hasPhoto || userId <= 0) return null;
+    return blobUrlByKey.get(cacheKey(tenantSlug, userId)) ?? null;
+  });
+  const [failed, setFailed] = useState(() => {
+    if (!hasPhoto || userId <= 0) return true;
+    return failedKeys.has(cacheKey(tenantSlug, userId));
+  });
+
+  useEffect(() => {
+    if (!hasPhoto || userId <= 0) {
+      setObjectUrl(null);
+      setFailed(true);
+      return;
+    }
+
+    const key = cacheKey(tenantSlug, userId);
+    if (failedKeys.has(key)) {
+      setObjectUrl(null);
+      setFailed(true);
+      return;
+    }
+    const cached = blobUrlByKey.get(key);
+    if (cached) {
+      setObjectUrl(cached);
+      setFailed(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFailed(false);
+    void loadFaceBlobUrl(tenantSlug, userId).then((url) => {
+      if (cancelled) return;
+      if (url) {
+        setObjectUrl(url);
+        setFailed(false);
+      } else {
+        setObjectUrl(null);
+        setFailed(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantSlug, userId, hasPhoto]);
+
+  const showImg = hasPhoto && userId > 0 && !failed && Boolean(objectUrl);
 
   return (
     <div
@@ -55,10 +165,13 @@ export function StaffFaceAvatar({
       {showImg ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src}
+          src={objectUrl!}
           alt={alt}
           className="h-full w-full object-cover"
-          onError={() => setFailed(true)}
+          onError={() => {
+            failedKeys.add(cacheKey(tenantSlug, userId));
+            setFailed(true);
+          }}
         />
       ) : (
         <span className="select-none uppercase tracking-wide">{initials.slice(0, 2) || "?"}</span>

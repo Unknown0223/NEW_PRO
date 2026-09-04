@@ -18,9 +18,14 @@ import { CLIENT_IMPORT_MAPPABLE_FIELDS } from "@/lib/client-import-fields";
 import {
   buildUpdateApplyFieldOptions,
   CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS,
-  DEFAULT_DUPLICATE_KEY_FIELDS
+  DEFAULT_DUPLICATE_KEY_FIELDS,
+  defaultUpdateApplyFieldKeys,
+  isClientImportTeamFieldKey,
+  RECOMMENDED_DUPLICATE_KEY_FIELDS,
+  teamUpdateApplyFieldKeys
 } from "@/lib/client-import-masks";
 import {
+  headerToAgentImportKey,
   mergeAutoClientImportColumns,
   rowToHeaderLabels,
   suggestColumnMapping
@@ -84,8 +89,16 @@ export function ClientImportMappingDialog({
   const [dupKeySet, setDupKeySet] = useState<Set<string>>(() => new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
   const [restrictUpdate, setRestrictUpdate] = useState(importMode === "update");
   const updateFieldOptions = useMemo(() => buildUpdateApplyFieldOptions(), []);
+  const baseUpdateOptions = useMemo(
+    () => updateFieldOptions.filter((o) => !isClientImportTeamFieldKey(o.key)),
+    [updateFieldOptions]
+  );
+  const teamUpdateOptions = useMemo(
+    () => updateFieldOptions.filter((o) => isClientImportTeamFieldKey(o.key)),
+    [updateFieldOptions]
+  );
   const [updateApplySet, setUpdateApplySet] = useState<Set<string>>(
-    () => new Set(updateFieldOptions.map((o) => o.key))
+    () => new Set(defaultUpdateApplyFieldKeys(updateFieldOptions))
   );
 
   const selectAllUpdateFields = useCallback(() => {
@@ -96,9 +109,28 @@ export function ClientImportMappingDialog({
     setUpdateApplySet(new Set());
   }, []);
 
+  const selectTeamUpdateFields = useCallback(() => {
+    setUpdateApplySet((prev) => {
+      const n = new Set(prev);
+      for (const k of teamUpdateApplyFieldKeys(updateFieldOptions)) n.add(k);
+      return n;
+    });
+  }, [updateFieldOptions]);
+
+  const deselectTeamUpdateFields = useCallback(() => {
+    setUpdateApplySet((prev) => {
+      const n = new Set(prev);
+      for (const k of teamUpdateApplyFieldKeys(updateFieldOptions)) n.delete(k);
+      return n;
+    });
+  }, [updateFieldOptions]);
+
   const allUpdateFieldsSelected =
     updateFieldOptions.length > 0 && updateFieldOptions.every((o) => updateApplySet.has(o.key));
   const noUpdateFieldsSelected = updateApplySet.size === 0;
+  const allTeamSelected =
+    teamUpdateOptions.length > 0 && teamUpdateOptions.every((o) => updateApplySet.has(o.key));
+  const noTeamSelected = teamUpdateOptions.every((o) => !updateApplySet.has(o.key));
 
   const resetState = useCallback(() => {
     xlsxModRef.current = null;
@@ -111,7 +143,7 @@ export function ClientImportMappingDialog({
     setCheckDuplicates(false);
     setDupKeySet(new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
     setRestrictUpdate(importMode === "update");
-    setUpdateApplySet(new Set(buildUpdateApplyFieldOptions().map((o) => o.key)));
+    setUpdateApplySet(new Set(defaultUpdateApplyFieldKeys()));
   }, [importMode]);
 
   useEffect(() => {
@@ -163,6 +195,19 @@ export function ClientImportMappingDialog({
   const fileColumnLabels = useMemo(() => {
     const row = matrix[headerRowIdx];
     return rowToHeaderLabels(row);
+  }, [matrix, headerRowIdx]);
+
+  const detectedTeamFromFile = useMemo(() => {
+    const row = matrix[headerRowIdx];
+    if (!Array.isArray(row)) return [] as string[];
+    const labels: string[] = [];
+    row.forEach((c) => {
+      const raw = c == null ? "" : String(c);
+      const key = headerToAgentImportKey(raw);
+      if (!key) return;
+      labels.push(raw.trim() || key);
+    });
+    return labels;
   }, [matrix, headerRowIdx]);
 
   useEffect(() => {
@@ -251,8 +296,8 @@ export function ClientImportMappingDialog({
                 <span className="break-all">
                   Файл: <strong>{file.name}</strong>
                   {importMode === "update"
-                    ? " — строки с «ИД» из системы; пустые ячейки в сопоставленных столбцах очищают поле в базе. Несуществующие коды справочника и агентов тоже очищаются. Столбцы «Агент N / Агент N день / Экспедитор N» подхватываются автоматически только если найдены в шапке."
-                    : " — для каждого поля системы выберите столбец. Опционально «ИД» / id / ИД: если указан — клиент создаётся с этим id или обновляется (в рамках tenant). «Агент 1…10 / день / Экспедитор» можно не мапить вручную."}
+                    ? " — строки с «ИД»; пустые ячейки в обычных полях очищают значение. Команда (агент / дни / экспедитор): пустая ячейка сохраняет текущее назначение; чтобы снять — напишите «очистить». Отметьте нужные поля ниже, включая блок «Команда»."
+                    : " — сопоставьте столбцы. «Команда» (Агент / день / Экспедитор) читается из файла полностью (авто или вручную). ИД необязателен."}
                 </span>
               ) : (
                 "Файл не выбран."
@@ -271,6 +316,39 @@ export function ClientImportMappingDialog({
             <p className="text-muted-foreground text-sm">Чтение файла…</p>
               ) : (
                 <div className="space-y-4">
+                  <div className="rounded-md border border-sky-200/80 bg-sky-50/70 px-3 py-2 text-xs text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/25 dark:text-sky-100">
+                    <p className="mb-1.5 font-semibold">Уникальность (дубликаты) — что проверять</p>
+                    <ul className="list-inside list-disc space-y-0.5 text-[11px] leading-snug">
+                      <li>
+                        <strong>★ Код клиента</strong> — главный бизнес-ID (рекомендуется)
+                      </li>
+                      <li>
+                        <strong>★ ИНН</strong> / <strong>★ ПИНФЛ</strong> — юридический / физ. идентификатор
+                      </li>
+                      <li>
+                        <strong>★ Телефон</strong> — частый практический дубликат
+                      </li>
+                      <li>
+                        <strong>Наименование</strong> — в БД уже уникально в рамках компании
+                      </li>
+                      <li>
+                        <strong>Город</strong> — слабый ключ (много клиентов в одном городе)
+                      </li>
+                    </ul>
+                    <p className="mt-1.5 text-[11px] opacity-90">
+                      {importMode === "update"
+                        ? "При обновлении эти проверки выполняются автоматически (ИД в файле + конфликт кода/ИНН/ПИНФЛ/телефона/имени с другим клиентом)."
+                        : "При новом импорте включите «Проверять дубликаты» и отметьте ★-поля ниже."}
+                    </p>
+                    <p className="mt-1 border-t border-sky-200/60 pt-1.5 text-[11px] dark:border-sky-800/50">
+                      <strong>Долг — агент и доставочник:</strong> снять / заменить сотрудника можно
+                      только если остаток долга по его <em>доставленным</em> заказам у клиента равен{" "}
+                      <strong>0</strong>. Любая сумма &gt; 0 блокирует. Переплата по заказам (оплачено
+                      больше) даёт остаток 0 — смена разрешена. Импорт пропустит заблокированные
+                      назначения (остальные поля обновятся) и покажет предупреждение со списком и
+                      суммой.
+                    </p>
+                  </div>
                   {importMode === "create" ? (
                     <div className="bg-muted/40 space-y-2 rounded-md border border-border/80 p-3">
                       <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
@@ -292,8 +370,8 @@ export function ClientImportMappingDialog({
                       {checkDuplicates ? (
                         <>
                           <p className="text-muted-foreground text-xs">
-                            Отметьте поля, по которым совпадение с уже существующим клиентом или с
-                            предыдущей строкой файла пропускает создание. По умолчанию — код и город.
+                            Отметьте поля (★ = рекомендуется). Совпадение с БД или с предыдущей строкой
+                            файла пропускает создание.
                           </p>
                           <div className="flex flex-wrap gap-x-4 gap-y-2">
                             {CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS.map(({ key, label }) => (
@@ -313,6 +391,9 @@ export function ClientImportMappingDialog({
                                   }}
                                 />
                                 {label}
+                                {(RECOMMENDED_DUPLICATE_KEY_FIELDS as readonly string[]).includes(key) ? (
+                                  <span className="text-amber-700 dark:text-amber-400 text-[10px]">★</span>
+                                ) : null}
                               </label>
                             ))}
                           </div>
@@ -321,6 +402,12 @@ export function ClientImportMappingDialog({
                     </div>
                   ) : (
                     <div className="bg-muted/40 space-y-2 rounded-md border border-border/80 p-3">
+                      <p className="text-sm font-medium">Обновление — дубликаты уже включены</p>
+                      <p className="text-muted-foreground text-xs">
+                        Повторный ИД в файле и конфликт наименования / кода / ИНН / ПИНФЛ / телефона с
+                        другим клиентом блокируют строку. Клиент без агента сохраняется; агент без
+                        рабочего места не привязывается.
+                      </p>
                       <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
                         <input
                           type="checkbox"
@@ -331,7 +418,7 @@ export function ClientImportMappingDialog({
                             const on = e.target.checked;
                             setRestrictUpdate(on);
                             if (on && updateApplySet.size === 0) {
-                              setUpdateApplySet(new Set(buildUpdateApplyFieldOptions().map((o) => o.key)));
+                              setUpdateApplySet(new Set(defaultUpdateApplyFieldKeys()));
                             }
                           }}
                         />
@@ -341,9 +428,8 @@ export function ClientImportMappingDialog({
                         <>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-muted-foreground text-xs">
-                              Отмеченные поля будут изменены в клиенте; остальные — нет, даже если
-                              столбец сопоставлен ниже. Снимите галочки с агента / дней / экспедитора,
-                              если не нужно менять их из файла.
+                              Отметьте только то, что нужно изменить. Блок «Команда» по умолчанию
+                              выключен — включите, если меняете агентов / дни / экспедиторов из файла.
                             </p>
                             <div className="flex shrink-0 flex-wrap items-center gap-1">
                               <span className="text-muted-foreground text-xs tabular-nums">
@@ -371,27 +457,85 @@ export function ClientImportMappingDialog({
                               </Button>
                             </div>
                           </div>
-                          <div className="max-h-48 overflow-y-auto rounded border border-border/60 bg-background/50 p-2">
-                            <div className="grid gap-1 sm:grid-cols-2">
-                              {updateFieldOptions.map(({ key, label }) => (
-                                <label key={key} className="flex cursor-pointer items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    className="border-input h-3.5 w-3.5 shrink-0 rounded"
-                                    checked={updateApplySet.has(key)}
-                                    disabled={isSubmitting}
-                                    onChange={(e) => {
-                                      setUpdateApplySet((prev) => {
-                                        const n = new Set(prev);
-                                        if (e.target.checked) n.add(key);
-                                        else n.delete(key);
-                                        return n;
-                                      });
-                                    }}
-                                  />
-                                  <span className="min-w-0">{label}</span>
-                                </label>
-                              ))}
+                          <div className="max-h-56 space-y-3 overflow-y-auto rounded border border-border/60 bg-background/50 p-2">
+                            <div>
+                              <p className="text-muted-foreground mb-1 text-[11px] font-semibold uppercase tracking-wide">
+                                Основные поля
+                              </p>
+                              <div className="grid gap-1 sm:grid-cols-2">
+                                {baseUpdateOptions.map(({ key, label }) => (
+                                  <label key={key} className="flex cursor-pointer items-center gap-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      className="border-input h-3.5 w-3.5 shrink-0 rounded"
+                                      checked={updateApplySet.has(key)}
+                                      disabled={isSubmitting}
+                                      onChange={(e) => {
+                                        setUpdateApplySet((prev) => {
+                                          const n = new Set(prev);
+                                          if (e.target.checked) n.add(key);
+                                          else n.delete(key);
+                                          return n;
+                                        });
+                                      }}
+                                    />
+                                    <span className="min-w-0">{label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="border-t border-border/50 pt-2">
+                              <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
+                                <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
+                                  Команда (агент · дни · экспедитор)
+                                </p>
+                                <div className="flex gap-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px]"
+                                    disabled={isSubmitting || allTeamSelected}
+                                    onClick={() => selectTeamUpdateFields()}
+                                  >
+                                    Вкл. команду
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px]"
+                                    disabled={isSubmitting || noTeamSelected}
+                                    onClick={() => deselectTeamUpdateFields()}
+                                  >
+                                    Выкл. команду
+                                  </Button>
+                                </div>
+                              </div>
+                              <p className="text-muted-foreground mb-1 text-[10px]">
+                                Пустая ячейка не снимает назначение; «очистить» / clear — снимает.
+                              </p>
+                              <div className="grid gap-1 sm:grid-cols-2">
+                                {teamUpdateOptions.map(({ key, label }) => (
+                                  <label key={key} className="flex cursor-pointer items-center gap-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      className="border-input h-3.5 w-3.5 shrink-0 rounded"
+                                      checked={updateApplySet.has(key)}
+                                      disabled={isSubmitting}
+                                      onChange={(e) => {
+                                        setUpdateApplySet((prev) => {
+                                          const n = new Set(prev);
+                                          if (e.target.checked) n.add(key);
+                                          else n.delete(key);
+                                          return n;
+                                        });
+                                      }}
+                                    />
+                                    <span className="min-w-0">{label}</span>
+                                  </label>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </>
@@ -447,7 +591,19 @@ export function ClientImportMappingDialog({
                   Строка заголовков вне таблицы. Введите номер от {1} до {Math.max(1, matrix.length)}.
                 </p>
               ) : (
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4">
+                <>
+                  {detectedTeamFromFile.length > 0 ? (
+                    <div className="rounded-md border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
+                      <strong>Команда в файле:</strong> {detectedTeamFromFile.slice(0, 12).join(", ")}
+                      {detectedTeamFromFile.length > 12
+                        ? ` … (+${detectedTeamFromFile.length - 12})`
+                        : ""}
+                      {importMode === "create"
+                        ? " — при импорте новых клиентов эти столбцы читаются полностью."
+                        : " — в обновлении отметьте блок «Команда» выше, если нужно менять назначения."}
+                    </div>
+                  ) : null}
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4">
                   {CLIENT_IMPORT_MAPPABLE_FIELDS.map(({ key, label }) => (
                     <div key={key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                       <Label className="text-muted-foreground shrink-0 text-xs sm:w-[40%] sm:text-sm">
@@ -473,7 +629,8 @@ export function ClientImportMappingDialog({
                       </select>
                     </div>
                   ))}
-                </div>
+                  </div>
+                </>
               )}
             </div>
           )}

@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { SettingsWorkspace } from "@/components/settings/settings-workspace";
 import {
@@ -148,6 +149,7 @@ function TerritoryTreeRow({
   const isOpen = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
   const sortedChildren = sortForest(node.children);
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   return (
     <div className="select-none">
@@ -238,9 +240,16 @@ function TerritoryTreeRow({
                   title="O‘chirish"
                   disabled={busy}
                   onClick={() => {
-                    if (window.confirm(`“${node.name || "Tugun"}” va ichidagi barchasi o‘chirilsinmi?`)) {
-                      onDelete(node.id);
-                    }
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Удалить",
+                        message: `“${node.name || "Tugun"}” va ichidagi barchasi o‘chirilsinmi?`,
+                        confirmLabel: "Да",
+                        cancelLabel: "Нет",
+                        destructive: true
+                      });
+                      if (ok) onDelete(node.id);
+                    })();
                   }}
                 >
                   <Trash2 className="size-4" />
@@ -273,6 +282,7 @@ function TerritoryTreeRow({
           ))}
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }

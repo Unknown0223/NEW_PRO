@@ -18,6 +18,7 @@ import {
 import { getUserFacingError } from "@/lib/error-utils";
 import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import {
   Ban,
   Check,
@@ -101,6 +102,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
   onChangeShipDate
 }: OrderStatusDropdownProps) {
   const router = useRouter();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const anchorRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -244,7 +246,19 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
 
   const onPickStatus = (action: StatusAction) => {
     if (action.kind === "reopen") {
-      if (!window.confirm(reopenConfirmMessage(order.order_type))) return;
+      setOpen(false);
+      void (async () => {
+        const ok = await confirm({
+          title: "Подтверждение",
+          message: reopenConfirmMessage(order.order_type),
+          confirmLabel: "Да",
+          cancelLabel: "Нет",
+          destructive: false
+        });
+        if (!ok) return;
+        onStatusChange(order.id, action.value);
+      })();
+      return;
     }
     onStatusChange(order.id, action.value);
     setOpen(false);
@@ -345,6 +359,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
           {shelfReturnNotice}
         </span>
       ) : null}
+      {confirmDialog}
     </span>
   );
 });

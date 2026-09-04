@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/table";
 import { apiFetch, useTenantReady } from "@/lib/api-client";
 import { activeBranchNamesFromProfile, type BranchRefRow } from "@/lib/branch-options";
-import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -45,10 +45,12 @@ import {
 import { AssignUserDialog } from "./assign-user-dialog";
 import { WorkSlotsBulkDialog, type WorkSlotsBulkResult } from "./work-slots-bulk-dialog";
 import { WorkSlotsBulkFloatingBar } from "./work-slots-bulk-floating-bar";
+import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromWorkSlotsBulkError } from "@/lib/work-slots-bulk-errors";
 import { CreateSlotDialog } from "./create-slot-dialog";
 import { EditSlotDialog } from "./edit-slot-dialog";
 import { SlotWorkplaceConfigDialog } from "./slot-workplace-config-dialog";
+import { WorkSlotsStaffImportDialog } from "./work-slots-staff-import-dialog";
 import { renderWorkSlotDataCell, WorkSlotRowActions } from "./work-slots-list-table";
 import { WorkSlotsFilterBar, type WorkSlotsFilterState } from "./work-slots-filter-bar";
 import { WorkSlotsActivityPanel } from "./work-slots-activity-panel";
@@ -58,15 +60,14 @@ import {
 } from "@/components/staff/staff-floating-toast";
 import {
   activeStatusListToQuery,
-  slotSupportsAgentRestrictions,
-  slotSupportsBulkMobileConfig,
-  slotSupportsRichWorkplaceConfig,
+  bulkFloatingConfigActions,
   workSlotsDefaultHiddenColumns,
   WORK_SLOTS_COLUMN_IDS,
   WORK_SLOTS_COLUMN_LABEL_BY_ID,
   WORK_SLOTS_COLUMNS,
   WORK_SLOTS_TABLE_ID,
   buildWorkSlotsQuery,
+  staffSessionsKind,
   type SlotWorkplaceConfigTabId
 } from "./work-slots-utils";
 
@@ -148,11 +149,16 @@ export function WorkSlotsWorkspace() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "unassign" | null>(null);
+  const [sessionsSlot, setSessionsSlot] = useState<WorkSlotListItem | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [staffImportOpen, setStaffImportOpen] = useState(false);
 
   const branchOptions = useMemo(() => {
     const set = new Set<string>(profileBranches);
     for (const r of rows) {
+      for (const code of r.branch_codes ?? []) {
+        if (code.trim()) set.add(code.trim());
+      }
       if (r.branch_code?.trim()) set.add(r.branch_code.trim());
     }
     for (const b of filterApplied.branchList) {
@@ -180,15 +186,26 @@ export function WorkSlotsWorkspace() {
         return { value: o.value, label };
       });
 
-    const raw = buildZoneRegionCityCascadeOptions(clientRefs, undefined, territoryNodes, {
-      zone:
-        filterDraft.territoryZoneList.length === 1 ? (filterDraft.territoryZoneList[0] ?? "") : "",
-      region:
-        filterDraft.territoryOblastList.length === 1
-          ? (filterDraft.territoryOblastList[0] ?? "")
-          : "",
-      city: filterDraft.territoryCityList.length === 1 ? (filterDraft.territoryCityList[0] ?? "") : ""
-    });
+    const hasTree = (territoryNodes?.length ?? 0) > 0;
+    const raw = hasTree
+      ? buildTerritoryTreeOnlyCascade(territoryNodes, {
+          zones: filterDraft.territoryZoneList,
+          regions: filterDraft.territoryOblastList
+        })
+      : buildZoneRegionCityCascadeOptions(clientRefs, undefined, territoryNodes, {
+          zone:
+            filterDraft.territoryZoneList.length === 1
+              ? (filterDraft.territoryZoneList[0] ?? "")
+              : "",
+          region:
+            filterDraft.territoryOblastList.length === 1
+              ? (filterDraft.territoryOblastList[0] ?? "")
+              : "",
+          city:
+            filterDraft.territoryCityList.length === 1
+              ? (filterDraft.territoryCityList[0] ?? "")
+              : ""
+        });
     return {
       zones: mapOpts(raw.zones),
       regions: mapOpts(raw.regions),
@@ -402,6 +419,11 @@ export function WorkSlotsWorkspace() {
           const parts = [`снято: ${r.unassigned}`];
           if (r.skipped_no_user) parts.push(`без сотрудника: ${r.skipped_no_user}`);
           setToast(`Сотрудники сняты (${parts.join(", ")})`);
+        } else if (r.sessions_revoked != null) {
+          const parts = [`сессий: ${r.sessions_revoked}`];
+          if (r.users_revoked != null) parts.push(`сотрудников: ${r.users_revoked}`);
+          if (r.skipped_no_user) parts.push(`без сотрудника: ${r.skipped_no_user}`);
+          setToast(`Сессии завершены (${parts.join(", ")})`);
         } else {
           const parts = [`мест: ${r.updated ?? 0}`];
           if (r.users_updated != null) parts.push(`сотрудников: ${r.users_updated}`);
@@ -427,6 +449,11 @@ export function WorkSlotsWorkspace() {
         const parts = [`снято: ${result.unassigned}`];
         if (result.skipped_no_user) parts.push(`без сотрудника: ${result.skipped_no_user}`);
         setToast(`Сотрудники сняты (${parts.join(", ")})`);
+      } else if (result.sessions_revoked != null) {
+        const parts = [`сессий: ${result.sessions_revoked}`];
+        if (result.users_revoked != null) parts.push(`сотрудников: ${result.users_revoked}`);
+        if (result.skipped_no_user) parts.push(`без сотрудника: ${result.skipped_no_user}`);
+        setToast(`Сессии завершены (${parts.join(", ")})`);
       } else {
         const parts = [`мест: ${result.updated ?? 0}`];
         if (result.users_updated != null) parts.push(`сотрудников: ${result.users_updated}`);
@@ -540,6 +567,15 @@ export function WorkSlotsWorkspace() {
                 Импорт
               </Button>
             </ExcelDropTarget>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setStaffImportOpen(true)}
+            >
+              <Users className="mr-1 h-4 w-4" />
+              Импорт сотрудников
+            </Button>
             <input
               ref={importInputRef}
               type="file"
@@ -556,13 +592,15 @@ export function WorkSlotsWorkspace() {
       />
 
       <StaffWorkspaceFilterPanel
-        filtersLayout="stacked"
+        filtersLayout="filters-only"
         filters={
           <WorkSlotsFilterBar
             draft={filterDraft}
             onDraftChange={setFilterDraft}
             appliedSlotType={filterApplied.slotType}
             onSlotTypeChange={(slotType) => applyFilterPatch({ slotType })}
+            onReset={clearFilters}
+            onApply={applyFilters}
             branches={branchOptions}
             directions={directions}
             territoryCascade={territoryCascade}
@@ -691,6 +729,7 @@ export function WorkSlotsWorkspace() {
           return renderWorkSlotDataCell(slot, colId, {
             resolveTerritoryLabel: resolveTerritoryDisplay,
             onOpenDetail: (id) => router.push(`/work-slots/${id}`),
+            onOpenSessions: (s) => setSessionsSlot(s),
             tenantSlug: tenant
           });
         }}
@@ -703,6 +742,9 @@ export function WorkSlotsWorkspace() {
               onOpenSection={(section) => openSlotSection(slot.id, section)}
               onEdit={() => setEditSlotId(slot.id)}
               onAssign={() => setAssignSlotId(slot.id)}
+              onOpenSessions={
+                slot.active_user_id ? () => setSessionsSlot(slot) : undefined
+              }
             />
           );
         }}
@@ -713,26 +755,8 @@ export function WorkSlotsWorkspace() {
           count={selectedIds.size}
           isActiveTab={listTab === "active"}
           busy={bulkBusy}
-          onMain={
-            slotSupportsRichWorkplaceConfig(filterApplied.slotType)
-              ? () => openGroupSection("main")
-              : undefined
-          }
-          onPrices={
-            slotSupportsAgentRestrictions(filterApplied.slotType)
-              ? () => openGroupSection("prices")
-              : undefined
-          }
-          onRestrictions={
-            slotSupportsAgentRestrictions(filterApplied.slotType)
-              ? () => openGroupSection("limits")
-              : undefined
-          }
-          onMobileConfig={
-            slotSupportsBulkMobileConfig(filterApplied.slotType)
-              ? () => openGroupSection("mobile")
-              : undefined
-          }
+          configActions={bulkFloatingConfigActions(filterApplied.slotType)}
+          onOpenConfig={(section) => openGroupSection(section)}
           onBulkEdit={() => setBulkOpen(true)}
           onUnassign={() => setConfirmBulk("unassign")}
           onToggleActive={() => setConfirmBulk(listTab === "active" ? "deactivate" : "activate")}
@@ -772,6 +796,8 @@ export function WorkSlotsWorkspace() {
         tenant={tenant}
         branchOptions={branchOptions}
         tradeDirections={directions.map((d) => ({ id: d.id, name: d.name, code: null }))}
+        defaultSlotType={filterApplied.slotType}
+        defaultBranchCodes={filterApplied.branchList}
         onCreated={() => {
           setToast("Slot yaratildi");
           void load();
@@ -837,6 +863,23 @@ export function WorkSlotsWorkspace() {
         }}
       />
       {tenant ? (
+        <StaffActiveSessionsDialog
+          open={sessionsSlot != null}
+          onOpenChange={(open) => {
+            if (!open) setSessionsSlot(null);
+          }}
+          tenantSlug={tenant}
+          staffKind={staffSessionsKind(sessionsSlot?.slot_type ?? "agent")}
+          userId={sessionsSlot?.active_user_id ?? null}
+          slotId={sessionsSlot?.id ?? null}
+          slotType={sessionsSlot?.slot_type ?? null}
+          maxSessions={sessionsSlot?.active_user_max_sessions ?? 1}
+          onPatched={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      {tenant ? (
         <WorkSlotsBulkDialog
           open={bulkOpen}
           onOpenChange={setBulkOpen}
@@ -853,6 +896,20 @@ export function WorkSlotsWorkspace() {
           warehouses={warehouses}
           cashDesks={cashDesks}
           onDone={handleBulkDone}
+        />
+      ) : null}
+      {tenant ? (
+        <WorkSlotsStaffImportDialog
+          open={staffImportOpen}
+          onOpenChange={setStaffImportOpen}
+          tenantSlug={tenant}
+          onSuccess={(r) => {
+            setToast(
+              `Импорт сотрудников: +${r.created} создано, ${r.updated} обновлено` +
+                (r.errors.length ? `, ${r.errors.length} ошибок` : "")
+            );
+            void load();
+          }}
         />
       ) : null}
       {tenant ? (

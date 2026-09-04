@@ -104,11 +104,11 @@ export async function updateOrderMeta(
   const agChanged = nextAgentId !== existing.agent_id;
   const isNewStatus = existing.status === "new";
 
-  // Agent doim qulflangan. Ombor — faqat «new».
+  // Agent va ombor tahrirda qulflangan.
   if (agChanged) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
-  if (whChanged && !isNewStatus) {
+  if (whChanged) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
 
@@ -181,6 +181,10 @@ export async function updateOrderMeta(
     if (!ex) {
       throw new Error("BAD_EXPEDITOR");
     }
+    const { assertExpeditorCanTakeNewWork } = await import(
+      "../../work-slots/work-slots.expeditor-gate"
+    );
+    await assertExpeditorCanTakeNewWork(tenantId, input.expeditor_user_id);
   }
 
   const prevBlockId = (existing as { warehouse_block_id?: number | null }).warehouse_block_id ?? null;
@@ -215,6 +219,13 @@ export async function updateOrderMeta(
       });
     } else {
       expeditorResolved = existing.expeditor_user_id;
+    }
+
+    if (expeditorResolved != null && expeditorResolved !== existing.expeditor_user_id) {
+      const { assertExpeditorCanTakeNewWork } = await import(
+        "../../work-slots/work-slots.expeditor-gate"
+      );
+      await assertExpeditorCanTakeNewWork(tenantId, expeditorResolved);
     }
 
     await assertOrderWarehouseBlockAssignment(

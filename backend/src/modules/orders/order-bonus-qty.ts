@@ -218,11 +218,17 @@ export async function findQtyBonusPeeks(
         }
         if (heroPid <= 0) continue;
         const giftPid = resolveQtyGiftProductId(view, heroPid, giftOverrides, ctx);
-        if (giftPid <= 0) continue;
+        const resolvedGift =
+          giftPid > 0
+            ? giftPid
+            : heroPid > 0
+              ? heroPid
+              : view.bonus_product_ids[0] ?? 0;
+        if (resolvedGift <= 0) continue;
         peeks.push({
           rule,
           purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
-          giftPid,
+          giftPid: resolvedGift,
           bonusQty: bonusUnits
         });
         anyPeek = true;
@@ -230,11 +236,17 @@ export async function findQtyBonusPeeks(
       }
 
       const giftPid = resolveQtyGiftProductId(view, QTY_AGGREGATE_PURCHASED_PID, giftOverrides, ctx);
-      if (giftPid <= 0) continue;
+      const resolvedGift =
+        giftPid > 0
+          ? giftPid
+          : view.bonus_product_ids[0] ??
+            [...qtyByProduct.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ??
+            0;
+      if (resolvedGift <= 0) continue;
       peeks.push({
         rule,
         purchasedPid: QTY_AGGREGATE_PURCHASED_PID,
-        giftPid,
+        giftPid: resolvedGift,
         bonusQty: bonusUnits
       });
       anyPeek = true;
@@ -324,8 +336,15 @@ export async function findQtyBonusPeeks(
           minUnits: bonusUnits,
           categoryCandidateIds
         });
-        if (giftPid <= 0) continue;
-        peeks.push({ rule, purchasedPid, giftPid, bonusQty: bonusUnits });
+        // Omborda yetmasa ham peek saqlanadi — preview/UI shart + mahsulot + yetishmovchilikni ko‘rsatadi.
+        const resolvedGift =
+          giftPid > 0
+            ? giftPid
+            : view.bonus_product_ids[0] ??
+              categoryCandidateIds?.[0] ??
+              (purchasedPid > 0 ? purchasedPid : 0);
+        if (resolvedGift <= 0) continue;
+        peeks.push({ rule, purchasedPid, giftPid: resolvedGift, bonusQty: bonusUnits });
       }
     }
   }

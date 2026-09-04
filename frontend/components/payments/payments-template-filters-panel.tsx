@@ -162,11 +162,12 @@ export function PaymentsTemplateFiltersPanel({
       <ClientsTemplateSelectField
         key="zone"
         label="Зона"
+        multi
         options={zoneOptions}
-        values={uiFromSingleValue(draft.territory_zone)}
+        values={splitMultiFilterValues(draft.territory_zone)}
         onChange={(v) =>
           onDraftChange({
-            territory_zone: v[0]?.trim() ?? "",
+            territory_zone: joinMultiFilterValues(v),
             territory_region: "",
             territory_city: ""
           })
@@ -252,19 +253,21 @@ export function PaymentsTemplateFiltersPanel({
         {filterVis.territory2 ? (
           <ClientsTemplateSelectField
             label="Область"
+            multi
             options={regionOptions}
-            values={uiFromSingleValue(draft.territory_region)}
+            values={splitMultiFilterValues(draft.territory_region)}
             onChange={(v) =>
-              onDraftChange({ territory_region: v[0]?.trim() ?? "", territory_city: "" })
+              onDraftChange({ territory_region: joinMultiFilterValues(v), territory_city: "" })
             }
           />
         ) : null}
         {filterVis.territory3 ? (
           <ClientsTemplateSelectField
             label="Город"
+            multi
             options={cityOptions}
-            values={uiFromSingleValue(draft.territory_city)}
-            onChange={(v) => onDraftChange({ territory_city: v[0]?.trim() ?? "" })}
+            values={splitMultiFilterValues(draft.territory_city)}
+            onChange={(v) => onDraftChange({ territory_city: joinMultiFilterValues(v) })}
           />
         ) : null}
         {!isExpenses && filterVis.amount ? (

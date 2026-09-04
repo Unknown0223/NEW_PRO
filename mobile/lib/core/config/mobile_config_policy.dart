@@ -97,5 +97,8 @@ String syncWindowMessage(SyncConfig sync) {
   final effective = effectiveSyncConfig(sync);
   final from = effective.allowedWindowFrom ?? '—';
   final to = effective.allowedWindowTo ?? '—';
-  return 'Sinxron faqat $from – $to oralig‘ida mumkin';
+  final now = syncWindowClockNow();
+  final hh = now.hour.toString().padLeft(2, '0');
+  final mm = now.minute.toString().padLeft(2, '0');
+  return 'Sinxron faqat $from – $to oralig‘ida mumkin (hozir $hh:$mm, ish mintaqasi)';
 }

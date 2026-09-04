@@ -115,6 +115,8 @@ export async function updatePayment(
           where: { id: input.expeditor_user_id, tenant_id: tenantId, is_active: true }
         });
         if (!ex) throw new Error("BAD_EXPEDITOR");
+        const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+        await assertExpeditorCanTakeNewWork(tenantId, ex.id);
         expeditorPatch = ex.id;
       }
     }

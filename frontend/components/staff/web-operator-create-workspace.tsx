@@ -18,8 +18,6 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WEB_PANEL_ACCESS_ROLE_OPTIONS } from "@/lib/distribution-roles";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
-const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 function FieldHint({ name, errors }: { name: string; errors: Record<string, string> }) {
   const t = errors[name];
@@ -53,11 +51,7 @@ export function WebOperatorCreateWorkspace({
     password: "",
     phone: "",
     email: "",
-    code: "",
     pinfl: "",
-    position: "",
-    max_sessions: "1",
-    app_access: false,
     can_authorize: true,
     web_access_role: "operator" as (typeof WEB_PANEL_ACCESS_ROLE_OPTIONS)[number]["value"]
   });
@@ -66,7 +60,6 @@ export function WebOperatorCreateWorkspace({
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const max_sessions = Number.parseInt(form.max_sessions, 10);
       const body: Record<string, unknown> = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim() || null,
@@ -75,11 +68,7 @@ export function WebOperatorCreateWorkspace({
         password: form.password,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        code: form.code.trim() || null,
         pinfl: form.pinfl.trim() || null,
-        position: form.position.trim() || null,
-        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
-        app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true
       };
@@ -188,48 +177,9 @@ export function WebOperatorCreateWorkspace({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Код</span>
-            <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
-            <FieldHint name="code" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Должность</span>
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={form.position}
-              onChange={(v) => setForm((f) => ({ ...f, position: v }))}
-              roleFilter={form.web_access_role}
-            />
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Шаблоны:{" "}
-              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-            <FieldHint name="position" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Параллельные веб-сессии (макс.)</span>
-            <Input
-              inputMode="numeric"
-              value={form.max_sessions}
-              onChange={(e) => setForm((f) => ({ ...f, max_sessions: e.target.value.replace(/\D/g, "") }))}
-            />
-            <FieldHint name="max_sessions" errors={fieldErrors} />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={form.app_access}
-              onChange={(e) => setForm((f) => ({ ...f, app_access: e.target.checked }))}
-            />
-            Доступ к мобильному приложению
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -274,7 +224,7 @@ export function WebOperatorCreateWorkspace({
     <PageShell>
       <PageHeader
         title="Новый веб-сотрудник"
-        description="Логин и пароль должны быть уникальными. Должность выбирается из списка."
+        description="Логин и пароль должны быть уникальными."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Link

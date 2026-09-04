@@ -16,13 +16,15 @@ import {
   mobileClientPatchToUpdateFields,
   type MobileClientInput
 } from "../staff/agent-mobile-config.client-mobile";
+import { appendClientToExistingAgentRouteDays } from "../field/field.service";
 import {
   agentScopedClientWhereForUser,
   assertAgentScopedClient,
-  clientSyncSelectForAgent,
   compactClient,
+  clientSyncSelectForAgent,
   loadAgentMobileConfig,
   normalizePhotoBase64Url,
+  resolveAgentWorkSlotId,
   type CompactClientRow
 } from "./mobile-agent-sync.service";
 
@@ -144,6 +146,8 @@ export async function createMobileAgentClient(
     data: { agent_id: userId }
   });
 
+  const workSlotId = await resolveAgentWorkSlotId(userId);
+
   if (input.visit_weekdays?.length) {
     await prisma.clientAgentAssignment.upsert({
       where: { client_id_slot: { client_id: id, slot: 1 } },
@@ -152,10 +156,12 @@ export async function createMobileAgentClient(
         client_id: id,
         agent_id: userId,
         slot: 1,
+        work_slot_id: workSlotId,
         visit_weekdays: input.visit_weekdays
       },
       update: {
         agent_id: userId,
+        work_slot_id: workSlotId,
         visit_weekdays: input.visit_weekdays
       }
     });
@@ -163,9 +169,23 @@ export async function createMobileAgentClient(
 
   const row = await prisma.client.findFirst({
     where: { id, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  return compactClient(row as unknown as CompactClientRow);
+  const compact = compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
+  if (input.visit_weekdays?.length) {
+    await appendClientToExistingAgentRouteDays(
+      tenantId,
+      userId,
+      {
+        client_id: id,
+        client_name: compact.name,
+        latitude: compact.latitude,
+        longitude: compact.longitude
+      },
+      input.visit_weekdays
+    );
+  }
+  return compact;
 }
 
 export async function patchMobileAgentClient(
@@ -187,11 +207,12 @@ export async function patchMobileAgentClient(
   const fields = mobileClientPatchToUpdateFields(patch as Partial<MobileClientInput>);
   await updateClientFields(tenantId, clientId, fields, userId);
 
+  const workSlotId = await resolveAgentWorkSlotId(userId);
   const row = await prisma.client.findFirst({
     where: { id: clientId, tenant_id: tenantId },
-    select: clientSyncSelectForAgent(userId)
+    select: clientSyncSelectForAgent(userId, workSlotId)
   });
-  return compactClient(row as unknown as CompactClientRow);
+  return compactClient(row as unknown as CompactClientRow, { agentId: userId, workSlotId });
 }
 
 /** GPS — faqat ushbu supervayzerga bog‘langan agentlar. */

@@ -204,7 +204,7 @@ export async function listConsignmentBalancesReport(
     allow_large_export: q.allow_large_export
   };
 
-  const where = buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
+  const where = await buildClientWhere(tenantId, qConsign, { skipBalanceFilter: true });
 
   const allClients = await prisma.client.findMany({
     where,

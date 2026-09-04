@@ -1,9 +1,10 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
+import { normalizeMaxSessionsOrDefault } from "../../lib/max-sessions";
 import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import type { CreateStaffInput, StaffKind, StaffRow } from "./staff.shared";
-import { kindRole } from "./staff.shared";
+import { kindRole, STAFF_KINDS_WITH_WORK_SLOT } from "./staff.shared";
 import { listStaff } from "./staff.crud.list";
 import { syncUserRoleLink } from "./staff.crud.create.shared";
 
@@ -24,10 +25,7 @@ export async function createWebStaff(
     throw new Error("CASH_DESK_OPERATOR_ONLY");
   }
   const passwordHashOp = await bcrypt.hash(input.password, 12);
-  const ms =
-    input.max_sessions != null && Number.isInteger(input.max_sessions) && input.max_sessions >= 1
-      ? input.max_sessions
-      : 1;
+  const ms = normalizeMaxSessionsOrDefault(input.max_sessions);
   const displayName = [input.last_name, input.first_name, input.middle_name]
     .filter((x) => x && String(x).trim().length > 0)
     .join(" ")
@@ -94,5 +92,26 @@ export async function createWebStaff(
   const rowsOp = await listStaff(tenantId, "operator");
   const rowOp = rowsOp.find((x) => x.id === createdOp.id);
   if (!rowOp) throw new Error("NOT_FOUND");
+
+  if (
+    input.work_slot_id != null &&
+    STAFF_KINDS_WITH_WORK_SLOT.has(kind === "operator" ? "operator" : (kind as StaffKind))
+  ) {
+    const slotId = input.work_slot_id;
+    if (Number.isFinite(slotId) && slotId > 0 && kind === "operator") {
+      const { assignUserToSlot } = await import("../work-slots/work-slots.assign");
+      await assignUserToSlot(
+        tenantId,
+        slotId,
+        createdOp.id,
+        actorUserId,
+        "Yangi xodim yaratishda biriktirish"
+      );
+      const rowsAfter = await listStaff(tenantId, "operator");
+      const rowAfter = rowsAfter.find((x) => x.id === createdOp.id);
+      if (rowAfter) return rowAfter;
+    }
+  }
+
   return rowOp;
 }

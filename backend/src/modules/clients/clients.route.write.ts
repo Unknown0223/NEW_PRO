@@ -125,6 +125,27 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
           );
         }
+        if (e instanceof Error && e.message === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan."
+          );
+        }
+        if (e instanceof Error && e.message === "ASSIGNMENT_PERSON_HAS_DEBT") {
+          const ex = e as Error & { debtMessage?: string; debtBlocks?: unknown };
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AssignmentPersonHasDebt",
+            ex.debtMessage ??
+              "Нельзя снять / заменить агента или экспедитора: остаток долга по доставленным заказам этого сотрудника должен быть ровно 0. Переплата по заказам = остаток 0 — тогда можно.",
+            ex.debtBlocks != null ? { debt_blocks: ex.debtBlocks } : undefined
+          );
+        }
         if (e instanceof Error && e.message === "EXPEDITOR_NOT_FOUND") {
           return sendApiError(
             reply,
@@ -202,6 +223,27 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             403,
             "AgentNotOnSlot",
             "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+          );
+        }
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan."
+          );
+        }
+        if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+          const ex = e as Error & { debtMessage?: string; debtBlocks?: unknown };
+          return sendApiError(
+            reply,
+            request,
+            409,
+            "AssignmentPersonHasDebt",
+            ex.debtMessage ??
+              "Нельзя снять / заменить агента или экспедитора: остаток долга по доставленным заказам этого сотрудника должен быть ровно 0. Переплата по заказам = остаток 0 — тогда можно.",
+            ex.debtBlocks != null ? { debt_blocks: ex.debtBlocks } : undefined
           );
         }
         if (msg === "EXPEDITOR_NOT_FOUND") {

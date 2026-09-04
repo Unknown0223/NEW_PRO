@@ -119,12 +119,6 @@ class AuthInterceptor extends Interceptor {
       handler.next(err);
       return;
     }
-    if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
-      await clearAuthTokens(_ref);
-      Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
-      handler.next(err);
-      return;
-    }
     if (isAppAccessDeniedResponse(err.response?.statusCode, err.response?.data)) {
       await clearAuthTokens(_ref);
       Future.microtask(() => notifyAppAccessDenied(_ref));
@@ -135,7 +129,13 @@ class AuthInterceptor extends Interceptor {
       handler.next(err);
       return;
     }
+    // SESSION_REVOKED ham shu yerda: avval refresh. Admin haqiqatan yopgan
+    // bo‘lsa refresh ham fail — faqat shunda chiqamiz. Race/ping — chiqarmaydi.
     if (err.requestOptions.extra['_authRetried'] == true) {
+      if (isSessionRevokedResponse(err.response?.statusCode, err.response?.data)) {
+        await clearAuthTokens(_ref);
+        Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
+      }
       handler.next(err);
       return;
     }
@@ -168,7 +168,12 @@ class AuthInterceptor extends Interceptor {
       final response = await _plainDio().fetch(retry);
       handler.resolve(response);
     } catch (e) {
-      handler.next(e is DioException ? e : err);
+      final retryErr = e is DioException ? e : err;
+      if (isSessionRevokedResponse(retryErr.response?.statusCode, retryErr.response?.data)) {
+        await clearAuthTokens(_ref);
+        Future.microtask(() => notifySessionExpired(_ref, forceLogout: true));
+      }
+      handler.next(retryErr);
     }
   }
 }

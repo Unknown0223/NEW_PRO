@@ -1,6 +1,8 @@
 /** GET `/api/:slug/payments` qatorlari (backend `PaymentListRow`) */
 export type PaymentListApiRow = {
   id: number;
+  /** Ko‘rinadigan hujjat ID; yo‘q bo‘lsa UI `#${id}` ishlatadi */
+  number?: string | null;
   client_id: number;
   client_name: string;
   client_legal_name: string | null;

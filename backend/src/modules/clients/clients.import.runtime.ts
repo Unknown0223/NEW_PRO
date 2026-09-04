@@ -195,7 +195,7 @@ export type ClientXlsxImportOptions = {
   /**
    * UI rejimi:
    * - `create` — yangi yozuvlar; `client_db_id`/`ИД`/`id` bo‘lsa tenant ichida upsert (bor → update, yo‘q → create with id).
-   * - `update` — faqat mavjudlarni yangilash (`client_db_id` majburiy).
+   * - `update` — faqat mavjudlarni yangilash (`client_db_id` / ИД majburiy: raqam yoki matnli kod).
    * - berilmasa — xaritada `client_db_id` bo‘lsa «yangilash» rejimi.
    */
   importMode?: "create" | "update";

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/session.dart';
+import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
@@ -115,6 +116,10 @@ class AgentVisitsPage extends ConsumerWidget {
     final config = ref.watch(sessionProvider).mobileConfig;
     final visitStartEndEnabled = config?.misc.visitStartEndEnabled ?? true;
     final activeVisits = ref.watch(visitsTodayProvider).valueOrNull?.where((v) => v.status == 'in_progress').toList() ?? [];
+    final weekdayTab = ref.watch(outletWeekdayTabProvider);
+    final filtersActive = weekdayTab > 0 ||
+        ref.watch(outletDebtsOnlyProvider) ||
+        (ref.watch(outletCategoryFilterProvider)?.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -126,15 +131,16 @@ class AgentVisitsPage extends ConsumerWidget {
             clipBehavior: Clip.none,
             children: [
               AgentIconButton(icon: Icons.filter_list, onPressed: () => AgentFilterSheet.show(context)),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+              if (filtersActive)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                  ),
                 ),
-              ),
             ],
           ),
           AgentIconButton(icon: Icons.map_outlined, onPressed: () => context.go('/map')),

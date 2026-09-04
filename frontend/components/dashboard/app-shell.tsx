@@ -42,6 +42,7 @@ import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { TenantSidebarClock } from "@/components/dashboard/tenant-sidebar-clock";
+import { ScrollEdgeHints } from "@/components/ui/scroll-edge-hints";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -543,7 +544,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <TenantSidebarClock />
           </div>
         </div>
-        <nav className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden p-2 overscroll-contain">
+        <ScrollEdgeHints
+          watch={openSection}
+          contentClassName="scrollbar-none flex flex-col gap-0.5 p-2"
+        >
           {dashboardSidebarLayout.map((entry, idx) => {
             if (entry.kind === "link") {
               if (!navItemVisible(entry.item, effectiveRole, permissionKeySet)) return null;
@@ -1287,7 +1291,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             return null;
           })}
-        </nav>
+        </ScrollEdgeHints>
       </aside>
 
       <div

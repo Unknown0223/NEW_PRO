@@ -3,7 +3,10 @@ import { prisma } from "../../config/database";
 import { buildSalesTerritoryAliasClause } from "../dashboard/sales-monitoring.scope";
 import type { SalesMonitoringFilters } from "../dashboard/sales-monitoring.types";
 import type { SupervisorDashboardFilters } from "../dashboard/dashboard.supervisor.scope";
-import { orderScopeSql } from "../dashboard/dashboard.supervisor.scope";
+import {
+  expandSupervisorPaymentFilters,
+  orderScopeSql
+} from "../dashboard/dashboard.supervisor.scope";
 import { decToString } from "../dashboard/dashboard.helpers";
 
 /** Rasmiy KPI — faqat tasdiqlangan rejalar (dashboard / hisobot). */
@@ -251,7 +254,8 @@ export async function loadSupervisorMonthlyKpiPlanBlock(
   const dayEnd = new Date(dayStart.getTime() + 86400000);
 
   const mtdFilters: SupervisorDashboardFilters = { ...filters, order_statuses: undefined };
-  const mtdScope = orderScopeSql(tenantId, monthStart, dayEnd, mtdFilters);
+  const mtdExpanded = await expandSupervisorPaymentFilters(tenantId, mtdFilters);
+  const mtdScope = orderScopeSql(tenantId, monthStart, dayEnd, mtdExpanded);
 
   const [planAgg, mtdRows] = await Promise.all([
     loadMonitoringPlanAggregates(tenantId, month, year, planScopeFromSupervisorFilters(tenantId, filters)),

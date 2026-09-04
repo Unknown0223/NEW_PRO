@@ -40,11 +40,22 @@ describe("expandPermissionKeyAliases — allow/deny juftliklar", () => {
 });
 
 describe("buildScopedAgentWhere — Access Сотрудники bog‘lanishi", () => {
-  it("supervisor: faqat o‘z agentlari", () => {
-    expect(buildScopedAgentWhere(1, { userId: 10, role: "supervisor" })).toEqual({
+  it("supervisor + bound agentlar: faqat shular", () => {
+    expect(
+      buildScopedAgentWhere(1, { userId: 10, role: "supervisor", bound_agent_ids: [101, 102] })
+    ).toEqual({
       tenant_id: 1,
       role: "agent",
-      supervisor_user_id: 10,
+      id: { in: [101, 102] },
+      is_active: true
+    });
+  });
+
+  it("supervisor bindsiz: bo‘sh", () => {
+    expect(buildScopedAgentWhere(1, { userId: 10, role: "supervisor", bound_agent_ids: [] })).toEqual({
+      tenant_id: 1,
+      role: "agent",
+      id: { in: [] },
       is_active: true
     });
   });

@@ -21,7 +21,7 @@ import { isAxiosError } from "axios";
 import { Download, LayoutGrid, ListFilter, RefreshCw, Search } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type BalanceView = "summary" | "valuation" | "by_warehouse";
 
@@ -497,16 +497,25 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
   });
 
   const groupsQ = useQuery({
-    queryKey: ["catalog-product-groups-balances", tenantSlug],
+    queryKey: ["catalog-product-groups-balances", tenantSlug, draftCat],
     queryFn: async () => {
+      const params = new URLSearchParams({ limit: "200", page: "1", is_active: "true" });
+      if (draftCat.trim()) params.set("category_id", draftCat.trim());
       const { data } = await api.get<{ data: GroupOpt[]; total: number }>(
-        `/api/${tenantSlug}/catalog/product-groups?limit=200&page=1`
+        `/api/${tenantSlug}/catalog/product-groups?${params.toString()}`
       );
       return data.data;
     },
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference
   });
+
+  useEffect(() => {
+    if (!draftGroup || !groupsQ.data) return;
+    if (!groupsQ.data.some((g) => String(g.id) === draftGroup)) {
+      setDraftGroup("");
+    }
+  }, [groupsQ.data, draftGroup]);
 
   const priceTypesQ = useQuery({
     queryKey: ["price-types", tenantSlug, "stock-balances"],
@@ -754,7 +763,10 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
                 value={draftCat}
-                onChange={(e) => setDraftCat(e.target.value)}
+                onChange={(e) => {
+                  setDraftCat(e.target.value);
+                  setDraftGroup("");
+                }}
               >
                 <option value="">Все</option>
                 {(categoriesQ.data ?? []).map((c) => (

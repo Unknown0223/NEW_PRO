@@ -106,8 +106,9 @@ export const PERMISSION_MODULE_LABEL_RU: Record<string, string> = {
   access: "Доступ",
   users: "Пользователи",
   work_slots: "Рабочее место",
-  diagnostics: "Диагностика"
-};
+  diagnostics: "Диагностика",
+  activity: "Активность"
+}
 
 export type PermissionSectionDef = {
   module: string;
@@ -260,6 +261,15 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "baza_znaniy", labelRu: "База знаний", actions: CRUD },
   { module: "settings", section: "seansy", labelRu: "Сеансы пользователей", actions: ["view", "update", "status"] },
   { module: "settings", section: "geo_granitsy", labelRu: "Гео-границы", actions: ["view", "create", "update", "void", "restore", "history"] },
+  { module: "settings", section: "appearance", labelRu: "Тема и цвета", actions: ["view", "update"] },
+  { module: "settings", section: "mobile_app", labelRu: "Мобильное приложение", actions: ["view", "update"] },
+  { module: "settings", section: "returns_filter", labelRu: "Фильтр возврата", actions: ["view", "update"] },
+  { module: "settings", section: "document_edit_lock", labelRu: "Период редактирования", actions: ["view", "update"] },
+  { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: ["view", "update"] },
+  { module: "settings", section: "web_staff_positions", labelRu: "Должности веб-сотрудников", actions: [...CRUD, "activate", "deactivate"] },
+  { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: ["view", "update"] },
+  { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: ["view", "copy", "import"] },
+  { module: "settings", section: "system_migration", labelRu: "Системная миграция", actions: ["view", "update", "import", "copy"] },
 
   // ── Automation (Автоматизация заявок) — yangi ──────────────
   { module: "automation", section: "zaiavki", labelRu: "Автоматизация заявок", actions: ["view", "create", "update", "delete", "void", "restore", "status"] },
@@ -278,6 +288,9 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Diagnostics (Диагностика) — yangi ──────────────────────
   { module: "diagnostics", section: "error_logs", labelRu: "Журнал ошибок", actions: ["view", "copy"] },
+
+  // ── Activity (Активность и история) ───────────────────────
+  { module: "activity", section: "history", labelRu: "Активность и история", actions: ["view", "copy"] },
 
   // ── Access (Доступ) ────────────────────────────────────────
   { module: "access", section: "upravlenie", labelRu: "Доступ", actions: ["view", "update", "void", "restore", "history"] }

@@ -12,6 +12,7 @@ import '../../../core/update/app_update_info.dart';
 import 'agent_display_title.dart';
 import 'agent_menu_config.dart';
 import '../warehouse/warehouse_stock_providers.dart';
+import '../orders/create_order_exit_guard.dart';
 
 /// Menyu ekrani — salec-agent-mobile-ui-design shablon.
 class AgentDrawer extends ConsumerStatefulWidget {
@@ -75,9 +76,11 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
         ? session.tenantName!
         : 'Сервер: ${session.tenantSlug ?? "-"}';
 
-    void go(String path) {
+    void go(String path) async {
       Navigator.pop(context);
       if (path.isEmpty) return;
+      final canLeave = await confirmLeaveCreateOrderIfNeeded(ref);
+      if (!canLeave || !context.mounted) return;
       final loc = GoRouterState.of(context).matchedLocation;
       if (loc == path) {
         ref.read(agentRouteReselectProvider.notifier).state = path;

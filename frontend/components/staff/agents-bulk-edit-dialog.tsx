@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   AgentFormField,
@@ -9,10 +8,8 @@ import {
   AgentTemplateModalFooter,
   AgentTemplateModalHeader,
   agentModalBtnCancel,
-  agentModalBtnPrimary,
-  agentModalInputClass
+  agentModalBtnPrimary
 } from "@/components/staff/agent-workspace-template-ui";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 const AGENT_TYPE_OPTIONS = [
   { value: "Торговый представитель", label: "Торговый представитель" },
@@ -21,9 +18,8 @@ const AGENT_TYPE_OPTIONS = [
   { value: "Экспедитор", label: "Экспедитор" }
 ];
 
-/** Faqat shaxsga tegishli maydonlar — joy sozlamalari Рабочее место da. */
+/** Faqat shaxsga tegishli maydonlar — должность / app_access — Рабочее место da. */
 export type AgentsBulkEditFields = {
-  position?: string;
   agent_type?: string;
 };
 
@@ -40,27 +36,23 @@ export function AgentsBulkEditDialog({
   open,
   count,
   loading,
-  tenantSlug,
   onClose,
   onSave
 }: Props) {
-  const [position, setPosition] = useState("");
   const [agentType, setAgentType] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    setPosition("");
     setAgentType("");
     setError(null);
   }, [open]);
 
   const handleSave = async () => {
     const fields: AgentsBulkEditFields = {};
-    if (position.trim()) fields.position = position.trim();
     if (agentType.trim()) fields.agent_type = agentType.trim();
     if (Object.keys(fields).length === 0) {
-      setError("Выберите хотя бы одно поле (должность или тип агента)");
+      setError("Выберите тип агента");
       return;
     }
     setError(null);
@@ -72,29 +64,9 @@ export function AgentsBulkEditDialog({
       <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
         <AgentTemplateModalHeader
           title="Массовое редактирование"
-          subtitle={`Выбрано агентов: ${count}. Склад/филиал/направление — в Рабочее место.`}
+          subtitle={`Выбрано агентов: ${count}. Должность / доступ / сессии — в Рабочее место.`}
         />
         <div className="space-y-3 px-6 py-4">
-          <AgentFormField label="Должность">
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPosition}
-              roleFilter="agent"
-              className={agentModalInputClass}
-              emptyLabel="Не менять"
-            />
-            <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">
-              Шаблоны:{" "}
-              <Link
-                href="/settings/web-staff-position-presets"
-                className="text-primary underline underline-offset-2"
-              >
-                Должности
-              </Link>
-              .
-            </span>
-          </AgentFormField>
           <AgentFormField label="Тип агента">
             <AgentFormSelect
               value={agentType}

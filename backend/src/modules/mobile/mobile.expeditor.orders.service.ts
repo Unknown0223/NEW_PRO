@@ -6,8 +6,10 @@ import { updateClientFields } from "../clients/clients.service";
 import { updateOrderStatus } from "../orders/domain/order.lifecycle";
 import { getAllowedNextStatuses, normalizeOrderType } from "../orders/order-status";
 import { listOrdersPaged } from "../orders/orders.service";
+import { extractMobileConfigFromEntitlementsUnknown } from "../staff/agent-mobile-config";
 import { resolveMobileConfigForUser } from "../staff/agent-mobile-config.defaults";
 import type { AgentMobileConfigV1 } from "../staff/agent-mobile-config.types";
+import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 
 export async function loadExpeditorMobileConfig(
   tenantId: number,
@@ -18,6 +20,17 @@ export async function loadExpeditorMobileConfig(
     select: { role: true, agent_entitlements: true }
   });
   if (!u) throw new Error("NOT_FOUND");
+  const slotMap = await loadActiveWorkSlotsByUserIds([expeditorUserId]);
+  const slotInfo = slotMap.get(expeditorUserId);
+  if (slotInfo) {
+    const slot = await prisma.workSlot.findFirst({
+      where: { id: slotInfo.slot_id, tenant_id: tenantId },
+      select: { entitlements: true }
+    });
+    if (extractMobileConfigFromEntitlementsUnknown(slot?.entitlements)) {
+      return resolveMobileConfigForUser(u.role ?? "expeditor", slot?.entitlements);
+    }
+  }
   return resolveMobileConfigForUser(u.role ?? "expeditor", u.agent_entitlements);
 }
 

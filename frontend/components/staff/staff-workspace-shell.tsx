@@ -112,8 +112,8 @@ export function StaffWorkspaceFilterPanel({
   onRefresh: () => void;
   isFetching?: boolean;
   bulkMenu?: ReactNode;
-  /** Klientlar sahifasi kabi bitta qator grid; stacked — filtrlar ustida, tugmalar pastda */
-  filtersLayout?: "default" | "clients-row" | "stacked";
+  /** Klientlar sahifasi kabi bitta qator grid; stacked — filtrlar ustida, tugmalar pastda; filters-only — faqat filtr sloti */
+  filtersLayout?: "default" | "clients-row" | "stacked" | "filters-only";
 }) {
   const panelClass =
     filtersLayout === "clients-row"
@@ -166,6 +166,8 @@ export function StaffWorkspaceFilterPanel({
           {filters}
           {filterActionsClientsRow}
         </div>
+      ) : filtersLayout === "filters-only" ? (
+        <div>{filters}</div>
       ) : filtersLayout === "stacked" ? (
         <div className="space-y-2">
           {filters}
@@ -196,7 +198,7 @@ export function StaffWorkspaceFilterPanel({
             onChange={(e) => onToggleAllOnPage(e.target.checked)}
             aria-label="Выбрать всех на странице"
           />
-          <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все</span>
+          <span className="whitespace-nowrap text-xs sm:text-sm">Выбрать все на странице</span>
         </label>
         <button
           type="button"

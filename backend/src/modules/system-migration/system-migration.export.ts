@@ -4,7 +4,11 @@ import { prisma } from "../../config/database";
 import { buildInitialSetupExportBuffer } from "../tenant-settings/initial-setup-export.service";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
 import {
-  BACKUP_FORMAT_VERSION, BACKUP_KIND, INITIAL_SETUP_XLSX_PATH, MANIFEST_PATH, PROFILE_JSON_PATH
+  BACKUP_FORMAT_VERSION,
+  BACKUP_KIND,
+  INITIAL_SETUP_XLSX_PATH,
+  MANIFEST_PATH,
+  PROFILE_JSON_PATH
 } from "./system-migration.constants";
 import { getMigrationInventory } from "./system-migration.inventory";
 import { extendedDataFilePaths, loadExtendedTables } from "./system-migration.extended.export";
@@ -20,6 +24,9 @@ type ExportContext = {
   tenantSlug: string;
 };
 
+/** Postgres/Prisma bind-param limtidan saqlanish (katta `IN (...)`). */
+const IN_CHUNK = 4000;
+
 function prismaErrorCode(e: unknown): string {
   if (e !== null && typeof e === "object" && "code" in e) {
     return String((e as { code?: unknown }).code ?? "");
@@ -27,23 +34,41 @@ function prismaErrorCode(e: unknown): string {
   return "";
 }
 
+function isSkippableSchemaError(e: unknown): boolean {
+  const code = prismaErrorCode(e);
+  if (code === "P2021" || code === "P2022") return true;
+  if (e instanceof Prisma.PrismaClientKnownRequestError && (e.code === "P2021" || e.code === "P2022")) {
+    return true;
+  }
+  return false;
+}
+
 /** Prod’da ba’zi jadvallar hali migrate bo‘lmagan bo‘lishi mumkin — eksport to‘liq yiqilmasin. */
 async function safeFindMany<T>(label: string, run: () => Promise<T[]>): Promise<T[]> {
   try {
     return await run();
   } catch (e) {
-    const code = prismaErrorCode(e);
-    // `instanceof` ba’zan Prisma package duplicate tufayli ishlamaydi — code bilan tekshiramiz.
-    if (
-      code === "P2021" ||
-      code === "P2022" ||
-      (e instanceof Prisma.PrismaClientKnownRequestError && (e.code === "P2021" || e.code === "P2022"))
-    ) {
-      console.warn(`[system-migration.export] skip ${label}: ${code || "P202x"}`);
+    if (isSkippableSchemaError(e)) {
+      console.warn(`[system-migration.export] skip ${label}: ${prismaErrorCode(e) || "P202x"}`);
       return [];
     }
     throw e;
   }
+}
+
+async function safeFindManyByIds<T>(
+  label: string,
+  ids: number[],
+  runChunk: (chunk: number[]) => Promise<T[]>
+): Promise<T[]> {
+  if (!ids.length) return [];
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const rows = await safeFindMany(`${label}[${i}-${i + chunk.length}]`, () => runChunk(chunk));
+    out.push(...rows);
+  }
+  return out;
 }
 
 async function loadReferenceTables(tenantId: number) {
@@ -88,19 +113,15 @@ async function loadTransactionalTables(tenantId: number) {
     auditEvents,
     clientAuditLogs
   ] = await Promise.all([
-    orderIds.length
-      ? safeFindMany("order_items", () => prisma.orderItem.findMany({ where: { order_id: { in: orderIds } } }))
-      : Promise.resolve([]),
-    orderIds.length
-      ? safeFindMany("order_status_logs", () =>
-          prisma.orderStatusLog.findMany({ where: { order_id: { in: orderIds } } })
-        )
-      : Promise.resolve([]),
-    orderIds.length
-      ? safeFindMany("order_change_logs", () =>
-          prisma.orderChangeLog.findMany({ where: { order_id: { in: orderIds } } })
-        )
-      : Promise.resolve([]),
+    safeFindManyByIds("order_items", orderIds, (chunk) =>
+      prisma.orderItem.findMany({ where: { order_id: { in: chunk } } })
+    ),
+    safeFindManyByIds("order_status_logs", orderIds, (chunk) =>
+      prisma.orderStatusLog.findMany({ where: { order_id: { in: chunk } } })
+    ),
+    safeFindManyByIds("order_change_logs", orderIds, (chunk) =>
+      prisma.orderChangeLog.findMany({ where: { order_id: { in: chunk } } })
+    ),
     safeFindMany("payments", () => prisma.payment.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("goods_receipts", () => prisma.goodsReceipt.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("sales_returns", () => prisma.salesReturn.findMany({ where: { tenant_id: tenantId } })),
@@ -116,16 +137,12 @@ async function loadTransactionalTables(tenantId: number) {
   const returnIds = salesReturns.map((r) => r.id);
 
   const [goodsReceiptLines, salesReturnLines] = await Promise.all([
-    receiptIds.length
-      ? safeFindMany("goods_receipt_lines", () =>
-          prisma.goodsReceiptLine.findMany({ where: { receipt_id: { in: receiptIds } } })
-        )
-      : Promise.resolve([]),
-    returnIds.length
-      ? safeFindMany("sales_return_lines", () =>
-          prisma.salesReturnLine.findMany({ where: { return_id: { in: returnIds } } })
-        )
-      : Promise.resolve([])
+    safeFindManyByIds("goods_receipt_lines", receiptIds, (chunk) =>
+      prisma.goodsReceiptLine.findMany({ where: { receipt_id: { in: chunk } } })
+    ),
+    safeFindManyByIds("sales_return_lines", returnIds, (chunk) =>
+      prisma.salesReturnLine.findMany({ where: { return_id: { in: chunk } } })
+    )
   ]);
 
   return {
@@ -183,18 +200,15 @@ async function loadBonusAndFilesTables(tenantId: number) {
     salesPlans,
     kpiResults,
     priceMatrix,
-    clientPhotoReports
+    clientPhotoReports,
+    bonusStrategies
   ] = await Promise.all([
-    kpiGroupIds.length
-      ? safeFindMany("kpi_group_products", () =>
-          prisma.kpiGroupProduct.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
-        )
-      : Promise.resolve([]),
-    kpiGroupIds.length
-      ? safeFindMany("kpi_group_agents", () =>
-          prisma.kpiGroupAgent.findMany({ where: { kpi_group_id: { in: kpiGroupIds } } })
-        )
-      : Promise.resolve([]),
+    safeFindManyByIds("kpi_group_products", kpiGroupIds, (chunk) =>
+      prisma.kpiGroupProduct.findMany({ where: { kpi_group_id: { in: chunk } } })
+    ),
+    safeFindManyByIds("kpi_group_agents", kpiGroupIds, (chunk) =>
+      prisma.kpiGroupAgent.findMany({ where: { kpi_group_id: { in: chunk } } })
+    ),
     safeFindMany("bonus_rules", () => prisma.bonusRule.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("plan_approver_configs", () =>
       prisma.planApproverConfig.findMany({ where: { tenant_id: tenantId } })
@@ -212,35 +226,35 @@ async function loadBonusAndFilesTables(tenantId: number) {
           created_at: { gte: photoReportExportCutoff() }
         }
       })
+    ),
+    safeFindMany("bonus_strategies", () =>
+      prisma.bonusStrategy.findMany({ where: { tenant_id: tenantId } })
     )
   ]);
 
   const bonusRuleIds = bonusRules.map((r) => r.id);
   const configIds = planConfigs.map((c) => c.id);
   const planIds = salesPlans.map((p) => p.id);
+  const strategyIds = bonusStrategies.map((s) => s.id);
 
-  const [bonusRuleClauses, bonusRuleConditions, planLevels, planTargets] = await Promise.all([
-    bonusRuleIds.length
-      ? safeFindMany("bonus_rule_clauses", () =>
-          prisma.bonusRuleClause.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
-        )
-      : Promise.resolve([]),
-    bonusRuleIds.length
-      ? safeFindMany("bonus_rule_conditions", () =>
-          prisma.bonusRuleCondition.findMany({ where: { bonus_rule_id: { in: bonusRuleIds } } })
-        )
-      : Promise.resolve([]),
-    configIds.length
-      ? safeFindMany("plan_approver_levels", () =>
-          prisma.planApproverLevel.findMany({ where: { config_id: { in: configIds } } })
-        )
-      : Promise.resolve([]),
-    planIds.length
-      ? safeFindMany("sales_kpi_plan_targets", () =>
-          prisma.salesKpiPlanTarget.findMany({ where: { plan_id: { in: planIds } } })
-        )
-      : Promise.resolve([])
-  ]);
+  const [bonusRuleClauses, bonusRuleConditions, planLevels, planTargets, bonusStrategyMembers] =
+    await Promise.all([
+      safeFindManyByIds("bonus_rule_clauses", bonusRuleIds, (chunk) =>
+        prisma.bonusRuleClause.findMany({ where: { bonus_rule_id: { in: chunk } } })
+      ),
+      safeFindManyByIds("bonus_rule_conditions", bonusRuleIds, (chunk) =>
+        prisma.bonusRuleCondition.findMany({ where: { bonus_rule_id: { in: chunk } } })
+      ),
+      safeFindManyByIds("plan_approver_levels", configIds, (chunk) =>
+        prisma.planApproverLevel.findMany({ where: { config_id: { in: chunk } } })
+      ),
+      safeFindManyByIds("sales_kpi_plan_targets", planIds, (chunk) =>
+        prisma.salesKpiPlanTarget.findMany({ where: { plan_id: { in: chunk } } })
+      ),
+      safeFindManyByIds("bonus_strategy_members", strategyIds, (chunk) =>
+        prisma.bonusStrategyMember.findMany({ where: { strategy_id: { in: chunk } } })
+      )
+    ]);
 
   return {
     kpi_groups: kpiGroups,
@@ -256,8 +270,40 @@ async function loadBonusAndFilesTables(tenantId: number) {
     sales_kpi_plan_targets: planTargets,
     kpi_results: kpiResults,
     price_matrix: priceMatrix,
-    client_photo_reports: clientPhotoReports
+    client_photo_reports: clientPhotoReports,
+    bonus_strategies: bonusStrategies,
+    bonus_strategy_members: bonusStrategyMembers
   };
+}
+
+async function buildMigrationSetupXlsx(tenantId: number): Promise<{ buf: Buffer; note?: string }> {
+  try {
+    const buf = await buildInitialSetupExportBuffer(tenantId, { liteForMigration: true });
+    return { buf };
+  } catch (e) {
+    if (e instanceof Error && e.message === "EMPTY_EXPORT") {
+      // Minimal workbook — ZIP ichida fayl bo‘lishi uchun
+      const ExcelJS = await import("exceljs");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("README");
+      ws.getCell("A1").value =
+        "Initial setup sheets empty — katalog ma’lumotlari data/*.json da.";
+      const buf = Buffer.from(await wb.xlsx.writeBuffer());
+      return { buf, note: "initial_setup_xlsx_empty_stub" };
+    }
+    console.warn(
+      "[system-migration.export] initial-setup xlsx failed — stub used:",
+      e instanceof Error ? e.message : e
+    );
+    const ExcelJS = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("README");
+    ws.getCell("A1").value = `Initial setup export skipped: ${
+      e instanceof Error ? e.message : "error"
+    }. Full data is in data/*.json.`;
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    return { buf, note: "initial_setup_xlsx_error_stub" };
+  }
 }
 
 export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> {
@@ -267,17 +313,20 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
   });
   if (!tenant) throw new Error("NOT_FOUND");
 
-  const [inventory, profile, settingsExtra, xlsxBuf, references, tables, bonusAndFiles, extended] =
-    await Promise.all([
-      getMigrationInventory(ctx.tenantId),
-      getTenantProfile(ctx.tenantId),
-      loadTenantSettingsExtra(ctx.tenantId),
-      buildInitialSetupExportBuffer(ctx.tenantId),
-      loadReferenceTables(ctx.tenantId),
-      loadTransactionalTables(ctx.tenantId),
-      loadBonusAndFilesTables(ctx.tenantId),
-      loadExtendedTables(ctx.tenantId)
-    ]);
+  // Avval yengil meta, keyin og‘ir jadvallar — pool/RAM cho‘qqisini pasaytiradi.
+  const [inventory, profile, settingsExtra, xlsxResult] = await Promise.all([
+    getMigrationInventory(ctx.tenantId),
+    getTenantProfile(ctx.tenantId),
+    loadTenantSettingsExtra(ctx.tenantId),
+    buildMigrationSetupXlsx(ctx.tenantId)
+  ]);
+
+  const [references, tables, bonusAndFiles, extended] = await Promise.all([
+    loadReferenceTables(ctx.tenantId),
+    loadTransactionalTables(ctx.tenantId),
+    loadBonusAndFilesTables(ctx.tenantId),
+    loadExtendedTables(ctx.tenantId)
+  ]);
 
   const photoCount = Array.isArray(bonusAndFiles.client_photo_reports)
     ? bonusAndFiles.client_photo_reports.length
@@ -298,6 +347,7 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
       exported_count: photoCount,
       note_uz: "Faqat oxirgi 30 kunlik fotootchyotlar; import barcha jadvallardan keyin."
     },
+    export_notes: xlsxResult.note ? [xlsxResult.note] : [],
     files: {
       spravochniki: [PROFILE_JSON_PATH, SETTINGS_EXTRA_JSON_PATH, INITIAL_SETUP_XLSX_PATH],
       data: [
@@ -329,6 +379,8 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
         "data/bonus_rules.json",
         "data/bonus_rule_clauses.json",
         "data/bonus_rule_conditions.json",
+        "data/bonus_strategies.json",
+        "data/bonus_strategy_members.json",
         "data/sales_kpi_plans.json",
         "data/client_photo_reports.json",
         ...extendedDataFilePaths()
@@ -353,7 +405,7 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
   zip.file(MANIFEST_PATH, jsonFileContent(manifest));
   zip.file(PROFILE_JSON_PATH, jsonFileContent(profile));
   zip.file(SETTINGS_EXTRA_JSON_PATH, jsonFileContent(settingsExtra));
-  zip.file(INITIAL_SETUP_XLSX_PATH, xlsxBuf);
+  zip.file(INITIAL_SETUP_XLSX_PATH, xlsxResult.buf);
 
   for (const [name, rows] of Object.entries(references)) {
     zip.file(`data/${name}.json`, jsonFileContent(rows));
@@ -379,7 +431,7 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
       `Source tenant: ${tenant.slug}`,
       "",
       "Import: bo'sh tenantga to'liq import (profil + spravochniklar + operatsion tarix).",
-      "Format v5: to'liq zaxira — katalog, RBAC, bog'lanishlar, balans va qo'shimcha tarix.",
+      "Format v6: to'liq zaxira — multi-slot, bonus strategiya, bank inbox, katalog/RBAC.",
       ""
     ].join("\n")
   );

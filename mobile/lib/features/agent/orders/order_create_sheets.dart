@@ -8,11 +8,13 @@ import '../../../core/config/consignment_due_date.dart';
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/config/price_type_labels.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../clients/client_photo_report_flow.dart';
+import 'bonus_fill_policy.dart';
 import 'bonus_stock_utils.dart';
 import 'order_create_models.dart';
 
@@ -935,9 +937,20 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
 
   OrderBonusPreview get preview => _preview;
 
+  BonusFillPolicy get _bonusFillPolicy =>
+      bonusFillPolicyFromOrders(widget.ordersConfig);
+
   bool _bonusModeAllowed(BonusMode mode) {
     final key = mode == BonusMode.auto ? 'auto' : 'none';
     return isBonusModeKeyAllowed(widget.ordersConfig, key);
+  }
+
+  /// Include all earned rules in gift payload (not only `autoApplyRuleIds`).
+  bool get _includeAllEarnedBonusRules {
+    final p = _bonusFillPolicy;
+    return p == BonusFillPolicy.free ||
+        p == BonusFillPolicy.allRequired ||
+        p == BonusFillPolicy.autoFillRemaining;
   }
 
   bool get _canUseBoth {
@@ -1046,7 +1059,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         _applyPreviewDefaults();
       });
       _emitDraft();
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.orders,
+        code: 'BonusPreviewFailed',
+        message: 'Заказ: превью бонусов/скидок не загрузилось',
+        path: '/mobile/orders/bonus-preview',
+      );
       if (!mounted) return;
       // Asosiy matn UX da o‘zgarmaydi; API/parse sababi debug uchun qo‘shiladi.
       var detail = '';
@@ -1099,9 +1120,21 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
           (m) => m.values.any((q) => q > 0),
         );
     if (!restoreGifts) {
-      _applyComputedBonusQty();
       if (_bonusMode == BonusMode.auto) {
-        _applyAutoBonusSelections();
+        if (shouldAutoFillBonuses(_bonusFillPolicy)) {
+          // 4: tizim to‘liq to‘ldiradi (mahsulot × qty ko‘rinadi).
+          _applyAutoBonusSelections();
+        } else if (_bonusFillPolicy == BonusFillPolicy.allRequired) {
+          // 3: multi qo‘lda; locked/single — max qiymat bilan ko‘rinadi.
+          _applyFixedOnlyBonusSelections();
+        } else {
+          // 2 free: locked/assortment to‘ldiriladi; multi/stepper agentga.
+          // Mahsulot nomlari + shartlar baribir _bonusRuleBlock da chiqadi.
+          _applyFixedOnlyBonusSelections();
+          // Avvalgidek qiymatlar ko‘rinsin: earned > 0 locked/single uchun to‘ldirish
+          // (stepper/free multi bo‘sh qolishi mumkin).
+          _seedVisibleGiftQtysForDisplay();
+        }
       }
     } else {
       for (final rule in _preview.eligibleBonuses) {
@@ -1118,8 +1151,14 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     } else if (_bonusMode == BonusMode.auto) {
       // Birinchi tahrirlanadigan bonus havzasini ochiq qoldiramiz (mahsulot/son).
       for (final rule in _bonusTabRules()) {
-        if (!_supportsMultiGiftPick(rule) || _earnedBonusQty(rule) <= 0) continue;
-        if (!_preview.autoApplyRuleIds.contains(rule.ruleId) &&
+        if (_earnedBonusQty(rule) <= 0) continue;
+        final mode = _giftUiMode(rule);
+        if (mode != BonusGiftUiMode.redistribute &&
+            mode != BonusGiftUiMode.qtyStepper) {
+          continue;
+        }
+        if (!_includeAllEarnedBonusRules &&
+            !_preview.autoApplyRuleIds.contains(rule.ruleId) &&
             _preview.autoApplyRuleIds.isNotEmpty) {
           continue;
         }
@@ -1255,7 +1294,8 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   List<OrderBonusPreviewRule> _bonusTabRules() =>
-      _preview.eligibleBonuses.where((r) => r.type != 'sum').toList();
+      // Barcha mos qoidalar (qty + sum) — shartlar / AgentTierStrip ko‘rinsin.
+      List<OrderBonusPreviewRule>.from(_preview.eligibleBonuses);
 
   /// Foizli / min-sum skidka — server `eligible_discounts` ro‘yxati.
   List<OrderDiscountPreviewRule> _applicableDiscounts() => _preview.eligibleDiscounts;
@@ -1397,6 +1437,206 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         }
       }
     }
+  }
+
+  /// Fixed / locked gifts only — leaves multi-pick empty for agent fill (all_required).
+  /// Free multi: avvalgidek taqsimlab ko‘rsatamiz (0…max ga tushirish mumkin).
+  void _applyFixedOnlyBonusSelections() {
+    for (final rule in _preview.eligibleBonuses) {
+      final ui = _giftUiMode(rule);
+      if (ui == BonusGiftUiMode.redistribute) {
+        if (_bonusFillPolicy == BonusFillPolicy.free) {
+          final earned = _earnedBonusQty(rule);
+          if (earned > 0) {
+            final m = _qtyMapForRule(rule.ruleId);
+            _distributeBonusByStock(rule, m, earned);
+          }
+        }
+        continue;
+      }
+      // free + bitta tovar: max dan boshlanadi (ko‘rinadi); agent 0…max qilishi mumkin.
+      if (ui == BonusGiftUiMode.qtyStepper) {
+        final earned = _earnedBonusQty(rule);
+        final m = _qtyMapForRule(rule.ruleId);
+        for (final g in rule.giftProducts) {
+          m.putIfAbsent(g.productId, () => 0);
+        }
+        if (earned > 0 && _selectedGiftTotal(rule) <= 0) {
+          final pid = rule.defaultGiftProductId ??
+              (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+          if (pid != null) {
+            m[pid] = earned;
+            _giftProductByRule[rule.ruleId] = pid;
+          }
+        }
+        continue;
+      }
+      final earned = _earnedBonusQty(rule);
+      if (earned <= 0) continue;
+      final m = _qtyMapForRule(rule.ruleId);
+      for (final k in m.keys.toList()) {
+        m[k] = 0;
+      }
+      if (_hasPerSkuBonusPlan(rule)) {
+        _applyAssortmentAutoGifts(rule, m);
+        continue;
+      }
+      if (rule.allowGiftSwap) {
+        final pid = _giftProductByRule[rule.ruleId] ??
+            rule.defaultGiftProductId ??
+            (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+        if (pid != null) {
+          m[pid] = earned;
+          _giftProductByRule[rule.ruleId] = pid;
+        }
+        continue;
+      }
+      if (rule.bonusQty > 0) {
+        final pid = rule.defaultGiftProductId ??
+            (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+        if (pid != null) {
+          m[pid] = earned;
+          _giftProductByRule[rule.ruleId] = pid;
+        }
+        continue;
+      }
+      var remaining = earned;
+      for (final g in _preview.autoApplyGifts) {
+        if (remaining <= 0) break;
+        if (!rule.giftProducts.any((p) => p.productId == g.productId)) continue;
+        final take = g.qty.clamp(0, remaining);
+        if (take <= 0) continue;
+        m[g.productId] = take;
+        _giftProductByRule[rule.ruleId] = g.productId;
+        remaining -= take;
+      }
+      if (remaining > 0) {
+        final pid = rule.defaultGiftProductId ??
+            (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+        if (pid != null) {
+          m[pid] = remaining;
+          _giftProductByRule[rule.ruleId] = pid;
+        }
+      }
+    }
+  }
+
+  /// Free rejimda ham ishlangan bonus mahsulot×qty darhol ko‘rinsin (0 emas).
+  /// Multi-pick / qtyStepper tahriri saqlanadi — faqat locked display to‘ldiriladi.
+  void _seedVisibleGiftQtysForDisplay() {
+    for (final rule in _preview.eligibleBonuses) {
+      final ui = _giftUiMode(rule);
+      if (ui == BonusGiftUiMode.redistribute || ui == BonusGiftUiMode.qtyStepper) {
+        continue;
+      }
+      final earned = _earnedBonusQty(rule);
+      if (earned <= 0) continue;
+      if (_selectedGiftTotal(rule) > 0) continue;
+      final m = _qtyMapForRule(rule.ruleId);
+      if (_hasPerSkuBonusPlan(rule)) {
+        _applyAssortmentAutoGifts(rule, m);
+        continue;
+      }
+      final pid = _giftProductByRule[rule.ruleId] ??
+          rule.defaultGiftProductId ??
+          (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+      if (pid != null) {
+        m[pid] = earned;
+        _giftProductByRule[rule.ruleId] = pid;
+      }
+    }
+  }
+
+  /// Tops up incomplete rules without wiping agent picks (auto_fill_remaining confirm).
+  void _fillRemainingBonusQty() {
+    for (final rule in _preview.eligibleBonuses) {
+      final earned = _earnedBonusQty(rule);
+      if (earned <= 0) continue;
+      final selected = _selectedGiftTotal(rule);
+      if (selected >= earned) continue;
+
+      final m = _qtyMapForRule(rule.ruleId);
+
+      if (_hasPerSkuBonusPlan(rule)) {
+        _applyAssortmentAutoGifts(rule, m);
+        continue;
+      }
+
+      if (_supportsMultiGiftPick(rule)) {
+        final sorted = [...rule.giftProducts]
+          ..sort(
+            (a, b) => bonusStockAvailable(b.stockAvailable)
+                .compareTo(bonusStockAvailable(a.stockAvailable)),
+          );
+        final next = fillRemainingGiftQtyMap(
+          earnedQty: earned,
+          currentQtyByProduct: m,
+          giftProductIds: sorted.map((g) => g.productId).toList(),
+          stockCapFor: (pid, cur) {
+            GiftProductPreview? g;
+            for (final x in rule.giftProducts) {
+              if (x.productId == pid) {
+                g = x;
+                break;
+              }
+            }
+            if (g == null) return cur;
+            return capGiftQtyByStock(
+              stockAvailable: g.stockAvailable,
+              requested: earned,
+            );
+          },
+        );
+        m
+          ..clear()
+          ..addAll(next);
+        for (final e in next.entries) {
+          if (e.value > 0) {
+            _giftProductByRule[rule.ruleId] = e.key;
+            break;
+          }
+        }
+        continue;
+      }
+
+      final need = earned - selected;
+      final pid = _giftProductByRule[rule.ruleId] ??
+          rule.defaultGiftProductId ??
+          (rule.giftProducts.isNotEmpty ? rule.giftProducts.first.productId : null);
+      if (pid != null && need > 0) {
+        m[pid] = (m[pid] ?? 0) + need;
+        _giftProductByRule[rule.ruleId] = pid;
+      }
+    }
+  }
+
+  String? _bonusFillCompletenessError() {
+    if (!requiresCompleteBonusFill(_bonusFillPolicy)) return null;
+    final rules = <BonusRuleFillState>[
+      for (final rule in _preview.eligibleBonuses)
+        BonusRuleFillState(
+          ruleId: rule.ruleId,
+          earnedQty: _earnedBonusQty(rule),
+          selectedQty: _selectedGiftTotal(rule),
+          // Majburiy rejim: har bir ishlangan qoida to‘liq (locked ham tizim to‘ldiradi).
+          agentMustFill: true,
+        ),
+    ];
+    final strategies = <BonusStrategyFillState>[
+      for (final s in _preview.strategies)
+        BonusStrategyFillState(
+          strategyId: s.strategyId,
+          requiresChoice: s.requiresChoice,
+          maxSelect: s.maxSelect,
+          pickedCount: (_strategyPicks[s.strategyId] ?? s.autoSelectedRuleIds).length,
+        ),
+    ];
+    return bonusFillCompletenessError(
+      rules: rules,
+      strategies: strategies,
+      incompleteBonusMessage: S.bonusFillIncomplete,
+      strategyChoiceMessage: S.bonusStrategyChoiceRequired,
+    );
   }
 
   Map<int, int> _qtyMapForRule(int ruleId) =>
@@ -1664,9 +1904,11 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     setState(() {
       _bonusMode = v;
       if (v == BonusMode.auto) {
-        final hasAny = _giftQtyByRule.values.any((m) => m.values.any((q) => q > 0));
-        if (!hasAny) {
+        final hasAny = anyGiftQtySelected(_giftQtyByRule);
+        if (!hasAny && shouldAutoFillBonuses(_bonusFillPolicy)) {
           _applyAutoBonusSelections();
+        } else if (!hasAny) {
+          _applyFixedOnlyBonusSelections();
         }
         final ids = _preview.autoApplyRuleIds;
         if (ids.isNotEmpty) {
@@ -1674,8 +1916,17 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         }
         _expandedBonusRuleIds.clear();
         for (final rule in _bonusTabRules()) {
-          if (!_supportsMultiGiftPick(rule) || _earnedBonusQty(rule) <= 0) continue;
-          if (ids.isNotEmpty && !ids.contains(rule.ruleId)) continue;
+          if (_earnedBonusQty(rule) <= 0) continue;
+          final mode = _giftUiMode(rule);
+          if (mode != BonusGiftUiMode.redistribute &&
+              mode != BonusGiftUiMode.qtyStepper) {
+            continue;
+          }
+          if (!_includeAllEarnedBonusRules &&
+              ids.isNotEmpty &&
+              !ids.contains(rule.ruleId)) {
+            continue;
+          }
           _expandedBonusRuleIds.add(rule.ruleId);
           break;
         }
@@ -1747,7 +1998,9 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final out = <BonusGiftOverrideInput>[];
     for (final rule in preview.eligibleBonuses) {
       if (lineRuleIds.contains(rule.ruleId)) continue;
-      if (_bonusMode == BonusMode.auto && !_preview.autoApplyRuleIds.contains(rule.ruleId)) {
+      if (!_includeAllEarnedBonusRules &&
+          _bonusMode == BonusMode.auto &&
+          !_preview.autoApplyRuleIds.contains(rule.ruleId)) {
         continue;
       }
       // Faqat swap ruxsat etilgan qoidalarda override yuboriladi.
@@ -1775,10 +2028,16 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     if (_bonusMode == BonusMode.none) return const [];
     final out = <BonusGiftLineInput>[];
     for (final rule in preview.eligibleBonuses) {
-      if (_bonusMode == BonusMode.auto && !_preview.autoApplyRuleIds.contains(rule.ruleId)) {
+      if (!_includeAllEarnedBonusRules &&
+          _bonusMode == BonusMode.auto &&
+          !_preview.autoApplyRuleIds.contains(rule.ruleId)) {
         continue;
       }
-      if (!_supportsMultiGiftPick(rule)) continue;
+      final ui = _giftUiMode(rule);
+      // Multi taqsimot yoki free bitta-tovar stepper — aniq qty bilan yuboriladi.
+      if (ui != BonusGiftUiMode.redistribute && ui != BonusGiftUiMode.qtyStepper) {
+        continue;
+      }
       for (final g in rule.giftProducts) {
         final q = _giftQtyFor(rule, g.productId);
         if (q > 0) {
@@ -1789,8 +2048,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     return out;
   }
 
+  bool _resolveApplyBonus() {
+    if (_bonusMode == BonusMode.none) return false;
+    if (requiresCompleteBonusFill(_bonusFillPolicy)) return true;
+    // free: apply only when agent selected any gifts
+    return anyGiftQtySelected(_giftQtyByRule);
+  }
+
   OrderBonusDiscountResult _buildResult() {
-    final applyBonus = _bonusMode != BonusMode.none;
+    final applyBonus = _resolveApplyBonus();
     final applyDiscount = _discountMode != DiscountMode.none;
     final giftLines = _buildGiftLines();
     final bonusQty = giftLines.fold<int>(0, (s, g) => s + g.qty);
@@ -2063,6 +2329,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   /// Faqat qty > 0 bo‘lgan sovg‘alar, productId bo‘yicha yagona.
+  /// Locked/earned: map bo‘sh bo‘lsa ham default mahsulot × earned ko‘rsatiladi.
   List<({GiftProductPreview g, int qty})> _activeGiftLines(OrderBonusPreviewRule rule) {
     final orderQty = _orderQtyByProduct();
     final byId = <int, ({GiftProductPreview g, int qty})>{};
@@ -2075,6 +2342,24 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       if (qty <= 0) continue;
       final prev = byId[g.productId];
       byId[g.productId] = prev == null ? (g: g, qty: qty) : (g: g, qty: prev.qty + qty);
+    }
+    if (byId.isEmpty &&
+        _giftUiMode(rule) == BonusGiftUiMode.lockedDisplay &&
+        _earnedBonusQty(rule) > 0 &&
+        gifts.isNotEmpty) {
+      final earned = _earnedBonusQty(rule);
+      GiftProductPreview? pick;
+      final def = rule.defaultGiftProductId;
+      if (def != null) {
+        for (final g in gifts) {
+          if (g.productId == def) {
+            pick = g;
+            break;
+          }
+        }
+      }
+      pick ??= gifts.first;
+      byId[pick.productId] = (g: pick, qty: earned);
     }
     return byId.values.toList();
   }
@@ -2181,14 +2466,15 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
             const SizedBox(height: 8),
           ],
           if (preview.eligibleBonuses.isEmpty)
-            const AgentEmptyState(message: S.emptyBonuses)
-          else if (_bonusTabRules().isNotEmpty)
-            for (final rule in _bonusTabRules()) _bonusRuleBlock(
-                  rule,
-                  expandedRuleIds: _expandedBonusRuleIds,
-                  onToggleExpanded: _toggleBonusRuleExpanded,
-                  sectionDisabled: _bonusSectionDisabled,
-                ),
+            const AgentEmptyState(message: S.emptyBonusesNoActive)
+          else
+            for (final rule in _bonusTabRules())
+              _bonusRuleBlock(
+                rule,
+                expandedRuleIds: _expandedBonusRuleIds,
+                onToggleExpanded: _toggleBonusRuleExpanded,
+                sectionDisabled: _bonusSectionDisabled,
+              ),
         ],
       ],
     );
@@ -2262,6 +2548,16 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     return rule.allowGiftSwap;
   }
 
+  BonusGiftUiMode _giftUiMode(OrderBonusPreviewRule rule) {
+    return resolveBonusGiftUiMode(
+      policy: _bonusFillPolicy,
+      supportsMultiGiftPick: _supportsMultiGiftPick(rule),
+      isAssortmentAuto: rule.isAssortmentAuto,
+      isLockedAutoGift: rule.isLockedAutoGift,
+      giftProductCount: rule.giftProducts.length,
+    );
+  }
+
   bool _ruleExpanded(int ruleId, Set<int> expandedRuleIds) => expandedRuleIds.contains(ruleId);
 
   void _toggleBonusRuleExpanded(int ruleId) {
@@ -2288,20 +2584,37 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     return otherTotal > 0;
   }
 
+  bool _canDecreaseGiftQty(OrderBonusPreviewRule rule, int productId) {
+    final qty = _giftQtyFor(rule, productId);
+    if (qty <= 0) return false;
+    if (!shouldPreserveBonusGiftTotal(_bonusFillPolicy)) return true;
+    // Majburiy: kamaytirish faqat boshqa SKU ga o‘tkazish mumkin bo‘lsa.
+    return rule.giftProducts.any((g) => g.productId != productId);
+  }
+
   void _setGiftQty(OrderBonusPreviewRule rule, int productId, int qty) {
     final maxQty = _maxGiftQty(rule);
     final m = _qtyMapForRule(rule.ruleId);
     final manual = _manualGiftByRule.putIfAbsent(rule.ruleId, () => <int>{});
     final oldQty = m[productId] ?? 0;
-    final targetQty = resolveGiftQtyWithRedistribution(
-      qtyByProduct: m,
-      productId: productId,
-      requestedQty: qty,
-      maxTotal: maxQty,
-      manualProductIds: manual,
-    );
-    setState(() {
+    final ui = _giftUiMode(rule);
+    final int targetQty;
+    if (ui == BonusGiftUiMode.qtyStepper) {
+      targetQty = qty.clamp(0, maxQty);
       m[productId] = targetQty;
+    } else {
+      targetQty = resolveGiftQtyWithRedistribution(
+        qtyByProduct: m,
+        productId: productId,
+        requestedQty: qty,
+        maxTotal: maxQty,
+        manualProductIds: manual,
+        preserveTotal: shouldPreserveBonusGiftTotal(_bonusFillPolicy),
+        allProductIds: rule.giftProducts.map((g) => g.productId).toList(),
+      );
+      m[productId] = targetQty;
+    }
+    setState(() {
       if (targetQty != oldQty) {
         manual.add(productId);
         _userEditedGifts = true;
@@ -2350,6 +2663,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   /// Yig‘ilgan va ochilgan / surilish holatida bir xil padding / qatorlar.
   Widget _bonusGiftLinesReadOnly(OrderBonusPreviewRule rule) {
     final lines = _activeGiftLines(rule);
+    final earned = _earnedBonusQty(rule);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -2363,7 +2677,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
         children: [
           if (lines.isEmpty)
             Text(
-              S.emptyBonuses,
+              earned > 0 ? S.bonusDistributeHint : S.emptyBonuses,
               style: AppTypography.caption.copyWith(color: Colors.grey.shade600),
             )
           else
@@ -2404,7 +2718,8 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                 fontSize: 10.5,
               ),
             ),
-            if (rule.isCategoryStockAuto || rule.allowGiftSwap)
+            if ((rule.isCategoryStockAuto || rule.allowGiftSwap) &&
+                rule.giftProducts.length > 1)
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
@@ -2465,14 +2780,21 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final selectedTotal = _selectedGiftTotal(rule);
     final grouped = _groupGiftProducts(rule);
     final expanded = _ruleExpanded(rule.ruleId, expandedRuleIds);
-    final multiPick = _supportsMultiGiftPick(rule);
+    final uiMode = _giftUiMode(rule);
+    final multiPick = uiMode == BonusGiftUiMode.redistribute;
+    final qtyStepper = uiMode == BonusGiftUiMode.qtyStepper;
     final activeLines = _activeGiftLines(rule);
-    final showGiftDetails = activeLines.isNotEmpty || multiPick;
-    // Oddiy/locked: doimo bir xil read-only qator (chevron yo‘q).
-    // multiPick: yopiqda shu qatorlar, ochiqda qty tahrirlash.
+    final showGiftDetails =
+        activeLines.isNotEmpty || multiPick || qtyStepper || maxQty > 0;
+    // multiPick: yopiqda read-only, ochiqda qty tahrirlash.
+    // qtyStepper (free single): doimo +/-.
+    // locked: faqat product × qty.
     final canToggle = multiPick && showGiftDetails;
-    final showReadOnlyLines = showGiftDetails && (!multiPick || !expanded);
-    final showEditors = canToggle && expanded && maxQty > 0;
+    final showReadOnlyLines = (uiMode == BonusGiftUiMode.lockedDisplay &&
+            showGiftDetails) ||
+        (multiPick && !expanded && showGiftDetails);
+    final showEditors = maxQty > 0 &&
+        ((canToggle && expanded) || qtyStepper);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -2511,16 +2833,16 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             clipBehavior: Clip.hardEdge,
-            child: showReadOnlyLines
-                ? _bonusGiftLinesReadOnly(rule)
-                : (showEditors
-                    ? _bonusGiftLinesEditor(
-                        rule,
-                        grouped: grouped,
-                        maxQty: maxQty,
-                        selectedTotal: selectedTotal,
-                        sectionDisabled: sectionDisabled,
-                      )
+            child: showEditors
+                ? _bonusGiftLinesEditor(
+                    rule,
+                    grouped: grouped,
+                    maxQty: maxQty,
+                    selectedTotal: selectedTotal,
+                    sectionDisabled: sectionDisabled,
+                  )
+                : (showReadOnlyLines
+                    ? _bonusGiftLinesReadOnly(rule)
                     : const SizedBox.shrink()),
           ),
         ],
@@ -2539,6 +2861,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
     final shortage = _giftStockShortage(rule, g);
     final canEdit = !sectionDisabled;
     final canIncrease = !sectionDisabled && _canIncreaseGiftQty(rule, g.productId);
+    final canDecrease = !sectionDisabled && _canDecreaseGiftQty(rule, g.productId);
     if (compact) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 4),
@@ -2559,7 +2882,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              onPressed: !canEdit || qty <= 0 ? null : () => _setGiftQty(rule, g.productId, qty - 1),
+              onPressed: !canDecrease ? null : () => _setGiftQty(rule, g.productId, qty - 1),
               icon: const Icon(Icons.remove_circle_outline, size: 20),
             ),
             _GiftQtyField(
@@ -2610,7 +2933,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  onPressed: !canEdit || qty <= 0 ? null : () => _setGiftQty(rule, g.productId, qty - 1),
+                  onPressed: !canDecrease ? null : () => _setGiftQty(rule, g.productId, qty - 1),
                   icon: const Icon(Icons.remove_circle_outline, size: 22),
                 ),
                 _GiftQtyField(
@@ -2937,7 +3260,25 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
                         backgroundColor: AppColors.agentAccent,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: _loadingPreview ? null : () => Navigator.pop(context, _buildResult()),
+                      onPressed: _loadingPreview
+                          ? null
+                          : () {
+                              final policy = _bonusFillPolicy;
+                              if (_bonusMode == BonusMode.auto &&
+                                  requiresCompleteBonusFill(policy)) {
+                                if (shouldAutoFillBonuses(policy)) {
+                                  _fillRemainingBonusQty();
+                                }
+                                final err = _bonusFillCompletenessError();
+                                if (err != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(err)),
+                                  );
+                                  return;
+                                }
+                              }
+                              Navigator.pop(context, _buildResult());
+                            },
                       child: const Text(S.finish),
                     ),
                   ),

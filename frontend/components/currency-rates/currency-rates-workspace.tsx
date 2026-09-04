@@ -3,6 +3,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { DatePickerPopover, formatRuDateButton, localYmd } from "@/components/ui/date-picker-popover";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
 import {
@@ -121,6 +122,7 @@ function saveErrorFields(e: unknown): Record<string, string> {
 export function CurrencyRatesWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const { has } = usePermissions();
   const canWrite =
     has("cash.kurs_valyuty.create") || has("cash.kurs_valyuty.update");
@@ -496,9 +498,16 @@ export function CurrencyRatesWorkspace() {
                           aria-label="Удалить"
                           disabled={deleteMut.isPending}
                           onClick={() => {
-                            if (!window.confirm(`Удалить курс ${r.base_currency}/${r.quote_currency} на ${r.rate_date}?`))
-                              return;
-                            deleteMut.mutate(r.id);
+                            void (async () => {
+                              const ok = await confirm({
+                                title: "Удалить",
+                                message: `Удалить курс ${r.base_currency}/${r.quote_currency} на ${r.rate_date}?`,
+                                confirmLabel: "Да",
+                                cancelLabel: "Нет",
+                                destructive: true
+                              });
+                              if (ok) deleteMut.mutate(r.id);
+                            })();
                           }}
                         >
                           <Trash2 className="size-4" />
@@ -680,6 +689,7 @@ export function CurrencyRatesWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
     </PageShell>
   );
 }

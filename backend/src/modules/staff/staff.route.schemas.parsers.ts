@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maxSessionsValueSchema } from "../../lib/max-sessions";
 import type { ListStaffFilters } from "./staff.service";
 export function parseAgentListFilters(q: Record<string, string | undefined>): ListStaffFilters {
   const filters: ListStaffFilters = {};
@@ -35,6 +36,8 @@ export function parseCollectorListFilters(q: Record<string, string | undefined>)
   else if (q.is_active === "false") filters.is_active = false;
   if (q.position?.trim()) filters.position = q.position.trim();
   if (q.territory?.trim()) filters.territory = q.territory.trim();
+  if (q.territory_oblast?.trim()) filters.territory_oblast = q.territory_oblast.trim();
+  if (q.territory_city?.trim()) filters.territory_city = q.territory_city.trim();
   return filters;
 }
 
@@ -44,6 +47,8 @@ export function parseAuditorListFilters(q: Record<string, string | undefined>): 
   else if (q.is_active === "false") filters.is_active = false;
   if (q.position?.trim()) filters.position = q.position.trim();
   if (q.territory?.trim()) filters.territory = q.territory.trim();
+  if (q.territory_oblast?.trim()) filters.territory_oblast = q.territory_oblast.trim();
+  if (q.territory_city?.trim()) filters.territory_city = q.territory_city.trim();
   return filters;
 }
 
@@ -92,7 +97,7 @@ export const createOperatorBodySchema = z
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     cash_desk_id: z.number().int().positive().optional(),
     cash_desk_link_role: z.enum(["cashier", "manager", "operator"]).optional(),
     /** `operator` dan tashqari distribusiya rollari — kassa bog‘lanmasi bo‘lmasligi kerak. */
@@ -126,7 +131,7 @@ export const patchOperatorBody = z
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     password: z.string().min(6).optional()
   })
   .refine((o) => Object.keys(o).length > 0, { message: "empty" });
@@ -146,7 +151,7 @@ export const createSkladchikBodySchema = z.object({
   can_authorize: z.boolean().optional(),
   is_active: z.boolean().optional(),
   app_access: z.boolean().optional(),
-  max_sessions: z.number().int().min(1).max(99).optional(),
+  max_sessions: maxSessionsValueSchema.optional(),
   warehouse_ids: z.array(z.number().int().positive()).optional(),
   warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
 });
@@ -166,7 +171,7 @@ export const patchSkladchikBody = z
     can_authorize: z.boolean().optional(),
     is_active: z.boolean().optional(),
     app_access: z.boolean().optional(),
-    max_sessions: z.number().int().min(1).max(99).optional(),
+    max_sessions: maxSessionsValueSchema.optional(),
     password: z.string().min(6).optional(),
     warehouse_ids: z.array(z.number().int().positive()).optional(),
     warehouse_staff_entitlements: z.record(z.string(), z.boolean()).optional()
@@ -177,12 +182,31 @@ export const bulkWebPanelRevokeBody = z.object({
   user_ids: z.array(z.number().int().positive()).min(1).max(200)
 });
 
+const bulkKomandaUserIds = z.array(z.number().int().positive()).min(1).max(500);
+
+export const bulkKomandaStaffBody = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("set_app_access"),
+    user_ids: bulkKomandaUserIds,
+    app_access: z.boolean()
+  }),
+  z.object({
+    action: z.literal("set_is_active"),
+    user_ids: bulkKomandaUserIds,
+    is_active: z.boolean()
+  }),
+  z.object({
+    action: z.literal("revoke_sessions"),
+    user_ids: bulkKomandaUserIds
+  })
+]);
+
 export const bulkWebPanelMaxSessionsBody = z.object({
   updates: z
     .array(
       z.object({
         user_id: z.number().int().positive(),
-        max_sessions: z.number().int().min(1).max(99)
+        max_sessions: maxSessionsValueSchema
       })
     )
     .min(1)

@@ -6,6 +6,7 @@
 import { getSnapshotCache, setSnapshotCache, stableJsonStringify } from "./dashboard.cache";
 import type { SalesDashboardFilters, SalesDashboardSnapshot } from "./dashboard.sales.types";
 import {
+  expandSalesPaymentFilters,
   resolveSalesTerritoryTerms,
   salesOrderScopeSql,
   salesProductJoinFilter
@@ -25,14 +26,15 @@ export async function getSalesDashboardSnapshot(
 
   const from = new Date(`${filters.from}T00:00:00.000Z`);
   const to = new Date(`${filters.to}T23:59:59.999Z`);
-  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, filters.territory_ids);
+  const expanded = await expandSalesPaymentFilters(tenantId, filters);
+  const territoryTerms = await resolveSalesTerritoryTerms(tenantId, expanded.territory_ids);
   const ctx: SalesSnapshotQueryCtx = {
     tenantId,
-    filters,
+    filters: expanded,
     territoryTerms,
-    salesScope: salesOrderScopeSql(tenantId, from, to, filters, territoryTerms, { forSales: true }),
-    allScope: salesOrderScopeSql(tenantId, from, to, filters, territoryTerms, { forSales: false }),
-    productFilter: salesProductJoinFilter("p", filters)
+    salesScope: salesOrderScopeSql(tenantId, from, to, expanded, territoryTerms, { forSales: true }),
+    allScope: salesOrderScopeSql(tenantId, from, to, expanded, territoryTerms, { forSales: false }),
+    productFilter: salesProductJoinFilter("p", expanded)
   };
 
   const productBlock = await fetchSalesSnapshotProductBlock(ctx);

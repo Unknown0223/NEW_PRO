@@ -16,6 +16,8 @@ export type OpeningBalanceListQuery = {
   amount_min?: number;
   amount_max?: number;
   search?: string;
+  /** Mijoz kartasidagi область (hudud). */
+  territory_region?: string;
   /** true — faqat arxiv (yumshoq o‘chirilgan) */
   archive?: boolean;
 };
@@ -50,4 +52,6 @@ export type CreateOpeningBalanceInput = {
   trade_direction?: string | null;
   note?: string | null;
   paid_at?: string | null;
+  /** Excel import: ledger agent (Excel code wins over the client card). */
+  ledger_agent_id?: number | null;
 };

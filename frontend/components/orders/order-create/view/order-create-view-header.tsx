@@ -88,7 +88,7 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
             : isExchangeFlow
               ? "Минус по доставленному заказу, плюс только из группы взаимозаменяемых."
               : isEditMode
-                ? "Faqat «Новый» zakaz. Klient va agent o‘zgarmaydi — qolgan maydonlar tahrirlanadi."
+                ? "Faqat «Новый» zakaz. Klient, agent va ombor o‘zgarmaydi — qolgan maydonlar tahrirlanadi."
                 : "Klient, ombor va mahsulot miqdorlari — to‘liq sahifa."
         }
         actions={
@@ -127,7 +127,7 @@ export function OrderCreateViewHeader({ vm }: { vm: OrderCreateVm }) {
                     ? "Avval klientni tanlang"
                     : !hasWarehouse
                       ? "Avval omborni tanlang"
-                      : requiresAgentAndPayment && !agentId.trim()
+                      : requiresAgentAndPayment && !agentId.trim() && !isEditMode
                         ? "Agentni tanlang (savdo zakazi)"
                       : requiresPaymentMethodForSubmit && !paymentMethodRef.trim()
                           ? "To‘lov usulini tanlang"

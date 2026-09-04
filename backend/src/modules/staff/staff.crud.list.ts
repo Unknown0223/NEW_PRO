@@ -56,6 +56,7 @@ import {
   validateAgentEntitlements,
   validateExpeditorAssignmentRules
 } from "./staff.shared";
+import { REF_KEY, readUiPrefs } from "../mobile/mobile-face.shared";
 export async function listStaff(
   tenantId: number,
   kind: StaffKind,
@@ -328,6 +329,10 @@ export async function listStaff(
           ) as Record<string, boolean>)
         : {},
     work_slot_id: workSlotByUser.get(u.id)?.slot_id ?? null,
-    work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null
+    work_slot_code: workSlotByUser.get(u.id)?.slot_code ?? null,
+    has_face_reference: (() => {
+      const key = readUiPrefs(u.ui_preferences)[REF_KEY];
+      return typeof key === "string" && key.length > 0;
+    })()
   }));
 }

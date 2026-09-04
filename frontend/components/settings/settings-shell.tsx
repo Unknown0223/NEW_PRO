@@ -3,15 +3,16 @@
 import { Input } from "@/components/ui/input";
 import type { SettingsItem } from "@/lib/settings-structure";
 import {
-  filterSettingsSectionsByRole,
-  findSettingsItemRequiringRolesForPath,
-  isSettingsItemAllowedForRole,
+  filterSettingsSectionsForAccess,
+  findSettingsItemForPath,
+  isSettingsItemAllowedForAccess,
   resolveSettingsItemHref,
   settingsSections
 } from "@/lib/settings-structure";
 import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 import { TimezoneSettingsDialog } from "@/components/settings/timezone-settings-dialog";
 import { useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import Link from "next/link";
@@ -99,6 +100,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   const hideSettingsAside = !shouldShowSettingsSecondaryAside(pathname);
   const isGeoBoundariesPage = normalizeSettingsPathname(pathname) === "/settings/geo-boundaries";
   const role = useEffectiveRole();
+  const perms = usePermissions();
   const [search, setSearch] = useState("");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false);
@@ -129,8 +131,8 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   };
 
   const roleFilteredSections = useMemo(
-    () => filterSettingsSectionsByRole(settingsSections, role),
-    [role]
+    () => filterSettingsSectionsForAccess(settingsSections, role, perms.keys),
+    [role, perms.keys]
   );
 
   useEffect(() => {
@@ -180,17 +182,21 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   }, [search, roleFilteredSections]);
 
   const settingsRoleGate = useMemo(() => {
-    const item = findSettingsItemRequiringRolesForPath(pathname);
+    if (pathname === "/settings" || pathname === "/settings/") return null;
+    const item = findSettingsItemForPath(pathname, currentSearch);
     if (!item) return null;
-    if (isSettingsItemAllowedForRole(item, role)) return null;
+    if (isSettingsItemAllowedForAccess(item, role, perms.keys)) return null;
     return item;
-  }, [pathname, role]);
+  }, [pathname, currentSearch, role, perms.keys]);
 
-  const gatedChildren = settingsRoleGate ? (
+  const gatedChildren =
+    perms.isLoading && role !== "admin" ? (
+      <p className="p-6 text-sm text-muted-foreground">Проверка доступа…</p>
+    ) : settingsRoleGate ? (
     <div className="flex flex-1 items-start justify-center py-8">
       <AccessDeniedBanner
         title="Нет доступа / Ruxsat yo‘q"
-        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли. / Bu sozlama bo‘limi sizning rolingiz uchun yopiq.`}
+        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав. / Bu sozlama bo‘limi sizning rolingiz yoki ruxsatlaringiz uchun yopiq.`}
         primaryHref="/settings"
         primaryLabel="К настройкам / Sozlamalar"
       />

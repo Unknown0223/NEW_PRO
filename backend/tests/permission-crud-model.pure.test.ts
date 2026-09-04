@@ -38,7 +38,7 @@ describe("permission-model (CRUD struktura)", () => {
 
   it("yangi bo'limlar mavjud (pivot/audit/finance/automation/work_slots/warehouse to'liq)", () => {
     const modules = new Set(PERMISSION_SECTIONS.map((s) => s.module));
-    for (const m of ["pivot", "audit", "finance", "automation", "work_slots", "warehouse", "routes"]) {
+    for (const m of ["pivot", "audit", "finance", "automation", "work_slots", "warehouse", "routes", "activity"]) {
       expect(modules.has(m), `module yo'q: ${m}`).toBe(true);
     }
     const whSections = PERMISSION_SECTIONS.filter((s) => s.module === "warehouse").map((s) => s.section);
@@ -119,6 +119,8 @@ describe("role-permission-presets", () => {
     const agent = buildRoleDefaultKeys("agent");
     expect(agent).toContain("orders.zakaz.create");
     expect(agent).toContain("clients.klient.create");
+    expect(agent).toContain("clients.foto.view");
+    expect(agent).toContain("clients.foto.create");
     expect(agent.some((k) => k.startsWith("warehouse."))).toBe(false);
   });
 

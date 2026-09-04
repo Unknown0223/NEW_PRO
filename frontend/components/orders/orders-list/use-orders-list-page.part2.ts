@@ -17,6 +17,7 @@ import {
 } from "./types";
 import type { OrdersListPagePart1 } from "./use-orders-list-page.part1";
 import { orderListDisplayTotalSum } from "@/lib/orders-list-columns";
+import { invalidateLiveDashboardQueries } from "@/lib/dashboard-shared-query-keys";
 
 export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
   const {
@@ -119,6 +120,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     },
     onSettled: (_data, _err, { id }) => {
       void qc.invalidateQueries({ queryKey: ["order", tenantSlug, id] });
+      invalidateLiveDashboardQueries(qc, tenantSlug);
     }
   });
 
@@ -247,6 +249,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
         patchOrderInOrdersListCaches(qc, tenantSlug, id, (r) => ({ ...r, status: vars.status }));
       }
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      invalidateLiveDashboardQueries(qc, tenantSlug);
       setSelectedOrderIds(new Set());
       setBulkTargetStatus("");
       if (res.failed.length > 0) {

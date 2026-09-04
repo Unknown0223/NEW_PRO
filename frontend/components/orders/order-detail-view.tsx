@@ -42,6 +42,7 @@ export type OrderListRow = {
   client_legal_name: string | null;
   warehouse_id: number | null;
   warehouse_name: string | null;
+  agent_id?: number | null;
   agent_name: string | null;
   agent_code: string | null;
   expeditors: string | null;

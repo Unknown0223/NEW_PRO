@@ -7,6 +7,11 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-aud
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
 import { invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
+import { resolveStoredPaymentMethodRef } from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import { parseBonusStackPolicy } from "../bonus-stack-policy";
 import { buildAppliedBonusRulesSnapshotForOrder } from "../order-bonus-snapshot.persist";
 import {
@@ -112,7 +117,7 @@ export async function updateOrderLines(
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
 
-  // Agent doim qulflangan. Ombor / to‘lov usuli — faqat «new» da o‘zgartiriladi.
+  // Agent, ombor doim qulflangan. To‘lov usuli — faqat «new» da o‘zgartiriladi.
   if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
     throw new Error("ORDER_HEADER_LOCKED");
   }
@@ -121,10 +126,9 @@ export async function updateOrderLines(
   const existingPm =
     (existing as { payment_method_ref?: string | null }).payment_method_ref?.trim() || null;
 
-  let warehouseId = existing.warehouse_id;
+  const warehouseId = existing.warehouse_id;
   if (input.warehouse_id !== undefined && !sameNullableId(input.warehouse_id, existing.warehouse_id)) {
-    if (!isNewStatus) throw new Error("ORDER_HEADER_LOCKED");
-    warehouseId = input.warehouse_id;
+    throw new Error("ORDER_HEADER_LOCKED");
   }
 
   let nextPaymentMethodRef = existingPm;
@@ -135,11 +139,32 @@ export async function updateOrderLines(
         ? null
         : (input.payment_method_ref ?? "").trim().slice(0, 64) || null;
   }
-  const warehouseChanged = !sameNullableId(warehouseId, existing.warehouse_id);
-  const paymentChanged = !samePaymentRef(nextPaymentMethodRef, existingPm);
 
   const agentId = existing.agent_id;
   const priceType = (input.price_type ?? "").trim() || "retail";
+  const patchPriceType = (input.price_type ?? "").trim();
+
+  if (isNewStatus && patchPriceType) {
+    const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
+      loadPriceTypeEntriesForResolve(tenantId),
+      loadPaymentMethodEntriesForResolve(tenantId)
+    ]);
+    const derived = resolveStoredPaymentMethodRef({
+      paymentMethodRef: nextPaymentMethodRef,
+      priceType: patchPriceType,
+      priceTypeEntries,
+      paymentMethodEntries,
+      preferPriceType: true
+    });
+    if (derived && !samePaymentRef(derived, nextPaymentMethodRef)) {
+      nextPaymentMethodRef = derived;
+    } else if (!nextPaymentMethodRef && derived) {
+      nextPaymentMethodRef = derived;
+    }
+  }
+
+  const warehouseChanged = !sameNullableId(warehouseId, existing.warehouse_id);
+  const paymentChanged = !samePaymentRef(nextPaymentMethodRef, existingPm);
 
   const existingOrderType = normalizeOrderType(existing.order_type ?? "order");
 

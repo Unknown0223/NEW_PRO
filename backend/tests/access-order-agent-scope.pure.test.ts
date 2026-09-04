@@ -53,4 +53,11 @@ describe("order agent Access scope", () => {
     expect(isOrderAgentAllowedForActor(7, actor)).toBe(true);
     expect(isOrderAgentAllowedForActor(8, actor)).toBe(false);
   });
+
+  it("kassir — to‘liq savdo katalogi yo‘q", () => {
+    const actor: ScopedReportActor = { userId: 4, role: "cashier", bound_agent_ids: [] };
+    expect(resolveAllowedAgentIdsForActor(actor)).toEqual([]);
+    expect(buildOrderAgentScopeWhere(actor)).toEqual({ agent_id: { in: [] } });
+    expect(isOrderAgentAllowedForActor(10, actor)).toBe(false);
+  });
 });

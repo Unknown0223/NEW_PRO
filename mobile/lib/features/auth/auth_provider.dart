@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_exceptions.dart';
 import '../../core/api/auth_api.dart';
+import '../../core/auth/app_lock.dart';
 import '../../core/auth/app_pin_store.dart';
 import '../../core/auth/biometric_service.dart';
 import '../../core/auth/biometric_preferences.dart';
@@ -25,15 +26,19 @@ import '../../core/config/mobile_config_policy.dart';
 import '../../core/database/app_database.dart';
 import '../../core/gps/gps_tracker.dart';
 import '../../core/push/fcm_service.dart';
+import '../../core/errors/error_reporter.dart';
 import '../../core/errors/user_facing_error.dart';
+import '../../core/clients/client_outlet_filters.dart';
 import '../../core/sync/bootstrap_sync_labels.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_payload_parser.dart';
 import '../../core/time/work_region_time.dart';
 import '../../core/notifications/mobile_local_notification_service.dart';
 import '../../core/l10n/app_strings_ru.dart';
+import '../../core/update/app_update_dialog.dart';
 import '../../core/update/app_update_info.dart';
 import '../../core/update/app_update_installer.dart';
+import '../../core/update/app_update_prompt.dart';
 
 enum AuthStatus {
   /// Cold start — sessiya/PIN tekshirilmoqda (splash).
@@ -146,6 +151,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Completer<bool>? _appUpdateGate;
   AppUpdateInfo? _deferredAppUpdate;
   bool _deferredAfterSync = false;
+  String? _sessionPromptedUpdateVersion;
   int _pinFailCount = 0;
 
   AuthNotifier(this._authApi, this._mobileApi, this._permsApi, this._session, this._ref)
@@ -518,9 +524,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
 
       // Akkaunt bor — login o‘rniga darhol PIN (yoki pin setup).
+      // Kamera Activity paytida process o‘lgan bo‘lsa — bir martalik o‘tkazish.
       if (await _canAppLock()) {
-        await _lockForApp();
-        return;
+        if (!await consumeExternalCaptureSkipLock()) {
+          await _lockForApp();
+          return;
+        }
       }
       if (await _needsPinSetup()) {
         state = const AuthState(status: AuthStatus.pinSetup);
@@ -660,15 +669,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Versiya dialogi — UI `AppUpdateListener` orqali.
-  /// Oldin barcha kutilayotgan ma’lumotlar serverga yuboriladi.
-  Future<bool> _gateAppUpdate(AppUpdateInfo? info, {bool afterSync = false}) async {
+  /// Bir oqimda (login → config → sync) bir xil versiya qayta so‘ralmasin.
+  Future<bool> _gateAppUpdate(
+    AppUpdateInfo? info, {
+    bool afterSync = false,
+    bool forcePrompt = false,
+  }) async {
     if (info == null || !info.hasAction) return false;
     final hasTarget =
         (info.launchUrl != null && info.launchUrl!.isNotEmpty) ||
         AppUpdateInstaller.canInstallInApp(info) ||
         (info.effectiveApkUrl != null && info.effectiveApkUrl!.isNotEmpty);
     if (info.required && !hasTarget) {
-      // APK/havola yo‘q — loginni o‘lik holatda bloklamaymiz (yuklab bo‘lmaydi).
       if (kDebugMode) {
         debugPrint(
           '[SalesDoc] Majburiy yangilanish (${info.latestVersion}), APK URL yo\'q — o‘tkazib yuborildi',
@@ -677,11 +689,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
 
+    if (!forcePrompt && await _shouldSkipOptionalUpdate(info)) {
+      return false;
+    }
+
+    if (_appUpdateGate != null && !_appUpdateGate!.isCompleted) {
+      final proceed = await _appUpdateGate!.future;
+      return info.required && !proceed;
+    }
+
+    // Dialog allaqachon ochiq — qayta gate/state yozilmasin (ustma-ust oyna).
+    if (isAppUpdateDialogInFlight) {
+      if (_appUpdateGate != null && !_appUpdateGate!.isCompleted) {
+        final proceed = await _appUpdateGate!.future;
+        return info.required && !proceed;
+      }
+      return false;
+    }
+
+    // Xuddi shu versiya pending — state qayta yozilmasin (listen qayta ishlamasin).
+    if (state.pendingAppUpdate == info &&
+        _appUpdateGate != null &&
+        !_appUpdateGate!.isCompleted) {
+      final proceed = await _appUpdateGate!.future;
+      return info.required && !proceed;
+    }
+
     await _flushPendingBeforeAppUpdate();
 
     final inForeground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (!inForeground) {
-      // Ixtiyoriy ham fonda eslatiladi (spam emas — bitta deferred).
       unawaited(
         MobileLocalNotificationService.instance.notifyAppUpdateAvailable(
           info: info,
@@ -690,24 +727,65 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       _deferredAppUpdate = info;
       _deferredAfterSync = afterSync;
-      // Majburiy: login/bootstrap kutadi. Ixtiyoriy: davom etadi, keyin dialog.
       return info.required;
     }
 
-    _appUpdateGate?.complete(false);
+    final version = appUpdatePromptVersion(info);
+    if (version != null && version.isNotEmpty) {
+      _sessionPromptedUpdateVersion = version;
+    }
+
     _appUpdateGate = Completer<bool>();
     state = state.copyWith(pendingAppUpdate: info, appUpdateAfterSync: afterSync);
     final proceed = await _appUpdateGate!.future;
     state = state.copyWith(clearPendingAppUpdate: true, clearAppUpdateAfterSync: true);
     _appUpdateGate = null;
+    if (!info.required && proceed) {
+      unawaited(_snoozeOptionalUpdate(info));
+    }
     if (info.required && !proceed) return true;
     return false;
+  }
+
+  Future<bool> _shouldSkipOptionalUpdate(AppUpdateInfo info) async {
+    if (info.required) return false;
+    final parsed = parseAppUpdateSnooze(await _readUpdateSnooze());
+    return shouldSkipOptionalUpdate(
+      info: info,
+      forcePrompt: false,
+      sessionPromptedVersion: _sessionPromptedUpdateVersion,
+      snoozedVersion: parsed?.version,
+      snoozedUntil: parsed?.until,
+    );
+  }
+
+  Future<String?> _readUpdateSnooze() async {
+    try {
+      return await AppDatabase().getSyncMeta('app_update_optional_snooze');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _snoozeOptionalUpdate(AppUpdateInfo info) async {
+    final v = appUpdatePromptVersion(info);
+    if (v == null || v.isEmpty) return;
+    _sessionPromptedUpdateVersion = v;
+    final until = DateTime.now().toUtc().add(kOptionalUpdateSnooze);
+    try {
+      await AppDatabase().setSyncMeta('app_update_optional_snooze', encodeAppUpdateSnooze(v, until));
+    } catch (_) {}
   }
 
   /// Fondan qaytish yoki bildirishnoma bosilganda — kechiktirilgan yangilash dialogi.
   Future<void> resumeDeferredAppUpdate() async {
     final info = _deferredAppUpdate;
     if (info == null || !info.hasAction) return;
+    if (!info.required && await _shouldSkipOptionalUpdate(info)) {
+      _deferredAppUpdate = null;
+      _deferredAfterSync = false;
+      return;
+    }
     final afterSync = _deferredAfterSync;
     _deferredAppUpdate = null;
     _deferredAfterSync = false;
@@ -764,7 +842,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return AppUpdateUpToDate(version);
       }
       unawaited(MobileLocalNotificationService.instance.ensureNotificationPermission());
-      await _gateAppUpdate(info, afterSync: false);
+      await _gateAppUpdate(info, afterSync: false, forcePrompt: true);
       return const AppUpdateOffered();
     } on ApiException catch (e) {
       final message = e.message.trim().isEmpty ? S.appUpdateCheckFailed : e.message;
@@ -807,6 +885,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   void resolveAppUpdateGate({required bool proceed}) {
+    final pending = state.pendingAppUpdate;
+    if (pending != null && !pending.required && proceed) {
+      unawaited(_snoozeOptionalUpdate(pending));
+    }
     if (_appUpdateGate != null && !_appUpdateGate!.isCompleted) {
       _appUpdateGate!.complete(proceed);
     }
@@ -979,6 +1061,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _wipeLocalAuth();
       _setError(UserFacingError.fromApi(e));
     } on NetworkException {
+      ErrorReporter.instance?.reportModuleIssue(
+        module: ErrorModules.sync,
+        code: 'BootstrapSyncOffline',
+        message: 'Синхронизация при входе: нет сети — отложена',
+        path: '/mobile/sync',
+        severity: 'warning',
+      );
       _session.markBootstrapped();
       state = AuthState(
         status: AuthStatus.ready,
@@ -988,8 +1077,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
         ),
       );
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.sync,
+        code: 'BootstrapSyncApiFailed',
+        message: 'Синхронизация при входе: API ошибка',
+        path: '/mobile/sync',
+      );
       _setError(UserFacingError.fromApi(e));
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.sync,
+        code: 'BootstrapSyncUnexpected',
+        message: 'Синхронизация при входе: неожиданная ошибка',
+        path: '/mobile/sync',
+      );
       _setError(UserFacingError.from(e, context: 'Не удалось синхронизировать данные (товары, клиенты, заказы).'));
     }
   }
@@ -1158,13 +1262,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     bool forceClientCatalog = false,
   }) async {
     final role = _session.state.user?.role;
-    final replaceCatalog = role == 'agent' &&
-        (SyncEngine.isFullCatalogSync(lastSyncAt) || forceClientCatalog);
+    // forceClientCatalog ≠ product wipe (delta bo‘sh mahsulotlar katalogni o‘chirmasin).
+    final replaceProducts =
+        role == 'agent' && SyncEngine.isFullCatalogSync(lastSyncAt);
 
     _reportSyncPhase(0, onPhase: onPhase);
     _reportSyncPhase(3, onPhase: onPhase);
     await AppDatabase().persistSync(
-      replaceProductCatalog: replaceCatalog,
+      replaceProductCatalog: replaceProducts,
       replaceClients: payload.clientsReplaceAll,
       markAgentClientsSynced: role == 'agent' && payload.clientsReplaceAll,
       products: payload.products,
@@ -1221,10 +1326,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final slug = _session.state.tenantSlug ?? '';
     if (slug.isEmpty) return;
     await ensureAuthTokens(_ref);
-    final refreshOutcome = await refreshAccessToken(_ref);
-    if (refreshOutcome == RefreshOutcome.definitiveFailure) {
-      await sessionExpired(forceLogout: true);
-      return;
+    // Har chaqiriqda refresh token rotate qilmaslik — race → INVALID_REFRESH → sessiya tozalanishi.
+    // Access yo‘q bo‘lsagina refresh; 401 ni Dio interceptor o‘zi qayta urinadi.
+    if (_ref.read(accessTokenProvider) == null) {
+      final refreshOutcome = await refreshAccessToken(_ref);
+      if (refreshOutcome == RefreshOutcome.definitiveFailure) {
+        await sessionExpired(forceLogout: true);
+        return;
+      }
+      if (refreshOutcome == RefreshOutcome.transientFailure) {
+        return;
+      }
     }
     try {
       final config = await _mobileApi.getAgentConfig(slug);
@@ -1391,6 +1503,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       int products = 0;
       int prices = 0;
       int orders = 0;
+      List<Map<String, dynamic>> clientRows = const [];
       final syncEngine = _ref.read(syncEngineProvider);
       if (syncEngine != null) {
         final payload = await syncEngine.pullSync(
@@ -1411,6 +1524,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         products = payload.products.length;
         prices = payload.prices.length;
         orders = payload.orders.length;
+        clientRows = payload.clients;
       } else {
         onPhase?.call(0);
         final payload = await _mobileApi.syncFullParsed(
@@ -1438,10 +1552,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         products = payload.products.length;
         prices = payload.prices.length;
         orders = payload.orders.length;
+        clientRows = payload.clients;
       }
 
       await AppDatabase().recordSyncToday();
       await checkForAppUpdate(afterSync: true);
+      _reportClientSyncHealth(
+        fullCatalog: lastAt == null || forceCatalog,
+        clients: clients,
+        products: products,
+        clientRows: clientRows,
+      );
       return AgentSyncResult(
         ok: true,
         error: null,
@@ -1454,14 +1575,73 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final info = UserFacingError.fromApi(e);
       return AgentSyncResult(ok: false, error: info.summary, errorInfo: info);
     } on NetworkException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.sync,
+        code: 'ManualSyncOffline',
+        message: 'Синхронизация: нет сети',
+        path: '/mobile/sync',
+        severity: 'warning',
+      );
       final info = UserFacingError.from(e, context: 'Синхронизация прервана — данные не обновлены.');
       return AgentSyncResult(ok: false, error: info.summary, errorInfo: info);
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.sync,
+        code: 'ManualSyncApiFailed',
+        message: 'Синхронизация: API ошибка',
+        path: '/mobile/sync',
+      );
       final info = UserFacingError.fromApi(e);
       return AgentSyncResult(ok: false, error: info.summary, errorInfo: info);
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.sync,
+        code: 'ManualSyncUnexpected',
+        message: 'Синхронизация не завершена',
+        path: '/mobile/sync',
+      );
       final info = UserFacingError.from(e, context: 'Синхронизация не завершена.');
       return AgentSyncResult(ok: false, error: info.summary, errorInfo: info);
+    }
+  }
+
+  void _reportClientSyncHealth({
+    required bool fullCatalog,
+    required int clients,
+    required int products,
+    required List<Map<String, dynamic>> clientRows,
+  }) {
+    final reporter = ErrorReporter.instance;
+    if (reporter == null || !fullCatalog) return;
+    if (clients <= 0) {
+      reporter.reportSyncIssue(
+        code: 'SyncClientsEmpty',
+        message: 'Синхронизация: клиенты не загрузились в локальную базу',
+        payload: {'clients': clients, 'products': products},
+      );
+      return;
+    }
+    final withDays = clientRows
+        .where((c) => parseVisitWeekdaysField(c['visit_weekdays']).isNotEmpty)
+        .length;
+    if (withDays == 0) {
+      reporter.reportSyncIssue(
+        code: 'SyncVisitDaysEmpty',
+        message:
+            'Синхронизация: клиенты есть, но дни визита пустые — список на день пуст',
+        payload: {'clients': clients, 'with_visit_days': withDays, 'products': products},
+      );
+    }
+    if (products <= 0) {
+      reporter.reportSyncIssue(
+        code: 'SyncProductsEmpty',
+        message: 'Синхронизация: товары не загрузились',
+        payload: {'clients': clients, 'products': products},
+      );
     }
   }
 
@@ -1494,22 +1674,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 
-  /// Web «Завершить все сессии» — login. Tarmoq uzilishi / timeout — chiqarmaydi.
+  /// Web «Завершить все сессии» — login. Tarmoq / vaqtinchalik 401 — chiqarmaydi.
   Future<void> validateActiveSession() async {
     if (state.status != AuthStatus.ready) return;
     if (_session.state.user == null) return;
     try {
       await ensureAuthTokens(_ref);
-      // Access muddati tugagan bo‘lsa — avval silent refresh (mutex).
-      final outcome = await refreshAccessToken(_ref);
-      if (outcome == RefreshOutcome.definitiveFailure) {
-        await sessionExpired(forceLogout: true);
-        return;
-      }
-      if (outcome == RefreshOutcome.transientFailure &&
-          _ref.read(accessTokenProvider) == null) {
-        // Oflayn va access yo‘q — mahalliy sessiya saqlanadi.
-        return;
+      // Majburiy refresh yo‘q — rotate race bilan chiqarib yubormaslik.
+      if (_ref.read(accessTokenProvider) == null) {
+        final outcome = await refreshAccessToken(_ref);
+        if (outcome == RefreshOutcome.definitiveFailure) {
+          await sessionExpired(forceLogout: true);
+          return;
+        }
+        if (outcome == RefreshOutcome.transientFailure) {
+          return;
+        }
       }
       await _authApi.me();
     } on UnauthorizedException {

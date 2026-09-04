@@ -14,19 +14,12 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
-import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
-import { useRouter } from "next/navigation";
-import {
-  goToStaffWorkplaceConfig,
-  NeedWorkSlotDialog,
-  WorkplaceMovedNotice
-} from "@/components/staff/workplace-moved-notice";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
+import { Pencil, KeyRound, UserMinus } from "lucide-react";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
-import Link from "next/link";
 import {
   StaffFilterSelect,
   StaffWorkspaceFilterPanel,
@@ -38,19 +31,16 @@ import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
+import { buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import {
-  StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
-  StaffKomandaAppAccessToggle,
   StaffKomandaBranchCell,
-  StaffKomandaCodeCell,
   StaffKomandaDeviceCell,
   StaffKomandaFioCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
   StaffKomandaPinflCell,
-  StaffKomandaPositionCell,
   StaffKomandaTagList,
   StaffKomandaTerritoryCell
 } from "@/components/staff/staff-komanda-table-cells";
@@ -85,33 +75,24 @@ const COLS = [
   "Кассы",
   "Территории",
   "Телефон",
-  "Код",
   "Название устройства",
   "ПИНФЛ",
   "Филиал",
-  "Должность",
-  "Версия APK",
-  "Доступ к приложение",
-  "Количество активных сессий",
-  "Максимальное количество сессий"
+  "Версия APK"
 ] as const;
 
-const COLLECTOR_TABLE_ID = "staff.collectors.v1";
+/** v2: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const COLLECTOR_TABLE_ID = "staff.collectors.v2";
 const COLLECTOR_COLUMN_IDS = [
   "fio",
   "login",
   "cash_desks",
   "territory",
   "phone",
-  "code",
   "device_name",
   "pinfl",
   "branch",
-  "position",
-  "apk_version",
-  "app_access",
-  "active_sessions",
-  "max_sessions"
+  "apk_version"
 ] as const;
 const COLLECTOR_COLUMNS = COLLECTOR_COLUMN_IDS.map((id, i) => ({
   id,
@@ -125,20 +106,18 @@ type Props = { tenantSlug: string };
 
 export function CollectorsWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
-  const router = useRouter();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
-  const [draftPos, setDraftPos] = useState("");
-  const [draftTerritory, setDraftTerritory] = useState("");
-  const [appliedPos, setAppliedPos] = useState("");
-  const [appliedTerritory, setAppliedTerritory] = useState("");
+  const [draftOblast, setDraftOblast] = useState("");
+  const [draftCity, setDraftCity] = useState("");
+  const [appliedOblast, setAppliedOblast] = useState("");
+  const [appliedCity, setAppliedCity] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [editRow, setEditRow] = useState<CollectorRow | null>(null);
+  const [passwordRow, setPasswordRow] = useState<CollectorRow | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [sessionRow, setSessionRow] = useState<CollectorRow | null>(null);
-  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [deactivateRow, setDeactivateRow] = useState<CollectorRow | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -161,22 +140,71 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
-      const { data } = await api.get<{ data: { positions: string[]; territories: string[] } }>(
-        `/api/${tenantSlug}/collectors/filter-options`
-      );
+      const { data } = await api.get<{
+        data: {
+          positions: string[];
+          territories: string[];
+          territory_oblasts?: string[];
+          territory_cities?: string[];
+        };
+      }>(`/api/${tenantSlug}/collectors/filter-options`);
       return data.data;
     }
   });
 
+  const profileQ = useQuery({
+    queryKey: ["settings", "profile", tenantSlug, "collectors-workspace"],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.profile,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        references: { territory_nodes?: TerritoryNode[] };
+      }>(`/api/${tenantSlug}/settings/profile`);
+      return data;
+    }
+  });
+
+  const territoryNodes = profileQ.data?.references?.territory_nodes;
+  const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
+
+  const oblastOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.regions.map((o) => o.value);
+    }
+    return filterQ.data?.territory_oblasts ?? [];
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterQ.data]);
+
+  const cityOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.cities.map((o) => o.value);
+    }
+    return filterQ.data?.territory_cities ?? [];
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterQ.data]);
+
+  useEffect(() => {
+    if (!draftCity) return;
+    if (cityOptions.length > 0 && !cityOptions.some((c) => c === draftCity)) {
+      setDraftCity("");
+    }
+  }, [cityOptions, draftCity]);
+
   const listQ = useQuery({
-    queryKey: ["collectors", tenantSlug, tab, appliedPos, appliedTerritory],
+    queryKey: ["collectors", tenantSlug, tab, appliedOblast, appliedCity],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
       const p = new URLSearchParams();
       p.set("is_active", tab === "active" ? "true" : "false");
-      if (appliedPos.trim()) p.set("position", appliedPos.trim());
-      if (appliedTerritory.trim()) p.set("territory", appliedTerritory.trim());
+      if (appliedOblast.trim()) p.set("territory_oblast", appliedOblast.trim());
+      if (appliedCity.trim()) p.set("territory_city", appliedCity.trim());
       const { data } = await api.get<{ data: CollectorRow[] }>(`/api/${tenantSlug}/collectors?${p.toString()}`);
       return data.data;
     }
@@ -259,22 +287,22 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedPos, appliedTerritory, search, pageSize]);
+  }, [tab, appliedOblast, appliedCity, search, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedPos, appliedTerritory, safePage, pageSize]);
+  }, [tab, appliedOblast, appliedCity, safePage, pageSize]);
 
   const applyFilters = () => {
-    setAppliedPos(draftPos);
-    setAppliedTerritory(draftTerritory);
+    setAppliedOblast(draftOblast);
+    setAppliedCity(draftCity);
   };
 
   const resetFilters = () => {
-    setDraftPos("");
-    setDraftTerritory("");
-    setAppliedPos("");
-    setAppliedTerritory("");
+    setDraftOblast("");
+    setDraftCity("");
+    setAppliedOblast("");
+    setAppliedCity("");
     setPage(1);
   };
 
@@ -323,24 +351,14 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         return r.territory ?? "";
       case "phone":
         return r.phone ?? "";
-      case "code":
-        return r.code ?? "";
       case "device_name":
         return r.device_name ?? "";
       case "pinfl":
         return r.pinfl ?? "";
       case "branch":
         return r.branch ?? "";
-      case "position":
-        return r.position ?? "";
       case "apk_version":
         return r.apk_version ?? "";
-      case "app_access":
-        return r.app_access ? "Да" : "Нет";
-      case "active_sessions":
-        return String(r.active_session_count);
-      case "max_sessions":
-        return String(r.max_sessions);
       default:
         return "";
     }
@@ -367,36 +385,14 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         return <StaffKomandaTerritoryCell territory={r.territory} />;
       case "phone":
         return <StaffKomandaPhoneCell phone={r.phone} />;
-      case "code":
-        return <StaffKomandaCodeCell code={r.code} />;
       case "device_name":
         return <StaffKomandaDeviceCell name={r.device_name} />;
       case "pinfl":
         return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "branch":
         return <StaffKomandaBranchCell branch={r.branch} />;
-      case "position":
-        return <StaffKomandaPositionCell position={r.position} />;
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
-      case "app_access":
-        return (
-          <StaffKomandaAppAccessToggle
-            checked={r.app_access}
-            disabled={patchMut.isPending}
-            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
-          />
-        );
-      case "active_sessions":
-        return (
-          <StaffKomandaActiveSessionsCell
-            count={r.active_session_count}
-            max={r.max_sessions}
-            onClick={() => setSessionRow(r)}
-          />
-        );
-      case "max_sessions":
-        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
@@ -419,25 +415,28 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         filters={
           <>
             <StaffFilterSelect
-              label="Должность"
-              value={draftPos}
-              onChange={setDraftPos}
-              emptyLabel="Все должности"
+              label="Область"
+              value={draftOblast}
+              onChange={(v) => {
+                setDraftOblast(v);
+                setDraftCity("");
+              }}
+              emptyLabel="Все области"
             >
-              {(filterQ.data?.positions ?? []).map((x) => (
-                <option key={x} value={x}>
+              {oblastOptions.map((x) => (
+                <option key={`obl-${x}`} value={x}>
                   {x}
                 </option>
               ))}
             </StaffFilterSelect>
             <StaffFilterSelect
-              label="Территория"
-              value={draftTerritory}
-              onChange={setDraftTerritory}
-              emptyLabel="Все территории"
+              label="Город"
+              value={draftCity}
+              onChange={setDraftCity}
+              emptyLabel="Все города"
             >
-              {(filterQ.data?.territories ?? []).map((x) => (
-                <option key={x} value={x}>
+              {cityOptions.map((x) => (
+                <option key={`city-${x}`} value={x}>
                   {x}
                 </option>
               ))}
@@ -502,16 +501,8 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton
-                title="Конфигурации"
-                onClick={() =>
-                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
-                }
-              >
-                <Settings2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Сессии" onClick={() => setSessionRow(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
+              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                <KeyRound className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
                 <Pencil className="h-4 w-4 text-amber-600" />
@@ -528,12 +519,9 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
 
       <StaffBulkFloatingBar
         count={selected.size}
-        allAccessOn={bulk.allAccessOn}
         isActiveTab={tab === "active"}
         busy={bulk.bulkBusy}
-        onToggleAccess={bulk.onToggleAccess}
         onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSessions={bulk.onClearSessions}
         onClearSelection={() => setSelected(new Set())}
       />
 
@@ -551,7 +539,18 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         onClose={() => setEditRow(null)}
         onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
       />
-      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
+      <StaffPasswordChangeDialog
+        open={passwordRow != null}
+        tenantSlug={tenantSlug}
+        apiSegment="collectors"
+        userId={passwordRow?.id ?? null}
+        login={passwordRow?.login ?? ""}
+        onClose={() => setPasswordRow(null)}
+        onDone={() => {
+          setPasswordRow(null);
+          void qc.invalidateQueries({ queryKey: ["collectors", tenantSlug] });
+        }}
+      />
       <CollectorAddDialog
         open={addOpen}
         tenantSlug={tenantSlug}
@@ -567,15 +566,6 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <StaffActiveSessionsDialog
-        open={sessionRow != null}
-        onOpenChange={(o) => !o && setSessionRow(null)}
-        tenantSlug={tenantSlug}
-        staffKind="collector"
-        userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 1}
-        onPatched={() => void qc.invalidateQueries({ queryKey: ["collectors", tenantSlug] })}
-      />
 
       <StaffImportDialog
         open={staffImport.open}
@@ -635,9 +625,7 @@ function CollectorEditDialog({
   const [last_name, setLast] = useState("");
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [position, setPosition] = useState("");
   const [login, setLogin] = useState("");
 
   useEffect(() => {
@@ -647,9 +635,7 @@ function CollectorEditDialog({
     setFirst(parts[1] ?? parts[0] ?? "");
     setMid(parts[2] ?? "");
     setPhone(row.phone ?? "");
-    setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setPosition(row.position ?? "");
     setLogin(row.login);
   }, [row]);
 
@@ -665,24 +651,7 @@ function CollectorEditDialog({
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">
-            Должность
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPosition}
-              roleFilter="collector"
-            />
-            <span className="text-[11px] leading-snug">
-              Шаблоны:{" "}
-              <Link href="/settings/web-staff-position-presets" className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-          </label>
           <Input
             className="font-mono sm:col-span-2"
             placeholder="Логин *"
@@ -705,9 +674,7 @@ function CollectorEditDialog({
                   last_name: last_name.trim() || null,
                   middle_name: middle_name.trim() || null,
                   phone: phone.trim() || null,
-                  code: code.trim() || null,
                   pinfl: pinfl.trim() || null,
-                  position: position.trim() || null,
                   login: login.trim().toLowerCase()
                 });
                 onClose();
@@ -743,15 +710,10 @@ function CollectorAddDialog({
   const [last_name, setLast] = useState("");
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPosition] = useState("");
-  const [territory, setTerritory] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [can_authorize, setCanAuthorize] = useState(true);
-  const [app_access, setAppAccess] = useState(true);
 
   return (
     <Dialog
@@ -763,15 +725,10 @@ function CollectorAddDialog({
           setLast("");
           setMid("");
           setPhone("");
-          setCode("");
           setPinfl("");
-          setBranch("");
-          setPosition("");
-          setTerritory("");
           setLogin("");
           setPassword("");
           setCanAuthorize(true);
-          setAppAccess(true);
         }
       }}
     >
@@ -785,33 +742,12 @@ function CollectorAddDialog({
           <Input placeholder="Фамилия" value={last_name} onChange={(e) => setLast(e.target.value)} />
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">
-            Должность
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPosition}
-              roleFilter="collector"
-            />
-            <span className="text-[11px] leading-snug">
-              Шаблоны:{" "}
-              <Link href="/settings/web-staff-position-presets" className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-          </label>
           <Input className="sm:col-span-2 font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
           <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuthorize(e.target.checked)} />
             Авторизация включена
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={app_access} onChange={(e) => setAppAccess(e.target.checked)} />
-            Доступ к приложению
           </label>
         </div>
         {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
@@ -827,13 +763,10 @@ function CollectorAddDialog({
                 last_name: last_name.trim() || null,
                 middle_name: middle_name.trim() || null,
                 phone: phone.trim() || null,
-                code: code.trim() || null,
                 pinfl: pinfl.trim() || null,
-                position: position.trim() || null,
                 login: login.trim(),
                 password,
-                can_authorize,
-                app_access
+                can_authorize
               })
             }
           >

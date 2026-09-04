@@ -20,7 +20,13 @@ const COVERED_SAMPLES: Array<{ method: string; path: string; key: string }> = [
   { method: "POST", path: "/api/:slug/orders/:id/approval/advance", key: "plans.ustanovka_planov.approve" },
   { method: "POST", path: "/api/:slug/agents/import.xlsx", key: "staff.agent.create" },
   { method: "GET", path: "/api/:slug/expeditors/import/template", key: "staff.ekspeditor.view" },
-  { method: "POST", path: "/api/:slug/staff/import.xlsx", key: "staff.agent.create" }
+  { method: "POST", path: "/api/:slug/staff/import.xlsx", key: "staff.agent.create" },
+  { method: "GET", path: "/api/:slug/clients/:id/photo-reports", key: "clients.foto.view" },
+  { method: "GET", path: "/api/:slug/geo-boundaries", key: "settings.geo_granitsy.view" },
+  { method: "GET", path: "/api/:slug/settings/mobile-app-release", key: "settings.mobile_app.view" },
+  { method: "GET", path: "/api/:slug/settings/document-edit-lock", key: "settings.document_edit_lock.view" },
+  { method: "GET", path: "/api/:slug/system-migration/inventory", key: "settings.system_migration.view" },
+  { method: "GET", path: "/api/:slug/activity", key: "activity.history.view" }
 ];
 
 describe("route-permission-guard coverage", () => {
@@ -36,5 +42,13 @@ describe("route-permission-guard coverage", () => {
     expect(matchRule("POST", "/api/auth/login")).toBeNull();
     expect(matchRule("GET", "/health")).toBeNull();
     expect(matchRule("GET", "/api/:slug/access/me-permissions")).toBeNull();
+  });
+
+  it("mobil API veb CRUD kalitlarini talab qilmaydi", () => {
+    expect(matchRule("GET", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
+    expect(matchRule("GET", "/api/test1/mobile/clients/55/photo-reports")).toBeNull();
+    expect(matchRule("GET", "/api/:slug/mobile/sync/full")).toBeNull();
+    expect(matchRule("GET", "/api/:slug/clients/:id/photo-reports")?.anyOf).toContain("clients.foto.view");
   });
 });

@@ -18,8 +18,8 @@ export const STAFF_NO_WORK_SLOT_MSG = "Avval rabochee mesto biriktiring";
 type Props = {
   className?: string;
   workSlotId?: number | null;
-  /** expeditor — avtoprivyazka / yo‘nalish ham joyda */
-  variant?: "default" | "expeditor";
+  /** expeditor — avtoprivyazka / yo‘nalish ham joyda; supervisor — jamoa agentlar */
+  variant?: "default" | "expeditor" | "supervisor";
   /** true — konfiguratsiya dialogini ochish uchun ?openConfig=1 */
   openConfig?: boolean;
 };
@@ -49,6 +49,20 @@ export function WorkplaceMovedNotice({
     );
   }
 
+  if (variant === "supervisor") {
+    return (
+      <p
+        className={`rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 ${className}`}
+      >
+        Команда агентов (подчинённые) настраивается в{" "}
+        <Link href={href} className="font-semibold underline">
+          Рабочее место
+        </Link>
+        {" → «Конфигурация» → вкладка «Команда»"}.
+      </p>
+    );
+  }
+
   return (
     <p
       className={`rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 ${className}`}
@@ -64,16 +78,19 @@ export function WorkplaceMovedNotice({
 
 /**
  * Staff qatoridagi «Конфигурация»:
- * - faol slot → `/work-slots/:id?openConfig=1`
+ * - faol slot → `/work-slots/:id?openConfig=1` (+ ixtiyoriy section)
  * - yo‘q → `onMissingSlot` (odatda NeedWorkSlotDialog)
  */
 export function goToStaffWorkplaceConfig(
   router: { push: (href: string) => void },
   workSlotId: number | null | undefined,
-  onMissingSlot: () => void
+  onMissingSlot: () => void,
+  section?: string
 ): void {
   if (workSlotId != null && workSlotId > 0) {
-    router.push(`/work-slots/${workSlotId}?openConfig=1`);
+    const q = new URLSearchParams({ openConfig: "1" });
+    if (section?.trim()) q.set("section", section.trim());
+    router.push(`/work-slots/${workSlotId}?${q.toString()}`);
     return;
   }
   onMissingSlot();

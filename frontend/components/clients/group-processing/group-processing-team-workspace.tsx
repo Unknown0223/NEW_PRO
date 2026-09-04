@@ -312,7 +312,7 @@ export function GroupProcessingTeamWorkspace() {
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; name?: string; fio?: string; login: string; is_active?: boolean }>;
-      }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+      }>(`/api/${tenantSlug}/expeditors?is_active=true&for_new_work=1`);
       return (data.data ?? [])
         .filter((u) => u.is_active !== false)
         .map((u) => ({

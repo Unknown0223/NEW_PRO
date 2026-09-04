@@ -138,6 +138,18 @@ describe("getUserFacingError", () => {
     const e = new AxiosError("Network Error", "ERR_NETWORK");
     expect(getUserFacingError(e)).toContain("Нет связи с сервером");
   });
+
+  it("403 ExpeditorNotOnSlot without message", () => {
+    const e = new AxiosError("fail");
+    e.response = {
+      status: 403,
+      data: { error: "ExpeditorNotOnSlot" },
+      statusText: "Forbidden",
+      headers: {},
+      config: {} as never
+    };
+    expect(getUserFacingError(e)).toContain("Dostavchik");
+  });
 });
 
 describe("withApiSupportLine", () => {

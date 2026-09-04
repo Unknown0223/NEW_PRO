@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { MOBILE_FIELD_ROLES } from "../../lib/constants";
-import { parseVisitWeekdaysJson } from "../clients/clients.types";
+import { resolveSyncClientVisitPlan } from "./mobile-agent-sync.client-weekdays";
 import {
   evaluateMobileSyncPolicy,
   syncWindowMessage
@@ -82,6 +82,12 @@ export function workRegionDayRange(dateStr: string): { start: Date; end: Date } 
   const start = new Date(Date.UTC(y, m - 1, d, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
   const end = new Date(Date.UTC(y, m - 1, d, 24 - WORK_REGION_UTC_OFFSET_HOURS - 1, 59, 59, 999));
   return { start, end };
+}
+
+/** Foto/list uchun — [start, nextDay) exclusive (chegarada kechagi kun aralashmasin). */
+export function workRegionDayRangeExclusive(dateStr: string): { start: Date; end: Date } {
+  const { start } = workRegionDayRange(dateStr);
+  return { start, end: new Date(start.getTime() + 86_400_000) };
 }
 
 export function localTodayRange(): { start: Date; end: Date } {
@@ -208,32 +214,28 @@ export type CompactClientRow = {
   contract_number?: string | null;
   notes?: string | null;
   visit_date?: string | null;
-  visit_weekdays?: number[];
+  visit_weekdays?: unknown;
   balance?: number | null;
   credit_limit?: Prisma.Decimal | null;
   client_balances?: { balance: Prisma.Decimal }[];
+  client_photo_reports?: { image_url: string | null }[];
   agent_assignments?: {
     visit_weekdays: unknown;
     visit_date?: Date | string | null;
     agent_id?: number | null;
+    work_slot_id?: number | null;
   }[];
 };
 
-export function compactClient(c: CompactClientRow) {
+export function compactClient(
+  c: CompactClientRow,
+  opts?: { agentId?: number; workSlotId?: number | null }
+) {
   const ledger = c.client_balances?.[0]?.balance;
-  const assignments = c.agent_assignments ?? [];
-  // Avvalo kunlari bor assignment (slot rejasi), keyin birinchisi.
-  const withDays = assignments.find((a) => parseVisitWeekdaysJson(a.visit_weekdays).length > 0);
-  const assignment = withDays ?? assignments[0];
-  const weekdays =
-    parseVisitWeekdaysJson(assignment?.visit_weekdays) ||
-    parseVisitWeekdaysJson(c.visit_weekdays);
-  const visitDate =
-    assignment?.visit_date != null
-      ? assignment.visit_date instanceof Date
-        ? assignment.visit_date.toISOString()
-        : String(assignment.visit_date)
-      : c.visit_date ?? null;
+  const plan = resolveSyncClientVisitPlan(c.agent_assignments, c.visit_weekdays, opts);
+  const visitDate = plan.visitDate ?? c.visit_date ?? null;
+  const weekdays = plan.weekdays;
+  const photoUrl = compactSyncPhotoUrl(c.client_photo_reports?.[0]?.image_url);
   return {
     id: c.id,
     name: c.name,
@@ -260,9 +262,16 @@ export function compactClient(c: CompactClientRow) {
     notes: c.notes ?? null,
     visit_date: visitDate,
     ...(weekdays.length ? { visit_weekdays: weekdays } : {}),
+    ...(photoUrl ? { photo_url: photoUrl } : {}),
     balance: ledger != null ? Number(ledger) : null,
     credit_limit: c.credit_limit != null ? Number(c.credit_limit) : null
   };
+}
+
+function compactSyncPhotoUrl(raw: string | null | undefined): string | undefined {
+  const s = raw?.trim() ?? "";
+  if (!s || s.startsWith("data:") || s.length > 2048) return undefined;
+  return s;
 }
 
 export const clientSyncSelectBase = {
@@ -294,21 +303,25 @@ export const clientSyncSelectBase = {
   client_balances: { select: { balance: true }, take: 1 }
 } as const;
 
-/** Mobil sync — joriy agent + slot:1 tashrif jadvali (VACANT/eski agent_id holati uchun). */
+/** Mobil sync — joriy agent yoki vacant work_slot tashrif jadvali. */
 export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | null) {
-  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [
-    { agent_id: agentId },
-    { slot: 1 }
-  ];
+  const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [{ agent_id: agentId }];
   if (workSlotId != null && workSlotId > 0) {
     assignmentOr.push({ work_slot_id: workSlotId });
   }
   return {
     ...clientSyncSelectBase,
+    client_photo_reports: {
+      where: { deleted_at: null },
+      orderBy: { created_at: "desc" as const },
+      take: 1,
+      select: { image_url: true }
+    },
     agent_assignments: {
       where: { OR: assignmentOr },
-      select: { visit_weekdays: true, visit_date: true, agent_id: true },
-      take: 5
+      select: { visit_weekdays: true, visit_date: true, agent_id: true, work_slot_id: true },
+      orderBy: { slot: "asc" as const },
+      take: 12
     }
   };
 }

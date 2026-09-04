@@ -8,10 +8,14 @@ import {
   Shield,
   Smartphone,
   Tags,
+  Truck,
   UserRoundX,
+  Users,
+  Warehouse,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { SlotWorkplaceConfigTabId } from "./work-slots-utils";
 
 export type WorkSlotsBulkFloatingBarProps = {
   count: number;
@@ -21,14 +25,53 @@ export type WorkSlotsBulkFloatingBarProps = {
   onBulkEdit: () => void;
   onUnassign: () => void;
   onClearSelection: () => void;
-  /** ≥2 tanlanganda — alohida konfiguratsiya ikonlari */
-  onMain?: () => void;
-  onPrices?: () => void;
-  onRestrictions?: () => void;
-  onMobileConfig?: () => void;
+  /** ≥2 tanlanganda — rolga mos konfiguratsiya (slotWorkplaceConfigTabs) */
+  configActions?: SlotWorkplaceConfigTabId[];
+  onOpenConfig?: (section: SlotWorkplaceConfigTabId) => void;
 };
 
-/** Guruhli amallar: 2+ tanlovda konfiguratsiya ikonlari ko‘rinadi. */
+const CONFIG_META: Record<
+  SlotWorkplaceConfigTabId,
+  { title: string; className: string; Icon: typeof LayoutGrid }
+> = {
+  main: {
+    title: "Основное — для выбранных",
+    className: "text-violet-600 hover:bg-violet-50",
+    Icon: LayoutGrid
+  },
+  prices: {
+    title: "Типы цен — для выбранных",
+    className: "text-amber-600 hover:bg-amber-50",
+    Icon: Tags
+  },
+  limits: {
+    title: "Ограничения — для выбранных",
+    className: "text-slate-600 hover:bg-slate-100",
+    Icon: Shield
+  },
+  mobile: {
+    title: "Мобильные настройки — для выбранных",
+    className: "text-teal-600 hover:bg-teal-50",
+    Icon: Smartphone
+  },
+  expeditor: {
+    title: "Правила экспедитора — для выбранных",
+    className: "text-sky-600 hover:bg-sky-50",
+    Icon: Truck
+  },
+  skladchik: {
+    title: "Права складчика — для выбранных",
+    className: "text-orange-600 hover:bg-orange-50",
+    Icon: Warehouse
+  },
+  team: {
+    title: "Команда — для выбранных",
+    className: "text-indigo-600 hover:bg-indigo-50",
+    Icon: Users
+  }
+};
+
+/** Guruhli amallar: 2+ tanlovda rolga mos konfiguratsiya ikonlari. */
 export function WorkSlotsBulkFloatingBar({
   count,
   isActiveTab,
@@ -37,14 +80,12 @@ export function WorkSlotsBulkFloatingBar({
   onBulkEdit,
   onUnassign,
   onClearSelection,
-  onMain,
-  onPrices,
-  onRestrictions,
-  onMobileConfig
+  configActions = [],
+  onOpenConfig
 }: WorkSlotsBulkFloatingBarProps) {
   if (count <= 0) return null;
 
-  const showConfigIcons = count >= 2;
+  const showConfigIcons = count >= 2 && configActions.length > 0 && onOpenConfig;
   const iconBtn =
     "flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 disabled:opacity-50";
 
@@ -58,53 +99,25 @@ export function WorkSlotsBulkFloatingBar({
           </span>
         </span>
 
-        {showConfigIcons && (onMain || onPrices || onRestrictions || onMobileConfig) ? (
+        {showConfigIcons ? (
           <>
             <span className="mx-1 h-6 w-px bg-slate-200" />
-            {onMain ? (
-              <button
-                type="button"
-                onClick={onMain}
-                disabled={busy}
-                title="Основное — для выбранных"
-                className={cn(iconBtn, "text-violet-600 hover:bg-violet-50")}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            ) : null}
-            {onPrices ? (
-              <button
-                type="button"
-                onClick={onPrices}
-                disabled={busy}
-                title="Типы цен — для выбранных"
-                className={cn(iconBtn, "text-amber-600 hover:bg-amber-50")}
-              >
-                <Tags className="h-4 w-4" />
-              </button>
-            ) : null}
-            {onRestrictions ? (
-              <button
-                type="button"
-                onClick={onRestrictions}
-                disabled={busy}
-                title="Ограничения — для выбранных"
-                className={cn(iconBtn, "text-slate-600 hover:bg-slate-100")}
-              >
-                <Shield className="h-4 w-4" />
-              </button>
-            ) : null}
-            {onMobileConfig ? (
-              <button
-                type="button"
-                onClick={onMobileConfig}
-                disabled={busy}
-                title="Мобильные настройки — для выбранных (полный экран)"
-                className={cn(iconBtn, "text-teal-600 hover:bg-teal-50")}
-              >
-                <Smartphone className="h-4 w-4" />
-              </button>
-            ) : null}
+            {configActions.map((id) => {
+              const meta = CONFIG_META[id];
+              const Icon = meta.Icon;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onOpenConfig(id)}
+                  disabled={busy}
+                  title={meta.title}
+                  className={cn(iconBtn, meta.className)}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              );
+            })}
           </>
         ) : null}
 

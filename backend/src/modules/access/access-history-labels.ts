@@ -81,6 +81,7 @@ export function deriveAccessHistoryOperationLabel(row: AccessHistoryLabelInput):
     if (nv.territory_ids !== undefined) return "Территории пользователя";
     if (nv.trade_direction_ids !== undefined) return "Направления пользователя";
     if (nv.supervisee_user_ids !== undefined) return "Подчинённые супервайзера";
+    if (nv.extra_role_keys !== undefined) return "Дополнительные роли";
   }
   if (entity_type === "user" && entity_id) {
     if (action_type.includes("access.cloned")) return "Копирование доступа";

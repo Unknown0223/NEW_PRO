@@ -300,7 +300,13 @@ export function ReportBuilderDatasetFiltersPanel({
               placeholder="Категория"
               items={(filterOptions?.product_categories ?? []).map((c) => ({ id: String(c.id), title: c.name }))}
               selected={filters.categoryIds.map(String)}
-              onChange={(ids) => onFiltersChange((f) => ({ ...f, categoryIds: numSelected(ids) }))}
+              onChange={(ids) =>
+                onFiltersChange((f) => ({
+                  ...f,
+                  categoryIds: numSelected(ids),
+                  productIds: []
+                }))
+              }
             />
             <FilterSelect
               placeholder="Группа"
@@ -309,7 +315,13 @@ export function ReportBuilderDatasetFiltersPanel({
                 title: g.code ? `${g.code} — ${g.name}` : g.name
               }))}
               selected={filters.productGroupIds.map(String)}
-              onChange={(ids) => onFiltersChange((f) => ({ ...f, productGroupIds: numSelected(ids) }))}
+              onChange={(ids) =>
+                onFiltersChange((f) => ({
+                  ...f,
+                  productGroupIds: numSelected(ids),
+                  productIds: []
+                }))
+              }
             />
             <FilterSelect placeholder="Продукт" items={productItems} selected={filters.productIds.map(String)} onChange={(ids) => onFiltersChange((f) => ({ ...f, productIds: numSelected(ids) }))} />
             <FilterSelect

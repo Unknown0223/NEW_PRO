@@ -13,11 +13,15 @@ model KpiGroupProduct {
 model KpiGroupAgent {
   kpi_group_id Int
   user_id      Int
-  kpi_group    KpiGroup @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  /// Faol ishchi o‘rni (dual-write); a'zolik hali user_id bo‘yicha
+  work_slot_id Int?
+  kpi_group    KpiGroup  @relation(fields: [kpi_group_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  work_slot    WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
 
   @@id([kpi_group_id, user_id])
   @@index([user_id])
+  @@index([work_slot_id])
   @@map("kpi_group_agents")
 }
 
@@ -450,19 +454,23 @@ model TenantTask {
 /// Kunlik marshrut (agent + sana + mijozlar tartibi).
 
 model AgentRouteDay {
-  id         Int      @id @default(autoincrement())
-  tenant_id  Int
-  agent_id   Int
-  route_date DateTime
-  stops      Json     @default("[]")
-  notes      String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  agent      User     @relation(fields: [agent_id], references: [id], onDelete: Cascade)
-  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  id           Int       @id @default(autoincrement())
+  tenant_id    Int
+  agent_id     Int
+  /// Marshrut yaratilgandagi ishchi o‘rni (snapshot)
+  work_slot_id Int?
+  route_date   DateTime
+  stops        Json      @default("[]")
+  notes        String?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  agent        User      @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  work_slot    WorkSlot? @relation(fields: [work_slot_id], references: [id], onDelete: SetNull)
 
   @@unique([tenant_id, agent_id, route_date])
   @@index([tenant_id, route_date])
+  @@index([work_slot_id])
   @@map("agent_route_days")
 }
 

@@ -6,8 +6,40 @@ import '../api/field_api.dart';
 import '../auth/session.dart';
 import '../config/gps_config_policy.dart';
 import '../config/mobile_config.dart';
+import '../errors/error_reporter.dart';
 
 enum GpsStatus { unknown, disabled, denied, granted, tracking }
+
+/// Mijozga nuqta biriktirish: nima uchun GPS olinmadi.
+enum GpsAttachIssue { serviceOff, denied, deniedForever, noFix }
+
+class GpsAttachOutcome {
+  final Position? position;
+  final GpsAttachIssue? issue;
+
+  const GpsAttachOutcome._({this.position, this.issue});
+
+  factory GpsAttachOutcome.ok(Position position) => GpsAttachOutcome._(position: position);
+
+  factory GpsAttachOutcome.fail(GpsAttachIssue issue) => GpsAttachOutcome._(issue: issue);
+
+  bool get ok => position != null;
+
+  String get message {
+    switch (issue) {
+      case GpsAttachIssue.serviceOff:
+        return 'Joylashuv o‘chirilgan. Telefon sozlamalarida GPS ni yoqing.';
+      case GpsAttachIssue.denied:
+        return 'GPS ruxsatini bering — keyin qayta bosing.';
+      case GpsAttachIssue.deniedForever:
+        return 'GPS ruxsati yopilgan. Ilova sozlamalaridan ruxsatni yoqing.';
+      case GpsAttachIssue.noFix:
+        return 'GPS signali topilmadi. Ochiq joyda qayta bosing.';
+      case null:
+        return '';
+    }
+  }
+}
 
 class GpsState {
   final GpsStatus status;
@@ -96,16 +128,97 @@ class GpsTracker extends StateNotifier<GpsState> {
   }
 
   Future<Position?> getCurrentPosition() async {
+    final attached = await attachCurrentPosition();
+    return attached.position;
+  }
+
+  /// Savdo nuqtasi GPS — ruxsat / o‘chiq GPS / signal yo‘qni alohida qaytaradi.
+  /// High+10s timeout hammasi «ruxsat yo‘q» deb ko‘rinmasin.
+  Future<GpsAttachOutcome> attachCurrentPosition() async {
     try {
-      if (!await requestPermission()) return null;
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (_disposed) return GpsAttachOutcome.fail(GpsAttachIssue.noFix);
+      if (!serviceEnabled) {
+        state = state.copyWith(status: GpsStatus.disabled);
+        ErrorReporter.instance?.reportModuleIssue(
+          module: ErrorModules.gps,
+          code: 'GpsServiceOff',
+          message: 'GPS: служба геолокации выключена',
+          path: '/mobile/gps',
+          severity: 'warning',
+        );
+        return GpsAttachOutcome.fail(GpsAttachIssue.serviceOff);
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (_disposed) return GpsAttachOutcome.fail(GpsAttachIssue.noFix);
+      if (permission == LocationPermission.deniedForever) {
+        state = state.copyWith(status: GpsStatus.denied);
+        ErrorReporter.instance?.reportModuleIssue(
+          module: ErrorModules.gps,
+          code: 'GpsDeniedForever',
+          message: 'GPS: доступ запрещён навсегда',
+          path: '/mobile/gps',
+          severity: 'warning',
+        );
+        return GpsAttachOutcome.fail(GpsAttachIssue.deniedForever);
+      }
+      if (permission == LocationPermission.denied) {
+        state = state.copyWith(status: GpsStatus.denied);
+        ErrorReporter.instance?.reportModuleIssue(
+          module: ErrorModules.gps,
+          code: 'GpsDenied',
+          message: 'GPS: доступ отклонён',
+          path: '/mobile/gps',
+          severity: 'warning',
+        );
+        return GpsAttachOutcome.fail(GpsAttachIssue.denied);
+      }
+
+      state = state.copyWith(status: GpsStatus.granted);
+
+      Position? lastKnown;
+      try {
+        lastKnown = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
+
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        return GpsAttachOutcome.ok(pos);
+      } on TimeoutException {
+        if (lastKnown != null) return GpsAttachOutcome.ok(lastKnown);
+        ErrorReporter.instance?.reportModuleIssue(
+          module: ErrorModules.gps,
+          code: 'GpsNoFixTimeout',
+          message: 'GPS: таймаут фиксации позиции',
+          path: '/mobile/gps',
+          severity: 'warning',
+        );
+        return GpsAttachOutcome.fail(GpsAttachIssue.noFix);
+      }
+    } catch (e, st) {
+      try {
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) return GpsAttachOutcome.ok(lastKnown);
+      } catch (_) {}
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.gps,
+        code: 'GpsAttachFailed',
+        message: 'GPS: не удалось получить позицию',
+        path: '/mobile/gps',
+        severity: 'warning',
       );
-    } catch (_) {
-      return null;
+      return GpsAttachOutcome.fail(GpsAttachIssue.noFix);
     }
   }
 
@@ -179,8 +292,17 @@ class GpsTracker extends StateNotifier<GpsState> {
           accuracyMeters: position.accuracy,
         );
       }
-    } catch (_) {
-      // Silently fail — will retry next interval
+    } catch (e, st) {
+      // Silently fail — will retry next interval; jurnalga yozamiz (12s dedupe).
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.gps,
+        code: 'GpsPingFailed',
+        message: 'GPS: ping на сервер не отправился',
+        path: '/mobile/field/location',
+        severity: 'warning',
+      );
     }
   }
 

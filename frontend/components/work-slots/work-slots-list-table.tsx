@@ -4,20 +4,24 @@ import { useRouter } from "next/navigation";
 import {
   Eye,
   LayoutGrid,
+  MonitorSmartphone,
   Pencil,
   Shield,
   Smartphone,
   Tags,
   Truck,
   UserRound,
+  Users,
   Warehouse
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AgentIconButton } from "@/components/staff/agent-workspace-template-ui";
 import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
+import { formatMaxSessionsLabel } from "@/lib/max-sessions";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
 import {
   formatSlotDate,
+  formatSlotBranches,
   slotTypeLabel,
   slotWorkplaceConfigTabs,
   type SlotWorkplaceConfigTabId,
@@ -38,6 +42,7 @@ export function renderWorkSlotDataCell(
   opts: {
     resolveTerritoryLabel?: (raw: string) => string;
     onOpenDetail?: (id: number) => void;
+    onOpenSessions?: (slot: WorkSlotListItem) => void;
     tenantSlug?: string;
   } = {}
 ) {
@@ -99,8 +104,35 @@ export function renderWorkSlotDataCell(
       return (
         <span className="block max-w-[10rem] truncate">{slot.active_cash_desk_names ?? "—"}</span>
       );
+    case "active_sessions": {
+      if (!slot.active_user_id) return <span className="text-muted-foreground">—</span>;
+      const n = slot.active_user_active_session_count ?? 0;
+      return (
+        <button
+          type="button"
+          className="tabular-nums text-teal-700 hover:underline"
+          title="Активные сессии"
+          onClick={() => opts.onOpenSessions?.(slot)}
+        >
+          {n}
+        </button>
+      );
+    }
+    case "max_sessions": {
+      if (!slot.active_user_id) return <span className="text-muted-foreground">—</span>;
+      return (
+        <button
+          type="button"
+          className="tabular-nums text-slate-800 hover:underline"
+          title="Лимит сессий"
+          onClick={() => opts.onOpenSessions?.(slot)}
+        >
+          {formatMaxSessionsLabel(slot.active_user_max_sessions)}
+        </button>
+      );
+    }
     case "branch":
-      return <span className="text-slate-700">{slot.branch_code ?? "—"}</span>;
+      return <span className="text-slate-700">{formatSlotBranches(slot)}</span>;
     case "role":
       return <span className="text-slate-600">{slotTypeLabel(slot.slot_type)}</span>;
     case "status":
@@ -127,7 +159,8 @@ const SECTION_ICON: Record<
   limits: Shield,
   mobile: Smartphone,
   expeditor: Truck,
-  skladchik: Warehouse
+  skladchik: Warehouse,
+  team: Users
 };
 
 type RowActionsProps = {
@@ -136,12 +169,13 @@ type RowActionsProps = {
   onOpenSection: (section: SlotWorkplaceConfigTabId) => void;
   onEdit: () => void;
   onAssign: () => void;
+  onOpenSessions?: () => void;
 };
 
 /**
  * Har konfiguratsiya bo‘limi — alohida ikon (tabli modal yo‘q).
  */
-export function WorkSlotRowActions({ slot, onOpenSection, onEdit, onAssign }: RowActionsProps) {
+export function WorkSlotRowActions({ slot, onOpenSection, onEdit, onAssign, onOpenSessions }: RowActionsProps) {
   const router = useRouter();
   const sections = slotWorkplaceConfigTabs(slot.slot_type);
 
@@ -165,6 +199,11 @@ export function WorkSlotRowActions({ slot, onOpenSection, onEdit, onAssign }: Ro
           </AgentIconButton>
         );
       })}
+      {slot.active_user_id && onOpenSessions ? (
+        <AgentIconButton title="Активные сессии" onClick={onOpenSessions}>
+          <MonitorSmartphone className="h-4 w-4 text-teal-700" />
+        </AgentIconButton>
+      ) : null}
       <AgentIconButton
         title="Подробнее / история"
         onClick={() => router.push(`/work-slots/${slot.id}`)}

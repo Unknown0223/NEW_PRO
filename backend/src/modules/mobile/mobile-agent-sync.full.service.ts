@@ -43,7 +43,7 @@ export async function fetchSyncClients(
       select: clientSyncSelectForAgent(agentId, workSlotId)
     });
     if (rows.length === 0) break;
-    out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow)));
+    out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow, { agentId, workSlotId })));
     if (rows.length < take) break;
     skip += rows.length;
   }
@@ -154,6 +154,10 @@ export async function syncFull(
   await applyMobileSyncGate(tenantId, userId, presence);
   const forceClients = presence?.forceClientsCatalog === true;
   const clientSince = forceClients || lastSyncAt == null ? new Date(0) : lastSyncAt;
+  // forceClientsCatalog faqat mijozlar — mahsulotlar ham to‘liq kelishi kerak,
+  // aks holda mobil REPLACE qilganda (eski bug) yoki delta bo‘sh qoladi.
+  const productSince =
+    forceClients || lastSyncAt == null ? new Date(0) : lastSyncAt;
   const since: Date = lastSyncAt ?? new Date(0);
   const clientsReplaceAll = lastSyncAt == null || forceClients;
 
@@ -163,7 +167,7 @@ export async function syncFull(
       where: {
         tenant_id: tenantId,
         is_active: true,
-        ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
+        ...(productSince.getTime() > 0 ? { updated_at: { gt: productSince } } : {})
       },
       select: {
         id: true,
@@ -183,7 +187,7 @@ export async function syncFull(
     prisma.productPrice.findMany({
       where: {
         tenant_id: tenantId,
-        ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
+        ...(productSince.getTime() > 0 ? { updated_at: { gt: productSince } } : {})
       },
       select: { product_id: true, price_type: true, price: true },
       take: 20000

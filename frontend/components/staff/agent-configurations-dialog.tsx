@@ -334,8 +334,17 @@ export function AgentConfigurationsDialog({
   const handleSave = async () => {
     setLocalSaveError(null);
     try {
+      /** UI dagi «Текущее окно» (06:00–22:00 default) saqlansin — bo‘sh qoldirilsa mobil eski oynani saqlab qolmasin. */
+      const draftToSave: AgentMobileConfigDraft = {
+        ...draft,
+        sync: {
+          ...draft.sync,
+          allowed_window_from: effectiveSyncWindowFrom(draft.sync?.allowed_window_from),
+          allowed_window_to: effectiveSyncWindowTo(draft.sync?.allowed_window_to)
+        }
+      };
       if (bulkMode) {
-        const patch = diffMobileConfigDraft(baselineDraft, draft);
+        const patch = diffMobileConfigDraft(baselineDraft, draftToSave);
         if (!patch) {
           setLocalSaveError("Нет изменений для сохранения. Отредактируйте хотя бы одно поле.");
           return;
@@ -347,7 +356,7 @@ export function AgentConfigurationsDialog({
       const prev = agent!.agent_entitlements ?? {};
       await onSave({
         ...prev,
-        mobile_config: draft
+        mobile_config: draftToSave
       });
       onClose();
     } catch (err) {
@@ -927,7 +936,7 @@ export function AgentConfigurationsDialog({
                   <span className="text-[13px] font-medium text-foreground">С</span>
                   <TimePickerField
                     aria-label="Время начала синхронизации"
-                    value={windowFrom}
+                    value={windowFrom.trim() ? windowFrom : summaryFrom}
                     placeholder={summaryFrom}
                     onChange={(next) =>
                       setDraft((d) =>
@@ -943,7 +952,7 @@ export function AgentConfigurationsDialog({
                   <span className="text-[13px] font-medium text-foreground">По</span>
                   <TimePickerField
                     aria-label="Время окончания синхронизации"
-                    value={windowTo}
+                    value={windowTo.trim() ? windowTo : summaryTo}
                     placeholder={summaryTo}
                     onChange={(next) =>
                       setDraft((d) =>

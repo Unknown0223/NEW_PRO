@@ -12,8 +12,6 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
-import Link from "next/link";
 
 type Kind = "agent" | "expeditor" | "supervisor" | "collector" | "auditor" | "skladchik";
 
@@ -42,10 +40,8 @@ const emptyForm = {
   middle_name: "",
   phone: "",
   territory: "",
-  code: "",
   pinfl: "",
   branch: "",
-  position: "",
   login: "",
   password: "",
   product: "",
@@ -55,7 +51,6 @@ const emptyForm = {
   warehouse_id: "",
   return_warehouse_id: "",
   can_authorize: true,
-  app_access: true,
   consignment: false
 };
 
@@ -146,11 +141,9 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
         phone: form.phone.trim() || null,
         territory:
           kind === "supervisor" || workplaceOnWorkSlots ? null : form.territory.trim() || null,
-        code: kind === "supervisor" ? null : form.code.trim() || null,
         pinfl: kind === "supervisor" ? null : form.pinfl.trim() || null,
         branch:
           kind === "supervisor" || workplaceOnWorkSlots ? null : form.branch.trim() || null,
-        position: kind === "supervisor" ? null : form.position.trim() || null,
         login: form.login.trim(),
         password: form.password,
         product: kind === "supervisor" ? null : form.product || null,
@@ -175,7 +168,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               ? Number.parseInt(form.return_warehouse_id, 10)
               : null,
         can_authorize: form.can_authorize,
-        app_access: kind === "supervisor" ? true : form.app_access,
         consignment: kind === "supervisor" || workplaceOnWorkSlots ? false : form.consignment
       });
     },
@@ -409,10 +401,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
           </div>
         ) : null}
         <div className="flex flex-col gap-1">
-          <Input placeholder="Код" value={form.code} onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))} />
-          <FieldHint name="code" errors={fieldErrors} />
-        </div>
-        <div className="flex flex-col gap-1">
           <Input placeholder="ПИНФЛ" value={form.pinfl} onChange={(e) => setForm((p) => ({ ...p, pinfl: e.target.value }))} />
           <FieldHint name="pinfl" errors={fieldErrors} />
         </div>
@@ -433,25 +421,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
             <FieldHint name="branch" errors={fieldErrors} />
           </div>
         ) : null}
-        <div className="flex flex-col gap-1">
-          <StaffPositionSelect
-            tenantSlug={tenantSlug}
-            value={form.position}
-            onChange={(v) => setForm((p) => ({ ...p, position: v }))}
-            roleFilter={kind}
-          />
-          <span className="text-[11px] leading-snug text-muted-foreground">
-            Шаблоны:{" "}
-            <Link
-              href="/settings/web-staff-position-presets"
-              className="text-primary underline underline-offset-2"
-            >
-              Должности
-            </Link>
-            .
-          </span>
-          <FieldHint name="position" errors={fieldErrors} />
-        </div>
         <div className="flex flex-col gap-1">
           <Input placeholder="Логин" value={form.login} onChange={(e) => setForm((p) => ({ ...p, login: e.target.value }))} />
           <FieldHint name="login" errors={fieldErrors} />
@@ -493,14 +462,6 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
               onChange={(e) => setForm((p) => ({ ...p, can_authorize: e.target.checked }))}
             />
             Активный
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.app_access}
-              onChange={(e) => setForm((p) => ({ ...p, app_access: e.target.checked }))}
-            />
-            Доступ к приложение
           </label>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4 sm:col-span-2">

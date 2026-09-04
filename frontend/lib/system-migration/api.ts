@@ -140,7 +140,9 @@ export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reas
 
 export async function downloadMigrationBackup(tenantSlug: string): Promise<void> {
   const { data } = await api.get(`/api/${tenantSlug}/system-migration/export.backup.zip`, {
-    responseType: "blob"
+    responseType: "blob",
+    // Katta tenant ZIP — default timeout yetmasligi mumkin
+    timeout: 10 * 60 * 1000
   });
   const blob = data as Blob;
   const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());

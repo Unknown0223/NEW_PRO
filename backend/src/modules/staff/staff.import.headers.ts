@@ -4,7 +4,14 @@
 
 import * as XLSX from "xlsx";
 import type { StaffImportKind } from "./staff.import.kinds";
-import { headerAliasesForKind } from "./staff.import.kinds";
+import {
+  STAFF_IMPORT_KINDS,
+  STAFF_IMPORT_SHEET_NAME,
+  headerAliasesForKind,
+  isStaffImportKind,
+  resolveOfficeWebRoleFromSheetName,
+  type StaffOfficeWebRole
+} from "./staff.import.kinds";
 
 export function normHeader(s: string): string {
   return s
@@ -111,6 +118,126 @@ export function readMatrixFromBuffer(buffer: Buffer): { sheetName: string; matri
   if (!sheet) return { sheetName, matrix: [] };
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
   return { sheetName, matrix };
+}
+
+/** RU / EN aliases for workbook sheet names → StaffImportKind */
+const SHEET_NAME_ALIASES: Record<StaffImportKind, string[]> = {
+  agent: ["агент", "агенты", "agents", "agent"],
+  expeditor: ["экспедитор", "экспедиторы", "expeditors", "expeditor", "ekspeditor"],
+  supervisor: ["супервайзер", "супервайзеры", "supervisors", "supervisor", "supervayzer"],
+  collector: ["инкассатор", "инкассаторы", "collectors", "collector", "inkassator"],
+  auditor: ["аудитор", "аудиторы", "auditors", "auditor"],
+  skladchik: ["складчик", "складчики", "skladchik", "warehouse workers"],
+  operator: [
+    "сотрудник",
+    "сотрудники",
+    "оператор",
+    "операторы",
+    "operators",
+    "operator",
+    "sotrudniki",
+    "менеджер",
+    "менеджеры",
+    "директор",
+    "директоры",
+    "бухгалтер",
+    "бухгалтеры",
+    "manager",
+    "director",
+    "accountant"
+  ]
+};
+
+/**
+ * Map Excel sheet tab name to import kind (canonical RU sheet name, kind id, or aliases).
+ * Office role sheets (Менеджеры, …) → kind `operator`.
+ */
+export function resolveStaffImportKindFromSheetName(name: string): StaffImportKind | null {
+  const raw = String(name ?? "").trim();
+  if (!raw) return null;
+  const n = normHeader(raw).slice(0, 31);
+
+  if (resolveOfficeWebRoleFromSheetName(raw)) return "operator";
+
+  for (const kind of STAFF_IMPORT_KINDS) {
+    if (kind === "operator") continue;
+    if (normHeader(STAFF_IMPORT_SHEET_NAME[kind]).slice(0, 31) === n) return kind;
+  }
+  if (isStaffImportKind(n)) return n;
+  const lower = raw.toLowerCase().trim();
+  if (isStaffImportKind(lower)) return lower;
+
+  for (const kind of STAFF_IMPORT_KINDS) {
+    for (const alias of SHEET_NAME_ALIASES[kind]) {
+      if (normHeader(alias) === n) return kind;
+    }
+  }
+  return null;
+}
+
+export type StaffWorkbookSheet = {
+  sheetName: string;
+  kind: StaffImportKind;
+  matrix: unknown[][];
+  /** Office sheets: default Системная роль when column empty */
+  defaultWebRole?: StaffOfficeWebRole;
+};
+
+/** All workbook sheets that map to a known staff import kind (unknown sheets skipped). */
+export function readAllStaffSheetsFromBuffer(buffer: Buffer): StaffWorkbookSheet[] {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+  const out: StaffWorkbookSheet[] = [];
+  const seenFieldKinds = new Set<StaffImportKind>();
+  const seenOfficeRoles = new Set<string>();
+
+  for (const sheetName of wb.SheetNames) {
+    const officeRole = resolveOfficeWebRoleFromSheetName(sheetName);
+    const kind = resolveStaffImportKindFromSheetName(sheetName);
+    if (!kind) continue;
+
+    if (kind === "operator") {
+      const roleKey = officeRole ?? `legacy:${normHeader(sheetName)}`;
+      if (seenOfficeRoles.has(roleKey)) continue;
+      seenOfficeRoles.add(roleKey);
+    } else {
+      if (seenFieldKinds.has(kind)) continue;
+      seenFieldKinds.add(kind);
+    }
+
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+    out.push({
+      sheetName,
+      kind,
+      matrix,
+      ...(officeRole ? { defaultWebRole: officeRole } : {})
+    });
+  }
+  return out;
+}
+
+/**
+ * Prefer sheet matching the requested kind’s canonical name; else first sheet (backward compat).
+ */
+export function readMatrixForKindFromBuffer(
+  buffer: Buffer,
+  kind: StaffImportKind
+): { sheetName: string; matrix: unknown[][] } {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+  const preferred = normHeader(STAFF_IMPORT_SHEET_NAME[kind]).slice(0, 31);
+  let chosen = wb.SheetNames[0] || "Sheet1";
+  for (const name of wb.SheetNames) {
+    const resolved = resolveStaffImportKindFromSheetName(name);
+    if (resolved === kind || normHeader(name).slice(0, 31) === preferred) {
+      chosen = name;
+      break;
+    }
+  }
+  const sheet = wb.Sheets[chosen];
+  if (!sheet) return { sheetName: chosen, matrix: [] };
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+  return { sheetName: chosen, matrix };
 }
 
 export function buildStaffImportHeaderMap(

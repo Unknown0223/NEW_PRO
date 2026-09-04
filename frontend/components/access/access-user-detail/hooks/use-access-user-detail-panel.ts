@@ -36,6 +36,8 @@ import {
   type PermissionSourceFilter
 } from "@/lib/access-user-permission-matrix";
 import {
+  type AccessRoleDefaultRow,
+  type DetailModalKind,
   type MatrixRow,
   type ModalPickRow,
   type DetailResponse,
@@ -109,7 +111,7 @@ export function useAccessUserDetailPanel({
     head.scrollLeft = body.scrollLeft;
   }, []);
 
-  const [modal, setModal] = useState<null | "operations" | "cash" | "warehouse" | "branch" | "payment" | "direction" | "territory" | "staff">(null);
+  const [modal, setModal] = useState<null | DetailModalKind>(null);
   const [modalSearch, setModalSearch] = useState("");
   const [modalSel, setModalSel] = useState<Set<string>>(() => new Set());
   const [showSelOnly, setShowSelOnly] = useState(false);
@@ -166,6 +168,20 @@ export function useAccessUserDetailPanel({
     enabled: Boolean(tenantSlug) && (modal === "operations" || inner === "operations"),
     staleTime: 30 * 60_000,
     gcTime: 60 * 60_000,
+    refetchOnWindowFocus: false
+  });
+
+  const roleDefaultsQ = useQuery({
+    queryKey: ["access-role-defaults", tenantSlug],
+    queryFn: async () => {
+      const { data } = await api.get<{ data: AccessRoleDefaultRow[] }>(
+        `/api/${tenantSlug}/access/role-defaults`
+      );
+      return data.data;
+    },
+    enabled: Boolean(tenantSlug) && (modal === "role_packs" || inner === "operations"),
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false
   });
 
@@ -719,6 +735,8 @@ export function useAccessUserDetailPanel({
     if (kind === "operations") {
       /** Faqat qo‘shimcha operatsiyalar — hozirgi faol ro‘yxat emas. */
       setModalSel(new Set());
+    } else if (kind === "role_packs") {
+      setModalSel(new Set(detailQ.data?.extra_role_keys ?? []));
     } else if (kind === "territory" && scope) {
       setModalSel(new Set(scope.territories.map(String)));
     } else if (kind === "cash" && scope) {
@@ -746,6 +764,21 @@ export function useAccessUserDetailPanel({
   };
 
   const modalItems = useMemo(() => {
+    if (modal === "role_packs") {
+      const primary = (user?.role ?? "").trim();
+      return (roleDefaultsQ.data ?? [])
+        .filter((r) => {
+          const k = r.key.trim();
+          if (!k || k === primary) return false;
+          if (k === "admin" && primary !== "admin") return false;
+          return true;
+        })
+        .map((r) => ({
+          key: r.key,
+          label: r.name?.trim() || r.key,
+          sub: String(r.operations_count)
+        }));
+    }
     if (modal === "territory") {
       return (territoriesQ.data?.flat ?? []).map((r: TerritoryApiRow) => ({
         key: r.key,
@@ -754,7 +787,7 @@ export function useAccessUserDetailPanel({
       }));
     }
     return (dimQ.data ?? []).map((r) => ({ key: r.key, label: r.label, sub: String(r.attached_users_count) }));
-  }, [modal, territoriesQ.data, dimQ.data]);
+  }, [modal, territoriesQ.data, dimQ.data, roleDefaultsQ.data, user?.role]);
 
   /** Modalka «Добавить операции»: faqat hali berilmagan (effective=false) operatsiyalar. */
   const attachModalBaseItems = useMemo((): ModalPickRow[] => {
@@ -800,6 +833,7 @@ export function useAccessUserDetailPanel({
   }, [modalItems, modalSearch, showSelOnly, modalSel]);
 
   const dimPickModal = modal === "cash" || modal === "warehouse" || modal === "branch" || modal === "payment" || modal === "direction";
+  const rolePacksModal = modal === "role_packs";
 
   const visibleDimPickKeys = useMemo(() => {
     if (!dimPickModal) return [] as string[];
@@ -810,6 +844,44 @@ export function useAccessUserDetailPanel({
     visibleDimPickKeys.length > 0 && visibleDimPickKeys.every((k) => modalSel.has(k));
   const dimPickSomeSelected =
     visibleDimPickKeys.length > 0 && visibleDimPickKeys.some((k) => modalSel.has(k)) && !dimPickAllSelected;
+
+  const visibleRolePackKeys = useMemo(() => {
+    if (!rolePacksModal) return [] as string[];
+    return filteredModalItems.map((x) => x.key);
+  }, [rolePacksModal, filteredModalItems]);
+
+  const rolePacksAllSelected =
+    visibleRolePackKeys.length > 0 && visibleRolePackKeys.every((k) => modalSel.has(k));
+  const rolePacksSomeSelected =
+    visibleRolePackKeys.length > 0 && visibleRolePackKeys.some((k) => modalSel.has(k)) && !rolePacksAllSelected;
+
+  const extraRoleKeys = detailQ.data?.extra_role_keys ?? [];
+  const extraRoleLabelByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of roleDefaultsQ.data ?? []) {
+      m.set(r.key, r.name?.trim() || r.key);
+    }
+    return m;
+  }, [roleDefaultsQ.data]);
+
+  const removeExtraRolePack = useCallback(
+    async (key: string) => {
+      const next = extraRoleKeys.filter((k) => k !== key);
+      try {
+        await patchMut.mutateAsync({ extra_role_keys: next });
+        setBulkFeedback({
+          tone: "ok",
+          text: `Снят пакет роли: ${extraRoleLabelByKey.get(key) ?? key}`
+        });
+      } catch (err) {
+        setBulkFeedback({
+          tone: "err",
+          text: userMessageAfterAccessPatchFailure(err, "Не удалось снять роль")
+        });
+      }
+    },
+    [extraRoleKeys, extraRoleLabelByKey, patchMut]
+  );
 
   const opAttachGroups = useMemo((): OpAttachTreeNode[] => {
     if (modal !== "operations") return [];
@@ -885,6 +957,24 @@ export function useAccessUserDetailPanel({
         });
       }
       return;
+    } else if (modal === "role_packs") {
+      try {
+        await patchMut.mutateAsync({ extra_role_keys: [...modalSel].map((k) => k.trim()).filter(Boolean) });
+        setBulkFeedback({
+          tone: "ok",
+          text:
+            modalSel.size > 0
+              ? `Дополнительные роли: ${modalSel.size}`
+              : "Дополнительные роли сняты — осталась основная роль"
+        });
+        setModal(null);
+      } catch (err) {
+        setBulkFeedback({
+          tone: "err",
+          text: userMessageAfterAccessPatchFailure(err, "Не удалось сохранить роли")
+        });
+      }
+      return;
     } else if (modal === "territory") {
       await patchMut.mutateAsync({
         territory_ids: [...modalSel].map(Number).filter((n) => Number.isInteger(n) && n > 0)
@@ -954,7 +1044,9 @@ export function useAccessUserDetailPanel({
   const modalTitle =
     modal === "operations"
       ? `Добавить операции: ${modalUserLabel}`
-      : modal === "territory" || modal === "staff"
+      : modal === "role_packs"
+        ? `Добавить права роли: ${modalUserLabel}`
+        : modal === "territory" || modal === "staff"
         ? ""
         : modal === "cash"
           ? `Прикрепить кассу: ${modalUserLabel}`
@@ -1077,6 +1169,14 @@ export function useAccessUserDetailPanel({
     visibleDimPickKeys,
     dimPickAllSelected,
     dimPickSomeSelected,
+    rolePacksModal,
+    roleDefaultsQ,
+    visibleRolePackKeys,
+    rolePacksAllSelected,
+    rolePacksSomeSelected,
+    extraRoleKeys,
+    extraRoleLabelByKey,
+    removeExtraRolePack,
     saveModal
   };
 }

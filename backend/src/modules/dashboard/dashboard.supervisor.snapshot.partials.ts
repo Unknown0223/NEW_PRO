@@ -9,21 +9,27 @@ import type {
   SupervisorProductRow,
   SupervisorVisitRow
 } from "./dashboard.supervisor.scope";
-import { orderScopeSql, planScopeSql, visitScopeSql } from "./dashboard.supervisor.scope";
+import {
+  expandSupervisorPaymentFilters,
+  orderScopeSql,
+  planScopeSql,
+  visitScopeSql
+} from "./dashboard.supervisor.scope";
 import { loadSupervisorProductAnalyticsBlocks } from "./dashboard.supervisor.snapshot-products";
 import { loadSupervisorVisitAndSalesBlocks } from "./dashboard.supervisor.snapshot-visits";
 import { loadSupervisorMonthlyKpiPlanBlock } from "../plans/plans.monitoring-aggregates";
 
 async function buildSupervisorScopes(tenantId: number, filters: SupervisorDashboardFilters) {
-  const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
+  const expanded = await expandSupervisorPaymentFilters(tenantId, filters);
+  const dayStart = new Date(`${expanded.date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 86400000);
   const weekday = ((dayStart.getUTCDay() + 6) % 7) + 1;
   return {
     dayStart,
     dayEnd,
-    orderScope: orderScopeSql(tenantId, dayStart, dayEnd, filters),
-    visitScope: visitScopeSql(tenantId, dayStart, dayEnd, filters),
-    planScope: planScopeSql(tenantId, dayStart, dayEnd, weekday, filters)
+    orderScope: orderScopeSql(tenantId, dayStart, dayEnd, expanded),
+    visitScope: visitScopeSql(tenantId, dayStart, dayEnd, expanded),
+    planScope: planScopeSql(tenantId, dayStart, dayEnd, weekday, expanded)
   };
 }
 

@@ -13,6 +13,11 @@ import {
   type LinkageConstraintScope,
   type LinkageSelectedMasters
 } from "../linkage/linkage.service";
+import { pickExpeditorAssignmentRules } from "./expeditor-auto-assign";
+import {
+  filterStaffOnActiveWorkSlot,
+  tenantUsesExpeditorWorkSlots
+} from "../work-slots/work-slots.expeditor-gate";
 import { prisma } from "../../config/database";
 import { priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { extractMobileConfigFromEntitlementsUnknown } from "../staff/agent-mobile-config";
@@ -135,7 +140,15 @@ export async function getOrderCreateContextBundle(
     scope.selected_expeditor_user_id != null
       ? prisma.user.findFirst({
           where: { tenant_id: tenantId, id: scope.selected_expeditor_user_id, role: "expeditor", is_active: true },
-          select: { id: true, expeditor_assignment_rules: true }
+          select: {
+            id: true,
+            expeditor_assignment_rules: true,
+            slot_user_links: {
+              where: { ended_at: null },
+              select: { slot: { select: { expeditor_assignment_rules: true } } },
+              take: 1
+            }
+          }
         })
       : Promise.resolve(null)
   ]);
@@ -190,13 +203,17 @@ export async function getOrderCreateContextBundle(
         : users
     : users;
   const strictExpeditorByClient = scope.selected_client_id != null;
-  const constrainedExpeditors = scope.constrained
+  let constrainedExpeditors = scope.constrained
     ? scope.expeditor_ids.length > 0
       ? expeditors.filter((r) => r.is_active && scopedExpeditorIds.has(r.id))
       : strictExpeditorByClient
         ? []
         : expeditors.filter((r) => r.is_active)
     : expeditors.filter((r) => r.is_active);
+  constrainedExpeditors = await filterStaffOnActiveWorkSlot(
+    await tenantUsesExpeditorWorkSlots(tenantId),
+    constrainedExpeditors
+  );
 
   const allPaymentMethods = profile.references.payment_method_entries ?? [];
   const salePriceTypeEntries = priceTypeEntriesFromUnknown(profile.references.price_type_entries).filter(
@@ -237,11 +254,13 @@ export async function getOrderCreateContextBundle(
   const agentLegacyPriceType = selectedAgent?.price_type?.trim() ? [selectedAgent.price_type.trim()] : [];
   const agentAllowedPriceTypes = mergeUnique(entPriceTypes, agentPriceTypes, agentLegacyPriceType);
 
-  const expRules = selectedExpeditor?.expeditor_assignment_rules;
-  const expAllowedPriceTypes =
-    expRules != null && typeof expRules === "object" && !Array.isArray(expRules)
-      ? parseStringArray((expRules as Record<string, unknown>).price_types)
-      : [];
+  const expRules = selectedExpeditor
+    ? pickExpeditorAssignmentRules(
+        selectedExpeditor.slot_user_links[0]?.slot.expeditor_assignment_rules,
+        selectedExpeditor.expeditor_assignment_rules
+      )
+    : null;
+  const expAllowedPriceTypes = parseStringArray(expRules?.price_types);
 
   let restrictedPriceTypes: string[] | null = null;
   if (agentAllowedPriceTypes.length > 0 && expAllowedPriceTypes.length > 0) {

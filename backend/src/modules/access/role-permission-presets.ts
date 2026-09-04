@@ -59,6 +59,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("orders", "vozvrat", ["view", "create"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
       sec("clients", "profil"),
+      secOnly("clients", "foto", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view"]),
       secOnly("staff", "konsignatsiya", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view"])
@@ -78,13 +79,20 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("finance"),
       mod("audit"),
       sec("plans", "ustanovka_planov"),
-      secOnly("work_slots", "raboche_mesto", ["view", "history"]),
+      secOnly("work_slots", "raboche_mesto", ["view", "history", "update"]),
       secOnly("staff", "agent", ["activate", "deactivate"]),
       secOnly("staff", "sotrudniki", ["activate", "deactivate"])
     ),
 
   sales_director: () =>
-    uniq(mod("dashboard"), mod("reports"), modViewOnly("orders"), modViewOnly("clients"), mod("plans")),
+    uniq(
+      mod("dashboard"),
+      mod("reports"),
+      modViewOnly("orders"),
+      modViewOnly("clients"),
+      mod("plans"),
+      secOnly("work_slots", "raboche_mesto", ["view", "update", "history"])
+    ),
 
   regional_manager: () =>
     uniq(
@@ -157,6 +165,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("orders", "zakaz", ["view", "create", "copy"]),
       secOnly("orders", "vozvrat", ["view", "create"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
+      secOnly("clients", "foto", ["view", "create", "void"]),
       sec("clients", "profil"),
       secOnly("dashboard", "prodazhi", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view", "update"]),
@@ -170,6 +179,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("orders"),
       modViewOnly("clients"),
       secOnly("clients", "klient", ["activate"]),
+      secOnly("clients", "foto", ["view"]),
       secOnly("staff", "agent", ["view", "activate", "assign"]),
       secOnly("staff", "supervayzer", ["view"]),
       secOnly("staff", "kpi", ["view"]),
@@ -183,6 +193,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       secOnly("orders", "zakaz", ["view", "status"]),
       secOnly("orders", "vozvrat", ["view", "create", "status"]),
+      secOnly("clients", "foto", ["view", "create", "void"]),
       modViewOnly("invoices"),
       secOnly("cash", "zayavki_na_oplatu", ["view"]),
       secOnly("cash", "dolgi_ekspeditora", ["view", "copy"])

@@ -257,6 +257,15 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
             "Агент не назначен на рабочее место — новый заказ запрещён (только сбор долга)"
           );
         }
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — назначение на заказ запрещено"
+          );
+        }
         if (msg === "ORDER_REQUIRES_WAREHOUSE") {
           return sendApiError(reply, request, 400, "OrderRequiresWarehouse");
         }
@@ -366,6 +375,14 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 403, "LinkageProductForbidden", undefined, {
             product_id: ex.product_id
           });
+        }
+        if (
+          typeof e === "object" &&
+          e != null &&
+          "code" in e &&
+          (e as { code?: string }).code === "P2002"
+        ) {
+          return sendApiError(reply, request, 409, "DuplicateOrderNumber");
         }
         throw e;
       }

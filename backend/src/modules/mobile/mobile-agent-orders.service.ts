@@ -264,6 +264,7 @@ export async function createMobileOrder(
       bonus_gift_lines: body.bonus_gift_lines,
       bonus_strategy_selections: body.bonus_strategy_selections,
       order_type: "order",
+      creation_channel: "mobile",
       items: body.items
     },
     { role, userId }

@@ -32,6 +32,11 @@ import {
 
 import type { SalesDashboardFilters } from "./dashboard.sales.types";
 import { normalizeFromYmd, normalizeToYmd } from "./dashboard.finance";
+import { expandPaymentMethodFilterValues } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 
 export function normalizeSalesDateType(input?: string): SalesDashboardFilters["date_type"] {
   return input === "shipment_date" ? "shipment_date" : "order_date";
@@ -67,6 +72,21 @@ export function parseSalesDashboardFilters(q: Record<string, string | undefined>
     territory_3_list: csvToTextArray(q.territory_3 ?? q.territory3),
     payment_types: csvToTextArray(q.payment_types),
     trade_directions: csvToTextArray(q.trade_direction ?? q.trade_directions)
+  };
+}
+
+export async function expandSalesPaymentFilters(
+  tenantId: number,
+  f: SalesDashboardFilters
+): Promise<SalesDashboardFilters> {
+  if (f.payment_types.length === 0) return f;
+  const [pm, pt] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  return {
+    ...f,
+    payment_types: expandPaymentMethodFilterValues(f.payment_types, pm, pt)
   };
 }
 

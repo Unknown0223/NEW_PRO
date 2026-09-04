@@ -1,4 +1,10 @@
 import type { WorkSlotRow } from "./work-slots.types";
+import {
+  effectiveCashDeskIds,
+  effectiveTerritories,
+  effectiveWarehouseIds,
+  effectiveBranchCodes
+} from "./work-slots.multi-bindings";
 
 export function parseUserTerritoryParts(raw: string | null | undefined): {
   zone: string | null;
@@ -18,11 +24,12 @@ export function parseUserTerritoryParts(raw: string | null | undefined): {
   };
 }
 
-type SlotRowSource = {
+export type SlotRowSource = {
   id: number;
   slot_code: string;
   label: string | null;
   branch_code: string | null;
+  branch_codes?: string[] | null;
   direction_id: number | null;
   slot_type: string;
   is_active: boolean;
@@ -30,9 +37,12 @@ type SlotRowSource = {
   created_at: Date;
   updated_at: Date;
   territory: string | null;
+  territories?: string[] | null;
   warehouse_id: number | null;
+  warehouse_ids?: number[] | null;
   return_warehouse_id: number | null;
   cash_desk_id: number | null;
+  cash_desk_ids?: number[] | null;
   price_type: string | null;
   price_types: unknown;
   entitlements: unknown;
@@ -44,6 +54,7 @@ type SlotRowSource = {
   consignment_close_minute: number;
   warehouse_staff_entitlements: unknown;
   expeditor_assignment_rules: unknown;
+  supervisee_agent_slot_ids?: number[] | null;
   warehouse: { id: number; name: string } | null;
   return_warehouse: { id: number; name: string } | null;
   cash_desk: { id: number; name: string } | null;
@@ -54,6 +65,9 @@ type SlotRowSource = {
       id: number;
       name: string;
       territory: string | null;
+      position: string | null;
+      app_access: boolean;
+      max_sessions: number;
       warehouse: { id: number; name: string } | null;
       warehouse_links: Array<{ warehouse: { id: number; name: string } }>;
       cash_desk_links: Array<{ cash_desk: { id: number; name: string } }>;
@@ -61,31 +75,54 @@ type SlotRowSource = {
   }>;
 };
 
-export function mapSlotRow(s: SlotRowSource): WorkSlotRow {
+export type SlotNameLookups = {
+  warehouseNames?: Map<number, string>;
+  cashDeskNames?: Map<number, string>;
+};
+
+export function mapSlotRow(s: SlotRowSource, lookups?: SlotNameLookups): WorkSlotRow {
   const active = s.user_links[0];
   const u = active?.user;
 
-  // P0: slot config manba; user — fallback (dual-write davri).
-  const slotTerritory = s.territory?.trim() || null;
+  const slotTerritories = effectiveTerritories(s);
   const userTerritory = u?.territory?.trim() || null;
-  const territory = slotTerritory || userTerritory;
+  const territories =
+    slotTerritories.length > 0 ? slotTerritories : userTerritory ? [userTerritory] : [];
+  const territory = territories[0] ?? null;
 
-  const slotWhId = s.warehouse_id ?? s.warehouse?.id ?? null;
+  const warehouseIds = effectiveWarehouseIds(s);
   const userWhId = u?.warehouse?.id ?? u?.warehouse_links?.[0]?.warehouse?.id ?? null;
-  const primaryWarehouseId = slotWhId ?? userWhId;
+  const activeWarehouseIds =
+    warehouseIds.length > 0 ? warehouseIds : userWhId != null ? [userWhId] : [];
+  const primaryWarehouseId = activeWarehouseIds[0] ?? null;
 
   const whNames = new Set<string>();
+  for (const id of activeWarehouseIds) {
+    const fromLookup = lookups?.warehouseNames?.get(id);
+    if (fromLookup) whNames.add(fromLookup);
+  }
   if (s.warehouse?.name) whNames.add(s.warehouse.name);
   if (u?.warehouse?.name) whNames.add(u.warehouse.name);
   for (const l of u?.warehouse_links ?? []) {
     if (l.warehouse?.name) whNames.add(l.warehouse.name);
   }
 
-  const slotCashId = s.cash_desk_id ?? s.cash_desk?.id ?? null;
+  const cashDeskIds = effectiveCashDeskIds(s);
   const cashLinks = u?.cash_desk_links ?? [];
-  const primaryCashDeskId = slotCashId ?? cashLinks[0]?.cash_desk?.id ?? null;
+  const activeCashDeskIds =
+    cashDeskIds.length > 0
+      ? cashDeskIds
+      : cashLinks.map((l) => l.cash_desk?.id).filter((id): id is number => id != null && id > 0);
+  const primaryCashDeskId = activeCashDeskIds[0] ?? s.cash_desk?.id ?? null;
+
   const cashNames: string[] = [];
-  if (s.cash_desk?.name) cashNames.push(s.cash_desk.name);
+  for (const id of activeCashDeskIds) {
+    const fromLookup = lookups?.cashDeskNames?.get(id);
+    if (fromLookup && !cashNames.includes(fromLookup)) cashNames.push(fromLookup);
+  }
+  if (s.cash_desk?.name && !cashNames.includes(s.cash_desk.name)) {
+    cashNames.push(s.cash_desk.name);
+  }
   for (const l of cashLinks) {
     const n = l.cash_desk?.name;
     if (n?.trim() && !cashNames.includes(n)) cashNames.push(n);
@@ -98,6 +135,7 @@ export function mapSlotRow(s: SlotRowSource): WorkSlotRow {
     slot_code: s.slot_code,
     label: s.label,
     branch_code: s.branch_code,
+    branch_codes: effectiveBranchCodes(s),
     direction_id: s.direction_id,
     direction_name: s.direction?.name ?? null,
     slot_type: s.slot_type,
@@ -106,14 +144,21 @@ export function mapSlotRow(s: SlotRowSource): WorkSlotRow {
     active_user_id: u?.id ?? null,
     active_user_name: u?.name ?? null,
     active_user_territory: territory,
+    active_user_position: u?.position ?? null,
+    active_user_app_access: u != null ? u.app_access : null,
+    active_user_max_sessions: u != null ? u.max_sessions : null,
+    active_user_active_session_count: 0,
     active_territory_zone: parts.zone,
     active_territory_oblast: parts.oblast,
     active_territory_city: parts.city,
+    active_territories: territories,
     active_warehouse_id: primaryWarehouseId,
+    active_warehouse_ids: activeWarehouseIds,
     active_warehouse_name: whNames.size > 0 ? [...whNames].join(", ") : null,
     return_warehouse_id: s.return_warehouse_id ?? s.return_warehouse?.id ?? null,
     return_warehouse_name: s.return_warehouse?.name ?? null,
     active_cash_desk_id: primaryCashDeskId,
+    active_cash_desk_ids: activeCashDeskIds,
     active_cash_desk_names: cashNames.length > 0 ? cashNames.join(", ") : null,
     price_type: s.price_type?.trim() || null,
     price_types: Array.isArray(s.price_types)
@@ -141,6 +186,9 @@ export function mapSlotRow(s: SlotRowSource): WorkSlotRow {
       !Array.isArray(s.expeditor_assignment_rules)
         ? (s.expeditor_assignment_rules as Record<string, unknown>)
         : {},
+    supervisee_agent_slot_ids: Array.isArray(s.supervisee_agent_slot_ids)
+      ? s.supervisee_agent_slot_ids.filter((id): id is number => Number.isFinite(id) && id > 0)
+      : [],
     active_since: active?.started_at.toISOString() ?? null,
     created_at: s.created_at.toISOString(),
     updated_at: s.updated_at.toISOString()
@@ -162,6 +210,9 @@ export const slotInclude = {
           id: true,
           name: true,
           territory: true,
+          position: true,
+          app_access: true,
+          max_sessions: true,
           warehouse: { select: { id: true, name: true } },
           warehouse_links: {
             select: { warehouse: { select: { id: true, name: true } } }

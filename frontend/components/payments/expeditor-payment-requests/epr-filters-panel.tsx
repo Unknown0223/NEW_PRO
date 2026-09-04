@@ -5,7 +5,7 @@ import {
   type TemplateSelectOption
 } from "@/components/clients/clients-template-select-field";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { uiFromSingleValue } from "@/lib/client-filter-select-value";
+import { joinMultiFilterValues, splitMultiFilterValues, uiFromSingleValue } from "@/lib/client-filter-select-value";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
 import type { DealType, EprFilterState, StatusFilter } from "./expeditor-payment-requests-types";
@@ -206,9 +206,12 @@ export function EprFiltersPanel({
           <div key={t.key} className="w-[170px]">
             <ClientsTemplateSelectField
               label={t.label}
+              multi
               options={t.options}
-              values={uiFromSingleValue(t.value)}
-              onChange={(v) => onDraftChange({ [t.key]: v[0]?.trim() ?? "" } as Partial<EprFilterState>)}
+              values={splitMultiFilterValues(t.value)}
+              onChange={(v) =>
+                onDraftChange({ [t.key]: joinMultiFilterValues(v) } as Partial<EprFilterState>)
+              }
             />
           </div>
         ))}

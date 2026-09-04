@@ -97,6 +97,15 @@ export async function registerOrderPatchRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "OrderRequiresPaymentMethod");
         }
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — назначение на заказ запрещено"
+          );
+        }
         if (msg === "ORDER_REQUIRES_WAREHOUSE_FOR_BLOCK") {
           return sendApiError(reply, request, 400, "OrderRequiresWarehouseForBlock");
         }

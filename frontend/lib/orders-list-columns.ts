@@ -215,10 +215,9 @@ export function orderListDisplayTotalSum(o: {
 }
 
 function requestSourceLabel(o: OrderListRow): string {
-  if (o.request_type_ref?.trim()) return o.request_type_ref.trim();
   if (o.creation_channel === "mobile") return "Телефон (агент)";
   if (o.creation_channel === "web") return "Веб";
-  return "";
+  return o.request_type_ref?.trim() ?? "";
 }
 
 export function orderListExportCell(o: OrderListRow, colId: string): string {

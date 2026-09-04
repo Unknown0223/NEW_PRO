@@ -18,6 +18,7 @@ import 'agent_drawer.dart';
 import 'agent_scaffold_key.dart';
 import 'agent_van_selling_strip.dart';
 import '../clients/client_map_holder.dart';
+import '../sync/agent_sync_overlay.dart';
 import '../sync/manual_sync_provider.dart';
 import '../sync/sync_progress_sheet.dart';
 import '../sync/sync_success_dialog.dart';
@@ -128,11 +129,7 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
               Expanded(child: ClientMapPreloadHost(child: widget.child)),
             ],
           ),
-          if (syncRunning)
-            ModalBarrier(
-              color: Colors.black.withValues(alpha: 0.35),
-              dismissible: false,
-            ),
+          if (syncRunning) const AgentSyncLoadingOverlay(),
           if (syncRunning) SyncProgressSheet(state: sync),
         ],
       ),

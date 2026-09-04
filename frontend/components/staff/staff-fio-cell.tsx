@@ -9,7 +9,7 @@ type Props = PersonNameParts & {
   showAvatar?: boolean;
   className?: string;
   /** Agar berilsa — dumaloq etalon rasm (yo‘q bo‘lsa initials) */
-  face?: { tenantSlug: string; userId: number } | null;
+  face?: { tenantSlug: string; userId: number; hasPhoto?: boolean } | null;
 };
 
 export function StaffFioCell({
@@ -41,6 +41,7 @@ export function StaffFioCell({
           alt={display}
           size="sm"
           ringColor={color}
+          hasPhoto={face.hasPhoto === true}
         />
       ) : (
         <div

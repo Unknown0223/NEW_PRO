@@ -197,6 +197,15 @@ function buildPaymentSlotMatchKeys(
   def: { value: string; label: string },
   entries:
     | Array<{ id: string; name: string; code?: string | null; active?: boolean }>
+    | undefined,
+  priceTypes?:
+    | Array<{
+        id: string;
+        name: string;
+        code?: string | null;
+        payment_method_id?: string;
+        active?: boolean;
+      }>
     | undefined
 ): Set<string> {
   const keys = new Set<string>();
@@ -226,6 +235,17 @@ function buildPaymentSlotMatchKeys(
       add(e.code ?? undefined);
       add(sk);
     }
+  }
+  for (const pt of priceTypes ?? []) {
+    if (pt.active === false) continue;
+    const pmId = normTrim(pt.payment_method_id);
+    if (!pmId) continue;
+    if (!keys.has(pmId) && !keys.has(pmId.toLowerCase())) continue;
+    add(pt.id);
+    add(pt.name);
+    add(pt.code ?? undefined);
+    const ptKey = String(pt.code ?? "").trim() || String(pt.name ?? "").trim();
+    add(ptKey);
   }
   return keys;
 }
@@ -758,6 +778,7 @@ export function DashboardHome({
     const kpi = dataQ.data.kpi;
     const breakdown = kpi.sales_by_payment_method ?? [];
     const entries = profileRefs?.payment_method_entries;
+    const priceTypes = profileRefs?.price_type_entries;
     const defs = paymentFilterOptions;
 
     if (defs.length === 0) {
@@ -774,7 +795,7 @@ export function DashboardHome({
 
     const slotMeta = defs.map((def) => ({
       def,
-      keys: buildPaymentSlotMatchKeys(def, entries)
+      keys: buildPaymentSlotMatchKeys(def, entries, priceTypes)
     }));
     const slotSums = slotMeta.map(() => "0");
     let orphanSum = "0";
@@ -808,7 +829,7 @@ export function DashboardHome({
       out.push({ title: "Не указано", amount: orphanSum, empty: false });
     }
     return out;
-  }, [dataQ.data, paymentFilterOptions, profileRefs?.payment_method_entries]);
+  }, [dataQ.data, paymentFilterOptions, profileRefs?.payment_method_entries, profileRefs?.price_type_entries]);
 
   const enterprisePaymentSlots = useMemo((): SupervisorPaymentSlot[] => {
     if (!kpiPaymentColumnSlots) return [];

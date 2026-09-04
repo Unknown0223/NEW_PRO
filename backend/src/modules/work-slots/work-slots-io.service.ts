@@ -138,6 +138,7 @@ export async function importWorkSlotsFromBuffer(
           data: {
             label,
             branch_code: branch,
+            branch_codes: branch ? [branch] : [],
             slot_type: slotType,
             is_active: isActive,
             sort_order: Number.isFinite(sortOrder) ? sortOrder : 0
@@ -152,6 +153,7 @@ export async function importWorkSlotsFromBuffer(
             slot_code: code,
             label,
             branch_code: branch,
+            branch_codes: branch ? [branch] : [],
             slot_type: slotType,
             is_active: isActive,
             sort_order: Number.isFinite(sortOrder) ? sortOrder : 0

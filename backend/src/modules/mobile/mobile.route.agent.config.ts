@@ -31,6 +31,8 @@ export async function registerMobileAgentConfigRoutes(app: FastifyInstance) {
         agent_limits: result.agent_limits,
         work_slot_id: result.work_slot_id,
         work_slot_code: result.work_slot_code,
+        work_timezone: result.work_timezone,
+        work_utc_offset_hours: result.work_utc_offset_hours,
         tenant_references: result.tenant_references,
         agent_cities: result.agent_cities,
         ...(result.app_update ? { app_update: result.app_update } : {})

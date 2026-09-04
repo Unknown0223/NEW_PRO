@@ -9,6 +9,7 @@ import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -19,21 +20,13 @@ import {
 } from "@/components/ui/dialog";
 import {
   KeyRound,
-  MonitorSmartphone,
   Pencil,
-  Settings,
   UserRoundCheck,
   UserRoundX
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import {
-  goToStaffWorkplaceConfig,
-  NeedWorkSlotDialog,
-  WorkplaceMovedNotice
-} from "@/components/staff/workplace-moved-notice";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
@@ -51,22 +44,14 @@ import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { formatPersonDisplayName } from "@/lib/person-display";
 import {
-  StaffKomandaActiveSessionsCell,
-  StaffKomandaAppAccessToggle,
   StaffKomandaBranchCell,
-  StaffKomandaCodeCell,
   StaffKomandaFioCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
   StaffKomandaPinflCell,
-  StaffKomandaPositionCell,
   StaffKomandaTagList,
   StaffKomandaYesNoCell
 } from "@/components/staff/staff-komanda-table-cells";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
-
-const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 function FieldHint({ name, errors }: { name: string; errors: Record<string, string> }) {
   const t = errors[name];
@@ -102,41 +87,37 @@ type WebStaffRow = {
   work_slot_code?: string | null;
 };
 
-type FilterOptions = { branches: string[]; positions: string[]; position_presets: string[] };
+type FilterOptions = {
+  branches: string[];
+  positions: string[];
+  position_presets: string[];
+  warehouses?: Array<{ id: number; name: string; branches: string[] }>;
+};
 
 type WarehousePickerRow = { id: number; name: string };
 
 const SKLADCHIK_COLS = [
   "Ф.И.О",
   "Авторизоваться",
-  "Код",
   "ПИНФЛ",
   "Email",
   "Склад",
   "Телефон",
   "Филиал",
-  "Должность",
-  "Количество активных сессий",
-  "Максимальное количество сессий",
-  "Доступ к приложение",
   "Авторизация"
 ] as const;
 
-const SKLADCHIK_TABLE_ID = "staff.skladchik.v1";
+/** v2: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const SKLADCHIK_TABLE_ID = "staff.skladchik.v2";
 
 const SKLADCHIK_COLUMN_IDS = [
   "fio",
   "login",
-  "code",
   "pinfl",
   "email",
   "warehouses",
   "phone",
   "branch",
-  "position",
-  "active_sessions",
-  "max_sessions",
-  "app_access",
   "can_authorize"
 ] as const;
 
@@ -154,26 +135,16 @@ function skladExportCellString(r: WebStaffRow, colId: string): string {
       return formatPersonDisplayName(r);
     case "login":
       return r.login;
-    case "code":
-      return r.code ?? "";
     case "pinfl":
       return r.pinfl ?? "";
     case "email":
       return r.email ?? "";
-    case "position":
-      return r.position ?? "";
     case "warehouses":
       return (r.warehouses ?? []).map((w) => w.name).join("; ");
     case "phone":
       return r.phone ?? "";
     case "branch":
       return r.branch ?? "";
-    case "active_sessions":
-      return String(r.active_session_count);
-    case "max_sessions":
-      return String(r.max_sessions);
-    case "app_access":
-      return r.app_access ? "Да" : "Нет";
     case "can_authorize":
       return r.can_authorize ? "Да" : "Нет";
     default:
@@ -194,14 +165,10 @@ function renderSkladDataCell(colId: string, r: WebStaffRow) {
       );
     case "login":
       return <StaffKomandaLoginCell login={r.login} />;
-    case "code":
-      return <StaffKomandaCodeCell code={r.code} />;
     case "pinfl":
       return <StaffKomandaPinflCell pinfl={r.pinfl} />;
     case "email":
       return <span className="text-xs text-slate-700">{r.email ?? "—"}</span>;
-    case "position":
-      return <StaffKomandaPositionCell position={r.position} />;
     case "warehouses":
       return (
         <StaffKomandaTagList items={(r.warehouses ?? []).map((w) => w.name)} maxVisible={2} />
@@ -210,8 +177,6 @@ function renderSkladDataCell(colId: string, r: WebStaffRow) {
       return <StaffKomandaPhoneCell phone={r.phone} />;
     case "branch":
       return <StaffKomandaBranchCell branch={r.branch} />;
-    case "max_sessions":
-      return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
     case "can_authorize":
       return <StaffKomandaYesNoCell value={r.can_authorize} />;
     default:
@@ -223,31 +188,20 @@ type Props = { tenantSlug: string };
 
 export function SkladchikWorkspace({ tenantSlug }: Props) {
   const qc = useQueryClient();
-  const router = useRouter();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
   const [filterBranch, setFilterBranch] = useState("");
-  const [filterPosition, setFilterPosition] = useState("");
   const [filterWarehouseId, setFilterWarehouseId] = useState("");
   const [appliedBranch, setAppliedBranch] = useState("");
-  const [appliedPosition, setAppliedPosition] = useState("");
   const [appliedWarehouseId, setAppliedWarehouseId] = useState("");
 
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [editRow, setEditRow] = useState<WebStaffRow | null>(null);
   const [passwordRow, setPasswordRow] = useState<WebStaffRow | null>(null);
-  const [bulkRevokeOpen, setBulkRevokeOpen] = useState(false);
-  const [bulkLimitsOpen, setBulkLimitsOpen] = useState(false);
-  /** Modallarda qulflash: ochilgan paytdagi qatorlar (tanlov yoki joriy ro‘yxat) */
-  const [bulkRevokeRows, setBulkRevokeRows] = useState<WebStaffRow[] | null>(null);
-  const [bulkLimitsRows, setBulkLimitsRows] = useState<WebStaffRow[] | null>(null);
-  const [limitsDraft, setLimitsDraft] = useState<Record<number, number>>({});
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [sessionRow, setSessionRow] = useState<WebStaffRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [needSlotOpen, setNeedSlotOpen] = useState(false);
-
   const tablePrefs = useUserTablePrefs({
     tenantSlug,
     tableId: SKLADCHIK_TABLE_ID,
@@ -286,16 +240,35 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     }
   });
 
+  const warehouseFilterOptions = useMemo(() => {
+    const fromOpts = filterOptsQ.data?.warehouses;
+    if (fromOpts && fromOpts.length > 0) {
+      const branch = filterBranch.trim();
+      if (!branch) return fromOpts.map((w) => ({ id: w.id, name: w.name }));
+      const linked = fromOpts.filter((w) =>
+        w.branches.some((b) => b.localeCompare(branch, "ru", { sensitivity: "accent" }) === 0)
+      );
+      // Filialda bog‘langan ombor bo‘lmasa — barcha (bo‘sh dropdown emas)
+      return (linked.length > 0 ? linked : fromOpts).map((w) => ({ id: w.id, name: w.name }));
+    }
+    return warehousesPickerQ.data ?? [];
+  }, [filterOptsQ.data?.warehouses, filterBranch, warehousesPickerQ.data]);
+
+  useEffect(() => {
+    if (!filterWarehouseId) return;
+    if (!warehouseFilterOptions.some((w) => String(w.id) === filterWarehouseId)) {
+      setFilterWarehouseId("");
+    }
+  }, [warehouseFilterOptions, filterWarehouseId]);
+
   const listQ = useQuery({
-    queryKey: ["skladchik", tenantSlug, tab, appliedBranch, appliedPosition, appliedWarehouseId],
+    queryKey: ["skladchik", tenantSlug, tab, appliedBranch, appliedWarehouseId],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.live,
-    refetchInterval: 45_000,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("is_active", tab === "active" ? "true" : "false");
       if (appliedBranch.trim()) params.set("branch", appliedBranch.trim());
-      if (appliedPosition.trim()) params.set("position", appliedPosition.trim());
       if (appliedWarehouseId.trim()) params.set("warehouse_id", appliedWarehouseId.trim());
       const { data } = await api.get<{ data: WebStaffRow[] }>(
         `/api/${tenantSlug}/skladchik?${params.toString()}`
@@ -304,30 +277,6 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         ...r,
         warehouse_staff_entitlements: r.warehouse_staff_entitlements ?? {}
       }));
-    }
-  });
-
-  const bulkRevokeMut = useMutation({
-    mutationFn: async (userIds: number[]) => {
-      await api.post(`/api/${tenantSlug}/skladchik/bulk/sessions/revoke`, { user_ids: userIds });
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
-      setBulkRevokeOpen(false);
-      setBulkRevokeRows(null);
-      setSelected(new Set());
-    }
-  });
-
-  const bulkLimitsMut = useMutation({
-    mutationFn: async (updates: { user_id: number; max_sessions: number }[]) => {
-      await api.post(`/api/${tenantSlug}/skladchik/bulk/max-sessions`, { updates });
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
-      setBulkLimitsOpen(false);
-      setBulkLimitsRows(null);
-      setSelected(new Set());
     }
   });
 
@@ -342,34 +291,7 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const appAccessMut = useMutation({
-    mutationFn: async (vars: { id: number; app_access: boolean }) => {
-      await api.patch(`/api/${tenantSlug}/skladchik/${vars.id}`, { app_access: vars.app_access });
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
-    }
-  });
-
   function renderDataCell(colId: string, r: WebStaffRow) {
-    if (colId === "active_sessions") {
-      return (
-        <StaffKomandaActiveSessionsCell
-          count={r.active_session_count}
-          max={r.max_sessions}
-          onClick={() => setSessionRow(r)}
-        />
-      );
-    }
-    if (colId === "app_access") {
-      return (
-        <StaffKomandaAppAccessToggle
-          checked={r.app_access}
-          disabled={appAccessMut.isPending}
-          onChange={(next) => appAccessMut.mutate({ id: r.id, app_access: next })}
-        />
-      );
-    }
     return renderSkladDataCell(colId, r);
   }
 
@@ -398,33 +320,24 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedBranch, appliedPosition, appliedWarehouseId, search, pageSize]);
+  }, [tab, appliedBranch, appliedWarehouseId, search, pageSize]);
 
   useEffect(() => {
     setSelected(new Set());
-  }, [tab, appliedBranch, appliedPosition, appliedWarehouseId, safePage, pageSize]);
+  }, [tab, appliedBranch, appliedWarehouseId, safePage, pageSize]);
 
   const applyFilters = () => {
     setAppliedBranch(filterBranch);
-    setAppliedPosition(filterPosition);
     setAppliedWarehouseId(filterWarehouseId);
   };
 
   const resetFilters = () => {
     setFilterBranch("");
-    setFilterPosition("");
     setFilterWarehouseId("");
     setAppliedBranch("");
-    setAppliedPosition("");
     setAppliedWarehouseId("");
     setPage(1);
   };
-
-  /** Guruh amali: tanlov bo‘lsa faqat tanlanganlar, aks holda joriy jadvaldagi hammasi */
-  function computeBulkTargets(): WebStaffRow[] {
-    if (selected.size > 0) return rows.filter((r) => selected.has(r.id));
-    return rows;
-  }
 
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
@@ -456,59 +369,11 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
     });
   }
 
-  function openBulkLimits() {
-    const targets = computeBulkTargets();
-    if (!targets.length) return;
-    const draft: Record<number, number> = {};
-    for (const r of targets) {
-      draft[r.id] = r.max_sessions;
-    }
-    setLimitsDraft(draft);
-    setBulkLimitsRows(targets);
-    setBulkLimitsOpen(true);
-  }
-
-  function openBulkRevoke() {
-    const targets = computeBulkTargets();
-    if (!targets.length) return;
-    setBulkRevokeRows(targets);
-    setBulkRevokeOpen(true);
-  }
-
-  function adjustLimit(id: number, delta: number) {
-    setLimitsDraft((d) => {
-      const cur = d[id] ?? 1;
-      const next = Math.min(99, Math.max(1, cur + delta));
-      return { ...d, [id]: next };
-    });
-  }
-
-  function setAllLimitsTo(n: number) {
-    if (!Number.isFinite(n) || n < 1 || n > 99) return;
-    setLimitsDraft((d) => {
-      const next = { ...d };
-      for (const id of Object.keys(next).map(Number)) {
-        next[id] = n;
-      }
-      return next;
-    });
-  }
-
-  function bumpAllLimits(delta: number) {
-    setLimitsDraft((d) => {
-      const next = { ...d };
-      for (const id of Object.keys(next).map(Number)) {
-        next[id] = Math.min(99, Math.max(1, (next[id] ?? 1) + delta));
-      }
-      return next;
-    });
-  }
-
   return (
     <StaffWorkspaceLayout>
       <StaffWorkspaceHeader
         title="Складчик"
-        subtitle="Управление сотрудниками склада, привязкой к складам и сессиями"
+        subtitle="Управление сотрудниками склада и привязкой к складам"
         addLabel="Добавить сотрудника"
         onAdd={() => setCreateOpen(true)}
         onColumnSettings={() => setColumnDialogOpen(true)}
@@ -520,7 +385,10 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
             <StaffFilterSelect
               label="Филиал"
               value={filterBranch}
-              onChange={setFilterBranch}
+              onChange={(v) => {
+                setFilterBranch(v);
+                setFilterWarehouseId("");
+              }}
               emptyLabel="Все филиалы"
             >
               {(filterOptsQ.data?.branches ?? []).map((b) => (
@@ -530,24 +398,12 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
               ))}
             </StaffFilterSelect>
             <StaffFilterSelect
-              label="Должность"
-              value={filterPosition}
-              onChange={setFilterPosition}
-              emptyLabel="Все должности"
-            >
-              {(filterOptsQ.data?.positions ?? []).map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </StaffFilterSelect>
-            <StaffFilterSelect
               label="Склад"
               value={filterWarehouseId}
               onChange={setFilterWarehouseId}
               emptyLabel="Все склады"
             >
-              {(warehousesPickerQ.data ?? []).map((w) => (
+              {warehouseFilterOptions.map((w) => (
                 <option key={w.id} value={String(w.id)}>
                   {w.name}
                 </option>
@@ -615,17 +471,6 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton
-                title="Конфигурации"
-                onClick={() =>
-                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
-                }
-              >
-                <Settings className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Активные сессии" onClick={() => setSessionRow(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
-              </AgentIconButton>
               <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
                 <KeyRound className="h-4 w-4" />
               </AgentIconButton>
@@ -636,9 +481,16 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
                 <AgentIconButton
                   title="Деактивировать"
                   onClick={() => {
-                    if (window.confirm(`${r.fio} — деактивировать пользователя?`)) {
-                      deactivateMut.mutate(r);
-                    }
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Деактивировать",
+                        message: `${r.fio} — деактивировать пользователя?`,
+                        confirmLabel: "Да",
+                        cancelLabel: "Нет",
+                        destructive: true
+                      });
+                      if (ok) deactivateMut.mutate(r);
+                    })();
                   }}
                 >
                   <UserRoundX className="h-4 w-4 text-rose-600" />
@@ -655,12 +507,9 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
 
       <StaffBulkFloatingBar
         count={selected.size}
-        allAccessOn={bulk.allAccessOn}
         isActiveTab={tab === "active"}
         busy={bulk.bulkBusy}
-        onToggleAccess={bulk.onToggleAccess}
         onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSessions={bulk.onClearSessions}
         onClearSelection={() => setSelected(new Set())}
       />
 
@@ -671,15 +520,16 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         onCancel={() => bulk.setConfirmBulk(null)}
         onConfirm={bulk.handleConfirmBulk}
       />
+      {confirmDialog}
 
       <p className="text-xs text-muted-foreground">
         <strong className="text-foreground">Складчик</strong> — сотрудники склада (роль{" "}
         <code className="text-foreground">skladchik</code> в JWT). Можно привязать несколько складов.
-        Шаблоны должностей:{" "}
-        <Link href="/settings/web-staff-position-presets" className="text-primary underline">
-          Должности веб-сотрудников
+        Код места, должность и сессии — в{" "}
+        <Link href="/work-slots" className="text-primary underline">
+          Рабочее место
         </Link>
-        . Активные сессии обновляются примерно каждые <code className="text-foreground">45 с</code>.
+        .
       </p>
 
       <WebStaffEditDialog
@@ -702,20 +552,6 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <StaffActiveSessionsDialog
-        open={sessionRow != null}
-        onOpenChange={(open) => {
-          if (!open) setSessionRow(null);
-        }}
-        tenantSlug={tenantSlug}
-        staffKind="skladchik"
-        userId={sessionRow?.id ?? null}
-        maxSessions={sessionRow?.max_sessions ?? 1}
-        onPatched={() => {
-          void qc.invalidateQueries({ queryKey: ["skladchik", tenantSlug] });
-        }}
-        contentClassName="sm:max-w-2xl"
-      />
 
       <StaffImportDialog
         open={staffImport.open}
@@ -744,167 +580,6 @@ export function SkladchikWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
-
-      <Dialog
-        open={bulkRevokeOpen}
-        onOpenChange={(o) => {
-          if (!o) {
-            setBulkRevokeOpen(false);
-            setBulkRevokeRows(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg border border-teal-800/20 shadow-lg" showCloseButton>
-          <DialogHeader>
-            <DialogTitle>Veb-sessiyalarni yopish</DialogTitle>
-            <p className="text-xs font-normal text-muted-foreground">
-              {bulkRevokeRows && bulkRevokeRows.length > 0 ? (
-                <>
-                  <strong className="text-foreground">{bulkRevokeRows.length}</strong> ta xodimning barcha faol
-                  refresh-sessiyalari yopiladi.
-                  {selected.size === 0 ? (
-                    <span> (Tanlov qilinmagan — joriy ro‘yxatdagi hammasi.)</span>
-                  ) : null}
-                </>
-              ) : null}
-            </p>
-          </DialogHeader>
-          <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
-            {(bulkRevokeRows ?? []).map((r) => (
-              <li key={r.id} className="flex justify-between gap-2 rounded border px-2 py-1.5">
-                <span>{r.fio}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  faol sessiyalar: {r.active_session_count}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setBulkRevokeOpen(false);
-                setBulkRevokeRows(null);
-              }}
-            >
-              Bekor
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={
-                bulkRevokeMut.isPending || !bulkRevokeRows || bulkRevokeRows.length === 0
-              }
-              onClick={() => {
-                if (!bulkRevokeRows?.length) return;
-                bulkRevokeMut.mutate(bulkRevokeRows.map((r) => r.id));
-              }}
-            >
-              {bulkRevokeMut.isPending ? "…" : "Sessiyalarni yopish"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={bulkLimitsOpen}
-        onOpenChange={(o) => {
-          if (!o) {
-            setBulkLimitsOpen(false);
-            setBulkLimitsRows(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg border border-teal-800/20 shadow-lg" showCloseButton>
-          <DialogHeader>
-            <DialogTitle>Sessiya limitlarini o‘zgartirish</DialogTitle>
-            <p className="text-xs font-normal text-muted-foreground">
-              {bulkLimitsRows && bulkLimitsRows.length > 0 ? (
-                <>
-                  <strong className="text-foreground">{bulkLimitsRows.length}</strong> ta xodim uchun maksimal
-                  parallel sessiya yangilanadi.
-                  {selected.size === 0 ? (
-                    <span> (Tanlov qilinmagan — joriy ro‘yxatdagi hammasi.)</span>
-                  ) : null}
-                </>
-              ) : null}
-            </p>
-          </DialogHeader>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Button type="button" size="sm" variant="secondary" onClick={() => bumpAllLimits(-1)}>
-              Hammasiga −1
-            </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={() => bumpAllLimits(1)}>
-              Hammasiga +1
-            </Button>
-            <span className="text-muted-foreground">yoki</span>
-            <Input
-              className="w-20"
-              inputMode="numeric"
-              placeholder="1–99"
-              id="uniform-limit"
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const el = document.getElementById("uniform-limit") as HTMLInputElement | null;
-                if (el) setAllLimitsTo(Number.parseInt(el.value, 10));
-              }}
-            >
-              Qiymatni qo‘llash
-            </Button>
-          </div>
-          <ul className="max-h-56 space-y-2 overflow-y-auto text-sm">
-            {(bulkLimitsRows ?? []).map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border px-2 py-1.5">
-                <span className="min-w-0 flex-1 truncate">{r.fio}</span>
-                <div className="flex items-center gap-1">
-                  <Button type="button" size="sm" variant="outline" onClick={() => adjustLimit(r.id, -1)}>
-                    −
-                  </Button>
-                  <span className="w-8 text-center tabular-nums">{limitsDraft[r.id] ?? r.max_sessions}</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => adjustLimit(r.id, 1)}>
-                    +
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setBulkLimitsOpen(false);
-                setBulkLimitsRows(null);
-              }}
-            >
-              Bekor
-            </Button>
-            <Button
-              type="button"
-              className={tealPrimary}
-              disabled={
-                bulkLimitsMut.isPending || !bulkLimitsRows || bulkLimitsRows.length === 0
-              }
-              onClick={() => {
-                if (!bulkLimitsRows?.length) return;
-                const updates = bulkLimitsRows.map((r) => ({
-                  user_id: r.id,
-                  max_sessions: limitsDraft[r.id] ?? r.max_sessions
-                }));
-                bulkLimitsMut.mutate(updates);
-              }}
-            >
-              {bulkLimitsMut.isPending ? "…" : "Saqlash"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </StaffWorkspaceLayout>
   );
 }
@@ -933,12 +608,7 @@ function SkladchikCreateModal({
     password: "",
     phone: "",
     email: "",
-    code: "",
     pinfl: "",
-    branch: "",
-    position: "",
-    max_sessions: "1",
-    app_access: false,
     can_authorize: true
   });
   const [warehouseIds, setWarehouseIds] = useState<number[]>([]);
@@ -957,12 +627,7 @@ function SkladchikCreateModal({
       password: "",
       phone: "",
       email: "",
-      code: "",
       pinfl: "",
-      branch: "",
-      position: "",
-      max_sessions: "1",
-      app_access: false,
       can_authorize: true
     });
     setWarehouseIds([]);
@@ -970,7 +635,6 @@ function SkladchikCreateModal({
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const max_sessions = Number.parseInt(form.max_sessions, 10);
       const body: Record<string, unknown> = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim() || null,
@@ -979,11 +643,7 @@ function SkladchikCreateModal({
         password: form.password,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        code: form.code.trim() || null,
         pinfl: form.pinfl.trim() || null,
-        position: form.position.trim() || null,
-        max_sessions: Number.isFinite(max_sessions) ? max_sessions : 1,
-        app_access: form.app_access,
         can_authorize: form.can_authorize,
         is_active: true
       };
@@ -1009,9 +669,10 @@ function SkladchikCreateModal({
     }
   });
 
-  const branches = filterOptions?.branches ?? [];
   const tealPrimaryLocal =
     "bg-teal-600 text-white shadow-sm hover:bg-teal-700 focus-visible:ring-teal-600/40 disabled:opacity-60";
+
+  void filterOptions;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1070,50 +731,11 @@ function SkladchikCreateModal({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Kod</span>
-            <Input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
-            <FieldHint name="code" errors={fieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">PINFL</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
           </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Lavozim</span>
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={form.position}
-              onChange={(v) => setForm((f) => ({ ...f, position: v }))}
-              roleFilter="skladchik"
-            />
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Shablonlar:{" "}
-              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-            <FieldHint name="position" errors={fieldErrors} />
-          </label>
           <WorkplaceMovedNotice />
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Maks. sessiya</span>
-            <Input
-              inputMode="numeric"
-              value={form.max_sessions}
-              onChange={(e) => setForm((f) => ({ ...f, max_sessions: e.target.value.replace(/\D/g, "") }))}
-            />
-            <FieldHint name="max_sessions" errors={fieldErrors} />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={form.app_access}
-              onChange={(e) => setForm((f) => ({ ...f, app_access: e.target.checked }))}
-            />
-            Mobil ilova
-          </label>
           <label className="flex items-center gap-2 text-xs">
             <input
               type="checkbox"
@@ -1240,13 +862,8 @@ function WebStaffEditDialog({
   const [middle_name, setMid] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
-  const [branch, setBranch] = useState("");
-  const [position, setPosition] = useState("");
   const [login, setLogin] = useState("");
-  const [max_sessions, setMaxS] = useState("1");
-  const [app_access, setAppAccess] = useState(false);
   const [can_authorize, setCanAuth] = useState(true);
   const [warehouseIds, setWarehouseIds] = useState<number[]>([]);
   const [patchBannerError, setPatchBannerError] = useState<string | null>(null);
@@ -1277,13 +894,8 @@ function WebStaffEditDialog({
     setMid((row.middle_name ?? "").trim());
     setPhone(row.phone ?? "");
     setEmail(row.email ?? "");
-    setCode(row.code ?? "");
     setPinfl(row.pinfl ?? "");
-    setBranch(row.branch ?? "");
-    setPosition(row.position ?? "");
     setLogin(row.login);
-    setMaxS(String(row.max_sessions));
-    setAppAccess(row.app_access);
     setCanAuth(row.can_authorize);
     setWarehouseIds((row.warehouses ?? []).map((w) => w.id));
   }, [row]);
@@ -1291,19 +903,14 @@ function WebStaffEditDialog({
   const patchMut = useMutation({
     mutationFn: async () => {
       if (!row) return;
-      const ms = Number.parseInt(max_sessions, 10);
       await api.patch(`/api/${tenantSlug}/skladchik/${row.id}`, {
         first_name: first_name.trim(),
         last_name: last_name.trim() || null,
         middle_name: middle_name.trim() || null,
         phone: phone.trim() || null,
         email: email.trim() || null,
-        code: code.trim() || null,
         pinfl: pinfl.trim() || null,
-        position: position.trim() || null,
         login: login.trim().toLowerCase(),
-        max_sessions: Number.isFinite(ms) ? ms : row.max_sessions,
-        app_access,
         can_authorize
       });
     },
@@ -1383,49 +990,11 @@ function WebStaffEditDialog({
             <FieldHint name="email" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Kod</span>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} />
-            <FieldHint name="code" errors={patchFieldErrors} />
-          </label>
-          <label className="grid gap-1">
             <span className="text-xs text-muted-foreground">PINFL</span>
             <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
             <FieldHint name="pinfl" errors={patchFieldErrors} />
           </label>
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Lavozim</span>
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPosition}
-              roleFilter="skladchik"
-            />
-            <span className="text-[11px] leading-snug text-muted-foreground">
-              Shablonlar ro‘yxatini{" "}
-              <Link
-                href={POSITION_PRESETS_SETTINGS_HREF}
-                className="text-primary underline underline-offset-2 hover:text-primary/90"
-              >
-                bu yerda
-              </Link>{" "}
-              boshqarasiz.
-            </span>
-            <FieldHint name="position" errors={patchFieldErrors} />
-          </label>
           <WorkplaceMovedNotice />
-          <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Maks. veb-sessiyalar</span>
-            <Input
-              inputMode="numeric"
-              value={max_sessions}
-              onChange={(e) => setMaxS(e.target.value.replace(/\D/g, ""))}
-            />
-            <FieldHint name="max_sessions" errors={patchFieldErrors} />
-          </label>
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={app_access} onChange={(e) => setAppAccess(e.target.checked)} />
-            Mobil ilova
-          </label>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuth(e.target.checked)} />
             Kirish ruxsati

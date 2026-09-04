@@ -7,10 +7,13 @@ import {
 } from "@/components/clients/clients-table-toolbar";
 import { ClientsTemplateFiltersPanel } from "@/components/clients/clients-template-filters-panel";
 import { GroupProcessingPickDialog } from "@/components/clients/group-processing/group-processing-pick-dialog";
+import { GroupProcessingInlineDialog, type InlineDialogRefs } from "@/components/clients/group-processing/group-processing-inline-dialog";
 import {
   GROUP_PROCESSING_IDS_STORAGE_KEY,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
+import { useClientBulkPatch, useClientBulkActive } from "@/hooks/use-client-bulk-patch";
+import { chunkClientIds } from "@/lib/client-bulk-patch";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
@@ -37,7 +40,11 @@ import {
 import { CLIENT_IMPORT_MAX_FILE_BYTES } from "@/lib/client-import-limits";
 import { mergeRefOptions } from "@/lib/merge-ref-options";
 import { mergeRefSelectOptions, optionsToValueLabelMap } from "@/lib/ref-select-options";
-import { buildZoneRegionCityCascadeOptions, type ClientRefsTerritoryBundle } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, buildTerritoryTreeOnlyCascade, type ClientRefsTerritoryBundle } from "@/lib/territory-client-filters";
+import {
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import { api, apiBaseURL } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
@@ -189,6 +196,7 @@ export default function ClientsPage() {
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [groupPickOpen, setGroupPickOpen] = useState(false);
+  const [groupInlineOpen, setGroupInlineOpen] = useState(false);
   const [showSessionLoadingHint, setShowSessionLoadingHint] = useState(false);
   const clientsPrefsMigrated = useRef(false);
 
@@ -737,26 +745,34 @@ export default function ClientsPage() {
     };
   }, [refData]);
 
-  const territoryCascade = useMemo(
-    () =>
-      buildZoneRegionCityCascadeOptions(
-        territoryRefsBundle,
-        undefined,
-        profileQ.data?.territory_nodes,
-        {
-          zone: draftToolbar.zoneFilter,
-          region: draftToolbar.regionFilter,
-          city: draftToolbar.cityFilter
-        }
-      ),
-    [
+  const territoryCascade = useMemo(() => {
+    const zones = splitMultiFilterValues(draftToolbar.zoneFilter);
+    const region = draftToolbar.regionFilter;
+    const city = draftToolbar.cityFilter;
+    const nodes = profileQ.data?.territory_nodes;
+    if ((nodes?.length ?? 0) > 0) {
+      return buildTerritoryTreeOnlyCascade(nodes, {
+        zones,
+        regions: region ? [region] : []
+      });
+    }
+    return buildZoneRegionCityCascadeOptions(
       territoryRefsBundle,
-      profileQ.data?.territory_nodes,
-      draftToolbar.zoneFilter,
-      draftToolbar.regionFilter,
-      draftToolbar.cityFilter
-    ]
-  );
+      undefined,
+      nodes,
+      {
+        zone: zones.length === 1 ? (zones[0] ?? "") : "",
+        region,
+        city
+      }
+    );
+  }, [
+    territoryRefsBundle,
+    profileQ.data?.territory_nodes,
+    draftToolbar.zoneFilter,
+    draftToolbar.regionFilter,
+    draftToolbar.cityFilter
+  ]);
 
   const clientsTerritoryZoneKeys = useMemo(
     () => new Set(territoryCascade.zones.map((o) => normTrim(o.value))),
@@ -772,16 +788,21 @@ export default function ClientsPage() {
   );
 
   useEffect(() => {
-    const z = normTrim(draftToolbar.zoneFilter);
-    if (!z) return;
-    if (!clientsTerritoryZoneKeys.has(z)) {
-      setDraftToolbar((d) => ({ ...d, zoneFilter: "", regionFilter: "", cityFilter: "" }));
-    }
+    if (clientsTerritoryZoneKeys.size === 0) return;
+    const zones = splitMultiFilterValues(draftToolbar.zoneFilter);
+    if (zones.length === 0) return;
+    const kept = zones.filter((z) => clientsTerritoryZoneKeys.has(normTrim(z)));
+    if (kept.length === zones.length) return;
+    setDraftToolbar((d) => ({
+      ...d,
+      zoneFilter: joinMultiFilterValues(kept),
+      ...(kept.length === 0 ? { regionFilter: "", cityFilter: "" } : {})
+    }));
   }, [clientsTerritoryZoneKeys, draftToolbar.zoneFilter]);
 
   useEffect(() => {
     const r = normTrim(draftToolbar.regionFilter);
-    if (!r) return;
+    if (!r || clientsTerritoryRegionKeys.size === 0) return;
     if (!clientsTerritoryRegionKeys.has(r)) {
       setDraftToolbar((d) => ({ ...d, regionFilter: "", cityFilter: "" }));
     }
@@ -789,7 +810,7 @@ export default function ClientsPage() {
 
   useEffect(() => {
     const c = normTrim(draftToolbar.cityFilter);
-    if (!c) return;
+    if (!c || clientsTerritoryCityKeys.size === 0) return;
     if (!clientsTerritoryCityKeys.has(c)) {
       setDraftToolbar((d) => ({ ...d, cityFilter: "" }));
     }
@@ -964,6 +985,130 @@ export default function ClientsPage() {
       return data.data.map((r) => ({ id: r.id, name: r.fio, login: r.login }));
     }
   });
+
+  // --- Групповые обработки: дополнительные справочники ---
+  const gpWarehousesQ = useQuery({
+    queryKey: ["warehouses", tenantSlug, "group-processing-inline"],
+    enabled: Boolean(tenantSlug) && groupInlineOpen,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: Array<{ id: number; name: string }> }>(
+        `/api/${tenantSlug}/warehouses/table?is_active=true&page=1&limit=200`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const gpCashDesksQ = useQuery({
+    queryKey: ["cash-desks", tenantSlug, "group-processing-inline"],
+    enabled: Boolean(tenantSlug) && groupInlineOpen,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: Array<{ id: number; name: string }> }>(
+        `/api/${tenantSlug}/cash-desks?is_active=true&limit=200&page=1`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const gpPriceTypesQ = useQuery({
+    queryKey: ["price-types", tenantSlug, "group-processing-inline"],
+    enabled: Boolean(tenantSlug) && groupInlineOpen,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: string[] }>(`/api/${tenantSlug}/price-types?kind=sale`);
+      return (data.data ?? []).map((v) => ({ value: v, label: v }));
+    }
+  });
+
+  const gpTagsQ = useQuery({
+    queryKey: ["client-tags", tenantSlug],
+    enabled: Boolean(tenantSlug) && groupInlineOpen,
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: Array<{ id: number; name: string }> }>(
+        `/api/${tenantSlug}/clients/tags`
+      );
+      return data.data ?? [];
+    }
+  });
+
+  const gpBulkPatch = useClientBulkPatch(tenantSlug);
+  const gpBulkActive = useClientBulkActive(tenantSlug);
+
+  const gpRefs = useMemo<InlineDialogRefs>(() => {
+    const refs = refData;
+    const strOpts = (values: string[] | undefined) => (values ?? []).map((v) => ({ value: v, label: v }));
+    const categoryOpts = refs?.category_options?.length ? refs.category_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.categories);
+    const typeOpts = refs?.client_type_options?.length ? refs.client_type_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.client_type_codes);
+    const formatOpts = refs?.client_format_options?.length ? refs.client_format_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.client_formats);
+    const channelOpts = refs?.sales_channel_options?.length ? refs.sales_channel_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.sales_channels);
+    const regionOpts = refs?.region_options?.length ? refs.region_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.regions);
+    const cityOpts = refs?.city_options?.length ? refs.city_options.map((o) => ({ value: o.value, label: o.label })) : strOpts(refs?.cities);
+
+    return {
+      agents: (agentsFilterQ.data ?? []).map((a) => ({ id: a.id, name: a.name })),
+      expeditors: (expeditorsFilterQ.data ?? []).map((a) => ({ id: a.id, name: a.name })),
+      warehouses: gpWarehousesQ.data ?? [],
+      cashDesks: gpCashDesksQ.data ?? [],
+      categories: categoryOpts,
+      clientTypes: typeOpts,
+      clientFormats: formatOpts,
+      salesChannels: channelOpts,
+      productCategories: strOpts(refs?.product_category_refs),
+      regions: regionOpts,
+      districts: strOpts(refs?.districts),
+      cities: cityOpts,
+      neighborhoods: strOpts(refs?.neighborhoods),
+      zones: strOpts(refs?.zones),
+      priceTypes: gpPriceTypesQ.data ?? [],
+      tags: gpTagsQ.data ?? []
+    };
+  }, [refData, agentsFilterQ.data, expeditorsFilterQ.data, gpWarehousesQ.data, gpCashDesksQ.data, gpPriceTypesQ.data, gpTagsQ.data]);
+
+  const gpApplyField = useCallback(async (_sectionId: string, payload: Record<string, unknown>) => {
+    if (!tenantSlug) return;
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    if (payload.__bulk_active !== undefined) {
+      await gpBulkActive.mutateAsync({ clientIds: ids, is_active: Boolean(payload.__bulk_active) });
+      return;
+    }
+    if (payload.__bulk_tags) {
+      let addIds = [...((payload.add_tag_ids as number[]) ?? [])];
+      const removeIds = [...((payload.remove_tag_ids as number[]) ?? [])];
+      const createName = (payload.create_tag_name as string | undefined)?.trim();
+      if (createName) {
+        const { data: created } = await api.post<{ id: number; name: string }>(`/api/${tenantSlug}/clients/tags`, { name: createName });
+        addIds = [...new Set([...addIds, created.id])];
+        await qc.invalidateQueries({ queryKey: ["client-tags", tenantSlug] });
+      }
+      for (const chunk of chunkClientIds(ids)) {
+        await api.patch(`/api/${tenantSlug}/clients/bulk-tags`, {
+          client_ids: chunk,
+          ...(addIds.length ? { add_tag_ids: addIds } : {}),
+          ...(removeIds.length ? { remove_tag_ids: removeIds } : {})
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
+      return;
+    }
+    const patch = { ...payload };
+    delete patch.__bulk_active;
+    delete patch.__bulk_tags;
+    delete patch.add_tag_ids;
+    delete patch.remove_tag_ids;
+    delete patch.create_tag_name;
+    if (Object.keys(patch).length === 0) return;
+    await gpBulkPatch.mutateAsync({ clientIds: ids, patch });
+  }, [tenantSlug, selectedIds, gpBulkPatch, gpBulkActive, qc]);
+
+  const gpApplyAll = useCallback(async (payloads: Array<{ sectionId: string; payload: Record<string, unknown> }>) => {
+    for (const { sectionId, payload } of payloads) {
+      await gpApplyField(sectionId, payload);
+    }
+  }, [gpApplyField]);
 
   const onToolbarDraftChange = (patch: Partial<ClientToolbarFiltersState>) => {
     let shouldAutoApply = false;
@@ -1227,7 +1372,7 @@ export default function ClientsPage() {
             onImportUpdate={() => openImportLaunch("update")}
             onImportCreate={() => openImportLaunch("create")}
             importDisabled={importMut.isPending || !tenantSlug}
-            onGroupProcessing={() => setGroupPickOpen(true)}
+            onGroupProcessing={() => setGroupInlineOpen(true)}
             groupProcessingDisabled={selectedIds.size === 0}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -1302,6 +1447,15 @@ export default function ClientsPage() {
           const qs = ids.length <= 500 && ids.length > 0 ? `?ids=${ids.join(",")}` : "";
           router.push(`/clients/group-processing/${actionId}${qs}`);
         }}
+      />
+
+      <GroupProcessingInlineDialog
+        open={groupInlineOpen}
+        onOpenChange={setGroupInlineOpen}
+        selectedCount={selectedIds.size}
+        refs={gpRefs}
+        onApplyField={gpApplyField}
+        onApplyAll={gpApplyAll}
       />
     </PageShell>
   );

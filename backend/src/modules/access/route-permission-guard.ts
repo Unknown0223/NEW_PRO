@@ -130,6 +130,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/clients$/, "clients.klient.create"),
   r(["PUT", "PATCH"], /\/clients\/:id$/, "clients.klient.update"),
   r(["DELETE"], /\/clients\/:id$/, "clients.klient.delete"),
+  r(WRITE, /\/clients\/:id\/photo-reports\/[^/]+\/restore/, "clients.foto.restore"),
+  r(["DELETE"], /\/clients\/:id\/photo-reports/, "clients.foto.void"),
+  r(["POST"], /\/clients\/:id\/photo-reports/, "clients.foto.create"),
+  r(READ, /\/clients\/:id\/photo-reports/, "clients.foto.view"),
   r(READ, /\/clients(\/|$)/, "clients.klient.view"),
 
   // ─────────── Накладные / списания (assembly via returns write-offs) ───────────
@@ -151,8 +155,13 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/products(\/|$)/, "settings.tovar.view"),
   r(WRITE, /\/settings\/profile$/, "settings.profil_kompanii.update"),
   r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view"),
-  r(WRITE, /\/system-migration\/import/, "settings.profil_kompanii.update"),
-  r(READ, /\/system-migration(\/|$)/, "settings.profil_kompanii.view"),
+  r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
+  r(READ, /\/settings\/mobile-app-release/, "settings.mobile_app.view"),
+  r(WRITE, /\/settings\/document-edit-lock/, "settings.document_edit_lock.update"),
+  r(READ, /\/settings\/document-edit-lock/, "settings.document_edit_lock.view"),
+  r(READ, /\/settings\/initial-setup/, "settings.initial_setup.view", "settings.profil_kompanii.view"),
+  r(WRITE, /\/system-migration\/import/, "settings.system_migration.update", "settings.system_migration.import", "settings.profil_kompanii.update"),
+  r(READ, /\/system-migration(\/|$)/, "settings.system_migration.view", "settings.profil_kompanii.view"),
 
   // ─────────── Пользователи (staff) ───────────
   // Excel import (create|update) — before generic POST /agents|staff
@@ -210,6 +219,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/workdays/, "staff.tabel.view"),
   r(READ, /\/tabel-audit/, "staff.tabel.view"),
   r(WRITE, /\/work-slots\/.*\/(assign|unassign)/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
+  r(READ, /\/work-slots\/.*\/sessions/, "work_slots.raboche_mesto.view", "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/work-slots\/.*\/sessions/, "work_slots.raboche_mesto.update"),
+  r(WRITE, /\/work-slots\/sessions/, "work_slots.raboche_mesto.update"),
   r(WRITE, /\/work-slots/, "work_slots.raboche_mesto.create", "work_slots.raboche_mesto.update", "work_slots.raboche_mesto.assign"),
   r(READ, /\/work-slots/, "work_slots.raboche_mesto.view"),
   r(WRITE, /\/client-agent-assignments/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
@@ -234,7 +246,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Dashboard ───────────
   r(READ, /\/dashboard\/sales-monitoring/, "dashboard.prodazhi.view"),
   r(READ, /\/dashboard\/sales/, "dashboard.prodazhi.view"),
-  r(READ, /\/dashboard\/finance/, "dashboard.finansy.view"),
+  r(READ, /\/dashboard\/finance/, "dashboard.finansy.view", "finance.obzor.view"),
+  r(READ, /\/dashboard\/supervisor\/photo-reports/, "clients.foto.view"),
   r(READ, /\/dashboard\/supervisor/, "dashboard.supervayzer.view"),
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
@@ -296,16 +309,22 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/field(\/|$)/, "gps.gps.update", "routes.marshruty.update"),
   r(READ, /\/field(\/|$)/, "gps.gps.view", "routes.marshruty.view"),
   r(READ, /\/gps-monitoring(\/|$)/, "gps.gps.view", "routes.trek.view", "routes.marshruty.view"),
-  r(WRITE, /\/geo-boundaries(\/|$)/, "clients.klient.assign", "clients.klient.update"),
-  r(READ, /\/geo-boundaries(\/|$)/, "clients.klient.view"),
+  r(WRITE, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.create", "settings.geo_granitsy.update"),
+  r(READ, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.view"),
 
   // ─────────── Уведомления ───────────
   r(WRITE, /\/notifications(\/|$)/, "staff.zadachi.update"),
-  r(READ, /\/notifications(\/|$)/, "staff.zadachi.view")
+  r(READ, /\/notifications(\/|$)/, "staff.zadachi.view"),
+
+  // ─────────── Активность ───────────
+  r(READ, /\/activity(\/|$)/, "activity.history.view")
 ];
 
 function matchRule(method: string, routePath: string): RoutePermissionRule | null {
   for (const candidate of pathsToMatch(routePath)) {
+    // Mobil API o‘z JWT+rol guardida; veb CRUD kalitlari (`clients.foto.view` va h.k.)
+    // `/mobile/clients/:id/photo-reports` ga tushmasin.
+    if (candidate.includes("/mobile/")) return null;
     for (const rule of ROUTE_PERMISSION_RULES) {
       if (!rule.methods.includes(method as Method)) continue;
       if (rule.test.test(candidate)) return rule;

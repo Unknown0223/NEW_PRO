@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { parseVisitWeekdaysJson } from "./clients.types";
+import { formatVisitWeekdaysRuAbbrev } from "./clients.visit-weekdays";
 import { CONTACT_SLOTS } from "./clients.helpers";
 import { agentAssignmentSelectFields } from "./clients.agent-assignments";
 import { buildClientListWhereInput, clientListOrderBy } from "./clients.list";
@@ -19,7 +20,7 @@ export function lalakuNewClientTemplateHeaders(): string[] {
     agentCols.push(`Агент ${i}`, `Агент ${i} день`, `Экспедитор ${i}`);
   }
   return [
-    /** Ixtiyoriy: berilsa shu `clients.id` bilan yaratiladi yoki yangilanadi */
+    /** Ixtiyoriy: raqam = clients.id; matn (ks_1652…) = client_code */
     "ИД",
     "Наименование",
     "Юридическое название",
@@ -99,7 +100,7 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
     if (h === "Телефон") return "+998901112233";
     if (h === "Город (код)") return "ANDIJON SHAXAR";
     if (h.startsWith("Агент ") && !h.includes("день") && !h.startsWith("Агент 1")) return "---";
-    if (h.includes("день")) return "1, 3";
+    if (h.includes("день")) return "Пн, Ср";
     if (h.startsWith("Экспедитор")) return "---";
     return "---";
   });
@@ -109,10 +110,8 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
   return Buffer.from(buf);
 }
 
-function formatVisitWeekdaysNumeric(days: number[]): string {
-  return parseVisitWeekdaysJson(days)
-    .filter((d) => d >= 1 && d <= 7)
-    .join(", ");
+function formatVisitWeekdaysForExport(days: number[]): string {
+  return formatVisitWeekdaysRuAbbrev(parseVisitWeekdaysJson(days));
 }
 
 type ClientUpdateTemplateFilterQuery = Omit<ListClientsQuery, "page" | "limit">;
@@ -232,8 +231,8 @@ export async function buildClientUpdateImportTemplateBuffer(
     for (let slot = 1; slot <= CONTACT_SLOTS; slot++) {
       const item = bySlot.get(slot);
       row.push(item?.agent?.code?.trim() || item?.agent?.name?.trim() || "");
-      // 1=Du … 7=Ya (import raqam va Пн/Вт ni qabul qiladi)
-      row.push(formatVisitWeekdaysNumeric(parseVisitWeekdaysJson(item?.visit_weekdays)));
+      // Пн…Вс (import raqam va qisqa rus nomlarini qabul qiladi)
+      row.push(formatVisitWeekdaysForExport(parseVisitWeekdaysJson(item?.visit_weekdays)));
       row.push(item?.expeditor_user?.name?.trim() || item?.expeditor_phone?.trim() || "");
     }
     ws.addRow(row);

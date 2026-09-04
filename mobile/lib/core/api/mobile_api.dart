@@ -148,8 +148,12 @@ class MobileApi {
           if (e.value.isNotEmpty) body[e.key] = e.value;
         }
       }
-      final r = await _dio.post('/api/$slug/mobile/sync/delta', data: _jsonBody(body));
-      return SyncFullResult.fromJson(r.data as Map<String, dynamic>);
+      final r = await _dio.post<String>(
+        '/api/$slug/mobile/sync/delta',
+        data: _jsonBody(body),
+        options: Options(responseType: ResponseType.plain),
+      );
+      return compute(parseSyncFullResultJson, r.data ?? '{}');
     } on DioException catch (e) { throw _map(e); }
   }
 
@@ -340,7 +344,10 @@ class MobileApi {
 
   Future<List<ClientPhotoReport>> getClientPhotoReports(String slug, int clientId) async {
     try {
-      final r = await _dio.get('/api/$slug/mobile/clients/$clientId/photo-reports');
+      final r = await _dio.get(
+        '/api/$slug/mobile/clients/$clientId/photo-reports',
+        queryParameters: {'include_images': '1'},
+      );
       final list = r.data['data'] as List? ?? [];
       return list
           .map((e) => ClientPhotoReport.fromJson(Map<String, dynamic>.from(e as Map)))
@@ -622,6 +629,15 @@ class SyncFullResult {
       workUtcOffsetHours: offsetRaw is num ? offsetRaw : num.tryParse('$offsetRaw'),
     );
   }
+}
+
+/// Isolate uchun top-level: delta sync JSON parse.
+SyncFullResult parseSyncFullResultJson(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map) {
+    return SyncFullResult(syncAt: '');
+  }
+  return SyncFullResult.fromJson(Map<String, dynamic>.from(decoded));
 }
 
 class SyncClient {

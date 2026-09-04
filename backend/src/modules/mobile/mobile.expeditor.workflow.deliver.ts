@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { loadDeliveryDebtByClient, mergeLedgerWithUnpaidDelivered } from "../client-balances/client-balances.delivery";
 import { loadExpeditorMobileConfig } from "./mobile.expeditor.service";
 import { parseExpeditorAssignmentRules } from "../staff/staff.shared.helpers";
+import { collectWarehouseIdsForUsers } from "../linkage/linkage.warehouse-ids";
 
 const COMPLETED_STATUSES = ["delivered", "returned"] as const;
 const RETURN_TYPES = ["return", "partial_return", "return_by_order"] as const;
@@ -353,7 +354,8 @@ export async function listMobileExpeditorWarehouses(tenantId: number, expeditorU
   });
   const orderWhIds = fromOrders.map((r) => r.warehouse_id!).filter(Boolean);
 
-  const allIds = [...new Set([...ruleIds, ...orderWhIds])];
+  const fromSlotAndLinks = await collectWarehouseIdsForUsers(tenantId, [expeditorUserId]);
+  const allIds = [...new Set([...ruleIds, ...orderWhIds, ...fromSlotAndLinks])];
   if (!allIds.length) {
     const all = await prisma.warehouse.findMany({
       where: { tenant_id: tenantId, is_active: true },

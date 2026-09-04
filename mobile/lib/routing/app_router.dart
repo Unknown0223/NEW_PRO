@@ -254,6 +254,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/draft',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentDraftPage(),
+      ),
+      GoRoute(
         path: '/orders/detail/:orderId',
         parentNavigatorKey: rootNavigatorKey,
         builder: (ctx, state) {
@@ -563,7 +568,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/debtors-by-orders',
               builder: (_, __) => const AgentDebtorsByOrdersPage(),),
-          GoRoute(path: '/draft', builder: (_, __) => const AgentDraftPage()),
           GoRoute(
               path: '/sync-success',
               builder: (_, __) => const SyncSuccessScreen(),),

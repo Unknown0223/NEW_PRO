@@ -5,11 +5,11 @@ import {
   normalizeGrantDelegationOperationKey,
   toGrantDelegationKey
 } from "./access-grant-delegation";
+import { composeLinkedRoleKeys, extraRoleKeysFromLinks } from "./access-extra-roles";
 import { expandPermissionKeyAliases } from "./legacy-key-map";
 import {
   AccessManageRequiredError,
   derivePermissionModule,
-  ensureRoleByKey,
   getUsersHaveAccessManage,
   mergeUserPermissionKeys,
   removeUserPermissionsByKeys
@@ -36,7 +36,32 @@ export type AccessPatchBodyInput = {
   /** Operatsiya kaliti — boshqalarga berish huquqi (shaxsiy `access.grant.<key>`). */
   grant_delegation_allow?: string[];
   grant_delegation_revoke?: string[];
+  /** Qo‘shimcha rol paketlari (`user_roles`); asosiy `users.role` o‘zgarmaydi. Bo‘sh massiv — faqat asosiy rol. */
+  extra_role_keys?: string[];
 };
+
+async function replaceUserRoleLinksTx(
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  userId: number,
+  linkedKeys: string[]
+): Promise<void> {
+  const roles = await Promise.all(
+    linkedKeys.map((key) =>
+      tx.role.upsert({
+        where: { tenant_id_key: { tenant_id: tenantId, key } },
+        create: { tenant_id: tenantId, key, name: key },
+        update: {}
+      })
+    )
+  );
+  await tx.userRole.deleteMany({ where: { user_id: userId } });
+  if (roles.length === 0) return;
+  await tx.userRole.createMany({
+    data: roles.map((r) => ({ user_id: userId, role_id: r.id })),
+    skipDuplicates: true
+  });
+}
 
 /** Некорректный список подчинённых (не тот тенант, сам себе и т.п.). */
 export class SuperviseePatchError extends Error {
@@ -89,8 +114,11 @@ export async function applyAccessUserPatchBodyTx(
   ];
   const grantDelegationTouched = grantDelegationAllow.length > 0 || grantDelegationRevoke.length > 0;
 
+  const extraRoleTouched = body.extra_role_keys !== undefined;
+
   const hasPermTxWork =
     Boolean(body.role?.trim()) ||
+    extraRoleTouched ||
     body.is_active != null ||
     Boolean(body.remove_permission_keys?.length) ||
     permDefined ||
@@ -99,15 +127,29 @@ export async function applyAccessUserPatchBodyTx(
   if (!hasPermTxWork && !scopeTouched && !superviseeTouched) return;
 
   let rbacRole = _existing.role;
+  const nextPrimary = body.role?.trim() || _existing.role;
+  const userUpdate: { role?: string; is_active?: boolean } = {};
   if (body.role?.trim()) {
-    const nextRole = body.role.trim();
-    rbacRole = nextRole;
-    await tx.user.update({ where: { id: userId }, data: { role: nextRole } });
-    const role = await ensureRoleByKey(tenantId, nextRole, nextRole);
-    await tx.userRole.deleteMany({ where: { user_id: userId } });
-    await tx.userRole.create({ data: { user_id: userId, role_id: role.id } });
-  } else if (body.is_active != null) {
-    await tx.user.update({ where: { id: userId }, data: { is_active: body.is_active } });
+    rbacRole = nextPrimary;
+    userUpdate.role = nextPrimary;
+  }
+  if (body.is_active != null) userUpdate.is_active = body.is_active;
+  if (Object.keys(userUpdate).length > 0) {
+    await tx.user.update({ where: { id: userId }, data: userUpdate });
+  }
+
+  if (body.role?.trim() || extraRoleTouched) {
+    let extras: string[];
+    if (extraRoleTouched) {
+      extras = body.extra_role_keys ?? [];
+    } else {
+      const links = await tx.userRole.findMany({
+        where: { user_id: userId, role: { tenant_id: tenantId } },
+        select: { role: { select: { key: true } } }
+      });
+      extras = extraRoleKeysFromLinks(_existing.role, links.map((l) => l.role.key));
+    }
+    await replaceUserRoleLinksTx(tx, tenantId, userId, composeLinkedRoleKeys(nextPrimary, extras));
   }
 
   if (body.remove_permission_keys?.length) {
@@ -206,6 +248,19 @@ export async function applyAccessUserPatchBodyTx(
   }
 
   if (superviseeTouched) {
+    const { getActiveSlotForUser } = await import("../work-slots/work-slots.query.read");
+    const activeSlot = await getActiveSlotForUser(userId);
+    if (activeSlot != null) {
+      const slotMeta = await tx.workSlot.findFirst({
+        where: { id: activeSlot.slot_id, tenant_id: tenantId },
+        select: { slot_type: true }
+      });
+      if (slotMeta?.slot_type === "supervisor") {
+        throw new SuperviseePatchError(
+          "Подчинённые настраиваются в Рабочее место → Команда (WORKPLACE_ON_SLOT)."
+        );
+      }
+    }
     const raw = body.supervisee_user_ids ?? [];
     const desired = [...new Set(raw)];
     if (desired.includes(userId)) {
@@ -261,8 +316,11 @@ export async function applyAccessUserPatchBody(
   const grantDelegationTouched =
     Boolean(body.grant_delegation_allow?.length) || Boolean(body.grant_delegation_revoke?.length);
 
+  const extraRoleTouched = body.extra_role_keys !== undefined;
+
   const hasPermTxWork =
     Boolean(body.role?.trim()) ||
+    extraRoleTouched ||
     body.is_active != null ||
     Boolean(body.remove_permission_keys?.length) ||
     permDefined ||

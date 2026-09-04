@@ -40,7 +40,7 @@ void main() {
     );
   });
 
-  test('resolveDailyVisitPlanIds — jadval yo‘q, reja bo‘sh', () {
+  test('resolveDailyVisitPlanIds — jadval yo‘q, katalog = reja (Визиты bilan mos)', () {
     final clients = [
       {'id': 1, 'name': 'A'},
       {'id': 2, 'name': 'B'},
@@ -51,6 +51,22 @@ void main() {
         allClients: clients,
         weekday: 3,
         todayIso: '2026-07-08',
+      ),
+      {1, 2},
+    );
+  });
+
+  test('resolveDailyVisitPlanIds — jadval bor, bugun reja yo‘q', () {
+    final clients = [
+      {'id': 1, 'visit_weekdays': [1]},
+      {'id': 2, 'visit_weekdays': [5]},
+    ];
+    expect(
+      resolveDailyVisitPlanIds(
+        route: {'stops': []},
+        allClients: clients,
+        weekday: 4,
+        todayIso: '2026-09-03',
       ),
       isEmpty,
     );

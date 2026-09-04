@@ -8,6 +8,7 @@ import { OrdersNakladnoyPreviewModal } from "@/components/orders/orders-list/ord
 import { OrdersBulkDownloadModal } from "@/components/orders/orders-list/orders-bulk-download-modal";
 import { OrdersBulkUploadPanel } from "@/components/orders/orders-list/orders-bulk-upload-panel";
 import { downloadBulkExportSelection } from "@/lib/bulk-export-download";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import type { BulkExportTemplateDef } from "@/lib/bulk-export-templates";
 import {
   bulkExportTemplateKey,
@@ -87,6 +88,7 @@ const BULK_STATUS_QUICK = [
 type ViewMode = "main" | "upload";
 
 export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const {
     tenantSlug,
     selectedOrderIds,
@@ -602,14 +604,21 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           );
         }}
         onDetach={() => {
-          if (!window.confirm(`Открепить доставщика у ${formatGroupedInteger(count)} заказ(ов)?`)) {
-            return;
-          }
-          setBulkExpFeedback(null);
-          bulkExpeditorMut.mutate(
-            { order_ids: ids, expeditor_user_id: null },
-            { onSuccess: () => setExpeditorDialogOpen(false) }
-          );
+          void (async () => {
+            const ok = await confirm({
+              title: "Открепить",
+              message: `Открепить доставщика у ${formatGroupedInteger(count)} заказ(ов)?`,
+              confirmLabel: "Да",
+              cancelLabel: "Нет",
+              destructive: true
+            });
+            if (!ok) return;
+            setBulkExpFeedback(null);
+            bulkExpeditorMut.mutate(
+              { order_ids: ids, expeditor_user_id: null },
+              { onSuccess: () => setExpeditorDialogOpen(false) }
+            );
+          })();
         }}
       />
 
@@ -632,6 +641,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           );
         }}
       />
+      {confirmDialog}
     </>
   );
 }

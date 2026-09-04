@@ -36,8 +36,6 @@ if not exist "%RELEASES%" mkdir "%RELEASES%"
 for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content '%MOBILE_SRC%\pubspec.yaml' | Select-String '^version:' | ForEach-Object { $_ -replace 'version:\s*','' -replace '\+.*','' }).ToString().Trim()"`) do set "APP_VER=%%V"
 copy /Y "%APK%" "%RELEASE_APK%" >nul
 if defined APP_VER copy /Y "%APK%" "%RELEASES%\SalesDoc-!APP_VER!-release.apk" >nul
-for /f %%D in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set "TODAY=%%D"
-copy /Y "%APK%" "%RELEASES%\SalesDoc-%TODAY%-release.apk" >nul
 
 echo.
 echo Tayyor:

@@ -19,7 +19,7 @@ import {
   listStaff,
   listStaffSessions,
   listSupervisorFilterOptions,
-  listWebPanelStaffFilterOptions,
+  listSkladchikFilterOptions,
   listWebStaffPositionPresetsAdmin,
   listWebStaffPositionPresetHistory,
   createWebStaffPositionPreset,
@@ -67,14 +67,17 @@ import {
   createWebStaffPositionPresetBody,
   patchWebStaffPositionPresetBody
 } from "./staff.route.schemas";
+import { registerKomandaBulkRoute } from "./staff.route.komanda-bulk";
 
 export async function registerStaffSkladchikRoutes(app: FastifyInstance) {
+  registerKomandaBulkRoute(app, "skladchik");
+
   app.get(
     "/api/:slug/skladchik/meta/filter-options",
     { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const data = await listWebPanelStaffFilterOptions(request.tenant!.id);
+      const data = await listSkladchikFilterOptions(request.tenant!.id);
       return reply.send({ data });
     }
   );

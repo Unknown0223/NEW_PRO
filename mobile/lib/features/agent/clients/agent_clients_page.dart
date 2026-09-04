@@ -14,6 +14,8 @@ import '../../auth/auth_provider.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
+import '../../../core/clients/client_outlet_filters.dart';
 import '../shell/agent_app_bar.dart';
 import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
@@ -305,18 +307,36 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
         await _syncClients();
         ref.invalidate(filteredClientsProvider);
       },
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
-        itemCount: clients.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (ctx, i) => _ClientListTile(
-          client: clients[i],
-          onTap: () {
-            final id = clients[i]['id'];
-            if (id is! int && id is! num) return;
-            context.push('/clients/${(id as num).toInt()}');
-          },
-        ),
+      child: Builder(
+        builder: (context) {
+          final showBalance =
+              ref.watch(sessionProvider).mobileConfig?.client.showBalance ?? true;
+          final agentBalances =
+              ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
+          final drafts = ref.watch(orderDraftsProvider).valueOrNull;
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+            itemCount: clients.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (ctx, i) {
+              final client = clients[i];
+              final id = (client['id'] as num?)?.toInt();
+              final balanceAmount = showBalance
+                  ? clientAgentLedgerBalance(agentBalances, id)
+                  : null;
+              final hasDraft = id != null && drafts?[id] != null;
+              return _ClientListTile(
+                client: client,
+                balanceAmount: balanceAmount,
+                hasDraft: hasDraft,
+                onTap: () {
+                  if (id == null) return;
+                  context.push('/clients/$id');
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -413,30 +433,31 @@ class _OutletCategoryChips extends ConsumerWidget {
   }
 }
 
-class _ClientListTile extends ConsumerWidget {
+class _ClientListTile extends StatelessWidget {
   final Map<String, dynamic> client;
+  final double? balanceAmount;
+  final bool hasDraft;
   final VoidCallback onTap;
 
-  const _ClientListTile({required this.client, required this.onTap});
+  const _ClientListTile({
+    required this.client,
+    required this.onTap,
+    this.balanceAmount,
+    this.hasDraft = false,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final name = client['name']?.toString() ?? '';
     final code = client['client_code']?.toString().trim() ?? '—';
     final category = client['category']?.toString().trim() ?? 'B';
-    final clientId = (client['id'] as num?)?.toInt();
-    final showBalance = ref.watch(sessionProvider).mobileConfig?.client.showBalance ?? true;
-    final agentBalances = ref.watch(clientAgentLedgerBalancesProvider).valueOrNull;
-    final balanceAmount = showBalance
-        ? clientAgentLedgerBalance(agentBalances, clientId)
-        : null;
-    final drafts = ref.watch(orderDraftsProvider).valueOrNull;
-    final hasDraft = clientId != null && drafts?[clientId] != null;
 
     return AgentVisitOutletCard(
       name: name,
       code: code,
       grade: category.isEmpty ? 'B' : category,
+      visitDays: formatClientVisitDaysDisplay(client),
+      photoUrl: firstClientPhotoUrl(client),
       balanceAmount: balanceAmount,
       hasDraft: hasDraft,
       onTap: onTap,

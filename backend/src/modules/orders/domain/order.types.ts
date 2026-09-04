@@ -47,6 +47,10 @@ export type CreateOrderInput = {
   is_consignment?: boolean;
   /** ISO sana (ixtiyoriy) */
   consignment_due_date?: string | null;
+  /** Ixtiyoriy hujjat ID; bo‘sh → create dan keyin String(id) */
+  number?: string | null;
+  /** Server-only: mobile API sets `mobile`. Web omits (inferred from viewer role). */
+  creation_channel?: "web" | "mobile" | null;
   items: OrderLineInput[];
   /** `order_type=exchange` uchun majburiy (minus/plus alohida) */
   source_order_ids?: number[];
@@ -343,6 +347,7 @@ export type OrderDetailLoaded = {
   warehouse_block_id: number | null;
   discount_alert: string | null;
   bonus_alert: string | null;
+  creation_channel?: string | null;
   created_at: Date;
   client: {
     name: string;

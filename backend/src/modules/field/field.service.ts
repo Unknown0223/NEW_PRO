@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { getActiveSlotForUser } from "../work-slots/work-slots.query.read";
+import {
+  appendStopToRouteStops,
+  isoDatesThisWeekForWeekdays
+} from "./agent-route-stops";
 
 function startOfUtcDay(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
@@ -219,6 +224,7 @@ export async function upsertAgentRouteDay(
   if (Number.isNaN(d.getTime())) throw new Error("InvalidDate");
   const day = startOfUtcDay(d);
   const stops = Array.isArray(body.stops) ? body.stops : [];
+  const activeSlot = await getActiveSlotForUser(body.agent_id);
   const row = await prisma.agentRouteDay.upsert({
     where: {
       tenant_id_agent_id_route_date: { tenant_id: tenantId, agent_id: body.agent_id, route_date: day }
@@ -227,6 +233,7 @@ export async function upsertAgentRouteDay(
       tenant_id: tenantId,
       agent_id: body.agent_id,
       route_date: day,
+      work_slot_id: activeSlot?.slot_id ?? null,
       stops: stops as Prisma.InputJsonValue,
       notes: body.notes?.trim() || null
     },
@@ -237,6 +244,35 @@ export async function upsertAgentRouteDay(
     include: { agent: { select: { id: true, name: true, login: true } } }
   });
   return serializeRouteDay(row);
+}
+
+/** Mavjud kunlik marshrutga nuqta qo‘shish (yangi bo‘sh marshrut yaratilmaydi). */
+export async function appendClientToExistingAgentRouteDays(
+  tenantId: number,
+  agentId: number,
+  stop: {
+    client_id: number;
+    client_name: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+  visitWeekdays: number[]
+): Promise<void> {
+  const dates = isoDatesThisWeekForWeekdays(visitWeekdays);
+  if (dates.length === 0) return;
+  for (const routeDate of dates) {
+    const existing = await getAgentRouteDay(tenantId, agentId, routeDate);
+    if (!existing) continue;
+    const next = appendStopToRouteStops(existing.stops, stop);
+    const prevLen = Array.isArray(existing.stops) ? existing.stops.length : 0;
+    if (next.length === prevLen) continue;
+    await upsertAgentRouteDay(tenantId, {
+      agent_id: agentId,
+      route_date: routeDate,
+      stops: next,
+      notes: existing.notes
+    });
+  }
 }
 
 export async function listAgentRouteDays(

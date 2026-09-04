@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 export function StaffKomandaFioCell(
   props: PersonNameParts & {
     kpiColor?: string | null;
-    face?: { tenantSlug: string; userId: number } | null;
+    face?: { tenantSlug: string; userId: number; hasPhoto?: boolean } | null;
   }
 ) {
   return (

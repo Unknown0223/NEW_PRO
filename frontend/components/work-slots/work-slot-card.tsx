@@ -8,7 +8,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { WorkSlotListItem } from "@/lib/work-slots-types";
-import { formatSlotDate, slotTypeLabel } from "./work-slots-utils";
+import { formatSlotDate, formatSlotBranches, slotTypeLabel } from "./work-slots-utils";
 import { LockStatusBadge, SlotBadge } from "./slot-badge";
 import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
 
@@ -135,10 +135,14 @@ export function WorkSlotCard({
           </p>
         ) : null}
         <div className="flex flex-wrap gap-1.5">
-          {slot.branch_code ? (
-            <Badge variant="outline" className="text-[10px]">
-              {slot.branch_code}
-            </Badge>
+          {formatSlotBranches(slot) !== "—" ? (
+            formatSlotBranches(slot)
+              .split(", ")
+              .map((code) => (
+                <Badge key={code} variant="outline" className="text-[10px]">
+                  {code}
+                </Badge>
+              ))
           ) : null}
           <Badge variant="secondary" className="text-[10px]">
             {slotTypeLabel(slot.slot_type)}

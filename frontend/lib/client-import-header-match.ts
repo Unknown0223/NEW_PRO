@@ -172,7 +172,7 @@ export function headerToClientImportKey(header: string): string | null {
 export function suggestColumnMapping(headerCells: string[]): Record<string, number> {
   const out: Record<string, number> = {};
   headerCells.forEach((raw, idx) => {
-    const key = headerToClientImportKey(String(raw ?? ""));
+    const key = headerToClientImportKey(String(raw ?? "")) ?? headerToAgentImportKey(String(raw ?? ""));
     if (key && out[key] === undefined) out[key] = idx;
   });
   return out;

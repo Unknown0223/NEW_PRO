@@ -93,6 +93,26 @@ export function regionFilterNormKeys(region: string): Set<string> {
   return out;
 }
 
+/** Filtrdagi viloyat uchun `clients.city` prefikslari (`XR_` → XORAZM). */
+export function cityStartsWithPrefixesForRegion(regionFilter: string): string[] {
+  const norms = regionFilterNormKeys(regionFilter);
+  if (norms.size === 0) return [];
+  const out: string[] = [];
+  for (const row of CITY_CODE_PREFIX_TERRITORY) {
+    if (norms.has(normKeyTerritoryMatch(row.region))) out.push(row.prefix);
+  }
+  return out;
+}
+
+/** Filtrdagi zona uchun `clients.city` prefikslari (`SOUTH-WEST` → XR_, SM_, …). */
+export function cityStartsWithPrefixesForZone(zoneFilter: string): string[] {
+  const zf = normKeyTerritoryMatch(zoneFilter);
+  if (!zf) return [];
+  return CITY_CODE_PREFIX_TERRITORY.filter((row) => normKeyTerritoryMatch(row.zone) === zf).map(
+    (row) => row.prefix
+  );
+}
+
 export function mergeMobileCitiesByZoneRegion(input: {
   fromTree: Record<string, string[]>;
   fromClientRows: Record<string, string[]>;

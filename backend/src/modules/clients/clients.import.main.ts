@@ -160,7 +160,7 @@ export async function importClientsFromXlsx(
         created: 0,
         updated: 0,
         errors: [
-          "Yangi import (importMode=create): xaritada «Наименование» (name) ustuni bo‘lishi kerak. Ixtiyoriy «ИД» / id ustuni berilsa, shu id bilan yaratiladi yoki yangilanadi."
+          "Yangi import (importMode=create): xaritada «Наименование» (name) ustuni bo‘lishi kerak. Ixtiyoriy «ИД» — raqam (DB id) yoki matnli kod (ks_1652, g3_516…); berilsa shu bilan yaratiladi/yangilanadi."
         ]
       };
     }

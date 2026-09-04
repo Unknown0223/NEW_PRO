@@ -13,13 +13,14 @@ import {
 import type { ClientBalanceTerritoryOptions } from "./client-balances.types";
 import { buildClientWhere } from "./client-balances.where";
 import type { ClientBalanceListQuery } from "./client-balances.types";
+import { inferCityTerritoryFromCode } from "../mobile/mobile-territory-references";
 
 export async function listClientBalanceTerritoryOptions(
   tenantId: number,
   scope?: ClientBalanceListQuery
 ): Promise<ClientBalanceTerritoryOptions> {
   const clientScopeWhere: Prisma.ClientWhereInput = scope
-    ? buildClientWhere(tenantId, scope, { skipBalanceFilter: true, skipTerritoryFilters: true })
+    ? await buildClientWhere(tenantId, scope, { skipBalanceFilter: true, skipTerritoryFilters: true })
     : { tenant_id: tenantId, merged_into_client_id: null };
 
   const withField = (field: Prisma.ClientWhereInput): Prisma.ClientWhereInput => ({
@@ -60,11 +61,23 @@ export async function listClientBalanceTerritoryOptions(
     loadActiveBranchNames(tenantId)
   ]);
 
+  const inferredRegions = new Set<string>();
+  const inferredZones = new Set<string>();
+  for (const row of cities) {
+    const inf = inferCityTerritoryFromCode(row.city ?? "");
+    if (!inf) continue;
+    inferredRegions.add(inf.region);
+    inferredZones.add(inf.zone);
+  }
+
+  const uniqSorted = (values: string[]) =>
+    [...new Set(values.map((x) => x.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+
   return {
-    regions: regions.map((r) => r.region!).filter((x) => x.trim() !== ""),
+    regions: uniqSorted([...regions.map((r) => r.region!), ...inferredRegions]),
     cities: cities.map((r) => r.city!).filter((x) => x.trim() !== ""),
     districts: districts.map((r) => r.district!).filter((x) => x.trim() !== ""),
-    zones: zones.map((r) => r.zone!).filter((x) => x.trim() !== ""),
+    zones: uniqSorted([...zones.map((r) => r.zone!), ...inferredZones]),
     neighborhoods: neighborhoods.map((r) => r.neighborhood!).filter((x) => x.trim() !== ""),
     branches: branchNames
   };

@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/lib/auth-store";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
@@ -9,20 +8,22 @@ import { api } from "@/lib/api";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
 import { STALE } from "@/lib/query-stale";
-import { MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
+import { Pencil, KeyRound, UserMinus } from "lucide-react";
 import { AgentFormModal } from "@/components/staff/agent-form-modal";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
+import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import {
   AgentsBulkEditDialog,
   type AgentsBulkEditFields
 } from "@/components/staff/agents-bulk-edit-dialog";
 import { AgentsFiltersRow } from "@/components/staff/agents-filters-row";
 import { formatPersonDisplayName } from "@/lib/person-display";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
+import { buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
@@ -35,23 +36,14 @@ import {
 import { StaffImportDialog } from "@/components/staff/staff-import-dialog";
 import { useStaffExcelImport } from "@/components/staff/use-staff-excel-import";
 import {
-  goToStaffWorkplaceConfig,
-  NeedWorkSlotDialog
-} from "@/components/staff/workplace-moved-notice";
-import {
-  StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
-  StaffKomandaAppAccessToggle,
-  StaffKomandaCodeCell,
   StaffKomandaCreatedAtCell,
   StaffKomandaDeviceCell,
   StaffKomandaFioCell,
   StaffKomandaLastSyncCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
-  StaffKomandaPinflCell,
-  StaffKomandaPositionCell
+  StaffKomandaPinflCell
 } from "@/components/staff/staff-komanda-table-cells";
 
 export type AgentRow = {
@@ -99,12 +91,14 @@ export type AgentRow = {
   };
   work_slot_id?: number | null;
   work_slot_code?: string | null;
+  has_face_reference?: boolean;
 };
 
 type TenantProfile = {
   references: {
     branches?: Array<{ id: string; name: string; active?: boolean }>;
     trade_directions?: string[];
+    territory_nodes?: TerritoryNode[];
     payment_method_entries?: Array<{
       id: string;
       name: string;
@@ -118,38 +112,28 @@ const COLS = [
   "Ф.И.О",
   "Авторизоваться",
   "Телефон",
-  "Код",
   "Продукт",
   "Тип агента",
   "Версия APK",
   "ПИНФЛ",
   "Название устройства",
   "Последняя синхронизация",
-  "Должность",
-  "Дата создания",
-  "Доступ к приложение",
-  "Количество активных сессий",
-  "Максимальное количество сессий"
+  "Дата создания"
 ] as const;
 
-/** v4: Smart-kod / work_slot ustuni olib tashlandi — faqat Рабочее место sahifasida */
-const AGENT_TABLE_ID = "staff.agents.v4";
+/** v5: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const AGENT_TABLE_ID = "staff.agents.v5";
 const AGENT_COLUMN_IDS = [
   "fio",
   "login",
   "phone",
-  "code",
   "product",
   "agent_type",
   "apk_version",
   "pinfl",
   "device_name",
   "last_sync",
-  "position",
-  "created_at",
-  "app_access",
-  "active_sessions",
-  "max_sessions"
+  "created_at"
 ] as const;
 
 const AGENT_COLUMNS = AGENT_COLUMN_IDS.map((id, i) => ({
@@ -166,8 +150,6 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.product ?? "";
     case "agent_type":
       return r.agent_type ?? "";
-    case "code":
-      return r.code ?? "";
     case "pinfl":
       return r.pinfl ?? "";
     case "consignment":
@@ -182,16 +164,8 @@ function agentExportCellString(r: AgentRow, colId: string): string {
       return r.phone ?? "";
     case "login":
       return r.login;
-    case "position":
-      return r.position ?? "";
     case "created_at":
       return new Date(r.created_at).toLocaleDateString("ru-RU");
-    case "app_access":
-      return r.app_access ? "Да" : "Нет";
-    case "active_sessions":
-      return String(r.active_session_count);
-    case "max_sessions":
-      return String(r.max_sessions);
     default:
       return "";
   }
@@ -204,13 +178,13 @@ function buildAgentSearchHaystack(r: AgentRow): string {
     r.fio,
     r.login,
     r.phone ?? "",
-    r.code ?? "",
     r.pinfl ?? "",
     r.device_name ?? "",
     r.apk_version ?? "",
     r.branch ?? "",
     r.warehouse ?? "",
     r.agent_type ?? "",
+    r.work_slot_code ?? "",
     ...(r.price_types ?? [])
   ]
     .join(" ")
@@ -218,17 +192,18 @@ function buildAgentSearchHaystack(r: AgentRow): string {
 }
 
 export function AgentsWorkspace({ tenantSlug }: Props) {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const actorUserId = decodeAccessTokenUserId(accessToken);
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftBranch, setDraftBranch] = useState("");
   const [draftTd, setDraftTd] = useState("");
-  const [draftPos, setDraftPos] = useState("");
+  const [draftOblast, setDraftOblast] = useState("");
+  const [draftCity, setDraftCity] = useState("");
   const [appliedBranch, setAppliedBranch] = useState("");
   const [appliedTd, setAppliedTd] = useState("");
-  const [appliedPos, setAppliedPos] = useState("");
+  const [appliedOblast, setAppliedOblast] = useState("");
+  const [appliedCity, setAppliedCity] = useState("");
   const [search, setSearch] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -246,32 +221,11 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [createAgentError, setCreateAgentError] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<AgentRow | null>(null);
-  const [sessionAgent, setSessionAgent] = useState<AgentRow | null>(null);
-  const [needSlotOpen, setNeedSlotOpen] = useState(false);
+  const [passwordRow, setPasswordRow] = useState<AgentRow | null>(null);
   const [deactivateAgent, setDeactivateAgent] = useState<AgentRow | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
-  const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | "clear-sessions" | null>(
-    null
-  );
-
-  const filterOptQ = useQuery({
-    queryKey: ["agents-filter-options", tenantSlug],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{
-        data: {
-          branches: string[];
-          trade_directions: string[];
-          positions: string[];
-          territories?: string[];
-          territory_tokens?: string[];
-        };
-      }>(`/api/${tenantSlug}/agents/filter-options`);
-      return data.data;
-    }
-  });
+  const [confirmBulk, setConfirmBulk] = useState<"activate" | "deactivate" | null>(null);
 
   const profileQ = useQuery({
     queryKey: ["settings", "profile", tenantSlug, "agents-workspace"],
@@ -291,8 +245,69 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const tradeDirectionsCatalog = useActiveTradeDirectionsCatalog(tenantSlug, "agents-workspace");
   const tradeDirectionFilterOptions = tradeDirectionsCatalog.labels;
 
+  const filterOptQ = useQuery({
+    queryKey: ["agents-filter-options", tenantSlug],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.reference,
+    queryFn: async () => {
+      const { data } = await api.get<{
+        data: {
+          territory_oblasts?: string[];
+          territory_cities?: string[];
+          territory_tokens?: string[];
+        };
+      }>(`/api/${tenantSlug}/agents/filter-options`);
+      return data.data;
+    }
+  });
+
+  const territoryNodes = profileQ.data?.references?.territory_nodes;
+  const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
+
+  const oblastOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.regions.map((o) => o.value);
+    }
+    const fromApi = filterOptQ.data?.territory_oblasts ?? [];
+    if (fromApi.length > 0) return fromApi;
+    return [...(filterOptQ.data?.territory_tokens ?? [])].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterOptQ.data]);
+
+  const cityOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.cities.map((o) => o.value);
+    }
+    const fromApi = filterOptQ.data?.territory_cities ?? [];
+    if (fromApi.length > 0) return fromApi;
+    return [...(filterOptQ.data?.territory_tokens ?? [])].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterOptQ.data]);
+
+  useEffect(() => {
+    if (!draftCity) return;
+    if (cityOptions.length > 0 && !cityOptions.some((c) => c === draftCity)) {
+      setDraftCity("");
+    }
+  }, [cityOptions, draftCity]);
+
   const listQ = useQuery({
-    queryKey: ["agent", tenantSlug, actorUserId, tab, appliedBranch, appliedTd, appliedPos],
+    queryKey: [
+      "agent",
+      tenantSlug,
+      actorUserId,
+      tab,
+      appliedBranch,
+      appliedTd,
+      appliedOblast,
+      appliedCity
+    ],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
@@ -300,7 +315,8 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
       params.set("is_active", tab === "active" ? "true" : "false");
       if (appliedBranch.trim()) params.set("branch", appliedBranch.trim());
       if (appliedTd.trim()) params.set("trade_direction", appliedTd.trim());
-      if (appliedPos.trim()) params.set("position", appliedPos.trim());
+      if (appliedOblast.trim()) params.set("territory_oblast", appliedOblast.trim());
+      if (appliedCity.trim()) params.set("territory_city", appliedCity.trim());
       const { data } = await api.get<{ data: AgentRow[] }>(
         `/api/${tenantSlug}/agents?${params.toString()}`
       );
@@ -337,35 +353,17 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
     }
   });
 
-  const bulkMut = useMutation({
-    mutationFn: async (body: Record<string, unknown>) => {
-      const { data } = await api.post<{ data: { updated: number } }>(`/api/${tenantSlug}/agents/bulk`, body);
-      return data.data;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["agents-filter-options", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["consignment"] });
-      setSelectedIds(new Set());
-    },
-    onError: (e: unknown) => {
-      window.alert(messageFromAgentsBulkError(e));
-    }
-  });
-
   const bulkEditMut = useMutation({
     mutationFn: async (fields: AgentsBulkEditFields) => {
       const ids = Array.from(selectedIds);
       if (ids.length === 0) return;
 
-      const patch: Record<string, unknown> = {};
-      if (fields.position !== undefined) patch.position = fields.position;
-      if (fields.agent_type !== undefined) patch.agent_type = fields.agent_type;
-
-      if (Object.keys(patch).length > 0) {
-        for (const id of ids) {
-          await api.patch(`/api/${tenantSlug}/agents/${id}`, patch);
-        }
+      if (fields.agent_type !== undefined) {
+        await api.post(`/api/${tenantSlug}/agents/bulk`, {
+          action: "set_agent_type",
+          agent_ids: ids,
+          agent_type: fields.agent_type
+        });
       }
     },
     onSuccess: () => {
@@ -383,9 +381,11 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const bulkActiveMut = useMutation({
     mutationFn: async (is_active: boolean) => {
       const ids = Array.from(selectedIds);
-      for (const id of ids) {
-        await api.patch(`/api/${tenantSlug}/agents/${id}`, { is_active });
-      }
+      await api.post(`/api/${tenantSlug}/agents/bulk`, {
+        action: "set_is_active",
+        agent_ids: ids,
+        is_active
+      });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
@@ -423,23 +423,13 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedBranch, appliedTd, appliedPos, search, pageSize]);
+  }, [tab, appliedBranch, appliedTd, appliedOblast, appliedCity, search, pageSize]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [tab, appliedBranch, appliedTd, appliedPos, safePage, pageSize]);
+  }, [tab, appliedBranch, appliedTd, appliedOblast, appliedCity, safePage, pageSize]);
 
-  const selectedRows = useMemo(
-    () => filteredRows.filter((r) => selectedIds.has(r.id)),
-    [filteredRows, selectedIds]
-  );
-
-  const allAccessOn = useMemo(() => {
-    if (selectedRows.length === 0) return false;
-    return selectedRows.every((a) => a.app_access);
-  }, [selectedRows]);
-
-  const bulkBusy = bulkMut.isPending || bulkEditMut.isPending || bulkActiveMut.isPending;
+  const bulkBusy = bulkEditMut.isPending || bulkActiveMut.isPending;
 
   const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
 
@@ -467,16 +457,19 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
   const applyFilters = () => {
     setAppliedBranch(draftBranch);
     setAppliedTd(draftTd);
-    setAppliedPos(draftPos);
+    setAppliedOblast(draftOblast);
+    setAppliedCity(draftCity);
   };
 
   const resetFilters = () => {
     setDraftBranch("");
     setDraftTd("");
-    setDraftPos("");
+    setDraftOblast("");
+    setDraftCity("");
     setAppliedBranch("");
     setAppliedTd("");
-    setAppliedPos("");
+    setAppliedOblast("");
+    setAppliedCity("");
     setPage(1);
   };
 
@@ -498,15 +491,13 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
-            face={{ tenantSlug, userId: r.id }}
+            face={{ tenantSlug, userId: r.id, hasPhoto: r.has_face_reference === true }}
           />
         );
       case "login":
         return <StaffKomandaLoginCell login={r.login} />;
       case "phone":
         return <StaffKomandaPhoneCell phone={r.phone} />;
-      case "code":
-        return <StaffKomandaCodeCell code={r.code} />;
       case "product":
         return (
           <span className="whitespace-nowrap text-slate-700">{formatProductCell(r.product)}</span>
@@ -521,28 +512,8 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         return <StaffKomandaDeviceCell name={r.device_name} />;
       case "last_sync":
         return <StaffKomandaLastSyncCell at={r.last_sync_at} />;
-      case "position":
-        return <StaffKomandaPositionCell position={r.position} />;
       case "created_at":
         return <StaffKomandaCreatedAtCell at={r.created_at} />;
-      case "app_access":
-        return (
-          <StaffKomandaAppAccessToggle
-            checked={r.app_access}
-            disabled={patchMut.isPending}
-            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
-          />
-        );
-      case "active_sessions":
-        return (
-          <StaffKomandaActiveSessionsCell
-            count={r.active_session_count}
-            max={r.max_sessions}
-            onClick={() => setSessionAgent(r)}
-          />
-        );
-      case "max_sessions":
-        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
@@ -565,14 +536,17 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         filters={
           <AgentsFiltersRow
             draftBranch={draftBranch}
-            draftPos={draftPos}
             draftTd={draftTd}
+            draftOblast={draftOblast}
+            draftCity={draftCity}
             onDraftBranch={setDraftBranch}
-            onDraftPos={setDraftPos}
             onDraftTd={setDraftTd}
+            onDraftOblast={setDraftOblast}
+            onDraftCity={setDraftCity}
             branchOptions={branchOptions}
-            positionOptions={filterOptQ.data?.positions ?? []}
             tradeDirectionOptions={tradeDirectionFilterOptions}
+            oblastOptions={oblastOptions}
+            cityOptions={cityOptions}
           />
         }
         onReset={resetFilters}
@@ -585,7 +559,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onToggleAllOnPage={toggleAllAgentsOnPage}
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
-        searchPlaceholder="Поиск по ФИО, коду, логину…"
+        searchPlaceholder="Поиск по ФИО, логину…"
         onExport={() => {
           const order = tablePrefs.visibleColumnOrder;
           const headers = order.map((id) => AGENT_COLUMN_LABEL_BY_ID.get(id) ?? id);
@@ -635,16 +609,8 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton
-                title="Конфигурация"
-                onClick={() =>
-                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
-                }
-              >
-                <Settings2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Активные сессии" onClick={() => setSessionAgent(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
+              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                <KeyRound className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
                 <Pencil className="h-4 w-4 text-amber-600" />
@@ -661,20 +627,10 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
 
       <StaffBulkFloatingBar
         count={selectedIds.size}
-        allAccessOn={allAccessOn}
         isActiveTab={tab === "active"}
         busy={bulkBusy}
-        onToggleAccess={() =>
-          void bulkMut.mutateAsync({
-            action: "set_app_access",
-            agent_ids: Array.from(selectedIds),
-            app_access: !allAccessOn
-          })
-        }
-        onConfigurations={() => setNeedSlotOpen(true)}
         onBulkEdit={() => setBulkEditOpen(true)}
         onToggleActive={() => setConfirmBulk(tab === "active" ? "deactivate" : "activate")}
-        onClearSessions={() => setConfirmBulk("clear-sessions")}
         onClearSelection={() => setSelectedIds(new Set())}
       />
 
@@ -694,21 +650,11 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         message={
           confirmBulk === "deactivate"
             ? "Вы хотите деактивировать выбранных агентов?"
-            : confirmBulk === "activate"
-              ? "Вы хотите активировать выбранных агентов?"
-              : "Вы хотите сбросить все сессии у выбранных агентов?"
+            : "Вы хотите активировать выбранных агентов?"
         }
         busy={bulkBusy}
         onCancel={() => setConfirmBulk(null)}
         onConfirm={() => {
-          if (confirmBulk === "clear-sessions") {
-            void bulkMut.mutateAsync({
-              action: "revoke_sessions",
-              agent_ids: Array.from(selectedIds)
-            });
-            setConfirmBulk(null);
-            return;
-          }
           if (confirmBulk === "deactivate") {
             void bulkActiveMut.mutateAsync(false);
             return;
@@ -761,21 +707,18 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onSubmitEdit={(id, body) => patchMut.mutateAsync({ id, body })}
       />
 
-      <StaffActiveSessionsDialog
-        open={sessionAgent != null}
-        onOpenChange={(open) => {
-          if (!open) setSessionAgent(null);
-        }}
+      <StaffPasswordChangeDialog
+        open={passwordRow != null}
         tenantSlug={tenantSlug}
-        staffKind="agent"
-        userId={sessionAgent?.id ?? null}
-        maxSessions={sessionAgent?.max_sessions ?? 1}
-        onPatched={() => {
+        apiSegment="agents"
+        userId={passwordRow?.id ?? null}
+        login={passwordRow?.login ?? ""}
+        onClose={() => setPasswordRow(null)}
+        onDone={() => {
+          setPasswordRow(null);
           void qc.invalidateQueries({ queryKey: ["agent", tenantSlug] });
         }}
       />
-
-      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
 
       <AgentTemplateConfirmDialog
         open={Boolean(deactivateAgent)}

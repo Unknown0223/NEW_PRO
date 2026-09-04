@@ -234,6 +234,17 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
     }
   }
 
+  Future<void> _sendHeldNow(int id) async {
+    try {
+      await ref.read(heldOrderSchedulerProvider).submitNow(id);
+      if (!mounted) return;
+      showAgentToast(context, 'Заказ отправлен', accentColor: AppColors.success);
+    } catch (_) {
+      if (!mounted) return;
+      showAgentToast(context, 'Не удалось отправить заказ', accentColor: AppColors.error);
+    }
+  }
+
   void _markAllRead(List<_NotifItem> items) {
     final ids = items.map((e) => e.id).toSet();
     ref.read(notificationsReadIdsProvider.notifier).state = {
@@ -506,6 +517,7 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
                     };
                   },
                   onCancelHeld: item.held != null ? () => _cancelHeld(item.held!.id) : null,
+                  onSendHeldNow: item.held != null ? () => _sendHeldNow(item.held!.id) : null,
                   onSyncNow: () => startManualSync(context, ref, full: false),
                 ),
           ],
@@ -558,6 +570,7 @@ class _NotifCard extends StatelessWidget {
   final String Function(OrderDebtRow) debtDays;
   final VoidCallback onMarkRead;
   final VoidCallback? onCancelHeld;
+  final VoidCallback? onSendHeldNow;
   final VoidCallback onSyncNow;
 
   const _NotifCard({
@@ -568,6 +581,7 @@ class _NotifCard extends StatelessWidget {
     required this.debtDays,
     required this.onMarkRead,
     required this.onCancelHeld,
+    required this.onSendHeldNow,
     required this.onSyncNow,
   });
 
@@ -595,6 +609,12 @@ class _NotifCard extends StatelessWidget {
             }
           },
           onCancel: onCancelHeld,
+          onSendNow: onSendHeldNow == null
+              ? null
+              : () {
+                  onMarkRead();
+                  onSendHeldNow!();
+                },
         );
       case _NotifKind.urgentVisit:
         return _UrgentVisitCard(
@@ -694,12 +714,14 @@ class _UrgentHeldCard extends StatefulWidget {
   final bool unread;
   final VoidCallback onTap;
   final VoidCallback? onCancel;
+  final VoidCallback? onSendNow;
 
   const _UrgentHeldCard({
     required this.held,
     required this.unread,
     required this.onTap,
     this.onCancel,
+    this.onSendNow,
   });
 
   @override
@@ -822,6 +844,22 @@ class _UrgentHeldCardState extends State<_UrgentHeldCard> with SingleTickerProvi
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                if (widget.onSendNow != null)
+                  FilledButton(
+                    onPressed: widget.onSendNow,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text(
+                      'Сейчас',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                  ),
                 if (widget.onCancel != null)
                   IconButton(
                     tooltip: 'Отменить',

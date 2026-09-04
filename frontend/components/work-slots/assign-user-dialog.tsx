@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { AssignChecklist, StaffPick, WorkSlotListItem } from "@/lib/work-slots-types";
+import { isOperatorLikeSlotType } from "@/lib/work-slots-types";
 import { formatSlotDate, staffApiPath } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
 
@@ -59,14 +60,19 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
       const s = detail.data;
       setSlot(s);
       const path = staffApiPath(s.slot_type);
-      const staffRes = await apiFetch<{ data: Array<{ id: number; fio: string; code: string | null }> }>(
-        `/api/${tenant}/${path}?limit=500`
-      );
+      const staffRes = await apiFetch<{
+        data: Array<{ id: number; fio: string; code: string | null; kind?: string }>;
+      }>(`/api/${tenant}/${path}?limit=500`);
+      const rows = staffRes.data ?? [];
+      const forSlot = isOperatorLikeSlotType(s.slot_type)
+        ? rows.filter((u) => (u.kind ?? "").toLowerCase() === s.slot_type)
+        : rows;
       setStaff(
-        (staffRes.data ?? []).map((u) => ({
+        forSlot.map((u) => ({
           id: u.id,
           fio: u.fio,
-          code: u.code
+          code: u.code,
+          kind: u.kind ?? null
         }))
       );
       const cl = await apiFetch<{ data: AssignChecklist }>(`/api/${tenant}/work-slots/${slotId}/checklist`);

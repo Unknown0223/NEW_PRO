@@ -1,4 +1,4 @@
-export const BACKUP_FORMAT_VERSION = 5 as const;
+export const BACKUP_FORMAT_VERSION = 6 as const;
 export const BACKUP_KIND = "salec-tenant-backup" as const;
 export const BACKUP_FILE_EXTENSION = ".zip" as const;
 
@@ -112,11 +112,12 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
   },
   {
     id: "bonus_plans",
-    label_uz: "Bonus, KPI va rejalar",
-    label_ru: "Бонусы, KPI и планы",
+    label_uz: "Bonus, KPI, strategiyalar va rejalar",
+    label_ru: "Бонусы, KPI, стратегии и планы",
     phase: 4,
     export_status: "included",
-    import_status: "included"
+    import_status: "included",
+    import_note_uz: "Bonus qoidalari, strategiyalar, KPI guruhlari va savdo rejalari."
   },
   {
     id: "files",
@@ -130,13 +131,13 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
   },
   {
     id: "extended",
-    label_uz: "Katalog, RBAC, bog‘lanishlar va qo‘shimcha tarix",
-    label_ru: "Каталог, RBAC, связи и доп. история",
+    label_uz: "Katalog, RBAC, bog‘lanishlar, bank inbox va qo‘shimcha tarix",
+    label_ru: "Каталог, RBAC, связи, bank inbox и доп. история",
     phase: 4,
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Mahsulot katalogi, narxlar, hududlar, rollar, kassa/ombor/slot bog‘lanishlari, shartlar (srok), balans harakatlari va boshqalar."
+      "Mahsulot katalogi, narxlar, hududlar, rollar, multi-ombor/kassa slotlar, bank o‘tkazmalar inbox, balans harakatlari."
   }
 ];
 

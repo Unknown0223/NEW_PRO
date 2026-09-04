@@ -5,7 +5,9 @@ import {
   parseUserTerritoryParts,
   slotTypeLabel,
   slotWorkplaceConfigTabs,
-  staffApiPath
+  staffApiPath,
+  staffSessionsKind,
+  workSlotsDefaultHiddenColumns
 } from "../components/work-slots/work-slots-utils";
 
 describe("work-slots-utils", () => {
@@ -62,5 +64,47 @@ describe("work-slots-utils", () => {
     expect(slotWorkplaceConfigTabs("auditor").map((t) => t.id)).toContain("mobile");
     expect(slotWorkplaceConfigTabs("skladchik").map((t) => t.id)).not.toContain("mobile");
     expect(slotWorkplaceConfigTabs("collector").map((t) => t.id)).not.toContain("mobile");
+  });
+
+  it("slotWorkplaceConfigTabs includes team for supervisor only", () => {
+    expect(slotWorkplaceConfigTabs("supervisor").map((t) => t.id)).toContain("team");
+    expect(slotWorkplaceConfigTabs("supervisor").find((t) => t.id === "team")?.label).toBe("Команда");
+    expect(slotWorkplaceConfigTabs("agent").map((t) => t.id)).not.toContain("team");
+    expect(slotWorkplaceConfigTabs("operator").map((t) => t.id)).toEqual(["main"]);
+    expect(slotWorkplaceConfigTabs("manager").map((t) => t.id)).toEqual(["main"]);
+    expect(slotWorkplaceConfigTabs("director").map((t) => t.id)).toEqual(["main"]);
+    expect(slotWorkplaceConfigTabs("sales_director").map((t) => t.id)).toEqual(["main"]);
+  });
+
+  it("workSlotsDefaultHiddenColumns keeps bindings visible for director/operator", () => {
+    expect(workSlotsDefaultHiddenColumns("director")).toEqual([]);
+    expect(workSlotsDefaultHiddenColumns("operator")).toEqual([]);
+    expect(workSlotsDefaultHiddenColumns("sales_director")).toEqual(["cash_desk"]);
+    expect(workSlotsDefaultHiddenColumns("accountant")).toEqual(["warehouse"]);
+  });
+
+  it("slotTypeLabel lists Сотрудники roles separately", () => {
+    expect(slotTypeLabel("operator")).toBe("Оператор");
+    expect(slotTypeLabel("manager")).toBe("Менеджер");
+    expect(slotTypeLabel("director")).toBe("Директор");
+    expect(slotTypeLabel("sales_director")).toBe("Директор по продажам");
+  });
+
+  it("staffApiPath maps all operator-like slots to operators", () => {
+    expect(staffApiPath("operator")).toBe("operators");
+    expect(staffApiPath("manager")).toBe("operators");
+    expect(staffApiPath("director")).toBe("operators");
+  });
+
+  it("staffSessionsKind maps slot type to staff sessions API kind", () => {
+    expect(staffSessionsKind("agent")).toBe("agent");
+    expect(staffSessionsKind("collector")).toBe("collector");
+    expect(staffSessionsKind("expeditor")).toBe("expeditor");
+    expect(staffSessionsKind("skladchik")).toBe("skladchik");
+    expect(staffSessionsKind("supervisor")).toBe("supervisor");
+    expect(staffSessionsKind("auditor")).toBe("auditor");
+    expect(staffSessionsKind("operator")).toBe("operator");
+    expect(staffSessionsKind("manager")).toBe("operator");
+    expect(staffSessionsKind("director")).toBe("operator");
   });
 });

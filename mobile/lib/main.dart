@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart' show FlutterError, kIsWeb;
@@ -24,25 +26,33 @@ import 'features/auth/face_verification_listener.dart';
 import 'routing/app_router.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ru');
-  await loadAppEnv();
-  await MobileLocalNotificationService.instance.init();
-  await _initServerClockPersistence();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeDateFormatting('ru');
+    await loadAppEnv();
+    await MobileLocalNotificationService.instance.init();
+    await _initServerClockPersistence();
 
-  if (!kIsWeb && Platform.isAndroid) {
-    final info = await DeviceInfoPlugin().androidInfo;
-    configureApiHostForAndroidEmulator(!info.isPhysicalDevice);
-    debugPrint('[SalesDoc] API (resolved): ${resolveApiBaseUrl()}');
-  }
+    if (!kIsWeb && Platform.isAndroid) {
+      final info = await DeviceInfoPlugin().androidInfo;
+      configureApiHostForAndroidEmulator(!info.isPhysicalDevice);
+      debugPrint('[SalesDoc] API (resolved): ${resolveApiBaseUrl()}');
+    }
 
-  // Uncaught Flutter/zone xatolari — diagnostika jurnaliga.
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    ErrorReporter.instance?.reportFatal(details.exception, details.stack);
-  };
+    // Uncaught Flutter/zone xatolari — diagnostika jurnaliga (to‘liq stack + kontekst).
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      ErrorReporter.instance?.reportFlutterError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'platform_dispatcher'});
+      return true;
+    };
 
-  runApp(const ProviderScope(child: SalesDocApp()));
+    runApp(const ProviderScope(child: SalesDocApp()));
+  }, (error, stack) {
+    ErrorReporter.instance?.reportFatal(error, stack, extra: {'source': 'zone'});
+  });
 }
 
 /// Server-langarlangan soatni diskdagi «floor» bilan bog‘laymiz:

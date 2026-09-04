@@ -56,8 +56,8 @@ import {
   mergeLedgerWithUnpaidDelivered
 } from "../../client-balances/client-balances.service";
 import {
-  resolvePaymentMethodRefToLabel,
-  resolvePriceTypeKeyToLabel
+  expandPaymentMethodFilterValues,
+  orderListPriceTypeLabel
 } from "../../tenant-settings/finance-refs";
 import {
   loadPaymentMethodEntriesForResolve,
@@ -72,6 +72,7 @@ import {
   sumBonusQty
 } from "./order.detail-mappers";
 import { loadOrdersListMetaEnrichment } from "./order.list-enrichment";
+import { normalizeStoredCreationChannel } from "./order.creation-channel";
 import {
   orderDetailInclude,
   type ListOrdersQuery,
@@ -159,6 +160,11 @@ export async function listOrdersPaged(
   }
 
   const andClauses: Prisma.OrderWhereInput[] = [{ tenant_id: tenantId }];
+
+  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
 
   const scopedActor = await enrichScopedReportActor(tenantId, {
     userId: viewerUserId ?? null,
@@ -298,9 +304,19 @@ export async function listOrdersPaged(
   const pmRef = q.payment_method_ref?.trim();
   const listPriceType = q.list_price_type?.trim();
   if (pmRef) {
-    andClauses.push({ payment_method_ref: pmRef });
+    const aliases = expandPaymentMethodFilterValues(
+      [pmRef],
+      pmEntriesForLabel,
+      ptEntriesForLabel
+    );
+    andClauses.push({ payment_method_ref: { in: aliases } });
   } else if (listPriceType) {
-    andClauses.push({ payment_method_ref: listPriceType });
+    const aliases = expandPaymentMethodFilterValues(
+      [listPriceType],
+      pmEntriesForLabel,
+      ptEntriesForLabel
+    );
+    andClauses.push({ payment_method_ref: { in: aliases } });
   }
 
   const parsedPeriods = (() => {
@@ -472,16 +488,8 @@ export async function listOrdersPaged(
   );
 
   // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
-  const [pmEntriesForLabel, ptEntriesForLabel] = await Promise.all([
-    loadPaymentMethodEntriesForResolve(tenantId),
-    loadPriceTypeEntriesForResolve(tenantId)
-  ]);
-  const priceTypeDisplayLabel = (refRaw: string | null): string | null => {
-    if (!refRaw) return null;
-    const viaPm = resolvePaymentMethodRefToLabel(refRaw, pmEntriesForLabel);
-    if (viaPm != null && viaPm !== refRaw) return viaPm;
-    return resolvePriceTypeKeyToLabel(refRaw, ptEntriesForLabel);
-  };
+  const priceTypeDisplayLabel = (refRaw: string | null): string | null =>
+    orderListPriceTypeLabel(refRaw, pmEntriesForLabel, ptEntriesForLabel);
 
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
@@ -582,7 +590,10 @@ export async function listOrdersPaged(
       source_order_numbers: metaRow?.source_order_numbers ?? [],
       source_order_ids: metaRow?.source_order_ids ?? [],
       returned_at: metaRow?.returned_at ?? null,
-      creation_channel: metaRow?.creation_channel ?? "web",
+      creation_channel: normalizeStoredCreationChannel(
+        (o as { creation_channel?: string | null }).creation_channel,
+        metaRow?.creation_channel ?? "web"
+      ),
       expected_ship_date: metaRow?.expected_ship_date ?? null,
       shipped_at: metaRow?.shipped_at ?? finRow?.shipped_at ?? null,
       delivered_at: metaRow?.delivered_at ?? finRow?.delivered_at ?? null,

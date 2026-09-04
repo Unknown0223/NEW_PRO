@@ -6,6 +6,7 @@ import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/expeditor_api.dart';
 import '../../../core/auth/biometric_transaction_confirm.dart';
 import '../../../core/auth/session.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/face/face_verification_flow.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -135,13 +136,30 @@ class _ExpeditorPaymentSheetState extends ConsumerState<ExpeditorPaymentSheet> {
       ref.invalidate(expeditorReturnedPaymentsProvider);
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        module: ErrorModules.payments,
+        code: 'ExpeditorPaymentFailed',
+        message: 'Оплата (экспедитор): создание платежа не удалось',
+        path: '/mobile/expeditor/payments',
+        payload: {'order_id': widget.orderId},
+      );
       if (mounted) {
         setState(() {
           _submitting = false;
           _error = e.message;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.payments,
+        code: 'ExpeditorPaymentUnexpected',
+        message: 'Оплата (экспедитор): неожиданная ошибка',
+        path: '/mobile/expeditor/payments',
+        payload: {'order_id': widget.orderId},
+      );
       if (mounted) {
         setState(() {
           _submitting = false;

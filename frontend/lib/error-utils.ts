@@ -78,6 +78,16 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
         data?.message?.trim() ||
         "Пользователь не назначен на рабочее место. Обратитесь к администратору.";
     }
+    else if (status === 403 && data?.error === "AgentNotOnSlot") {
+      base =
+        data?.message?.trim() ||
+        "Agent ish joyiga biriktirilmagan — yangi ish taqiqlangan (faqat qarz yig‘ish).";
+    }
+    else if (status === 403 && data?.error === "ExpeditorNotOnSlot") {
+      base =
+        data?.message?.trim() ||
+        "Dostavchik ish joyiga biriktirilmagan — yangi ish taqiqlangan.";
+    }
     else if (status === 403) base = "Недостаточно прав для этого действия.";
     else if (status === 404) base = "Данные не найдены.";
     else if (status === 409 && data?.error === "RuleLocked") {
@@ -100,7 +110,14 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
     else if (status === 409) base = "Данные были изменены. Обновите страницу и повторите.";
     else if (status === 503) base = "Сервис временно недоступен. Попробуйте позже.";
     else if (status && status >= 500) base = "Ошибка сервера. Можно повторить запрос.";
-    else if (typeof data?.error === "string" && data.error.trim()) base = data.error.trim();
+    else if (typeof data?.error === "string" && data.error.trim()) {
+      // Avoid dumping raw codes like "ValidationError" when no message was set
+      if (data.error === "ValidationError") {
+        base = "Проверьте правильность введённых данных.";
+      } else {
+        base = data.error.trim();
+      }
+    }
     else if (status === 400 || status === 422) base = "Проверьте правильность введённых данных.";
     else if (status === 429) base = "Слишком много запросов. Подождите немного и повторите.";
     else if (error.message.trim()) base = error.message;

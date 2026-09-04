@@ -43,6 +43,28 @@ class AppUpdateInfo {
 
   bool get hasAction => required || optional;
 
+  @override
+  bool operator ==(Object other) =>
+      other is AppUpdateInfo &&
+      other.required == required &&
+      other.optional == optional &&
+      other.currentVersion == currentVersion &&
+      other.latestVersion == latestVersion &&
+      other.minVersion == minVersion &&
+      other.apkUrl == apkUrl &&
+      other.url == url;
+
+  @override
+  int get hashCode => Object.hash(
+        required,
+        optional,
+        currentVersion,
+        latestVersion,
+        minVersion,
+        apkUrl,
+        url,
+      );
+
   /// In-app o‘rnatish uchun APK manzili (do‘kondan mustaqil).
   String? get effectiveApkUrl {
     final apk = apkUrl?.trim();

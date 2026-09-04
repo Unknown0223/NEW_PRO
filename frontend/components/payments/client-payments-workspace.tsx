@@ -505,12 +505,23 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
     setBulkBusy(true);
     try {
       const ids = Array.from(selected);
-      for (const id of ids) {
-        await api.delete(`/api/${tenantSlug}/payments/${id}`);
-      }
+      const { data } = await api.post<{
+        ok: number[];
+        failed: { id: number; error: string }[];
+      }>(`/api/${tenantSlug}/payments/batch-delete`, { ids });
+      const failed = data.failed ?? [];
+      const ok = data.ok ?? [];
       setSelected(new Set());
       invalidatePayments();
-      setFeedback(`В архив перенесено: ${ids.length}`);
+      if (failed.length > 0) {
+        setFeedback(
+          `В архив: ${ok.length}. Ошибок: ${failed.length}${
+            failed[0] ? ` (напр. #${failed[0].id})` : ""
+          }`
+        );
+      } else {
+        setFeedback(`В архив перенесено: ${ok.length || ids.length}`);
+      }
       setTimeout(() => setFeedback(null), 5000);
     } catch (e) {
       setFeedback(getUserFacingError(e, "Не удалось удалить выбранные оплаты."));
@@ -909,7 +920,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
         selectedCount={selected.size}
         title={
           primarySelectedRow
-            ? `${isExpenses ? "Расход" : "Оплата"} #${primarySelectedRow.id} · ${primarySelectedRow.client_name}`
+            ? `${isExpenses ? "Расход" : "Оплата"} #${primarySelectedRow.number?.trim() || primarySelectedRow.id} · ${primarySelectedRow.client_name}`
             : ""
         }
         showEdit={selected.size === 1}

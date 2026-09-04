@@ -11,6 +11,7 @@ import 'agent_template_form.dart';
 import 'agent_ui.dart';
 
 import '../api/api_exceptions.dart';
+import '../errors/user_facing_error.dart';
 
 /// Pul/son maydonlari uchun minglik guruhlash (3 xonadan bo'shliq bilan).
 /// Masalan: `1000000` → `1 000 000`. O'qishga oson bo'lishi uchun.
@@ -1951,19 +1952,13 @@ class AgentErrorPanel extends StatelessWidget {
   });
 
   bool get _is401 {
-    final s = error.toString();
-    return s.contains('401') || s.contains('Sessiya') || s.contains('Unauthorized');
+    final u = UserFacingError.from(error);
+    return u.title.contains('Сессия') ||
+        error is UnauthorizedException ||
+        (error is ApiException && (error as ApiException).statusCode == 401);
   }
 
-  String get _message {
-    if (error is ApiException) return (error as ApiException).message;
-    final s = error.toString();
-    if (_is401) return 'Sessiya tugadi. Qayta kiring.';
-    if (s.contains('SocketException') || s.contains('NetworkException')) {
-      return 'Internet yoki server bilan bog\'lanib bo\'lmadi';
-    }
-    return 'Ma\'lumot yuklanmadi';
-  }
+  String get _message => UserFacingError.toast(error);
 
   @override
   Widget build(BuildContext context) {

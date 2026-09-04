@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
+import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
@@ -111,7 +111,7 @@ export async function patchOperator(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {
@@ -210,7 +210,7 @@ export async function patchSkladchik(
   if (input.app_access !== undefined) data.app_access = input.app_access;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.password !== undefined && input.password.trim().length > 0) {

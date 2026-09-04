@@ -24,6 +24,7 @@ export const MODULE_PARENT_LABEL_RU: Record<string, string> = {
   pivot: "Отчёт",
   work_slots: "Рабочее место",
   diagnostics: "Диагностика",
+  activity: "Активность",
   general: "Общее",
   misc: "Разное"
 };

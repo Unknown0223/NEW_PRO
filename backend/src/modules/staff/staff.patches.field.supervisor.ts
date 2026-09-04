@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
@@ -170,7 +171,7 @@ export async function patchSupervisor(
   if (input.is_active !== undefined) data.is_active = input.is_active;
   if (input.max_sessions !== undefined) {
     const n = input.max_sessions;
-    if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+    assertValidMaxSessions(n);
     data.max_sessions = n;
   }
   if (input.kpi_color !== undefined) data.kpi_color = input.kpi_color?.trim().slice(0, 16) || null;

@@ -4,8 +4,7 @@ import { getActiveSlotForUser } from "./work-slots.query.read";
 
 /**
  * Admin va WorkSlot tipiga kirmaydigan rollar — ishchi o‘rni talab qilinmaydi.
- * Agent / collector / expeditor / skladchik / supervisor / auditor — talab qilinadi
- * (agar tenantda shu tipdagi faol slotlar bo‘lsa).
+ * Maydon + nazorat + Сотрудники web-rollari (operator, manager, …) — tip nomi = role.
  */
 export function roleRequiresWorkSlot(role: string): boolean {
   return isWorkSlotType(role);

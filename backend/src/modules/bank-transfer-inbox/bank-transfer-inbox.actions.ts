@@ -83,7 +83,15 @@ export async function createPendingPaymentFromInbox(
         paid_at: eventAt,
         received_at: eventAt,
         confirmed_at: null,
-        entry_kind: "payment"
+        entry_kind: "payment",
+        number: inbox.external_id?.trim().slice(0, 64) || null
+      }
+    });
+
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        number: payment.number?.trim() || String(payment.id)
       }
     });
 

@@ -177,7 +177,9 @@ export const createPaymentBodySchema = z.object({
   ledger_agent_id: z.number().int().positive().nullable().optional(),
   allocation_mode: z.enum(["cash", "consignment", "none"]).optional(),
   allocation_order_ids: z.array(z.number().int().positive()).max(500).optional(),
-  allocation_agent_id: z.number().int().positive().nullable().optional()
+  allocation_agent_id: z.number().int().positive().nullable().optional(),
+  /** Ixtiyoriy: har qanday matnli to‘lov ID (ks_1652, PAY-9…) */
+  number: z.string().trim().min(1).max(64).optional().nullable()
 });
 
 /** PATCH `/api/:slug/payments/:id` */
@@ -212,6 +214,36 @@ export const rejectPaymentBodySchema = z.object({
 
 /** POST `/api/:slug/payments/batch-confirm` */
 export const batchConfirmPaymentsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100)
+});
+
+/** POST `/api/:slug/payments/batch-reject` */
+export const batchRejectPaymentsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  reason: z.string().max(500).optional()
+});
+
+/** POST `/api/:slug/payments/batch-return-to-expeditor` */
+export const batchReturnPaymentsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  reason: z.string().max(500).optional(),
+  duration_minutes: z.number().int().min(1).max(43200).optional()
+});
+
+/** POST `/api/:slug/payments/batch-restore` */
+export const batchRestorePaymentsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  comment: z.string().trim().min(1).max(2000)
+});
+
+/** POST `/api/:slug/payments/batch-delete` */
+export const batchDeletePaymentsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  cancel_reason_ref: z.string().max(128).optional()
+});
+
+/** POST `/api/:slug/payments/by-ids` — EPR confirm hydrate */
+export const paymentsByIdsBodySchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(100)
 });
 

@@ -6,7 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import '../api/mobile_api.dart';
 import '../camera/photo_service.dart';
 import '../config/mobile_config.dart';
+import '../config/mobile_config_policy.dart';
 import '../database/app_database.dart';
+import '../errors/error_reporter.dart';
 
 /// Foto hisobotlar oflayn navbat — online bo‘lganda 5 martagacha qayta urinadi.
 class PhotoReportQueue {
@@ -27,8 +29,10 @@ class PhotoReportQueue {
     return dest.path;
   }
 
-  /// Sync oynasi tugagan (captureDeadline o‘tgan) mijoz uchun yangi rasm bloklanadi.
-  static Future<bool> isCaptureBlockedForClient(int clientId) async {
+  /// Yangi rasm olish: sinxron oynasi yoki hold captureDeadline tugagach bloklanadi.
+  /// Allaqachon olingan fotolarni yuborish ([flush]) vaqt oynasiga bog‘liq emas.
+  static Future<bool> isCaptureBlockedForClient(int clientId, {SyncConfig? sync}) async {
+    if (sync != null && !evaluateSyncPolicy(sync).allowed) return true;
     final rows = await AppDatabase().getPendingHeldOrdersForClient(clientId);
     if (rows.isEmpty) return false;
     final now = DateTime.now();
@@ -50,8 +54,9 @@ class PhotoReportQueue {
     required String imagePath,
     required String caption,
     int? orderId,
+    SyncConfig? sync,
   }) async {
-    if (await isCaptureBlockedForClient(clientId)) {
+    if (await isCaptureBlockedForClient(clientId, sync: sync)) {
       return false;
     }
     final persisted = await persistImage(imagePath);
@@ -69,9 +74,13 @@ class PhotoReportQueue {
     required MobileApi api,
     required String slug,
     PhotoConfig? photoConfig,
+    int? clientId,
   }) async {
     final db = AppDatabase();
-    final pending = await db.getPendingPhotoReports();
+    var pending = await db.getPendingPhotoReports();
+    if (clientId != null) {
+      pending = pending.where((item) => item['client_id'] == clientId).toList();
+    }
     if (pending.isEmpty) return const PhotoFlushResult(sent: 0, failed: 0);
 
     var sent = 0;
@@ -94,6 +103,13 @@ class PhotoReportQueue {
       try {
         final b64 = await encodeClientPhotoBase64(imagePath, config: photoConfig);
         if (b64 == null) {
+          ErrorReporter.instance?.reportModuleIssue(
+            module: ErrorModules.photos,
+            code: 'PhotoEncodeFailed',
+            message: 'Фотоотчёт: не удалось закодировать файл из очереди',
+            path: '/mobile/clients/photo-reports',
+            payload: {'client_id': clientId, 'queue_id': id, 'retry': retryCount},
+          );
           await _registerFailure(db, id, retryCount);
           failed++;
           continue;
@@ -110,7 +126,16 @@ class PhotoReportQueue {
           await file.delete();
         } catch (_) {}
         sent++;
-      } catch (_) {
+      } catch (e, st) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          stack: st,
+          module: ErrorModules.photos,
+          code: 'PhotoQueueFlushFailed',
+          message: 'Фотоотчёт: flush очереди не удался',
+          path: '/mobile/clients/photo-reports',
+          payload: {'client_id': clientId, 'queue_id': id, 'retry': retryCount},
+        );
         await _registerFailure(db, id, retryCount);
         failed++;
         // Keyingi fotolarni ham urinish — bitta xato hammasi to‘xtatmasin.

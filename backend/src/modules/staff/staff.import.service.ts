@@ -17,6 +17,7 @@ import {
   STAFF_IMPORT_DEFAULT_PASSWORD,
   STAFF_IMPORT_MAX_ERRORS,
   STAFF_IMPORT_MAX_ROWS,
+  STAFF_IMPORT_SHEET_NAME,
   type StaffImportKind
 } from "./staff.import.kinds";
 import {
@@ -24,7 +25,8 @@ import {
   cell,
   normPinfl,
   parseNameFromFio,
-  readMatrixFromBuffer,
+  readAllStaffSheetsFromBuffer,
+  readMatrixForKindFromBuffer,
   suggestLogin,
   yesRu
 } from "./staff.import.headers";
@@ -36,6 +38,7 @@ import {
   resolveWarehouseIdsByNames,
   resolveWorkSlotIdByCode
 } from "./staff.import.resolve";
+import * as XLSX from "xlsx";
 
 export type StaffImportResult = {
   created: number;
@@ -46,6 +49,10 @@ export type StaffImportResult = {
     processedRows: number;
     skippedEmpty: number;
   };
+};
+
+export type StaffWorkbookImportResult = StaffImportResult & {
+  byKind: Partial<Record<StaffImportKind, StaffImportResult>>;
 };
 
 function mapCreateError(msg: string): string {
@@ -101,15 +108,15 @@ async function applyPatch(
   }
 }
 
-export async function importStaffFromXlsxBuffer(
+export async function importStaffFromMatrix(
   tenantId: number,
   kind: StaffImportKind,
-  buffer: Buffer,
+  matrix: unknown[][],
   actorUserId: number | null = null,
-  opts?: { defaultPassword?: string }
+  opts?: { defaultPassword?: string; errorPrefix?: string; defaultWebRole?: string }
 ): Promise<StaffImportResult> {
   const defaultPassword = (opts?.defaultPassword || STAFF_IMPORT_DEFAULT_PASSWORD).trim();
-  const { matrix } = readMatrixFromBuffer(buffer);
+  const errPrefix = opts?.errorPrefix ?? "";
   if (matrix.length < 2) {
     throw new Error("EMPTY_FILE");
   }
@@ -135,7 +142,7 @@ export async function importStaffFromXlsxBuffer(
 
   const pushErr = (excelRow: number, message: string) => {
     if (errors.length >= STAFF_IMPORT_MAX_ERRORS) return;
-    errors.push(`Строка ${excelRow}: ${message}`);
+    errors.push(`${errPrefix}Строка ${excelRow}: ${message}`);
   };
 
   for (let i = 0; i < dataRows.length; i++) {
@@ -180,12 +187,25 @@ export async function importStaffFromXlsxBuffer(
       if (Number.isFinite(n) && n >= 1 && n <= 99) max_sessions = Math.floor(n);
     }
 
+    const createKind: StaffKind =
+      kind === "operator"
+        ? parseOperatorWebKind(
+            (h.webRole !== undefined ? cell(row, h.webRole) : "").trim() ||
+              (opts?.defaultWebRole ?? "")
+          )
+        : (kind as StaffKind);
+
     const workSlotCode = h.workSlot !== undefined ? cell(row, h.workSlot) : "";
     let work_slot_id: number | null = null;
     if (workSlotCode.trim()) {
-      work_slot_id = await resolveWorkSlotIdByCode(tenantId, workSlotCode, kind);
+      work_slot_id = await resolveWorkSlotIdByCode(tenantId, workSlotCode, kind, {
+        slotType: createKind
+      });
       if (work_slot_id == null) {
-        pushErr(excelRow, `рабочее место не найдено «${workSlotCode.trim()}»`);
+        pushErr(
+          excelRow,
+          `рабочее место не найдено «${workSlotCode.trim()}» (роль ${createKind})`
+        );
         continue;
       }
     } else if (needsWorkSlot) {
@@ -227,22 +247,30 @@ export async function importStaffFromXlsxBuffer(
     if (kind === "supervisor" && h.agentsCol !== undefined) {
       const agentsRaw = cell(row, h.agentsCol);
       if (agentsRaw.trim()) {
-        const resolved = await resolveAgentIdsFromCell(tenantId, agentsRaw);
-        if (resolved.missing.length) {
+        const existingForTeam = await findExistingStaffUser(tenantId, kind, login, code);
+        let skipTeamImport = work_slot_id != null;
+        if (!skipTeamImport && existingForTeam) {
+          const { getActiveSlotForUser } = await import("../work-slots/work-slots.query.read");
+          const active = await getActiveSlotForUser(existingForTeam.id);
+          skipTeamImport = active != null;
+        }
+        if (skipTeamImport) {
           pushErr(
             excelRow,
-            `агенты не найдены: ${resolved.missing.slice(0, 5).join(", ")}${resolved.missing.length > 5 ? "…" : ""}`
+            "агенты (колонка) пропущены: команда настраивается в Рабочее место → Команда"
           );
-          // still assign found ones
+        } else {
+          const resolved = await resolveAgentIdsFromCell(tenantId, agentsRaw);
+          if (resolved.missing.length) {
+            pushErr(
+              excelRow,
+              `агенты не найдены: ${resolved.missing.slice(0, 5).join(", ")}${resolved.missing.length > 5 ? "…" : ""}`
+            );
+          }
+          supervisee_agent_ids = resolved.ids;
         }
-        supervisee_agent_ids = resolved.ids;
       }
     }
-
-    const createKind: StaffKind =
-      kind === "operator"
-        ? parseOperatorWebKind(h.webRole !== undefined ? cell(row, h.webRole) : "")
-        : (kind as StaffKind);
 
     try {
       const existing = await findExistingStaffUser(tenantId, kind, login, code);
@@ -338,5 +366,124 @@ export async function importStaffFromXlsxBuffer(
       processedRows,
       skippedEmpty
     }
+  };
+}
+
+/**
+ * Single-kind import from XLSX.
+ * If the workbook has multiple sheets, prefers the sheet matching `STAFF_IMPORT_SHEET_NAME[kind]`,
+ * otherwise falls back to the first sheet (backward compatible).
+ * Optional `sheetName` forces a specific sheet when present.
+ */
+export async function importStaffFromXlsxBuffer(
+  tenantId: number,
+  kind: StaffImportKind,
+  buffer: Buffer,
+  actorUserId: number | null = null,
+  opts?: { defaultPassword?: string; sheetName?: string; defaultWebRole?: string }
+): Promise<StaffImportResult> {
+  let matrix: unknown[][];
+  let defaultWebRole = opts?.defaultWebRole;
+  if (opts?.sheetName?.trim()) {
+    const wb = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
+    const want = opts.sheetName.trim();
+    const found =
+      wb.SheetNames.find((n) => n === want) ??
+      wb.SheetNames.find((n) => n.toLowerCase() === want.toLowerCase());
+    if (!found || !wb.Sheets[found]) throw new Error("EMPTY_FILE");
+    matrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[found], { header: 1, defval: "" });
+    if (!defaultWebRole) {
+      const { resolveOfficeWebRoleFromSheetName } = await import("./staff.import.kinds");
+      defaultWebRole = resolveOfficeWebRoleFromSheetName(found) ?? undefined;
+    }
+  } else {
+    ({ matrix } = readMatrixForKindFromBuffer(buffer, kind));
+  }
+  return importStaffFromMatrix(tenantId, kind, matrix, actorUserId, {
+    defaultPassword: opts?.defaultPassword,
+    defaultWebRole
+  });
+}
+
+/** Import every recognized role sheet in a multi-sheet workbook. */
+export async function importStaffWorkbookFromXlsxBuffer(
+  tenantId: number,
+  buffer: Buffer,
+  actorUserId: number | null = null,
+  opts?: { defaultPassword?: string }
+): Promise<StaffWorkbookImportResult> {
+  const sheets = readAllStaffSheetsFromBuffer(buffer);
+  if (sheets.length === 0) {
+    throw new Error("EMPTY_FILE");
+  }
+
+  const byKind: Partial<Record<StaffImportKind, StaffImportResult>> = {};
+  let created = 0;
+  let updated = 0;
+  let totalRows = 0;
+  let processedRows = 0;
+  let skippedEmpty = 0;
+  const errors: string[] = [];
+
+  for (const sheet of sheets) {
+    const label = sheet.sheetName || STAFF_IMPORT_SHEET_NAME[sheet.kind];
+    try {
+      const result = await importStaffFromMatrix(
+        tenantId,
+        sheet.kind,
+        sheet.matrix,
+        actorUserId,
+        {
+          defaultPassword: opts?.defaultPassword,
+          errorPrefix: `[${label}] `,
+          defaultWebRole: sheet.defaultWebRole
+        }
+      );
+      const prev = byKind[sheet.kind];
+      if (prev) {
+        byKind[sheet.kind] = {
+          created: prev.created + result.created,
+          updated: prev.updated + result.updated,
+          errors: [...prev.errors, ...result.errors].slice(0, STAFF_IMPORT_MAX_ERRORS),
+          importStats: {
+            totalRows: prev.importStats.totalRows + result.importStats.totalRows,
+            processedRows: prev.importStats.processedRows + result.importStats.processedRows,
+            skippedEmpty: prev.importStats.skippedEmpty + result.importStats.skippedEmpty
+          }
+        };
+      } else {
+        byKind[sheet.kind] = result;
+      }
+      created += result.created;
+      updated += result.updated;
+      totalRows += result.importStats.totalRows;
+      processedRows += result.importStats.processedRows;
+      skippedEmpty += result.importStats.skippedEmpty;
+      for (const e of result.errors) {
+        if (errors.length >= STAFF_IMPORT_MAX_ERRORS) break;
+        errors.push(e);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "ошибка";
+      if (msg === "EMPTY_FILE" || msg === "MISSING_FIO_COLUMN") {
+        // empty / header-only sheet — skip quietly
+        continue;
+      }
+      if (errors.length < STAFF_IMPORT_MAX_ERRORS) {
+        errors.push(`[${label}] ${msg === "TOO_MANY_ROWS" ? "слишком много строк" : msg}`);
+      }
+    }
+  }
+
+  if (created === 0 && updated === 0 && Object.keys(byKind).length === 0 && errors.length === 0) {
+    throw new Error("EMPTY_FILE");
+  }
+
+  return {
+    created,
+    updated,
+    errors,
+    byKind,
+    importStats: { totalRows, processedRows, skippedEmpty }
   };
 }

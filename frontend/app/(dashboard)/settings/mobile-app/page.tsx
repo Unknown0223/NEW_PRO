@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import { api } from "@/lib/api";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
@@ -135,10 +136,11 @@ export default function MobileAppSettingsPage() {
   const isAdmin = role === "admin";
   const hydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const [minVersion, setMinVersion] = useState("");
   const [latestVersion, setLatestVersion] = useState("");
-  const [forceUpdate, setForceUpdate] = useState(true);
+  const [forceUpdate, setForceUpdate] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState("");
   const [storeAndroid, setStoreAndroid] = useState("");
   const [storeIos, setStoreIos] = useState("");
@@ -174,6 +176,18 @@ export default function MobileAppSettingsPage() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      if (forceUpdate) {
+        const ok = await confirm({
+          title: "Majburiy yangilash",
+          message: "Eski versiyadagi agentlar login qila olmaydi, ilovani yangilash majburiy bo‘ladi.",
+          detail:
+            "APK serverda bo‘lmasa yangilash 404 bilan yopiladi. O‘chirish shart emas — kalit mos bo‘lsa ilova ichida yangilanadi. Davom etasizmi?",
+          confirmLabel: "Ha",
+          cancelLabel: "Нет",
+          destructive: false
+        });
+        if (!ok) throw new Error("SAVE_CANCELLED");
+      }
       const { data: body } = await api.patch<{ policy: MobileAppReleasePolicy }>(
         `/api/${tenantSlug}/settings/mobile-app-release`,
         {
@@ -190,10 +204,15 @@ export default function MobileAppSettingsPage() {
     },
     onSuccess: () => {
       setMsgTone("ok");
-      setMsg("Saqlandi — agentlar ilovani ochganda yangilash dialogi chiqadi");
+      setMsg(
+        forceUpdate
+          ? "Saqlandi — past versiyalar loginni yangilashsiz ocholmaydi"
+          : "Saqlandi — ixtiyoriy yangilash: «Обновить» yoki «Позже», o‘chirish shart emas"
+      );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     },
     onError: (e) => {
+      if (e instanceof Error && e.message === "SAVE_CANCELLED") return;
       setMsgTone("err");
       setMsg(getUserFacingError(e));
     }
@@ -221,12 +240,14 @@ export default function MobileAppSettingsPage() {
       });
       setUploadProgress(100);
       setDownloadUrl(body.download_url);
-      setForceUpdate(true);
+      setForceUpdate(body.policy.force_update === true);
       if (body.policy.latest_version) {
         setLatestVersion(body.policy.latest_version);
       }
       if (body.policy.min_version) {
         setMinVersion(body.policy.min_version);
+      } else {
+        setMinVersion("");
       }
       if (body.policy.release_notes) {
         setReleaseNotes(body.policy.release_notes);
@@ -235,7 +256,8 @@ export default function MobileAppSettingsPage() {
       }
       setMsgTone("ok");
       setMsg(
-        `APK tayyor (${formatMb(body.bytes)}). Versiya ${body.policy.latest_version ?? "—"} — agentlar ilova ichida yangilanadi.`
+        `APK tayyor (${formatMb(body.bytes)}). Versiya ${body.policy.latest_version ?? "—"}. ` +
+          "Majburiy yangilash yoqilmadi — agentlar ilovani o‘chirmasdan, ichida «Обновить» bilan yangilaydi."
       );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     } catch (e) {
@@ -277,7 +299,7 @@ export default function MobileAppSettingsPage() {
 
   const apkReady = data?.apk?.ready === true;
   const latest = data?.policy.latest_version ?? latestVersion;
-  const otaActive = Boolean(latest && (downloadUrl || apkReady) && forceUpdate);
+  const otaActive = Boolean(latest && (downloadUrl || apkReady));
   const statusOk = otaActive && apkReady;
   const effectiveUrl = downloadUrl || data?.apk?.download_url || "";
 
@@ -285,7 +307,7 @@ export default function MobileAppSettingsPage() {
     <div className="mx-auto max-w-4xl space-y-6 pb-10">
       <PageHeader
         title="Mobil ilova — serverdan yangilash"
-        description="Yangi APK ni serverga yuklang. Agentlar ilovani ochganda yoki sync qilganda ilova ichida yangilanadi. Kalit mos bo‘lsa PIN va kesh saqlanadi."
+        description="Yangi APK ni serverga yuklang. Agentlar ilovani ochganda ichida yangilanadi — o‘chirish shart emas (imzo kaliti mos bo‘lsa PIN/kesh saqlanadi). «Majburiy yangilash» ni faqat APK tayyor bo‘lganda yoqing."
       />
 
       {isLoading ? (
@@ -309,7 +331,7 @@ export default function MobileAppSettingsPage() {
                   </CardDescription>
                 </div>
                 <Badge variant={statusOk ? "success" : apkReady ? "warning" : "destructive"} className="px-2.5 py-1 text-[11px]">
-                  {statusOk ? "OTA faol" : apkReady ? "Sozlash kerak" : "APK yo‘q"}
+                  {statusOk ? "OTA tayyor" : apkReady ? "APK bor" : "APK yo‘q"}
                 </Badge>
               </div>
             </CardHeader>
@@ -357,10 +379,10 @@ export default function MobileAppSettingsPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-medium text-foreground">
                     {statusOk
-                      ? `Server yangilashi ishlayapti — ${latest}`
+                      ? `Ilova ichida yangilash ishlaydi — ${latest} (o‘chirish shart emas)`
                       : apkReady
-                        ? "APK bor, lekin majburiy yangilash yoki versiya to‘liq sozlanmagan"
-                        : "APK serverda yo‘q — agentlar «Обновить» da 404 olishi mumkin"}
+                        ? "APK bor. Saqlash + ixtiyoriy dialog yetarli; majburiy belgi loginni bloklaydi"
+                        : "APK serverda yo‘q — «Обновить» 404 beradi. Avval APK yuklang, majburiyni yoqmang"}
                   </p>
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <p>
@@ -369,7 +391,9 @@ export default function MobileAppSettingsPage() {
                     </p>
                     <p>
                       <span className="font-medium text-foreground/80">Majburiy:</span>{" "}
-                      {forceUpdate ? "ha — past versiya loginni bloklaydi" : "yo‘q — ixtiyoriy dialog"}
+                      {forceUpdate
+                        ? "ha — past versiya loginni bloklaydi (APK bo‘lmasa tuzoq)"
+                        : "yo‘q — ixtiyoriy «Обновить» / «Позже», ilova o‘chirilmaydi"}
                     </p>
                   </div>
                 </div>
@@ -528,9 +552,9 @@ export default function MobileAppSettingsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Yoqilsa: oxirgi versiyadan past APK da login bloklanadi, yangilash dialogi majburiy.
-                    O‘chirilsa (tavsiya, oddiy deploy): ixtiyoriy dialog — «Обновить» yoki «Позже»;
-                    login ishlayveradi, agentlar o‘zlari yangilaydi.
+                    Yoqilsa: oxirgi versiyadan past APK loginni ochmaydi. APK serverda bo‘lmasa agent
+                    tuzoqda qoladi. O‘chirilsa (tavsiya): «Обновить» / «Позже» — ilovani o‘chirish
+                    shart emas, kalit mos bo‘lsa PIN saqlanadi.
                   </p>
                 </div>
               </label>
@@ -693,6 +717,7 @@ export default function MobileAppSettingsPage() {
           </Card>
         </>
       )}
+      {confirmDialog}
     </div>
   );
 }

@@ -68,3 +68,15 @@ backend/src/modules/work-slots/work-slots.service.ts
 
 backend/src/modules/orders/domain/order.lines.ts
 
+backend/src/modules/work-slots/work-slots.config-mirror.ts
+backend/src/modules/staff/staff.import.service.ts
+backend/src/modules/tenant-settings/finance-refs.ts
+backend/src/modules/staff/staff.import.kinds.ts
+backend/src/modules/opening-balances/opening-balances.import.xlsx.ts
+backend/src/modules/system-migration/system-migration.export.ts
+backend/src/modules/staff/staff.shared.filters.ts
+backend/src/modules/clients/clients.import.rows-update.ts
+backend/src/modules/payments/payments.route.write.ts
+backend/src/modules/bank-transfer-inbox/bank-transfer-inbox.actions.ts
+backend/src/modules/payments/payment.query.mappers.ts
+

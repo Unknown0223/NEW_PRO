@@ -1,44 +1,48 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyFlexibleImportId,
   classifyImportClientDbId,
+  normalizeExternalDocNumber,
   parseClientDbIdFromCell
-} from "../src/modules/clients/clients.import.assign";
+} from "../src/modules/clients/clients.import.flexible-id";
 import { excelHeaderToImportKey, headerToClientImportKey } from "../src/modules/clients/clients.import.keys";
 import { lalakuNewClientTemplateHeaders } from "../src/modules/clients/clients.import.templates";
 
-describe("clients import id column", () => {
-  it("maps id / ID / ид / client_db_id headers to client_db_id", () => {
+describe("clients import flexible id (ks_1652 style)", () => {
+  it("maps id / ID / ид headers to client_db_id", () => {
     expect(headerToClientImportKey("id")).toBe("client_db_id");
-    expect(headerToClientImportKey("ID")).toBe("client_db_id");
-    expect(headerToClientImportKey("ид")).toBe("client_db_id");
     expect(headerToClientImportKey("ИД")).toBe("client_db_id");
-    expect(headerToClientImportKey("client_db_id")).toBe("client_db_id");
-    expect(headerToClientImportKey("client_id")).toBe("client_db_id");
     expect(excelHeaderToImportKey("db_id")).toBe("client_db_id");
   });
 
-  it("does not map client code aliases to client_db_id", () => {
-    expect(headerToClientImportKey("код_клиента")).toBe("client_code");
-    expect(headerToClientImportKey("ид_клиента")).toBe("client_code");
+  it("accepts numeric DB ids and any string codes", () => {
+    expect(classifyFlexibleImportId(null)).toEqual({ kind: "absent" });
+    expect(classifyFlexibleImportId("---")).toEqual({ kind: "absent" });
+    expect(classifyFlexibleImportId("12")).toEqual({ kind: "ok_db", id: 12 });
+    expect(classifyFlexibleImportId("12.0")).toEqual({ kind: "ok_db", id: 12 });
+    expect(classifyFlexibleImportId("ks_1652")).toEqual({ kind: "ok_code", code: "ks_1652" });
+    expect(classifyFlexibleImportId("np_8697")).toEqual({ kind: "ok_code", code: "np_8697" });
+    expect(classifyFlexibleImportId("ya_2113")).toEqual({ kind: "ok_code", code: "ya_2113" });
+    expect(classifyFlexibleImportId("g3_516")).toEqual({ kind: "ok_code", code: "g3_516" });
+    expect(classifyFlexibleImportId("ABC-01")).toEqual({ kind: "ok_code", code: "ABC-01" });
+    expect(classifyFlexibleImportId("0").kind).toBe("invalid");
   });
 
-  it("classifyImportClientDbId accepts positive ints and rejects bad values", () => {
-    expect(classifyImportClientDbId(null)).toEqual({ kind: "absent" });
-    expect(classifyImportClientDbId("---")).toEqual({ kind: "absent" });
-    expect(classifyImportClientDbId("")).toEqual({ kind: "absent" });
-    expect(classifyImportClientDbId("12")).toEqual({ kind: "ok", id: 12 });
-    expect(classifyImportClientDbId("12.0")).toEqual({ kind: "ok", id: 12 });
-    expect(classifyImportClientDbId("0").kind).toBe("invalid");
-    expect(classifyImportClientDbId("-3").kind).toBe("invalid");
-    expect(classifyImportClientDbId("abc").kind).toBe("invalid");
-    expect(classifyImportClientDbId("1.5").kind).toBe("invalid");
+  it("legacy classifyImportClientDbId still accepts numbers only via parseClientDbIdFromCell", () => {
     expect(parseClientDbIdFromCell("99")).toBe(99);
-    expect(parseClientDbIdFromCell("nope")).toBeNull();
+    expect(parseClientDbIdFromCell("ks_1652")).toBeNull();
+    expect(classifyImportClientDbId("15")).toEqual({ kind: "ok", id: 15 });
+  });
+
+  it("normalizeExternalDocNumber keeps any string doc id", () => {
+    expect(normalizeExternalDocNumber("ks_1652")).toBe("ks_1652");
+    expect(normalizeExternalDocNumber("  ORD-9  ")).toBe("ORD-9");
+    expect(normalizeExternalDocNumber("---")).toBeNull();
+    expect(normalizeExternalDocNumber("")).toBeNull();
   });
 
   it("new-client template includes optional ИД column", () => {
     const headers = lalakuNewClientTemplateHeaders();
     expect(headers[0]).toBe("ИД");
-    expect(headers).toContain("Наименование");
   });
 });

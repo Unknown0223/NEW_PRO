@@ -41,6 +41,8 @@ const createBody = z.object({
   refund_amount: z.number().positive().nullable().optional(),
   note: z.string().max(2000).optional().nullable(),
   refusal_reason_ref: z.string().trim().max(128).optional().nullable(),
+  /** Ixtiyoriy vazvrat ID (har qanday matn); bo‘sh → avto R-… */
+  number: z.string().trim().min(1).max(48).optional().nullable(),
   lines: z
     .array(
       z.object({
@@ -400,6 +402,14 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
         if (msg === "EMPTY_LINES") return sendApiError(reply, request, 400, "EmptyLines");
         if (msg === "REFUND_NEEDS_CLIENT") return sendApiError(reply, request, 400, "RefundNeedsClient");
         if (msg === "RETURN_NOT_INTERCHANGEABLE") return sendReturnNotInterchangeable(reply, request, e);
+        if (
+          typeof e === "object" &&
+          e != null &&
+          "code" in e &&
+          (e as { code?: string }).code === "P2002"
+        ) {
+          return sendApiError(reply, request, 409, "DuplicateReturnNumber");
+        }
         throw e;
       }
     }

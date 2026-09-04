@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exceptions.dart';
+import '../../../core/api/mobile_api.dart';
 import '../../../core/api/field_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/clients/agent_client_balance.dart';
@@ -10,12 +11,14 @@ import '../../../core/clients/agent_outlet_filters_provider.dart';
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/config/mobile_order_guards.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/errors/error_reporter.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../clients/client_photo_report_flow.dart';
 import '../orders/held_order_model.dart';
 import '../orders/held_orders_provider.dart';
@@ -158,6 +161,30 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
   }
 
   Future<void> _pickRefusal() async {
+    // Foto otchot majburiy bo'lsa — avval foto talab qilinadi.
+    final photoRequired = ref.read(sessionProvider).mobileConfig?.photo.requiredForOrder ?? false;
+    if (photoRequired) {
+      final slug = ref.read(sessionProvider).tenantSlug ?? '';
+      if (slug.isNotEmpty && _visit?.clientId != null) {
+        try {
+          final photos = await ref.read(mobileApiProvider).getClientPhotoReports(slug, _visit!.clientId!);
+          if (!hasPhotoReportToday(photos)) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Сначала добавьте фотоотчет перед отказом'),
+                  backgroundColor: AppColors.warning,
+                ),
+              );
+            }
+            return;
+          }
+        } catch (_) {
+          // Network xato — offline da davom etiladi.
+        }
+      }
+    }
+
     final reasons = ref.read(refusalReasonsProvider);
     if (reasons.isEmpty) {
       if (mounted) {
@@ -186,12 +213,30 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
               refusalReasonRef: picked.id,
             );
       } on ApiException catch (e) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          module: ErrorModules.visits,
+          code: 'VisitRefuseFailed',
+          message: 'Визит: отказ не сохранился на сервере',
+          path: '/mobile/field/visits',
+          payload: {'client_id': visit?.clientId, 'reason_ref': picked.id},
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Rad saqlanmadi: ${e.message}'), backgroundColor: AppColors.error),
           );
         }
-      } catch (_) {}
+      } catch (e, st) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          stack: st,
+          module: ErrorModules.visits,
+          code: 'VisitRefuseUnexpected',
+          message: 'Визит: неожиданная ошибка при отказе',
+          path: '/mobile/field/visits',
+          payload: {'client_id': visit?.clientId},
+        );
+      }
     }
     await _completeVisit(refused: true, reasonRef: picked.id);
   }
@@ -237,6 +282,8 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
       }
     }
     final held = heldOrder;
+    // Faqat held countdown uchun — SQLite emas.
+    if (held != null) ref.watch(heldOrderTickProvider);
     final gps = ref.watch(gpsTrackerProvider);
     final pos = gps.lastPosition;
     final gpsLine = pos != null
@@ -264,6 +311,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
                 name: name,
                 code: code.isEmpty ? '—' : code,
                 grade: category.isEmpty ? 'B' : category,
+                photoUrl: firstClientPhotoUrl(client),
                 balanceAmount: balanceAmount,
                 hasDraft: hasDraft,
               ),

@@ -11,7 +11,7 @@ import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { ImagePlus, RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 export type ClientPhotoRow = {
@@ -24,30 +24,14 @@ export type ClientPhotoRow = {
 };
 
 function ClientPhotoThumb({
-  tenantSlug,
-  clientId,
-  photoId,
   alt,
+  imageUrl,
   contentPurged
 }: {
-  tenantSlug: string;
-  clientId: number;
-  photoId: number;
   alt: string;
+  imageUrl?: string;
   contentPurged?: boolean;
 }) {
-  const imgQ = useQuery({
-    queryKey: ["client-photo-report-image", tenantSlug, clientId, photoId],
-    staleTime: STALE.list,
-    enabled: !contentPurged,
-    queryFn: async () => {
-      const { data } = await api.get<ClientPhotoRow>(
-        `/api/${tenantSlug}/clients/${clientId}/photo-reports/${photoId}`
-      );
-      return data.image_url ?? "";
-    }
-  });
-
   if (contentPurged) {
     return (
       <div className="flex aspect-square w-full items-center justify-center bg-muted px-2 text-center text-[10px] text-muted-foreground">
@@ -56,21 +40,13 @@ function ClientPhotoThumb({
     );
   }
 
-  if (imgQ.isLoading) {
-    return (
-      <div className="flex aspect-square w-full items-center justify-center bg-muted">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!imgQ.data) {
+  if (!imageUrl) {
     return <div className="aspect-square w-full bg-muted" />;
   }
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={imgQ.data} alt={alt} className="aspect-square w-full object-cover" loading="lazy" />
+    <img src={imageUrl} alt={alt} className="aspect-square w-full object-cover" loading="lazy" />
   );
 }
 
@@ -87,9 +63,12 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
     queryKey: ["client-photo-reports", tenantSlug, clientId, archiveView],
     staleTime: STALE.list,
     queryFn: async () => {
-      const qs = archiveView ? "?archive=true" : "";
+      const sp = new URLSearchParams();
+      if (archiveView) sp.set("archive", "true");
+      sp.set("include_images", "true");
+      const qs = sp.toString();
       const { data } = await api.get<{ data: ClientPhotoRow[] }>(
-        `/api/${tenantSlug}/clients/${clientId}/photo-reports${qs}`
+        `/api/${tenantSlug}/clients/${clientId}/photo-reports?${qs}`
       );
       return data.data;
     }
@@ -235,10 +214,8 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
           {rows.map((r) => (
             <li key={r.id} className="group relative overflow-hidden rounded-lg border border-border bg-card shadow-sm">
               <ClientPhotoThumb
-                tenantSlug={tenantSlug}
-                clientId={clientId}
-                photoId={r.id}
                 alt={r.caption ?? ""}
+                imageUrl={r.image_url}
                 contentPurged={r.content_purged}
               />
               <div className="space-y-1 p-2">

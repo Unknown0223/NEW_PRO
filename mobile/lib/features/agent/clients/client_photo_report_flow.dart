@@ -10,7 +10,10 @@ import '../../../core/camera/photo_service.dart' show encodeClientPhotoBase64, p
 import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/errors/error_reporter.dart';
+import '../../../core/errors/user_facing_error.dart';
 import '../../../core/sync/photo_report_queue.dart';
+import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 
 /// Standart foto sabablari (veb spravochnik bo‘sh bo‘lsa).
@@ -120,11 +123,10 @@ class MandatoryPhotoBanner extends StatelessWidget {
 }
 
 bool _isPhotoToday(ClientPhotoReport p) {
-  final dt = DateTime.tryParse(p.createdAt);
-  if (dt == null) return false;
-  final local = dt.toLocal();
-  final now = DateTime.now();
-  return local.year == now.year && local.month == now.month && local.day == now.day;
+  final wr = toWorkRegionFromIso(p.createdAt);
+  if (wr == null) return false;
+  final now = workRegionNow();
+  return wr.year == now.year && wr.month == now.month && wr.day == now.day;
 }
 
 bool hasPhotoReportToday(List<ClientPhotoReport> photos) {
@@ -239,11 +241,14 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   int? orderId,
   String? category,
 }) async {
-  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(
+        clientId,
+        sync: ref.read(sessionProvider).mobileConfig?.sync,
+      )) {
     if (context.mounted) {
       showAgentToast(
         context,
-        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        'Окно съёмки закрыто — новые фото нельзя. Уже снятые синхронизируйте отдельно в любое время.',
         accentColor: AppColors.warning,
       );
     }
@@ -314,13 +319,23 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       imagePath: photo.filePath,
       caption: caption,
       orderId: orderId,
+      sync: ref.read(sessionProvider).mobileConfig?.sync,
+    );
+    ErrorReporter.instance?.reportModuleIssue(
+      module: ErrorModules.photos,
+      code: queued ? 'PhotoQueuedOffline' : 'PhotoQueueFailed',
+      message: queued
+          ? 'Фотоотчёт: сеть недоступна — в офлайн очередь'
+          : 'Фотоотчёт: не удалось сохранить в офлайн очередь',
+      path: '/mobile/clients/photo-reports',
+      payload: {'client_id': clientId, 'order_id': orderId, 'queued': queued},
     );
     if (context.mounted) {
       showAgentToast(
         context,
         queued
-            ? 'Foto oflayn saqlandi — internet paydo bo‘lganda (5 martagacha) yuboriladi'
-            : 'Sync vaqti tugagan yoki fotoni saqlab bo‘lmadi',
+            ? 'Foto oflayn saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
+            : 'Окно съёмки закрыто или фото сақланмади',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
     }
@@ -332,13 +347,24 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       imagePath: photo.filePath,
       caption: caption,
       orderId: orderId,
+      sync: ref.read(sessionProvider).mobileConfig?.sync,
+    );
+    ErrorReporter.instance?.reportCaught(
+      e,
+      module: ErrorModules.photos,
+      code: queued ? 'PhotoUploadFailedQueued' : 'PhotoUploadFailed',
+      message: queued
+          ? 'Фотоотчёт: загрузка не удалась — в очередь'
+          : 'Фотоотчёт: загрузка не удалась',
+      path: '/mobile/clients/photo-reports',
+      payload: {'client_id': clientId, 'order_id': orderId, 'queued': queued},
     );
     if (context.mounted) {
       showAgentToast(
         context,
         queued
-            ? 'Foto saqlandi — online bo‘lganda qayta yuboriladi'
-            : 'Foto yuklanmadi: $e',
+            ? 'Foto saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
+            : UserFacingError.toast(e, action: 'Не удалось загрузить фото'),
         accentColor: queued ? AppColors.warning : AppColors.error,
       );
     }
@@ -353,11 +379,14 @@ Future<ClientPhotoReport?> replacePhotoReport({
   required int clientId,
   required ClientPhotoReport existing,
 }) async {
-  if (await PhotoReportQueue.isCaptureBlockedForClient(clientId)) {
+  if (await PhotoReportQueue.isCaptureBlockedForClient(
+        clientId,
+        sync: ref.read(sessionProvider).mobileConfig?.sync,
+      )) {
     if (context.mounted) {
       showAgentToast(
         context,
-        'Sync vaqti tugadi — yangi foto olinmaydi. Navbatdagi fotolar internetda yuboriladi.',
+        'Окно съёмки закрыто — новые фото нельзя. Уже снятые синхронизируйте отдельно в любое время.',
         accentColor: AppColors.warning,
       );
     }
@@ -429,8 +458,16 @@ Future<ClientPhotoReport?> replacePhotoReport({
           orderId: existing.orderId,
         );
   } catch (e) {
+    ErrorReporter.instance?.reportCaught(
+      e,
+      module: ErrorModules.photos,
+      code: 'PhotoReplaceFailed',
+      message: 'Фотоотчёт: не удалось обновить фото',
+      path: '/mobile/clients/photo-reports',
+      payload: {'client_id': clientId, 'photo_id': existing.id},
+    );
     if (context.mounted) {
-      showAgentToast(context, 'Foto yangilanmadi: $e');
+      showAgentToast(context, UserFacingError.toast(e, action: 'Не удалось обновить фото'));
     }
     return null;
   }

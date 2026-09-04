@@ -16,11 +16,32 @@ import {
 } from "./payment-allocations.service";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
+import { buildActorPaymentGrantOr } from "../access/access-staff-scope";
 import {
   parseTransferChannelFromPaymentNote,
   resolveTransferChannel
 } from "../bank-transfer-inbox/bank-transfer-inbox.helpers";
 import type { PaymentListQuery, PaymentListRow } from "./payment.query.types";
+
+function splitFilterTerms(raw?: string): string[] {
+  if (!raw?.trim()) return [];
+  const sep = raw.includes("|") ? "|" : ",";
+  return [...new Set(raw.split(sep).map((s) => s.trim()).filter(Boolean))];
+}
+
+function clientFieldContainsAny(
+  field: "zone" | "region" | "city" | "district",
+  raw?: string
+): Prisma.ClientWhereInput | null {
+  const terms = splitFilterTerms(raw);
+  if (terms.length === 0) return null;
+  if (terms.length === 1) {
+    return { [field]: { contains: terms[0], mode: "insensitive" as const } };
+  }
+  return {
+    OR: terms.map((t) => ({ [field]: { contains: t, mode: "insensitive" as const } }))
+  };
+}
 
 export function paymentListInclude(tenantId: number): Prisma.PaymentInclude {
   return {
@@ -116,6 +137,7 @@ export function mapPaymentToListRow(r: any, tenantId: number): PaymentListRow {
     : (fromNote?.channel ?? null);
   return {
     id: r.id,
+    number: r.number != null && String(r.number).trim() ? String(r.number).trim() : null,
     client_id: r.client_id,
     client_name: r.client.name,
     client_legal_name: r.client.legal_name ?? null,
@@ -241,7 +263,8 @@ export function buildPaymentListWhere(
     if (hit.restricted) {
       scopedAgentIds = hit.agentIds;
       if (scopedAgentIds.length === 0) {
-        andParts.push({ id: { in: [] } });
+        const grantOr = buildActorPaymentGrantOr(actorScope);
+        andParts.push(grantOr ?? { id: { in: [] } });
       }
     }
   }
@@ -266,18 +289,14 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.territory_region?.trim()) {
-    clientAnd.push({ region: { contains: q.territory_region.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_city?.trim()) {
-    clientAnd.push({ city: { contains: q.territory_city.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_district?.trim()) {
-    clientAnd.push({ district: { contains: q.territory_district.trim(), mode: "insensitive" } });
-  }
-  if (q.territory_zone?.trim()) {
-    clientAnd.push({ zone: { contains: q.territory_zone.trim(), mode: "insensitive" } });
-  }
+  const regionClause = clientFieldContainsAny("region", q.territory_region);
+  if (regionClause) clientAnd.push(regionClause);
+  const cityClause = clientFieldContainsAny("city", q.territory_city);
+  if (cityClause) clientAnd.push(cityClause);
+  const districtClause = clientFieldContainsAny("district", q.territory_district);
+  if (districtClause) clientAnd.push(districtClause);
+  const zoneClause = clientFieldContainsAny("zone", q.territory_zone);
+  if (zoneClause) clientAnd.push(zoneClause);
 
   if (q.deal_type === "regular") {
     clientAnd.push({

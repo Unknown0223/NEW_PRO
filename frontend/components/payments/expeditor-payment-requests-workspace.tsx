@@ -45,6 +45,7 @@ import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-direct
 import {
   buildClientTerritoryFilterLevels,
   buildPaymentTerritorySelectOptions,
+  buildZoneRegionCityCascadeOptions,
   type ClientTerritoryFilterField
 } from "@/lib/territory-client-filters";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -513,16 +514,48 @@ export function ExpeditorPaymentRequestsWorkspace() {
     });
   }, [rows]);
 
+  const territoryCascade = useMemo(
+    () =>
+      buildZoneRegionCityCascadeOptions(
+        clientRefsQ.data,
+        territoryOptsQ.data,
+        profileQ.data?.territory_nodes,
+        {
+          zone: draft.territoryZone,
+          region: draft.territoryRegion,
+          city: draft.territoryCity
+        }
+      ),
+    [
+      clientRefsQ.data,
+      territoryOptsQ.data,
+      profileQ.data?.territory_nodes,
+      draft.territoryZone,
+      draft.territoryRegion,
+      draft.territoryCity
+    ]
+  );
+
   const territoryFilterOptions = useMemo(
     () =>
       territoryFilterSpecs.map((spec) => {
-        const opts = buildPaymentTerritorySelectOptions(
-          spec.field,
-          clientRefsQ.data,
-          territoryOptsQ.data,
-          profileQ.data?.territory_nodes,
-          readTerritoryFilter(draft, spec.field)
-        );
+        const cascaded =
+          spec.field === "zone"
+            ? territoryCascade.zones
+            : spec.field === "region"
+              ? territoryCascade.regions
+              : spec.field === "city"
+                ? territoryCascade.cities
+                : null;
+        const opts =
+          cascaded ??
+          buildPaymentTerritorySelectOptions(
+            spec.field,
+            clientRefsQ.data,
+            territoryOptsQ.data,
+            profileQ.data?.territory_nodes,
+            readTerritoryFilter(draft, spec.field)
+          );
         return {
           key:
             spec.field === "zone"
@@ -537,7 +570,14 @@ export function ExpeditorPaymentRequestsWorkspace() {
           value: readTerritoryFilter(draft, spec.field)
         };
       }),
-    [territoryFilterSpecs, clientRefsQ.data, territoryOptsQ.data, profileQ.data?.territory_nodes, draft]
+    [
+      territoryFilterSpecs,
+      territoryCascade,
+      clientRefsQ.data,
+      territoryOptsQ.data,
+      profileQ.data?.territory_nodes,
+      draft
+    ]
   );
 
   const handleBulkDelete = useCallback(() => {
@@ -546,11 +586,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
       void (async () => {
         setRejectBusy(true);
         try {
-          for (const id of Array.from(selected)) {
-            await api.post(`/api/${tenantSlug}/payments/${id}/reject`, {
-              reason: reason.trim() || undefined
-            });
-          }
+          await api.post(`/api/${tenantSlug}/payments/batch-reject`, {
+            ids: Array.from(selected),
+            reason: reason.trim() || undefined
+          });
           setSelected(new Set());
           void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
           void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
@@ -570,11 +609,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
       void (async () => {
         setDeleteBusy(true);
         try {
-          for (const id of Array.from(selected)) {
-            const sp = new URLSearchParams();
-            sp.set("cancel_reason_ref", reason.trim().slice(0, 128));
-            await api.delete(`/api/${tenantSlug}/payments/${id}?${sp.toString()}`);
-          }
+          await api.post(`/api/${tenantSlug}/payments/batch-delete`, {
+            ids: Array.from(selected),
+            cancel_reason_ref: reason.trim().slice(0, 128)
+          });
           setSelected(new Set());
           void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
           void qc.invalidateQueries({ queryKey: ["payments", tenantSlug] });
@@ -616,12 +654,11 @@ export function ExpeditorPaymentRequestsWorkspace() {
     void (async () => {
       setReturnBusy(true);
       try {
-        for (const id of Array.from(selected)) {
-          await api.post(`/api/${tenantSlug}/payments/${id}/return-to-expeditor`, {
-            reason: reason || undefined,
-            duration_minutes: duration
-          });
-        }
+        await api.post(`/api/${tenantSlug}/payments/batch-return-to-expeditor`, {
+          ids: Array.from(selected),
+          reason: reason || undefined,
+          duration_minutes: duration
+        });
         setSelected(new Set());
         setReturnModalOpen(false);
         void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
@@ -648,9 +685,10 @@ export function ExpeditorPaymentRequestsWorkspace() {
     void (async () => {
       setRestoreBusy(true);
       try {
-        for (const id of Array.from(selected)) {
-          await api.post(`/api/${tenantSlug}/payments/${id}/restore`, { comment });
-        }
+        await api.post(`/api/${tenantSlug}/payments/batch-restore`, {
+          ids: Array.from(selected),
+          comment
+        });
         setSelected(new Set());
         setRestoreModalOpen(false);
         void qc.invalidateQueries({ queryKey: ["expeditor-payment-requests", tenantSlug] });
@@ -685,7 +723,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
         "Кто изменил"
       ],
       rows.map((r) => [
-        r.id,
+        r.number?.trim() || r.id,
         r.paid_at?.slice(0, 10) ?? r.created_at?.slice(0, 10) ?? "",
         r.expeditor_name ?? "",
         r.client_name,
@@ -725,7 +763,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
         return (
           <td key={colId} className="whitespace-nowrap border-b border-border px-2 py-2 font-medium text-slate-700">
             <Link href={`/payments/${r.id}`} className="text-[#063b36] hover:underline">
-              {r.id}
+              {r.number?.trim() || r.id}
             </Link>
           </td>
         );
@@ -1046,6 +1084,7 @@ export function ExpeditorPaymentRequestsWorkspace() {
                       disabled={!canAct || selectableOnPage.length === 0}
                       className="accent-teal-600"
                       aria-label="Выбрать все на странице"
+                      title="Выбрать все на текущей странице (не весь отфильтрованный список)"
                     />
                   </th>
                   {visibleDataColumns.map((colId) => {

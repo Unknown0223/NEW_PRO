@@ -62,6 +62,12 @@ export const bulkProductsKpiGroupBodySchema = z.object({
   kpi_group_id: z.number().int().positive().nullable()
 });
 
+/** POST `/api/:slug/products/bulk-equipment` */
+export const bulkProductsEquipmentBodySchema = z.object({
+  product_ids: z.array(z.number().int().positive()).min(1).max(500),
+  is_equipment: z.boolean()
+});
+
 function parseFilterId(raw: string | undefined): number | undefined {
   if (!raw?.trim()) return undefined;
   const n = Number.parseInt(raw.trim(), 10);

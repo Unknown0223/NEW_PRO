@@ -23,7 +23,6 @@ import {
   SETTINGS_EXTRA_JSON_PATH
 } from "./system-migration.import.settings-extra";
 import { importExtendedPhases } from "./system-migration.extended.import";
-import { emptyIdMaps } from "./system-migration.id-maps";
 import { parseBackupZip, type ParsedBackupPreview } from "./system-migration.import.preview";
 import { prisma } from "../../config/database";
 import { patchTenantProfile } from "../tenant-settings/tenant-settings.service";
@@ -170,26 +169,30 @@ export async function applyBackupZip(
     skipped.push("spravochniklar (bo‘lim tanlanmagan)");
   }
 
-  // Boshlang‘ich sozlamalar: katalog/hudud/narx/slot. «extended» tanlangan bo‘lsa u yerda qoplanadi.
-  if (stages.has("initial_setup") && !stages.has("extended")) {
-    await report("references", 40, "Boshlang‘ich sozlamalar (katalog, hudud, narx, slot)…");
-    const maps = refResult?.maps ?? emptyIdMaps();
-    // references allaqachon phase 0 ni olib kelgan bo‘lsa — faqat 1–2.
-    const phases = stages.has("references") ? [1, 2] : [0, 1, 2];
+  // Boshlang‘ich sozlamalar / katalog / slot — bonus va buyurtmalardan OLDIN
+  // (work_slot_id, supplier_id, KPI target FK lar uchun map kerak).
+  let earlyCatalogDone = false;
+  const needEarlyCatalog =
+    Boolean(refResult) &&
+    (stages.has("initial_setup") ||
+      stages.has("extended") ||
+      stages.has("bonus") ||
+      stages.has("transactional"));
+
+  if (needEarlyCatalog && refResult) {
+    await report("references", 42, "Katalog, hudud, narx va ish o‘rinlari…");
     try {
       await prisma.$transaction(
         async (tx) => {
-              const extCounts = await importExtendedPhases(
+          const extCounts = await importExtendedPhases(
             tx,
             zip,
             targetTenantId,
-            maps,
-            phases,
+            refResult!.maps,
+            [1, 2],
             warnings,
             {
               strictFk: false,
-              // Bo‘sh tenantda ham seed/RBAC yoki arxiv ichidagi dublikat bo‘lishi mumkin —
-              // qisman commit qoldirmaslik uchun har doim dublikatni o‘tkazib yuboramiz.
               skipDuplicateKeys: true,
               conflictPolicy
             }
@@ -200,6 +203,7 @@ export async function applyBackupZip(
         },
         { timeout: 180_000 }
       );
+      earlyCatalogDone = true;
       if (preview.has_initial_setup_xlsx && !applied.includes(INITIAL_SETUP_XLSX_PATH)) {
         applied.push(INITIAL_SETUP_XLSX_PATH);
       }
@@ -230,6 +234,8 @@ export async function applyBackupZip(
             if (bonusCounts.bonus_rules) applied.push("data/bonus_rules.json");
             if (bonusCounts.bonus_rule_clauses) applied.push("data/bonus_rule_clauses.json");
             if (bonusCounts.bonus_rule_conditions) applied.push("data/bonus_rule_conditions.json");
+            if (bonusCounts.bonus_strategies) applied.push("data/bonus_strategies.json");
+            if (bonusCounts.bonus_strategy_members) applied.push("data/bonus_strategy_members.json");
             if (bonusCounts.kpi_groups) applied.push("data/kpi_groups.json");
             if (bonusCounts.sales_kpi_plans) applied.push("data/sales_kpi_plans.json");
           },
@@ -306,7 +312,9 @@ export async function applyBackupZip(
     } else {
       try {
         if ((preview.format_version ?? BACKUP_FORMAT_VERSION) >= 5) {
-          await report("extended", 90, "Katalog, RBAC va qo‘shimcha jadvallar…");
+          await report("extended", 90, "RBAC, bog‘lanishlar va qo‘shimcha jadvallar…");
+          // 1–2 allaqachon earlyCatalog da (slot/katalog); 3–4: linklar, balans, bank inbox…
+          const phases = earlyCatalogDone ? [3, 4] : [1, 2, 3, 4];
           await prisma.$transaction(
             async (tx) => {
               const extCounts = await importExtendedPhases(
@@ -314,7 +322,7 @@ export async function applyBackupZip(
                 zip,
                 targetTenantId,
                 refResult!.maps,
-                [1, 2, 3, 4],
+                phases,
                 warnings,
                 {
                   strictFk: false,
@@ -330,7 +338,7 @@ export async function applyBackupZip(
           );
         } else if ((preview.format_version ?? 0) >= 4) {
           warnings.push(
-            "Format v4 — katalog, RBAC va qo‘shimcha jadvallar arxivda yo‘q. To‘liq zaxira uchun v5 eksport oling."
+            "Format v4 — katalog, RBAC va qo‘shimcha jadvallar arxivda yo‘q. To‘liq zaxira uchun v5+ eksport oling."
           );
         }
       } catch (e) {

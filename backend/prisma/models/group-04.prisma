@@ -144,6 +144,8 @@ model Order {
   warehouse_block_id        Int?
   /// Snapshot: qaysi ishchi o‘rnida yaratilgan (agent_id — kim)
   work_slot_id                Int?
+  /// `web` — ofis paneli; `mobile` — agent/ekspeditor ilovasi
+  creation_channel           String?          @db.VarChar(16)
   payments                    Payment[]
   change_logs                 OrderChangeLog[]
   items                       OrderItem[]
@@ -220,6 +222,8 @@ model OrderChangeLog {
 model Payment {
   id                 Int       @id @default(autoincrement())
   tenant_id          Int
+  /// Tashqi / ko‘rinadigan hujjat ID (ks_1652, PAY-12…); bo‘sh → create dan keyin String(id)
+  number             String?   @db.VarChar(64)
   client_id          Int
   order_id           Int?
   amount             Decimal   @db.Decimal(15, 2)
@@ -269,6 +273,8 @@ model Payment {
   @@index([tenant_id, paid_at(sort: Desc)])
   @@index([expeditor_user_id])
   @@index([ledger_agent_id])
+  @@unique([tenant_id, number])
+  @@index([tenant_id, number])
   edit_grants          PaymentEditGrant[]
   bank_transfer_inbox  BankTransferInbox[]
   @@map("client_payments")

@@ -162,6 +162,10 @@ async function validateExpeditorUserIds(tenantId: number, userIds: number[]) {
   for (const id of uniq) {
     if (!ok.has(id)) throw new Error("BAD_EXPEDITOR_USER");
   }
+  const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+  for (const id of uniq) {
+    await assertExpeditorCanTakeNewWork(tenantId, id);
+  }
   return uniq;
 }
 

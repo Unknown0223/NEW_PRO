@@ -87,6 +87,8 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     isExchangeFlow,
     headerClientAgentLocked,
     loadingLists,
+    lockedAgentLabel,
+    lockedWarehouseLabel,
     mutation,
     orderClientPickerScopeIds,
     orderIsConsignment,
@@ -221,6 +223,21 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 <Label htmlFor="oc-warehouse">
                   {isPolkiSheet ? "Sklad qaytarish (qaytarish ombori)" : "Ombor"}
                 </Label>
+                {headerClientAgentLocked ? (
+                  <>
+                    <Input
+                      id="oc-warehouse"
+                      readOnly
+                      className={cn(fieldClass, "cursor-default bg-muted/40")}
+                      value={lockedWarehouseLabel || warehouseId || "—"}
+                      aria-label="Ombor"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Tahrirda ombor o‘zgartirilmaydi.
+                    </p>
+                  </>
+                ) : (
+                  <>
                 <FilterSelect
                   id="oc-warehouse"
                   data-testid="order-create-warehouse"
@@ -229,10 +246,15 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   aria-label={isPolkiSheet ? "Qaytarish ombori" : "Ombor"}
                   value={warehouseId}
                   onChange={(e) => {
+                    if (headerClientAgentLocked) return;
                     setSelectionNotice(null);
                     setWarehouseId(e.target.value);
                   }}
-                  disabled={mutation.isPending || loadingLists || !canPickWarehouse}
+                  disabled={
+                    mutation.isPending ||
+                    loadingLists ||
+                    !canPickWarehouse
+                  }
                 >
                   {warehouses.map((w) => (
                     <option key={w.id} value={String(w.id)}>
@@ -244,6 +266,8 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 {!canPickWarehouse ? (
                   <p className="text-[11px] text-muted-foreground">Avval klientni tanlang.</p>
                 ) : null}
+                  </>
+                )}
               </div>
               {isPolkiFree ? (
                 <div className="space-y-1">
@@ -273,6 +297,21 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
               ) : null}
               <div className="space-y-2" data-oc-error="agent">
                 <Label htmlFor="oc-agent">Agent{requiresAgentAndPayment ? " *" : ""}</Label>
+                {headerClientAgentLocked ? (
+                  <>
+                    <Input
+                      id="oc-agent"
+                      readOnly
+                      className={cn(fieldClass, "cursor-default bg-muted/40")}
+                      value={lockedAgentLabel || "—"}
+                      aria-label="Agent"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Tahrirda agent o‘zgartirilmaydi.
+                    </p>
+                  </>
+                ) : (
+                  <>
                 <FilterSearchableSelect
                   id="oc-agent"
                   className={fieldClass}
@@ -280,26 +319,20 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   value={agentId}
                   options={agentFilterOptions}
                   onValueChange={(v) => {
-                    if (headerClientAgentLocked) return;
                     setSelectionNotice(null);
                     setAgentId(v);
                   }}
                   disabled={
                     mutation.isPending ||
                     loadingLists ||
-                    !canPickWarehouse ||
-                    headerClientAgentLocked
+                    !canPickWarehouse
                   }
                   searchPlaceholder="Qidiruv: login, ism"
                   emptyMessage="Mos agent topilmadi"
                   minPopoverWidth={320}
                   includeEmptyOption={!requiresAgentAndPayment || !agentId.trim()}
                 />
-                {headerClientAgentLocked ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Tahrirda agent o‘zgartirilmaydi.
-                  </p>
-                ) : clientId.trim() ? (
+                {clientId.trim() ? (
                   <OrderCreateAgentLockHint
                     assignments={clientAssignmentsForLock}
                     selectedAgentId={
@@ -309,6 +342,8 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     }
                   />
                 ) : null}
+                  </>
+                )}
               </div>
               {requiresAgentAndPayment && showOrderPaymentMethodSelector ? (
                 <div className="space-y-2" data-oc-error="payment">
@@ -321,7 +356,11 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     aria-label="To‘lov usuli"
                     value={paymentMethodRef}
                     onChange={(e) => setPaymentMethodRef(e.target.value)}
-                    disabled={mutation.isPending || loadingLists || !canPickWarehouse}
+                    disabled={
+                      mutation.isPending ||
+                      loadingLists ||
+                      (!canPickWarehouse && !headerClientAgentLocked)
+                    }
                   >
                     {paymentMethodSelectOptions.map((e) => (
                       <option key={e.id} value={e.id}>
@@ -353,12 +392,16 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                       setSelectionNotice(null);
                       setExpeditorUserId(v);
                     }}
-                    disabled={mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor}
+                    disabled={
+                      mutation.isPending ||
+                      createCtxQ.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
                     searchPlaceholder="Qidiruv: ID, login, FIO"
                     emptyMessage="Topilmadi"
                     minPopoverWidth={280}
                   />
-                  {!canPickPricingAndExpeditor ? (
+                  {!canPickPricingAndExpeditor && !headerClientAgentLocked ? (
                     <p className="text-[11px] text-muted-foreground">Ombor tanlang — keyin ochiladi.</p>
                   ) : null}
                 </div>
@@ -369,7 +412,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                 <div
                   className={cn(
                     "max-h-[min(52vh,420px)] space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/10 p-3",
-                    !canPickPricingAndExpeditor && "opacity-60",
+                    !canPickPricingAndExpeditor && !headerClientAgentLocked && "opacity-60",
                     errorTarget === "price" && localError && "ring-2 ring-destructive/50"
                   )}
                   role="radiogroup"
@@ -394,7 +437,9 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                           setPriceType(t);
                         }}
                         disabled={
-                          mutation.isPending || createCtxQ.isPending || !canPickPricingAndExpeditor
+                          mutation.isPending ||
+                          createCtxQ.isPending ||
+                          (!canPickPricingAndExpeditor && !headerClientAgentLocked)
                         }
                       />
                       <span className="font-medium capitalize">{priceTypeDisplayLabel(t, priceTypeLabels)}</span>
@@ -407,7 +452,10 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     className="size-3.5 rounded border-input"
                     checked={oldPricesEnabled}
                     onChange={(e) => oldPrices.onOldPricesCheckboxChange(e.target.checked)}
-                    disabled={mutation.isPending || !canPickPricingAndExpeditor}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
                   />
                   Старые цены
                   {oldPricesEnabled && priceAsOf ? (
@@ -481,7 +529,10 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                     className={fieldClass}
                     value={applyBonus ? "auto" : "off"}
                     onChange={(e) => setApplyBonus(e.target.value === "auto")}
-                    disabled={mutation.isPending || !canPickPricingAndExpeditor}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
                   >
                     <option value="auto">Avto (bonus qoidalarini qo‘llash)</option>
                     <option value="off">O‘chirilgan</option>

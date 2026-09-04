@@ -101,6 +101,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           .header("Content-Disposition", `attachment; filename="${filename}"`)
           .send(buf);
       } catch (e) {
+        request.log.error({ err: e }, "system-migration.export.backup failed");
         if (e instanceof Error && e.message === "EMPTY_EXPORT") {
           return sendApiError(
             reply,
@@ -113,7 +114,13 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
-        throw e;
+        return sendApiError(
+          reply,
+          request,
+          500,
+          "ExportFailed",
+          "Zaxira arxivini yaratib bo‘lmadi. Qayta urinib ko‘ring yoki supportga murojaat qiling."
+        );
       }
     }
   );
@@ -259,6 +266,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           });
           completeMigrationImportSession(session.id, result);
         } catch (e) {
+          request.log.error({ err: e }, "system-migration.import.apply failed");
           failMigrationImportSession(session.id, humanizeMigrationApplyError(e));
         }
       })();

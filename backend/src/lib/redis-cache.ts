@@ -3,6 +3,10 @@ import CircuitBreaker from "opossum";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { createRedisClient } from "./redis-client";
+import {
+  dashboardCacheKeyPrefixes,
+  isDashboardCacheKeyForTenant
+} from "../modules/dashboard/dashboard.cache-keys";
 
 /**
  * Umumiy maqsaddagi Redis client — Dashboard cache, narxlar cache, stock cache va h.k.
@@ -196,11 +200,11 @@ export function tenantRedisKey(tenantId: number, ...segments: string[]): string 
 }
 
 export function ordersListCacheKey(tenantId: number, fingerprint: string): string {
-  return `${tenantRedisKey(tenantId, "orders", "list")}:${fingerprint}`;
+  return `${tenantRedisKey(tenantId, "orders", "list", "v3")}:${fingerprint}`;
 }
 
 export function ordersListCachePrefix(tenantId: number): string {
-  return `${tenantRedisKey(tenantId, "orders", "list")}:`;
+  return `${tenantRedisKey(tenantId, "orders", "list", "v3")}:`;
 }
 
 export function clientDetailCacheKey(tenantId: number, clientId: number): string {
@@ -231,14 +235,25 @@ export async function invalidateTenantSettingsCache(tenantId: number): Promise<v
   }
 }
 
-/** Barcha tenant dashboard cache kalitlarini o'chirish */
+/** Barcha tenant dashboard cache kalitlarini o'chirish (stats + savdo/supervisor/moliya snapshot). */
 export async function invalidateDashboard(tenantId: number): Promise<void> {
-  const key = tenantRedisKey(tenantId, "dashboard");
+  pruneMemoryStore();
+  for (const key of [...memoryStore.keys()]) {
+    if (isDashboardCacheKeyForTenant(tenantId, key)) memoryStore.delete(key);
+  }
   try {
     const redis = await getRedisForApp();
-    await runRedisOp(() => redis.del(key));
+    const found: string[] = [];
+    for (const prefix of dashboardCacheKeyPrefixes(tenantId)) {
+      const keys = await runRedisOp(() => redis.keys(`${prefix}*`));
+      found.push(...keys);
+    }
+    const uniq = [...new Set(found.filter((k) => isDashboardCacheKeyForTenant(tenantId, k)))];
+    if (uniq.length > 0) {
+      await runRedisOp(() => redis.del(...uniq));
+    }
   } catch {
-    memoryStore.delete(key);
+    /* in-memory already pruned */
   }
 }
 
@@ -270,7 +285,7 @@ export async function invalidatePriceTypesCache(tenantId: number): Promise<void>
 
 /** `listOrdersPaged` Redis/in-memory keshi — status o‘zgarganda majburiy tozalash. */
 export async function invalidateOrdersListCache(tenantId: number): Promise<void> {
-  const prefix = `${tenantRedisKey(tenantId, "orders", "list")}:`;
+  const prefix = ordersListCachePrefix(tenantId);
   pruneMemoryStore();
   for (const key of [...memoryStore.keys()]) {
     if (key.startsWith(prefix)) memoryStore.delete(key);

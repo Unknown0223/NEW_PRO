@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import {
   batchConfirmPaymentsBodySchema,
   createPaymentBodySchema,
@@ -7,6 +8,7 @@ import {
   parseOptPositiveInt,
   parsePaymentsListQuery,
   patchPaymentBodySchema,
+  paymentsByIdsBodySchema,
   rejectPaymentBodySchema
 } from "../../contracts/payments.schemas";
 import { prisma } from "../../config/database";
@@ -30,6 +32,7 @@ import {
   deletePayment,
   getPaymentDetail,
   listPayments,
+  listPaymentsByIds,
   listPaymentsForClient,
   listPaymentsForOrder,
   rejectPendingPayment,
@@ -68,6 +71,27 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
       });
       const result = await listPayments(request.tenant!.id, query, actorScope);
       return reply.send(result);
+    }
+  );
+
+  app.post(
+    "/api/:slug/payments/by-ids",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = paymentsByIdsBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(
+          reply,
+          request,
+          400,
+          "ValidationError",
+          "Invalid request body",
+          zodValidationExtras(parsed.error)
+        );
+      }
+      const data = await listPaymentsByIds(request.tenant!.id, parsed.data.ids);
+      return reply.send({ data });
     }
   );
 
@@ -147,9 +171,24 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "CashDeskNoDiscountPayments");
         }
         if (msg === "BAD_EXPEDITOR") return sendApiError(reply, request, 400, "BadExpeditor");
+        if (msg === "EXPEDITOR_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "ExpeditorNotOnSlot",
+            "Экспедитор не назначен на рабочее место — назначение запрещено"
+          );
+        }
         if (msg === "BAD_LEDGER_AGENT") return sendApiError(reply, request, 400, "BadLedgerAgent");
         if (msg === "BRANCH_SCOPE_VIOLATION") {
           return sendApiError(reply, request, 403, "BranchScopeViolation");
+        }
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === "P2002"
+        ) {
+          return sendApiError(reply, request, 409, "DuplicatePaymentNumber");
         }
         throw e;
       }

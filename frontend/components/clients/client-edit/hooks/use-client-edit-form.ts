@@ -148,7 +148,7 @@ export function useClientEditForm({
     queryFn: async () => {
       const { data } = await api.get<{
         data: Array<{ id: number; fio: string; login: string; is_active: boolean }>;
-      }>(`/api/${tenantSlug}/expeditors`);
+      }>(`/api/${tenantSlug}/expeditors?is_active=true&for_new_work=1`);
       return data.data
         .filter((r) => r.is_active)
         .map((r) => ({ id: r.id, name: r.fio, login: r.login }));
@@ -299,21 +299,21 @@ export function useClientEditForm({
   const hintRows = useMemo(() => Object.values(refsQ.data?.city_territory_hints ?? {}), [refsQ.data?.city_territory_hints]);
 
   const cascadedCityOpts = useMemo(() => {
-    if (!region) return cityOpts;
-    const allow = new Set(
-      hintRows
-        .filter((h) => !region || h.region_stored === region)
-        .map((h) => [h.region_stored, h.zone_stored])
-        .flat()
-        .filter(Boolean)
-    );
+    if (!region && !zone) return cityOpts;
     const filtered = cityOpts.filter((o) => {
-      if (!allow.size) return true;
       const h = pickCityTerritoryHint(refsQ.data?.city_territory_hints, o.value);
-      return (!!h && (!region || h.region_stored === region)) || allow.has(o.value);
+      if (!h) return false;
+      if (region && h.region_stored !== region) return false;
+      if (zone && h.zone_stored !== zone) return false;
+      return true;
     });
+    const current = city.trim();
+    if (current && !filtered.some((o) => o.value === current)) {
+      const cur = cityOpts.find((o) => o.value === current);
+      return cur ? [cur, ...filtered] : filtered;
+    }
     return filtered.length > 0 ? filtered : cityOpts;
-  }, [cityOpts, hintRows, refsQ.data?.city_territory_hints, region]);
+  }, [city, cityOpts, refsQ.data?.city_territory_hints, region, zone]);
 
   const cascadedZoneOpts = useMemo(() => {
     let base: string[];
@@ -351,12 +351,15 @@ export function useClientEditForm({
     setRegion(next);
     if (next.trim() !== region.trim()) {
       setCity("");
-      setZone("");
     }
   };
 
   const onZoneSelect = (next: string) => {
     setZone(next);
+    if (next.trim() !== zone.trim()) {
+      setRegion("");
+      setCity("");
+    }
   };
 
   const agentsForTeamPicker = useMemo(() => {

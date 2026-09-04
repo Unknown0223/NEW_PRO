@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   inputHasWorkplaceStaffFields,
+  stripWorkplaceStaffFields,
   WORKPLACE_STAFF_PATCH_KEYS
 } from "../src/modules/work-slots/work-slots.staff-guard";
 import {
@@ -20,6 +21,22 @@ describe("work-slots.staff-guard", () => {
     expect(inputHasWorkplaceStaffFields({ login: "x" })).toBe(false);
     expect(inputHasWorkplaceStaffFields({ territory: "A / B" })).toBe(true);
     expect(inputHasWorkplaceStaffFields({ cash_desk_id: 1 })).toBe(true);
+  });
+
+  it("strips workplace keys and keeps personal fields", () => {
+    const input: Record<string, unknown> = {
+      first_name: "Sumbula",
+      login: "b737322",
+      branch: null,
+      consignment: false,
+      kpi_color: "#0d9488"
+    };
+    stripWorkplaceStaffFields(input);
+    expect(input).toEqual({
+      first_name: "Sumbula",
+      login: "b737322",
+      kpi_color: "#0d9488"
+    });
   });
 });
 

@@ -122,11 +122,22 @@ export function useFinanceFilterOptions(args: {
 
     const cityOptions = (() => {
       const regions = draft.territory_2_list;
-      const map = reportFilters?.territory_3_by_2 ?? reportFilters?.cities_by_zone_region;
-      if (regions.length && map) {
+      const zones = draft.territory_1_list;
+      const cityMap = reportFilters?.territory_3_by_2 ?? reportFilters?.cities_by_zone_region;
+      const regionMap = reportFilters?.territory_2_by_1 ?? reportFilters?.regions_by_zone;
+      if (regions.length && cityMap) {
         const set = new Set<string>();
-        for (const r of regions) for (const c of map[r] ?? []) set.add(c);
+        for (const r of regions) for (const c of cityMap[r] ?? []) set.add(c);
         return withTerritoryLabels(Array.from(set), cityLabelByValue, true);
+      }
+      if (zones.length && regionMap && cityMap) {
+        const regionSet = new Set<string>();
+        for (const z of zones) for (const r of regionMap[z] ?? []) regionSet.add(r);
+        const citySet = new Set<string>();
+        for (const r of regionSet) for (const c of cityMap[r] ?? []) citySet.add(c);
+        if (citySet.size > 0) {
+          return withTerritoryLabels(Array.from(citySet), cityLabelByValue, true);
+        }
       }
       return mapTerritoryOpts(clientRefs?.city_options ?? []).map((o) => ({
         value: o.value,

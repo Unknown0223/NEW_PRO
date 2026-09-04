@@ -80,8 +80,8 @@ final filteredClientsProvider = FutureProvider<List<Map<String, dynamic>>>((ref)
     }
   }
 
-  // Kun tabida faqat rejalashtirilgan mijozlar (veb: agent + kun filtri bilan mos).
-  final includeUnscheduled = weekdayTab <= 0 && !tenantHasAnyVisitSchedule(all);
+  // Kun tabida reja yo‘q bo‘lsa ham katalog ko‘rinsin (sinxron kunlari bo‘sh).
+  final includeUnscheduled = !tenantHasAnyVisitSchedule(all);
 
   return applyOutletFilters(
     all,

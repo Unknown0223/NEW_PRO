@@ -33,6 +33,11 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("GET", "/health")).toBeNull();
   });
 
+  it("does not apply web photo-report RBAC to mobile photo routes", () => {
+    expect(matchRule("GET", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
+  });
+
   it("has rules for core modules (orders, warehouse, cash, clients)", () => {
     const joined = ROUTE_PERMISSION_RULES.flatMap((r) => r.anyOf).join(" ");
     expect(joined).toContain("orders.zakaz.");

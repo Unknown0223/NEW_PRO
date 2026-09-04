@@ -4,15 +4,23 @@ model WorkSlot {
   slot_code          String                  @db.VarChar(32)
   label              String?                 @db.VarChar(128)
   branch_code        String?                 @db.VarChar(120)
+  /// Bir nechta filial; `branch_code` — birinchisi / asosiy.
+  branch_codes       String[]                @default([])
   direction_id       Int?
   slot_type          String                  @default("agent") @db.VarChar(32)
   is_active          Boolean                 @default(true)
   sort_order         Int                     @default(0)
   /// Joy konfiguratsiyasi (P0): manba — slot; faol userga mirror.
   territory          String?
+  /// Bir nechta hudud: har biri «zona / oblast / shahar»; `territory` — birinchisi (compat).
+  territories        String[]                @default([])
   warehouse_id       Int?
+  /// Bir nechta ombor; `warehouse_id` — birinchisi / asosiy.
+  warehouse_ids      Int[]                   @default([])
   return_warehouse_id Int?
   cash_desk_id       Int?
+  /// Bir nechta kassa; `cash_desk_id` — birinchisi / asosiy.
+  cash_desk_ids      Int[]                   @default([])
   price_type         String?
   price_types        Json                    @default("[]")
   entitlements       Json                    @default("{}")
@@ -23,6 +31,8 @@ model WorkSlot {
   consignment_close_hour   Int               @default(0)
   consignment_close_minute Int               @default(0)
   supervisor_user_id Int?
+  /// SVR jamoa: agent ishchi o‘rinlari (slot id). Faol agentlarning supervisor_user_id shu yerdan sinxronlanadi.
+  supervisee_agent_slot_ids Int[]            @default([])
   warehouse_staff_entitlements Json          @default("{}")
   expeditor_assignment_rules   Json          @default("{}")
   created_at         DateTime                @default(now())
@@ -41,6 +51,9 @@ model WorkSlot {
   client_assignments ClientAgentAssignment[]
   face_verification_logs FaceVerificationLog[]
   orders             Order[]
+  sales_kpi_plan_targets SalesKpiPlanTarget[]
+  kpi_group_agents       KpiGroupAgent[]
+  agent_route_days       AgentRouteDay[]
 
   @@unique([tenant_id, slot_code])
   @@index([tenant_id, branch_code])
@@ -240,7 +253,8 @@ model ErrorEvent {
   request_id   String?   @db.VarChar(64)
   http_status  Int?
   error_code   String?   @db.VarChar(128)
-  message      String    @db.VarChar(500)
+  /// To‘liq xato matni (mobil/backend); qisqa ko‘rinish UI da truncate.
+  message      String    @db.Text
   path         String?   @db.VarChar(255)
   method       String?   @db.VarChar(16)
   /// android | ios | server

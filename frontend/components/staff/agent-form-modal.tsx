@@ -15,7 +15,6 @@ import {
 } from "@/components/staff/agent-workspace-template-ui";
 import type { AgentRow } from "@/components/staff/agents-workspace";
 import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 
 function randomPassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -67,15 +66,11 @@ export function AgentFormModal({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [agent_type, setAgentType] = useState("Торговый представитель");
-  const [position, setPos] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [formErr, setFormErr] = useState<string | null>(null);
   const [kpi_color, setKpi] = useState("#d41c1c");
-  const [app_access, setAppAccess] = useState(true);
-  const [max_sessions, setMaxSessions] = useState(1);
   const [showPasswordField, setShowPasswordField] = useState(false);
 
   useEffect(() => {
@@ -100,15 +95,11 @@ export function AgentFormModal({
       setPhone("");
       setEmail("");
       setAgentType("Торговый представитель");
-      setPos("");
-      setCode("");
       setPinfl("");
       setLogin("");
       setPassword(randomPassword());
       setFormErr(null);
       setKpi("#d41c1c");
-      setAppAccess(true);
-      setMaxSessions(2);
       setShowPasswordField(true);
       return;
     }
@@ -121,15 +112,11 @@ export function AgentFormModal({
     setPhone(r.phone ?? "");
     setEmail(r.email ?? "");
     setAgentType(r.agent_type ?? "Торговый представитель");
-    setPos(r.position ?? "");
-    setCode(r.code ?? "");
     setPinfl(r.pinfl ?? "");
     setLogin(r.login);
     setPassword("");
     setFormErr(null);
     setKpi(r.kpi_color || "#d41c1c");
-    setAppAccess(r.app_access);
-    setMaxSessions(r.max_sessions);
   }, [open, isNew, r]);
 
   const handleSave = async () => {
@@ -142,12 +129,8 @@ export function AgentFormModal({
       phone: phone.trim() || null,
       email: email.trim() || null,
       agent_type: agent_type.trim() || null,
-      position: position.trim() || null,
-      code: code.trim() || null,
       pinfl: pinfl.trim() || null,
-      kpi_color: kpi_color || null,
-      app_access,
-      max_sessions
+      kpi_color: kpi_color || null
     };
     if (isNew) {
       onSubmitCreate({
@@ -193,7 +176,9 @@ export function AgentFormModal({
             <p className="text-xs text-slate-500">
               {isNew
                 ? "Заполните данные нового торгового представителя"
-                : `Код: ${r?.code ?? "—"}`}
+                : r?.work_slot_code
+                  ? `Рабочее место: ${r.work_slot_code}`
+                  : "Личные данные"}
             </p>
           </div>
           <button
@@ -269,7 +254,7 @@ export function AgentFormModal({
 
           <AgentFormSection title="Учётная запись и роль" icon={<Package className="h-4 w-4" />}>
             <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Склад, филиал, территория и назначение на место — только в{" "}
+              Код места, должность, доступ к приложению и сессии — в{" "}
               <a href="/work-slots" className="font-semibold underline">
                 Рабочее место
               </a>
@@ -302,20 +287,6 @@ export function AgentFormModal({
                   ]}
                 />
               </AgentFormField>
-              <AgentFormField label="Код">
-                <div className="relative">
-                  <input
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    maxLength={20}
-                    className={`${agentModalInputClass} pr-14`}
-                    placeholder="GGTSH005"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                    {code.length}/20
-                  </span>
-                </div>
-              </AgentFormField>
               <AgentFormField label="Логин">
                 <div className="relative">
                   <input
@@ -330,22 +301,13 @@ export function AgentFormModal({
                   </span>
                 </div>
               </AgentFormField>
-              <AgentFormField label="Должность">
-                <StaffPositionSelect
-                  tenantSlug={tenantSlug}
-                  value={position}
-                  onChange={setPos}
-                  roleFilter="agent"
-                  className={agentModalInputClass}
-                />
-              </AgentFormField>
               {formErr ? (
                 <p className="text-xs text-red-600 col-span-full">{formErr}</p>
               ) : null}
             </div>
           </AgentFormSection>
 
-          <AgentFormSection title="Настройки доступа" icon={<Shield className="h-4 w-4" />}>
+          <AgentFormSection title="Пароль" icon={<Shield className="h-4 w-4" />}>
             <div className="space-y-3">
               <button
                 type="button"
@@ -372,32 +334,6 @@ export function AgentFormModal({
                   />
                 </AgentFormField>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <AgentFormField label="Макс. сессий">
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={max_sessions}
-                    onChange={(e) => setMaxSessions(Number(e.target.value))}
-                    className={agentModalInputClass}
-                  />
-                </AgentFormField>
-                <AgentFormField label="Доступ к приложению">
-                  <label className="flex h-[42px] items-center justify-between rounded-lg border border-border bg-card px-3">
-                    <span className="text-sm text-slate-700">Включен</span>
-                    <input
-                      type="checkbox"
-                      className="peer sr-only"
-                      checked={app_access}
-                      onChange={(e) => setAppAccess(e.target.checked)}
-                    />
-                    <div className="relative h-5 w-9 rounded-full bg-muted transition peer-checked:bg-teal-500">
-                      <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-card shadow transition peer-checked:translate-x-4" />
-                    </div>
-                  </label>
-                </AgentFormField>
-              </div>
             </div>
           </AgentFormSection>
 
@@ -427,7 +363,6 @@ export function AgentFormModal({
               </div>
             </div>
           </AgentFormSection>
-
         </div>
 
         <div className="border-t border-border bg-muted px-6 py-4">

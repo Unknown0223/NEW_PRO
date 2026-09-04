@@ -5,7 +5,13 @@ import type { ListCatalogOpts } from "./product-catalog.types";
 import { catalogDeactivateData, catalogRestoreData, listWhere, normCode } from "./product-catalog.shared";
 
 export async function listProductCatalogGroups(tenantId: number, opts: ListCatalogOpts) {
-  const where = listWhere(tenantId, opts);
+  const base = listWhere(tenantId, opts);
+  const where: Prisma.ProductCatalogGroupWhereInput = { ...base };
+  if (opts.category_id != null && opts.category_id > 0) {
+    where.products = {
+      some: { tenant_id: tenantId, category_id: opts.category_id }
+    };
+  }
   const [total, rows] = await Promise.all([
     prisma.productCatalogGroup.count({ where }),
     prisma.productCatalogGroup.findMany({

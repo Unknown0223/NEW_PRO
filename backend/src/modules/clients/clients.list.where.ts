@@ -1,16 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import {
-  buildCityTerritoryHints,
-  expandRegionFilterSynonyms,
-  referencesWithResolvedTerritoryNodes
-} from "../tenant-settings/tenant-settings.service";
-import type { CityTerritoryHintDto } from "../tenant-settings/tenant-settings.service";
-import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
 import type { ListClientsQuery } from "./clients.types";
 import { buildClientListSearchOrClause } from "./clients.list.search";
 import type { ScopedReportActor } from "../access/access-agent-scope";
 import { intersectRequestedAgentIds } from "../access/access-agent-scope";
+import {
+  clientWhereForRegionFilter,
+  clientWhereForZoneFilter,
+  loadClientTerritoryFilterBundle
+} from "./clients.territory-filter";
 
 export async function clientIdsWithVisitWeekday(tenantId: number, day: number): Promise<number[]> {
   const d = Math.floor(day);
@@ -49,74 +47,6 @@ export async function clientIdsWithAgentVisitWeekday(
   return rows.map((r) => r.client_id);
 }
 
-async function loadTenantReferencesForClientTerritoryFilters(tenantId: number): Promise<{
-  hints: Record<string, CityTerritoryHintDto>;
-  ref: Record<string, unknown> | undefined;
-}> {
-  const row = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { settings: true }
-  });
-  const refRaw = (row?.settings as { references?: Record<string, unknown> } | null)?.references as
-    | Record<string, unknown>
-    | undefined;
-  const ref = refRaw ? referencesWithResolvedTerritoryNodes(refRaw) : undefined;
-  return {
-    hints: buildCityTerritoryHints(ref),
-    ref
-  };
-}
-
-function cityKeysMatchingRegionInHints(
-  hints: Record<string, CityTerritoryHintDto>,
-  regionFilter: string
-): string[] {
-  const rf = regionFilter.trim();
-  if (!rf) return [];
-  const rfNorm = normKeyTerritoryMatch(rf);
-  const uniq = new Set<string>();
-  for (const [cityKey, hint] of Object.entries(hints)) {
-    const rs = (hint.region_stored ?? "").trim();
-    const rl = (hint.region_label ?? "").trim();
-    if (!rs && !rl) continue;
-    const match =
-      rs === rf ||
-      rl === rf ||
-      normKeyTerritoryMatch(rs) === rfNorm ||
-      normKeyTerritoryMatch(rl) === rfNorm;
-    if (match) {
-      const k = cityKey.trim();
-      if (k) uniq.add(k);
-    }
-  }
-  return [...uniq];
-}
-
-function cityKeysMatchingZoneInHints(
-  hints: Record<string, CityTerritoryHintDto>,
-  zoneFilter: string
-): string[] {
-  const zf = zoneFilter.trim();
-  if (!zf) return [];
-  const zfNorm = normKeyTerritoryMatch(zf);
-  const uniq = new Set<string>();
-  for (const [cityKey, hint] of Object.entries(hints)) {
-    const zs = (hint.zone_stored ?? "").trim();
-    const zl = (hint.zone_label ?? "").trim();
-    if (!zs && !zl) continue;
-    const match =
-      zs === zf ||
-      zl === zf ||
-      normKeyTerritoryMatch(zs) === zfNorm ||
-      normKeyTerritoryMatch(zl) === zfNorm;
-    if (match) {
-      const k = cityKey.trim();
-      if (k) uniq.add(k);
-    }
-  }
-  return [...uniq];
-}
-
 /** Ro‘yxat, eksport va count uchun umumiy WHERE. `null` — hech qachon mos kelmas (masalan hafta kuni bo‘yicha bo‘sh). */
 export async function buildClientListWhereInput(
   tenantId: number,
@@ -133,37 +63,24 @@ export async function buildClientListWhereInput(
   const zoneKeys = [...new Set(zoneList)];
   const territoryBundle =
     regionQ || zoneKeys.length > 0
-      ? await loadTenantReferencesForClientTerritoryFilters(tenantId)
-      : { hints: {} as Record<string, CityTerritoryHintDto>, ref: undefined as Record<string, unknown> | undefined };
+      ? await loadClientTerritoryFilterBundle(tenantId)
+      : { hints: {}, ref: undefined };
 
   if (q.is_active === true) andList.push({ is_active: true });
   if (q.is_active === false) andList.push({ is_active: false });
   const cat = q.category?.trim();
   if (cat) andList.push({ category: cat });
   if (regionQ) {
-    const cityKeys = cityKeysMatchingRegionInHints(territoryBundle.hints, regionQ);
-    const regionSynonyms = expandRegionFilterSynonyms(territoryBundle.ref, regionQ);
-    const orRegion: Prisma.ClientWhereInput[] = regionSynonyms.map((v) => ({
-      region: { equals: v, mode: "insensitive" }
-    }));
-    if (cityKeys.length > 0) orRegion.push({ city: { in: cityKeys } });
-    andList.push({ OR: orRegion });
+    const clause = clientWhereForRegionFilter(territoryBundle, [regionQ]);
+    if (clause) andList.push(clause);
   }
   const district = q.district?.trim();
   if (district) andList.push({ district });
   const neighborhood = q.neighborhood?.trim();
   if (neighborhood) andList.push({ neighborhood });
   if (zoneKeys.length > 0) {
-    const orZone: Prisma.ClientWhereInput[] = [];
-    for (const zoneQ of zoneKeys) {
-      const cityKeys = cityKeysMatchingZoneInHints(territoryBundle.hints, zoneQ);
-      orZone.push(
-        { zone: zoneQ },
-        { zone: { equals: zoneQ, mode: "insensitive" } },
-        ...(cityKeys.length > 0 ? [{ city: { in: cityKeys } }] : [])
-      );
-    }
-    andList.push({ OR: orZone });
+    const clause = clientWhereForZoneFilter(territoryBundle, zoneKeys);
+    if (clause) andList.push(clause);
   }
   const city = q.city?.trim();
   if (city) andList.push({ city });

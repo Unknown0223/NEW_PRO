@@ -10,6 +10,20 @@ function isTechnicalPrismaMessage(m: string): boolean {
 
 /** Async sessiya / sync apply — foydalanuvchiga sodda o‘zbekcha matn. */
 export function humanizeMigrationApplyError(e: unknown): string {
+  const prismaCode =
+    e !== null && typeof e === "object" && "code" in e
+      ? String((e as { code?: unknown }).code ?? "")
+      : "";
+  if (prismaCode === "P2002") {
+    return "Dublikat yozuv topildi. Bo‘sh tenantga yuklang yoki «Eskisini qoldirish / Yangisini almashtirish» ni tanlang.";
+  }
+  if (prismaCode === "P2003") {
+    return "Bog‘lanish xatosi (foreign key). Avval spravochniklarni import qiling yoki bo‘sh tenantga yuklang.";
+  }
+  if (prismaCode === "P2021" || prismaCode === "P2022") {
+    return "Ma’lumotlar bazasi yangilanmagan. Administratorga murojaat qiling.";
+  }
+
   if (e instanceof Error) {
     const m = e.message.trim();
     if (m === "TARGET_NOT_EMPTY") {
@@ -17,6 +31,18 @@ export function humanizeMigrationApplyError(e: unknown): string {
     }
     if (m === "PROFILE_MISSING") {
       return "Kompaniya profili topilmadi. Arxiv to‘liq emas — qayta eksport qiling.";
+    }
+    if (m === "NOT_FOUND") {
+      return "Tenant yoki profil topilmadi. Sahifani yangilab qayta urinib ko‘ring.";
+    }
+    if (m === "INVALID_BRANCH_CASH_DESK") {
+      return "Filialdagi kassa ID maqsad tenantda yo‘q. Avval kassalar/spravochniklar import qilinsin yoki bo‘sh tenantga yuklang.";
+    }
+    if (m === "DUPLICATE_BRANCH_CASH_DESK") {
+      return "Filial sozlamalarida bir xil kassa ikki marta bog‘langan. Arxivdagi filial/kassa bog‘lanishini tekshiring.";
+    }
+    if (m === "EMPTY_EXPORT") {
+      return "Eksport bo‘sh chiqdi. Qayta eksport qiling.";
     }
     if (m.startsWith("INVALID_BACKUP:")) {
       return m.replace("INVALID_BACKUP:", "").trim() || "Zaxira arxivi yaroqsiz.";
@@ -40,7 +66,7 @@ export function humanizeMigrationApplyError(e: unknown): string {
       return "Import amalga oshmadi: ba’zi bog‘lanishlar topilmadi. Spravochniklarni tekshirib, qayta urinib ko‘ring.";
     }
     if (/^[A-Z][A-Z0-9_]+$/.test(m) || /^P20\d{2}/.test(m)) {
-      return "Import amalga oshmadi. Qayta urinib ko‘ring yoki bo‘sh tenantga yuklang.";
+      return `Import amalga oshmadi (${m}). Qayta urinib ko‘ring yoki bo‘sh tenantga yuklang.`;
     }
     if (/[A-Za-z]:\\|node_modules|\.ts:\d+/.test(m)) {
       return "Import amalga oshmadi. Qayta urinib ko‘ring.";
@@ -73,6 +99,26 @@ export function mapMigrationApplyError(
       400,
       "ProfileMissing",
       "Kompaniya profili topilmadi. Arxiv to‘liq emas — qayta eksport qiling."
+    );
+    return true;
+  }
+  if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
+    void sendApiError(
+      reply,
+      request,
+      400,
+      "InvalidBranchCashDesk",
+      humanizeMigrationApplyError(e)
+    );
+    return true;
+  }
+  if (e instanceof Error && e.message === "DUPLICATE_BRANCH_CASH_DESK") {
+    void sendApiError(
+      reply,
+      request,
+      400,
+      "DuplicateBranchCashDesk",
+      humanizeMigrationApplyError(e)
     );
     return true;
   }

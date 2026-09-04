@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,7 @@ function pickDefaultCurrency(refs: SettingsProfile["references"] | undefined): s
 
 export default function ExpensesPage() {
   const tenant = useTenant();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pnl, setPnl] = useState<PnlReport | null>(null);
@@ -128,7 +130,14 @@ export default function ExpensesPage() {
   };
 
   const handleRestoreExpense = async (id: number) => {
-    if (!confirm(`Chiqim #${id} ni tiklash?`)) return;
+    const ok = await confirm({
+      title: "Восстановить",
+      message: `Восстановить расход #${id}?`,
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: false
+    });
+    if (!ok) return;
     await apiFetch(`/api/${tenant}/expenses/${id}/restore`, { method: "POST" });
     fetchAll();
   };
@@ -381,6 +390,7 @@ export default function ExpensesPage() {
         error={voidError}
         consequences={["Запись исчезнет из активного списка", "P&L пересчитается без этого расхода"]}
       />
+      {confirmDialog}
     </div>
   );
 }

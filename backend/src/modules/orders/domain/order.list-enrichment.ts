@@ -1,5 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
+import { inferListCreationChannel } from "./order.creation-channel";
 
 const PO_ZAKAZU_RE = /По\s+заказу\s+(\S+)/i;
 
@@ -34,13 +34,6 @@ function parseSourceFromComment(comment: string | null): string | null {
   return m?.[1]?.trim() || null;
 }
 
-function roleToChannel(role: string | null | undefined): "web" | "mobile" {
-  const r = (role ?? "").toLowerCase();
-  // Agent va ekspeditor (dastavchik) — mobil ilovadan yaratadi.
-  if (r.includes("agent") || r.includes("expeditor")) return "mobile";
-  return "web";
-}
-
 /**
  * Ro‘yxat uchun qo‘shimcha maydonlar: manba zakaz, qaytish/otgruzka sanalari, yaratilish kanali.
  */
@@ -62,12 +55,13 @@ export async function loadOrdersListMetaEnrichment(
   const ids = rows.map((r) => r.id);
 
   const statusRows = await prisma.orderStatusLog.findMany({
-    where: { order_id: { in: ids }, superseded_at: null },
+    where: { order_id: { in: ids } },
     orderBy: [{ order_id: "asc" }, { created_at: "asc" }],
     select: {
       order_id: true,
       to_status: true,
       created_at: true,
+      superseded_at: true,
       user: { select: { login: true, name: true, role: true } }
     }
   });
@@ -89,17 +83,19 @@ export async function loadOrdersListMetaEnrichment(
         role: log.user.role
       });
     }
-    if (log.to_status === "confirmed" && !confirmedAt.has(log.order_id)) {
-      confirmedAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "delivering" && !deliveringAt.has(log.order_id)) {
-      deliveringAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "delivered" && !deliveredAt.has(log.order_id)) {
-      deliveredAt.set(log.order_id, log.created_at);
-    }
-    if (log.to_status === "returned" && !returnedAt.has(log.order_id)) {
-      returnedAt.set(log.order_id, log.created_at);
+    if (log.superseded_at == null) {
+      if (log.to_status === "confirmed" && !confirmedAt.has(log.order_id)) {
+        confirmedAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "delivering" && !deliveringAt.has(log.order_id)) {
+        deliveringAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "delivered" && !deliveredAt.has(log.order_id)) {
+        deliveredAt.set(log.order_id, log.created_at);
+      }
+      if (log.to_status === "returned" && !returnedAt.has(log.order_id)) {
+        returnedAt.set(log.order_id, log.created_at);
+      }
     }
   }
 
@@ -172,9 +168,10 @@ export async function loadOrdersListMetaEnrichment(
 
     const firstUser = firstLogUser.get(r.id);
     const agentRole = r.agent_id != null ? agentRoleById.get(r.agent_id) : undefined;
-    const channel = firstUser?.role
-      ? roleToChannel(firstUser.role)
-      : roleToChannel(agentRole);
+    const channel = inferListCreationChannel({
+      firstLogRole: firstUser?.role,
+      agentRole
+    });
 
     const isReturnType =
       r.order_type === "return" ||

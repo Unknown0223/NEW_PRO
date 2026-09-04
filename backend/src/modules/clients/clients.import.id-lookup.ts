@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { chunkNumericIds } from "./clients.import.runtime";
-import { classifyImportClientDbId } from "./clients.import.assign";
+import { classifyFlexibleImportId } from "./clients.import.flexible-id";
 import { readArrayCell } from "./clients.import.parse";
 
 /** PostgreSQL `ANY(int[])` — bitta bind; 50k+ ID uchun ham xavfsiz. */
@@ -36,8 +36,11 @@ export async function loadImportExplicitIdConflicts(
   for (let r = firstDataRow; r <= lastRowIdx; r++) {
     const row = rows[r];
     if (!Array.isArray(row)) continue;
-    const parsed = classifyImportClientDbId(readArrayCell(row, colIndexByKey.client_db_id));
-    if (parsed.kind === "ok") candidateIds.add(parsed.id);
+    const parsed = classifyFlexibleImportId(readArrayCell(row, colIndexByKey.client_db_id), {
+      maxCodeLen: 32,
+      label: "ИД"
+    });
+    if (parsed.kind === "ok_db") candidateIds.add(parsed.id);
   }
   if (candidateIds.size === 0) return { foreignIdSet, mergedIdSet };
   const idList = Array.from(candidateIds);
@@ -156,6 +159,65 @@ export async function fetchImportExistingClients(
         AND c.id = ANY(${chunk}::int[])
     `;
     out.push(...rows);
+  }
+  return out;
+}
+
+export async function fetchImportExistingClientsByCodes(
+  tenantId: number,
+  codes: string[]
+): Promise<ImportExistingClientRow[]> {
+  const uniq = [...new Set(codes.map((c) => c.trim()).filter(Boolean))];
+  if (uniq.length === 0) return [];
+  const out: ImportExistingClientRow[] = [];
+  const CHUNK = 5_000;
+  for (let i = 0; i < uniq.length; i += CHUNK) {
+    const chunk = uniq.slice(i, i + CHUNK);
+    const rows = await prisma.client.findMany({
+      where: {
+        tenant_id: tenantId,
+        merged_into_client_id: null,
+        client_code: { in: chunk }
+      },
+      select: {
+        id: true,
+        name: true,
+        legal_name: true,
+        phone: true,
+        phone_normalized: true,
+        address: true,
+        client_code: true,
+        client_pinfl: true,
+        category: true,
+        client_type_code: true,
+        credit_limit: true,
+        is_active: true,
+        responsible_person: true,
+        landmark: true,
+        inn: true,
+        pdl: true,
+        logistics_service: true,
+        license_until: true,
+        working_hours: true,
+        region: true,
+        district: true,
+        city: true,
+        neighborhood: true,
+        zone: true,
+        street: true,
+        house_number: true,
+        apartment: true,
+        gps_text: true,
+        latitude: true,
+        longitude: true,
+        notes: true,
+        client_format: true,
+        sales_channel: true,
+        product_category_ref: true,
+        contact_persons: true
+      }
+    });
+    out.push(...(rows as ImportExistingClientRow[]));
   }
   return out;
 }

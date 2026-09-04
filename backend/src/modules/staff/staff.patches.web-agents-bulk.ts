@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { assertValidMaxSessions, clampAdjustedMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onBulkAppAccessChanged } from "../auth/app-access.service";
 import { validateConsignmentCloseSchedule } from "../consignment/consignment-settings";
@@ -56,6 +57,8 @@ export type BulkAgentsInput =
       close_minute: number;
     }
   | { action: "set_app_access"; agent_ids: number[]; app_access: boolean }
+  | { action: "set_is_active"; agent_ids: number[]; is_active: boolean }
+  | { action: "set_agent_type"; agent_ids: number[]; agent_type: string | null }
   | { action: "revoke_sessions"; agent_ids: number[] }
   | { action: "set_max_sessions"; agent_ids: number[]; max_sessions: number }
   | { action: "adjust_max_sessions"; agent_ids: number[]; delta: number }
@@ -193,6 +196,28 @@ export async function bulkPatchAgents(
       await auditBulk(ids.length);
       return { updated: ids.length };
     }
+    case "set_is_active": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { is_active: input.is_active }
+      });
+      await auditBulk(ids.length, { is_active: input.is_active });
+      return { updated: ids.length };
+    }
+    case "set_agent_type": {
+      const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
+      const agentType =
+        input.agent_type == null || !String(input.agent_type).trim()
+          ? null
+          : String(input.agent_type).trim().slice(0, 120);
+      await prisma.user.updateMany({
+        where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
+        data: { agent_type: agentType }
+      });
+      await auditBulk(ids.length, { agent_type: agentType });
+      return { updated: ids.length };
+    }
     case "revoke_sessions": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
       const now = new Date();
@@ -206,7 +231,7 @@ export async function bulkPatchAgents(
     case "set_max_sessions": {
       const ids = await assertTenantAgentIdList(tenantId, input.agent_ids);
       const n = input.max_sessions;
-      if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("BAD_MAX_SESSIONS");
+      assertValidMaxSessions(n);
       await prisma.user.updateMany({
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { max_sessions: n }
@@ -224,7 +249,7 @@ export async function bulkPatchAgents(
       });
       await prisma.$transaction(
         rows.map((u) => {
-          const next = Math.min(99, Math.max(1, u.max_sessions + d));
+          const next = clampAdjustedMaxSessions(u.max_sessions, d);
           return prisma.user.update({ where: { id: u.id }, data: { max_sessions: next } });
         })
       );

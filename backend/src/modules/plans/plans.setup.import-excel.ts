@@ -8,6 +8,7 @@ import { getDirection, parseDecimalInput } from "./plans.setup.shared";
 import { ensurePlansAndTargets } from "./plans.setup.create";
 import { canRoleSetPlan } from "./plans.setup.roles";
 import type { PlansSetupImportBody } from "./plans.setup.schema";
+import { getActiveSlotForUser } from "../work-slots/work-slots.query.read";
 
 export type PlansImportApplyResult = {
   updated: number;
@@ -218,11 +219,13 @@ export async function applyPlansSetupImport(
         });
         updated += 1;
       } else {
+        const slot = await getActiveSlotForUser(row.userId);
         await prisma.salesKpiPlanTarget.create({
           data: {
             tenant_id: tenantId,
             plan_id: planId,
             user_id: row.userId,
+            work_slot_id: slot?.slot_id ?? null,
             cost: (patch.cost as Prisma.Decimal | undefined) ?? undefined,
             count: (patch.count as Prisma.Decimal | undefined) ?? undefined,
             volume: (patch.volume as Prisma.Decimal | undefined) ?? undefined,

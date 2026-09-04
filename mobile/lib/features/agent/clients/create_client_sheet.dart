@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../core/api/api_exceptions.dart';
 import '../../../core/api/dio_client.dart' show ensureAuthTokens, accessTokenProvider;
@@ -9,9 +10,14 @@ import '../../../core/auth/session.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/gps/gps_tracker.dart';
+import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/time/work_region_time.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../route/agent_route_provider.dart';
+import '../route/route_planning_provider.dart';
 import 'clients_list_provider.dart';
 import 'client_dynamic_form.dart';
 
@@ -70,18 +76,24 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
         return;
       }
 
-      Position? pos;
+      double? lat;
+      double? lon;
       if (showCoordinatesField(_clientCfg)) {
-        try {
-          pos = await Geolocator.getCurrentPosition();
-        } catch (_) {}
+        final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
+        if (attached.position != null) {
+          lat = attached.position!.latitude;
+          lon = attached.position!.longitude;
+        } else if (isClientFieldRequired(_clientCfg, 'coordinates')) {
+          if (mounted) setState(() => _error = attached.message);
+          return;
+        }
       }
 
       final body = ClientDynamicFormFields.toApiBody(
         _clientCfg,
         _controllers,
-        latitude: pos?.latitude,
-        longitude: pos?.longitude,
+        latitude: lat,
+        longitude: lon,
       );
       final name = (body.remove('name') ?? _controllers['name']?.text.trim() ?? '').toString();
       var phoneRaw = (body.remove('phone') ?? _controllers['phone']?.text.trim() ?? '').toString();
@@ -117,13 +129,22 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
           'client_code': row['client_code'],
           'category': row['category'],
           'is_active': isActive == false ? 0 : 1,
-          'latitude': row['latitude'],
-          'longitude': row['longitude'],
+          'latitude': row['latitude'] ?? lat,
+          'longitude': row['longitude'] ?? lon,
+          if (visitWeekdays.isNotEmpty) 'visit_weekdays': jsonEncode(visitWeekdays),
         },
       ]);
 
       ref.invalidate(clientsListProvider);
-      resetOutletFilters(ref);
+      ref.invalidate(todayRouteProvider);
+      ref.invalidate(plannedDailyRouteProvider);
+      ref.invalidate(realTodayRouteProvider);
+      ref.read(outletCategoryFilterProvider.notifier).state = null;
+      ref.read(outletVisitStatusFilterProvider.notifier).state = S.dayAll;
+      ref.read(outletDebtsOnlyProvider.notifier).state = false;
+      final todayWd = serverTodayWeekday();
+      ref.read(outletWeekdayTabProvider.notifier).state =
+          visitWeekdays.contains(todayWd) ? todayWd : 0;
 
       if (mounted) {
         if (_clientCfg.requireNewClientApproval || isActive == false) {

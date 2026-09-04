@@ -83,6 +83,7 @@ Set<int> resolveRouteClientIdsForDay({
 }
 
 /// Bosh sahifa: bugungi kunlik vizit rejasi — ОКБ (vizitlar ro‘yxati bilan mos).
+/// Tashrif kunlari umuman yo‘q bo‘lsa — katalog (Визиты «Чт» fallback bilan bir xil).
 Set<int> resolveDailyVisitPlanIds({
   required Map<String, dynamic>? route,
   required List<Map<String, dynamic>> allClients,
@@ -91,7 +92,12 @@ Set<int> resolveDailyVisitPlanIds({
 }) {
   final plannedToday = plannedClientIdsForDay(allClients, weekday, todayIso);
   if (plannedToday.isNotEmpty) return plannedToday;
-  return routeClientIdsFromRoute(route);
+  final fromRoute = routeClientIdsFromRoute(route);
+  if (fromRoute.isNotEmpty) return fromRoute;
+  if (!tenantHasAnyVisitSchedule(allClients)) {
+    return activeClientIds(allClients);
+  }
+  return {};
 }
 
 /// Reja bo‘yicha bajarilgan tashriflar.

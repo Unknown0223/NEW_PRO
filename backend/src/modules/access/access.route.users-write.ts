@@ -39,9 +39,13 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     await repairNestedGrantDelegationKeys(tenantId, user.id);
-    const [matrix, grantDelegationOperationKeys, supervisees, branch_links, warehouse_links, cash_links, pm_links, td_links, territoryIds] = await Promise.all([
+    const [matrix, grantDelegationOperationKeys, extraRoleRows, supervisees, branch_links, warehouse_links, cash_links, pm_links, td_links, territoryIds] = await Promise.all([
       getUserAccessMatrix(tenantId, user.id, user.role),
       loadGrantDelegationOperationKeys(tenantId, user.id),
+      prisma.userRole.findMany({
+        where: { user_id: id, role: { tenant_id: tenantId } },
+        select: { role: { select: { key: true } } }
+      }),
       prisma.user.findMany({
         where: { tenant_id: tenantId, supervisor_user_id: id },
         select: { id: true, login: true, name: true, code: true, role: true, is_active: true },
@@ -72,6 +76,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         },
         matrix,
         grant_delegation_operation_keys: grantDelegationOperationKeys,
+        extra_role_keys: extraRoleRows.map((r) => r.role.key).filter((k) => k !== user.role),
         supervisees,
         scope: {
           branches: branch_links.map((b) => b.branch_code),
@@ -112,6 +117,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
       body.trade_direction_ids !== undefined;
     const superviseeTouched = body.supervisee_user_ids !== undefined;
 
+    const extraRoleTouched = body.extra_role_keys !== undefined;
     try {
       await applyAccessUserPatchBody(tenantId, id, body, existing);
     } catch (e) {
@@ -141,7 +147,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
 
     const actionTypes: string[] = [];
     if (body.role?.trim() || body.is_active != null) actionTypes.push("user.profile.updated");
-    if (body.remove_permission_keys?.length || permDefined || body.grant_delegation_allow?.length || body.grant_delegation_revoke?.length) actionTypes.push("permissions.updated");
+    if (body.remove_permission_keys?.length || permDefined || body.grant_delegation_allow?.length || body.grant_delegation_revoke?.length || extraRoleTouched) actionTypes.push("permissions.updated");
     if (scopeTouched) actionTypes.push("scope.updated");
     if (superviseeTouched) actionTypes.push("supervisees.updated");
     const action_type = actionTypes.length ? actionTypes.join("+") : "access.updated";

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_build_info.dart';
 import '../device/mobile_device_info.dart';
+import '../errors/error_reporter.dart';
 import '../l10n/app_strings_ru.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
@@ -29,7 +30,18 @@ int _compareSemver(String a, String b) {
   return 0;
 }
 
+Completer<bool>? _inFlightUpdateDialog;
+
+/// Boshqa joylar (listener / notification) dialog ochiqligini bilishi uchun.
+bool get isAppUpdateDialogInFlight {
+  final g = _inFlightUpdateDialog;
+  return g != null && !g.isCompleted;
+}
+
+const kAppUpdateDialogRouteName = 'app_update_dialog';
+
 /// Kalit mos: ustiga yangilash. Kalit mos emas: Downloads → o‘chirish → qayta o‘rnatish.
+/// Bir vaqtda bitta oyna — ustma-ust dialog ochilmasin.
 Future<bool> showAppUpdateDialog(
   AppUpdateInfo info, {
   required bool blocking,
@@ -37,25 +49,53 @@ Future<bool> showAppUpdateDialog(
   BuildContext? context,
 }) async {
   if (!info.hasAction) return true;
+  final existing = _inFlightUpdateDialog;
+  if (existing != null && !existing.isCompleted) {
+    return existing.future;
+  }
 
   final ctx = context ?? rootNavigatorKey.currentContext;
-  if (ctx == null) {
+  if (ctx == null || !ctx.mounted) {
     return !blocking;
   }
 
-  final inApp = AppUpdateInstaller.canInstallInApp(info);
-  final result = await showDialog<bool>(
-    context: ctx,
-    barrierDismissible: !blocking,
-    builder: (dialogCtx) => _AppUpdateDialog(
-      info: info,
-      blocking: blocking,
-      inApp: inApp,
-      afterSync: afterSync,
-    ),
-  );
+  // Slotni sync band qilamiz — ikkinchi chaqiriq shu yerda qo‘shiladi.
+  final gate = Completer<bool>();
+  _inFlightUpdateDialog = gate;
 
-  return result ?? !blocking;
+  try {
+    final nav = Navigator.of(ctx, rootNavigator: true);
+    // Orphan / oldingi yangilash overlay qolgan bo‘lsa — yopamiz.
+    nav.popUntil((route) {
+      final name = route.settings.name;
+      if (name == kAppUpdateDialogRouteName) return false;
+      return true;
+    });
+
+    final inApp = AppUpdateInstaller.canInstallInApp(info);
+    final result = await showDialog<bool>(
+      context: ctx,
+      useRootNavigator: true,
+      barrierDismissible: !blocking,
+      routeSettings: const RouteSettings(name: kAppUpdateDialogRouteName),
+      builder: (dialogCtx) => _AppUpdateDialog(
+        info: info,
+        blocking: blocking,
+        inApp: inApp,
+        afterSync: afterSync,
+      ),
+    );
+    final proceed = result ?? !blocking;
+    if (!gate.isCompleted) gate.complete(proceed);
+    return proceed;
+  } catch (e) {
+    if (!gate.isCompleted) gate.complete(!blocking);
+    rethrow;
+  } finally {
+    if (_inFlightUpdateDialog == gate) {
+      _inFlightUpdateDialog = null;
+    }
+  }
 }
 
 class _AppUpdateDialog extends StatefulWidget {
@@ -304,9 +344,33 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> with WidgetsBindingO
         });
       } on AppUpdateSignatureException catch (e) {
         if (!mounted) return;
+        ErrorReporter.instance?.reportCaught(
+          e,
+          module: ErrorModules.update,
+          code: 'AppUpdateSignatureMismatch',
+          message: 'Обновление: несовпадение подписи APK',
+          path: '/mobile/app-update',
+          payload: {
+            'latest_version': widget.info.latestVersion,
+            'current_version': widget.info.currentVersion,
+            'apk_path': e.apkPath,
+          },
+        );
         await _enterSignatureRecovery(e);
-      } catch (e) {
+      } catch (e, st) {
         if (!mounted) return;
+        ErrorReporter.instance?.reportCaught(
+          e,
+          stack: st,
+          module: ErrorModules.update,
+          code: 'AppUpdateInstallFailed',
+          message: 'Обновление: загрузка/установка не удалась',
+          path: '/mobile/app-update',
+          payload: {
+            'latest_version': widget.info.latestVersion,
+            'current_version': widget.info.currentVersion,
+          },
+        );
         setState(() {
           _busy = false;
           _status = _friendlyUpdateError(e);

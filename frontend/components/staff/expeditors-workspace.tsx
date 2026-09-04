@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
-import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,16 +17,11 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { DEFAULT_TABLE_PAGE_SIZES } from "@/lib/table-page-sizes";
-import { StaffActiveSessionsDialog } from "@/components/staff/staff-active-sessions-dialog";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
-import { Eye, Link2, MonitorSmartphone, Pencil, Settings2, UserMinus } from "lucide-react";
-import Link from "next/link";
+import { KeyRound, Pencil, UserMinus } from "lucide-react";
 import { StaffFaceReferencePanel } from "@/components/staff/staff-face-reference-panel";
-import {
-  goToStaffWorkplaceConfig,
-  NeedWorkSlotDialog,
-  WorkplaceMovedNotice
-} from "@/components/staff/workplace-moved-notice";
+import { WorkplaceMovedNotice } from "@/components/staff/workplace-moved-notice";
+import { StaffPasswordChangeDialog } from "@/components/staff/staff-password-change-dialog";
 import { ExpeditorsFiltersRow } from "@/components/staff/expeditors-filters-row";
 import { AgentIconButton, AgentTemplateConfirmDialog } from "@/components/staff/agent-workspace-template-ui";
 import { StaffBulkFloatingBar } from "@/components/staff/staff-bulk-floating-bar";
@@ -44,29 +37,21 @@ import { useStaffKomandaBulk } from "@/hooks/use-staff-komanda-bulk";
 import { activeBranchNamesFromProfile } from "@/lib/branch-options";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { formatPersonDisplayName } from "@/lib/person-display";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { cn } from "@/lib/utils";
+import { buildTerritoryTreeOnlyCascade } from "@/lib/territory-client-filters";
+import type { TerritoryNode } from "@/lib/territory-tree";
 import {
-  StaffKomandaActiveSessionsCell,
   StaffKomandaApkCell,
-  StaffKomandaAppAccessToggle,
   StaffKomandaBranchCell,
-  StaffKomandaCodeCell,
   StaffKomandaCreatedAtCell,
   StaffKomandaDeviceCell,
   StaffKomandaFioCell,
   StaffKomandaLastSyncCell,
   StaffKomandaLoginCell,
-  StaffKomandaMaxSessionsCell,
   StaffKomandaPhoneCell,
   StaffKomandaPinflCell,
-  StaffKomandaPositionCell,
   StaffKomandaTerritoryCell,
   StaffKomandaWarehouseCell
 } from "@/components/staff/staff-komanda-table-cells";
-import { StaffPositionSelect } from "@/components/staff/staff-position-select";
-
-const POSITION_PRESETS_SETTINGS_HREF = "/settings/web-staff-position-presets";
 
 export type ExpeditorAssignmentRules = {
   price_types?: string[];
@@ -111,6 +96,7 @@ export type ExpeditorRow = {
   kpi_color: string | null;
   work_slot_id?: number | null;
   work_slot_code?: string | null;
+  has_face_reference?: boolean;
   agent_entitlements: {
     price_types?: string[];
     product_rules?: Array<{ category_id: number; all: boolean; product_ids?: number[] }>;
@@ -123,6 +109,7 @@ type TenantProfile = {
   references: {
     branches?: Array<{ id: string; name: string; active?: boolean }>;
     trade_directions?: string[];
+    territory_nodes?: TerritoryNode[];
     payment_method_entries?: Array<{
       id: string;
       name: string;
@@ -136,7 +123,6 @@ const COLS = [
   "Ф.И.О",
   "Авторизоваться",
   "Телефон",
-  "Код",
   "Склад",
   "Версия APK",
   "ПИНФЛ",
@@ -144,19 +130,15 @@ const COLS = [
   "Название устройства",
   "Последняя синхронизация",
   "Филиал",
-  "Должность",
-  "Дата создания",
-  "Доступ к приложение",
-  "Количество активных сессий",
-  "Максимальное количество сессий"
+  "Дата создания"
 ] as const;
 
-const EXPEDITOR_TABLE_ID = "staff.expeditors.v1";
+/** v2: код / должность / сессии / app_access olib tashlandi — Рабочее место */
+const EXPEDITOR_TABLE_ID = "staff.expeditors.v2";
 const EXPEDITOR_COLUMN_IDS = [
   "fio",
   "login",
   "phone",
-  "code",
   "warehouse",
   "apk_version",
   "pinfl",
@@ -164,11 +146,7 @@ const EXPEDITOR_COLUMN_IDS = [
   "device_name",
   "last_sync",
   "branch",
-  "position",
-  "created_at",
-  "app_access",
-  "active_sessions",
-  "max_sessions"
+  "created_at"
 ] as const;
 const EXPEDITOR_COLUMNS = EXPEDITOR_COLUMN_IDS.map((id, i) => ({
   id,
@@ -188,15 +166,12 @@ function randomPassword(len = 10) {
 type Props = { tenantSlug: string };
 
 export function ExpeditorsWorkspace({ tenantSlug }: Props) {
-  const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftBranch, setDraftBranch] = useState("");
   const [draftTd, setDraftTd] = useState("");
-  const [draftPos, setDraftPos] = useState("");
   const [appliedBranch, setAppliedBranch] = useState("");
   const [appliedTd, setAppliedTd] = useState("");
-  const [appliedPos, setAppliedPos] = useState("");
   const [search, setSearch] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -213,12 +188,9 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
 
   const [addOpen, setAddOpen] = useState(false);
   const [createExpeditorError, setCreateExpeditorError] = useState<string | null>(null);
-  const [infoRow, setInfoRow] = useState<ExpeditorRow | null>(null);
   const [editRow, setEditRow] = useState<ExpeditorRow | null>(null);
-  const [sessionExpeditor, setSessionExpeditor] = useState<ExpeditorRow | null>(null);
-  const [assignRow, setAssignRow] = useState<ExpeditorRow | null>(null);
+  const [passwordRow, setPasswordRow] = useState<ExpeditorRow | null>(null);
   const [deactivateExpeditor, setDeactivateExpeditor] = useState<ExpeditorRow | null>(null);
-  const [needSlotOpen, setNeedSlotOpen] = useState(false);
   const [draftOblast, setDraftOblast] = useState("");
   const [draftCity, setDraftCity] = useState("");
   const [appliedOblast, setAppliedOblast] = useState("");
@@ -237,6 +209,8 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           positions: string[];
           territories: string[];
           territory_tokens: string[];
+          territory_oblasts?: string[];
+          territory_cities?: string[];
         };
       }>(`/api/${tenantSlug}/expeditors/filter-options`);
       return data.data;
@@ -268,7 +242,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
       tab,
       appliedBranch,
       appliedTd,
-      appliedPos,
       appliedOblast,
       appliedCity
     ],
@@ -279,7 +252,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
       params.set("is_active", tab === "active" ? "true" : "false");
       if (appliedBranch.trim()) params.set("branch", appliedBranch.trim());
       if (appliedTd.trim()) params.set("trade_direction", appliedTd.trim());
-      if (appliedPos.trim()) params.set("position", appliedPos.trim());
       if (appliedOblast.trim()) params.set("territory_oblast", appliedOblast.trim());
       if (appliedCity.trim()) params.set("territory_city", appliedCity.trim());
       const { data } = await api.get<{ data: ExpeditorRow[] }>(
@@ -298,18 +270,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         `/api/${tenantSlug}/warehouses`
       );
       return data.data;
-    }
-  });
-
-  const priceTypesQ = useQuery({
-    queryKey: ["price-types", tenantSlug, "expeditors-ws"],
-    enabled: Boolean(tenantSlug),
-    staleTime: STALE.reference,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: string[]; options?: PriceTypeOption[] }>(
-        `/api/${tenantSlug}/price-types?kind=sale`
-      );
-      return priceTypeOptionsFromResponse(data);
     }
   });
 
@@ -380,11 +340,11 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [tab, appliedBranch, appliedTd, appliedPos, appliedOblast, appliedCity, search, pageSize]);
+  }, [tab, appliedBranch, appliedTd, appliedOblast, appliedCity, search, pageSize]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [tab, appliedBranch, appliedTd, appliedPos, appliedOblast, appliedCity, safePage, pageSize]);
+  }, [tab, appliedBranch, appliedTd, appliedOblast, appliedCity, safePage, pageSize]);
 
   const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id));
 
@@ -426,21 +386,46 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
     });
   };
 
-  const territoryTokenOptions = useMemo(() => {
-    const t = filterOptQ.data?.territory_tokens ?? [];
-    return [...t].sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data?.territory_tokens]);
+  const territoryNodes = profileQ.data?.references?.territory_nodes;
+  const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
 
-  const territoryFilterOptions = useMemo(() => {
-    const t = filterOptQ.data?.territory_tokens ?? [];
-    const full = filterOptQ.data?.territories ?? [];
-    return Array.from(new Set([...full, ...t])).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [filterOptQ.data]);
+  /** Oblasts/cities: daraxt kaskadi (oblast → shahar); daraxt bo‘lmasa — alohida API ro‘yxatlari */
+  const oblastOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.regions.map((o) => o.value);
+    }
+    const fromApi = filterOptQ.data?.territory_oblasts ?? [];
+    if (fromApi.length > 0) return fromApi;
+    return [...(filterOptQ.data?.territory_tokens ?? [])].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterOptQ.data]);
+
+  const cityOptions = useMemo(() => {
+    if (hasTerritoryTree) {
+      const cascaded = buildTerritoryTreeOnlyCascade(territoryNodes, {
+        zones: [],
+        regions: draftOblast ? [draftOblast] : []
+      });
+      return cascaded.cities.map((o) => o.value);
+    }
+    const fromApi = filterOptQ.data?.territory_cities ?? [];
+    if (fromApi.length > 0) return fromApi;
+    return [...(filterOptQ.data?.territory_tokens ?? [])].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [hasTerritoryTree, territoryNodes, draftOblast, filterOptQ.data]);
+
+  useEffect(() => {
+    if (!draftCity) return;
+    if (cityOptions.length > 0 && !cityOptions.some((c) => c === draftCity)) {
+      setDraftCity("");
+    }
+  }, [cityOptions, draftCity]);
 
   const applyFilters = () => {
     setAppliedBranch(draftBranch);
     setAppliedTd(draftTd);
-    setAppliedPos(draftPos);
     setAppliedOblast(draftOblast);
     setAppliedCity(draftCity);
   };
@@ -448,12 +433,10 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
   const resetFilters = () => {
     setDraftBranch("");
     setDraftTd("");
-    setDraftPos("");
     setDraftOblast("");
     setDraftCity("");
     setAppliedBranch("");
     setAppliedTd("");
-    setAppliedPos("");
     setAppliedOblast("");
     setAppliedCity("");
     setPage(1);
@@ -467,8 +450,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         return r.login;
       case "phone":
         return r.phone ?? "";
-      case "code":
-        return r.code ?? "";
       case "warehouse":
         return r.warehouse ?? "";
       case "apk_version":
@@ -483,16 +464,8 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         return r.last_sync_at ? new Date(r.last_sync_at).toLocaleString("ru-RU") : "";
       case "branch":
         return r.branch ?? "";
-      case "position":
-        return r.position ?? "";
       case "created_at":
         return new Date(r.created_at).toLocaleDateString("ru-RU");
-      case "app_access":
-        return r.app_access ? "Да" : "Нет";
-      case "active_sessions":
-        return String(r.active_session_count);
-      case "max_sessions":
-        return String(r.max_sessions);
       default:
         return "";
     }
@@ -508,15 +481,13 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
             middle_name={r.middle_name}
             fio={r.fio}
             kpiColor={r.kpi_color}
-            face={{ tenantSlug, userId: r.id }}
+            face={{ tenantSlug, userId: r.id, hasPhoto: r.has_face_reference === true }}
           />
         );
       case "login":
         return <StaffKomandaLoginCell login={r.login} />;
       case "phone":
         return <StaffKomandaPhoneCell phone={r.phone} />;
-      case "code":
-        return <StaffKomandaCodeCell code={r.code} />;
       case "warehouse":
         return <StaffKomandaWarehouseCell warehouse={r.warehouse} />;
       case "apk_version":
@@ -531,28 +502,8 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         return <StaffKomandaLastSyncCell at={r.last_sync_at} />;
       case "branch":
         return <StaffKomandaBranchCell branch={r.branch} />;
-      case "position":
-        return <StaffKomandaPositionCell position={r.position} />;
       case "created_at":
         return <StaffKomandaCreatedAtCell at={r.created_at} />;
-      case "app_access":
-        return (
-          <StaffKomandaAppAccessToggle
-            checked={r.app_access}
-            disabled={patchMut.isPending}
-            onChange={(next) => patchMut.mutate({ id: r.id, body: { app_access: next } })}
-          />
-        );
-      case "active_sessions":
-        return (
-          <StaffKomandaActiveSessionsCell
-            count={r.active_session_count}
-            max={r.max_sessions}
-            onClick={() => setSessionExpeditor(r)}
-          />
-        );
-      case "max_sessions":
-        return <StaffKomandaMaxSessionsCell max={r.max_sessions} />;
       default:
         return "—";
     }
@@ -575,19 +526,17 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         filters={
           <ExpeditorsFiltersRow
             draftBranch={draftBranch}
-            draftPos={draftPos}
             draftTd={draftTd}
             draftOblast={draftOblast}
             draftCity={draftCity}
             onDraftBranch={setDraftBranch}
-            onDraftPos={setDraftPos}
             onDraftTd={setDraftTd}
             onDraftOblast={setDraftOblast}
             onDraftCity={setDraftCity}
             branchOptions={branchOptions}
-            positionOptions={filterOptQ.data?.positions ?? []}
             tradeDirectionOptions={tradeDirectionFilterOptions}
-            territoryTokenOptions={territoryTokenOptions}
+            oblastOptions={oblastOptions}
+            cityOptions={cityOptions}
           />
         }
         onReset={resetFilters}
@@ -650,22 +599,8 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton
-                title="Конфигурации"
-                onClick={() =>
-                  goToStaffWorkplaceConfig(router, r.work_slot_id, () => setNeedSlotOpen(true))
-                }
-              >
-                <Settings2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Активные сессии" onClick={() => setSessionExpeditor(r)}>
-                <MonitorSmartphone className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Условия привязки к заявке" onClick={() => setAssignRow(r)}>
-                <Link2 className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Инфо" onClick={() => setInfoRow(r)}>
-                <Eye className="h-4 w-4" />
+              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                <KeyRound className="h-4 w-4" />
               </AgentIconButton>
               <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
                 <Pencil className="h-4 w-4 text-amber-600" />
@@ -682,12 +617,9 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
 
       <StaffBulkFloatingBar
         count={selectedIds.size}
-        allAccessOn={bulk.allAccessOn}
         isActiveTab={tab === "active"}
         busy={bulk.bulkBusy}
-        onToggleAccess={bulk.onToggleAccess}
         onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSessions={bulk.onClearSessions}
         onClearSelection={() => setSelectedIds(new Set())}
       />
 
@@ -714,12 +646,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <AgentInfoDialog
-        row={infoRow}
-        priceTypeOptions={priceTypesQ.data ?? []}
-        onClose={() => setInfoRow(null)}
-      />
-
       <AgentEditDialog
         row={editRow}
         onClose={() => setEditRow(null)}
@@ -727,18 +653,15 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         onPatch={(id, body) => patchMut.mutateAsync({ id, body })}
       />
 
-      <NeedWorkSlotDialog open={needSlotOpen} onClose={() => setNeedSlotOpen(false)} />
-
-      <StaffActiveSessionsDialog
-        open={sessionExpeditor != null}
-        onOpenChange={(open) => {
-          if (!open) setSessionExpeditor(null);
-        }}
+      <StaffPasswordChangeDialog
+        open={passwordRow != null}
         tenantSlug={tenantSlug}
-        staffKind="expeditor"
-        userId={sessionExpeditor?.id ?? null}
-        maxSessions={sessionExpeditor?.max_sessions ?? 1}
-        onPatched={() => {
+        apiSegment="expeditors"
+        userId={passwordRow?.id ?? null}
+        login={passwordRow?.login ?? ""}
+        onClose={() => setPasswordRow(null)}
+        onDone={() => {
+          setPasswordRow(null);
           void qc.invalidateQueries({ queryKey: ["expeditors", tenantSlug] });
         }}
       />
@@ -758,9 +681,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           });
         }}
       />
-
-
-      <ExpeditorAssignmentDialog row={assignRow} onClose={() => setAssignRow(null)} />
 
       <Dialog open={Boolean(deactivateExpeditor)} onOpenChange={(o) => !o && setDeactivateExpeditor(null)}>
         <DialogContent className="max-w-sm">
@@ -784,70 +704,6 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         </DialogContent>
       </Dialog>
     </StaffWorkspaceLayout>
-  );
-}
-
-function AgentInfoDialog({
-  row,
-  priceTypeOptions,
-  onClose
-}: {
-  row: ExpeditorRow | null;
-  priceTypeOptions?: PriceTypeOption[];
-  onClose: () => void;
-}) {
-  if (!row) return null;
-  const ptLabel = (k: string) =>
-    priceTypeOptions?.find((o) => o.id === k)?.label ?? k;
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Экспедитор</DialogTitle>
-        </DialogHeader>
-        <WorkplaceMovedNotice
-          className="mb-2"
-          variant="expeditor"
-          workSlotId={row.work_slot_id ?? undefined}
-          openConfig
-        />
-        <dl className="grid grid-cols-[8rem_1fr] gap-x-2 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Ф.И.О</dt>
-          <dd>{row.fio}</dd>
-          <dt className="text-muted-foreground">Логин</dt>
-          <dd className="font-mono">{row.login}</dd>
-          <dt className="text-muted-foreground">Телефон</dt>
-          <dd>{row.phone ?? "—"}</dd>
-          <dt className="text-muted-foreground">E-mail</dt>
-          <dd>{row.email ?? "—"}</dd>
-          <dt className="text-muted-foreground">Код</dt>
-          <dd>{row.code ?? "—"}</dd>
-          <dt className="text-muted-foreground">ПИНФЛ</dt>
-          <dd>{row.pinfl ?? "—"}</dd>
-          <dt className="text-muted-foreground">Склад</dt>
-          <dd>{row.warehouse ?? "—"}</dd>
-          <dt className="text-muted-foreground">Филиал</dt>
-          <dd>{row.branch ?? "—"}</dd>
-          <dt className="text-muted-foreground">Зона</dt>
-          <dd>{row.trade_direction ?? "—"}</dd>
-          <dt className="text-muted-foreground">Территория</dt>
-          <dd>{row.territory ?? "—"}</dd>
-          <dt className="text-muted-foreground">Тип цены</dt>
-          <dd>
-            {(row.price_types ?? []).map(ptLabel).join(", ") ||
-              (row.price_type ? ptLabel(row.price_type) : "—")}
-          </dd>
-          <dt className="text-muted-foreground">Сессии</dt>
-          <dd>
-            {row.active_session_count} / {row.max_sessions}
-          </dd>
-          <dt className="text-muted-foreground">APK</dt>
-          <dd>{row.apk_version ?? "—"}</dd>
-          <dt className="text-muted-foreground">Устройство</dt>
-          <dd>{row.device_name ?? "—"}</dd>
-        </dl>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -879,8 +735,6 @@ function AgentAddDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [agent_type, setAgentType] = useState("Экспедитор");
-  const [position, setPos] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -895,8 +749,6 @@ function AgentAddDialog({
     setPhone("");
     setEmail("");
     setAgentType("Экспедитор");
-    setPos("");
-    setCode("");
     setPinfl("");
     setLogin("");
     setPassword(randomPassword());
@@ -922,7 +774,7 @@ function AgentAddDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
           <label className="text-xs text-muted-foreground">
-            Должность (тип)
+            Тип
             <select
               className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
               value={agent_type}
@@ -932,23 +784,6 @@ function AgentAddDialog({
               <option value="Водитель">Водитель</option>
             </select>
           </label>
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Должность
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPos}
-              roleFilter="expeditor"
-            />
-            <span className="text-[11px] leading-snug">
-              Шаблоны:{" "}
-              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-          </label>
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
           <div className="flex gap-2">
@@ -983,14 +818,10 @@ function AgentAddDialog({
                 phone: phone.trim() || null,
                 email: email.trim() || null,
                 agent_type: agent_type.trim() || null,
-                position: position.trim() || null,
-                code: code.trim() || null,
                 pinfl: pinfl.trim() || null,
                 login: login.trim().toLowerCase(),
                 password,
                 kpi_color: kpi_color || null,
-                max_sessions: 1,
-                app_access: true,
                 can_authorize: true
               })
             }
@@ -1031,8 +862,6 @@ function AgentEditDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [agent_type, setAgentType] = useState("");
-  const [position, setPos] = useState("");
-  const [code, setCode] = useState("");
   const [pinfl, setPinfl] = useState("");
   const [login, setLogin] = useState("");
   const [kpi_color, setKpi] = useState("#ef4444");
@@ -1049,8 +878,6 @@ function AgentEditDialog({
     setPhone(r.phone ?? "");
     setEmail(r.email ?? "");
     setAgentType(r.agent_type ?? "");
-    setPos(r.position ?? "");
-    setCode(r.code ?? "");
     setPinfl(r.pinfl ?? "");
     setLogin(r.login);
     setKpi(r.kpi_color || "#ef4444");
@@ -1070,8 +897,6 @@ function AgentEditDialog({
         phone: phone.trim() || null,
         email: email.trim() || null,
         agent_type: agent_type.trim() || null,
-        position: position.trim() || null,
-        code: code.trim() || null,
         pinfl: pinfl.trim() || null,
         kpi_color: kpi_color || null,
         login: login.trim().toLowerCase()
@@ -1108,25 +933,8 @@ function AgentEditDialog({
           <Input placeholder="Отчество" value={middle_name} onChange={(e) => setMid(e.target.value)} />
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="E-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Input placeholder="Должность / тип" value={agent_type} onChange={(e) => setAgentType(e.target.value)} />
-          <Input placeholder="Код" value={code} onChange={(e) => setCode(e.target.value)} maxLength={20} />
+          <Input placeholder="Тип" value={agent_type} onChange={(e) => setAgentType(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Должность
-            <StaffPositionSelect
-              tenantSlug={tenantSlug}
-              value={position}
-              onChange={setPos}
-              roleFilter="expeditor"
-            />
-            <span className="text-[11px] leading-snug">
-              Шаблоны:{" "}
-              <Link href={POSITION_PRESETS_SETTINGS_HREF} className="text-primary underline underline-offset-2">
-                Должности
-              </Link>
-              .
-            </span>
-          </label>
           <Input
             placeholder="Логин *"
             value={login}
@@ -1159,78 +967,6 @@ function AgentEditDialog({
           >
             Сохранить
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ExpeditorAssignmentDialog({
-  row,
-  onClose
-}: {
-  row: ExpeditorRow | null;
-  onClose: () => void;
-}) {
-  if (!row) return null;
-
-  const slotHref =
-    row.work_slot_id != null
-      ? `/work-slots/${row.work_slot_id}?openConfig=1`
-      : "/work-slots";
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Условия привязки к заявке</DialogTitle>
-          <p className="text-sm text-muted-foreground">{row.fio}</p>
-        </DialogHeader>
-
-        <div className="mb-1 flex items-center gap-2.5 rounded-xl border border-teal-100 bg-gradient-to-r from-teal-50 to-emerald-50/60 px-3.5 py-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm text-white shadow-sm">
-            🚚
-          </span>
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-teal-600">Экспедитор</p>
-            <p className="truncate text-sm font-semibold text-slate-800">
-              {row.work_slot_code ?? "Рабочее место"}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3 text-sm text-slate-700">
-          <p>
-            Типы цен, склады, направления, территории и{" "}
-            <strong>правила автопривязки заказов</strong> привязаны к{" "}
-            <strong>рабочему месту</strong>, а не к сотруднику. При смене экспедитора на месте
-            настройки остаются на слоте.
-          </p>
-          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            Откройте{" "}
-            <Link href={slotHref} className="font-semibold text-teal-700 underline">
-              Рабочее место
-            </Link>{" "}
-            → «Конфигурация места» → вкладка «Экспедитор».
-          </p>
-          {row.work_slot_id == null ? (
-            <p className="text-xs text-amber-800">
-              У сотрудника ещё нет рабочего места — сначала создайте или назначьте место в списке
-              «Рабочее место» (роль Экспедитор).
-            </p>
-          ) : null}
-        </div>
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Закрыть
-          </Button>
-          <Link
-            href={slotHref}
-            className={cn(buttonVariants({ className: "bg-teal-700 hover:bg-teal-800" }))}
-          >
-            Открыть рабочее место
-          </Link>
         </DialogFooter>
       </DialogContent>
     </Dialog>

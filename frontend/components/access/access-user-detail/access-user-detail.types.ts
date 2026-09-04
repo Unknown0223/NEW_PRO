@@ -75,6 +75,8 @@ export type DetailResponse = {
   matrix: MatrixRow[];
   /** Operatsiya kalitlari — foydalanuvchi boshqalarga berishi mumkin (mustaqil ro‘yxat). */
   grant_delegation_operation_keys?: string[];
+  /** Asosiy `user.role` dan tashqari `user_roles` paketlari. */
+  extra_role_keys?: string[];
   supervisees: { id: number; login: string; name: string; code: string | null; role: string; is_active: boolean }[];
   scope: {
     branches: string[];
@@ -87,6 +89,24 @@ export type DetailResponse = {
 };
 
 export type DimRow = { key: string; label: string; attached_users_count: number; is_active: boolean };
+
+export type AccessRoleDefaultRow = {
+  id: number;
+  key: string;
+  name: string;
+  operations_count: number;
+};
+
+export type DetailModalKind =
+  | "operations"
+  | "role_packs"
+  | "cash"
+  | "warehouse"
+  | "branch"
+  | "payment"
+  | "direction"
+  | "territory"
+  | "staff";
 
 /** Ответ GET /access/territories — плоский список. */
 export type TerritoryApiRow = {
@@ -337,7 +357,7 @@ export function formatTerritoryAssigneeSubtitle(u: DetailResponse["user"]): stri
 
 
 export function patchTouchesUserDirectory(body: Record<string, unknown>): boolean {
-  if (body.role != null || body.is_active != null) return true;
+  if (body.role != null || body.is_active != null || body.extra_role_keys != null) return true;
   if (
     body.branch_codes != null ||
     body.warehouse_ids != null ||

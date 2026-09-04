@@ -29,7 +29,7 @@ if (-not $ApkPath) {
   }
 }
 if (-not (Test-Path $ApkPath)) {
-  throw "APK topilmadi: $ApkPath — avval deploy-mobile-prod.cmd ishga tushiring"
+  throw "APK not found: $ApkPath - build the release APK first"
 }
 
 if (-not $LatestVersion) { $LatestVersion = Get-PubspecVersion }
@@ -46,7 +46,7 @@ Write-Host "Versiya: $LatestVersion  force=$force (ixtiyoriy=$([bool](-not $forc
 $loginBody = @{ slug = $Slug; login = $AdminLogin; password = $AdminPassword } | ConvertTo-Json
 $token = (Invoke-RestMethod -Uri "$Api/api/auth/login" -Method POST -Body $loginBody -ContentType "application/json").accessToken
 
-# Joriy siyosat — soft OTA da min_version ni saqlab qolamiz
+# Current policy: keep min_version for soft OTA
 $prevPolicy = $null
 try {
   $prevPolicy = Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
@@ -85,7 +85,7 @@ $minVer = if ($force) { $minFloor } else { if ($prevMin) { $prevMin } else { $nu
 $notes = if ($force) {
   "Production majburiy yangilash $LatestVersion"
 } else {
-  "Production ixtiyoriy yangilash $LatestVersion — ilova ichida «Обновить» yoki «Позже»"
+  "Production ixtiyoriy yangilash $LatestVersion - ilova ichida Obnovit yoki Pozje"
 }
 
 $policy = @{
@@ -99,7 +99,7 @@ if ($null -ne $minVer -and $minVer -ne "") {
 } else {
   $policy.min_version = $null
 }
-# PowerShell string Body ba'zan Content-Length nomuvofiqligiga olib keladi — UTF-8 bayt yuboramiz
+# PowerShell string Body can mismatch Content-Length - send UTF-8 bytes
 $policyJson = $policy | ConvertTo-Json -Compress
 $policyBytes = [System.Text.Encoding]::UTF8.GetBytes($policyJson)
 Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `

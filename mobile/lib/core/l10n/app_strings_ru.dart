@@ -26,6 +26,8 @@ abstract final class S {
   static const sync = 'Синхронизация';
   static const ordersSumToday = 'Сумма заказов сегодня';
   static const productsVolumeToday = 'Объём товаров сегодня';
+  static String orderCreatedBanner(String number) => 'Заказ №$number создан';
+  static const orderCreatedBannerHint = 'Заказ успешно отправлен';
 
   static const visitOrder = 'Добавить заказ';
   static const visitComplete = 'Завершить визит';
@@ -114,6 +116,8 @@ abstract final class S {
   static const empty = 'Нет данных';
   static const emptyOrders = 'Нет заказов';
   static const emptyVisitPoints = 'Нет точек для визита на этот день';
+  static const emptyVisitOpenAll = 'Показать всех клиентов';
+  static const emptyVisitHasClientsHint = 'Клиенты загружены, но на этот день план пуст';
   static const emptyOutlets = 'Нет торговых точек';
   static const emptyOutletsForDay = 'Нет торговых точек на этот день';
   static const emptyDebtors = 'Нет должников';
@@ -248,6 +252,9 @@ abstract final class S {
   static const discountShortageCommentPrefix = 'Скидка';
   static const warehouseStock = 'На складе';
   static const emptyBonuses = 'Нет бонусов';
+  /// Aktiv bonus qoidasi yo‘q yoki savat shartga yetmagan.
+  static const emptyBonusesNoActive =
+      'Нет активного бонуса для этого заказа';
   static const emptyDiscounts = 'Нет скидок';
   static const discountNotApplied = 'Скидка не будет применена к заказу';
   static const discountCashDeskMissing = 'Касса для оплаты скидки не настроена';
@@ -256,6 +263,10 @@ abstract final class S {
   static const selectBtn = 'Выбрать';
   static const bonusPreviewFailed =
       'Не удалось загрузить правила — выберите «Авто» или «Без бонуса»';
+  static const bonusFillIncomplete =
+      'Заполните все положенные бонусы полностью';
+  static const bonusStrategyChoiceRequired =
+      'Выберите правила стратегии бонусов';
   static const linkedBonusDiscountHint =
       'Бонус и скидка связаны — можно использовать оба';
   static const exclusiveBonusDiscountHint =

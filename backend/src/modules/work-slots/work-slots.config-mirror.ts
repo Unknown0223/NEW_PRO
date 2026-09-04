@@ -6,6 +6,16 @@ import {
   buildUserTerritory,
   parseUserTerritoryPartsFromHelpers
 } from "./work-slots.config-territory";
+import {
+  buildTerritoriesFromPartLists,
+  effectiveBranchCodes,
+  effectiveCashDeskIds,
+  effectiveTerritories,
+  effectiveWarehouseIds,
+  resolveCashDeskIdsPatch,
+  resolveTerritoriesPatch,
+  resolveWarehouseIdsPatch
+} from "./work-slots.multi-bindings";
 
 /**
  * Slot entitlements → user mirror.
@@ -53,9 +63,12 @@ export type Tx = Prisma.TransactionClient;
 
 export type SlotWorkplaceConfigRow = {
   territory: string | null;
+  territories: string[];
   warehouse_id: number | null;
+  warehouse_ids: number[];
   return_warehouse_id: number | null;
   cash_desk_id: number | null;
+  cash_desk_ids: number[];
   price_type: string | null;
   price_types: Prisma.JsonValue;
   entitlements: Prisma.JsonValue;
@@ -69,6 +82,7 @@ export type SlotWorkplaceConfigRow = {
   warehouse_staff_entitlements: Prisma.JsonValue;
   expeditor_assignment_rules: Prisma.JsonValue;
   branch_code: string | null;
+  branch_codes: string[];
   direction_id: number | null;
 };
 
@@ -89,11 +103,20 @@ function cashDeskLinkRoleForUser(userRole: string): string | null {
   }
 }
 
+/** Ombor bog‘lamasi — dastavchik/agent joy omborlari zakaz linkage da ko‘rinsin. */
+export function warehouseLinkRoleForUser(userRole: string): string | null {
+  if (userRole === "skladchik") return "skladchik";
+  return cashDeskLinkRoleForUser(userRole);
+}
+
 const SLOT_CONFIG_SELECT = {
   territory: true,
+  territories: true,
   warehouse_id: true,
+  warehouse_ids: true,
   return_warehouse_id: true,
   cash_desk_id: true,
+  cash_desk_ids: true,
   price_type: true,
   price_types: true,
   entitlements: true,
@@ -107,6 +130,7 @@ const SLOT_CONFIG_SELECT = {
   warehouse_staff_entitlements: true,
   expeditor_assignment_rules: true,
   branch_code: true,
+  branch_codes: true,
   direction_id: true
 } as const;
 
@@ -129,6 +153,12 @@ export async function mirrorSlotConfigToUser(
   ]);
   if (!slot || !user) return;
 
+  const warehouseIds = effectiveWarehouseIds(slot);
+  const cashDeskIds = effectiveCashDeskIds(slot);
+  const territories = effectiveTerritories(slot);
+  const primaryWarehouseId = warehouseIds[0] ?? null;
+  const primaryTerritory = territories[0] ?? null;
+
   const directionName =
     slot.direction_id != null
       ? (
@@ -147,7 +177,7 @@ export async function mirrorSlotConfigToUser(
   await tx.user.update({
     where: { id: userId },
     data: {
-      territory: slot.territory,
+      territory: primaryTerritory,
       branch: slot.branch_code,
       trade_direction: directionName,
       price_type: slot.price_type,
@@ -162,7 +192,9 @@ export async function mirrorSlotConfigToUser(
       warehouse_staff_entitlements: slot.warehouse_staff_entitlements ?? {},
       expeditor_assignment_rules: slot.expeditor_assignment_rules ?? {},
       warehouse:
-        slot.warehouse_id == null ? { disconnect: true } : { connect: { id: slot.warehouse_id } },
+        primaryWarehouseId == null
+          ? { disconnect: true }
+          : { connect: { id: primaryWarehouseId } },
       return_warehouse:
         slot.return_warehouse_id == null
           ? { disconnect: true }
@@ -178,33 +210,45 @@ export async function mirrorSlotConfigToUser(
     }
   });
 
-  if (user.role === "skladchik") {
+  const warehouseLinkRole = warehouseLinkRoleForUser(user.role);
+  if (warehouseLinkRole) {
     await tx.warehouseUserLink.deleteMany({
-      where: { user_id: userId, link_role: "skladchik" }
+      where: { user_id: userId }
     });
-    if (slot.warehouse_id != null && slot.warehouse_id > 0) {
-      await tx.warehouseUserLink.create({
-        data: {
-          warehouse_id: slot.warehouse_id,
+    if (warehouseIds.length > 0) {
+      await tx.warehouseUserLink.createMany({
+        data: warehouseIds.map((warehouse_id) => ({
+          warehouse_id,
           user_id: userId,
-          link_role: "skladchik"
-        }
+          link_role: warehouseLinkRole
+        })),
+        skipDuplicates: true
       });
     }
   }
 
   await tx.cashDeskUserLink.deleteMany({ where: { user_id: userId } });
-  if (slot.cash_desk_id != null && slot.cash_desk_id > 0) {
+  if (cashDeskIds.length > 0) {
     const linkRole = cashDeskLinkRoleForUser(user.role);
     if (linkRole) {
-      await tx.cashDeskUserLink.create({
-        data: {
-          cash_desk_id: slot.cash_desk_id,
+      await tx.cashDeskUserLink.createMany({
+        data: cashDeskIds.map((cash_desk_id) => ({
+          cash_desk_id,
           user_id: userId,
           link_role: linkRole
-        }
+        })),
+        skipDuplicates: true
       });
     }
+  }
+
+  const branchCodes = effectiveBranchCodes(slot);
+  await tx.userBranchLink.deleteMany({ where: { tenant_id: tenantId, user_id: userId } });
+  if (branchCodes.length > 0) {
+    await tx.userBranchLink.createMany({
+      data: branchCodes.map((branch_code) => ({ tenant_id: tenantId, user_id: userId, branch_code })),
+      skipDuplicates: true
+    });
   }
 }
 
@@ -248,15 +292,22 @@ export async function clearWorkplaceFieldsOnUser(
 
   await tx.warehouseUserLink.deleteMany({ where: { user_id: userId } });
   await tx.cashDeskUserLink.deleteMany({ where: { user_id: userId } });
+  await tx.userBranchLink.deleteMany({ where: { tenant_id: tenantId, user_id: userId } });
 }
 
 export type SlotConfigPatch = {
   territory_zone?: string | null;
   territory_oblast?: string | null;
   territory_city?: string | null;
+  territory_zones?: string[];
+  territory_oblasts?: string[];
+  territory_cities?: string[];
+  territories?: string[] | null;
   warehouse_id?: number | null;
+  warehouse_ids?: number[] | null;
   return_warehouse_id?: number | null;
   cash_desk_id?: number | null;
+  cash_desk_ids?: number[] | null;
   price_type?: string | null;
   price_types?: unknown;
   entitlements?: unknown;
@@ -276,9 +327,15 @@ export function hasSlotConfigPatch(p: SlotConfigPatch): boolean {
     p.territory_zone !== undefined ||
     p.territory_oblast !== undefined ||
     p.territory_city !== undefined ||
+    p.territory_zones !== undefined ||
+    p.territory_oblasts !== undefined ||
+    p.territory_cities !== undefined ||
+    p.territories !== undefined ||
     p.warehouse_id !== undefined ||
+    p.warehouse_ids !== undefined ||
     p.return_warehouse_id !== undefined ||
     p.cash_desk_id !== undefined ||
+    p.cash_desk_ids !== undefined ||
     p.price_type !== undefined ||
     p.price_types !== undefined ||
     p.entitlements !== undefined ||
@@ -304,12 +361,79 @@ export async function applySlotConfigPatch(
 ): Promise<void> {
   if (!hasSlotConfigPatch(patch)) return;
 
-  if (patch.warehouse_id != null && patch.warehouse_id > 0) {
-    const wh = await tx.warehouse.findFirst({
-      where: { id: patch.warehouse_id, tenant_id: tenantId },
-      select: { id: true }
+  const existing = await tx.workSlot.findFirst({
+    where: { id: slotId, tenant_id: tenantId },
+    select: {
+      territory: true,
+      territories: true,
+      warehouse_id: true,
+      warehouse_ids: true,
+      cash_desk_id: true,
+      cash_desk_ids: true
+    }
+  });
+  if (!existing) return;
+
+  const existingTerritoryValue = existing.territory ?? existingTerritory;
+
+  const warehouseResolved = resolveWarehouseIdsPatch({
+    existingIds: existing.warehouse_ids ?? [],
+    existingPrimary: existing.warehouse_id,
+    warehouse_ids: patch.warehouse_ids,
+    warehouse_id: patch.warehouse_id
+  });
+  const cashResolved = resolveCashDeskIdsPatch({
+    existingIds: existing.cash_desk_ids ?? [],
+    existingPrimary: existing.cash_desk_id,
+    cash_desk_ids: patch.cash_desk_ids,
+    cash_desk_id: patch.cash_desk_id
+  });
+
+  const hasTerritoryPartLists =
+    (patch.territory_zones?.length ?? 0) > 0 ||
+    (patch.territory_oblasts?.length ?? 0) > 0 ||
+    (patch.territory_cities?.length ?? 0) > 0;
+
+  let territoriesResolved:
+    | { territories: string[]; territory: string | null }
+    | undefined;
+
+  if (patch.territories !== undefined) {
+    territoriesResolved = resolveTerritoriesPatch({
+      existingList: existing.territories ?? [],
+      existingPrimary: existingTerritoryValue,
+      territories: patch.territories,
+      territory: undefined
     });
-    if (!wh) throw new Error("BAD_WAREHOUSE");
+  } else if (hasTerritoryPartLists) {
+    const built = buildTerritoriesFromPartLists({
+      zones: patch.territory_zones,
+      oblasts: patch.territory_oblasts,
+      cities: patch.territory_cities
+    });
+    territoriesResolved = {
+      territories: built,
+      territory: built[0] ?? null
+    };
+  } else {
+    const nextTerritory = applyTerritoryFieldPatch(existingTerritoryValue, patch);
+    if (nextTerritory !== undefined) {
+      territoriesResolved = resolveTerritoriesPatch({
+        existingList: existing.territories ?? [],
+        existingPrimary: existingTerritoryValue,
+        territories: undefined,
+        territory: nextTerritory,
+        replacePrimary: true
+      });
+    }
+  }
+
+  const warehouseIdsToCheck = warehouseResolved?.warehouse_ids ?? [];
+  if (warehouseIdsToCheck.length > 0) {
+    const found = await tx.warehouse.count({
+      where: { tenant_id: tenantId, id: { in: warehouseIdsToCheck } }
+    });
+    if (found !== warehouseIdsToCheck.length) throw new Error("BAD_WAREHOUSE");
   }
   if (patch.return_warehouse_id != null && patch.return_warehouse_id > 0) {
     const wh = await tx.warehouse.findFirst({
@@ -318,23 +442,33 @@ export async function applySlotConfigPatch(
     });
     if (!wh) throw new Error("BAD_WAREHOUSE");
   }
-  if (patch.cash_desk_id != null && patch.cash_desk_id > 0) {
-    const desk = await tx.cashDesk.findFirst({
-      where: { id: patch.cash_desk_id, tenant_id: tenantId },
-      select: { id: true }
+  const cashIdsToCheck = cashResolved?.cash_desk_ids ?? [];
+  if (cashIdsToCheck.length > 0) {
+    const found = await tx.cashDesk.count({
+      where: { tenant_id: tenantId, id: { in: cashIdsToCheck } }
     });
-    if (!desk) throw new Error("BAD_CASH_DESK");
+    if (found !== cashIdsToCheck.length) throw new Error("BAD_CASH_DESK");
   }
 
-  const nextTerritory = applyTerritoryFieldPatch(existingTerritory, patch);
-
   const data: Prisma.WorkSlotUncheckedUpdateInput = {
-    ...(nextTerritory !== undefined ? { territory: nextTerritory } : {}),
-    ...(patch.warehouse_id !== undefined ? { warehouse_id: patch.warehouse_id } : {}),
+    ...(territoriesResolved
+      ? { territory: territoriesResolved.territory, territories: territoriesResolved.territories }
+      : {}),
+    ...(warehouseResolved
+      ? {
+          warehouse_id: warehouseResolved.warehouse_id,
+          warehouse_ids: warehouseResolved.warehouse_ids
+        }
+      : {}),
     ...(patch.return_warehouse_id !== undefined
       ? { return_warehouse_id: patch.return_warehouse_id }
       : {}),
-    ...(patch.cash_desk_id !== undefined ? { cash_desk_id: patch.cash_desk_id } : {}),
+    ...(cashResolved
+      ? {
+          cash_desk_id: cashResolved.cash_desk_id,
+          cash_desk_ids: cashResolved.cash_desk_ids
+        }
+      : {}),
     ...(patch.price_type !== undefined ? { price_type: patch.price_type?.trim() || null } : {}),
     ...(patch.price_types !== undefined
       ? { price_types: patch.price_types as Prisma.InputJsonValue }

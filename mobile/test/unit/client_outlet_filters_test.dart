@@ -101,6 +101,16 @@ void main() {
     expect(sunday.map((c) => c['id']).toList(), [1]);
   });
 
+  test('applyOutletFilters — reja yo‘q bo‘lsa kun tabida ham katalog', () {
+    final clients = [
+      {'id': 1, 'name': 'A'},
+      {'id': 2, 'name': 'B'},
+    ];
+    expect(tenantHasAnyVisitSchedule(clients), isFalse);
+    final tue = applyOutletFilters(clients, weekdayTab: 2, includeUnscheduled: true);
+    expect(tue.map((c) => c['id']).toList(), [1, 2]);
+  });
+
   test('clientMatchesWeekdayTab includeUnscheduled fallback', () {
     expect(
       clientMatchesWeekdayTab({'id': 1}, 2, includeUnscheduled: true),

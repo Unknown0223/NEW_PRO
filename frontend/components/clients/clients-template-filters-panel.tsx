@@ -111,7 +111,7 @@ export function ClientsTemplateFiltersPanel({
     () =>
       agentOptions.map((a) => ({
         value: String(a.id),
-        label: `${a.name}${a.login ? ` (${a.login})` : ""}`,
+        label: a.name,
         searchText: a.login
       })),
     [agentOptions]
@@ -120,7 +120,7 @@ export function ClientsTemplateFiltersPanel({
     () =>
       expeditorOptions.map((a) => ({
         value: String(a.id),
-        label: `${a.name}${a.login ? ` (${a.login})` : ""}`,
+        label: a.name,
         searchText: a.login
       })),
     [expeditorOptions]

@@ -155,6 +155,13 @@ function uniqSorted(values: string[]): string[] {
   return Array.from(s).sort((a, b) => a.localeCompare(b, "ru"));
 }
 
+function splitFilterCodes(raw: string): string[] {
+  const t = trimText(raw);
+  if (!t) return [];
+  const sep = t.includes("|") ? "|" : ",";
+  return uniqSorted(t.split(sep));
+}
+
 function territoryNamesEqual(a: string, b: string): boolean {
   const left = trimText(a);
   const right = trimText(b);
@@ -501,11 +508,13 @@ export function buildZoneRegionCityCascadeOptions(
   territoryNodes: TerritoryNode[] | undefined,
   current: { zone: string; region: string; city: string }
 ): { zones: RefSelectOption[]; regions: RefSelectOption[]; cities: RefSelectOption[] } {
+  const zoneList = splitFilterCodes(current.zone);
+  const regionList = splitFilterCodes(current.region);
   const hasTerritoryTree = (territoryNodes?.length ?? 0) > 0;
   if (hasTerritoryTree) {
     return buildTerritoryTreeOnlyCascade(territoryNodes, {
-      zones: current.zone ? [current.zone] : [],
-      regions: current.region ? [current.region] : []
+      zones: zoneList,
+      regions: regionList
     });
   }
 

@@ -32,8 +32,9 @@ import {
 
 import {
   orderScopeSql,
-  planScopeSql,
   visitScopeSql,
+  planScopeSql,
+  expandSupervisorPaymentFilters,
   type SupervisorDashboardFilters,
   type SupervisorDashboardSnapshot,
   type SupervisorEfficiencyRow,
@@ -57,12 +58,13 @@ export async function getSupervisorDashboardSnapshot(
   const cached = await getSnapshotCache<SupervisorDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
-  const dayStart = new Date(`${filters.date}T00:00:00.000Z`);
+  const expanded = await expandSupervisorPaymentFilters(tenantId, filters);
+  const dayStart = new Date(`${expanded.date}T00:00:00.000Z`);
   const dayEnd = new Date(dayStart.getTime() + 86400000);
   const weekday = ((dayStart.getUTCDay() + 6) % 7) + 1;
-  const orderScope = orderScopeSql(tenantId, dayStart, dayEnd, filters);
-  const visitScope = visitScopeSql(tenantId, dayStart, dayEnd, filters);
-  const planScope = planScopeSql(tenantId, dayStart, dayEnd, weekday, filters);
+  const orderScope = orderScopeSql(tenantId, dayStart, dayEnd, expanded);
+  const visitScope = visitScopeSql(tenantId, dayStart, dayEnd, expanded);
+  const planScope = planScopeSql(tenantId, dayStart, dayEnd, weekday, expanded);
 
 
   const { salesAgg, cashAgg, paymentBreakdownRows, mappedVisitRows, totals } =

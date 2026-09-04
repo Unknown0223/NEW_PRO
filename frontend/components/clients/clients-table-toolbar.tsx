@@ -134,7 +134,7 @@ export function ClientsTableFilters({
                 <option value="">Все</option>
                 {agentOptions.map((u) => (
                   <option key={u.id} value={String(u.id)}>
-                    {u.name} ({u.login})
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -238,7 +238,7 @@ export function ClientsTableFilters({
                 <option value="">Все</option>
                 {expeditorOptions.map((u) => (
                   <option key={`ex-${u.id}`} value={String(u.id)}>
-                    {u.name} ({u.login})
+                    {u.name}
                   </option>
                 ))}
               </select>

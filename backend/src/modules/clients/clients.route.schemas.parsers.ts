@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../../config/env";
 import { assertExcelImportSize } from "../../lib/multipart-limits";
+import { parseVisitWeekdaysFromCell } from "./clients.visit-weekdays";
 import type { ListClientsQuery } from "./clients.service";
 import { buildClientUpdateImportTemplateBuffer } from "./clients.service";
 
@@ -120,7 +121,9 @@ function parsePositiveIntList(raw: string | undefined, maxItems = 40): number[] 
 }
 
 function parseWeekdayList(raw: string | undefined): number[] {
-  return parsePositiveIntList(raw, 7).filter((n) => n >= 1 && n <= 7);
+  if (!raw?.trim()) return [];
+  const { days } = parseVisitWeekdaysFromCell(raw);
+  return days.slice(0, 7);
 }
 
 function parseStringList(raw: string | undefined, maxItems = 30): string[] {
@@ -138,6 +141,15 @@ function mergeIntList(multiRaw: string | undefined, singleRaw: string | undefine
   if (singleRaw != null && singleRaw !== "") {
     const n = Number.parseInt(singleRaw, 10);
     if (Number.isFinite(n) && n > 0) return [n];
+  }
+  return [];
+}
+
+function mergeWeekdayList(multiRaw: string | undefined, singleRaw: string | undefined): number[] {
+  const fromMulti = parseWeekdayList(multiRaw);
+  if (fromMulti.length > 0) return fromMulti;
+  if (singleRaw != null && singleRaw.trim() !== "") {
+    return parseWeekdayList(singleRaw);
   }
   return [];
 }
@@ -198,7 +210,7 @@ export function parseClientListQuery(q: Record<string, string | undefined>): Lis
   const agent_id = agent_ids.length === 1 ? agent_ids[0] : undefined;
   const expeditor_user_ids = mergeIntList(q.expeditor_user_ids, q.expeditor_user_id);
   const expeditor_user_id = expeditor_user_ids.length === 1 ? expeditor_user_ids[0] : undefined;
-  const visit_weekdays = mergeIntList(q.visit_weekdays, q.visit_weekday).filter((n) => n >= 1 && n <= 7);
+  const visit_weekdays = mergeWeekdayList(q.visit_weekdays, q.visit_weekday).filter((n) => n >= 1 && n <= 7);
   const visit_weekday = visit_weekdays.length === 1 ? visit_weekdays[0] : undefined;
   const zones = mergeStringList(q.zones, q.zone);
   const zone = zones.length === 1 ? zones[0] : undefined;

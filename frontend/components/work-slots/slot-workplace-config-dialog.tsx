@@ -8,6 +8,7 @@ import {
   Smartphone,
   Tags,
   Truck,
+  Users,
   Warehouse
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,14 +20,18 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { StaffPositionSelect } from "@/components/staff/staff-position-select";
 import { SlotEntitlementsEditor } from "@/components/work-slots/slot-entitlements-editor";
 import {
   SlotExpeditorRulesEditor,
   parseExpeditorAssignmentRules
 } from "@/components/work-slots/slot-expeditor-rules-editor";
 import { SlotSkladchikEntitlementsEditor } from "@/components/work-slots/slot-skladchik-entitlements-editor";
+import { SlotSupervisorTeamEditor } from "@/components/work-slots/slot-supervisor-team-editor";
+import { AgentTemplateModal } from "@/components/staff/agent-workspace-template-ui";
 import {
   AgentConfigurationsDialog,
   type AgentConfigDialogRow
@@ -35,9 +40,17 @@ import type { AgentEntitlementSavePayload } from "@/components/staff/agent-restr
 import type { ExpeditorAssignmentRules } from "@/components/staff/expeditors-workspace";
 import { api } from "@/lib/api";
 import { apiFetch } from "@/lib/api-client";
+import {
+  mergeSlotEntitlementsForEditor,
+  parseSlotEntitlements
+} from "@/lib/slot-entitlements-merge";
 import { cn } from "@/lib/utils";
 import { priceTypeOptionsFromResponse, type PriceTypeOption } from "@/lib/price-type-label";
 import { STALE } from "@/lib/query-stale";
+import {
+  UNLIMITED_MAX_SESSIONS,
+  isUnlimitedMaxSessions
+} from "@/lib/max-sessions";
 import type { WorkSlotListItem, WorkSlotType } from "@/lib/work-slots-types";
 import {
   slotWorkplaceConfigTabs,
@@ -54,7 +67,8 @@ const TAB_ICONS: Record<SlotWorkplaceConfigTab["icon"], ReactNode> = {
   shield: <Shield className="h-4 w-4 shrink-0" />,
   smartphone: <Smartphone className="h-4 w-4 shrink-0" />,
   truck: <Truck className="h-4 w-4 shrink-0" />,
-  warehouse: <Warehouse className="h-4 w-4 shrink-0" />
+  warehouse: <Warehouse className="h-4 w-4 shrink-0" />,
+  users: <Users className="h-4 w-4 shrink-0" />
 };
 
 type Props = {
@@ -75,35 +89,37 @@ type Props = {
 function parseEntitlements(
   raw: WorkSlotListItem["entitlements"] | undefined
 ): AgentEntitlementSavePayload {
-  if (!raw || typeof raw !== "object") return { price_types: [], product_rules: [] };
-  const price_types = Array.isArray(raw.price_types)
-    ? raw.price_types.filter((x): x is string => typeof x === "string")
-    : [];
-  const product_rules = Array.isArray(raw.product_rules)
-    ? (raw.product_rules as AgentEntitlementSavePayload["product_rules"])
-    : [];
-  return { price_types, product_rules };
+  return parseSlotEntitlements(raw);
 }
 
 type FormState = {
   directionId: string;
   returnWarehouseId: string;
+  /** Occupant User — write-through via work-slots PATCH (not WorkSlot columns). */
+  position: string;
+  appAccess: boolean;
+  maxSessions: string;
   priceType: string;
   priceTypes: string[];
   entitlements: AgentEntitlementSavePayload;
   skladchikEntitlements: Record<string, boolean>;
   expeditorRules: ExpeditorAssignmentRules;
+  superviseeAgentSlotIds: number[];
 };
 
 function emptyForm(): FormState {
   return {
     directionId: "",
     returnWarehouseId: "",
+    position: "",
+    appAccess: true,
+    maxSessions: "1",
     priceType: "",
     priceTypes: [],
     entitlements: { price_types: [], product_rules: [] },
     skladchikEntitlements: {},
-    expeditorRules: {}
+    expeditorRules: {},
+    superviseeAgentSlotIds: []
   };
 }
 
@@ -111,11 +127,18 @@ function formFromSlot(d: WorkSlotListItem): FormState {
   return {
     directionId: d.direction_id != null ? String(d.direction_id) : "",
     returnWarehouseId: d.return_warehouse_id != null ? String(d.return_warehouse_id) : "",
+    position: d.active_user_position ?? "",
+    appAccess: d.active_user_app_access ?? true,
+    maxSessions:
+      d.active_user_max_sessions != null ? String(d.active_user_max_sessions) : "1",
     priceType: d.price_type ?? "",
     priceTypes: d.price_types ?? [],
     entitlements: parseEntitlements(d.entitlements),
     skladchikEntitlements: d.warehouse_staff_entitlements ?? {},
-    expeditorRules: parseExpeditorAssignmentRules(d.expeditor_assignment_rules)
+    expeditorRules: parseExpeditorAssignmentRules(d.expeditor_assignment_rules),
+    superviseeAgentSlotIds: Array.isArray(d.supervisee_agent_slot_ids)
+      ? d.supervisee_agent_slot_ids.filter((id) => Number.isFinite(id) && id > 0)
+      : []
   };
 }
 
@@ -139,6 +162,9 @@ export function SlotWorkplaceConfigDialog({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitsMixed, setLimitsMixed] = useState(false);
+  /** Editor faqat slot entitlements yuklangandan keyin ochiladi — aks holda belgilar bo‘sh ko‘rinadi. */
+  const [limitsHydrated, setLimitsHydrated] = useState(false);
 
   const effectiveSlotType: WorkSlotType | undefined = bulkMode
     ? slotTypeProp
@@ -223,6 +249,36 @@ export function SlotWorkplaceConfigDialog({
     setBaseline(next);
   }, []);
 
+  const loadBulkLimits = useCallback(async () => {
+    if (!tenant || slotIds.length === 0) {
+      applyForm(emptyForm());
+      setLimitsMixed(false);
+      setLimitsHydrated(true);
+      return;
+    }
+    setLoading(true);
+    setLimitsHydrated(false);
+    setError(null);
+    try {
+      const ents = await Promise.all(
+        slotIds.map(async (id) => {
+          const res = await apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${id}`);
+          return parseEntitlements(res.data.entitlements);
+        })
+      );
+      const { merged, mixed } = mergeSlotEntitlementsForEditor(ents);
+      applyForm({ ...emptyForm(), entitlements: merged });
+      setLimitsMixed(mixed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка загрузки");
+      applyForm(emptyForm());
+      setLimitsMixed(false);
+    } finally {
+      setLoading(false);
+      setLimitsHydrated(true);
+    }
+  }, [tenant, slotIds, applyForm]);
+
   const load = useCallback(async () => {
     if (!tenant || !slotId || bulkMode) return;
     setLoading(true);
@@ -236,20 +292,32 @@ export function SlotWorkplaceConfigDialog({
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
+      setLimitsHydrated(true);
     }
   }, [tenant, slotId, bulkMode, applyForm]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLimitsHydrated(false);
+      setLimitsMixed(false);
+      return;
+    }
     setError(null);
     if (bulkMode) {
       setSlot(null);
+      if (section === "limits") {
+        void loadBulkLimits();
+        return;
+      }
+      setLimitsMixed(false);
       applyForm(emptyForm());
       setLoading(false);
       return;
     }
+    setLimitsMixed(false);
+    if (section === "limits") setLimitsHydrated(false);
     if (slotId) void load();
-  }, [open, bulkMode, slotId, load, applyForm]);
+  }, [open, bulkMode, slotId, section, load, loadBulkLimits, applyForm]);
 
   const togglePriceType = (key: string) => {
     setForm((prev) => ({
@@ -264,12 +332,23 @@ export function SlotWorkplaceConfigDialog({
 
   const buildConfigBody = (): Record<string, unknown> => {
     if (section === "main") {
-      return {
+      const ms = Number.parseInt(form.maxSessions, 10);
+      const body: Record<string, unknown> = {
         direction_id: form.directionId.trim() ? Number.parseInt(form.directionId.trim(), 10) : null,
         return_warehouse_id: form.returnWarehouseId.trim()
           ? Number.parseInt(form.returnWarehouseId.trim(), 10)
           : null
       };
+      // Occupant fields: backend writes to active User (no WorkSlot columns).
+      // Bulk: applies to each selected slot that has an active occupant.
+      body.position = form.position.trim() || null;
+      body.app_access = form.appAccess;
+      body.max_sessions = Number.isFinite(ms) && isUnlimitedMaxSessions(ms)
+        ? UNLIMITED_MAX_SESSIONS
+        : Number.isFinite(ms) && ms >= 1
+          ? ms
+          : 1;
+      return body;
     }
     if (section === "prices") {
       return {
@@ -282,6 +361,9 @@ export function SlotWorkplaceConfigDialog({
     }
     if (section === "expeditor") {
       return { expeditor_assignment_rules: form.expeditorRules };
+    }
+    if (section === "team") {
+      return { supervisee_agent_slot_ids: form.superviseeAgentSlotIds };
     }
     return {};
   };
@@ -391,9 +473,30 @@ export function SlotWorkplaceConfigDialog({
 
   /** Cheklovlar — to‘liq SlotEntitlementsEditor. */
   if (section === "limits") {
+    if (!open) return null;
+    const limitsReady = limitsHydrated && !loading;
+    if (!limitsReady) {
+      return (
+        <AgentTemplateModal
+          title={bulkMode ? "Групповые ограничения" : "Ограничения места"}
+          onClose={() => onOpenChange(false)}
+          width="max-w-3xl"
+        >
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          ) : (
+            <p className="py-10 text-center text-sm text-slate-500">
+              Загрузка сохранённых ограничений…
+            </p>
+          )}
+        </AgentTemplateModal>
+      );
+    }
     return (
       <SlotEntitlementsEditor
-        open={open && !loading}
+        open={open}
         tenant={tenant}
         initial={form.entitlements}
         priceTypes={(priceTypesQ.data ?? []).map((o) => o.id)}
@@ -401,6 +504,8 @@ export function SlotWorkplaceConfigDialog({
         bulkMode={bulkMode}
         bulkCount={slotIds.length}
         bulkLabel={bulkSummary ?? (slot ? slot.slot_code : undefined)}
+        mixedHint={limitsMixed}
+        loadError={error}
         onClose={() => onOpenChange(false)}
         onSave={async (next) => {
           const body = {
@@ -475,6 +580,70 @@ export function SlotWorkplaceConfigDialog({
                 ))}
               </FilterSelect>
             </div>
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs text-muted-foreground">
+                Должность, доступ к приложению и лимит сессий — у активного сотрудника на этом
+                месте (сохраняется в карточку пользователя). Код места — в списке слотов.
+              </p>
+              {!bulkMode && !slot?.active_user_id ? (
+                <p className="text-xs text-amber-800">
+                  Место свободно — поля сотрудника применятся после назначения.
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                <Label>Должность</Label>
+                <StaffPositionSelect
+                  tenantSlug={tenant}
+                  value={form.position}
+                  onChange={(v) => setForm((p) => ({ ...p, position: v }))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Макс. сессий</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.maxSessions === "0" ? "∞" : form.maxSessions}
+                    disabled={form.maxSessions === "0"}
+                    onChange={(e) =>
+                      setForm((p) => ({
+                        ...p,
+                        maxSessions: e.target.value.replace(/\D/g, "")
+                      }))
+                    }
+                    className="h-10"
+                  />
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="accent-teal-600"
+                      checked={form.maxSessions === "0"}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          maxSessions: e.target.checked ? "0" : "1"
+                        }))
+                      }
+                    />
+                    Неограниченно
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <Label>Доступ к приложению</Label>
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-teal-600"
+                      checked={form.appAccess}
+                      onChange={(e) => setForm((p) => ({ ...p, appAccess: e.target.checked }))}
+                    />
+                    {form.appAccess ? "Вкл" : "Выкл"}
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         );
       case "prices":
@@ -530,6 +699,14 @@ export function SlotWorkplaceConfigDialog({
             tenant={tenant}
             value={form.expeditorRules}
             onChange={(v) => setForm((p) => ({ ...p, expeditorRules: v }))}
+          />
+        );
+      case "team":
+        return (
+          <SlotSupervisorTeamEditor
+            tenant={tenant}
+            value={form.superviseeAgentSlotIds}
+            onChange={(v) => setForm((p) => ({ ...p, superviseeAgentSlotIds: v }))}
           />
         );
       default:

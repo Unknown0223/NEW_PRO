@@ -8,25 +8,61 @@ import {
   applyTerritoryFieldPatch,
   buildUserTerritory
 } from "./work-slots.config-territory";
+import { buildTerritoriesFromPartLists } from "./work-slots.multi-bindings";
 
 export type ActiveUserAttrsPatch = {
   territory_zone?: string | null;
   territory_oblast?: string | null;
   territory_city?: string | null;
+  territories?: string[] | null;
   warehouse_id?: number | null;
+  warehouse_ids?: number[] | null;
   cash_desk_id?: number | null;
+  cash_desk_ids?: number[] | null;
+  /** Faqat faol User ga yoziladi (slot ustunlari yo‘q). */
+  position?: string | null;
+  app_access?: boolean;
+  max_sessions?: number;
 };
 
 export { buildUserTerritory, applyTerritoryFieldPatch };
 
-export function hasActiveUserAttrsPatch(patch: ActiveUserAttrsPatch): boolean {
+export function hasWorkplaceGeoAttrsPatch(patch: ActiveUserAttrsPatch): boolean {
   return (
     patch.territory_zone !== undefined ||
     patch.territory_oblast !== undefined ||
     patch.territory_city !== undefined ||
+    patch.territories !== undefined ||
     patch.warehouse_id !== undefined ||
-    patch.cash_desk_id !== undefined
+    patch.warehouse_ids !== undefined ||
+    patch.cash_desk_id !== undefined ||
+    patch.cash_desk_ids !== undefined
   );
+}
+
+/** Occupant User maydonlari — KOMANDA UI dan ko‘chirilgan (должность / app / сессии). */
+export function hasOccupantUserAttrsPatch(patch: ActiveUserAttrsPatch): boolean {
+  return (
+    patch.position !== undefined ||
+    patch.app_access !== undefined ||
+    patch.max_sessions !== undefined
+  );
+}
+
+export function hasActiveUserAttrsPatch(patch: ActiveUserAttrsPatch): boolean {
+  return hasWorkplaceGeoAttrsPatch(patch) || hasOccupantUserAttrsPatch(patch);
+}
+
+export function occupantUserUpdateData(patch: ActiveUserAttrsPatch): {
+  position?: string | null;
+  app_access?: boolean;
+  max_sessions?: number;
+} {
+  return {
+    ...(patch.position !== undefined ? { position: patch.position?.trim() || null } : {}),
+    ...(patch.app_access !== undefined ? { app_access: patch.app_access } : {}),
+    ...(patch.max_sessions !== undefined ? { max_sessions: patch.max_sessions } : {})
+  };
 }
 
 export type ActiveUserTerritoryRoundRobin = {
@@ -43,26 +79,31 @@ export function hasTerritoryRoundRobin(lists: ActiveUserTerritoryRoundRobin): bo
   );
 }
 
+/** Multi territory: bir xil ro‘yxat har bir slotga (round-robin o‘rniga). */
 export function resolvePerSlotUserAttrsPatch(
-  index: number,
+  _index: number,
   base: ActiveUserAttrsPatch,
   lists: ActiveUserTerritoryRoundRobin
 ): ActiveUserAttrsPatch {
   const patch: ActiveUserAttrsPatch = { ...base };
-  if (lists.territory_zones?.length) {
-    patch.territory_zone = lists.territory_zones[index % lists.territory_zones.length] ?? null;
-  }
-  if (lists.territory_oblasts?.length) {
-    patch.territory_oblast = lists.territory_oblasts[index % lists.territory_oblasts.length] ?? null;
-  }
-  if (lists.territory_cities?.length) {
-    patch.territory_city = lists.territory_cities[index % lists.territory_cities.length] ?? null;
+  if (hasTerritoryRoundRobin(lists)) {
+    const built = buildTerritoriesFromPartLists({
+      zones: lists.territory_zones,
+      oblasts: lists.territory_oblasts,
+      cities: lists.territory_cities
+    });
+    patch.territories = built;
+    // singular parts — primary (birinchi)
+    delete patch.territory_zone;
+    delete patch.territory_oblast;
+    delete patch.territory_city;
   }
   return patch;
 }
 
 /**
  * P0: joy maydonlari avval WorkSlot ga yoziladi, keyin faol userga mirror.
+ * Occupant position/app_access/max_sessions — to‘g‘ridan-to‘g‘ri User ga.
  * Faol user yo‘q bo‘lsa — faqat slot yangilanadi (NO_ACTIVE_USER emas).
  */
 export async function patchActiveUserOnSlot(
@@ -82,18 +123,31 @@ export async function patchActiveUserOnSlot(
     territory_zone: patch.territory_zone,
     territory_oblast: patch.territory_oblast,
     territory_city: patch.territory_city,
+    territories: patch.territories,
     warehouse_id: patch.warehouse_id,
-    cash_desk_id: patch.cash_desk_id
+    warehouse_ids: patch.warehouse_ids,
+    cash_desk_id: patch.cash_desk_id,
+    cash_desk_ids: patch.cash_desk_ids
   };
 
   return prisma.$transaction(async (tx) => {
-    await applySlotConfigPatch(tx, tenantId, slotId, configPatch, slot.territory);
+    if (hasWorkplaceGeoAttrsPatch(patch)) {
+      await applySlotConfigPatch(tx, tenantId, slotId, configPatch, slot.territory);
+    }
     const link = await tx.slotUserLink.findFirst({
       where: { tenant_id: tenantId, slot_id: slotId, ended_at: null },
       select: { user_id: true }
     });
     if (link) {
-      await mirrorSlotConfigToUser(tx, tenantId, slotId, link.user_id);
+      if (hasWorkplaceGeoAttrsPatch(patch)) {
+        await mirrorSlotConfigToUser(tx, tenantId, slotId, link.user_id);
+      }
+      if (hasOccupantUserAttrsPatch(patch)) {
+        await tx.user.update({
+          where: { id: link.user_id },
+          data: occupantUserUpdateData(patch)
+        });
+      }
       return link.user_id;
     }
     return 0;
@@ -133,4 +187,3 @@ export async function bulkPatchActiveUsersOnSlots(
 
   return { users_updated, skipped_no_user };
 }
-

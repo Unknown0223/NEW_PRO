@@ -7,21 +7,12 @@ import {
 import type { TerritoryNode } from "../lib/territory-tree";
 import {
   EMPTY_LOCATION_BULK_MODES,
+  emptyLocationValues,
   validateBulkTerritorySet,
   type WorkSlotsLocationValues
 } from "../components/work-slots/work-slots-location-fields";
 
-const emptyLocation = (): WorkSlotsLocationValues => ({
-  territoryZone: "",
-  territoryOblast: "",
-  territoryCity: "",
-  territoryZoneList: [],
-  territoryOblastList: [],
-  territoryCityList: [],
-  warehouseId: null,
-  returnWarehouseId: null,
-  cashDeskId: null
-});
+const emptyLocation = (): WorkSlotsLocationValues => emptyLocationValues();
 
 /** Haqiqiy tenant daraxti: FV → ANDIJON VILOYATI → tumanlar */
 const fvTree: TerritoryNode[] = [

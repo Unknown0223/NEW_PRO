@@ -124,6 +124,8 @@ export type StaffRow = {
   /** Faol ishchi o‘rni (agent, inkasator, ekspeditor, omborchi) */
   work_slot_id: number | null;
   work_slot_code: string | null;
+  /** Yuz etalon rasmi bor — web avatar GET ni faqat shunda chaqirish */
+  has_face_reference: boolean;
 };
 
 export type StaffCreateResult = StaffRow & { warnings?: string[] };
@@ -132,7 +134,10 @@ export const STAFF_KINDS_WITH_WORK_SLOT = new Set<StaffKind>([
   "agent",
   "collector",
   "expeditor",
-  "skladchik"
+  "skladchik",
+  "supervisor",
+  "auditor",
+  "operator"
 ]);
 
 export type CreateStaffInput = {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
+import '../errors/error_reporter.dart';
 import '../time/work_region_time.dart';
 
 class AppDatabase {
@@ -14,23 +15,24 @@ class AppDatabase {
   }
 
   static Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'salesdoc.db');
-    return openDatabase(
-      path,
-      version: 18,
-      onOpen: (db) async {
-        // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
-        try {
-          await db.rawQuery('PRAGMA journal_mode=WAL');
-          await db.rawQuery('PRAGMA synchronous=NORMAL');
-        } catch (_) {}
-        await _ensureClientColumns(db);
-        await _ensureHeldOrderSummaryColumns(db);
-        await _ensurePhotoRetryColumn(db);
-        await _ensurePerfIndexes(db);
-      },
-      onCreate: (db, version) async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final path = p.join(dbPath, 'salesdoc.db');
+      return openDatabase(
+        path,
+        version: 19,
+        onOpen: (db) async {
+          // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
+          try {
+            await db.rawQuery('PRAGMA journal_mode=WAL');
+            await db.rawQuery('PRAGMA synchronous=NORMAL');
+          } catch (_) {}
+          await _ensureClientColumns(db);
+          await _ensureHeldOrderSummaryColumns(db);
+          await _ensurePhotoRetryColumn(db);
+          await _ensurePerfIndexes(db);
+        },
+        onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE clients (
             id INTEGER PRIMARY KEY,
@@ -58,7 +60,8 @@ class AppDatabase {
             client_pinfl TEXT,
             contract_number TEXT,
             notes TEXT,
-            visit_date TEXT
+            visit_date TEXT,
+            photo_url TEXT
           )
         ''');
         await db.execute('''
@@ -286,6 +289,9 @@ class AppDatabase {
         if (oldVersion < 18) {
           await _ensurePerfIndexes(db);
         }
+        if (oldVersion < 19) {
+          await _ensureClientColumns(db);
+        }
         if (oldVersion < 5) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS agent_visits (
@@ -306,6 +312,18 @@ class AppDatabase {
         }
       },
     );
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.database,
+        code: 'SqliteOpenFailed',
+        message: 'SQLite: не удалось открыть локальную базу',
+        path: '/mobile/database',
+        severity: 'fatal',
+      );
+      rethrow;
+    }
   }
 
   static Future<void> _ensureHeldOrderSummaryColumns(Database db) async {
@@ -408,6 +426,46 @@ class AppDatabase {
     if (!cols.contains('visit_date')) {
       await db.execute('ALTER TABLE clients ADD COLUMN visit_date TEXT');
     }
+    if (!cols.contains('photo_url')) {
+      await db.execute('ALTER TABLE clients ADD COLUMN photo_url TEXT');
+    }
+  }
+
+  static Future<void> _preserveClientPhotoUrls(
+    DatabaseExecutor db,
+    List<Map<String, dynamic>> clients,
+  ) async {
+    final ids = <int>[];
+    for (final c in clients) {
+      final incoming = c['photo_url']?.toString().trim();
+      if (incoming != null && incoming.isNotEmpty) continue;
+      final id = c['id'];
+      if (id is int) ids.add(id);
+    }
+    if (ids.isEmpty) return;
+    final existing = <int, String>{};
+    for (var i = 0; i < ids.length; i += 400) {
+      final chunk = ids.skip(i).take(400).toList();
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final rows = await db.query(
+        'clients',
+        columns: ['id', 'photo_url'],
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+      for (final r in rows) {
+        final p = r['photo_url']?.toString().trim();
+        final id = r['id'];
+        if (id is int && p != null && p.isNotEmpty) existing[id] = p;
+      }
+    }
+    for (final c in clients) {
+      final incoming = c['photo_url']?.toString().trim();
+      if (incoming != null && incoming.isNotEmpty) continue;
+      final id = c['id'];
+      final keep = id is int ? existing[id] : null;
+      if (keep != null) c['photo_url'] = keep;
+    }
   }
 
   static Future<void> _upsertBatched(
@@ -466,6 +524,7 @@ class AppDatabase {
       await Future<void>.delayed(Duration.zero);
       await _upsertBatchedTxn(txn, 'prices', prices);
       await Future<void>.delayed(Duration.zero);
+      await _preserveClientPhotoUrls(txn, clients);
       if (replaceClients) {
         await txn.delete('clients');
       }
@@ -622,7 +681,7 @@ class AppDatabase {
 
   /// Eski katalog versiyasi yoki visit_weekdays yo‘q — qayta to‘liq yuklash.
   /// Eslatma: ≤50 mijoz «stale» deb hisoblanmasin — bu har ochilishda full sync qilardi.
-  static const agentClientsCatalogVersion = '6';
+  static const agentClientsCatalogVersion = '7';
 
   Future<bool> needsAgentClientCatalogUpgrade() async {
     final db = await database;
@@ -673,6 +732,7 @@ class AppDatabase {
 
   Future<void> upsertClients(List<Map<String, dynamic>> clients) async {
     final db = await database;
+    await _preserveClientPhotoUrls(db, clients);
     await _upsertBatched(db, 'clients', clients);
   }
 

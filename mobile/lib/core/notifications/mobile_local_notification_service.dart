@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../l10n/app_strings_ru.dart';
+import '../errors/error_reporter.dart';
 import '../theme/app_colors.dart';
 import '../ui/agent_ui.dart';
 import '../update/app_update_info.dart';
@@ -234,9 +235,22 @@ class MobileLocalNotificationService {
   Future<void> clearDayScopedTrayNotifications() async {
     await init();
     _tenMinAlertKey = null;
-    await _plugin.cancel(_syncNotificationId);
-    await _plugin.cancel(_heldOrdersWarnNotificationId);
-    await _plugin.cancel(_heldOrdersSentNotificationId);
+    try {
+      await _plugin.cancel(_syncNotificationId);
+      await _plugin.cancel(_heldOrdersWarnNotificationId);
+      await _plugin.cancel(_heldOrdersSentNotificationId);
+    } catch (e, st) {
+      // R8/TypeToken yoki plugin xatosi sync/kun aylanishini to‘xtatmasin.
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.notifications,
+        code: 'NotificationCancelFailed',
+        message: 'Уведомления: cancel не удался (TypeToken/R8?)',
+        path: '/mobile/notifications',
+        severity: 'warning',
+      );
+    }
   }
 
   /// Kechiktirilgan zakaz yuborishiga ~1 daqiqa qolganda.

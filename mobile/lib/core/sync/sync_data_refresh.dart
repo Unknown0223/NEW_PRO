@@ -16,13 +16,15 @@ typedef ProviderInvalidator = void Function(ProviderOrFamily provider);
 void _invalidateAll(ProviderInvalidator invalidate) {
   invalidate(homeStatsProvider);
   invalidate(syncCountTodayProvider);
+  invalidate(pendingPhotoCountProvider);
   invalidate(agentDashboardProvider);
   invalidate(homeVisitMetricsProvider);
   invalidate(visitedTodayClientIdsProvider);
   invalidate(visitsTodayProvider);
   invalidate(realTodayRouteProvider);
   invalidate(clientsListProvider);
-  invalidate(filteredClientsProvider);
+  // filteredClientsProvider clientsListProvider.future ni watch qiladi —
+  // alohida invalidate shart emas (cascade flickering oldini olish).
   invalidate(agentStaleClientCatalogProvider);
   invalidate(ordersListProvider);
   invalidate(agentKpiProvider);
@@ -30,6 +32,17 @@ void _invalidateAll(ProviderInvalidator invalidate) {
 
 /// Sinxron tugagach barcha bog‘liq ekranlarni yangilash (`Ref` yoki `WidgetRef`).
 void invalidateSyncedData(ProviderInvalidator invalidate) => _invalidateAll(invalidate);
+
+/// Bitta zakaz yuborilgach — katalog/full-sync emas, faqat zakaz va vizit ko‘rsatkichlari.
+void invalidateAfterOrderSubmit(ProviderInvalidator invalidate) {
+  invalidate(homeStatsProvider);
+  invalidate(pendingPhotoCountProvider);
+  invalidate(agentDashboardProvider);
+  invalidate(homeVisitMetricsProvider);
+  invalidate(visitedTodayClientIdsProvider);
+  invalidate(visitsTodayProvider);
+  invalidate(ordersListProvider);
+}
 
 /// Chiqish / sessiya tugagach kesh providerlarini tozalash.
 void invalidateAuthScopedData(ProviderInvalidator invalidate) => _invalidateAll(invalidate);

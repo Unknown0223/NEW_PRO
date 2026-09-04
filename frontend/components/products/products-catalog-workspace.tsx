@@ -2,6 +2,7 @@
 
 import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
@@ -210,7 +211,10 @@ function EquipmentItemsTab({
     }
     try {
       setSavingId(-1);
-      await Promise.all(ids.map((id) => api.put(`/api/${tenantSlug}/products/${id}`, { is_equipment: true })));
+      await api.post(`/api/${tenantSlug}/products/bulk-equipment`, {
+        product_ids: ids,
+        is_equipment: true
+      });
       setAddOpen(false);
       setPickedIds(new Set());
       setPickerSearch("");
@@ -461,6 +465,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
     : "/products";
   const settingsAsidePx = pathname.startsWith("/settings/") ? 300 : 0;
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
   const priceFileRef = useRef<HTMLInputElement>(null);
   const [page, setPage] = useState(1);
   const [categoryId, setCategoryId] = useState("");
@@ -515,17 +520,25 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   }, [categoriesQ.data, categoryId]);
 
   const groupsQ = useQuery({
-    queryKey: ["catalog-simple", "catalog/product-groups", tenantSlug, "items-filter"],
+    queryKey: ["catalog-simple", "catalog/product-groups", tenantSlug, "items-filter", categoryId],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.reference,
     queryFn: async () => {
       const params = new URLSearchParams({ page: "1", limit: "500", is_active: "true" });
+      if (categoryId) params.set("category_id", categoryId);
       const { data } = await api.get<{ data: { id: number; name: string }[] }>(
         `/api/${tenantSlug}/catalog/product-groups?${params}`
       );
       return data.data;
     }
   });
+
+  useEffect(() => {
+    if (!productGroupId || !groupsQ.data) return;
+    if (!groupsQ.data.some((g) => String(g.id) === productGroupId)) {
+      setProductGroupId("");
+    }
+  }, [groupsQ.data, productGroupId]);
 
   const brandsQ = useQuery({
     queryKey: ["catalog-simple", "catalog/brands", tenantSlug, "items-bulk"],
@@ -816,7 +829,10 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           <select
             className={`${inputCls} min-w-[9rem]`}
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
+            onChange={(e) => {
+              setCategoryId(e.target.value);
+              setProductGroupId("");
+            }}
           >
             <option value="">Все</option>
             {(categoriesQ.data ?? []).map((c) => (
@@ -1115,9 +1131,16 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                               title="Восстановить"
                               aria-label="Восстановить"
                               onClick={() => {
-                                if (window.confirm(`Восстановить «${r.name}»?`)) {
-                                  activateMut.mutate(r.id);
-                                }
+                                void (async () => {
+                                  const ok = await confirm({
+                                    title: "Восстановить",
+                                    message: `Восстановить «${r.name}»?`,
+                                    confirmLabel: "Да",
+                                    cancelLabel: "Нет",
+                                    destructive: false
+                                  });
+                                  if (ok) activateMut.mutate(r.id);
+                                })();
                               }}
                             >
                               <RotateCcw className="size-3.5" aria-hidden />
@@ -1210,6 +1233,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
         pending={deactivateMut.isPending}
         consequences={["Товар останется в базе и доступен во вкладке «Не активный»"]}
       />
+      {confirmDialog}
 
       <Dialog
         open={fullProductOpen}

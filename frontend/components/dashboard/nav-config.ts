@@ -33,7 +33,7 @@ export const dashboardHomeNav: { sectionTitle: string; items: NavItem[] } = {
     {
       href: "/dashboard/finance",
       label: "Финансы",
-      showIfAnyPermission: ["dashboard.finansy.view", "dashboard.finansy"]
+      showIfAnyPermission: ["dashboard.finansy.view", "dashboard.finansy", "finance.obzor.view"]
     },
     {
       href: "/dashboard/sales",
@@ -477,7 +477,7 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
       showIfAnyPermission: [...NAV_PERM.audit]
     }
   },
-  { kind: "link", item: { href: "/activity", label: "Активность и история", roles: ["admin"] } },
+  { kind: "link", item: { href: "/activity", label: "Активность и история", showIfAnyPermission: [...NAV_PERM.activity] } },
   {
     kind: "link",
     item: {

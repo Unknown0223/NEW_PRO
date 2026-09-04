@@ -5,6 +5,8 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 
+import '../errors/error_reporter.dart';
+
 /// Biometric service — telefon qulfida ishlatiladigan barmoq izi / Face ID.
 class BiometricService {
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -61,9 +63,36 @@ class BiometricService {
       return ok;
     } on PlatformException catch (e) {
       _log('authenticate PlatformException: ${e.code} ${e.message}');
+      const skip = {
+        'UserCancel',
+        'AuthenticationCanceled',
+        'Canceled',
+        'userCanceled',
+        'NotAvailable',
+        'PasscodeNotSet',
+        'NotEnrolled',
+      };
+      if (!skip.contains(e.code)) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          module: ErrorModules.auth,
+          code: 'BiometricAuthFailed',
+          message: 'Биометрия: ошибка аутентификации (${e.code})',
+          path: '/mobile/auth/biometric',
+          payload: {'platform_code': e.code},
+        );
+      }
       return false;
-    } catch (e) {
+    } catch (e, st) {
       _log('authenticate error: $e');
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.auth,
+        code: 'BiometricAuthUnexpected',
+        message: 'Биометрия: неожиданная ошибка',
+        path: '/mobile/auth/biometric',
+      );
       return false;
     }
   }

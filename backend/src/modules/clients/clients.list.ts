@@ -83,6 +83,10 @@ function bulkClientPatchErrorMessage(code: string): string {
       return "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang.";
     case "AGENT_NOT_ON_SLOT":
       return "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish).";
+    case "EXPEDITOR_NOT_ON_SLOT":
+      return "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan.";
+    case "ASSIGNMENT_PERSON_HAS_DEBT":
+      return "Qarzdorlik bor: agent yoki ekspeditorni olib tashlab / almashtirib bo‘lmaydi. Faqat qoldiq 0 bo‘lganda ruxsat (peredoplata ham 0 hisoblanadi).";
     case "EXPEDITOR_NOT_FOUND":
       return "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang.";
     case "VALIDATION":
@@ -119,7 +123,15 @@ export async function bulkPatchClients(
       updated += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "UNKNOWN";
-      failed.push({ id, error: bulkClientPatchErrorMessage(msg) });
+      if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+        const ex = e as Error & { debtMessage?: string };
+        failed.push({
+          id,
+          error: ex.debtMessage?.trim() || bulkClientPatchErrorMessage(msg)
+        });
+      } else {
+        failed.push({ id, error: bulkClientPatchErrorMessage(msg) });
+      }
     }
   }
 
@@ -160,7 +172,15 @@ export async function bulkPatchClientItems(
       updated += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "UNKNOWN";
-      failed.push({ id: item.client_id, error: bulkClientPatchErrorMessage(msg) });
+      if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
+        const ex = e as Error & { debtMessage?: string };
+        failed.push({
+          id: item.client_id,
+          error: ex.debtMessage?.trim() || bulkClientPatchErrorMessage(msg)
+        });
+      } else {
+        failed.push({ id: item.client_id, error: bulkClientPatchErrorMessage(msg) });
+      }
     }
   }
 

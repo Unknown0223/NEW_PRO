@@ -66,7 +66,9 @@ export const createOrderBodySchema = z
     source_order_ids: z.array(z.number().int().positive()).optional(),
     minus_lines: z.array(exchangeLineSchema).optional(),
     plus_lines: z.array(plusLineSchema).optional(),
-    reason_ref: z.string().trim().max(256).optional().nullable()
+    reason_ref: z.string().trim().max(256).optional().nullable(),
+    /** Ixtiyoriy hujjat ID (har qanday matn); bo‘sh → create dan keyin String(id) */
+    number: z.string().trim().min(1).max(64).optional().nullable()
   })
   .superRefine((data, ctx) => {
     const ot = data.order_type ?? "order";

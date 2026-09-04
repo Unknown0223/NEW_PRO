@@ -171,6 +171,8 @@ import { buildApp } from "../src/app";
 
 const app = buildApp();
 
+const MOBILE_LOGIN = { apk_version: "3.1.0" };
+
 describe("auth + tenant integration", () => {
   beforeAll(async () => {
     await app.ready();
@@ -210,7 +212,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
 
     expect(loginResponse.status).toBe(200);
@@ -229,7 +232,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
     expect(loginResponse.status).toBe(200);
 
@@ -244,7 +248,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/api/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
 
     expect(loginResponse.status).toBe(200);
@@ -255,7 +260,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
 
     const meResponse = await request(app.server)
@@ -271,7 +277,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
 
     const meResponse = await request(app.server)
@@ -288,7 +295,8 @@ describe("auth + tenant integration", () => {
     const loginResponse = await request(app.server).post("/auth/login").send({
       slug: "andijon",
       login: "agent01",
-      password: "secret123"
+      password: "secret123",
+      ...MOBILE_LOGIN
     });
 
     const oldHash = createHash("sha256").update(loginResponse.body.refreshToken).digest("hex");
@@ -303,5 +311,33 @@ describe("auth + tenant integration", () => {
 
     const oldTokenRow = state.refreshTokens.find((r) => r.token_hash === oldHash);
     expect(oldTokenRow?.revoked_at).not.toBeNull();
+  });
+
+  it("rejects agent web login without apk_version", async () => {
+    const loginResponse = await request(app.server).post("/auth/login").send({
+      slug: "andijon",
+      login: "agent01",
+      password: "secret123"
+    });
+    expect(loginResponse.status).toBe(403);
+    expect(loginResponse.body.error).toBe("WEB_ACCESS_DENIED");
+  });
+
+  it("rejects agent /auth/me from a browser user-agent", async () => {
+    const loginResponse = await request(app.server).post("/auth/login").send({
+      slug: "andijon",
+      login: "agent01",
+      password: "secret123",
+      ...MOBILE_LOGIN
+    });
+    expect(loginResponse.status).toBe(200);
+
+    const meResponse = await request(app.server)
+      .get("/auth/me")
+      .set("Authorization", `Bearer ${loginResponse.body.accessToken}`)
+      .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0");
+
+    expect(meResponse.status).toBe(403);
+    expect(meResponse.body.error).toBe("WEB_ACCESS_DENIED");
   });
 });

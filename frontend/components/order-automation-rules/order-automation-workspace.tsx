@@ -22,6 +22,7 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
@@ -57,6 +58,7 @@ export function OrderAutomationWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const qc = useQueryClient();
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const [tab, setTab] = useState<TabId>("restrictions");
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive">("active");
@@ -288,7 +290,16 @@ export function OrderAutomationWorkspace() {
             refLabelByCode={refLabelByCode}
             onEdit={openEdit}
             onDelete={(id) => {
-              if (window.confirm("Удалить правило?")) deleteM.mutate(id);
+              void (async () => {
+                const ok = await confirm({
+                  title: "Удалить",
+                  message: "Удалить правило?",
+                  confirmLabel: "Да",
+                  cancelLabel: "Нет",
+                  destructive: true
+                });
+                if (ok) deleteM.mutate(id);
+              })();
             }}
             onToggleActive={(id, active) => toggleM.mutate({ id, active })}
             onDuplicate={(id) => duplicateM.mutate(id)}
@@ -324,6 +335,7 @@ export function OrderAutomationWorkspace() {
         onSubmit={() => saveM.mutate()}
         saving={saveM.isPending}
       />
+      {confirmDialog}
     </div>
   );
 }

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { StaffFaceAvatar } from "@/components/staff/staff-face-avatar";
+import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
+import {
+  invalidateStaffFaceAvatarCache,
+  StaffFaceAvatar
+} from "@/components/staff/staff-face-avatar";
 
 type Meta = { has_reference: boolean; uploaded_at: string | null };
 
@@ -35,6 +39,7 @@ export function StaffFaceReferencePanel({
   const [err, setErr] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { confirm, dialog: confirmDialog } = useAppConfirm();
 
   const load = useCallback(async () => {
     if (!enabled || !userId) return;
@@ -68,6 +73,7 @@ export function StaffFaceReferencePanel({
       await api.put(`/api/${tenantSlug}/staff/users/${userId}/face-reference`, {
         image_base64
       });
+      invalidateStaffFaceAvatarCache(tenantSlug, userId);
       setTick((t) => t + 1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Yuklash xatosi");
@@ -78,11 +84,19 @@ export function StaffFaceReferencePanel({
   }
 
   async function onDelete() {
-    if (!confirm("Etalon yuz rasmini o‘chirishni tasdiqlaysizmi?")) return;
+    const ok = await confirm({
+      title: "Удалить",
+      message: "Etalon yuz rasmini o‘chirishni tasdiqlaysizmi?",
+      confirmLabel: "Да",
+      cancelLabel: "Нет",
+      destructive: true
+    });
+    if (!ok) return;
     setBusy(true);
     setErr(null);
     try {
       await api.delete(`/api/${tenantSlug}/staff/users/${userId}/face-reference`);
+      invalidateStaffFaceAvatarCache(tenantSlug, userId);
       setTick((t) => t + 1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "O‘chirish xatosi");
@@ -157,6 +171,7 @@ export function StaffFaceReferencePanel({
         </span>
       ) : null}
       {err ? <p className="text-xs text-destructive">{err}</p> : null}
+      {confirmDialog}
     </div>
   );
 }

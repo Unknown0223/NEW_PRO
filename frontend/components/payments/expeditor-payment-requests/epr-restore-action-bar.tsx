@@ -50,7 +50,10 @@ export function EprRestoreActionBar({
     >
       <div className="flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border border-teal-600/40 bg-card px-2 py-2 shadow-[0_8px_40px_rgba(6,59,54,0.28)]">
         <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-slate-700">
-          Выбрано: <span className="text-teal-700">{selectedCount}</span> / {total}
+          Выбрано: <span className="text-teal-700">{selectedCount}</span>
+          {total > 0 ? (
+            <span className="font-normal text-slate-500"> (на стр. / фильтр: {total})</span>
+          ) : null}
         </span>
 
         <button

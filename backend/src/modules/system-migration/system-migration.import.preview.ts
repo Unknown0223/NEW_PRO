@@ -80,6 +80,7 @@ export async function parseBackupZip(buf: Buffer, targetTenantId: number): Promi
       }
       if (
         formatVersion !== BACKUP_FORMAT_VERSION &&
+        formatVersion !== 5 &&
         formatVersion !== 4 &&
         formatVersion !== 3 &&
         formatVersion !== 2 &&

@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import { buildAppliedBonusRulesSnapshotForOrder } from "../order-bonus-snapshot.persist";
+import { resolveStoredPaymentMethodRef } from "../../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../../tenant-settings/tenant-settings.service";
 import { bonusGiftMapToJson } from "./order.detail-mappers";
 import { orderDetailInclude } from "./order.types";
 import type { CreateOrderLimitsResult } from "./order.create-tx.limits";
@@ -9,6 +14,25 @@ import type { DiscountAlertCode } from "../order-discount-alert";
 import type { BonusAlertCode } from "../order-bonus-stock-cap";
 
 import type { CreateOrderTxParams } from "./order.create-tx.types";
+
+async function paymentMethodRefForCreateOrder(
+  tenantId: number,
+  orderType: string,
+  paymentMethodRef: string | null | undefined,
+  priceType: string
+): Promise<string | null> {
+  if (orderType !== "order") return null;
+  const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
+    loadPriceTypeEntriesForResolve(tenantId),
+    loadPaymentMethodEntriesForResolve(tenantId)
+  ]);
+  return resolveStoredPaymentMethodRef({
+    paymentMethodRef,
+    priceType,
+    priceTypeEntries,
+    paymentMethodEntries
+  });
+}
 
 export async function persistCreateOrderInTransaction(
   tx: Prisma.TransactionClient,
@@ -61,6 +85,13 @@ export async function persistCreateOrderInTransaction(
     });
   }
 
+  if (expeditorUserId != null) {
+    const { assertExpeditorCanTakeNewWork } = await import(
+      "../../work-slots/work-slots.expeditor-gate"
+    );
+    await assertExpeditorCanTakeNewWork(tenantId, expeditorUserId);
+  }
+
   const commentTrim =
     input.comment === undefined || input.comment === null ? null : input.comment.trim() || null;
 
@@ -98,6 +129,7 @@ export async function persistCreateOrderInTransaction(
       warehouse_id: input.warehouse_id,
       agent_id: input.agent_id ?? null,
       work_slot_id: workSlotId,
+      creation_channel: p.creationChannel,
       expeditor_user_id: expeditorUserId,
       order_type: orderType,
       status: statusForType,
@@ -113,8 +145,12 @@ export async function persistCreateOrderInTransaction(
       request_type_ref: requestTypeRefTrim,
       is_consignment: isConsignmentOrder,
       consignment_due_date: isConsignmentOrder ? consignmentDueDate : null,
-      payment_method_ref:
-        orderType === "order" ? (input.payment_method_ref ?? "").trim().slice(0, 64) || null : null,
+      payment_method_ref: await paymentMethodRefForCreateOrder(
+        tenantId,
+        orderType,
+        input.payment_method_ref,
+        priceType
+      ),
       ...(orderType === "exchange" && exchangeMetaJson != null ? { exchange_meta: exchangeMetaJson } : {}),
       items: {
         create: [
@@ -197,7 +233,11 @@ export async function persistCreateOrderInTransaction(
   return tx.order.update({
     where: { id: created.id },
     data: {
-      number: String(created.id),
+      number: (() => {
+        const custom =
+          input.number != null ? String(input.number).trim().replace(/\u00a0/g, " ") : "";
+        return custom ? custom.slice(0, 64) : String(created.id);
+      })(),
       comment:
         commentTrim != null
           ? commentTrim.replace(/заказ \(новый\)/g, `заказ #${created.id}`)

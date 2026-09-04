@@ -16,6 +16,7 @@ export type WorkSlotRow = {
   slot_code: string;
   label: string | null;
   branch_code: string | null;
+  branch_codes: string[];
   direction_id: number | null;
   direction_name: string | null;
   slot_type: string;
@@ -24,14 +25,24 @@ export type WorkSlotRow = {
   active_user_id: number | null;
   active_user_name: string | null;
   active_user_territory: string | null;
+  /** Occupant User.position — KOMANDA o‘rniga slot config orqali. */
+  active_user_position: string | null;
+  active_user_app_access: boolean | null;
+  active_user_max_sessions: number | null;
+  /** Faol (revoked emas, muddati o‘tmagan) refresh-tokenlar soni. */
+  active_user_active_session_count: number;
   active_territory_zone: string | null;
   active_territory_oblast: string | null;
   active_territory_city: string | null;
+  /** Barcha territory satrlari (birinchisi — primary / compat). */
+  active_territories: string[];
   active_warehouse_id: number | null;
+  active_warehouse_ids: number[];
   active_warehouse_name: string | null;
   return_warehouse_id: number | null;
   return_warehouse_name: string | null;
   active_cash_desk_id: number | null;
+  active_cash_desk_ids: number[];
   active_cash_desk_names: string | null;
   price_type: string | null;
   price_types: string[];
@@ -44,6 +55,8 @@ export type WorkSlotRow = {
   consignment_close_minute: number;
   warehouse_staff_entitlements: Record<string, boolean>;
   expeditor_assignment_rules: Record<string, unknown>;
+  /** SVR jamoa: agent ishchi o‘rinlari */
+  supervisee_agent_slot_ids: number[];
   active_since: string | null;
   created_at: string;
   updated_at: string;

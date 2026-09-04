@@ -11,6 +11,7 @@ import '../config/mobile_config_policy.dart';
 import '../config/sync_policy_provider.dart';
 import '../connectivity/connectivity_service.dart';
 import '../database/app_database.dart';
+import '../errors/error_reporter.dart';
 import '../time/work_region_time.dart';
 import 'photo_report_queue.dart';
 import 'sync_payload_parser.dart';
@@ -127,10 +128,13 @@ class SyncEngine {
     );
 
     onPhase?.call(1);
-    final replaceCatalog = _userRole == 'agent' &&
-        (isFullCatalogSync(lastSyncAt) || forceClientsCatalog);
+    // Faqat to‘liq sync mahsulotlarni REPLACE qilsin.
+    // forceClientsCatalog faqat mijozlar uchun — aks holda delta bo‘sh products
+    // eski katalogni o‘chirib yuboradi (SyncProductsEmpty).
+    final replaceProducts =
+        _userRole == 'agent' && isFullCatalogSync(lastSyncAt);
     await _db.persistSync(
-      replaceProductCatalog: replaceCatalog,
+      replaceProductCatalog: replaceProducts,
       replaceClients: payload.clientsReplaceAll,
       markAgentClientsSynced: _userRole == 'agent' && payload.clientsReplaceAll,
       products: payload.products,
@@ -141,8 +145,8 @@ class SyncEngine {
     );
 
     onPhase?.call(5);
-    unawaited(offlineFuture);
-    unawaited(photoFuture);
+    // Navbat + foto to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
+    await Future.wait([offlineFuture, photoFuture]);
     return payload;
   }
 
@@ -179,7 +183,21 @@ class SyncEngine {
 
         await _db.markQueueItemSent(item['id'] as int);
         sent++;
-      } catch (e) {
+      } catch (e, st) {
+        ErrorReporter.instance?.reportCaught(
+          e,
+          stack: st,
+          module: ErrorModules.sync,
+          code: 'OfflineOrderFlushFailed',
+          message: 'Синхронизация: офлайн заказ не отправился',
+          path: '/mobile/sync/flush',
+          payload: {
+            'queue_id': item['id'],
+            'client_id': item['client_id'],
+            'sent': sent,
+            'failed': failed + 1,
+          },
+        );
         failed++;
         break;
       }
@@ -215,7 +233,15 @@ class SyncEngine {
     }
     try {
       return await _mobileApi.syncFlushOrders(_slug);
-    } catch (_) {
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.sync,
+        code: 'ServerPendingFlushFailed',
+        message: 'Синхронизация: server pending flush не удался',
+        path: '/mobile/sync/flush',
+      );
       return null;
     }
   }
@@ -252,13 +278,15 @@ final autoFlushProvider = Provider<void>((ref) {
   final syncCfg = ref.watch(sessionProvider.select((s) => s.mobileConfig?.sync ?? const SyncConfig()));
 
   isOnline.whenData((online) async {
-    if (!policy.allowed || !online || syncEngine == null) return;
+    if (!online || syncEngine == null) return;
     try {
+      // Fotolar: yig‘ilgan rasmlarni istalgan vaqtda yuborish (oyna cheklovi yo‘q).
       final photoCfg = ref.read(sessionProvider).mobileConfig?.photo;
       final photoPending = await AppDatabase().pendingPhotoReportCount();
       if (photoPending > 0) {
         await syncEngine.flushPendingPhotoReports(photoConfig: photoCfg);
       }
+      if (!policy.allowed) return;
       final count = await syncEngine.pendingCount();
       if (count > 0) {
         await syncEngine.flushOfflineQueue(policySync: syncCfg);

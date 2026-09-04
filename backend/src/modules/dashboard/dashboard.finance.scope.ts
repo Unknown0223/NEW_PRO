@@ -30,6 +30,11 @@ import {
   normalizeYmd
 } from "./dashboard.helpers";
 import type { FinanceDashboardFilters } from "./dashboard.finance.types";
+import { expandPaymentMethodFilterValues } from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
 
 export function normalizeFromYmd(input?: string): string {
   const t = (input ?? "").trim();
@@ -64,6 +69,21 @@ export function parseFinanceDashboardFilters(
     territory_2_list: csvToStringArray(q.territory_2 ?? q.territory2),
     territory_3_list: csvToStringArray(q.territory_3 ?? q.territory3),
     statuses
+  };
+}
+
+export async function expandFinancePaymentFilters(
+  tenantId: number,
+  f: FinanceDashboardFilters
+): Promise<FinanceDashboardFilters> {
+  if (f.payment_types.length === 0) return f;
+  const [pm, pt] = await Promise.all([
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
+  ]);
+  return {
+    ...f,
+    payment_types: expandPaymentMethodFilterValues(f.payment_types, pm, pt)
   };
 }
 

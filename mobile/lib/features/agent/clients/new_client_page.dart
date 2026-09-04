@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -21,6 +22,10 @@ import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_template_form.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/l10n/app_strings_ru.dart';
+import '../../../core/time/work_region_time.dart';
+import '../route/agent_route_provider.dart';
+import '../route/route_planning_provider.dart';
 import 'agent_clients_page.dart';
 import 'clients_list_provider.dart';
 import '../shell/agent_app_bar.dart';
@@ -93,20 +98,48 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     if (_gpsLoading || !showCoordinatesField(_cfg)) return;
     setState(() => _gpsLoading = true);
     try {
-      final pos = await ref.read(gpsTrackerProvider.notifier).getCurrentPosition();
+      final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
       if (!mounted) return;
-      if (pos == null) {
-        _showFormSnack('GPS ruxsati yo‘q yoki joylashuv o‘chirilgan', backgroundColor: AppColors.error);
+      if (!attached.ok) {
+        _showGpsIssue(attached);
         return;
       }
       setState(() {
-        _latitude = pos.latitude;
-        _longitude = pos.longitude;
+        _latitude = attached.position!.latitude;
+        _longitude = attached.position!.longitude;
       });
-      // Koordinatalar formada ko‘rinadi — pastdagi tugmani to‘sadigan snackbar kerak emas.
     } finally {
       if (mounted) setState(() => _gpsLoading = false);
     }
+  }
+
+  void _showGpsIssue(GpsAttachOutcome attached) {
+    final issue = attached.issue;
+    VoidCallback? openSettings;
+    if (issue == GpsAttachIssue.serviceOff) {
+      openSettings = Geolocator.openLocationSettings;
+    } else if (issue == GpsAttachIssue.deniedForever) {
+      openSettings = openAppSettings;
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(attached.message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 76),
+        duration: const Duration(seconds: 5),
+        action: openSettings == null
+            ? null
+            : SnackBarAction(
+                label: 'Sozlamalar',
+                textColor: Colors.white,
+                onPressed: openSettings,
+              ),
+      ),
+    );
   }
 
   Future<void> _capturePhoto() async {
@@ -135,12 +168,15 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     );
   }
 
-  Future<void> _uploadPhotoIfNeeded(String slug, int clientId) async {
+  Future<String?> _uploadPhotoIfNeeded(String slug, int clientId) async {
     final b64 = await _photoBase64Payload();
-    if (b64 == null) return;
+    if (b64 == null) return _photoPath;
     setState(() => _photoUploading = true);
     try {
-      await ref.read(mobileApiProvider).postClientPhotoReport(slug, clientId, imageBase64: b64);
+      final row = await ref.read(mobileApiProvider).postClientPhotoReport(slug, clientId, imageBase64: b64);
+      final url = row.imageUrl.trim();
+      if (url.isNotEmpty && !url.startsWith('data:')) return url;
+      return _photoPath;
     } finally {
       if (mounted) setState(() => _photoUploading = false);
     }
@@ -184,10 +220,19 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       double? lon = _longitude;
       final coordsVisible = isClientFieldVisible(_cfg, 'coordinates');
       if (coordsVisible && showCoordinatesField(_cfg) && (lat == null || lon == null)) {
-        final pos = await ref.read(gpsTrackerProvider.notifier).getCurrentPosition();
-        if (pos != null) {
-          lat = pos.latitude;
-          lon = pos.longitude;
+        final attached = await ref.read(gpsTrackerProvider.notifier).attachCurrentPosition();
+        if (attached.position != null) {
+          lat = attached.position!.latitude;
+          lon = attached.position!.longitude;
+        } else if (isClientFieldRequired(_cfg, 'coordinates')) {
+          if (mounted) {
+            setState(() {
+              _saving = false;
+              _error = attached.message;
+            });
+            _showGpsIssue(attached);
+          }
+          return;
         }
       }
 
@@ -220,10 +265,12 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       });
 
       final clientId = (row['id'] as num?)?.toInt();
+      String? savedPhotoUrl;
       if (clientId != null && _photoPath != null && _cfg.showPhotos) {
         try {
-          await _uploadPhotoIfNeeded(slug, clientId);
+          savedPhotoUrl = await _uploadPhotoIfNeeded(slug, clientId);
         } catch (_) {
+          savedPhotoUrl = _photoPath;
           if (mounted) {
             _showFormSnack('Klient saqlandi, lekin foto yuklanmadi', backgroundColor: AppColors.warning);
           }
@@ -245,12 +292,21 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
           'latitude': row['latitude'] ?? lat,
           'longitude': row['longitude'] ?? lon,
           if (visitWeekdays.isNotEmpty) 'visit_weekdays': jsonEncode(visitWeekdays),
+          if ((savedPhotoUrl ?? _photoPath) != null) 'photo_url': savedPhotoUrl ?? _photoPath,
         },
       ]);
 
       ref.invalidate(clientsListProvider);
       ref.invalidate(filteredClientsProvider);
-      resetOutletFilters(ref);
+      ref.invalidate(todayRouteProvider);
+      ref.invalidate(plannedDailyRouteProvider);
+      ref.invalidate(realTodayRouteProvider);
+      ref.read(outletCategoryFilterProvider.notifier).state = null;
+      ref.read(outletVisitStatusFilterProvider.notifier).state = S.dayAll;
+      ref.read(outletDebtsOnlyProvider.notifier).state = false;
+      final todayWd = serverTodayWeekday();
+      ref.read(outletWeekdayTabProvider.notifier).state =
+          visitWeekdays.contains(todayWd) ? todayWd : 0;
 
       if (!mounted) return;
 
