@@ -40,8 +40,11 @@ class AgentYandexMapState extends State<AgentYandexMap> {
   bool _failed = false;
   bool _mapReady = false;
   Timer? _dataPushDebounce;
+  StreamSubscription<Position>? _userLocSub;
+  Position? _lastUserFix;
 
   String? _failReason;
+
 
   List<RouteMapStop> get _validStops =>
       capMapDisplayStops(widget.stops.where((s) => s.hasCoords).toList(growable: false));
@@ -57,6 +60,8 @@ class AgentYandexMapState extends State<AgentYandexMap> {
   @override
   void dispose() {
     _dataPushDebounce?.cancel();
+    unawaited(_userLocSub?.cancel() ?? Future.value());
+    _userLocSub = null;
     super.dispose();
   }
 
@@ -120,7 +125,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
 
   void _scheduleDataPush() {
     _dataPushDebounce?.cancel();
-    _dataPushDebounce = Timer(const Duration(milliseconds: 180), () {
+    _dataPushDebounce = Timer(const Duration(milliseconds: 260), () {
       if (!mounted || !_mapReady) return;
       unawaited(_controller?.runJavaScript(yandexMapUpdateJs(_runtimeData())));
     });
@@ -158,6 +163,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
               _failed = false;
               _failReason = null;
             });
+            unawaited(_startUserLocationTracking(panOnce: true));
             return;
           }
           if (text.startsWith('error')) {
@@ -204,6 +210,8 @@ class AgentYandexMapState extends State<AgentYandexMap> {
       _mapReady = false;
       _failReason = null;
     });
+    unawaited(_userLocSub?.cancel() ?? Future.value());
+    _userLocSub = null;
     _controller?.loadHtmlString(_buildHtml(), baseUrl: 'https://api-maps.yandex.ru/');
   }
 
@@ -226,25 +234,65 @@ class AgentYandexMapState extends State<AgentYandexMap> {
     await _controller?.runJavaScript('window.zoomOut && window.zoomOut();');
   }
 
+  Future<void> _pushUserLocation(double lat, double lon, {bool pan = false}) async {
+    if (!_mapReady) return;
+    await _controller?.runJavaScript(
+      'window.setUserLocation && window.setUserLocation($lat, $lon, ${pan ? 'true' : 'false'});',
+    );
+  }
+
+  Future<void> _startUserLocationTracking({bool panOnce = false}) async {
+    final granted = await Permission.location.request().isGranted;
+    if (!granted || !mounted) return;
+
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        _lastUserFix = last;
+        await _pushUserLocation(last.latitude, last.longitude, pan: panOnce);
+        panOnce = false;
+      }
+    } catch (_) {}
+
+    try {
+      final fix = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      if (!mounted) return;
+      _lastUserFix = fix;
+      await _pushUserLocation(fix.latitude, fix.longitude, pan: panOnce);
+    } catch (_) {}
+
+    await _userLocSub?.cancel();
+    _userLocSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 12,
+      ),
+    ).listen(
+      (pos) {
+        _lastUserFix = pos;
+        unawaited(_pushUserLocation(pos.latitude, pos.longitude));
+      },
+      onError: (_) {},
+    );
+  }
+
   Future<void> goToUserLocation() async {
     final granted = await Permission.location.request().isGranted;
     if (!granted) return;
     try {
-      final last = await Geolocator.getLastKnownPosition();
-      if (last != null) {
-        await _controller?.runJavaScript(
-          'window.panTo && window.panTo(${last.latitude}, ${last.longitude}, 15);',
+      if (_lastUserFix != null) {
+        await _pushUserLocation(
+          _lastUserFix!.latitude,
+          _lastUserFix!.longitude,
+          pan: true,
         );
       }
-      final fix = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 8),
-        ),
-      );
-      await _controller?.runJavaScript(
-        'window.panTo && window.panTo(${fix.latitude}, ${fix.longitude}, 15);',
-      );
+      await _startUserLocationTracking(panOnce: true);
     } catch (_) {}
   }
 
@@ -261,7 +309,7 @@ class AgentYandexMapState extends State<AgentYandexMap> {
         WebViewWidget(controller: controller),
         if (_loading)
           ColoredBox(
-            color: AppColors.background.withOpacity(0.92),
+            color: AppColors.background.withValues(alpha: 0.92),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

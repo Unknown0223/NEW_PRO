@@ -15,11 +15,19 @@ final plannedDailyRouteProvider = FutureProvider<List<RouteMapStop>>((ref) async
   final weekdayTab = ref.watch(effectiveWeekdayTabProvider);
   if (weekdayTab <= 0) return const [];
 
-  final route = await ref.watch(todayRouteProvider.future);
-  final routeStart = await ref.watch(agentRouteStartProvider.future);
-  final visitedIds = await ref.watch(visitedTodayClientIdsProvider.future);
+  // Parallel — GPS / route / visited / activity birga.
+  final packed = await Future.wait<Object?>([
+    ref.watch(todayRouteProvider.future),
+    ref.watch(agentRouteStartProvider.future),
+    ref.watch(visitedTodayClientIdsProvider.future),
+    AppDatabase().getLastClientActivityById(),
+  ]);
+
+  final route = packed[0] as Map<String, dynamic>?;
+  final routeStart = packed[1] as RouteMapStop?;
+  final visitedIds = packed[2] as Set<int>;
+  final lastActivity = packed[3] as Map<int, DateTime>;
   final routeCfg = ref.watch(sessionProvider).mobileConfig?.route ?? const RouteConfig();
-  final lastActivity = await AppDatabase().getLastClientActivityById();
 
   final rawStops = <RouteMapStop>[];
   final stopsRaw = (route?['stops'] as List?) ?? [];

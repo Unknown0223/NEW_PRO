@@ -15,7 +15,6 @@ import { useEffectiveRole } from "@/lib/auth-store";
 import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -230,12 +229,13 @@ export function SettingsShell({ children }: { children: ReactNode }) {
         <div className="shrink-0 space-y-2 border-b border-border/60 px-3 py-3 md:px-4">
           <div className="flex items-baseline justify-between gap-2 px-0.5">
             <p className="text-sm font-bold text-foreground">Настройки</p>
-            <Link
-              href="/dashboard"
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
               className="text-[11px] text-primary underline-offset-4 hover:underline md:text-xs"
             >
               ← Дашборд
-            </Link>
+            </button>
           </div>
           <div className="relative">
             <Search
@@ -299,10 +299,11 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                               const childActive = isItemActive(pathname, currentSearch, chref);
                               return (
                                 <li key={child.slug}>
-                                  <Link
-                                    href={chref}
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(chref)}
                                     className={cn(
-                                      "relative block rounded-md py-1.5 pl-8 pr-2 text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
+                                      "relative block w-full rounded-md py-1.5 pl-8 pr-2 text-left text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
                                       "before:absolute before:left-4 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",
                                       childActive &&
                                         "bg-primary/10 font-medium text-foreground before:bg-primary",
@@ -311,7 +312,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                                     )}
                                   >
                                     {child.title}
-                                  </Link>
+                                  </button>
                                 </li>
                               );
                             })}
@@ -346,11 +347,12 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                   const active = isItemActive(pathname, currentSearch, href);
                   return (
                     <li key={item.slug}>
-                      <Link
-                        href={href}
+                      <button
+                        type="button"
                         title={item.description}
+                        onClick={() => router.push(href)}
                         className={cn(
-                          "relative block rounded-md py-1.5 pl-6 pr-2 text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
+                          "relative block w-full rounded-md py-1.5 pl-6 pr-2 text-left text-[13px] font-normal text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground",
                           "before:absolute before:left-2 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-muted-foreground/45",
                           active && "bg-primary/10 font-medium text-foreground before:bg-primary",
                           active &&
@@ -358,7 +360,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
                         )}
                       >
                         {item.title}
-                      </Link>
+                      </button>
                     </li>
                   );
                 })}

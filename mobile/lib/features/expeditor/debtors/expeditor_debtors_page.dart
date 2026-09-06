@@ -37,6 +37,7 @@ class ExpeditorDebtorsPage extends ConsumerWidget {
 
     if (!policy.acceptPaymentFromDebtors && !policy.acceptPaymentOnDelivery) {
       return Scaffold(
+        drawer: const ExpeditorDrawer(),
         appBar: AppBar(title: const Text('Должники')),
         body: const Center(child: Text('Оплата отключена в конфигурации')),
       );
@@ -103,10 +104,14 @@ class ExpeditorDebtorsPage extends ConsumerWidget {
                 final c = rows[i - 1];
                 final clientId = c['id'] as int?;
                 final bal = (c['balance'] as num?)?.toDouble() ?? 0;
+                final opening = (c['opening_debt'] as num?)?.toDouble() ?? 0;
+                final fromOps = bal.abs() - opening;
                 return _DebtorCard(
                   name: c['name']?.toString() ?? '—',
                   address: c['address']?.toString(),
                   balance: bal,
+                  openingDebt: opening > 0.01 ? opening : null,
+                  enteredDebt: opening > 0.01 && fromOps > 0.01 ? fromOps : null,
                   overdue: _overdue(c['overdue_at']?.toString()),
                   onTap: clientId == null
                       ? null
@@ -138,6 +143,8 @@ class _DebtorCard extends StatelessWidget {
   final String name;
   final String? address;
   final double balance;
+  final double? openingDebt;
+  final double? enteredDebt;
   final String? overdue;
   final VoidCallback? onTap;
   final VoidCallback? onBalanceTap;
@@ -146,6 +153,8 @@ class _DebtorCard extends StatelessWidget {
     required this.name,
     required this.address,
     required this.balance,
+    this.openingDebt,
+    this.enteredDebt,
     required this.overdue,
     required this.onTap,
     required this.onBalanceTap,
@@ -153,7 +162,6 @@ class _DebtorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDebt = balance < -0.01;
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),
@@ -227,6 +235,34 @@ class _DebtorCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (openingDebt != null) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text('Начальный баланс:',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textMuted),),
+                    const Spacer(),
+                    Text(formatMoneyUz(openingDebt!),
+                        style: AppTypography.bodyMedium
+                            .copyWith(fontWeight: FontWeight.w800),),
+                  ],
+                ),
+              ],
+              if (enteredDebt != null) ...[
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text('Из операций:',
+                        style: AppTypography.bodyMedium
+                            .copyWith(color: AppColors.textMuted),),
+                    const Spacer(),
+                    Text(formatMoneyUz(enteredDebt!),
+                        style: AppTypography.bodyMedium
+                            .copyWith(fontWeight: FontWeight.w800),),
+                  ],
+                ),
+              ],
               if (overdue != null) ...[
                 const SizedBox(height: 2),
                 Row(

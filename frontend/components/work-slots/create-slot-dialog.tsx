@@ -12,6 +12,7 @@ import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { WorkSlotType } from "@/lib/work-slots-types";
+import { slotCodeMatchesType, slotCodeTypeMismatchMessage } from "@/lib/work-slots-types";
 import { SLOT_ACTIVE_STATUS_ITEMS, SLOT_TYPE_OPTIONS } from "./work-slots-utils";
 
 type TradeDirectionOpt = { id: number; name: string; code?: string | null };
@@ -95,6 +96,7 @@ export function CreateSlotDialog({
     if (!code) return "Smart-код обязателен";
     if (!/^[A-Za-z0-9-]{1,32}$/.test(code)) return "Код: буквы, цифры или дефис (1–32)";
     if (!slotType) return "Выберите роль";
+    if (!slotCodeMatchesType(code, slotType)) return slotCodeTypeMismatchMessage(code, slotType);
     return null;
   };
 

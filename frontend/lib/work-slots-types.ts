@@ -34,6 +34,38 @@ export function isOperatorLikeSlotType(value: string): value is OperatorLikeSlot
   return (OPERATOR_LIKE_SLOT_TYPES as readonly string[]).includes(value);
 }
 
+/** Smart-kod prefiksi — backend `SLOT_TYPE_CODE_PREFIX` bilan bir xil. */
+export const SLOT_TYPE_CODE_PREFIX: Record<WorkSlotType, string> = {
+  agent: "A",
+  collector: "I",
+  expeditor: "E",
+  skladchik: "S",
+  supervisor: "N",
+  auditor: "U",
+  operator: "O",
+  director: "D",
+  sales_director: "V",
+  manager: "M",
+  regional_manager: "R",
+  accountant: "B",
+  warehouse_manager: "W"
+};
+
+const SMART_CODE_RE = /^([A-Z])-([A-Z0-9]+)-(\d{1,6})$/;
+
+/** Smart format bo‘lsa prefiks tipga mos kelishi shart; custom kodlar (PMXRZ002) OK. */
+export function slotCodeMatchesType(code: string, slotType: WorkSlotType): boolean {
+  const normalized = code.trim().toUpperCase();
+  const m = SMART_CODE_RE.exec(normalized);
+  if (!m) return true;
+  return m[1] === SLOT_TYPE_CODE_PREFIX[slotType];
+}
+
+export function slotCodeTypeMismatchMessage(code: string, slotType: WorkSlotType): string {
+  const expected = SLOT_TYPE_CODE_PREFIX[slotType];
+  return `Smart-код «${code.trim().toUpperCase()}» не соответствует роли (ожидается префикс ${expected}-…)`;
+}
+
 export type WorkSlotEntitlements = {
   price_types?: string[];
   product_rules?: Array<{ category_id: number; all: boolean; product_ids?: number[] }>;

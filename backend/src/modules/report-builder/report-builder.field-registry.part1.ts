@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { DATASET_ORDERS_SALES_LINES } from "./report-builder.constants";
+import {
+  resolvedCitySql,
+  resolvedRegionSql,
+  resolvedZoneSql
+} from "./report-builder.territory-sql";
 import type {
   ReportBuilderDateMode,
   ReportBuilderFieldMeta,
@@ -29,19 +34,19 @@ export const FIELD_REGISTRY_PART1: Record<
     label: "Зона",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.zone, '')`
+    expr: () => resolvedZoneSql()
   },
   client_region: {
     label: "Область",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.region, '')`
+    expr: () => resolvedRegionSql()
   },
   client_city: {
     label: "Город",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.city, '')`
+    expr: () => resolvedCitySql()
   },
   agent_name: {
     label: "Агент",
@@ -204,19 +209,19 @@ export const FIELD_REGISTRY_PART1: Record<
     label: "Зона",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.zone, '')`
+    expr: () => resolvedZoneSql()
   },
   territory_level_2: {
     label: "Область",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.region, '')`
+    expr: () => resolvedRegionSql()
   },
   territory_level_3: {
     label: "Город",
     allowRow: true,
     allowCol: true,
-    expr: () => Prisma.sql`COALESCE(c.city, '')`
+    expr: () => resolvedCitySql()
   },
   tenant_default_currency: {
     label: "Валюта по умолчанию",

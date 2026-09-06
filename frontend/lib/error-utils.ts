@@ -109,7 +109,13 @@ export function getUserFacingError(error: unknown, fallback = "Произошл�
     }
     else if (status === 409) base = "Данные были изменены. Обновите страницу и повторите.";
     else if (status === 503) base = "Сервис временно недоступен. Попробуйте позже.";
-    else if (status && status >= 500) base = "Ошибка сервера. Можно повторить запрос.";
+    else if (status && status >= 500) {
+      const msg = data?.message?.trim();
+      base =
+        msg && msg.length > 0
+          ? msg
+          : "Ошибка сервера. Можно повторить запрос.";
+    }
     else if (typeof data?.error === "string" && data.error.trim()) {
       // Avoid dumping raw codes like "ValidationError" when no message was set
       if (data.error === "ValidationError") {

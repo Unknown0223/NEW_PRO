@@ -14,6 +14,7 @@ import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_status_labels.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
+import '../shell/expeditor_drawer.dart';
 import 'expeditor_returned_payments_banner.dart';
 
 class ExpeditorPaymentsPage extends ConsumerStatefulWidget {
@@ -108,6 +109,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
 
     if (!policy.paymentsEnabled) {
       return Scaffold(
+        drawer: const ExpeditorDrawer(),
         appBar: AppBar(title: const Text('To\'lovlar')),
         body: Center(child: Text(policy.blockPaymentMessage())),
       );
@@ -127,6 +129,7 @@ class _ExpeditorPaymentsPageState extends ConsumerState<ExpeditorPaymentsPage> {
     final ctxAsync = ref.watch(expeditorPaymentContextProvider(orderId));
 
     return Scaffold(
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(title: Text('To\'lov #$orderId')),
       body: ctxAsync.when(
         data: (ctx) {

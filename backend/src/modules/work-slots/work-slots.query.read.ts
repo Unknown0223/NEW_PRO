@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { toFio } from "../staff/staff.shared.helpers";
 import type { SlotHistoryRow, WorkSlotRow } from "./work-slots.types";
 import {
   mapSlotRow,
@@ -172,10 +173,10 @@ export async function getSlotHistory(
     userIds.size > 0
       ? await prisma.user.findMany({
           where: { id: { in: [...userIds] } },
-          select: { id: true, name: true }
+          select: { id: true, name: true, first_name: true, last_name: true, middle_name: true }
         })
       : [];
-  const nameById = new Map(users.map((u) => [u.id, u.name]));
+  const nameById = new Map(users.map((u) => [u.id, toFio(u)]));
 
   return {
     data: entries.map((e) => ({
@@ -237,7 +238,7 @@ export async function listSlotDebtCollectors(
 
   const users = await prisma.user.findMany({
     where: { tenant_id: tenantId, id: { in: [...userIds] }, role: "agent" },
-    select: { id: true, name: true, is_active: true }
+    select: { id: true, name: true, first_name: true, last_name: true, middle_name: true, is_active: true }
   });
 
   const activeLinks = await prisma.slotUserLink.findMany({
@@ -259,7 +260,7 @@ export async function listSlotDebtCollectors(
     if (!unpaid.gt(0.01)) continue;
     out.push({
       user_id: u.id,
-      name: u.name?.trim() || `#${u.id}`,
+      name: toFio(u) || `#${u.id}`,
       is_active: u.is_active,
       on_active_slot: onSlot.has(u.id),
       unpaid: unpaid.toString()
@@ -343,8 +344,11 @@ export async function getWorkSlotCodeOccupancyWarning(
   if (!slot) return null;
   const link = await prisma.slotUserLink.findFirst({
     where: { slot_id: slot.id, ended_at: null },
-    select: { user_id: true, user: { select: { name: true } } }
+    select: {
+      user_id: true,
+      user: { select: { name: true, first_name: true, last_name: true, middle_name: true } }
+    }
   });
   if (!link || link.user_id === userId) return null;
-  return `Kod «${slot.slot_code}» boshqa xodimga (${link.user.name}) biriktirilgan slotda band`;
+  return `Kod «${slot.slot_code}» boshqa xodimga (${toFio(link.user)}) biriktirilgan slotda band`;
 }

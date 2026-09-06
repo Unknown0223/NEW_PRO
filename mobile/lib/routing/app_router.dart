@@ -74,6 +74,9 @@ import '../features/supervisor/gps/supervisor_gps_page.dart';
 import '../features/supervisor/kpi/supervisor_kpi_page.dart';
 import '../features/supervisor/kpi/supervisor_kpi_route_page.dart';
 import '../features/supervisor/settings/supervisor_settings_page.dart';
+import '../features/supervisor/clients/supervisor_clients_page.dart';
+import '../features/supervisor/clients/supervisor_client_edit_page.dart';
+import '../features/supervisor/clients/supervisor_notifications_page.dart';
 import '../features/shared/profile/profile_page.dart';
 import '../features/cashier/cashier_home_page.dart';
 import '../features/cashier/bank_transfer_inbox_page.dart';
@@ -270,6 +273,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/kpi/route/days',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const AgentKpiDiagnosticsDaysPage(),
+      ),
+      // Fullscreen: ShellRoute ichida parentNavigatorKey=root bo‘lishi mumkin emas.
+      GoRoute(
+        path: '/kpi/calc',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const AgentKpiCalcPage(),
+      ),
+      GoRoute(
+        path: '/sv-kpi/route',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorKpiRoutePage(),
+      ),
+      GoRoute(
+        path: '/sv-clients/:id',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return SupervisorClientEditPage(clientId: id);
+        },
+      ),
+      GoRoute(
+        path: '/sv-notifications',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorNotificationsPage(),
       ),
       GoRoute(
         path: '/clients/new',
@@ -548,13 +575,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/kpi',
             builder: (_, __) => const AgentKpiPage(),
-            routes: [
-              GoRoute(
-                path: 'calc',
-                parentNavigatorKey: rootNavigatorKey,
-                builder: (_, __) => const AgentKpiCalcPage(),
-              ),
-            ],
           ),
           GoRoute(
             path: '/kpi/route',
@@ -597,17 +617,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               builder: (_, __) => const SupervisorGpsPage(),),
           GoRoute(
               path: '/sv-kpi',
-              builder: (_, __) => const SupervisorKpiPage(),
-              routes: [
-                GoRoute(
-                  path: 'route',
-                  parentNavigatorKey: rootNavigatorKey,
-                  builder: (_, __) => const SupervisorKpiRoutePage(),
-                ),
-              ],),
+              builder: (_, __) => const SupervisorKpiPage(),),
           GoRoute(
               path: '/sv-settings',
               builder: (_, __) => const SupervisorSettingsPage(),),
+          GoRoute(
+              path: '/sv-clients',
+              builder: (_, __) => const SupervisorClientsPage(),),
           GoRoute(
               path: '/agents',
               builder: (_, __) => const SupervisorAgentsPage(),),
@@ -675,7 +691,10 @@ class _NavShell extends ConsumerWidget {
         type: BottomNavigationBarType.fixed,
         selectedFontSize: 11,
         unselectedFontSize: 11,
-        onTap: (i) => context.go(items[i].path),
+        onTap: (i) {
+          final router = GoRouter.of(context);
+          router.go(items[i].path);
+        },
         items: items
             .map((it) => BottomNavigationBarItem(
                   icon: Icon(it.icon),

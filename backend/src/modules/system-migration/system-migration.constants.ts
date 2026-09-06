@@ -100,7 +100,8 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     label_ru: "Визиты и активность агентов",
     phase: 3,
     export_status: "included",
-    import_status: "included"
+    import_status: "included",
+    import_note_uz: "Tashriflar va barcha GPS pinglar (to‘liq zaxira)."
   },
   {
     id: "expenses",
@@ -127,7 +128,7 @@ export const MIGRATION_MODULES: MigrationModuleDef[] = [
     export_status: "included",
     import_status: "included",
     import_note_uz:
-      "Faqat oxirgi 30 kunlik mijoz fotootchyotlari. Import eng oxirida (barcha bog‘lanishlardan keyin)."
+      "Barcha mijoz fotootchyotlari (to‘liq zaxira). Import eng oxirida (barcha bog‘lanishlardan keyin)."
   },
   {
     id: "extended",

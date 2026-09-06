@@ -77,6 +77,14 @@ function bulkClientPatchErrorMessage(code: string): string {
       return "Bu telefon mavjud.";
     case "DUPLICATE_NAME":
       return "Shu nomga o‘xshash klient mavjud.";
+    case "DUPLICATE_CLIENT_CODE":
+      return "Bu klient kodi band.";
+    case "DUPLICATE_INN":
+      return "Bu STIR (INN) band.";
+    case "DUPLICATE_PINFL":
+      return "Bu JSHSHIR (PINFL) band.";
+    case "DUPLICATE_INACTIVE":
+      return "Bu klient allaqachon mavjud, statusi nofaol.";
     case "DUPLICATE_AGENT_DIRECTION":
       return "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent.";
     case "AGENT_NOT_FOUND":

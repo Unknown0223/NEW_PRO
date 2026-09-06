@@ -1,8 +1,8 @@
 "use client";
 
-import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY, goToClientsKeepingSelection } from "@/components/clients/group-processing/group-processing-actions";
+import { GpMasterApplyButton } from "@/components/clients/group-processing/group-processing-apply-btn";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -13,7 +13,6 @@ import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -118,7 +117,6 @@ export function GroupProcessingOpsWorkspace() {
   const [draftByClient, setDraftByClient] = useState<Record<number, OpsDraft>>({});
   const [origByClient, setOrigByClient] = useState<Record<number, OpsDraft>>({});
   const [master, setMaster] = useState<OpsDraft>(() => emptyOps());
-  const [masterApply, setMasterApply] = useState({ warehouse_id: false, cash_desk_id: false });
   const [showField, setShowField] = useState<ShowField>(() => {
     try {
       const v = localStorage.getItem(SHOW_STORAGE_KEY) as ShowField | null;
@@ -235,18 +233,14 @@ export function GroupProcessingOpsWorkspace() {
     }));
   };
 
-  const applyMasterToSelected = () => {
+  const applyMasterToSelected = (fields?: (keyof OpsDraft)[]) => {
+    const keys = fields ?? (["warehouse_id", "cash_desk_id"] as const);
     const targets = selectedIds.size ? selectedIds : new Set(rows.map((r) => r.id));
-    if (!masterApply.warehouse_id && !masterApply.cash_desk_id) {
-      setStatusMsg("Сначала отметьте в общей строке, какие поля применять (✓)");
-      return;
-    }
     setDraftByClient((prev) => {
       const next = { ...prev };
       for (const id of targets) {
         const cur = { ...(next[id] ?? emptyOps()) };
-        if (masterApply.warehouse_id) cur.warehouse_id = master.warehouse_id;
-        if (masterApply.cash_desk_id) cur.cash_desk_id = master.cash_desk_id;
+        for (const key of keys) cur[key] = master[key];
         next[id] = cur;
       }
       return next;
@@ -307,7 +301,7 @@ export function GroupProcessingOpsWorkspace() {
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       if (res.ok > 0 && res.failed.length === 0) {
-        router.push("/clients");
+        goToClientsKeepingSelection(router.push, tenantSlug, seedIds);
         return;
       }
       setOrigByClient((prev) => {
@@ -342,17 +336,6 @@ export function GroupProcessingOpsWorkspace() {
     return (
       <>
         <td className="border-l border-slate-200 px-2 py-2 align-middle">
-          {opts?.master ? (
-            <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-              <input
-                type="checkbox"
-                className="size-3.5 accent-blue-600"
-                checked={masterApply.warehouse_id}
-                onChange={(e) => setMasterApply((m) => ({ ...m, warehouse_id: e.target.checked }))}
-              />
-              применить
-            </label>
-          ) : null}
           <select
             className={selectClass}
             value={draft.warehouse_id}
@@ -365,19 +348,11 @@ export function GroupProcessingOpsWorkspace() {
               </option>
             ))}
           </select>
+          {opts?.master ? (
+            <GpMasterApplyButton onClick={() => applyMasterToSelected(["warehouse_id"])} />
+          ) : null}
         </td>
         <td className="border-l border-slate-100 px-2 py-2 align-middle">
-          {opts?.master ? (
-            <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-              <input
-                type="checkbox"
-                className="size-3.5 accent-blue-600"
-                checked={masterApply.cash_desk_id}
-                onChange={(e) => setMasterApply((m) => ({ ...m, cash_desk_id: e.target.checked }))}
-              />
-              применить
-            </label>
-          ) : null}
           <select
             className={selectClass}
             value={draft.cash_desk_id}
@@ -390,6 +365,9 @@ export function GroupProcessingOpsWorkspace() {
               </option>
             ))}
           </select>
+          {opts?.master ? (
+            <GpMasterApplyButton onClick={() => applyMasterToSelected(["cash_desk_id"])} />
+          ) : null}
         </td>
       </>
     );
@@ -418,9 +396,14 @@ export function GroupProcessingOpsWorkspace() {
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}
+          >
             Вернуться обратно
-          </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -471,7 +454,7 @@ export function GroupProcessingOpsWorkspace() {
         ) : !rows.length ? (
           <div className="space-y-2 p-6 text-sm text-muted-foreground">
             <p>Нет клиентов. Сначала выберите клиентов в списке.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push("/clients")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}>
               К списку клиентов
             </Button>
           </div>
@@ -501,15 +484,7 @@ export function GroupProcessingOpsWorkspace() {
                     <span className="text-[11px] font-semibold text-emerald-800">
                       Общая строка (для выбранных)
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 text-[11px]"
-                      onClick={applyMasterToSelected}
-                    >
-                      Применить отмеченные поля
-                    </Button>
+                    <GpMasterApplyButton all onClick={() => applyMasterToSelected()} />
                   </div>
                 </td>
                 {renderSelects(master, (p) => setMaster((m) => ({ ...m, ...p })), { master: true })}

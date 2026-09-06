@@ -72,6 +72,13 @@ export type TimesheetRow = {
   fio: string;
   role: string;
   login: string;
+  /** Smart KOD */
+  code?: string | null;
+  /** Филиал */
+  branch?: string | null;
+  /** Направление */
+  direction?: string | null;
+  supervisor_user_id?: number | null;
   worked_days: number;
   absent_days: number;
   cells: TimesheetCell[];
@@ -263,16 +270,42 @@ export function initialsOf(fio: string): string {
     .join("");
 }
 
+/** User.role → qisqa yorliq (filtr chip / select). */
+const TIMESHEET_ROLE_LABELS: Record<string, string> = {
+  admin: "Админ",
+  agent: "Агент",
+  supervisor: "Супервайзер",
+  collector: "Инкассатор",
+  expeditor: "Экспедитор",
+  skladchik: "Складчик",
+  auditor: "Аудитор",
+  operator: "Оператор",
+  director: "Директор",
+  sales_director: "Директор по продажам",
+  manager: "Менеджер",
+  regional_manager: "Региональный менеджер",
+  accountant: "Бухгалтер",
+  warehouse_manager: "Менеджер склада",
+  cashier: "Кассир"
+};
+
+export function timesheetRoleLabel(role: string): string {
+  const key = role.trim().toLowerCase();
+  return TIMESHEET_ROLE_LABELS[key] ?? role;
+}
+
 /** Экспорт матрицы табеля в CSV (разделитель «;», BOM для Excel). mode: коды 0–5 или текст. */
 export function exportTimesheetCsv(month: string, days: number[], rows: TimesheetRow[], mode: "codes" | "labels" = "codes") {
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const head = ["ФИО", "Роль", "Логин", "Итого", ...dayCols];
+  const head = ["ФИО", "Роль", "Smart KOD", "Направление", "Филиал", "Итого", ...dayCols];
   const lines = rows.map((r) => {
     const total = r.cells.reduce((acc, c) => acc + statusWorkValue(c.status), 0);
     return [
       r.fio,
-      r.role,
-      r.login,
+      timesheetRoleLabel(r.role),
+      r.code ?? "",
+      r.direction ?? "",
+      r.branch ?? "",
       fmtTotal(total),
       ...r.cells.map((c) => (mode === "codes" ? STATUS_META[c.status].short : STATUS_META[c.status].label))
     ];

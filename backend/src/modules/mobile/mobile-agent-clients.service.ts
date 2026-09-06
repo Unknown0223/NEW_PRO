@@ -27,6 +27,7 @@ import {
   resolveAgentWorkSlotId,
   type CompactClientRow
 } from "./mobile-agent-sync.service";
+import { newClientActiveFromApprovalFlag } from "./mobile-agent-new-client";
 
 export async function createMobileClientPhotoReport(
   tenantId: number,
@@ -124,6 +125,9 @@ export async function createMobileAgentClient(
   userId: number,
   input: CreateClientBody
 ) {
+  const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+  await assertAgentCanTakeNewWork(tenantId, userId);
+
   const cfg = await loadAgentMobileConfig(tenantId, userId);
   assertMobileClientPolicy(cfg?.client, input as MobileClientInput, "create");
 
@@ -135,7 +139,12 @@ export async function createMobileAgentClient(
     region: input.region ?? null,
     city: input.city ?? null,
     zone: input.zone ?? null,
-    sales_channel: input.sales_channel ?? null
+    sales_channel: input.sales_channel ?? null,
+    inn: input.inn ?? null,
+    client_code: input.client_code ?? null,
+    client_pinfl: input.client_pinfl ?? null,
+    skipTerritoryAutoAssign: true,
+    is_active: newClientActiveFromApprovalFlag(cfg?.client?.require_new_client_approval)
   });
 
   const extra = mobileClientInputToUpdateFields(input as MobileClientInput);
@@ -147,25 +156,26 @@ export async function createMobileAgentClient(
   });
 
   const workSlotId = await resolveAgentWorkSlotId(userId);
+  const visitWeekdays = input.visit_weekdays?.length ? input.visit_weekdays : [];
 
-  if (input.visit_weekdays?.length) {
-    await prisma.clientAgentAssignment.upsert({
-      where: { client_id_slot: { client_id: id, slot: 1 } },
-      create: {
-        tenant_id: tenantId,
-        client_id: id,
-        agent_id: userId,
-        slot: 1,
-        work_slot_id: workSlotId,
-        visit_weekdays: input.visit_weekdays
-      },
-      update: {
-        agent_id: userId,
-        work_slot_id: workSlotId,
-        visit_weekdays: input.visit_weekdays
-      }
-    });
-  }
+  await prisma.clientAgentAssignment.upsert({
+    where: { client_id_slot: { client_id: id, slot: 1 } },
+    create: {
+      tenant_id: tenantId,
+      client_id: id,
+      agent_id: userId,
+      slot: 1,
+      work_slot_id: workSlotId,
+      visit_weekdays: visitWeekdays,
+      auto_assign_status: "assigned"
+    },
+    update: {
+      agent_id: userId,
+      work_slot_id: workSlotId,
+      auto_assign_status: "assigned",
+      ...(input.visit_weekdays?.length ? { visit_weekdays: input.visit_weekdays } : {})
+    }
+  });
 
   const row = await prisma.client.findFirst({
     where: { id, tenant_id: tenantId },
@@ -205,9 +215,51 @@ export async function patchMobileAgentClient(
 
   assertMobileClientPolicy(cfg?.client, patch as MobileClientInput, "patch");
   const fields = mobileClientPatchToUpdateFields(patch as Partial<MobileClientInput>);
-  await updateClientFields(tenantId, clientId, fields, userId);
+  if (Object.keys(fields).length > 0) {
+    await updateClientFields(tenantId, clientId, fields, userId);
+  }
 
   const workSlotId = await resolveAgentWorkSlotId(userId);
+
+  if (patch.visit_weekdays !== undefined) {
+    const visitWeekdays = patch.visit_weekdays ?? [];
+    await prisma.clientAgentAssignment.upsert({
+      where: { client_id_slot: { client_id: clientId, slot: 1 } },
+      create: {
+        tenant_id: tenantId,
+        client_id: clientId,
+        agent_id: userId,
+        slot: 1,
+        work_slot_id: workSlotId,
+        visit_weekdays: visitWeekdays,
+        auto_assign_status: "assigned"
+      },
+      update: {
+        visit_weekdays: visitWeekdays,
+        ...(workSlotId != null ? { work_slot_id: workSlotId } : {})
+      }
+    });
+    if (visitWeekdays.length > 0) {
+      const forRoute = await prisma.client.findFirst({
+        where: { id: clientId, tenant_id: tenantId },
+        select: { name: true, latitude: true, longitude: true }
+      });
+      if (forRoute) {
+        await appendClientToExistingAgentRouteDays(
+          tenantId,
+          userId,
+          {
+            client_id: clientId,
+            client_name: forRoute.name,
+            latitude: forRoute.latitude != null ? Number(forRoute.latitude) : null,
+            longitude: forRoute.longitude != null ? Number(forRoute.longitude) : null
+          },
+          visitWeekdays
+        );
+      }
+    }
+  }
+
   const row = await prisma.client.findFirst({
     where: { id: clientId, tenant_id: tenantId },
     select: clientSyncSelectForAgent(userId, workSlotId)

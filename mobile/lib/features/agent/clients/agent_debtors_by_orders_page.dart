@@ -74,6 +74,7 @@ class _AgentDebtorsByOrdersPageState extends ConsumerState<AgentDebtorsByOrdersP
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Должники по заказам',
+        useShellDrawer: true,
         showBack: true,
         actions: [
           AgentIconButton(

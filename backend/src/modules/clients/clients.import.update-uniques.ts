@@ -1,15 +1,23 @@
 import { prisma } from "../../config/database";
 import { normalizePhoneDigits } from "./clients.types";
+import {
+  hasAnyTerritory,
+  isSameClientIdentity,
+  territoryScopedNameWhere,
+  type TerritoryParts
+} from "./clients.unique-territory";
 
 export type ImportUpdateUniqueConflict = {
-  field: "name" | "phone" | "client_code" | "inn" | "client_pinfl";
+  field: "name" | "phone" | "client_code" | "inn" | "client_pinfl" | "identity";
   value: string;
   otherClientId: number;
+  otherIsActive: boolean;
 };
 
 /**
- * Yangilash: boshqa mijoz band qilgan noyob qiymatlarni aniqlash.
- * DB: `@@unique([tenant_id, name])`; telefon/kod/INN/PINFL — biznes unikal.
+ * Yangilash/yaratish: boshqa mijoz band qilgan noyob qiymatlarni aniqlash.
+ * Nom (+hudud), telefon, kod, INN, PINFL — biznes unikal (app-level).
+ * `clientId <= 0` — yaratish (hech kimni exclude qilmaslik).
  */
 export async function findImportUpdateUniqueConflicts(
   tenantId: number,
@@ -21,22 +29,64 @@ export async function findImportUpdateUniqueConflicts(
     client_code?: string | null;
     inn?: string | null;
     client_pinfl?: string | null;
+    region?: string | null;
+    zone?: string | null;
+    city?: string | null;
   }
 ): Promise<ImportUpdateUniqueConflict[]> {
   const conflicts: ImportUpdateUniqueConflict[] = [];
+  const exclude = clientId > 0 ? { id: { not: clientId } } : {};
+  const territory: TerritoryParts = {
+    region: patch.region,
+    zone: patch.zone,
+    city: patch.city
+  };
 
   const name = patch.name != null ? String(patch.name).trim() : "";
   if (name) {
+    const territoryFilter = hasAnyTerritory(territory) ? territoryScopedNameWhere(territory) : {};
     const hit = await prisma.client.findFirst({
       where: {
         tenant_id: tenantId,
         merged_into_client_id: null,
-        id: { not: clientId },
-        name: { equals: name, mode: "insensitive" }
+        ...exclude,
+        name: { equals: name, mode: "insensitive" },
+        ...territoryFilter
       },
-      select: { id: true }
+      select: {
+        id: true,
+        is_active: true,
+        name: true,
+        inn: true,
+        client_pinfl: true,
+        region: true,
+        zone: true,
+        city: true
+      }
     });
-    if (hit) conflicts.push({ field: "name", value: name, otherClientId: hit.id });
+    if (hit) {
+      const identity = isSameClientIdentity(
+        { name, inn: patch.inn, client_pinfl: patch.client_pinfl, ...territory },
+        {
+          name: hit.name,
+          inn: hit.inn,
+          client_pinfl: hit.client_pinfl,
+          region: hit.region,
+          zone: hit.zone,
+          city: hit.city
+        }
+      );
+      if (identity) {
+        conflicts.push({
+          field: "identity",
+          value: name,
+          otherClientId: hit.id,
+          otherIsActive: hit.is_active
+        });
+      } else {
+        conflicts.push({ field: "name", value: name, otherClientId: hit.id, otherIsActive: hit.is_active });
+      }
+    }
   }
 
   const phoneNorm =
@@ -47,12 +97,12 @@ export async function findImportUpdateUniqueConflicts(
       where: {
         tenant_id: tenantId,
         merged_into_client_id: null,
-        id: { not: clientId },
+        ...exclude,
         phone_normalized: phoneNorm
       },
-      select: { id: true }
+      select: { id: true, is_active: true }
     });
-    if (hit) conflicts.push({ field: "phone", value: phoneNorm, otherClientId: hit.id });
+    if (hit) conflicts.push({ field: "phone", value: phoneNorm, otherClientId: hit.id, otherIsActive: hit.is_active });
   }
 
   const code = patch.client_code != null ? String(patch.client_code).trim() : "";
@@ -61,12 +111,12 @@ export async function findImportUpdateUniqueConflicts(
       where: {
         tenant_id: tenantId,
         merged_into_client_id: null,
-        id: { not: clientId },
+        ...exclude,
         client_code: { equals: code, mode: "insensitive" }
       },
-      select: { id: true }
+      select: { id: true, is_active: true }
     });
-    if (hit) conflicts.push({ field: "client_code", value: code, otherClientId: hit.id });
+    if (hit) conflicts.push({ field: "client_code", value: code, otherClientId: hit.id, otherIsActive: hit.is_active });
   }
 
   const inn = patch.inn != null ? String(patch.inn).trim() : "";
@@ -75,12 +125,12 @@ export async function findImportUpdateUniqueConflicts(
       where: {
         tenant_id: tenantId,
         merged_into_client_id: null,
-        id: { not: clientId },
+        ...exclude,
         inn: { equals: inn, mode: "insensitive" }
       },
-      select: { id: true }
+      select: { id: true, is_active: true }
     });
-    if (hit) conflicts.push({ field: "inn", value: inn, otherClientId: hit.id });
+    if (hit) conflicts.push({ field: "inn", value: inn, otherClientId: hit.id, otherIsActive: hit.is_active });
   }
 
   const pinfl = patch.client_pinfl != null ? String(patch.client_pinfl).trim() : "";
@@ -89,12 +139,12 @@ export async function findImportUpdateUniqueConflicts(
       where: {
         tenant_id: tenantId,
         merged_into_client_id: null,
-        id: { not: clientId },
+        ...exclude,
         client_pinfl: { equals: pinfl, mode: "insensitive" }
       },
-      select: { id: true }
+      select: { id: true, is_active: true }
     });
-    if (hit) conflicts.push({ field: "client_pinfl", value: pinfl, otherClientId: hit.id });
+    if (hit) conflicts.push({ field: "client_pinfl", value: pinfl, otherClientId: hit.id, otherIsActive: hit.is_active });
   }
 
   return conflicts;

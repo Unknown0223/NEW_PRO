@@ -118,7 +118,8 @@ export function isOrderAgentAllowedForActor(
   actor: ScopedReportActor
 ): boolean {
   if (!actor.userId || actorHasUnrestrictedDataScope(actor.role)) return true;
-  if (actor.role === "agent") {
+  // Agent va ekspeditor o‘z maydon yozuvlari (vizit/GPS) uchun o‘zini ruxsat etadi.
+  if (actor.role === "agent" || actor.role === "expeditor") {
     return agentId != null && agentId === actor.userId;
   }
   if (agentId == null || agentId < 1) return false;

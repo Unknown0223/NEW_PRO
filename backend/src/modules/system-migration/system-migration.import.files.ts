@@ -2,13 +2,19 @@ import type { Prisma } from "@prisma/client";
 import JSZip from "jszip";
 import type { MigrationIdMaps } from "./system-migration.id-maps";
 import { hydrateDates, readZipJson, remapId, stripIdTenant } from "./system-migration.parse";
+import { parsePhotoZipUri } from "./system-migration.photo-zip";
 
 type Tx = Prisma.TransactionClient;
 
-/** Fotootchyot: faqat oxirgi N kun (default 30). */
-export const PHOTO_REPORT_EXPORT_DAYS = 30;
+/**
+ * Fotootchyot / GPS eksport oynasi.
+ * 0 yoki manfiy = to‘liq zaxira (hech narsa qoldirilmaydi).
+ */
+export const PHOTO_REPORT_EXPORT_DAYS = 0;
 
-export function photoReportExportCutoff(now = new Date()): Date {
+/** `null` = barcha yozuvlar (to‘liq zaxira). */
+export function photoReportExportCutoff(now = new Date()): Date | null {
+  if (!PHOTO_REPORT_EXPORT_DAYS || PHOTO_REPORT_EXPORT_DAYS <= 0) return null;
   const d = new Date(now);
   d.setUTCDate(d.getUTCDate() - PHOTO_REPORT_EXPORT_DAYS);
   return d;
@@ -32,8 +38,23 @@ export async function importClientPhotoReports(
       "deleted_at",
       "content_purged_at"
     ]);
-    const imageUrl = String(data.image_url ?? "").trim();
+    let imageUrl = String(data.image_url ?? "").trim();
     if (!imageUrl) continue;
+
+    const zipPath = parsePhotoZipUri(imageUrl);
+    if (zipPath) {
+      const entry = zip.file(zipPath);
+      if (!entry) continue;
+      const buf = await entry.async("nodebuffer");
+      if (!buf?.length) continue;
+      const lower = zipPath.toLowerCase();
+      const mime = lower.endsWith(".png")
+        ? "image/png"
+        : lower.endsWith(".webp")
+          ? "image/webp"
+          : "image/jpeg";
+      imageUrl = `data:${mime};base64,${buf.toString("base64")}`;
+    }
 
     await tx.clientPhotoReport.create({
       data: {

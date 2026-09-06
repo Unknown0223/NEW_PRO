@@ -7,6 +7,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// «Незавершённые заказы» — avvalgi kunlarda boshlangan, lekin hali tugallanmagan
 /// (delivered/returned bo'lmagan) eski zakazlar. Dastavchik ularni shu yerdan ochib
@@ -19,6 +20,7 @@ class ExpeditorUnfinishedPage extends ConsumerWidget {
     final orders = ref.watch(expeditorVisitsProvider('unfinished'));
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(title: const Text('Незавершённые заказы')),
       body: orders.when(
         loading: () => const Center(

@@ -98,7 +98,7 @@ const LABELS: Record<(typeof ORDER_LIST_COLUMN_IDS)[number], string> = {
   sales_channel: "Канал продаж",
   agent_trade_direction: "Направление торговли",
   day: "День",
-  request_type_ref: "Примечание",
+  request_type_ref: "Тип накладной",
   created_by: "Кто создал",
   comment: "Комментарий",
   created_by_role: "Роль(кто создал)"

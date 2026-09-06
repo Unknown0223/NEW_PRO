@@ -29,6 +29,12 @@ import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
 import { mergeMobileCitiesByZoneRegion } from "./mobile-territory-references";
+import {
+  filterPriceTypeOptionsByAllowed,
+  parsePriceTypeList,
+  resolveAgentAllowedPriceTypes
+} from "../orders/price-type-restriction";
+import { filterTerritoryRefsByAgentCities } from "../linkage/workplace-bindings";
 
 export function agentScopedClientWhere(
   tenantId: number,
@@ -446,6 +452,8 @@ export async function getMobileAgentConfigPayload(
       id: true,
       role: true,
       agent_entitlements: true,
+      agent_price_types: true,
+      price_type: true,
       consignment: true,
       consignment_limit_amount: true
     }
@@ -460,12 +468,16 @@ export async function getMobileAgentConfigPayload(
   let entitlementsForMobile = u.agent_entitlements;
   let consignment = u.consignment === true;
   let consignmentLimit = u.consignment_limit_amount?.toString() ?? null;
+  let slotPriceTypes: unknown = u.agent_price_types;
+  let slotLegacyPriceType = u.price_type?.trim() || null;
 
   if (slot) {
     const slotRow = await prisma.workSlot.findFirst({
       where: { id: slot.slot_id, tenant_id: tenantId },
       select: {
         entitlements: true,
+        price_types: true,
+        price_type: true,
         consignment: true,
         consignment_limit_amount: true
       }
@@ -490,6 +502,8 @@ export async function getMobileAgentConfigPayload(
         ...slotEntObj,
         ...(slotMc || userMc ? { mobile_config: slotMc ?? userMc } : {})
       };
+      slotPriceTypes = slotRow.price_types ?? slotPriceTypes;
+      if (slotRow.price_type?.trim()) slotLegacyPriceType = slotRow.price_type.trim();
       consignment = slotRow.consignment === true;
       consignmentLimit = slotRow.consignment_limit_amount?.toString() ?? null;
     }
@@ -529,6 +543,26 @@ export async function getMobileAgentConfigPayload(
   const workTimezone = loadTimezoneFromSettingsJson(st);
   const workUtcOffsetHours = utcOffsetHoursForTimezone(workTimezone);
 
+  const tenant_references = await loadMobileTenantReferences(tenantId);
+  const entPts =
+    entitlementsForMobile != null &&
+    typeof entitlementsForMobile === "object" &&
+    !Array.isArray(entitlementsForMobile)
+      ? parsePriceTypeList((entitlementsForMobile as Record<string, unknown>).price_types)
+      : [];
+  const allowedPriceTypes = resolveAgentAllowedPriceTypes({
+    entitlementsPriceTypes: entPts,
+    agentPriceTypes: parsePriceTypeList(slotPriceTypes),
+    legacyPriceType: slotLegacyPriceType
+  });
+  if (allowedPriceTypes.length > 0) {
+    tenant_references.price_type_options = filterPriceTypeOptionsByAllowed(
+      tenant_references.price_type_options,
+      allowedPriceTypes
+    );
+  }
+  const scopedTerritoryRefs = filterTerritoryRefsByAgentCities(tenant_references, agentCities);
+
   return {
     ok: true as const,
     user_id: u.id,
@@ -544,7 +578,7 @@ export async function getMobileAgentConfigPayload(
     /** Ish mintaqasi — admin Sozlamalar → Sistema → Vaqt mintaqasi. */
     work_timezone: workTimezone,
     work_utc_offset_hours: workUtcOffsetHours,
-    tenant_references: await loadMobileTenantReferences(tenantId),
+    tenant_references: scopedTerritoryRefs,
     agent_cities: agentCities,
     ...(appUpdate ? { app_update: appUpdate } : {})
   };

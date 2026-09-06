@@ -44,6 +44,7 @@ class _RoleRoutes {
     '/exp-client-map',
     '/exp-visits-map',
     '/exp-manual-sync',
+    '/my-returns',
   };
   static const supervisor = {
     '/home',
@@ -57,6 +58,8 @@ class _RoleRoutes {
     '/sv-kpi',
     '/sv-kpi/route',
     '/sv-settings',
+    '/sv-clients',
+    '/sv-notifications',
     '/agents',
   };
   static const cashier = {
@@ -93,16 +96,23 @@ class _RoleRoutes {
     if (role == 'expeditor' && location.startsWith('/exp-client-orders/')) return null;
     if (role == 'expeditor' && location.startsWith('/exp-client-ledger/')) return null;
     if (role == 'expeditor' && location.startsWith('/exp-return-by-order/')) return null;
+    if (role == 'expeditor' && location.startsWith('/my-returns')) return null;
     if ((role == 'cashier' || role == 'operator') &&
         location.startsWith('/bank-transfers/')) {
       return null;
     }
+    if (role == 'supervisor' && location.startsWith('/sv-clients/')) return null;
+    if (role == 'supervisor' && location.startsWith('/sv-kpi')) return null;
     if (allowed.contains(location)) return null;
     return '/home';
   }
 }
 
+String? roleGuardLocation(String role, String location) {
+  return _RoleRoutes.guard(role, location);
+}
+
 /// Redirect function for GoRouter — checks role access to routes
 String? roleRedirect(GoRouterState state, String role) {
-  return _RoleRoutes.guard(role, state.matchedLocation);
+  return roleGuardLocation(role, state.matchedLocation);
 }

@@ -494,15 +494,19 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
 
   /// Drawer / `context.go` orqali chiqish: dialog + ixtiyoriy chernovik.
   /// `true` — chiqish mumkin; `false` — qoling.
+  /// Ekran unmount bo‘lsa true: eski guard Vizit/Главная ni bloklamasin.
   Future<bool> _confirmLeaveForNavigation() async {
+    if (!mounted) return true;
     if (!_hasUnsavedChanges) return true;
-    if (!mounted) return false;
     final save = await showOrderDraftExitDialog(context);
-    if (!mounted) return false;
+    if (!mounted) return true;
     if (save == null) return false;
     if (save) {
-      return _saveDraft(popAfter: false);
+      final ok = await _saveDraft(popAfter: false);
+      if (ok) _releaseExitGuard();
+      return ok;
     }
+    _releaseExitGuard();
     return true;
   }
 

@@ -41,16 +41,24 @@ export async function proxyToBackend(
   const headers = new Headers(req.headers);
   headers.delete("host");
   headers.delete("connection");
+  // content-length ni o‘chirib, stream body bilan fetch o‘zi hisoblaydi
   headers.delete("content-length");
 
-  const init: RequestInit = {
+  const init: RequestInit & { duplex?: "half" } = {
     method: req.method,
     headers,
-    redirect: "manual"
+    redirect: "manual",
+    // Katta eksport/import — default fetch timeout yetmasligi mumkin
+    signal: AbortSignal.timeout(10 * 60 * 1000)
   };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
-    init.body = await req.arrayBuffer();
+    // arrayBuffer() 1–2 GB ZIP ni butunlay RAM ga oladi va import buziladi —
+    // multipart ni stream qilib uzatamiz.
+    if (req.body) {
+      init.body = req.body;
+      init.duplex = "half";
+    }
   }
 
   const res = await fetch(targetUrl, init);

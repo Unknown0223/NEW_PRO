@@ -1092,6 +1092,9 @@ class AgentDebtorCard extends StatelessWidget {
   final String? overdue;
   final String? legacyDebt;
   final String? currentDebt;
+  final String? openingDebt;
+  /// Buyurtma/to‘lovlardan yig‘ilgan qarz (boshlang‘ichdan tashqari).
+  final String? enteredDebt;
   final bool debtCollectionOnly;
   final VoidCallback? onTap;
 
@@ -1103,6 +1106,8 @@ class AgentDebtorCard extends StatelessWidget {
     this.overdue,
     this.legacyDebt,
     this.currentDebt,
+    this.openingDebt,
+    this.enteredDebt,
     this.debtCollectionOnly = false,
     this.onTap,
   });
@@ -1110,7 +1115,9 @@ class AgentDebtorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showSplit = (legacyDebt != null && legacyDebt!.isNotEmpty) ||
-        (currentDebt != null && currentDebt!.isNotEmpty);
+        (currentDebt != null && currentDebt!.isNotEmpty) ||
+        (openingDebt != null && openingDebt!.isNotEmpty) ||
+        (enteredDebt != null && enteredDebt!.isNotEmpty);
     return AgentSurfaceCard(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1157,7 +1164,28 @@ class AgentDebtorCard extends StatelessWidget {
                   ],
                   if (showSplit) ...[
                     const SizedBox(height: 6),
-                    if (legacyDebt != null && legacyDebt!.isNotEmpty)
+                    if (openingDebt != null && openingDebt!.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Начальный баланс:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(openingDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    if (enteredDebt != null && enteredDebt!.isNotEmpty) ...[
+                      if (openingDebt != null && openingDebt!.isNotEmpty) const SizedBox(height: 2),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Из операций:', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600)),
+                          Text(enteredDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ],
+                    if (legacyDebt != null && legacyDebt!.isNotEmpty) ...[
+                      if ((openingDebt != null && openingDebt!.isNotEmpty) ||
+                          (enteredDebt != null && enteredDebt!.isNotEmpty))
+                        const SizedBox(height: 2),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1165,6 +1193,7 @@ class AgentDebtorCard extends StatelessWidget {
                           Text(legacyDebt!, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
                         ],
                       ),
+                    ],
                     if (currentDebt != null && currentDebt!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Row(

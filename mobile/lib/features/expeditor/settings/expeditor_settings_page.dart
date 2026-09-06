@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../../auth/biometric_quick_login_tile.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// «Настройки» — ekspeditor. Veb «Конфигурации» bilan to'liq bog'langan:
 /// barcha qiymatlar `session.mobileConfig` (serverdan sinxron) dan o'qiladi,
@@ -24,6 +25,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: const Text('Настройки'),
         actions: [

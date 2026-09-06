@@ -95,13 +95,17 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
   }, [open, load]);
 
   const filteredStaff = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const tokens = search
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
     const list = staff.filter((u) => u.id !== slot?.active_user_id);
-    if (!q) return list;
-    return list.filter(
-      (u) =>
-        u.fio.toLowerCase().includes(q) || (u.code?.toLowerCase().includes(q) ?? false)
-    );
+    if (!tokens.length) return list;
+    return list.filter((u) => {
+      const hay = `${u.fio} ${u.code ?? ""}`.toLowerCase();
+      return tokens.every((t) => hay.includes(t));
+    });
   }, [staff, search, slot?.active_user_id]);
 
   const selectedStaff = useMemo(

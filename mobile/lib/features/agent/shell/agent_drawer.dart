@@ -76,16 +76,27 @@ class _AgentDrawerState extends ConsumerState<AgentDrawer> {
         ? session.tenantName!
         : 'Сервер: ${session.tenantSlug ?? "-"}';
 
-    void go(String path) async {
-      Navigator.pop(context);
-      if (path.isEmpty) return;
-      final canLeave = await confirmLeaveCreateOrderIfNeeded(ref);
-      if (!canLeave || !context.mounted) return;
-      final loc = GoRouterState.of(context).matchedLocation;
-      if (loc == path) {
-        ref.read(agentRouteReselectProvider.notifier).state = path;
+    Future<void> go(String path) async {
+      if (path.isEmpty) {
+        Navigator.pop(context);
+        return;
       }
-      context.go(path);
+      // Drawer `pop` qilingach bu widget unmount bo‘ladi — router/container
+      // ni oldindan olamiz, aks holda modal javobidan keyin `go` chaqirilmaydi.
+      final router = GoRouter.of(context);
+      final loc = GoRouterState.of(context).uri.path;
+      final container = ProviderScope.containerOf(context);
+      Navigator.pop(context);
+      await WidgetsBinding.instance.endOfFrame;
+      await leaveCreateOrderThenGo(
+        container: container,
+        go: router.go,
+        path: path,
+        currentLocation: loc,
+        onSameLocation: (p) {
+          container.read(agentRouteReselectProvider.notifier).state = p;
+        },
+      );
     }
 
     return Drawer(

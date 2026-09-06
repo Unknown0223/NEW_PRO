@@ -1,8 +1,8 @@
 "use client";
 
-import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY, goToClientsKeepingSelection } from "@/components/clients/group-processing/group-processing-actions";
+import { GpMasterApplyButton } from "@/components/clients/group-processing/group-processing-apply-btn";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -13,7 +13,6 @@ import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -153,14 +152,6 @@ export function GroupProcessingAttrsWorkspace() {
   const [draftByClient, setDraftByClient] = useState<Record<number, AttrDraft>>({});
   const [origByClient, setOrigByClient] = useState<Record<number, AttrDraft>>({});
   const [master, setMaster] = useState<AttrDraft>(() => emptyAttr());
-  /** Master maydonlaridan qaysilari «hammasiga» qo‘llanadi */
-  const [masterApply, setMasterApply] = useState({
-    is_active: false,
-    category: false,
-    client_type_code: false,
-    client_format: false,
-    sales_channel: false
-  });
   const [showField, setShowField] = useState<ShowField>(() => {
     try {
       const v = localStorage.getItem(SHOW_STORAGE_KEY) as ShowField | null;
@@ -276,32 +267,23 @@ export function GroupProcessingAttrsWorkspace() {
     }));
   };
 
-  const applyMasterToSelected = () => {
+  const applyMasterToSelected = (fields?: (keyof AttrDraft)[]) => {
+    const keys = fields ?? (["is_active", "category", "client_type_code", "client_format", "sales_channel"] as const);
     const targets = selectedIds.size ? selectedIds : new Set(rows.map((r) => r.id));
-    const any =
-      masterApply.is_active ||
-      masterApply.category ||
-      masterApply.client_type_code ||
-      masterApply.client_format ||
-      masterApply.sales_channel;
-    if (!any) {
-      setStatusMsg("Avval umumiy qatorda qaysi maydonlarni qo‘llashni belgilang (✓)");
-      return;
-    }
     setDraftByClient((prev) => {
       const next = { ...prev };
       for (const id of targets) {
         const cur = { ...(next[id] ?? emptyAttr()) };
-        if (masterApply.is_active) cur.is_active = master.is_active;
-        if (masterApply.category) cur.category = master.category;
-        if (masterApply.client_type_code) cur.client_type_code = master.client_type_code;
-        if (masterApply.client_format) cur.client_format = master.client_format;
-        if (masterApply.sales_channel) cur.sales_channel = master.sales_channel;
+        if (keys.includes("is_active")) cur.is_active = master.is_active;
+        if (keys.includes("category")) cur.category = master.category;
+        if (keys.includes("client_type_code")) cur.client_type_code = master.client_type_code;
+        if (keys.includes("client_format")) cur.client_format = master.client_format;
+        if (keys.includes("sales_channel")) cur.sales_channel = master.sales_channel;
         next[id] = cur;
       }
       return next;
     });
-    setStatusMsg(`${targets.size} ta klientga umumiy qiymatlar qo‘llandi (saqlash kerak)`);
+    setStatusMsg(`Общие значения применены к ${targets.size} клиентам (нужно сохранить)`);
   };
 
   const toggleSelectAll = (on: boolean) => {
@@ -357,7 +339,7 @@ export function GroupProcessingAttrsWorkspace() {
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       if (res.ok > 0 && res.failed.length === 0) {
-        router.push("/clients");
+        goToClientsKeepingSelection(router.push, tenantSlug, seedIds);
         return;
       }
       setOrigByClient((prev) => {
@@ -384,17 +366,6 @@ export function GroupProcessingAttrsWorkspace() {
   ) => (
     <>
       <td className="border-l border-slate-200 px-2 py-2 align-middle">
-        {opts?.master ? (
-          <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-blue-600"
-              checked={masterApply.is_active}
-              onChange={(e) => setMasterApply((m) => ({ ...m, is_active: e.target.checked }))}
-            />
-            qo‘llash
-          </label>
-        ) : null}
         <select
           className={selectClass}
           value={draft.is_active ? "1" : "0"}
@@ -403,19 +374,11 @@ export function GroupProcessingAttrsWorkspace() {
           <option value="1">Актив</option>
           <option value="0">Неактив</option>
         </select>
+        {opts?.master ? (
+          <GpMasterApplyButton onClick={() => applyMasterToSelected(["is_active"])} />
+        ) : null}
       </td>
       <td className="border-l border-slate-100 px-2 py-2 align-middle">
-        {opts?.master ? (
-          <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-blue-600"
-              checked={masterApply.category}
-              onChange={(e) => setMasterApply((m) => ({ ...m, category: e.target.checked }))}
-            />
-            qo‘llash
-          </label>
-        ) : null}
         <select
           className={selectClass}
           value={draft.category}
@@ -428,19 +391,11 @@ export function GroupProcessingAttrsWorkspace() {
             </option>
           ))}
         </select>
+        {opts?.master ? (
+          <GpMasterApplyButton onClick={() => applyMasterToSelected(["category"])} />
+        ) : null}
       </td>
       <td className="border-l border-slate-100 px-2 py-2 align-middle">
-        {opts?.master ? (
-          <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-blue-600"
-              checked={masterApply.client_type_code}
-              onChange={(e) => setMasterApply((m) => ({ ...m, client_type_code: e.target.checked }))}
-            />
-            qo‘llash
-          </label>
-        ) : null}
         <select
           className={selectClass}
           value={draft.client_type_code}
@@ -453,19 +408,11 @@ export function GroupProcessingAttrsWorkspace() {
             </option>
           ))}
         </select>
+        {opts?.master ? (
+          <GpMasterApplyButton onClick={() => applyMasterToSelected(["client_type_code"])} />
+        ) : null}
       </td>
       <td className="border-l border-slate-100 px-2 py-2 align-middle">
-        {opts?.master ? (
-          <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-blue-600"
-              checked={masterApply.client_format}
-              onChange={(e) => setMasterApply((m) => ({ ...m, client_format: e.target.checked }))}
-            />
-            qo‘llash
-          </label>
-        ) : null}
         <select
           className={selectClass}
           value={draft.client_format}
@@ -478,19 +425,11 @@ export function GroupProcessingAttrsWorkspace() {
             </option>
           ))}
         </select>
+        {opts?.master ? (
+          <GpMasterApplyButton onClick={() => applyMasterToSelected(["client_format"])} />
+        ) : null}
       </td>
       <td className="border-l border-slate-100 px-2 py-2 align-middle">
-        {opts?.master ? (
-          <label className="mb-1 flex items-center gap-1 text-[10px] text-slate-500">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-blue-600"
-              checked={masterApply.sales_channel}
-              onChange={(e) => setMasterApply((m) => ({ ...m, sales_channel: e.target.checked }))}
-            />
-            qo‘llash
-          </label>
-        ) : null}
         <select
           className={selectClass}
           value={draft.sales_channel}
@@ -503,6 +442,9 @@ export function GroupProcessingAttrsWorkspace() {
             </option>
           ))}
         </select>
+        {opts?.master ? (
+          <GpMasterApplyButton onClick={() => applyMasterToSelected(["sales_channel"])} />
+        ) : null}
       </td>
     </>
   );
@@ -536,9 +478,14 @@ export function GroupProcessingAttrsWorkspace() {
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}
+          >
             Вернуться обратно
-          </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -589,7 +536,7 @@ export function GroupProcessingAttrsWorkspace() {
         ) : !rows.length ? (
           <div className="space-y-2 p-6 text-sm text-muted-foreground">
             <p>Нет клиентов. Сначала выберите клиентов в списке.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push("/clients")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}>
               К списку клиентов
             </Button>
           </div>
@@ -627,15 +574,7 @@ export function GroupProcessingAttrsWorkspace() {
                     <span className="text-[11px] font-semibold text-emerald-800">
                       Общая строка (для выбранных)
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-7 text-[11px]"
-                      onClick={applyMasterToSelected}
-                    >
-                      Belgilangan maydonlarni qo‘llash
-                    </Button>
+                    <GpMasterApplyButton all onClick={() => applyMasterToSelected()} />
                   </div>
                 </td>
                 {renderAttrSelects(master, (p) => setMaster((m) => ({ ...m, ...p })), { master: true })}

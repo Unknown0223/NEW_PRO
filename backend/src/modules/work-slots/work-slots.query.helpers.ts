@@ -1,3 +1,4 @@
+import { toFio } from "../staff/staff.shared.helpers";
 import type { WorkSlotRow } from "./work-slots.types";
 import {
   effectiveCashDeskIds,
@@ -64,6 +65,9 @@ export type SlotRowSource = {
     user: {
       id: number;
       name: string;
+      first_name: string | null;
+      last_name: string | null;
+      middle_name: string | null;
       territory: string | null;
       position: string | null;
       app_access: boolean;
@@ -142,7 +146,7 @@ export function mapSlotRow(s: SlotRowSource, lookups?: SlotNameLookups): WorkSlo
     is_active: s.is_active,
     sort_order: s.sort_order,
     active_user_id: u?.id ?? null,
-    active_user_name: u?.name ?? null,
+    active_user_name: u ? toFio(u) : null,
     active_user_territory: territory,
     active_user_position: u?.position ?? null,
     active_user_app_access: u != null ? u.app_access : null,
@@ -209,6 +213,9 @@ export const slotInclude = {
         select: {
           id: true,
           name: true,
+          first_name: true,
+          last_name: true,
+          middle_name: true,
           territory: true,
           position: true,
           app_access: true,

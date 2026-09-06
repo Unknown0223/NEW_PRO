@@ -57,6 +57,22 @@ function actorIsAdmin(request: { user?: unknown }): boolean {
   return role === TENANT_ADMIN_ROLE;
 }
 
+/** `roles=a,b` yoki `roles=a&roles=b` (Fastify array) → unique list. */
+function parseCsvOrList(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) {
+    const list = raw
+      .flatMap((x) => String(x).split(","))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return list.length ? [...new Set(list)] : undefined;
+  }
+  const s = String(raw).trim();
+  if (!s) return undefined;
+  const list = s.split(",").map((x) => x.trim()).filter(Boolean);
+  return list.length ? [...new Set(list)] : undefined;
+}
+
 export async function registerTimesheetRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/timesheet/filters",
@@ -73,15 +89,23 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const q = request.query as Record<string, string | undefined>;
-      const month = (q.month ?? "").trim();
+      const q = request.query as Record<string, unknown>;
+      const month = String(q.month ?? "").trim();
       if (!month) return sendApiError(reply, request, 400, "BadMonth");
-      const user_id = q.user_id ? Number.parseInt(q.user_id, 10) : undefined;
-      if (q.user_id && Number.isNaN(user_id)) return sendApiError(reply, request, 400, "BadUserId");
+      const userIdRaw = q.user_id != null ? String(q.user_id).trim() : "";
+      const user_id = userIdRaw ? Number.parseInt(userIdRaw, 10) : undefined;
+      if (userIdRaw && Number.isNaN(user_id)) return sendApiError(reply, request, 400, "BadUserId");
       try {
+        const roles = parseCsvOrList(q.roles) ?? parseCsvOrList(q.role);
+        const branches = parseCsvOrList(q.branches) ?? parseCsvOrList(q.branch);
+        const directionRaw = String(q.direction_id ?? q.direction ?? "").trim();
+        const direction_id = directionRaw ? Number.parseInt(directionRaw, 10) : undefined;
         const data = await listTimesheetMatrix(request.tenant!.id, {
           month,
-          role: q.role?.trim() || undefined,
+          roles,
+          branches,
+          branch: branches?.length === 1 ? branches[0] : undefined,
+          direction_id: Number.isFinite(direction_id) ? direction_id : undefined,
           user_id
         });
         return reply.send({ data });

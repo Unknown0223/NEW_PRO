@@ -494,10 +494,10 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-            Bekor
+            Отмена
           </Button>
           <Button type="button" onClick={submit} disabled={pending}>
-            {pending ? "Saqlanmoqda…" : "Qo‘llash"}
+            {pending ? "Сохранение…" : "Применить"}
           </Button>
         </DialogFooter>
       </DialogContent>

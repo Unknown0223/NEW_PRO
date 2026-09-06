@@ -91,6 +91,7 @@ class _AgentWarehouseStockPageState extends ConsumerState<AgentWarehouseStockPag
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Остатки на складе',
+        useShellDrawer: true,
         showBack: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: _openSearch),

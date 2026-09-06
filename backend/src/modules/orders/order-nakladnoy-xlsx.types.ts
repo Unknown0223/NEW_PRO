@@ -25,15 +25,23 @@ export type NakladnoyOrderPayload = {
   tenantName: string;
   tenantPhone: string | null;
   clientName: string;
+  clientPhone: string | null;
   clientBalanceNum: Prisma.Decimal | null;
   clientAddress: string;
   currencyLabel: string;
   agentLine: string;
+  /** Накладные 2.1.7 — `код [имя] территория дата (телефон)` */
+  invoiceAgentLine: string;
   expeditorLine: string;
+  expeditorName: string | null;
   territory: string;
   warehouseName: string | null;
   agentId: number | null;
   expeditorUserId: number | null;
+  isConsignment: boolean;
+  paymentMethodRef: string | null;
+  /** `order` | `return` | `return_by_order` | … — 5.2.0 «Возврат с полки» guruhi */
+  orderType: string;
   lines: NakladnoyLine[];
   paidLines: NakladnoyLine[];
   bonusLines: NakladnoyLine[];

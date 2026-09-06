@@ -20,7 +20,7 @@ class AppDatabase {
       final path = p.join(dbPath, 'salesdoc.db');
       return openDatabase(
         path,
-        version: 19,
+        version: 20,
         onOpen: (db) async {
           // Android: PRAGMA faqat rawQuery orqali (execute xato beradi).
           try {
@@ -30,6 +30,7 @@ class AppDatabase {
           await _ensureClientColumns(db);
           await _ensureHeldOrderSummaryColumns(db);
           await _ensurePhotoRetryColumn(db);
+          await _ensurePendingLocationPingsTable(db);
           await _ensurePerfIndexes(db);
         },
         onCreate: (db, version) async {
@@ -154,6 +155,18 @@ class AppDatabase {
             created_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             retry_count INTEGER NOT NULL DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE pending_location_pings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            accuracy_meters REAL,
+            recorded_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
           )
         ''');
         await db.execute('''
@@ -292,6 +305,9 @@ class AppDatabase {
         if (oldVersion < 19) {
           await _ensureClientColumns(db);
         }
+        if (oldVersion < 20) {
+          await _ensurePendingLocationPingsTable(db);
+        }
         if (oldVersion < 5) {
           await db.execute('''
             CREATE TABLE IF NOT EXISTS agent_visits (
@@ -347,6 +363,26 @@ class AppDatabase {
     try {
       await db.execute(
         "UPDATE held_orders SET capture_deadline = submit_at WHERE capture_deadline IS NULL OR capture_deadline = ''",
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> _ensurePendingLocationPingsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_location_pings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        accuracy_meters REAL,
+        recorded_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    try {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_pending_loc_status ON pending_location_pings(status, retry_count)',
       );
     } catch (_) {}
   }
@@ -979,6 +1015,64 @@ class AppDatabase {
     final db = await database;
     final r = await db.rawQuery(
       "SELECT COUNT(*) as cnt FROM pending_photo_reports WHERE status = 'pending' AND retry_count < 5",
+    );
+    return r.first['cnt'] as int? ?? 0;
+  }
+
+  Future<int> enqueueLocationPing({
+    required double latitude,
+    required double longitude,
+    double? accuracyMeters,
+    required DateTime recordedAt,
+  }) async {
+    final db = await database;
+    return db.insert('pending_location_pings', {
+      'latitude': latitude,
+      'longitude': longitude,
+      'accuracy_meters': accuracyMeters,
+      'recorded_at': recordedAt.toUtc().toIso8601String(),
+      'status': 'pending',
+      'retry_count': 0,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingLocationPings({int limit = 50}) async {
+    final db = await database;
+    return db.query(
+      'pending_location_pings',
+      where: "status = 'pending' AND retry_count < ?",
+      whereArgs: [8],
+      orderBy: 'recorded_at ASC, id ASC',
+      limit: limit,
+    );
+  }
+
+  Future<void> deletePendingLocationPings(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.delete(
+      'pending_location_pings',
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  Future<void> bumpPendingLocationPingRetries(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE pending_location_pings SET retry_count = retry_count + 1 WHERE id IN ($placeholders)',
+      ids,
+    );
+  }
+
+  Future<int> pendingLocationPingCount() async {
+    final db = await database;
+    final r = await db.rawQuery(
+      "SELECT COUNT(*) as cnt FROM pending_location_pings WHERE status = 'pending' AND retry_count < 8",
     );
     return r.first['cnt'] as int? ?? 0;
   }

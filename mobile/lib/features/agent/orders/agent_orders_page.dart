@@ -124,7 +124,8 @@ class _AgentOrdersPageState extends ConsumerState<AgentOrdersPage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Мои заказы',
-        showBack: true,
+        useShellDrawer: true,
+        showBack: false,
         belowTitle: _agentSubtitle(session).isNotEmpty
             ? Padding(
                 padding: const EdgeInsets.only(left: 4),

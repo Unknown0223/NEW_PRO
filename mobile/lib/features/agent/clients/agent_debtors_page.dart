@@ -39,6 +39,7 @@ class AgentDebtorsPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Должники',
+        useShellDrawer: true,
         showBack: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/debtors')),
@@ -79,17 +80,23 @@ class AgentDebtorsPage extends ConsumerWidget {
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
                   ),
                 ),
-                for (final c in rows)
-                  AgentDebtorCard(
+                ...rows.map((c) {
+                  final fromOps = c.balance.abs() - c.openingDebt;
+                  return AgentDebtorCard(
                     name: c.name,
                     balance: _formatBalance(c.balance),
                     balanceAmount: c.balance,
                     overdue: _formatOverdue(c.overdueAt),
+                    openingDebt: c.openingDebt > 0.01 ? _formatBalance(c.openingDebt) : null,
+                    enteredDebt: c.openingDebt > 0.01 && fromOps > 0.01
+                        ? _formatBalance(fromOps)
+                        : null,
                     legacyDebt: c.legacyDebt > 0.01 ? _formatBalance(c.legacyDebt) : null,
                     currentDebt: c.currentDebt > 0.01 ? _formatBalance(c.currentDebt) : null,
                     debtCollectionOnly: c.debtCollectionOnly,
                     onTap: () => context.push('/clients/${c.id}'),
-                  ),
+                  );
+                }),
               ],
             ),
           );

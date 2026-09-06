@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
-  Filter,
   Info,
   RefreshCw,
   RotateCcw,
@@ -20,11 +19,12 @@ import {
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
-import { FilterSelect } from "@/components/ui/filter-select";
+import { FilterSearchableSelect } from "@/components/ui/filter-searchable-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useTabelAudit } from "@/lib/tabel/tabel-api";
+import { WorkSlotsMultiSelect } from "@/components/work-slots/work-slots-multi-select";
 import { TimesheetStatCards } from "@/components/timesheet/timesheet-stat-cards";
 import { TimesheetTable } from "@/components/timesheet/timesheet-table";
 import { TimesheetEditToolbar } from "@/components/timesheet/timesheet-edit-toolbar";
@@ -41,6 +41,7 @@ import {
   referenceDate,
   shiftMonth,
   statusWorkValue,
+  timesheetRoleLabel,
   todayIso,
   type AttendanceStatus,
   type TimesheetCell,
@@ -48,10 +49,32 @@ import {
 } from "@/components/timesheet/timesheet-shared";
 import { buildTimesheetCommentMap, exportTimesheetXlsx } from "@/components/timesheet/timesheet-export";
 
-type FiltersDto = { roles: string[]; employees: Array<{ id: number; fio: string; role: string; login: string }> };
+function isExcludedTimesheetRole(role: string | null | undefined): boolean {
+  return (role ?? "").trim().toLowerCase() === "admin";
+}
+
+function stripExcludedRoles(roles: string[]): string[] {
+  return roles.filter((r) => !isExcludedTimesheetRole(r));
+}
+
+type FiltersDto = {
+  roles: string[];
+  branches: string[];
+  directions: Array<{ id: number; name: string }>;
+  employees: Array<{ id: number; fio: string; role: string; login: string; code: string | null; branch: string | null }>;
+};
 type MatrixDto = { month: string; days: number[]; rows: TimesheetRow[]; locked: boolean };
 
-const PAGE_SIZES = [10, 25, 50];
+type DraftFilters = {
+  roles: string[];
+  branches: string[];
+  direction: string;
+  userId: string;
+};
+
+const EMPTY_FILTERS: DraftFilters = { roles: [], branches: [], direction: "", userId: "" };
+
+const PAGE_SIZES = [10, 25, 50, 100];
 
 export function TimesheetWorkspace() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -62,11 +85,11 @@ export function TimesheetWorkspace() {
 
   const [month, setMonth] = useState(monthNow());
 
-  // Фильтры по паттерну «черновик → Применить» (как в макете).
-  const [draft, setDraft] = useState({ role: "", branch: "", direction: "" });
-  const [applied, setApplied] = useState({ role: "", branch: "", direction: "" });
+  // Filtrlar darhol qo‘llanadi — bitta holat (draft = applied).
+  const [draft, setDraft] = useState<DraftFilters>(EMPTY_FILTERS);
   const [search, setSearch] = useState("");
-  const [sortDir, setSortDir] = useState<"asc" | "desc" | null>("asc");
+  /** null — server tartibi (SVR guruhlari) saqlanadi. */
+  const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -92,13 +115,24 @@ export function TimesheetWorkspace() {
   });
 
   const matrixQ = useQuery({
-    queryKey: ["timesheet-matrix", tenantSlug, month, applied.role],
+    queryKey: [
+      "timesheet-matrix",
+      tenantSlug,
+      month,
+      draft.roles.join(","),
+      draft.branches.join(","),
+      draft.direction,
+      draft.userId
+    ],
     enabled: Boolean(tenantSlug),
     staleTime: STALE.list,
     queryFn: async () => {
       const p = new URLSearchParams();
       p.set("month", month);
-      if (applied.role) p.set("role", applied.role);
+      if (draft.roles.length > 0) p.set("roles", draft.roles.join(","));
+      if (draft.branches.length > 0) p.set("branches", draft.branches.join(","));
+      if (draft.direction) p.set("direction_id", draft.direction);
+      if (draft.userId) p.set("user_id", draft.userId);
       const { data } = await api.get<{ data: MatrixDto }>(`/api/${tenantSlug}/timesheet?${p.toString()}`);
       return data.data;
     }
@@ -122,11 +156,41 @@ export function TimesheetWorkspace() {
     }
   });
 
-  // Роль (Должность) фильтруется на сервере; поиск + сортировка — на клиенте.
+  // Rol/filial — server + client (server kechiksa ham auditor sizib ketmasin).
   const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let src = matrixQ.data?.rows ?? [];
-    if (q) src = src.filter((r) => `${r.fio} ${r.role} ${r.login}`.toLowerCase().includes(q));
+    const tokens = search
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const roleSet = new Set(draft.roles.map((r) => r.trim().toLowerCase()).filter(Boolean));
+    const branchSet = new Set(draft.branches.map((b) => b.trim().toLowerCase()).filter(Boolean));
+    let src = (matrixQ.data?.rows ?? []).filter((r) => {
+      if (isExcludedTimesheetRole(r.role)) return false;
+      if (roleSet.size > 0 && !roleSet.has(r.role.trim().toLowerCase())) return false;
+      if (branchSet.size > 0) {
+        const b = (r.branch ?? "").trim().toLowerCase();
+        if (!b || !branchSet.has(b)) return false;
+      }
+      if (draft.userId && String(r.user_id) !== draft.userId) return false;
+      return true;
+    });
+    if (tokens.length) {
+      src = src.filter((r) => {
+        const hay = [
+          r.fio,
+          r.role,
+          timesheetRoleLabel(r.role),
+          r.login,
+          r.code ?? "",
+          r.branch ?? "",
+          r.direction ?? ""
+        ]
+          .join(" ")
+          .toLowerCase();
+        return tokens.every((t) => hay.includes(t));
+      });
+    }
     if (sortDir) {
       src = [...src].sort((a, b) => {
         const cmp = a.fio.localeCompare(b.fio, "ru");
@@ -134,7 +198,15 @@ export function TimesheetWorkspace() {
       });
     }
     return src;
-  }, [matrixQ.data?.rows, search, sortDir]);
+  }, [matrixQ.data?.rows, search, sortDir, draft.roles, draft.branches, draft.userId]);
+
+  // Eski «admin» filtri saqlanib qolgan bo‘lsa — tozalash.
+  useEffect(() => {
+    setDraft((d) => {
+      const roles = stripExcludedRoles(d.roles);
+      return roles.length === d.roles.length ? d : { ...d, roles };
+    });
+  }, []);
 
   const total = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -151,7 +223,104 @@ export function TimesheetWorkspace() {
   const pendingCount = Object.keys(pending).length;
 
   const allSelected = filteredRows.length > 0 && filteredRows.every((r) => selectedRows.has(r.user_id));
-  const filtersDirty = draft.role !== applied.role || draft.branch !== applied.branch || draft.direction !== applied.direction;
+
+  const roleFilterItems = useMemo(
+    () =>
+      (filtersQ.data?.roles ?? [])
+        .filter((r) => !isExcludedTimesheetRole(r))
+        .map((r) => ({
+          id: r,
+          title: timesheetRoleLabel(r),
+          searchText: `${r} ${timesheetRoleLabel(r)}`
+        })),
+    [filtersQ.data?.roles]
+  );
+
+  const employeeOptions = useMemo(() => {
+    const rows = (filtersQ.data?.employees ?? []).filter((e) => !isExcludedTimesheetRole(e.role));
+    const roleSet = new Set(draft.roles);
+    const branchSet = new Set(draft.branches.map((b) => b.toLowerCase()));
+    return rows
+      .filter((e) => {
+        if (roleSet.size && !roleSet.has(e.role)) return false;
+        if (branchSet.size) {
+          const b = (e.branch ?? "").toLowerCase();
+          if (!b || !branchSet.has(b)) return false;
+        }
+        return true;
+      })
+      .map((e) => ({
+        value: String(e.id),
+        label: e.code ? `${e.fio} (${e.code})` : e.fio,
+        searchText: `${e.fio} ${e.code ?? ""} ${e.login} ${e.role} ${e.branch ?? ""} ${timesheetRoleLabel(e.role)}`
+      }));
+  }, [filtersQ.data?.employees, draft.roles, draft.branches]);
+
+  const directionOptions = useMemo(
+    () =>
+      (filtersQ.data?.directions ?? []).map((d) => ({
+        value: String(d.id),
+        label: d.name
+      })),
+    [filtersQ.data?.directions]
+  );
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; text: string; clear: () => void }> = [];
+    for (const role of draft.roles) {
+      chips.push({
+        key: `role:${role}`,
+        text: timesheetRoleLabel(role),
+        clear: () => {
+          commitFilters((d) => {
+            const nextRoles = d.roles.filter((r) => r !== role);
+            const emp = filtersQ.data?.employees.find((e) => String(e.id) === d.userId);
+            const userId =
+              emp && nextRoles.length > 0 && !nextRoles.includes(emp.role) ? "" : d.userId;
+            return { ...d, roles: nextRoles, userId };
+          });
+        }
+      });
+    }
+    for (const branch of draft.branches) {
+      chips.push({
+        key: `branch:${branch}`,
+        text: branch,
+        clear: () => {
+          commitFilters((d) => {
+            const nextBranches = d.branches.filter((b) => b !== branch);
+            const emp = filtersQ.data?.employees.find((e) => String(e.id) === d.userId);
+            const eb = (emp?.branch ?? "").toLowerCase();
+            const userId =
+              emp &&
+              nextBranches.length > 0 &&
+              (!eb || !nextBranches.some((b) => b.toLowerCase() === eb))
+                ? ""
+                : d.userId;
+            return { ...d, branches: nextBranches, userId };
+          });
+        }
+      });
+    }
+    if (draft.direction) {
+      const name =
+        filtersQ.data?.directions.find((d) => String(d.id) === draft.direction)?.name ?? draft.direction;
+      chips.push({
+        key: "direction",
+        text: name,
+        clear: () => commitFilters({ direction: "" })
+      });
+    }
+    if (draft.userId) {
+      const emp = filtersQ.data?.employees.find((e) => String(e.id) === draft.userId);
+      chips.push({
+        key: "user",
+        text: emp?.fio ?? `#${draft.userId}`,
+        clear: () => commitFilters({ userId: "" })
+      });
+    }
+    return chips;
+  }, [draft, filtersQ.data?.directions, filtersQ.data?.employees]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -169,18 +338,38 @@ export function TimesheetWorkspace() {
     setPage(1);
   }
 
-  function applyFilters() {
-    setApplied(draft);
-    setPage(1);
-    setSelectedRows(new Set());
-    showToast("Фильтры применены");
-  }
-
   function clearFilters() {
-    setDraft({ role: "", branch: "", direction: "" });
-    setApplied({ role: "", branch: "", direction: "" });
+    setDraft(EMPTY_FILTERS);
     setSearch("");
     setPage(1);
+    setSelectedRows(new Set());
+  }
+
+  /** Filtr o‘zgarishi — darhol (bitta draft holati). */
+  function commitFilters(patch: Partial<DraftFilters> | ((prev: DraftFilters) => DraftFilters)) {
+    setDraft((prev) => {
+      const next = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+      return {
+        ...next,
+        roles: stripExcludedRoles(next.roles)
+      };
+    });
+    setPage(1);
+    setSelectedRows(new Set());
+  }
+
+  function setDraftRoles(roles: string[]) {
+    const clean = stripExcludedRoles(roles);
+    commitFilters((d) => {
+      const emp = filtersQ.data?.employees.find((e) => String(e.id) === d.userId);
+      const userId =
+        emp &&
+        (isExcludedTimesheetRole(emp.role) ||
+          (clean.length > 0 && !clean.includes(emp.role)))
+          ? ""
+          : d.userId;
+      return { ...d, roles: clean, userId };
+    });
   }
 
   function toggleRow(uid: number) {
@@ -243,6 +432,10 @@ export function TimesheetWorkspace() {
   }
 
   function setWorkValue(r: TimesheetRow, cell: TimesheetCell, value: number) {
+    if (r.is_departed && !canOverrideSlotLeave) {
+      showToast("Снят с рабочего места — табель заморожен (только admin)");
+      return;
+    }
     if (!canOverrideSlotLeave && isAfterSlotLeave(r, cell.date)) {
       showToast("День после ухода со слота — только admin");
       return;
@@ -264,7 +457,9 @@ export function TimesheetWorkspace() {
     }
     const status = WORK_STATUS_BY_VALUE[String(value)];
     const today = todayIso();
-    const targets = selectedRows.size > 0 ? filteredRows.filter((r) => selectedRows.has(r.user_id)) : filteredRows;
+    const targets = (selectedRows.size > 0 ? filteredRows.filter((r) => selectedRows.has(r.user_id)) : filteredRows).filter(
+      (r) => canOverrideSlotLeave || !r.is_departed
+    );
     setPending((p) => {
       const np = { ...p };
       for (const r of targets) {
@@ -286,6 +481,14 @@ export function TimesheetWorkspace() {
   }
 
   function handleCellClick(r: TimesheetRow, c: TimesheetCell) {
+    if (r.is_departed && !canOverrideSlotLeave) {
+      showToast("Снят с рабочего места — табель заморожен (только admin)");
+      return;
+    }
+    if (!canOverrideSlotLeave && isAfterSlotLeave(r, c.date)) {
+      showToast("День после ухода со слота — только admin");
+      return;
+    }
     setModalTarget({
       userId: r.user_id,
       fio: r.fio,
@@ -386,50 +589,105 @@ export function TimesheetWorkspace() {
       <TimesheetStatCards rows={filteredRows} refDate={refDate} refLabel={refLabel} />
 
       {/* Фильтры */}
-      <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <div className="space-y-3 rounded-lg border bg-card p-3 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[160px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Должность</label>
-            <FilterSelect
-              className="w-full"
-              emptyLabel="Все"
-              value={draft.role}
-              onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
-            >
-              {(filtersQ.data?.roles ?? []).map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </FilterSelect>
-          </div>
-          <div className="min-w-[160px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Филиал</label>
-            <FilterSelect
-              className="w-full"
-              emptyLabel="Все"
-              value={draft.branch}
-              onChange={(e) => setDraft((d) => ({ ...d, branch: e.target.value }))}
+          <div className="min-w-[170px] flex-1">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Должность
+            </label>
+            <WorkSlotsMultiSelect
+              variant="filter"
+              placeholder="Все должности"
+              items={roleFilterItems}
+              selectedValues={draft.roles}
+              onChange={setDraftRoles}
             />
           </div>
+
+          <div className="min-w-[150px] flex-1">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Филиал
+            </label>
+            <WorkSlotsMultiSelect
+              variant="filter"
+              placeholder="Все филиалы"
+              items={(filtersQ.data?.branches ?? []).map((b) => ({ id: b, title: b }))}
+              selectedValues={draft.branches}
+              onChange={(branches) =>
+                commitFilters((d) => ({
+                  ...d,
+                  branches,
+                  userId:
+                    !d.userId ||
+                    !(filtersQ.data?.employees ?? []).some((e) => {
+                      if (String(e.id) !== d.userId) return false;
+                      if (!branches.length) return false;
+                      const eb = (e.branch ?? "").toLowerCase();
+                      return !eb || !branches.some((b) => b.toLowerCase() === eb);
+                    })
+                      ? d.userId
+                      : ""
+                }))
+              }
+            />
+          </div>
+
           <div className="min-w-[160px] flex-1">
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Направление продаж</label>
-            <FilterSelect
-              className="w-full"
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Направление
+            </label>
+            <FilterSearchableSelect
               emptyLabel="Все"
+              placeholderLabel="Все направления"
               value={draft.direction}
-              onChange={(e) => setDraft((d) => ({ ...d, direction: e.target.value }))}
+              onValueChange={(direction) => commitFilters({ direction })}
+              options={directionOptions}
+              searchPlaceholder="Поиск направления…"
             />
           </div>
-          <Button
-            variant={filtersDirty ? "default" : "secondary"}
-            size="sm"
-            onClick={applyFilters}
-          >
-            <Filter className="mr-1 size-3.5" /> Применить
-          </Button>
+
+          <div className="min-w-[200px] flex-[1.2]">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Сотрудник
+            </label>
+            <FilterSearchableSelect
+              emptyLabel="Все"
+              placeholderLabel="ФИО / код / логин"
+              value={draft.userId}
+              onValueChange={(userId) => commitFilters({ userId })}
+              options={employeeOptions}
+              searchPlaceholder="Поиск ФИО, кода…"
+              emptyMessage="Нет сотрудников"
+            />
+          </div>
+
           <Button variant="ghost" size="icon-sm" onClick={clearFilters} title="Сбросить фильтры" aria-label="Сбросить фильтры">
             <RotateCcw className="size-4" />
           </Button>
         </div>
+
+        <p className="text-[10px] text-muted-foreground">
+          Только сотрудники с активностью / рабочим местом в выбранном месяце. Снятые с места — красным и заморожены.
+          SVR + agent: агенты, затем их SVR.
+        </p>
+
+        {activeFilterChips.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Активные:</span>
+            {activeFilterChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={chip.clear}
+                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/15"
+                title="Убрать фильтр"
+              >
+                {chip.text}
+                <X className="size-3 opacity-70" />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Панель инструментов */}
@@ -438,7 +696,7 @@ export function TimesheetWorkspace() {
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-9 pl-8 text-xs"
-            placeholder="Поиск: имя или код..."
+            placeholder="Поиск: ФИО, код, логин…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />

@@ -31,15 +31,19 @@ export function SlotSupervisorTeamEditor({ tenant, value, onChange }: Props) {
 
   const items = useMemo(() => {
     const rows = agentSlotsQ.data ?? [];
-    const q = search.trim().toLowerCase();
+    const tokens = search
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
     return rows
       .filter((s) => {
-        if (!q) return true;
+        if (!tokens.length) return true;
         const hay = [s.slot_code, s.label, s.active_user_name]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        return hay.includes(q);
+        return tokens.every((t) => hay.includes(t));
       })
       .map((s) => ({
         id: s.id,

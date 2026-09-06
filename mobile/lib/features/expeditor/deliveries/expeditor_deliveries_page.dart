@@ -5,6 +5,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// «Остаток в машине» — ekspeditor skladdan olib chiqqan, hali mijozga
 /// yetkazilmagan mahsulotlar ro'yxati (qoldiq).
@@ -22,6 +23,7 @@ class ExpeditorDeliveriesPage extends ConsumerWidget {
     final stock = ref.watch(expeditorVehicleStockProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Остаток в машине')),
+      drawer: const ExpeditorDrawer(),
       body: stock.when(
         data: (data) {
           final products = (data['products'] as List?)

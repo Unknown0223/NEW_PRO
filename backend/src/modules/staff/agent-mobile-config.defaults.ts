@@ -65,8 +65,8 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
       ...base,
       client: {
         can_create: false,
-        can_edit: false,
-        can_change_client_location: false,
+        can_edit: true,
+        can_change_client_location: true,
         show_balance: true,
         show_photos: true,
         phone_prefix: "+998",
@@ -78,7 +78,9 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
           territory: true,
           address: true,
           visit_day: true,
-          coordinates: true
+          coordinates: true,
+          inn: true,
+          pinfl: true
         }
       },
       gps: {

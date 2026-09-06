@@ -17,6 +17,7 @@ import {
   STATUS_META,
   fmtTotal,
   statusWorkValue,
+  timesheetRoleLabel,
   type TimesheetRow
 } from "@/components/timesheet/timesheet-shared";
 
@@ -108,12 +109,12 @@ export async function buildTimesheetXlsx(
   wb.creator = "SALEC";
   wb.created = new Date();
   const ws = wb.addWorksheet(`Табель ${month}`.slice(0, 31), {
-    views: [{ state: "frozen", xSplit: 4, ySplit: 1, topLeftCell: "E2" }],
+    views: [{ state: "frozen", xSplit: 6, ySplit: 1, topLeftCell: "G2" }],
     properties: { defaultRowHeight: 16 }
   });
 
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const headers = ["ФИО", "Роль", "Логин", "Итого", ...dayCols];
+  const headers = ["ФИО", "Роль", "Smart KOD", "Направление", "Филиал", "Итого", ...dayCols];
 
   const headerRow = ws.getRow(1);
   headerRow.height = 22;
@@ -130,18 +131,20 @@ export async function buildTimesheetXlsx(
     const total = r.cells.reduce((acc, c) => acc + statusWorkValue(c.status), 0);
 
     row.getCell(1).value = r.fio;
-    row.getCell(2).value = r.role;
-    row.getCell(3).value = r.login;
-    row.getCell(4).value = fmtTotal(total);
-    for (let i = 1; i <= 4; i++) {
+    row.getCell(2).value = timesheetRoleLabel(r.role);
+    row.getCell(3).value = r.code ?? "";
+    row.getCell(4).value = r.direction ?? "";
+    row.getCell(5).value = r.branch ?? "";
+    row.getCell(6).value = fmtTotal(total);
+    for (let i = 1; i <= 6; i++) {
       row.getCell(i).font = { size: 11, name: "Calibri" };
       row.getCell(i).alignment = { vertical: "middle" };
     }
-    row.getCell(4).alignment = { horizontal: "center", vertical: "middle" };
-    row.getCell(4).font = { size: 11, name: "Calibri", bold: true };
+    row.getCell(6).alignment = { horizontal: "center", vertical: "middle" };
+    row.getCell(6).font = { size: 11, name: "Calibri", bold: true };
 
     r.cells.forEach((c, cIdx) => {
-      const cell = row.getCell(5 + cIdx);
+      const cell = row.getCell(7 + cIdx);
       const meta = STATUS_META[c.status];
       // В обоих режимах ячейка = символ из UI-табеля (STATUS_META.short):
       // рабочие значения (1 / 0.5 / 0) — числом (удобно для формул),
@@ -174,10 +177,12 @@ export async function buildTimesheetXlsx(
   });
 
   ws.getColumn(1).width = 26;
-  ws.getColumn(2).width = 18;
+  ws.getColumn(2).width = 16;
   ws.getColumn(3).width = 14;
-  ws.getColumn(4).width = 8;
-  for (let i = 0; i < dayCols.length; i++) ws.getColumn(5 + i).width = 5;
+  ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 14;
+  ws.getColumn(6).width = 8;
+  for (let i = 0; i < dayCols.length; i++) ws.getColumn(7 + i).width = 5;
 
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }

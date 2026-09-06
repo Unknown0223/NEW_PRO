@@ -15,6 +15,7 @@ import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import type { TerritoryNode } from "@/lib/territory-tree";
 import type { WorkSlotListItem, WorkSlotType } from "@/lib/work-slots-types";
+import { slotCodeMatchesType, slotCodeTypeMismatchMessage } from "@/lib/work-slots-types";
 import {
   WorkSlotsLocationFields,
   emptyLocationValues,
@@ -192,10 +193,14 @@ export function EditSlotDialog({
       setError("Код: буквы, цифры или дефис (1–32)");
       return;
     }
+    if (!slotCodeMatchesType(code, slotType)) {
+      setError(slotCodeTypeMismatchMessage(code, slotType));
+      return;
+    }
 
     const changes: Record<string, unknown> = {};
     const l = label.trim() || null;
-    if (code !== (original.slot_code ?? "").trim().toUpperCase()) changes.slot_code = code;
+    // slot_code PATCH backendda qo‘llab-quvvatlanmaydi — faqat type bilan mosligi tekshiriladi
     if (l !== (original.label ?? null)) changes.label = l;
     const origBranches = branchesFromSlot(original);
     if (!sameStringList(branchCodeList, origBranches)) {

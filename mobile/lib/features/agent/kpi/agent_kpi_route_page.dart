@@ -97,6 +97,7 @@ class _AgentKpiRoutePageState extends ConsumerState<AgentKpiRoutePage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'KPI · ${tabelMonthTitle(month)}',
+        useShellDrawer: true,
         showBack: false,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(

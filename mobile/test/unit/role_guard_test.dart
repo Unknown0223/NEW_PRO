@@ -1,97 +1,86 @@
 import 'package:flutter_test/flutter_test.dart';
-
-// Mirror of role_guard logic for unit testing without importing private class.
-String? roleGuard(String role, String location) {
-  const agentRoutes = {
-    '/home', '/profile', '/clients', '/clients/new', '/orders', '/visits',
-    '/report', '/warehouse-stock', '/sync-success', '/manual-sync', '/debtors',
-    '/debtors-by-orders', '/route', '/map', '/search', '/settings',
-    '/draft', '/notifications', '/tabel', '/kpi', '/kpi/calc', '/orders/create',
-    '/client-location',
-  };
-  const expeditorRoutes = {
-    '/home', '/profile', '/visits', '/debtors', '/invoices',
-    '/deliveries', '/payments', '/returns', '/exp-return-by-order',
-    '/exp-unfinished', '/payments-info', '/exp-client-map', '/exp-visits-map',
-  };
-  const cashierRoutes = {
-    '/home',
-    '/profile',
-    '/bank-transfers',
-  };
-
-  Set<String> allowed;
-  switch (role) {
-    case 'expeditor':
-      allowed = expeditorRoutes;
-      break;
-    case 'cashier':
-    case 'operator':
-      allowed = cashierRoutes;
-      break;
-    default:
-      allowed = agentRoutes;
-  }
-
-  if (location == '/home' || location == '/profile') return null;
-  if (role == 'agent' && location.startsWith('/clients/')) return null;
-  if (role == 'agent' && location.startsWith('/kpi')) return null;
-  if (role == 'expeditor' && location.startsWith('/deliveries/')) return null;
-  if (role == 'expeditor' && location.startsWith('/invoices/')) return null;
-  if (role == 'expeditor' && location.startsWith('/exp-client/')) return null;
-  if (role == 'expeditor' && location.startsWith('/exp-debtor-client/')) return null;
-  if (role == 'expeditor' && location.startsWith('/exp-return-by-order/')) return null;
-  if ((role == 'cashier' || role == 'operator') &&
-      location.startsWith('/bank-transfers/')) {
-    return null;
-  }
-  if (allowed.contains(location)) return null;
-  return '/home';
-}
+import 'package:salesdoc_mobile/routing/role_guard.dart';
+import 'package:salesdoc_mobile/features/agent/shell/agent_menu_config.dart';
+import 'package:salesdoc_mobile/features/expeditor/shell/expeditor_drawer.dart';
 
 void main() {
   group('role_guard expeditor isolation', () {
     test('expeditor cannot access agent clients', () {
-      expect(roleGuard('expeditor', '/clients'), '/home');
-      expect(roleGuard('expeditor', '/clients/42'), '/home');
+      expect(roleGuardLocation('expeditor', '/clients'), '/home');
+      expect(roleGuardLocation('expeditor', '/clients/42'), '/home');
     });
 
     test('expeditor can access visits and invoices', () {
-      expect(roleGuard('expeditor', '/visits'), isNull);
-      expect(roleGuard('expeditor', '/invoices'), isNull);
-      expect(roleGuard('expeditor', '/invoices/pd_1_20260614'), isNull);
+      expect(roleGuardLocation('expeditor', '/visits'), isNull);
+      expect(roleGuardLocation('expeditor', '/invoices'), isNull);
+      expect(roleGuardLocation('expeditor', '/invoices/pd_1_20260614'), isNull);
     });
 
     test('expeditor can access delivery detail', () {
-      expect(roleGuard('expeditor', '/deliveries/99'), isNull);
+      expect(roleGuardLocation('expeditor', '/deliveries/99'), isNull);
     });
 
     test('expeditor can access debtor client detail', () {
-      expect(roleGuard('expeditor', '/exp-debtor-client/123'), isNull);
-      expect(roleGuard('expeditor', '/exp-client/123'), isNull);
+      expect(roleGuardLocation('expeditor', '/exp-debtor-client/123'), isNull);
+      expect(roleGuardLocation('expeditor', '/exp-client/123'), isNull);
     });
 
     test('agent can access client detail', () {
-      expect(roleGuard('agent', '/clients/42'), isNull);
+      expect(roleGuardLocation('agent', '/clients/42'), isNull);
     });
 
     test('agent cannot access expeditor deliveries', () {
-      expect(roleGuard('agent', '/deliveries'), '/home');
+      expect(roleGuardLocation('agent', '/deliveries'), '/home');
     });
 
     test('agent can access notifications', () {
-      expect(roleGuard('agent', '/notifications'), isNull);
+      expect(roleGuardLocation('agent', '/notifications'), isNull);
     });
 
     test('agent can access kpi', () {
-      expect(roleGuard('agent', '/kpi'), isNull);
-      expect(roleGuard('agent', '/kpi/calc'), isNull);
+      expect(roleGuardLocation('agent', '/kpi'), isNull);
+      expect(roleGuardLocation('agent', '/kpi/calc'), isNull);
+      expect(roleGuardLocation('agent', '/kpi/route'), isNull);
     });
 
-    test('cashier can access bank transfers', () {
-      expect(roleGuard('cashier', '/bank-transfers'), isNull);
-      expect(roleGuard('cashier', '/bank-transfers/12'), isNull);
-      expect(roleGuard('cashier', '/clients'), '/home');
+    test('every expeditor menu route passes the role guard', () {
+      for (final path in expeditorMenuRoutes) {
+        expect(
+          roleGuardLocation('expeditor', path),
+          isNull,
+          reason: '$path must be allowed for expeditor',
+        );
+      }
+    });
+  });
+
+  group('agent menu destinations are allowed', () {
+    test('every drawer route passes the agent role guard', () {
+      for (final item in agentMenuItems(null)) {
+        if (item.soon || item.route.isEmpty) continue;
+        final path = item.route.split('?').first;
+        expect(
+          roleGuardLocation('agent', path),
+          isNull,
+          reason: 'menu "${item.label}" → $path must be allowed',
+        );
+      }
+    });
+
+    test('every catalog page passes the agent role guard', () {
+      for (final path in agentNavigationPages) {
+        expect(
+          roleGuardLocation('agent', path),
+          isNull,
+          reason: '$path must be allowed for agent',
+        );
+      }
+    });
+
+    test('shell tabs are in the navigation catalog', () {
+      for (final path in agentShellTabPaths) {
+        expect(agentNavigationPages, contains(path));
+      }
     });
   });
 }

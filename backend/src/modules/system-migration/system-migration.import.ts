@@ -16,6 +16,7 @@ import {
   purgeTenantTransactionalForReplace
 } from "./system-migration.import.purge";
 import { importTransactionalTables } from "./system-migration.import.transactional";
+import { importFieldActivityTables } from "./system-migration.import.field";
 import { importClientPhotoReports } from "./system-migration.import.files";
 import {
   applyTenantSettingsExtra,
@@ -268,8 +269,33 @@ export async function applyBackupZip(
       if (skipOpsToAvoidDupes) {
         skipped.push("operatsion tarix (orders/payments) — maqsadda allaqachon bor");
         warnings.push(
-          "Maqsadda buyurtma/to‘lov bor: operatsion tarix import qilinmadi (dublikatdan saqlanish). Spravochniklar merge qilindi. To‘liq restore uchun «almashtirish» (replace) ni tanlang."
+          "Maqsadda buyurtma/to‘lov bor: buyurtma/to‘lov import qilinmadi (dublikatdan saqlanish). To‘liq restore uchun «Yangisini almashtirish» ni tanlang."
         );
+        // Keep: orders/payments o‘tkaziladi, lekin tashrif/GPS/xarajat hali ham qabul qilinadi.
+        try {
+          await report("transactional", 72, "Tashriflar va agent faoliyati…");
+          await prisma.$transaction(
+            async (tx) => {
+              const fieldCounts = await importFieldActivityTables(
+                tx,
+                zip,
+                targetTenantId,
+                refResult!.maps
+              );
+              if (fieldCounts.client_refusals) applied.push("data/client_refusals.json");
+              if (fieldCounts.agent_visits) applied.push("data/agent_visits.json");
+              if (fieldCounts.agent_location_pings) applied.push("data/agent_location_pings.json");
+              if (fieldCounts.expenses) applied.push("data/expenses.json");
+              if (fieldCounts.payment_allocations) applied.push("data/payment_allocations.json");
+            },
+            { timeout: 180_000 }
+          );
+        } catch (e) {
+          if (e instanceof Error && e.message.startsWith("MAP_MISSING:")) {
+            throw new Error(`IMPORT_MAP_ERROR:${e.message.replace("MAP_MISSING:", "")}`);
+          }
+          throw e;
+        }
       } else {
         try {
           await report("transactional", 72, "Buyurtmalar, to‘lovlar, audit…");

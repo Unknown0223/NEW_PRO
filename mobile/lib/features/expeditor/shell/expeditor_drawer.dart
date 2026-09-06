@@ -10,6 +10,20 @@ import '../../../core/ui/agent_ui.dart';
 import '../../auth/auth_provider.dart';
 import '../config/expeditor_config_enforcement.dart';
 
+/// Ekspeditor menyu yo‘nalishlari — bir-biriga o‘tish tekshiruvi.
+const expeditorMenuRoutes = <String>[
+  '/home',
+  '/visits',
+  '/payments',
+  '/exp-return-by-order',
+  '/returns',
+  '/my-returns',
+  '/deliveries',
+  '/exp-unfinished',
+  '/exp-settings',
+  '/profile',
+];
+
 /// Ekspeditor menyu / profil ekrani (shablon MenuScreen — green brand accent).
 class ExpeditorDrawer extends ConsumerStatefulWidget {
   const ExpeditorDrawer({super.key});
@@ -36,14 +50,20 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
     final policy = ExpeditorConfigPolicy.fromMobileConfig(session.mobileConfig);
     final name = (user?.name ?? '').trim();
 
-    void go(String path, {bool push = true}) {
-      Navigator.pop(context);
-      if (path.isEmpty) return;
-      if (push) {
-        context.push(path);
-      } else {
-        context.go(path);
+    void go(String path, {bool push = false}) {
+      if (path.isEmpty) {
+        Navigator.pop(context);
+        return;
       }
+      final router = GoRouter.of(context);
+      Navigator.pop(context);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (push) {
+          router.push(path);
+        } else {
+          router.go(path);
+        }
+      });
     }
 
     return Drawer(
@@ -108,12 +128,12 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                           icon: Icons.home_outlined,
                           label: 'Главная',
                           showDivider: false,
-                          onTap: () => go('/home', push: false),
+                          onTap: () => go('/home'),
                         ),
                         AgentMenuTile(
                           icon: Icons.add_location_alt_outlined,
                           label: 'Дополнительные визиты',
-                          onTap: () => go('/visits', push: false),
+                          onTap: () => go('/visits'),
                         ),
                         if (policy.paymentsEnabled)
                           AgentMenuTile(
@@ -138,7 +158,7 @@ class _ExpeditorDrawerState extends ConsumerState<ExpeditorDrawer> {
                         AgentMenuTile(
                           icon: Icons.inventory_2_outlined,
                           label: 'Остаток в машине',
-                          onTap: () => go('/deliveries', push: false),
+                          onTap: () => go('/deliveries'),
                         ),
                         AgentMenuTile(
                           icon: Icons.history_toggle_off_outlined,

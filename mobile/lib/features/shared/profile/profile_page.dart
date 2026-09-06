@@ -17,7 +17,6 @@ import '../../../core/ui/agent_ui.dart';
 import '../../auth/biometric_quick_login_tile.dart';
 import '../../auth/auth_provider.dart';
 import '../../agent/shell/agent_app_bar.dart';
-import '../../agent/shell/agent_scaffold_key.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -258,12 +257,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: isAgent
-          ? AgentAppBar(
+          ? const AgentAppBar(
               title: 'Редактировать профиль',
               showBack: true,
-              actions: [
-                AgentIconButton(icon: Icons.menu, onPressed: () => openAgentMenu(context)),
-              ],
+              useShellDrawer: true,
             )
           : const AgentAppBar(
               title: 'Редактировать профиль',

@@ -1,5 +1,8 @@
 import { prisma } from "../../config/database";
 import type { AutoAssignStatus, LockType, PendingAssignmentRow } from "./work-slots.types";
+import { contractLockBlocksOtherAgent } from "./work-slots.contract-lock";
+
+export { contractLockBlocksOtherAgent } from "./work-slots.contract-lock";
 
 export async function patchAssignmentLock(
   tenantId: number,
@@ -132,11 +135,7 @@ export async function assertOrderAgentAllowedForClient(
     where: { tenant_id: tenantId, client_id: clientId, slot: 1 },
     select: { lock_type: true, agent_id: true }
   });
-  if (
-    a?.lock_type === "contract" &&
-    a.agent_id != null &&
-    a.agent_id !== agentId
-  ) {
+  if (contractLockBlocksOtherAgent(a, agentId)) {
     throw new Error("CONTRACT_AGENT_MISMATCH");
   }
 }

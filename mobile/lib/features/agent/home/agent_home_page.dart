@@ -180,6 +180,7 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: S.home,
+        useShellDrawer: true,
         actions: [
           const AgentNotificationsBell(),
           AgentIconButton(

@@ -43,3 +43,28 @@ export function normalizeSlotCode(raw: string): string {
 export function isValidSlotCode(code: string): boolean {
   return /^[A-Z0-9-]{1,32}$/.test(code);
 }
+
+/** Smart format: `V-ANDIJON-001` — birinchi harf slot tipiga mos kelishi shart. Custom kodlar (PMXRZ002) ruxsat. */
+const SMART_CODE_RE = /^([A-Z])-([A-Z0-9]+)-(\d{1,6})$/;
+
+export function parseSmartSlotCodePrefix(code: string): string | null {
+  const m = SMART_CODE_RE.exec(normalizeSlotCode(code));
+  return m?.[1] ?? null;
+}
+
+export function expectedSmartPrefixForSlotType(slotType: string): string | null {
+  if (!isWorkSlotType(slotType)) return null;
+  return SLOT_TYPE_CODE_PREFIX[slotType];
+}
+
+/**
+ * Agar kod smart formatda bo‘lsa — prefiks slot_type bilan mos kelishi shart.
+ * Mos kelmasa BAD_SLOT_CODE_PREFIX (masalan sales_director o‘rniga N-...).
+ */
+export function assertSlotCodeMatchesType(code: string, slotType: string): void {
+  const prefix = parseSmartSlotCodePrefix(code);
+  if (!prefix) return;
+  const expected = expectedSmartPrefixForSlotType(slotType);
+  if (!expected) return;
+  if (prefix !== expected) throw new Error("BAD_SLOT_CODE_PREFIX");
+}

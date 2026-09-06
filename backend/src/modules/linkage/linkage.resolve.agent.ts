@@ -5,7 +5,9 @@ import {
   collectAllTrueCategoryIds,
   parseProductEntitlementRules
 } from "./linkage.shared";
+import { collectCashDeskIdsForUsers } from "./linkage.cash-desk-ids";
 import { collectWarehouseIdsForUsers } from "./linkage.warehouse-ids";
+import { resolveIdsPreferBindings } from "./workplace-bindings";
 
 export async function resolveByAgent(
   tenantId: number,
@@ -19,8 +21,17 @@ export async function resolveByAgent(
   product_ids: Set<number>;
   product_restricted: boolean;
 }> {
-  const [agentRow, clientsByPrimary, clientsBySlots, extraWh, whByOrders, cashLinks, expByClientSlots, expByOrders] =
-    await Promise.all([
+  const [
+    agentRow,
+    clientsByPrimary,
+    clientsBySlots,
+    extraWh,
+    whByOrders,
+    cashDeskIds,
+    slotEntRow,
+    expByClientSlots,
+    expByOrders
+  ] = await Promise.all([
       prisma.user.findFirst({
         where: { tenant_id: tenantId, id: selectedAgentId, role: "agent", is_active: true },
         select: { id: true, agent_entitlements: true }
@@ -44,10 +55,15 @@ export async function resolveByAgent(
         distinct: ["warehouse_id"],
         select: { warehouse_id: true }
       }),
-      prisma.cashDeskUserLink.findMany({
-        where: { user_id: selectedAgentId, cash_desk: { tenant_id: tenantId, is_active: true } },
-        distinct: ["cash_desk_id"],
-        select: { cash_desk_id: true }
+      collectCashDeskIdsForUsers(tenantId, [selectedAgentId]),
+      prisma.slotUserLink.findFirst({
+        where: {
+          tenant_id: tenantId,
+          user_id: selectedAgentId,
+          ended_at: null,
+          slot: { tenant_id: tenantId, deleted_at: null }
+        },
+        select: { slot: { select: { entitlements: true } } }
       }),
       prisma.clientAgentAssignment.findMany({
         where: { tenant_id: tenantId, agent_id: selectedAgentId, expeditor_user_id: { not: null } },
@@ -63,11 +79,14 @@ export async function resolveByAgent(
 
   const client_ids = new Set<number>(clientsByPrimary.map((r) => r.id));
   for (const r of clientsBySlots) client_ids.add(r.client_id);
-  const warehouse_ids = new Set<number>(extraWh);
-  for (const r of whByOrders) {
-    if (r.warehouse_id != null) warehouse_ids.add(r.warehouse_id);
-  }
-  const cash_desk_ids = new Set<number>(cashLinks.map((r) => r.cash_desk_id));
+  // Joy bog‘lamasi bo‘lsa — tarixdagi omborlar allow-listni kengaytirmasin.
+  const warehouse_ids = new Set<number>(
+    resolveIdsPreferBindings(
+      extraWh,
+      whByOrders.map((r) => r.warehouse_id).filter((id): id is number => id != null)
+    )
+  );
+  const cash_desk_ids = new Set<number>(cashDeskIds);
   const expeditor_ids = new Set<number>();
   for (const r of expByClientSlots) {
     if (r.expeditor_user_id != null) expeditor_ids.add(r.expeditor_user_id);
@@ -88,7 +107,9 @@ export async function resolveByAgent(
     };
   }
 
-  const parsedRules = parseProductEntitlementRules(agentRow.agent_entitlements);
+  // Work-slot entitlements — manba; user mirror eski bo‘lsa ham product_rules qo‘llansin.
+  const entitlementsSource = slotEntRow?.slot.entitlements ?? agentRow.agent_entitlements;
+  const parsedRules = parseProductEntitlementRules(entitlementsSource);
   const productIdSet = new Set<number>(parsedRules.productIds);
   if (parsedRules.allCategoryIds.length > 0) {
     const categoryRows = await prisma.productCategory.findMany({

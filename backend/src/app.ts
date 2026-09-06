@@ -37,11 +37,11 @@ export function buildApp() {
   app.register(helmet, helmetOptions);
   app.register(multipart, {
     limits: {
-      // Zaxira ZIP (foto URI) APK dan ham katta bo‘lishi mumkin — 256 MB.
+      // Migratsiya ZIP (siqilgan fotolar) — 512 MB gacha.
       fileSize: Math.max(
         env.MULTIPART_MAX_FILE_BYTES,
         env.MULTIPART_APK_MAX_BYTES,
-        256 * 1024 * 1024
+        512 * 1024 * 1024
       )
     }
   });

@@ -14,16 +14,20 @@ import {
   weekdayOf,
   WEEKDAY_SHORT_RU,
   WORK_STATUS_BY_VALUE,
+  timesheetRoleLabel,
   type AttendanceStatus,
   type TimesheetCell,
   type TimesheetRow,
   isAfterSlotLeave
 } from "@/components/timesheet/timesheet-shared";
 
-/** Смещения (px) для «липких» левых колонок: чекбокс · Должность · Сотрудник. */
+/** Смещения (px) для «липких» левых колонок: чекбокс · ФИО · Роль · Smart KOD · Направление · Филиал. */
 const STICKY_CHECKBOX = 0;
-const STICKY_ROLE = 40;
-const STICKY_NAME = 148;
+const STICKY_FIO = 40;
+const STICKY_ROLE = 220;
+const STICKY_CODE = 330;
+const STICKY_DIRECTION = 430;
+const STICKY_BRANCH = 550;
 
 export function TimesheetTable({
   rows,
@@ -94,18 +98,36 @@ export function TimesheetTable({
               />
             </th>
             <th
-              className="sticky z-40 min-w-[108px] border-b border-r bg-muted px-3 py-2 text-left font-semibold"
-              style={{ left: STICKY_ROLE }}
-            >
-              Должность
-            </th>
-            <th
-              className="sticky z-40 min-w-[240px] border-b border-r bg-muted px-3 py-2 text-left"
-              style={{ left: STICKY_NAME }}
+              className="sticky z-40 min-w-[180px] border-b border-r bg-muted px-3 py-2 text-left"
+              style={{ left: STICKY_FIO }}
             >
               <button type="button" onClick={onToggleSort} className="flex items-center gap-1 font-semibold hover:text-primary">
-                Сотрудник <SortIcon className="size-3 opacity-70" />
+                ФИО <SortIcon className="size-3 opacity-70" />
               </button>
+            </th>
+            <th
+              className="sticky z-40 min-w-[110px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"
+              style={{ left: STICKY_ROLE }}
+            >
+              Роль
+            </th>
+            <th
+              className="sticky z-40 min-w-[100px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"
+              style={{ left: STICKY_CODE }}
+            >
+              Smart KOD
+            </th>
+            <th
+              className="sticky z-40 min-w-[120px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"
+              style={{ left: STICKY_DIRECTION }}
+            >
+              Направление
+            </th>
+            <th
+              className="sticky z-40 min-w-[110px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"
+              style={{ left: STICKY_BRANCH }}
+            >
+              Филиал
             </th>
             <th className="min-w-[54px] border-b border-r bg-muted px-2 py-2 text-center font-semibold">Итого</th>
             {days.map((d) => {
@@ -151,7 +173,14 @@ export function TimesheetTable({
             const checked = selectedRows.has(r.user_id);
             const departed = Boolean(r.is_departed);
             return (
-              <tr key={r.user_id} className={cn("group", checked && "bg-primary/[0.04]", departed && "bg-red-50/40 dark:bg-red-950/10")}>
+              <tr
+                key={r.user_id}
+                className={cn(
+                  "group",
+                  checked && "bg-primary/[0.04]",
+                  departed && "bg-red-50/50 text-red-700 dark:bg-red-950/20 dark:text-red-300"
+                )}
+              >
                 <td
                   className="sticky z-20 w-10 border-b border-r bg-card px-0 py-1.5 text-center group-hover:bg-muted/60"
                   style={{ left: STICKY_CHECKBOX }}
@@ -166,20 +195,7 @@ export function TimesheetTable({
                 </td>
                 <td
                   className="sticky z-20 border-b border-r bg-card px-3 py-1.5 group-hover:bg-muted/60"
-                  style={{ left: STICKY_ROLE }}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium",
-                      departed ? "text-red-600 dark:text-red-400" : "text-foreground/80"
-                    )}
-                  >
-                    {r.role || "—"}
-                  </span>
-                </td>
-                <td
-                  className="sticky z-20 border-b border-r bg-card px-3 py-1.5 group-hover:bg-muted/60"
-                  style={{ left: STICKY_NAME }}
+                  style={{ left: STICKY_FIO }}
                 >
                   <div className="flex items-center gap-2.5">
                     <div
@@ -190,19 +206,50 @@ export function TimesheetTable({
                     >
                       {initialsOf(r.fio)}
                     </div>
-                    <div className="min-w-0">
-                      <div
-                        className={cn("truncate text-xs font-semibold", departed && "text-red-600 dark:text-red-400")}
-                        title={departed && r.slot_left_at ? `${r.fio} · ушёл ${r.slot_left_at}` : r.fio}
-                      >
-                        {r.fio}
-                        {departed ? " · ушёл" : ""}
-                      </div>
-                      <div className={cn("truncate font-mono text-[10px]", departed ? "text-red-500/80" : "text-muted-foreground")}>
-                        {r.login}
-                      </div>
+                    <div
+                      className={cn(
+                        "min-w-0 truncate text-xs font-semibold",
+                        r.role === "supervisor" && "text-violet-700 dark:text-violet-300",
+                        departed && "text-red-600 dark:text-red-400"
+                      )}
+                      title={departed && r.slot_left_at ? `${r.fio} · ушёл ${r.slot_left_at}` : r.fio}
+                    >
+                      {r.fio}
+                      {departed ? " · ушёл" : ""}
                     </div>
                   </div>
+                </td>
+                <td
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  style={{ left: STICKY_ROLE }}
+                >
+                  <span
+                    className={cn(
+                      "truncate",
+                      r.role === "supervisor" && "font-medium text-violet-700 dark:text-violet-300"
+                    )}
+                    title={r.role}
+                  >
+                    {timesheetRoleLabel(r.role)}
+                  </span>
+                </td>
+                <td
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 font-mono text-[11px] group-hover:bg-muted/60"
+                  style={{ left: STICKY_CODE }}
+                >
+                  {r.code?.trim() || "—"}
+                </td>
+                <td
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  style={{ left: STICKY_DIRECTION }}
+                >
+                  {r.direction?.trim() || "—"}
+                </td>
+                <td
+                  className="sticky z-20 border-b border-r bg-card px-2 py-1.5 text-[11px] group-hover:bg-muted/60"
+                  style={{ left: STICKY_BRANCH }}
+                >
+                  {r.branch?.trim() || "—"}
                 </td>
                 <td className="border-b border-r bg-muted/40 text-center font-mono font-bold text-primary">{fmtTotal(workedTotal(r))}</td>
                 {r.cells.map((c) => {
@@ -211,7 +258,8 @@ export function TimesheetTable({
                   const changed = isPending(r.user_id, c.date);
                   const sun = isSunday(c.date);
                   const future = c.date > today;
-                  const leaveLocked = isAfterSlotLeave(r, c.date) && !canOverrideSlotLeave;
+                  const leaveLocked =
+                    (Boolean(r.is_departed) || isAfterSlotLeave(r, c.date)) && !canOverrideSlotLeave;
                   const showFuture = future && !changed;
                   const sel = editMode && selectedDays.has(c.day);
                   const isSingle = singleDay === c.day;
@@ -241,7 +289,11 @@ export function TimesheetTable({
                     return (
                       <td key={c.date} className={tdClass}>
                         <div
-                          title={`${r.fio} · ${fmtRuDate(c.date)} — день после ухода со слота (только admin)`}
+                          title={
+                            r.is_departed
+                              ? `${r.fio} · снят с рабочего места — табель заморожен (только admin)`
+                              : `${r.fio} · ${fmtRuDate(c.date)} — день после ухода со слота (только admin)`
+                          }
                           className={cn("grid h-8 w-full place-items-center rounded-md font-mono text-[11px] font-bold", meta.cell)}
                         >
                           {meta.short}

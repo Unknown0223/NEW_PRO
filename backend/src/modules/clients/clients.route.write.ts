@@ -8,6 +8,7 @@ import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
 import { createClientMinimal, updateClientFields } from "./clients.service";
+import { clientUniqueHttp } from "./clients.write.uniques";
 import { bulkActiveBodySchema, createClientBodySchema } from "./clients.route.schemas";
 
 export async function registerClientWriteRoutes(app: FastifyInstance) {
@@ -60,7 +61,9 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
           client_format: parsed.data.client_format,
           sales_channel: parsed.data.sales_channel,
           product_category_ref: parsed.data.product_category_ref,
-          logistics_service: parsed.data.logistics_service
+          logistics_service: parsed.data.logistics_service,
+          inn: parsed.data.inn,
+          client_code: parsed.data.client_code
         });
         await updateClientFields(
           request.tenant!.id,
@@ -86,17 +89,9 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "VALIDATION") {
           return sendApiError(reply, request, 400, "ValidationError");
         }
-        if (e instanceof Error && e.message === "DUPLICATE_PHONE") {
-          return sendApiError(reply, request, 409, "DuplicatePhone", "Bu telefon mavjud.");
-        }
-        if (e instanceof Error && e.message === "DUPLICATE_NAME") {
-          return sendApiError(
-            reply,
-            request,
-            409,
-            "DuplicateName",
-            "Shu nomga o‘xshash klient mavjud."
-          );
+        const uniq = e instanceof Error ? clientUniqueHttp(e.message) : null;
+        if (uniq) {
+          return sendApiError(reply, request, 409, uniq.error, uniq.message);
         }
         if (e instanceof Error && e.message === "DUPLICATE_AGENT_DIRECTION") {
           return sendApiError(
@@ -198,6 +193,8 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        const uniq = clientUniqueHttp(msg);
+        if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "DUPLICATE_AGENT_DIRECTION") {
           return sendApiError(
             reply,

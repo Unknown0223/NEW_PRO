@@ -1,8 +1,8 @@
 "use client";
 
-import { GROUP_PROCESSING_IDS_STORAGE_KEY } from "@/components/clients/group-processing/group-processing-actions";
+import { GROUP_PROCESSING_IDS_STORAGE_KEY, goToClientsKeepingSelection } from "@/components/clients/group-processing/group-processing-actions";
+import { GpMasterApplyButton } from "@/components/clients/group-processing/group-processing-apply-btn";
 import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
@@ -14,7 +14,6 @@ import { STALE } from "@/lib/query-stale";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -380,8 +379,13 @@ export function GroupProcessingTeamWorkspace() {
     });
   };
 
-  const applyMasterToSelected = (teamIdx: number) => {
-    const m = master[teamIdx] ?? emptySlot();
+  type TeamApplyField = "agentId" | "expeditorUserId" | "weekdays";
+  const ALL_TEAM_FIELDS: TeamApplyField[] = ["agentId", "expeditorUserId", "weekdays"];
+
+  const applyMasterToSelected = (opts?: { teamIdx?: number; fields?: TeamApplyField[] }) => {
+    const teamIndices =
+      opts?.teamIdx != null ? [opts.teamIdx] : Array.from({ length: teamCount }, (_, i) => i);
+    const keys = opts?.fields ?? ALL_TEAM_FIELDS;
     const targets = selectedIds.size ? selectedIds : new Set(rows.map((r) => r.id));
     let applied = 0;
     let skipped = 0;
@@ -389,23 +393,39 @@ export function GroupProcessingTeamWorkspace() {
     for (const id of targets) {
       const slots = [...(nextDraft[id] ?? [emptySlot()])];
       while (slots.length < teamCount) slots.push(emptySlot());
-      if (m.agentId && agentUsedOnOtherDirection(slots, teamIdx, m.agentId)) {
-        skipped += 1;
-        continue;
+      let changed = false;
+      for (const teamIdx of teamIndices) {
+        const m = master[teamIdx] ?? emptySlot();
+        if (keys.includes("agentId") && m.agentId && agentUsedOnOtherDirection(slots, teamIdx, m.agentId)) {
+          skipped += 1;
+          continue;
+        }
+        const cur = slots[teamIdx] ?? emptySlot();
+        const nextSlot: TeamSlot = { ...cur };
+        if (keys.includes("agentId")) {
+          nextSlot.agentId = m.agentId;
+          nextSlot.agentOrphanLabel = undefined;
+        }
+        if (keys.includes("expeditorUserId")) {
+          nextSlot.expeditorUserId = m.expeditorUserId;
+          nextSlot.expeditorOrphanLabel = undefined;
+        }
+        if (keys.includes("weekdays")) {
+          nextSlot.weekdays = [...m.weekdays];
+        }
+        slots[teamIdx] = nextSlot;
+        changed = true;
       }
-      slots[teamIdx] = {
-        agentId: m.agentId,
-        expeditorUserId: m.expeditorUserId,
-        weekdays: [...m.weekdays]
-      };
-      nextDraft[id] = slots;
-      applied += 1;
+      if (changed) {
+        nextDraft[id] = slots;
+        applied += 1;
+      }
     }
     setDraftByClient(nextDraft);
     setStatusMsg(
       skipped > 0
-        ? `Направление ${teamIdx + 1}: ${applied} ta qo‘llandi, ${skipped} ta o‘tkazib yuborildi (agent boshqa yo‘nalishda bor)`
-        : `Направление ${teamIdx + 1}: ${applied} ta klientga qo‘llandi (saqlash kerak)`
+        ? `Применено к ${applied} клиентам, пропущено: ${skipped} (агент уже в другом направлении). Нужно сохранить.`
+        : `Применено к ${applied} клиентам (нужно сохранить)`
     );
   };
 
@@ -515,7 +535,7 @@ export function GroupProcessingTeamWorkspace() {
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       if (res.ok > 0 && res.failed.length === 0 && res.clearedNotes.length === 0) {
-        router.push("/clients");
+        goToClientsKeepingSelection(router.push, tenantSlug, seedIds);
         return;
       }
       const clearedHint =
@@ -602,15 +622,9 @@ export function GroupProcessingTeamWorkspace() {
               })}
             </select>
             {opts?.master ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="mt-1 h-6 w-full max-w-[11rem] text-[10px]"
-                onClick={() => applyMasterToSelected(teamIdx)}
-              >
-                Qo‘llash
-              </Button>
+              <GpMasterApplyButton
+                onClick={() => applyMasterToSelected({ teamIdx, fields: ["agentId"] })}
+              />
             ) : null}
           </td>
           <td className="border-l border-slate-100 px-2 py-2 align-middle">
@@ -634,9 +648,19 @@ export function GroupProcessingTeamWorkspace() {
                 </option>
               ))}
             </select>
+            {opts?.master ? (
+              <GpMasterApplyButton
+                onClick={() => applyMasterToSelected({ teamIdx, fields: ["expeditorUserId"] })}
+              />
+            ) : null}
           </td>
           <td className="border-l border-slate-100 px-2 py-2 align-middle">
             {renderWeekdays(s.weekdays, toggleDay)}
+            {opts?.master ? (
+              <GpMasterApplyButton
+                onClick={() => applyMasterToSelected({ teamIdx, fields: ["weekdays"] })}
+              />
+            ) : null}
           </td>
         </Fragment>
       );
@@ -659,8 +683,8 @@ export function GroupProcessingTeamWorkspace() {
             ) : null}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Shart: har bir yo‘nalishda klientga faqat <b>bitta</b> agent; bir xil agent boshqa yo‘nalishda
-            takrorlanmaydi.
+            Правило: в каждом направлении у клиента только <b>один</b> агент; тот же агент
+            не повторяется в другом направлении.
           </p>
           {statusMsg ? (
             <p
@@ -674,9 +698,14 @@ export function GroupProcessingTeamWorkspace() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/clients" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}
+          >
             Вернуться обратно
-          </Link>
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -741,7 +770,7 @@ export function GroupProcessingTeamWorkspace() {
         ) : !rows.length ? (
           <div className="space-y-2 p-6 text-sm text-muted-foreground">
             <p>Нет клиентов. Сначала выберите клиентов в списке или откройте обработку с ids.</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push("/clients")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToClientsKeepingSelection(router.push, tenantSlug, seedIds)}>
               К списку клиентов
             </Button>
           </div>
@@ -818,9 +847,12 @@ export function GroupProcessingTeamWorkspace() {
             <tbody>
               <tr className="border-b border-slate-300 bg-emerald-50/60">
                 <td className="px-2 py-2" colSpan={4}>
-                  <span className="text-[11px] font-semibold text-emerald-800">
-                    Общая строка (для выбранных)
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold text-emerald-800">
+                      Общая строка (для выбранных)
+                    </span>
+                    <GpMasterApplyButton all onClick={() => applyMasterToSelected()} />
+                  </div>
                 </td>
                 {renderDirectionCells(master, patchMaster, { master: true })}
               </tr>

@@ -51,7 +51,7 @@ function renderOrderBlock(
   const title =
     template === "nakladnoy_warehouse"
       ? "Загруз зав.склада 5.1.8 (PDF)"
-      : "Накладные 2.1.0 (PDF)";
+      : "Накладные 2.1.7 (PDF)";
   doc
     .font("Helvetica-Bold")
     .fontSize(12)

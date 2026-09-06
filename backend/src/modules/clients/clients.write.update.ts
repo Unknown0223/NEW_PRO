@@ -20,6 +20,8 @@ import {
   parseOptionalLatitude,
   parseOptionalLongitude
 } from "./clients.write.helpers";
+import { applyTerritoryHintsToClientInput } from "./clients.territory-sync";
+import { throwIfClientUniqueConflicts } from "./clients.write.uniques";
 
 export async function updateClientFields(
   tenantId: number,
@@ -35,6 +37,19 @@ export async function updateClientFields(
   }
 
   const skipLegacyAgentFields = input.agent_assignments !== undefined;
+
+  /** Forma shahar hintidan область ko‘rsatishi mumkin — DBda bo‘sh qolmasin. */
+  const hinted = await applyTerritoryHintsToClientInput(tenantId, {
+    city: input.city !== undefined ? input.city : existing.city,
+    region: input.region !== undefined ? input.region : existing.region,
+    zone: input.zone !== undefined ? input.zone : existing.zone
+  });
+  if (hinted.region && !(input.region !== undefined ? input.region?.trim() : existing.region?.trim())) {
+    input = { ...input, region: hinted.region };
+  }
+  if (hinted.zone && !(input.zone !== undefined ? input.zone?.trim() : existing.zone?.trim())) {
+    input = { ...input, zone: hinted.zone };
+  }
 
   const data: Prisma.ClientUncheckedUpdateInput = {};
   if (input.credit_limit !== undefined) {
@@ -231,6 +246,54 @@ export async function updateClientFields(
   const hasAssignments = input.agent_assignments !== undefined;
   if (!hasClientScalars && !hasAssignments) {
     throw new Error("EMPTY");
+  }
+
+  if (hasClientScalars) {
+    const nameTouched = data.name !== undefined;
+    const territoryTouched =
+      data.region !== undefined || data.zone !== undefined || data.city !== undefined;
+    const innTouched = data.inn !== undefined;
+    const pinflTouched = data.client_pinfl !== undefined;
+    const codeTouched = data.client_code !== undefined;
+    const phoneTouched = data.phone !== undefined || data.phone_normalized !== undefined;
+    const identityTouched = nameTouched || territoryTouched || innTouched || pinflTouched;
+
+    const nextName = typeof data.name === "string" ? data.name : existing.name;
+    const nextRegion =
+      data.region !== undefined ? (data.region as string | null) : existing.region;
+    const nextZone = data.zone !== undefined ? (data.zone as string | null) : existing.zone;
+    const nextCity = data.city !== undefined ? (data.city as string | null) : existing.city;
+    const nextInn = data.inn !== undefined ? (data.inn as string | null) : existing.inn;
+    const nextPinfl =
+      data.client_pinfl !== undefined
+        ? (data.client_pinfl as string | null)
+        : existing.client_pinfl;
+    const nextCode =
+      data.client_code !== undefined
+        ? (data.client_code as string | null)
+        : existing.client_code;
+    const nextPhone =
+      data.phone !== undefined ? (data.phone as string | null) : existing.phone;
+    const nextPhoneNorm =
+      data.phone_normalized !== undefined
+        ? (data.phone_normalized as string | null)
+        : existing.phone_normalized;
+
+    await throwIfClientUniqueConflicts(
+      tenantId,
+      {
+        name: identityTouched ? nextName : undefined,
+        phone: phoneTouched ? nextPhone : undefined,
+        phone_normalized: phoneTouched ? nextPhoneNorm : undefined,
+        inn: innTouched || identityTouched ? nextInn : undefined,
+        client_code: codeTouched ? nextCode : undefined,
+        client_pinfl: pinflTouched || identityTouched ? nextPinfl : undefined,
+        region: identityTouched ? nextRegion : undefined,
+        zone: identityTouched ? nextZone : undefined,
+        city: identityTouched ? nextCity : undefined
+      },
+      id
+    );
   }
 
   const addressTouched = clientUpdateTouchesAddress(input as Record<string, unknown>);

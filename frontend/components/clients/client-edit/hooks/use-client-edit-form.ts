@@ -454,8 +454,10 @@ export function useClientEditForm({
     if (!c) return;
     const h = pickCityTerritoryHint(hints, c);
     if (!h) return;
-    if (h.region_stored) setRegion(h.region_stored);
-    if (h.zone_stored) setZone(h.zone_stored);
+    // Faqat DBda bo‘sh maydonlarni to‘ldiramiz — saqlangan qiymatni yashirmaymiz.
+    // (Ilgari har doim overwrite qilinar edi: UI da область bor, DBda yo‘q → report N/A.)
+    if (!client.region?.trim() && h.region_stored) setRegion(h.region_stored);
+    if (!client.zone?.trim() && h.zone_stored) setZone(h.zone_stored);
   }, [clientQ.data, refsQ.data?.city_territory_hints]);
 
   const mutation = useMutation({

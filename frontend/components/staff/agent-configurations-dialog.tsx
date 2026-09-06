@@ -139,11 +139,13 @@ function ConfigSectionTitle({ children }: { children: ReactNode }) {
 function ConfigCheckRow({
   checked,
   onChange,
-  label
+  label,
+  hint
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
+  hint?: string;
 }) {
   return (
     <label
@@ -158,7 +160,10 @@ function ConfigCheckRow({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <span className="select-none text-[13px] leading-snug text-foreground/95">{label}</span>
+      <span className="select-none text-[13px] leading-snug text-foreground/95">
+        {label}
+        {hint ? <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span> : null}
+      </span>
     </label>
   );
 }
@@ -394,6 +399,11 @@ export function AgentConfigurationsDialog({
                       setDraft((d) => setDraftPath(d, "client", (c) => ({ ...c, [k]: v })))
                     }
                     label={label}
+                    hint={
+                      k === "require_new_client_approval"
+                        ? "Вкл — новый клиент сразу активен. Выкл — создаётся как неактивный."
+                        : undefined
+                    }
                   />
                 ))}
               </div>

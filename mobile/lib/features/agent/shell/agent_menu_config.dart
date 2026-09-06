@@ -74,3 +74,36 @@ bool agentShellHidesBottomNav(String location) {
   if (location.startsWith('/kpi/route/days')) return true;
   return false;
 }
+
+/// Menyu + pastki tab + asosiy sahifalar — bir-biriga o‘tish tekshiruvi.
+const agentNavigationPages = <String>[
+  '/home',
+  '/visits',
+  '/orders',
+  '/kpi',
+  '/kpi/route',
+  '/report',
+  '/clients',
+  '/clients/new',
+  '/debtors',
+  '/debtors-by-orders',
+  '/warehouse-stock',
+  '/draft',
+  '/map',
+  '/settings',
+  '/tabel',
+  '/profile',
+  '/notifications',
+  '/orders/create',
+  '/orders/special',
+  '/search',
+  '/route',
+];
+
+const agentShellTabPaths = <String>[
+  '/home',
+  '/visits',
+  '/orders',
+  '/kpi',
+  '/kpi/route',
+];

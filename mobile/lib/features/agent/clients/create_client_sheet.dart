@@ -16,17 +16,25 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/clients/client_outlet_filters.dart';
+import '../../../core/clients/client_local_uniques.dart';
 import '../route/agent_route_provider.dart';
 import '../route/route_planning_provider.dart';
 import 'clients_list_provider.dart';
 import 'client_dynamic_form.dart';
 
-Future<bool?> showCreateClientSheet(BuildContext context) {
-  return showModalBottomSheet<bool>(
+Future<CreateClientSheetResult?> showCreateClientSheet(BuildContext context) {
+  return showModalBottomSheet<CreateClientSheetResult>(
     context: context,
     isScrollControlled: true,
     builder: (ctx) => const _CreateClientSheet(),
   );
+}
+
+class CreateClientSheetResult {
+  final int? clientId;
+  final bool createOrder;
+  const CreateClientSheetResult({this.clientId, this.createOrder = false});
 }
 
 class _CreateClientSheet extends ConsumerStatefulWidget {
@@ -112,6 +120,19 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       }
 
       final visitWeekdays = ClientDynamicFormFields.visitWeekdaysFromControllers(_clientCfg, _controllers);
+      final localDup = findLocalClientDuplicateMessage(
+        await AppDatabase().getAllClients(activeOnly: false),
+        name: name,
+        phone: phone,
+        inn: body['inn']?.toString(),
+        clientPinfl: body['client_pinfl']?.toString(),
+        clientCode: body['client_code']?.toString(),
+        region: body['region']?.toString(),
+      );
+      if (localDup != null) {
+        if (mounted) setState(() => _error = localDup);
+        return;
+      }
       final row = await ref.read(mobileApiProvider).createClient(slug, {
         'name': name,
         'phone': phone,
@@ -144,19 +165,40 @@ class _CreateClientSheetState extends ConsumerState<_CreateClientSheet> {
       ref.read(outletDebtsOnlyProvider.notifier).state = false;
       final todayWd = serverTodayWeekday();
       ref.read(outletWeekdayTabProvider.notifier).state =
-          visitWeekdays.contains(todayWd) ? todayWd : 0;
+          weekdayTabAfterCreatedClient(visitWeekdays, todayWd);
 
-      if (mounted) {
-        if (_clientCfg.requireNewClientApproval || isActive == false) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.'),
-              backgroundColor: AppColors.info,
-            ),
-          );
-        }
-        Navigator.pop(context, true);
+      if (!mounted) return;
+      final pending = isActive == false;
+      if (pending) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.'),
+            backgroundColor: AppColors.info,
+          ),
+        );
+        Navigator.pop(context, CreateClientSheetResult(clientId: (row['id'] as num?)?.toInt()));
+        return;
       }
+
+      final createOrder = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Клиент добавлен'),
+          content: const Text('Yangi savdo nuqtasi uchun buyurtma yaratilsinmi?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать заказ')),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        CreateClientSheetResult(
+          clientId: (row['id'] as num?)?.toInt(),
+          createOrder: createOrder == true,
+        ),
+      );
     } on UnauthorizedException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {

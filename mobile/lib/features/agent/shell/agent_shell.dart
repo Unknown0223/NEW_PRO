@@ -26,6 +26,7 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/notifications/notifications_day_rollover.dart';
 import '../../../core/time/work_region_time.dart';
 import '../orders/held_orders_provider.dart';
+import '../orders/create_order_exit_guard.dart';
 import 'agent_menu_config.dart';
 
 /// Agent ilova qobig‘i: drawer + shablon pastki navigatsiya.
@@ -66,6 +67,9 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
       ref.read(authStateProvider.notifier).refreshMobileConfig();
       ref.invalidate(syncCountTodayProvider);
       unawaited(ref.read(notificationsDayRolloverProvider).checkNow());
+      try {
+        unawaited(ref.read(gpsTrackerProvider.notifier).flushPendingLocationPings());
+      } catch (_) {}
     }
   }
 
@@ -138,18 +142,24 @@ class _AgentShellState extends ConsumerState<AgentShell> with WidgetsBindingObse
           : AgentBottomNav(
               selectedIndex: _tabIndex(loc),
               onTab: (i) {
-                switch (i) {
-                  case 0:
-                    context.go('/home');
-                  case 1:
-                    context.go('/visits');
-                  case 2:
-                    context.go('/orders');
-                  case 3:
-                    context.go('/kpi');
-                  case 4:
-                    context.go('/kpi/route');
-                }
+                const paths = [
+                  '/home',
+                  '/visits',
+                  '/orders',
+                  '/kpi',
+                  '/kpi/route',
+                ];
+                if (i < 0 || i >= paths.length) return;
+                final path = paths[i];
+                final router = GoRouter.of(context);
+                final loc = GoRouterState.of(context).uri.path;
+                final container = ProviderScope.containerOf(context);
+                unawaited(leaveCreateOrderThenGo(
+                  container: container,
+                  go: router.go,
+                  path: path,
+                  currentLocation: loc,
+                ));
               },
             ),
     );

@@ -33,14 +33,11 @@ String defaultBonusModeKey(OrdersConfig orders) {
 
 bool isBonusModeKeyAllowed(OrdersConfig orders, String modeKey) {
   // Manual bonus rejim olib tashlangan — faqat auto | none.
+  // «Без бонуса» har doim (skidkadagi «Без скидки» kabi) — fill mode dan qat’i nazar.
   if (modeKey == 'manual') return false;
-  switch (bonusFillPolicyFromOrders(orders)) {
-    case BonusFillPolicy.free:
-      return modeKey == 'auto' || modeKey == 'none';
-    case BonusFillPolicy.allRequired:
-    case BonusFillPolicy.autoFillRemaining:
-      return modeKey == 'auto';
-  }
+  if (modeKey == 'none') return true;
+  if (modeKey == 'auto') return true;
+  return false;
 }
 
 bool shouldAutoFillBonuses(BonusFillPolicy policy) =>

@@ -254,6 +254,7 @@ class AgentVisitOutletCard extends StatelessWidget {
 class StartVisitClientTile extends StatelessWidget {
   final String name;
   final String code;
+  final String? photoUrl;
   final String? distanceLabel;
   final VoidCallback? onTap;
 
@@ -261,6 +262,7 @@ class StartVisitClientTile extends StatelessWidget {
     super.key,
     required this.name,
     required this.code,
+    this.photoUrl,
     this.distanceLabel,
     this.onTap,
   });
@@ -276,6 +278,8 @@ class StartVisitClientTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Row(
           children: [
+            ClientPhotoThumb(source: photoUrl, size: 52, radius: 12),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

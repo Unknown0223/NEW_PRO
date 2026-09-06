@@ -19,6 +19,7 @@ import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
 import '../../../core/ui/agent_visit_ui.dart';
+import '../../../core/ui/client_photo_thumb.dart';
 import '../clients/clients_list_provider.dart';
 import '../config/agent_config_enforcement.dart';
 import '../route/agent_route_provider.dart';
@@ -292,6 +293,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
                         return StartVisitClientTile(
                           name: c['name']?.toString() ?? '—',
                           code: code,
+                          photoUrl: firstClientPhotoUrl(c),
                           distanceLabel: dist.isEmpty ? null : dist,
                           onTap: () async {
                             final cfg = ref.read(sessionProvider).mobileConfig;

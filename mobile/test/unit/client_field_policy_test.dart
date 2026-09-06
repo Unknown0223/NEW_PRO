@@ -25,6 +25,15 @@ void main() {
       expect(isNewClientBlockedForOrder({'is_active': 1}, cfg, product), isFalse);
     });
 
+    test('default config allows order on a just-created active client', () {
+      const cfg = ClientConfig();
+      const product = ProductListConfig();
+      expect(product.allowSubmitForNewClient, isTrue);
+      expect(cfg.requireNewClientApproval, isFalse);
+      expect(isNewClientBlockedForOrder({'is_active': 1}, cfg, product), isFalse);
+      expect(isNewClientBlockedForOrder({'is_active': true}, cfg, product), isFalse);
+    });
+
     test('clientFormFieldKeys respects fields_visible', () {
       const cfg = ClientConfig(fieldsVisible: {'name': true, 'inn': true, 'bank': true});
       expect(clientFormFieldKeys(cfg), ['name', 'inn', 'bank']);

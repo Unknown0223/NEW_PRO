@@ -15,6 +15,7 @@ import {
   patchMobileAgentClient
 } from "./mobile.service";
 import { mobileAgentConfigPreHandler } from "./mobile.route.shared";
+import { clientUniqueHttp } from "../clients/clients.write.uniques";
 
 export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
 
@@ -40,18 +41,23 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
         return reply.status(201).send(row);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
-        if (msg === "DUPLICATE_PHONE") {
-          return sendApiError(reply, request, 409, "DuplicatePhone", "Bu telefon mavjud.");
-        }
-        if (msg === "DUPLICATE_NAME") {
-          return sendApiError(reply, request, 409, "DuplicateName", "Shu nomga mijoz mavjud.");
-        }
+        const uniq = clientUniqueHttp(msg);
+        if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         if (msg === "CLIENT_CREATE_FORBIDDEN") {
           return sendApiError(reply, request, 403, "Forbidden", "Mijoz yaratish ruxsat etilmagan");
         }
         if (msg === "CLIENT_LOCATION_FORBIDDEN") {
           return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+        }
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Agent ish joyiga biriktirilmagan — yangi mijoz yaratish taqiqlangan (faqat qarz yig‘ish)."
+          );
         }
         throw e;
       }
@@ -92,6 +98,8 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
+        const uniq = clientUniqueHttp(msg);
+        if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "CLIENT_EDIT_FORBIDDEN") {
           return sendApiError(reply, request, 403, "Forbidden", "Mijozni tahrirlash ruxsat etilmagan");
         }

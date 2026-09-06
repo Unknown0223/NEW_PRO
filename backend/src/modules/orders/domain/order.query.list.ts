@@ -71,7 +71,10 @@ import {
   loadOrdersFinanceEnrichment,
   sumBonusQty
 } from "./order.detail-mappers";
-import { loadOrdersListMetaEnrichment } from "./order.list-enrichment";
+import {
+  loadAgentTradeDirectionFromSlots,
+  loadOrdersListMetaEnrichment
+} from "./order.list-enrichment";
 import { normalizeStoredCreationChannel } from "./order.creation-channel";
 import {
   orderDetailInclude,
@@ -438,6 +441,7 @@ export async function listOrdersPaged(
         warehouse_block: { select: { id: true, name: true } },
         agent: {
           select: {
+            login: true,
             name: true,
             code: true,
             consignment: true,
@@ -482,10 +486,30 @@ export async function listOrdersPaged(
       comment: o.comment ?? null,
       exchange_meta: exchangeMetaById.get(o.id) ?? null,
       agent_id: o.agent_id,
+      client_id: o.client_id,
+      agent_login: o.agent?.login ?? null,
+      agent_name: o.agent?.name ?? null,
       created_at: o.created_at,
       status: o.status
     }))
   );
+
+  const agentsMissingTradeDir = [
+    ...new Set(
+      rows
+        .filter((o) => {
+          if (o.agent_id == null) return false;
+          const fromUser =
+            o.agent?.trade_direction_row?.name?.trim() ||
+            o.agent?.trade_direction_row?.code?.trim() ||
+            o.agent?.trade_direction?.trim() ||
+            null;
+          return !fromUser;
+        })
+        .map((o) => o.agent_id as number)
+    )
+  ];
+  const slotTradeDir = await loadAgentTradeDirectionFromSlots(tenantId, agentsMissingTradeDir);
 
   // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
   const priceTypeDisplayLabel = (refRaw: string | null): string | null =>
@@ -572,10 +596,10 @@ export async function listOrdersPaged(
       agent_name: o.agent?.name ?? null,
       agent_code: o.agent?.code ?? null,
       agent_trade_direction:
-        o.agent?.trade_direction_row?.code?.trim() ||
         o.agent?.trade_direction_row?.name?.trim() ||
+        o.agent?.trade_direction_row?.code?.trim() ||
         o.agent?.trade_direction?.trim() ||
-        null,
+        (o.agent_id != null ? slotTradeDir.get(o.agent_id) ?? null : null),
       expeditors: expeditorDisplay,
       expeditor_id: ex?.id ?? null,
       expeditor_display: expeditorDisplay,
@@ -584,7 +608,7 @@ export async function listOrdersPaged(
       zone: o.client.zone ?? null,
       consignment: o.agent?.consignment ?? null,
       is_consignment: o.is_consignment ?? false,
-      day: null,
+      day: metaRow?.day ?? null,
       created_by: metaRow?.created_by ?? null,
       created_by_role: metaRow?.created_by_role ?? null,
       source_order_numbers: metaRow?.source_order_numbers ?? [],

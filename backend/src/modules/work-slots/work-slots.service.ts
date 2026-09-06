@@ -28,9 +28,11 @@ import {
 import { unassignUserFromSlot } from "./work-slots.assign";
 import { resolveBranchCodesPatch } from "./work-slots.multi-bindings";
 import {
+  assertSupervisorUserId,
   syncSupervisorTeamToUsers,
   validateSuperviseeAgentSlotIds
 } from "./work-slots.supervisor-team";
+import { assertSlotCodeMatchesType, normalizeSlotCode } from "./work-slots.codes";
 
 export { suggestNextSlotCode } from "./work-slots.codes";
 
@@ -69,8 +71,10 @@ export async function createWorkSlot(
   },
   actorUserId?: number | null
 ) {
-  const code = body.slot_code.trim().toUpperCase();
+  const code = normalizeSlotCode(body.slot_code);
   if (!code) throw new Error("VALIDATION");
+  const slotType = body.slot_type ?? "agent";
+  assertSlotCodeMatchesType(code, slotType);
 
   if (body.direction_id != null) {
     const dir = await prisma.tradeDirection.findFirst({
@@ -96,7 +100,7 @@ export async function createWorkSlot(
         branch_code: branches?.branch_code ?? null,
         branch_codes: branches?.branch_codes ?? [],
         direction_id: body.direction_id ?? null,
-        slot_type: body.slot_type ?? "agent",
+        slot_type: slotType,
         is_active: body.is_active !== false,
         sort_order: body.sort_order ?? 0
       }
@@ -139,9 +143,20 @@ export async function patchWorkSlot(
 ) {
   const existing = await prisma.workSlot.findFirst({
     where: { id: slotId, tenant_id: tenantId },
-    select: { id: true, territory: true, slot_type: true, branch_code: true, branch_codes: true }
+    select: {
+      id: true,
+      territory: true,
+      slot_type: true,
+      slot_code: true,
+      branch_code: true,
+      branch_codes: true
+    }
   });
   if (!existing) throw new Error("NOT_FOUND");
+
+  if (body.slot_type !== undefined && body.slot_type !== existing.slot_type) {
+    assertSlotCodeMatchesType(existing.slot_code, body.slot_type);
+  }
 
   if (body.direction_id !== undefined && body.direction_id != null) {
     const dir = await prisma.tradeDirection.findFirst({
@@ -149,6 +164,10 @@ export async function patchWorkSlot(
       select: { id: true }
     });
     if (!dir) throw new Error("BAD_DIRECTION");
+  }
+
+  if (body.supervisor_user_id !== undefined) {
+    await assertSupervisorUserId(tenantId, body.supervisor_user_id);
   }
 
   const branchesResolved = resolveBranchCodesPatch({
@@ -284,6 +303,16 @@ export async function bulkPatchWorkSlots(
     where: { tenant_id: tenantId, id: { in: ids } }
   });
   if (found !== ids.length) throw new Error("BAD_SLOT_IDS");
+
+  if (body.slot_type !== undefined) {
+    const slotsForType = await prisma.workSlot.findMany({
+      where: { tenant_id: tenantId, id: { in: ids } },
+      select: { slot_code: true }
+    });
+    for (const s of slotsForType) {
+      assertSlotCodeMatchesType(s.slot_code, body.slot_type);
+    }
+  }
 
   if (body.delete === true) {
     const slots = await prisma.workSlot.findMany({

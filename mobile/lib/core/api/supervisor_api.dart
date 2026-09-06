@@ -98,13 +98,79 @@ class SupervisorApi {
     }
   }
 
+  Future<List<Map<String, dynamic>>> listClients(String slug, {String? q, int limit = 200}) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/mobile/supervisor/clients',
+        queryParameters: {
+          if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+          'limit': limit,
+        },
+      );
+      final list = r.data['data'] as List? ?? [];
+      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getClient(String slug, int clientId) async {
+    try {
+      final r = await _dio.get('/api/$slug/mobile/supervisor/clients/$clientId');
+      return Map<String, dynamic>.from(r.data as Map);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> patchClient(
+    String slug,
+    int clientId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final r = await _dio.patch('/api/$slug/mobile/supervisor/clients/$clientId', data: body);
+      return Map<String, dynamic>.from(r.data as Map);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> data, int unread})> listNotifications(
+    String slug, {
+    bool unreadOnly = false,
+    int limit = 40,
+  }) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/notifications',
+        queryParameters: {
+          if (unreadOnly) 'unread_only': 'true',
+          'limit': limit,
+        },
+      );
+      final map = r.data as Map;
+      final list = (map['data'] as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final unread = (map['unread_count'] as num?)?.toInt() ?? 0;
+      return (data: list, unread: unread);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> markNotificationRead(String slug, int id) async {
+    try {
+      await _dio.patch('/api/$slug/notifications/$id/read');
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   ApiException _map(DioException e) {
     if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
       return const NetworkException();
     }
-    final code = e.response?.statusCode ?? 0;
-    final msg = e.response?.data?['message']?.toString() ?? e.message ?? 'Xato';
-    return ApiException.fromStatusCode(code, msg);
+    return mapDioException(e);
   }
 }
 

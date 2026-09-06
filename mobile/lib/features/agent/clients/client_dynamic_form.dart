@@ -10,15 +10,14 @@ import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/tenant_refs_provider.dart';
 
-const kVisitDayRuOptions = [
-  'ПН, СР, ПТ',
-  'ПН',
-  'ВТ',
-  'СР',
-  'ЧТ',
-  'ПТ',
-  'СБ',
-  'ВС',
+const kVisitWeekdayChipOptions = <(int, String)>[
+  (1, 'ПН'),
+  (2, 'ВТ'),
+  (3, 'СР'),
+  (4, 'ЧТ'),
+  (5, 'ПТ'),
+  (6, 'СБ'),
+  (7, 'ВС'),
 ];
 
 /// Agent mijoz yaratish/tahrirlash — config maydonlari + format validatsiya.
@@ -100,6 +99,49 @@ class ClientDynamicFormFields extends ConsumerWidget {
     }
   }
 
+  Widget _buildVisitDayField(BuildContext context) {
+    final ctrl = _ctrl('visit_day');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: AnimatedBuilder(
+        animation: ctrl,
+        builder: (context, _) {
+          final selected = parseVisitWeekdaysFromRuSelection(ctrl.text).toSet();
+          final required = isClientFieldRequired(config, 'visit_day');
+          return InputDecorator(
+            decoration: InputDecoration(
+              labelText: clientFieldLabel('visit_day'),
+              suffixText: required ? '*' : null,
+              helperText: 'Bir yoki bir nechta kunni tanlang',
+              border: const OutlineInputBorder(),
+            ),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final (day, label) in kVisitWeekdayChipOptions)
+                  FilterChip(
+                    label: Text(label),
+                    selected: selected.contains(day),
+                    onSelected: (on) {
+                      final next = {...selected};
+                      if (on) {
+                        next.add(day);
+                      } else {
+                        next.remove(day);
+                      }
+                      final sorted = next.toList()..sort();
+                      ctrl.text = formatVisitWeekdaysRu(sorted);
+                    },
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildField(BuildContext context, WidgetRef ref, String key) {
     if (key == 'coordinates') {
       if (showGpsHint) {
@@ -123,37 +165,21 @@ class ClientDynamicFormFields extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    if (key == 'visit_day') {
+      return _buildVisitDayField(context);
+    }
+
     final options = _options(ref, key);
     if (options != null) {
       final current = _ctrl(key).text.trim();
+      final value = current.isNotEmpty && options.contains(current) ? current : null;
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: DropdownButtonFormField<String>(
-          initialValue: current.isNotEmpty && options.contains(current) ? current : null,
+          initialValue: value,
           decoration: _decoration(key),
           items: options
               .map((o) => DropdownMenuItem(value: o, child: Text(o, overflow: TextOverflow.ellipsis)))
-              .toList(),
-          onChanged: (v) => _ctrl(key).text = v ?? '',
-        ),
-      );
-    }
-
-    if (key == 'visit_day') {
-      final current = _ctrl(key).text.trim();
-      final selected = current.isNotEmpty && kVisitDayRuOptions.contains(current)
-          ? current
-          : (current.isEmpty ? kVisitDayRuOptions.first : null);
-      if (selected != null && _ctrl(key).text != selected) {
-        _ctrl(key).text = selected;
-      }
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: DropdownButtonFormField<String>(
-          initialValue: selected,
-          decoration: _decoration(key),
-          items: kVisitDayRuOptions
-              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
               .toList(),
           onChanged: (v) => _ctrl(key).text = v ?? '',
         ),
@@ -207,8 +233,12 @@ class ClientDynamicFormFields extends ConsumerWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
   }
 
-  static String? validate(ClientConfig config, Map<String, TextEditingController> controllers) {
-    var keys = clientFormFieldKeys(config);
+  static String? validate(
+    ClientConfig config,
+    Map<String, TextEditingController> controllers, {
+    Set<String> hiddenFieldKeys = const {},
+  }) {
+    var keys = clientFormFieldKeys(config).where((k) => !hiddenFieldKeys.contains(k)).toList();
     if (keys.isEmpty) {
       keys = ['name', 'phone'];
     }
@@ -262,6 +292,10 @@ class ClientDynamicFormFields extends ConsumerWidget {
       if (val == null) continue;
       final text = val.toString().trim();
       if (text.isEmpty) continue;
+      // visit_date ISO sana — kun chipiga mos emas; visit_weekdays dan olamiz.
+      if (entry.value == 'visit_day' && RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(text)) {
+        continue;
+      }
       var formText = text;
       if (entry.value == 'phone') {
         formText = text.replaceAll(RegExp(r'\D'), '');
@@ -269,9 +303,6 @@ class ClientDynamicFormFields extends ConsumerWidget {
         if (formText.startsWith(uz) && formText.length > uz.length) {
           formText = formText.substring(uz.length);
         }
-      }
-      if (entry.value == 'visit_day' && text.length >= 10) {
-        formText = text.substring(0, 10);
       }
       controllers.putIfAbsent(entry.value, () => TextEditingController()).text = formText;
     }
@@ -286,11 +317,8 @@ class ClientDynamicFormFields extends ConsumerWidget {
         days = wdRaw.map((e) => (e as num).toInt()).toList();
       }
       if (days.isNotEmpty) {
-        const labels = {1: 'ПН', 2: 'ВТ', 3: 'СР', 4: 'ЧТ', 5: 'ПТ', 6: 'СБ', 7: 'ВС'};
-        final label = days.map((d) => labels[d] ?? '').where((s) => s.isNotEmpty).join(', ');
-        if (label.isNotEmpty) {
-          controllers.putIfAbsent('visit_day', () => TextEditingController()).text = label;
-        }
+        controllers.putIfAbsent('visit_day', () => TextEditingController()).text =
+            formatVisitWeekdaysRu(days);
       }
     }
   }

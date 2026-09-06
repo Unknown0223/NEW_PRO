@@ -6,6 +6,7 @@ import {
   lineCodeDisplay,
   uniqJoin
 } from "../order-nakladnoy-xlsx.format";
+import { loading520IsShelfReturnOnly, loading520SheetName, loading520Title, sortLoading520GroupKeys } from "../order-nakladnoy-xlsx.consignment-217";
 import type { WarehouseAggregateContext } from "./warehouse-template-shared";
 import { expeditorLoadingDownloadFilename } from "./expeditor-loading-template-ids";
 
@@ -13,8 +14,8 @@ export type ExpeditorLoading520Line = {
   num: number;
   code: string;
   name: string;
-  qty: number | null;
-  bonus: number | null;
+  qty: number;
+  bonus: number;
   price: string;
   sum: string;
 };
@@ -33,6 +34,7 @@ export type ExpeditorLoading520Document = {
   title: string;
   printedAt: string;
   filename: string;
+  sheetName: string;
   meta: {
     dateOrder: string;
     dateShip: string | null;
@@ -50,14 +52,20 @@ export type ExpeditorLoading520Document = {
     bonus: number;
     sum: string;
   };
+  /** Faqat polki qaytarish — guruh «Возврат с полки», Итого yo‘q */
+  shelfReturnOnly: boolean;
 };
+
+function phoneFromInvoiceLine(line: string): string {
+  const m = /\((\d{7,15})\)\s*$/.exec(line.trim());
+  if (m?.[1]) return m[1];
+  const d = /(\+?\d[\d\s\-()]{8,})/.exec(line);
+  return d?.[1]?.replace(/\D/g, "") || "";
+}
 
 function metaAgentPhones(ctx: WarehouseAggregateContext): string {
   const phones = ctx.orders
-    .map((o) => {
-      const m = /(\+?\d[\d\s\-()]{8,})/.exec(o.agentLine);
-      return m?.[1]?.trim() ?? "";
-    })
+    .map((o) => phoneFromInvoiceLine(o.invoiceAgentLine || o.agentLine))
     .filter(Boolean);
   return uniqJoin([...new Set(phones)]);
 }
@@ -76,11 +84,11 @@ export function buildExpeditorLoading520Document(
   const merged = ctx.merged;
   const agents = ctx.agentLabels.join(", ") || merged.agentLine;
   const territory = ctx.territoryLabels.join(", ") || merged.territory || "";
-  const exp = ctx.expeditorLabels.join(", ") || merged.expeditorLine;
+  const exp = ctx.expeditorLabels.join(", ") || merged.expeditorName || merged.expeditorLine;
   const expVal = dashOrEmpty(exp);
   const phones = dashOrEmpty(metaAgentPhones(ctx));
 
-  const groupKeys = [...ctx.linesByGroup.keys()].sort((a, b) => a.localeCompare(b, "ru"));
+  const groupKeys = sortLoading520GroupKeys([...ctx.linesByGroup.keys()]);
   const groups: ExpeditorLoading520Group[] = [];
   let grandQty = 0;
   let grandBonus = 0;
@@ -113,33 +121,35 @@ export function buildExpeditorLoading520Document(
       name: gk,
       qty: gQty,
       bonus: gBonus,
-      sum: gSum > 0 ? fmtMoneyInt(gSum) : "",
+      sum: fmtMoneyInt(gSum),
       lines
     });
   }
 
   return {
     versionLabel,
-    title: `Загрузочный лист ${versionLabel} (Время печати: ${fmtDateTime(at)})`,
+    title: loading520Title(at),
     printedAt: fmtDateTime(at),
     filename: expeditorLoadingDownloadFilename("ex-5.2.0", at),
+    sheetName: loading520SheetName(expVal || merged.expeditorName),
     meta: {
       dateOrder: fmtDate(merged.createdAt),
-      dateShip: merged.dateTo ? fmtDate(merged.dateTo) : null,
+      dateShip: merged.dateTo ? fmtDate(merged.dateTo) : fmtDate(merged.createdAt),
       agents: dashOrEmpty(agents) || "—",
       agentPhones: phones,
       agentPhonesVisible: Boolean(phones),
       territory: dashOrEmpty(territory) || "—",
       expeditor: expVal || null,
-      expeditorVisible: Boolean(expVal),
+      expeditorVisible: true,
       currency: merged.currencyLabel || "So'm (UZS)"
     },
     groups,
     totals: {
       qty: grandQty,
       bonus: grandBonus,
-      sum: grandSum > 0 ? fmtMoneyInt(grandSum) : ""
-    }
+      sum: fmtMoneyInt(grandSum)
+    },
+    shelfReturnOnly: loading520IsShelfReturnOnly(groups.map((g) => g.name))
   };
 }
 
@@ -152,9 +162,9 @@ function lineToDoc(
     num,
     code: lineCodeDisplay(ln, options.codeColumn),
     name: ln.name,
-    qty: ln.qty > 0 ? ln.qty : null,
-    bonus: ln.bonusQty > 0 ? ln.bonusQty : null,
-    price: ln.price > 0 ? fmtMoneyInt(ln.price) : "",
-    sum: ln.sum > 0 ? fmtMoneyInt(ln.sum) : ""
+    qty: ln.qty,
+    bonus: ln.bonusQty,
+    price: ln.price > 0 ? fmtMoneyInt(ln.price) : "0",
+    sum: fmtMoneyInt(ln.sum)
   };
 }

@@ -155,6 +155,7 @@ export const mobilePatchClientBodySchema = z
   .object({
     name: z.string().trim().min(1).max(512).optional(),
     phone: z.string().trim().max(64).optional().nullable(),
+    visit_weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
     ...mobileClientOptionalFieldsSchema
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field required" });

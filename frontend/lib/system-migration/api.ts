@@ -110,6 +110,8 @@ export async function fetchMigrationInventory(tenantSlug: string): Promise<Migra
 }
 
 /** Brauzer MIME ishonchsiz — kengaytma + ZIP magic (PK\\x03\\x04 / PK\\x05\\x06). */
+export const MIGRATION_ZIP_MAX_BYTES = 512 * 1024 * 1024;
+
 export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reason?: string }> {
   const name = (file.name || "").toLowerCase();
   const looksZipName =
@@ -122,6 +124,13 @@ export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reas
   }
   if (file.size < 4) {
     return { ok: false, reason: "Fayl bo‘sh yoki juda kichik." };
+  }
+  if (file.size > MIGRATION_ZIP_MAX_BYTES) {
+    const gb = (file.size / (1024 * 1024 * 1024)).toFixed(1);
+    return {
+      ok: false,
+      reason: `ZIP juda katta (${gb} GB). Eski arxiv (siqilmagan fotolar). Avval shu sahifadan yangi «To‘liq zaxira» ni yuklab oling, keyin import qiling.`
+    };
   }
   try {
     const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
@@ -138,28 +147,68 @@ export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reas
   return { ok: true };
 }
 
-export async function downloadMigrationBackup(tenantSlug: string): Promise<void> {
-  const { data } = await api.get(`/api/${tenantSlug}/system-migration/export.backup.zip`, {
-    responseType: "blob",
-    // Katta tenant ZIP — default timeout yetmasligi mumkin
-    timeout: 10 * 60 * 1000
-  });
-  const blob = data as Blob;
-  const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
-  const isPk = head[0] === 0x50 && head[1] === 0x4b;
-  if (!isPk) {
-    const text = await blob.text().catch(() => "");
-    throw new Error(
-      text.trim().slice(0, 200) || "Eksport yaroqli ZIP qaytarmadi. Qayta urinib ko‘ring."
-    );
+export async function downloadMigrationBackup(
+  tenantSlug: string,
+  onProgress?: (p: MigrationImportProgress) => void
+): Promise<void> {
+  // Async: Next proxy / edge timeout sinxron ZIP kutishda uzilardi.
+  const { data: started } = await api.post<{ async: true; sessionId: string }>(
+    `/api/${tenantSlug}/system-migration/export/start`,
+    {},
+    { timeout: 60_000 }
+  );
+  const sessionId = started.sessionId;
+  if (!sessionId) throw new Error("Eksport sessiyasi ochilmadi");
+
+  const maxAttempts = 900; // ~7.5 daqiqa (500ms)
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const { data: session } = await api.get<{
+      state: string;
+      progress?: { stage?: string; percent?: number; message?: string };
+      error?: string;
+      filename?: string;
+    }>(`/api/${tenantSlug}/system-migration/export/sessions/${sessionId}`, {
+      timeout: 30_000
+    });
+
+    onProgress?.({
+      stage: String(session.progress?.stage ?? session.state),
+      percent: typeof session.progress?.percent === "number" ? session.progress.percent : 0,
+      message: session.progress?.message || "Eksport…"
+    });
+
+    if (session.state === "failed") {
+      throw new Error(session.error || "Zaxira arxivini yaratib bo‘lmadi");
+    }
+    if (session.state === "completed") {
+      const { data } = await api.get(
+        `/api/${tenantSlug}/system-migration/export/sessions/${sessionId}/download`,
+        {
+          responseType: "blob",
+          timeout: 10 * 60 * 1000
+        }
+      );
+      const blob = data as Blob;
+      const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+      const isPk = head[0] === 0x50 && head[1] === 0x4b;
+      if (!isPk) {
+        const text = await blob.text().catch(() => "");
+        throw new Error(
+          text.trim().slice(0, 200) || "Eksport yaroqli ZIP qaytarmadi. Qayta urinib ko‘ring."
+        );
+      }
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = session.filename || `salec-backup-${tenantSlug}-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
   }
-  const date = new Date().toISOString().slice(0, 10);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `salec-backup-${tenantSlug}-${date}.zip`;
-  a.click();
-  URL.revokeObjectURL(url);
+  throw new Error("Eksport juda uzoq davom etdi — qayta urinib ko‘ring");
 }
 
 export async function previewMigrationBackup(
@@ -171,7 +220,8 @@ export async function previewMigrationBackup(
   form.append("file", file, file.name || "salec-backup.zip");
   const { data } = await api.post<MigrationImportPreview>(
     `/api/${tenantSlug}/system-migration/import/preview`,
-    form
+    form,
+    { timeout: 10 * 60 * 1000 }
   );
   return data;
 }
@@ -259,6 +309,7 @@ export async function applyMigrationBackup(
     `/api/${tenantSlug}/system-migration/import/apply`,
     form,
     {
+      timeout: 10 * 60 * 1000,
       validateStatus: (s) => (s >= 200 && s < 300) || s === 202
     }
   );

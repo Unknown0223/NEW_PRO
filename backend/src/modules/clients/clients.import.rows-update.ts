@@ -360,18 +360,31 @@ export async function importClientUpdateRows(
     }
   };
 
+  const addressTouchedIds: number[] = [];
+
   if (bothUpdates.length > 0) {
     await processBatch(bothUpdates, async (tx, item) => {
-      const { idVal, nextData, agentPatches } = item as { idVal: number; nextData: Record<string, unknown>; agentPatches: unknown[] };
+      const { idVal, nextData, agentPatches } = item as {
+        idVal: number;
+        nextData: Record<string, unknown>;
+        agentPatches: unknown[];
+      };
       await tx.client.update({ where: { id: idVal }, data: nextData });
-      await replaceClientAgentAssignments(tx, tenantId, idVal, agentPatches as Parameters<typeof replaceClientAgentAssignments>[3], {
-        skipStaffDbValidation: true,
-        softPreserveDebtLockedStaff: true
-      }).then((res) => {
+      await replaceClientAgentAssignments(
+        tx,
+        tenantId,
+        idVal,
+        agentPatches as Parameters<typeof replaceClientAgentAssignments>[3],
+        {
+          skipStaffDbValidation: true,
+          softPreserveDebtLockedStaff: true
+        }
+      ).then((res) => {
         for (const b of res.debtBlocks) {
           ctx.warnings.push(`ИД=${idVal}: ${b.messageRu}`);
         }
       });
+      if (clientUpdateTouchesAddress(nextData)) addressTouchedIds.push(idVal);
     });
   }
 
@@ -379,6 +392,7 @@ export async function importClientUpdateRows(
     await processBatch(scalarOnly, async (tx, item) => {
       const { idVal, nextData } = item as { idVal: number; nextData: Record<string, unknown> };
       await tx.client.update({ where: { id: idVal }, data: nextData });
+      if (clientUpdateTouchesAddress(nextData)) addressTouchedIds.push(idVal);
     });
   }
 
@@ -394,6 +408,18 @@ export async function importClientUpdateRows(
         }
       });
     });
+  }
+
+  for (const idVal of addressTouchedIds) {
+    try {
+      await applyTerritoryAutoAssignAfterAddressChange(tenantId, idVal);
+    } catch (e) {
+      ctx.warnings.push(
+        `ИД=${idVal}: hudud bo‘yicha agent avto-biriktirish xatosi — ${
+          e instanceof Error ? e.message.slice(0, 120) : "xato"
+        }`
+      );
+    }
   }
 
   ctx.writeMs += Date.now() - writeStarted;

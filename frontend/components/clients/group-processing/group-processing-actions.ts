@@ -172,3 +172,60 @@ export const GROUP_PROCESSING_MISC_ALIASES = new Set<GroupProcessingActionId>([
 ]);
 
 export const GROUP_PROCESSING_IDS_STORAGE_KEY = "salec:group-processing-ids";
+export const CLIENTS_LIST_SELECTED_IDS_KEY = "salec:clients-list-selected-ids";
+
+const MAX_STORED_CLIENT_IDS = 5000;
+
+export function clientsListSelectedStorageKey(tenantSlug: string): string {
+  return `${CLIENTS_LIST_SELECTED_IDS_KEY}:${tenantSlug}`;
+}
+
+export function readStoredClientIds(storageKey: string): number[] {
+  try {
+    if (typeof sessionStorage === "undefined") return [];
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .slice(0, MAX_STORED_CLIENT_IDS);
+  } catch {
+    return [];
+  }
+}
+
+export function writeStoredClientIds(storageKey: string, ids: Iterable<number>): void {
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    const list = [
+      ...new Set(
+        [...ids]
+          .map((x) => Number(x))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      )
+    ].slice(0, MAX_STORED_CLIENT_IDS);
+    if (list.length === 0) sessionStorage.removeItem(storageKey);
+    else sessionStorage.setItem(storageKey, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function rememberClientsListSelection(
+  tenantSlug: string | null | undefined,
+  ids: Iterable<number>
+): void {
+  if (!tenantSlug) return;
+  writeStoredClientIds(clientsListSelectedStorageKey(tenantSlug), ids);
+}
+
+export function goToClientsKeepingSelection(
+  push: (href: string) => void,
+  tenantSlug: string | null | undefined,
+  ids: Iterable<number>
+): void {
+  rememberClientsListSelection(tenantSlug, ids);
+  push("/clients");
+}

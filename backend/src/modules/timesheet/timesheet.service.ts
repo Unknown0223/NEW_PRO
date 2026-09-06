@@ -3,9 +3,30 @@ import { prisma } from "../../config/database";
 import { AuditEntityType, sanitizePayloadForAudit } from "../../lib/tenant-audit";
 import { mergeTabelAudit, readTabelAudit, type NewTabelAuditRecord } from "../tabel/tabel-audit";
 import {
-  listDepartedSlotUserIdsInMonth,
+  listTimesheetEligibleUserIdsInMonth,
   loadSlotLeaveDatesForMonth
 } from "../work-slots/work-slots.occupancy";
+import { toFio } from "../staff/staff.shared.helpers";
+import { orderTimesheetRows, parseTimesheetRoleFilter } from "./timesheet.order";
+
+/** Табельda ko‘rsatilmaydigan rollar (masalan tizim admini). */
+const TIMESHEET_EXCLUDED_ROLES = ["admin"] as const;
+
+export function isTimesheetExcludedRole(role: string | null | undefined): boolean {
+  const r = (role ?? "").trim().toLowerCase();
+  return (TIMESHEET_EXCLUDED_ROLES as readonly string[]).includes(r);
+}
+
+/** Tanlangan rollardan adminni olib tashlaydi. Faqat excluded qolsa — `rejectedAll`. */
+export function sanitizeTimesheetRoles(roles: string[] | undefined): {
+  roles: string[] | undefined;
+  rejectedAll: boolean;
+} {
+  if (!roles?.length) return { roles: undefined, rejectedAll: false };
+  const next = roles.map((r) => r.trim()).filter((r) => r && !isTimesheetExcludedRole(r));
+  if (next.length === 0) return { roles: undefined, rejectedAll: true };
+  return { roles: next, rejectedAll: false };
+}
 
 /**
  * Полная модель статусов (паритет с прототипом TabelERP):
@@ -43,7 +64,16 @@ type TimesheetState = {
 
 export type TimesheetFilterInput = {
   month: string; // YYYY-MM
+  /** Bitta rol (eski API). */
   role?: string;
+  /** Bir nechta rol: `roles=agent,supervisor`. */
+  roles?: string[];
+  /** Bitta filial (eski API). */
+  branch?: string;
+  /** Bir nechta filial: `branches=A,B`. */
+  branches?: string[];
+  /** Trade direction id. */
+  direction_id?: number;
   user_id?: number;
 };
 
@@ -59,6 +89,13 @@ export type TimesheetRowDto = {
   fio: string;
   role: string;
   login: string;
+  /** Smart KOD */
+  code: string | null;
+  /** Филиал (user.branch yoki birinchi branch_link). */
+  branch: string | null;
+  /** Направление торговли. */
+  direction: string | null;
+  supervisor_user_id: number | null;
   cells: TimesheetCellDto[];
   worked_days: number;
   absent_days: number;
@@ -139,17 +176,76 @@ function isoDateForDay(month: string, day: number): string {
 
 export async function listTimesheetFilters(tenantId: number): Promise<{
   roles: string[];
-  employees: Array<{ id: number; fio: string; role: string; login: string }>;
+  branches: string[];
+  directions: Array<{ id: number; name: string }>;
+  employees: Array<{ id: number; fio: string; role: string; login: string; code: string | null; branch: string | null }>;
 }> {
-  const users = await prisma.user.findMany({
-    where: { tenant_id: tenantId, is_active: true },
-    select: { id: true, name: true, role: true, login: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }]
-  });
-  const roles = [...new Set(users.map((u) => u.role).filter((x) => x && x.trim().length > 0))];
+  const [users, branchLinks, directions] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        NOT: { role: { equals: "admin", mode: "insensitive" } }
+      },
+      select: {
+        id: true,
+        name: true,
+        first_name: true,
+        last_name: true,
+        middle_name: true,
+        role: true,
+        login: true,
+        code: true,
+        branch: true,
+        branch_links: { select: { branch_code: true }, take: 8 }
+      },
+      orderBy: [{ role: "asc" }, { last_name: "asc" }, { first_name: "asc" }, { name: "asc" }]
+    }),
+    prisma.userBranchLink.findMany({
+      where: { tenant_id: tenantId },
+      select: { branch_code: true },
+      distinct: ["branch_code"]
+    }),
+    prisma.tradeDirection.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    })
+  ]);
+
+  const roles = [
+    ...new Set(
+      users
+        .map((u) => u.role)
+        .filter((x) => x && x.trim().length > 0 && !isTimesheetExcludedRole(x))
+    )
+  ];
+  const branchSet = new Set<string>();
+  for (const u of users) {
+    if (isTimesheetExcludedRole(u.role)) continue;
+    if (u.branch?.trim()) branchSet.add(u.branch.trim());
+    for (const b of u.branch_links) {
+      if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+    }
+  }
+  for (const b of branchLinks) {
+    if (b.branch_code?.trim()) branchSet.add(b.branch_code.trim());
+  }
+
   return {
     roles,
-    employees: users.map((u) => ({ id: u.id, fio: u.name, role: u.role, login: u.login }))
+    branches: [...branchSet].sort((a, b) => a.localeCompare(b, "ru")),
+    directions: directions.map((d) => ({ id: d.id, name: d.name })),
+    employees: users
+      .filter((u) => !isTimesheetExcludedRole(u.role))
+      .map((u) => ({
+        id: u.id,
+        fio: toFio(u),
+        role: u.role,
+        login: u.login,
+        code: u.code,
+        branch: u.branch?.trim() || u.branch_links[0]?.branch_code?.trim() || null
+      }))
   };
 }
 
@@ -165,21 +261,103 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
   const state = parseTimesheetState(tenant.settings);
   const locked = state.locked_months.includes(input.month);
 
-  const departedIds = await listDepartedSlotUserIdsInMonth(tenantId, from, to);
+  const roleSanitize = sanitizeTimesheetRoles(parseTimesheetRoleFilter(input.role, input.roles?.join(",")));
+  if (roleSanitize.rejectedAll) {
+    const { daysInMonth } = monthDateRange(input.month);
+    return {
+      month: input.month,
+      days: Array.from({ length: daysInMonth }, (_, i) => i + 1),
+      rows: [],
+      locked
+    };
+  }
+  const roleFilter = roleSanitize.roles;
+  const branchList = [
+    ...new Set(
+      [
+        ...(input.branches ?? []),
+        ...(input.branch?.trim() ? [input.branch.trim()] : [])
+      ]
+        .map((b) => b.trim())
+        .filter(Boolean)
+    )
+  ];
+  const directionId =
+    typeof input.direction_id === "number" && Number.isFinite(input.direction_id) && input.direction_id > 0
+      ? input.direction_id
+      : undefined;
+
+  const { eligibleIds, departedIds } = await listTimesheetEligibleUserIdsInMonth(tenantId, from, to);
   const departedSet = new Set(departedIds);
 
-  const users = await prisma.user.findMany({
+  if (eligibleIds.length === 0) {
+    return {
+      month: input.month,
+      days: Array.from({ length: daysInMonth }, (_, i) => i + 1),
+      rows: [],
+      locked
+    };
+  }
+
+  const and: Prisma.UserWhereInput[] = [
+    { id: { in: eligibleIds } },
+    { NOT: { role: { equals: "admin", mode: "insensitive" } } }
+  ];
+  if (roleFilter?.length === 1) and.push({ role: roleFilter[0] });
+  else if (roleFilter && roleFilter.length > 1) and.push({ role: { in: roleFilter } });
+  if (typeof input.user_id === "number") and.push({ id: input.user_id });
+  if (branchList.length === 1) {
+    and.push({
+      OR: [
+        { branch: { equals: branchList[0], mode: "insensitive" } },
+        { branch_links: { some: { branch_code: { equals: branchList[0], mode: "insensitive" } } } }
+      ]
+    });
+  } else if (branchList.length > 1) {
+    and.push({
+      OR: branchList.flatMap((b) => [
+        { branch: { equals: b, mode: "insensitive" as const } },
+        { branch_links: { some: { branch_code: { equals: b, mode: "insensitive" as const } } } }
+      ])
+    });
+  }
+  if (directionId) {
+    and.push({ trade_direction_links: { some: { trade_direction_id: directionId } } });
+  }
+
+  const usersRaw = await prisma.user.findMany({
     where: {
       tenant_id: tenantId,
-      OR: [
-        { is_active: true },
-        ...(departedIds.length ? [{ id: { in: departedIds } }] : [])
-      ],
-      ...(input.role?.trim() ? { role: input.role.trim() } : {}),
-      ...(typeof input.user_id === "number" ? { id: input.user_id } : {})
+      AND: and
     },
-    select: { id: true, name: true, role: true, login: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }]
+    select: {
+      id: true,
+      name: true,
+      first_name: true,
+      last_name: true,
+      middle_name: true,
+      role: true,
+      login: true,
+      code: true,
+      branch: true,
+      trade_direction: true,
+      supervisor_user_id: true,
+      branch_links: { select: { branch_code: true }, take: 4 },
+      trade_direction_row: { select: { name: true } },
+      trade_direction_links: {
+        take: 3,
+        select: { trade_direction: { select: { name: true } } }
+      }
+    },
+    orderBy: [{ role: "asc" }, { last_name: "asc" }, { first_name: "asc" }, { name: "asc" }]
+  });
+  const roleSet = roleFilter?.length
+    ? new Set(roleFilter.map((r) => r.trim().toLowerCase()).filter(Boolean))
+    : null;
+  const users = usersRaw.filter((u) => {
+    if (isTimesheetExcludedRole(u.role)) return false;
+    if (roleSet && !roleSet.has(u.role.trim().toLowerCase())) return false;
+    return true;
   });
   const userIds = users.map((u) => u.id);
   const leaveByUser = await loadSlotLeaveDatesForMonth(tenantId, from, to, userIds);
@@ -223,11 +401,24 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
       if (status === "absent") absent += 1;
       return { day, date, status, source };
     });
+    const branch =
+      u.branch?.trim() ||
+      u.branch_links.find((b) => b.branch_code?.trim())?.branch_code?.trim() ||
+      null;
+    const direction =
+      u.trade_direction?.trim() ||
+      u.trade_direction_row?.name?.trim() ||
+      u.trade_direction_links.find((l) => l.trade_direction?.name?.trim())?.trade_direction?.name?.trim() ||
+      null;
     return {
       user_id: u.id,
-      fio: u.name,
+      fio: toFio(u),
       role: u.role,
       login: u.login,
+      code: u.code?.trim() || null,
+      branch,
+      direction,
+      supervisor_user_id: u.supervisor_user_id ?? null,
       cells,
       worked_days: worked,
       absent_days: absent,
@@ -236,15 +427,9 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
     };
   });
 
-  // Faol xodimlar yuqorida; slotdan chiqqanlar — jamoa pastida.
-  rows.sort((a, b) => {
-    if (a.is_departed !== b.is_departed) return a.is_departed ? 1 : -1;
-    const roleCmp = a.role.localeCompare(b.role, "ru");
-    if (roleCmp !== 0) return roleCmp;
-    return a.fio.localeCompare(b.fio, "ru");
-  });
+  const ordered = orderTimesheetRows(rows, roleFilter);
 
-  return { month: input.month, days, rows, locked };
+  return { month: input.month, days, rows: ordered, locked };
 }
 
 export const ATTENDANCE_STATUS_LABEL_RU: Record<AttendanceStatus, string> = {
@@ -305,15 +490,21 @@ export async function patchAttendanceCells(
   const userById = new Map(users.map((u) => [u.id, u]));
   for (const id of userIds) if (!userById.has(id)) throw new Error("USER_NOT_FOUND");
 
-  // Slotdan chiqqandan keyingi kunlar — faqat admin o‘zgartira oladi.
+  // Slotdan chiqqan (departed) yoki chiqish sanasidan keyingi kunlar — faqat admin.
   if (!opts?.actorIsAdmin) {
+    const monthsList = [...months];
     const leaveMaps: Map<string, Map<number, string>> = new Map();
-    for (const m of months) {
+    const departedByMonth = new Map<string, Set<number>>();
+    for (const m of monthsList) {
       const { from, to } = monthDateRange(m);
       leaveMaps.set(m, await loadSlotLeaveDatesForMonth(tenantId, from, to, userIds));
+      const { departedIds } = await listTimesheetEligibleUserIdsInMonth(tenantId, from, to);
+      departedByMonth.set(m, new Set(departedIds.filter((id) => userIds.includes(id))));
     }
     for (const e of entries) {
-      const left = leaveMaps.get(e.date.slice(0, 7))?.get(e.userId);
+      const m = e.date.slice(0, 7);
+      if (departedByMonth.get(m)?.has(e.userId)) throw new Error("SLOT_LEFT_DAY_LOCKED");
+      const left = leaveMaps.get(m)?.get(e.userId);
       if (left && e.date > left) throw new Error("SLOT_LEFT_DAY_LOCKED");
     }
   }

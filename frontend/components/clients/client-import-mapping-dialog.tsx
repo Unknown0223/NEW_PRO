@@ -197,6 +197,21 @@ export function ClientImportMappingDialog({
     return rowToHeaderLabels(row);
   }, [matrix, headerRowIdx]);
 
+  const detectedTeamKeysFromFile = useMemo(() => {
+    const row = matrix[headerRowIdx];
+    if (!Array.isArray(row)) return [] as string[];
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    row.forEach((c) => {
+      const raw = c == null ? "" : String(c);
+      const key = headerToAgentImportKey(raw);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      keys.push(key);
+    });
+    return keys;
+  }, [matrix, headerRowIdx]);
+
   const detectedTeamFromFile = useMemo(() => {
     const row = matrix[headerRowIdx];
     if (!Array.isArray(row)) return [] as string[];
@@ -209,6 +224,23 @@ export function ClientImportMappingDialog({
     });
     return labels;
   }, [matrix, headerRowIdx]);
+
+  /** Faylda agent/kun ustunlari bo‘lsa — yangilashda «Команда»ni avtomatik yoqamiz (kunlar o‘tkazib yuborilmasin). */
+  useEffect(() => {
+    if (!open || importMode !== "update") return;
+    if (detectedTeamKeysFromFile.length === 0) return;
+    setUpdateApplySet((prev) => {
+      let changed = false;
+      const n = new Set(prev);
+      for (const k of detectedTeamKeysFromFile) {
+        if (!n.has(k)) {
+          n.add(k);
+          changed = true;
+        }
+      }
+      return changed ? n : prev;
+    });
+  }, [open, importMode, detectedTeamKeysFromFile]);
 
   useEffect(() => {
     if (!open || !workbook || !sheetName || matrix.length === 0) return;
@@ -261,6 +293,18 @@ export function ClientImportMappingDialog({
       }
       if (restrictUpdate && updateApplySet.size === 0) {
         setLocalErr("Отметьте хотя бы одно поле для обновления или снимите «Только выбранные поля».");
+        return;
+      }
+      const mappedTeamKeys = Object.keys(merged).filter(
+        (k) => k.startsWith("import_agent_") || k.startsWith("import_expeditor_")
+      );
+      const teamDaysMapped = mappedTeamKeys.some((k) => k.includes("_days"));
+      const teamApplyOn =
+        !restrictUpdate || mappedTeamKeys.some((k) => updateApplySet.has(k));
+      if (teamDaysMapped && !teamApplyOn) {
+        setLocalErr(
+          "В файле есть столбцы дней визита, но блок «Команда» не отмечен — нажмите «Вкл. команду», иначе дни (в т.ч. суббота) не обновятся."
+        );
         return;
       }
     } else if (merged.name === undefined) {
@@ -339,6 +383,11 @@ export function ClientImportMappingDialog({
                       {importMode === "update"
                         ? "При обновлении эти проверки выполняются автоматически (ИД в файле + конфликт кода/ИНН/ПИНФЛ/телефона/имени с другим клиентом)."
                         : "При новом импорте включите «Проверять дубликаты» и отметьте ★-поля ниже."}
+                    </p>
+                    <p className="mt-1 border-t border-sky-200/60 pt-1.5 text-[11px] dark:border-sky-800/50">
+                      <strong>Дни визита (Агент N день):</strong> только{" "}
+                      <strong>1…7</strong> (1=Пн, <strong>6=Сб</strong>, 7=Вс) или Пн…Вс / «Сб» /
+                      «shanba». Число <code>0</code> и 0-based индекс — не принимаются (пропускаются).
                     </p>
                     <p className="mt-1 border-t border-sky-200/60 pt-1.5 text-[11px] dark:border-sky-800/50">
                       <strong>Долг — агент и доставочник:</strong> снять / заменить сотрудника можно
@@ -428,8 +477,9 @@ export function ClientImportMappingDialog({
                         <>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-muted-foreground text-xs">
-                              Отметьте только то, что нужно изменить. Блок «Команда» по умолчанию
-                              выключен — включите, если меняете агентов / дни / экспедиторов из файла.
+                              Отметьте только то, что нужно изменить. Если в файле есть столбцы
+                              «Агент / день / Экспедитор», блок «Команда» включается автоматически —
+                              иначе дни визита (Пн…Вс / 1…7) не обновятся.
                             </p>
                             <div className="flex shrink-0 flex-wrap items-center gap-1">
                               <span className="text-muted-foreground text-xs tabular-nums">

@@ -627,7 +627,7 @@ export function WorkSlotsWorkspace() {
           setFilterApplied((prev) => ({ ...prev, search: value.trim() }));
           setPage(1);
         }}
-        searchPlaceholder="Поиск по коду или названию…"
+        searchPlaceholder="Поиск: код, название или ФИО сотрудника…"
         onRefresh={() => {
           setIsRefreshing(true);
           void load().finally(() => setIsRefreshing(false));

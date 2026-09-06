@@ -168,6 +168,7 @@ export function SystemMigrationWorkspace() {
   const [preview, setPreview] = useState<MigrationImportPreview | null>(null);
   const [toast, setToast] = useState<{ text: string; kind: "ok" | "err" } | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [exportProgress, setExportProgress] = useState<MigrationImportProgress | null>(null);
   const [importMode, setImportMode] = useState<"full" | "profile_only">("full");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [conflictOpen, setConflictOpen] = useState(false);
@@ -281,11 +282,14 @@ export function SystemMigrationWorkspace() {
   const onExport = useCallback(async () => {
     if (!tenantSlug) return;
     setExportBusy(true);
+    setExportProgress({ stage: "queued", percent: 1, message: "Eksport boshlandi…" });
     try {
-      await downloadMigrationBackup(tenantSlug);
+      await downloadMigrationBackup(tenantSlug, (p) => setExportProgress(p));
       setToast({ text: "To‘liq zaxira yuklab olindi", kind: "ok" });
+      setExportProgress({ stage: "done", percent: 100, message: "Tayyor" });
     } catch (e) {
       setToast({ text: getUserFacingError(e, "Zaxirani yuklab bo‘lmadi"), kind: "err" });
+      setExportProgress(null);
     } finally {
       setExportBusy(false);
     }
@@ -390,9 +394,23 @@ export function SystemMigrationWorkspace() {
               )}
               To‘liq zaxira yuklab olish (.zip)
             </Button>
+            {exportBusy && exportProgress ? (
+              <div className="rounded-md border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <div className="mb-1 flex justify-between gap-2">
+                  <span>{exportProgress.message || "Eksport…"}</span>
+                  <span>{exportProgress.percent}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded bg-muted">
+                  <div
+                    className="h-full bg-primary transition-[width]"
+                    style={{ width: `${Math.max(2, exportProgress.percent)}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
             <p className="text-xs text-muted-foreground">
-              Format v5: profil, boshlang‘ich sozlamalar, katalog, RBAC, narxlar, bonus/KPI, operatsion
-              tarix va fotolar — bitta ZIP.
+              Format v6: profil, sozlamalar, katalog, RBAC, narxlar, bonus/KPI, operatsion tarix,
+              tashriflar, barcha GPS va fotolar (siqilgan JPEG) — bitta ZIP.
             </p>
           </CardContent>
         </Card>
@@ -634,12 +652,13 @@ export function SystemMigrationWorkspace() {
                   onClick={onApplyClick}
                 >
                   {importBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  {importMode === "full" ? "To‘liq importni qo‘llash" : "Profilni qo‘llash"}
+                  {importMode === "full" ? "To‘liq qabul qilish / qo‘llash" : "Profilni qo‘llash"}
                 </Button>
                 {!preview.target_empty && importMode === "full" ? (
                   <p className="text-xs text-muted-foreground">
-                    Qo‘llashdan oldin dublikatlar oynasi ochiladi: eskisini qoldirish (xavfsiz) yoki
-                    yangisini almashtirish.
+                    Qo‘llashdan oldin tanlov ochiladi. To‘liq nusxa uchun{" "}
+                    <span className="font-medium text-foreground">«To‘liq qabul qilish»</span>{" "}
+                    (almashtirish) ni bosing — hech narsa qolib ketmasin.
                   </p>
                 ) : null}
                 {importMode === "full" &&
@@ -653,7 +672,7 @@ export function SystemMigrationWorkspace() {
                 {importMode === "full" && (preview.format_version ?? 0) < 5 ? (
                   <p className="text-xs text-amber-800">
                     Format v{preview.format_version} — to‘liq zaxira (katalog, RBAC, bog‘lanishlar) uchun
-                    yangi eksport oling (v5).
+                    yangi eksport oling (v6).
                   </p>
                 ) : null}
                 {importMode === "profile_only" && preview.has_initial_setup_xlsx ? (
@@ -780,26 +799,26 @@ export function SystemMigrationWorkspace() {
       <Dialog open={conflictOpen} onOpenChange={setConflictOpen}>
         <DialogContent className="sm:max-w-lg" overlayClassName="bg-black/40">
           <DialogHeader>
-            <DialogTitle>Dublikatlar: qanday davom etamiz?</DialogTitle>
+            <DialogTitle>Zaxirani qabul qilish</DialogTitle>
             <DialogDescription>
-              Bu kompaniyada allaqachon ma’lumot bor. Bir xil kod/SKU/login bo‘lgan yozuvlar uchun
-              quyidagidan birini tanlang.
+              Bu kompaniyada allaqachon ma’lumot bor. To‘liq migratsiya uchun arxivni to‘liq qabul
+              qiling; aks holda ba’zi buyurtma/to‘lovlar qolib ketishi mumkin.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 text-sm">
-            <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5">
-              <p className="font-medium text-foreground">Eskisini qoldirish</p>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50/80 px-3 py-2 space-y-1.5">
+              <p className="font-medium text-foreground">To‘liq qabul qilish (tavsiya)</p>
               <p className="text-xs text-muted-foreground">
-                Mavjud mijoz, mahsulot, user va boshqalar o‘zgarmaydi. Arxivdagi yangi qiymatlar
-                yozilmaydi — xavfsizroq tanlov (odatda shuni tanlang).
+                Bir xil kalitli yozuvlar arxiv bilan yangilanadi; buyurtma/to‘lov/tashrif/foto ham
+                arxivdan to‘liq yoziladi. Boshqa serverdan ko‘chirishda shu variantni tanlang.
               </p>
             </div>
             <div className="rounded-md border bg-muted/30 px-3 py-2 space-y-1.5">
-              <p className="font-medium text-foreground">Yangisini almashtirish</p>
+              <p className="font-medium text-foreground">Eskisini qoldirish (merge)</p>
               <p className="text-xs text-muted-foreground">
-                Bir xil kalitli yozuvlar arxivdagi ma’lumot bilan yangilanadi (nom, narx, telefon va
-                hokazo). Faqat arxivdagi ma’lumot to‘g‘ri ekaniga ishonchingiz komil bo‘lsa.
+                Mavjud mijoz/mahsulot/user saqlanadi. Agar maqsadda allaqachon buyurtma/to‘lov
+                bo‘lsa, ular qayta yozilmaydi — faqat tashrif/GPS va spravochniklar qo‘shiladi.
               </p>
             </div>
 
@@ -812,8 +831,8 @@ export function SystemMigrationWorkspace() {
                 {blockersSummary ? <p>Maqsadda bor: {blockersSummary}.</p> : null}
                 {opsBusyOnTarget ? (
                   <p>
-                    Maqsadda buyurtmalar yoki to‘lovlar bor — operatsion tarix (buyurtma/to‘lov)
-                    import qilinmaydi (dublikatdan saqlanish).
+                    Maqsadda buyurtma/to‘lov bor. «Eskisini qoldirish»da ular import qilinmaydi;
+                    to‘liq nusxa uchun «To‘liq qabul qilish»ni tanlang.
                   </p>
                 ) : null}
                 {priceWithoutProductsRisk ? (
@@ -836,20 +855,20 @@ export function SystemMigrationWorkspace() {
           <DialogFooter className="gap-2 sm:flex-col sm:space-x-0">
             <Button
               type="button"
+              className="w-full"
+              disabled={importBusy}
+              onClick={() => runApply("replace", true)}
+            >
+              To‘liq qabul qilish
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               className="w-full"
               disabled={importBusy}
               onClick={() => runApply("keep", true)}
             >
-              Eskisini qoldirish
-            </Button>
-            <Button
-              type="button"
-              className="w-full"
-              disabled={importBusy}
-              onClick={() => runApply("replace", true)}
-            >
-              Yangisini almashtirish
+              Eskisini qoldirish (merge)
             </Button>
             <Button
               type="button"

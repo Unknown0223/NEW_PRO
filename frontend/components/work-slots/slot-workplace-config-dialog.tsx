@@ -107,6 +107,8 @@ type FormState = {
   superviseeAgentSlotIds: number[];
 };
 
+const EMPTY_SLOT_IDS: number[] = [];
+
 function emptyForm(): FormState {
   return {
     directionId: "",
@@ -149,7 +151,7 @@ export function SlotWorkplaceConfigDialog({
   section,
   slotId = null,
   bulkMode = false,
-  slotIds = [],
+  slotIds = EMPTY_SLOT_IDS,
   bulkSummary,
   slotType: slotTypeProp,
   warehouses,
@@ -249,8 +251,16 @@ export function SlotWorkplaceConfigDialog({
     setBaseline(next);
   }, []);
 
+  const slotIdsKey = slotIds.join(",");
+
   const loadBulkLimits = useCallback(async () => {
-    if (!tenant || slotIds.length === 0) {
+    const ids = slotIdsKey
+      ? slotIdsKey
+          .split(",")
+          .map((s) => Number.parseInt(s, 10))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!tenant || ids.length === 0) {
       applyForm(emptyForm());
       setLimitsMixed(false);
       setLimitsHydrated(true);
@@ -261,7 +271,7 @@ export function SlotWorkplaceConfigDialog({
     setError(null);
     try {
       const ents = await Promise.all(
-        slotIds.map(async (id) => {
+        ids.map(async (id) => {
           const res = await apiFetch<{ data: WorkSlotListItem }>(`/api/${tenant}/work-slots/${id}`);
           return parseEntitlements(res.data.entitlements);
         })
@@ -277,7 +287,7 @@ export function SlotWorkplaceConfigDialog({
       setLoading(false);
       setLimitsHydrated(true);
     }
-  }, [tenant, slotIds, applyForm]);
+  }, [tenant, slotIdsKey, applyForm]);
 
   const load = useCallback(async () => {
     if (!tenant || !slotId || bulkMode) return;
@@ -424,6 +434,7 @@ export function SlotWorkplaceConfigDialog({
   /** Mobil — to‘liq sozlamalar oynasi (oraliq modal yo‘q). */
   if (section === "mobile") {
     const mobileReady = bulkMode || mobileAgentRow != null;
+    const mobileVariant = effectiveSlotType === "supervisor" ? "supervisor" : "agent";
     return (
       <AgentConfigurationsDialog
         open={open && !loading && mobileReady}
@@ -432,6 +443,7 @@ export function SlotWorkplaceConfigDialog({
         bulkSummary={bulkSummary ?? (slot ? `${titleBase}: ${slot.slot_code}` : undefined)}
         saving={mobileSaving || loading}
         paymentMethodEntries={paymentMethodsQ.data}
+        variant={mobileVariant}
         onClose={() => onOpenChange(false)}
         onSave={async (ent) => {
           setMobileSaving(true);

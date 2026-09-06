@@ -24,7 +24,12 @@ export type AgentLocationPingRow = {
 export async function recordAgentLocationPing(
   tenantId: number,
   agentId: number,
-  input: { latitude: number; longitude: number; accuracy_meters?: number | null }
+  input: {
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    recorded_at?: Date | null;
+  }
 ): Promise<AgentLocationPingRow> {
   const user = await prisma.user.findFirst({
     where: {
@@ -37,6 +42,8 @@ export async function recordAgentLocationPing(
   });
   if (!user) throw new Error("AgentNotFound");
 
+  const recordedAt = clampClientRecordedAt(input.recorded_at ?? null);
+
   const row = await prisma.agentLocationPing.create({
     data: {
       tenant_id: tenantId,
@@ -46,7 +53,8 @@ export async function recordAgentLocationPing(
       accuracy_meters:
         input.accuracy_meters != null && Number.isFinite(input.accuracy_meters)
           ? input.accuracy_meters
-          : null
+          : null,
+      ...(recordedAt ? { recorded_at: recordedAt } : {})
     }
   });
   return {
@@ -57,6 +65,56 @@ export async function recordAgentLocationPing(
     accuracy_meters: row.accuracy_meters,
     recorded_at: row.recorded_at.toISOString()
   };
+}
+
+/** Client oflayn flush: 7 kun orqaga / 5 daqiqa oldinga cheklov. */
+export function clampClientRecordedAt(raw: Date | null | undefined, now = new Date()): Date | null {
+  if (raw == null || Number.isNaN(raw.getTime())) return null;
+  const maxFutureMs = 5 * 60 * 1000;
+  const maxPastMs = 7 * 24 * 60 * 60 * 1000;
+  if (raw.getTime() > now.getTime() + maxFutureMs) return now;
+  if (raw.getTime() < now.getTime() - maxPastMs) return new Date(now.getTime() - maxPastMs);
+  return raw;
+}
+
+export async function recordAgentLocationPingsBatch(
+  tenantId: number,
+  agentId: number,
+  pings: Array<{
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    recorded_at?: Date | null;
+  }>
+): Promise<{ inserted: number }> {
+  if (!pings.length) return { inserted: 0 };
+  const user = await prisma.user.findFirst({
+    where: {
+      id: agentId,
+      tenant_id: tenantId,
+      role: { in: ["agent", "expeditor"] },
+      is_active: true
+    },
+    select: { id: true }
+  });
+  if (!user) throw new Error("AgentNotFound");
+
+  const now = new Date();
+  const data = pings.slice(0, 200).map((p) => {
+    const recordedAt = clampClientRecordedAt(p.recorded_at ?? null, now);
+    return {
+      tenant_id: tenantId,
+      agent_id: agentId,
+      latitude: new Prisma.Decimal(p.latitude),
+      longitude: new Prisma.Decimal(p.longitude),
+      accuracy_meters:
+        p.accuracy_meters != null && Number.isFinite(p.accuracy_meters) ? p.accuracy_meters : null,
+      recorded_at: recordedAt ?? now
+    };
+  });
+
+  const result = await prisma.agentLocationPing.createMany({ data });
+  return { inserted: result.count };
 }
 
 export async function listAgentLocationPings(

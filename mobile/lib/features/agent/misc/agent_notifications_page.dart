@@ -427,6 +427,7 @@ class _AgentNotificationsPageState extends ConsumerState<AgentNotificationsPage>
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'Уведомления',
+        useShellDrawer: true,
         showBack: true,
         actions: [
           AgentIconButton(

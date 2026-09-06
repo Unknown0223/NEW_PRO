@@ -7,8 +7,8 @@ export type ExpeditorLoading520PreviewLine = {
   num: number;
   code: string;
   name: string;
-  qty: number | null;
-  bonus: number | null;
+  qty: number;
+  bonus: number;
   price: string;
   sum: string;
 };
@@ -26,6 +26,7 @@ export type ExpeditorLoading520Preview = {
   title: string;
   printedAt: string;
   filename: string;
+  sheetName?: string;
   meta: {
     dateOrder: string;
     dateShip: string | null;
@@ -43,6 +44,7 @@ export type ExpeditorLoading520Preview = {
     bonus: number;
     sum: string;
   };
+  shelfReturnOnly?: boolean;
 };
 
 function apiBody(orderIds: number[], prefs: NakladnoyExportPrefs) {

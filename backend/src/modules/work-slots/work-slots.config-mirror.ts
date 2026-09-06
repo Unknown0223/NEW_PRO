@@ -512,6 +512,19 @@ export async function applySlotConfigPatch(
       : {})
   };
 
+  // Ограничения → denormalized price_types (agent_price_types mirror bilan mos).
+  if (
+    patch.entitlements !== undefined &&
+    patch.price_types === undefined &&
+    patch.entitlements != null &&
+    typeof patch.entitlements === "object" &&
+    !Array.isArray(patch.entitlements) &&
+    Array.isArray((patch.entitlements as Record<string, unknown>).price_types)
+  ) {
+    const pts = (patch.entitlements as Record<string, unknown>).price_types as unknown[];
+    data.price_types = pts.filter((x): x is string => typeof x === "string") as Prisma.InputJsonValue;
+  }
+
   await tx.workSlot.update({ where: { id: slotId }, data });
 }
 

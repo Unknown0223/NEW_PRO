@@ -7,6 +7,29 @@ function uniquePositiveIds(ids: number[]): number[] {
   return [...new Set(ids.filter((id) => Number.isFinite(id) && id > 0))];
 }
 
+/**
+ * Agent.supervisor_user_id / slot.supervisor_user_id faqat role=supervisor bo‘lishi shart.
+ * Aks holda pivot «Супервайзер» ustunida direktor va boshqa rollar chiqadi.
+ */
+export async function assertSupervisorUserId(
+  tenantId: number,
+  supervisorUserId: number | null | undefined,
+  tx?: Tx
+): Promise<void> {
+  if (supervisorUserId == null) return;
+  const db = tx ?? prisma;
+  const sup = await db.user.findFirst({
+    where: {
+      id: supervisorUserId,
+      tenant_id: tenantId,
+      is_active: true,
+      role: "supervisor"
+    },
+    select: { id: true }
+  });
+  if (!sup) throw new Error("BAD_SUPERVISOR");
+}
+
 /** Barcha id lar tenant dagi faol (void qilinmagan) agent slotlari bo‘lishi shart. */
 export async function validateSuperviseeAgentSlotIds(
   tx: Tx,

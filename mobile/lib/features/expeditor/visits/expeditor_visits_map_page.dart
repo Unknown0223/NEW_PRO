@@ -9,7 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/ui/agent_ui.dart';
 import '../../../core/ui/agent_ui_extended.dart';
-import '../../../core/utils/external_actions.dart';
+import '../../../core/utils/client_navigation.dart';
 
 /// Ekspeditor — vizit/marshrut nuqtalarini ilova ichida Yandex xaritada ko'rsatish.
 class ExpeditorVisitsMapPage extends ConsumerStatefulWidget {
@@ -109,11 +109,15 @@ class _ExpeditorVisitsMapPageState
               },
         onRoute: () async {
           Navigator.pop(ctx);
-          await launchClientLocation(
+          final ok = await openDirectionsToClient(
             latitude: stop.latitude,
             longitude: stop.longitude,
-            label: stop.name,
           );
+          if (!ok && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Не удалось открыть навигацию')),
+            );
+          }
         },
       ),
     );

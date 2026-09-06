@@ -1644,6 +1644,7 @@ class DebtorClient {
   final String? overdueAt;
   final double legacyDebt;
   final double currentDebt;
+  final double openingDebt;
   final bool debtCollectionOnly;
 
   DebtorClient({
@@ -1655,6 +1656,7 @@ class DebtorClient {
     this.overdueAt,
     this.legacyDebt = 0,
     this.currentDebt = 0,
+    this.openingDebt = 0,
     this.debtCollectionOnly = false,
   });
 
@@ -1667,6 +1669,7 @@ class DebtorClient {
         overdueAt: j['overdue_at']?.toString(),
         legacyDebt: (j['legacy_debt'] as num?)?.toDouble() ?? 0,
         currentDebt: (j['current_debt'] as num?)?.toDouble() ?? 0,
+        openingDebt: (j['opening_debt'] as num?)?.toDouble() ?? 0,
         debtCollectionOnly: j['debt_collection_only'] == true,
       );
 }

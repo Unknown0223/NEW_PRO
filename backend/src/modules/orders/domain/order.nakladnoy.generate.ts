@@ -85,7 +85,7 @@ export async function requestBulkOrderNakladnoyPreview(
     return {
       label,
       filename: doc.filename,
-      pages: [{ sheetName: "5.2.0", kind: "structured-520", loading520: doc }]
+      pages: [{ sheetName: doc.sheetName || "1.520.", kind: "structured-520", loading520: doc }]
     };
   }
 
@@ -223,7 +223,7 @@ export async function requestBulkOrderNakladnoy(
         ? expeditorLoadingDownloadFilename(expLayoutId)
         : tid === "nakladnoy_warehouse"
           ? `zagruz_zav_sklda_5_1_8_${day}.${format}`
-          : `nakladnye_2_1_0_${day}.${format}`;
+          : `nakladnye_2_1_7_${day}.${format}`;
 
   return {
     buffer,

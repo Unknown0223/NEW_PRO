@@ -6,7 +6,9 @@ import '../api/field_api.dart';
 import '../auth/session.dart';
 import '../config/gps_config_policy.dart';
 import '../config/mobile_config.dart';
+import '../database/app_database.dart';
 import '../errors/error_reporter.dart';
+import 'gps_ping_queue.dart';
 
 enum GpsStatus { unknown, disabled, denied, granted, tracking }
 
@@ -63,7 +65,8 @@ class GpsTracker extends StateNotifier<GpsState> {
   final String _slug;
   Timer? _timer;
   bool _disposed = false;
-  Position? _lastSentPosition;
+  Position? _lastEnqueuedPosition;
+  bool _flushRunning = false;
 
   GpsTracker({
     required FieldApi fieldApi,
@@ -108,11 +111,14 @@ class GpsTracker extends StateNotifier<GpsState> {
 
     stopTracking();
 
-    await _sendPing();
+    await _captureAndEnqueuePing();
     if (_disposed) return;
+    unawaited(flushPendingLocationPings());
 
     final interval = Duration(seconds: _config.trackingIntervalSec);
-    _timer = Timer.periodic(interval, (_) => _sendPing());
+    _timer = Timer.periodic(interval, (_) {
+      unawaited(_captureAndEnqueuePing().then((_) => flushPendingLocationPings()));
+    });
 
     if (!_disposed) {
       state = state.copyWith(status: GpsStatus.tracking);
@@ -125,6 +131,8 @@ class GpsTracker extends StateNotifier<GpsState> {
     if (!_disposed && state.status == GpsStatus.tracking) {
       state = state.copyWith(status: GpsStatus.granted);
     }
+    // Timer to‘xtasa ham navbatdagi pinglar uzatilsin.
+    unawaited(flushPendingLocationPings());
   }
 
   Future<Position?> getCurrentPosition() async {
@@ -260,8 +268,8 @@ class GpsTracker extends StateNotifier<GpsState> {
     return Geolocator.distanceBetween(lat1, lng1, lat2, lng2);
   }
 
-  /// Send GPS ping to backend
-  Future<void> _sendPing() async {
+  /// GPS ni lokal navbatga yozadi (internet bo‘lmasa ham), keyin flush urinadi.
+  Future<void> _captureAndEnqueuePing() async {
     if (_disposed) return;
     try {
       final position = await getCurrentPosition();
@@ -271,45 +279,73 @@ class GpsTracker extends StateNotifier<GpsState> {
       if (!accuracyCheck.ok) return;
 
       final minDist = _config.minDistanceM;
-      if (minDist != null && minDist > 0 && _lastSentPosition != null) {
-        final moved = distanceBetween(
-          _lastSentPosition!.latitude,
-          _lastSentPosition!.longitude,
-          position.latitude,
-          position.longitude,
-        );
-        if (moved < minDist) return;
-      }
+      final shouldEnqueue = shouldEnqueueGpsPing(
+        lat: position.latitude,
+        lng: position.longitude,
+        lastLat: _lastEnqueuedPosition?.latitude,
+        lastLng: _lastEnqueuedPosition?.longitude,
+        minDistanceM: minDist,
+        distanceMeters: distanceBetween,
+      );
+      if (!shouldEnqueue) return;
 
-      state = state.copyWith(lastPosition: position, lastPingAt: DateTime.now());
-      _lastSentPosition = position;
+      final recordedAt = DateTime.now().toUtc();
+      await AppDatabase().enqueueLocationPing(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracyMeters: position.accuracy,
+        recordedAt: recordedAt,
+      );
 
-      if (_slug.isNotEmpty) {
-        await _fieldApi.sendLocation(
-          _slug,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          accuracyMeters: position.accuracy,
-        );
+      _lastEnqueuedPosition = position;
+      if (!_disposed) {
+        state = state.copyWith(lastPosition: position, lastPingAt: recordedAt);
       }
     } catch (e, st) {
-      // Silently fail — will retry next interval; jurnalga yozamiz (12s dedupe).
       ErrorReporter.instance?.reportCaught(
         e,
         stack: st,
         module: ErrorModules.gps,
-        code: 'GpsPingFailed',
-        message: 'GPS: ping на сервер не отправился',
+        code: 'GpsEnqueueFailed',
+        message: 'GPS: локальная очередь не записала ping',
         path: '/mobile/field/location',
         severity: 'warning',
       );
     }
   }
 
+  /// Oflayn GPS navbatini serverga batch uzatish.
+  Future<int> flushPendingLocationPings() async {
+    if (_disposed || _slug.isEmpty || _flushRunning) return 0;
+    _flushRunning = true;
+    try {
+      return await flushPendingLocationPingsToServer(
+        db: AppDatabase(),
+        fieldApi: _fieldApi,
+        slug: _slug,
+        isCancelled: () => _disposed,
+      );
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.gps,
+        code: 'GpsPingFlushFailed',
+        message: 'GPS: offline flush не отправился',
+        path: '/mobile/field/location/batch',
+        severity: 'warning',
+      );
+      return 0;
+    } finally {
+      _flushRunning = false;
+    }
+  }
+
   @override
   void dispose() {
+    _timer?.cancel();
+    _timer = null;
     _disposed = true;
-    stopTracking();
     super.dispose();
   }
 }

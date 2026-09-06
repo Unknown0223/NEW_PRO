@@ -13,6 +13,7 @@ import '../../../core/ui/agent_ui_extended.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 import 'expeditor_bonus_calc_sheet.dart';
 
 /// Qaytarish usuli:
@@ -87,6 +88,7 @@ class _ExpeditorReturnByOrderPageState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: Text(_orderId == null
             ? 'Возврат с полки по заказу'

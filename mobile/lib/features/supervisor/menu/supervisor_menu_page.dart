@@ -188,6 +188,22 @@ class SupervisorMenuPage extends ConsumerWidget {
                     ),
                     const Divider(height: 1),
                     tile(
+                      icon: Icons.store_mall_directory_outlined,
+                      title: 'База клиентов',
+                      subtitle: policy.canEditClient
+                          ? 'Только клиенты ваших агентов'
+                          : 'Редактирование отключено',
+                      onTap: () => context.push('/sv-clients'),
+                    ),
+                    const Divider(height: 1),
+                    tile(
+                      icon: Icons.notifications_outlined,
+                      title: 'Уведомления',
+                      subtitle: 'Изменения координат от других SVR',
+                      onTap: () => context.push('/sv-notifications'),
+                    ),
+                    const Divider(height: 1),
+                    tile(
                       icon: Icons.task_alt_outlined,
                       title: 'Задачи',
                       soon: true,

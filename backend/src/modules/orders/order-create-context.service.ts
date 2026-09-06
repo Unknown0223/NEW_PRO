@@ -23,6 +23,13 @@ import { priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/fi
 import { extractMobileConfigFromEntitlementsUnknown } from "../staff/agent-mobile-config";
 
 import { loadOrderCreateCatalogSlice } from "./order-create-context.catalog";
+import {
+  filterCatalogByAllowedPriceTypes,
+  intersectPriceTypes,
+  parsePriceTypeList,
+  resolveAgentAllowedPriceTypes
+} from "./price-type-restriction";
+import { filterWarehousesByScope } from "../linkage/workplace-bindings";
 
 export type OrderCreateContextBundle = {
   clients: Awaited<ReturnType<typeof listClientsForTenantPaged>>["data"];
@@ -42,28 +49,6 @@ export async function getOrderCreateContextBundle(
   tenantId: number,
   selected: LinkageSelectedMasters = {}
 ): Promise<OrderCreateContextBundle> {
-  const parseStringArray = (v: unknown): string[] => {
-    if (!Array.isArray(v)) return [];
-    return v
-      .filter((x): x is string => typeof x === "string" && x.trim() !== "")
-      .map((s) => s.trim());
-  };
-  const mergeUnique = (...lists: string[][]): string[] => {
-    const out = new Set<string>();
-    for (const list of lists) {
-      for (const item of list) {
-        const t = item.trim();
-        if (t) out.add(t);
-      }
-    }
-    return [...out];
-  };
-  const intersectStrings = (a: string[], b: string[]): string[] => {
-    if (a.length === 0 || b.length === 0) return [];
-    const bNorm = new Set(b.map((x) => x.trim().toLowerCase()));
-    return a.filter((x) => bNorm.has(x.trim().toLowerCase()));
-  };
-
   const ORDER_CREATE_CONTEXT_DEBUG = process.env.ORDER_CREATE_CONTEXT_DEBUG === "1";
   const logDebug = (event: string, payload: Record<string, unknown>) => {
     if (!ORDER_CREATE_CONTEXT_DEBUG) return;
@@ -161,7 +146,6 @@ export async function getOrderCreateContextBundle(
       return hasAgent || hasExpeditor;
     });
   });
-  const scopedWarehouseIds = new Set(scope.warehouse_ids);
   const scopedAgentIds = new Set(scope.agent_ids);
   /** Tanlangan agentni almashtirish: klient bor-yo‘qligida `users` ro‘yxati faqat shu agentga qisqarmasin. */
   let scopedAgentIdsForUserPicker = scopedAgentIds;
@@ -183,14 +167,14 @@ export async function getOrderCreateContextBundle(
     scopedAgentIdsForUserPicker = new Set(users.map((u) => u.id));
   }
   const scopedExpeditorIds = new Set(scope.expeditor_ids);
-  const strictWarehouseByClient = scope.selected_client_id != null;
-  const constrainedWarehouses = scope.constrained
-    ? scope.warehouse_ids.length > 0
-      ? warehouses.filter((w) => scopedWarehouseIds.has(w.id))
-      : strictWarehouseByClient
-        ? []
-        : warehouses
-    : warehouses;
+  const constrainedWarehouses = filterWarehousesByScope({
+    warehouses,
+    constrained: scope.constrained,
+    warehouseIds: scope.warehouse_ids,
+    selectedAgentId: scope.selected_agent_id,
+    selectedExpeditorUserId: scope.selected_expeditor_user_id,
+    selectedClientId: scope.selected_client_id
+  });
   const strictAgentScope =
     scope.selected_client_id != null ||
     scope.selected_warehouse_id != null ||
@@ -225,8 +209,9 @@ export async function getOrderCreateContextBundle(
    * - avvalo tenant sozlamalaridagi `price_type_entries` (sale, active)
    * - agar sozlama bo‘sh bo‘lsa: minimal `retail` (DB’dagi "tasodifiy" eski qiymatlar chiqib ketmasin)
    *   (oldingi distinct fallback `priceTypesRaw` maxsus tenantlarda aralash qiymatlar berib yuborishi mumkin).
+   * - keyin agent/expeditor allow-list bo‘yicha filtr (`Ограничения` / entitlements.price_types).
    */
-  const price_types = (() => {
+  const catalogPriceTypes = (() => {
     if (salePriceTypeEntries.length > 0) {
       const keys = salePriceTypeEntries.map((e) => priceTypeKey(e)).map((s) => s.trim()).filter(Boolean);
       return Array.from(new Set(keys)).sort((a, b) => a.localeCompare(b, "uz"));
@@ -245,14 +230,37 @@ export async function getOrderCreateContextBundle(
     paymentMethodIdsByPriceType.set(key, set);
   }
 
-  const agentEnt = selectedAgent?.agent_entitlements;
+  // Work-slot — joy manbasi; user mirror eski bo‘lsa ham cheklov to‘g‘ri qo‘llansin.
+  let agentEntSource = selectedAgent?.agent_entitlements;
+  let agentPriceTypesSource: unknown = selectedAgent?.agent_price_types;
+  let agentLegacyPriceType = selectedAgent?.price_type?.trim() || null;
+  if (selectedAgent) {
+    const slotLink = await prisma.slotUserLink.findFirst({
+      where: { tenant_id: tenantId, user_id: selectedAgent.id, ended_at: null },
+      select: {
+        slot: { select: { entitlements: true, price_types: true, price_type: true } }
+      }
+    });
+    if (slotLink?.slot) {
+      agentEntSource = slotLink.slot.entitlements ?? agentEntSource;
+      agentPriceTypesSource = slotLink.slot.price_types ?? agentPriceTypesSource;
+      if (slotLink.slot.price_type?.trim()) {
+        agentLegacyPriceType = slotLink.slot.price_type.trim();
+      }
+    }
+  }
+
+  const agentEnt = agentEntSource;
   const entPriceTypes =
     agentEnt != null && typeof agentEnt === "object" && !Array.isArray(agentEnt)
-      ? parseStringArray((agentEnt as Record<string, unknown>).price_types)
+      ? parsePriceTypeList((agentEnt as Record<string, unknown>).price_types)
       : [];
-  const agentPriceTypes = parseStringArray(selectedAgent?.agent_price_types);
-  const agentLegacyPriceType = selectedAgent?.price_type?.trim() ? [selectedAgent.price_type.trim()] : [];
-  const agentAllowedPriceTypes = mergeUnique(entPriceTypes, agentPriceTypes, agentLegacyPriceType);
+  const agentPriceTypes = parsePriceTypeList(agentPriceTypesSource);
+  const agentAllowedPriceTypes = resolveAgentAllowedPriceTypes({
+    entitlementsPriceTypes: entPriceTypes,
+    agentPriceTypes,
+    legacyPriceType: agentLegacyPriceType
+  });
 
   const expRules = selectedExpeditor
     ? pickExpeditorAssignmentRules(
@@ -260,16 +268,18 @@ export async function getOrderCreateContextBundle(
         selectedExpeditor.expeditor_assignment_rules
       )
     : null;
-  const expAllowedPriceTypes = parseStringArray(expRules?.price_types);
+  const expAllowedPriceTypes = parsePriceTypeList(expRules?.price_types);
 
   let restrictedPriceTypes: string[] | null = null;
   if (agentAllowedPriceTypes.length > 0 && expAllowedPriceTypes.length > 0) {
-    restrictedPriceTypes = intersectStrings(agentAllowedPriceTypes, expAllowedPriceTypes);
+    restrictedPriceTypes = intersectPriceTypes(agentAllowedPriceTypes, expAllowedPriceTypes);
   } else if (agentAllowedPriceTypes.length > 0) {
     restrictedPriceTypes = agentAllowedPriceTypes;
   } else if (expAllowedPriceTypes.length > 0) {
     restrictedPriceTypes = expAllowedPriceTypes;
   }
+
+  const price_types = filterCatalogByAllowedPriceTypes(catalogPriceTypes, restrictedPriceTypes);
 
   let filteredPaymentMethods = allPaymentMethods;
   if (restrictedPriceTypes != null) {
@@ -295,8 +305,8 @@ export async function getOrderCreateContextBundle(
     }
   }
 
-  const agentMobilePolicy = selectedAgent?.agent_entitlements
-    ? extractMobileConfigFromEntitlementsUnknown(selectedAgent.agent_entitlements)
+  const agentMobilePolicy = agentEnt
+    ? extractMobileConfigFromEntitlementsUnknown(agentEnt)
     : undefined;
   const disallowedPaymentIds = new Set(
     (agentMobilePolicy?.misc?.disallowed_payment_method_codes ?? [])

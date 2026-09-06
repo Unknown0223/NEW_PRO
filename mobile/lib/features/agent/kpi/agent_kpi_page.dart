@@ -31,6 +31,7 @@ class AgentKpiPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: 'KPI',
+        useShellDrawer: true,
         belowTitle: dataAsync.maybeWhen(
           data: (d) => Text(
             kpiAgentSubtitle(d, fallbackName: fallbackName, fallbackCode: fallbackCode),

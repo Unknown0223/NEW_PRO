@@ -27,6 +27,7 @@ import { getReportBuilderMetadata } from "./report-builder.metadata";
 import { runReportBuilderDataset } from "./report-builder.dataset";
 import { buildMatrixView, runReportBuilderPreview } from "./report-builder.query";
 import { mergeTerritoryFilterOptions, type TerritoryRow } from "../reports/territory-nodes";
+import { parseUserTerritoryPartsFromHelpers } from "../work-slots/work-slots.config-territory";
 import * as saved from "./report-builder.saved";
 import type {
   ReportBuilderConfigPayload,
@@ -100,7 +101,9 @@ export async function getReportBuilderFilterOptions(
     paymentRows,
     clientCategoryRows,
     tenantRow,
-    territoryRows
+    territoryRows,
+    workSlotTerritoryRows,
+    agentTerritoryRows
   ] = await Promise.all([
     prisma.user.findMany({
       where: whereAgent,
@@ -196,6 +199,21 @@ export async function getReportBuilderFilterOptions(
       },
       select: { zone: true, region: true, city: true, district: true },
       take: 5000
+    }),
+    prisma.workSlot.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { territory: true, territories: true },
+      take: 3000
+    }),
+    prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        is_active: true,
+        OR: [{ role: "agent" }, { role: "supervisor" }, { role: "expeditor" }],
+        NOT: { territory: null }
+      },
+      select: { territory: true },
+      take: 3000
     })
   ]);
 
@@ -226,15 +244,41 @@ export async function getReportBuilderFilterOptions(
     unknown
   >;
   const refs = referencesWithResolvedTerritoryNodes(refsRaw);
-  const territoryMerged = mergeTerritoryFilterOptions(
-    refs,
-    territoryRows.map((r) => ({
-      // Robust fallback for tenants where one of zone/region/city isn't populated.
-      t1: (r.zone ?? "").trim() || (r.region ?? "").trim() || null,
-      t2: (r.region ?? "").trim() || (r.city ?? "").trim() || null,
-      t3: (r.city ?? "").trim() || (r.district ?? "").trim() || null
-    })) satisfies TerritoryRow[]
-  );
+  const clientTerritoryRows: TerritoryRow[] = territoryRows.map((r) => ({
+    // Robust fallback for tenants where one of zone/region/city isn't populated.
+    t1: (r.zone ?? "").trim() || (r.region ?? "").trim() || null,
+    t2: (r.region ?? "").trim() || (r.city ?? "").trim() || null,
+    t3: (r.city ?? "").trim() || (r.district ?? "").trim() || null
+  }));
+  const workplaceTerritoryRows: TerritoryRow[] = [];
+  for (const slot of workSlotTerritoryRows) {
+    const rawList = [
+      ...(slot.territories?.length ? slot.territories : []),
+      ...(slot.territory ? [slot.territory] : [])
+    ];
+    for (const raw of rawList) {
+      const parts = parseUserTerritoryPartsFromHelpers(raw);
+      if (!parts.zone && !parts.oblast && !parts.city) continue;
+      workplaceTerritoryRows.push({
+        t1: parts.zone,
+        t2: parts.oblast,
+        t3: parts.city
+      });
+    }
+  }
+  for (const u of agentTerritoryRows) {
+    const parts = parseUserTerritoryPartsFromHelpers(u.territory);
+    if (!parts.zone && !parts.oblast && !parts.city) continue;
+    workplaceTerritoryRows.push({
+      t1: parts.zone,
+      t2: parts.oblast,
+      t3: parts.city
+    });
+  }
+  const territoryMerged = mergeTerritoryFilterOptions(refs, [
+    ...clientTerritoryRows,
+    ...workplaceTerritoryRows
+  ]);
   const territory_level_1 = territoryMerged.territory_1.map((id) => ({ id, label: id }));
   const territory_level_2 = territoryMerged.territory_2.map((id) => ({ id, label: id }));
   const territory_level_3 = territoryMerged.territory_3.map((id) => ({ id, label: id }));

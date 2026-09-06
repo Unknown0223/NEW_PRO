@@ -4,6 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/client_navigation.dart';
 import '../shell/agent_app_bar.dart';
 import 'client_map_holder.dart';
 
@@ -25,6 +26,8 @@ class ClientLocationMapPage extends ConsumerStatefulWidget {
 }
 
 class _ClientLocationMapPageState extends ConsumerState<ClientLocationMapPage> {
+  bool _navBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +38,24 @@ class _ClientLocationMapPageState extends ConsumerState<ClientLocationMapPage> {
             longitude: widget.longitude,
           );
     });
+  }
+
+  Future<void> _openDirections() async {
+    if (_navBusy) return;
+    setState(() => _navBusy = true);
+    try {
+      final ok = await openDirectionsToClient(
+        latitude: widget.latitude,
+        longitude: widget.longitude,
+      );
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть навигацию')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _navBusy = false);
+    }
   }
 
   @override
@@ -48,6 +69,19 @@ class _ClientLocationMapPageState extends ConsumerState<ClientLocationMapPage> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AgentAppBar(title: widget.clientName, showBack: true),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _navBusy ? null : _openDirections,
+          backgroundColor: AppColors.agentAccent,
+          foregroundColor: Colors.white,
+          icon: _navBusy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.directions),
+          label: const Text('Маршрут'),
+        ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

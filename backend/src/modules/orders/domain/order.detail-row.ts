@@ -28,6 +28,13 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     o.agent?.trade_direction?.trim() ||
     null;
   const cl = o.client;
+  const statusLogsChrono = [...o.status_logs].reverse();
+  const firstLogWithUser = statusLogsChrono.find((l) => l.user?.login?.trim());
+  const createdBy =
+    firstLogWithUser?.user?.login?.trim() ||
+    o.agent?.login?.trim() ||
+    o.agent?.name?.trim() ||
+    null;
   return {
     id: o.id,
     number: o.number,
@@ -66,7 +73,7 @@ export function toDetailRow(o: OrderDetailLoaded, viewerRole?: string): OrderDet
     zone: cl.zone ?? null,
     consignment: o.agent?.consignment ?? null,
     day: null,
-    created_by: null,
+    created_by: createdBy,
     created_by_role: null,
     expected_ship_date: null,
     shipped_at: null,

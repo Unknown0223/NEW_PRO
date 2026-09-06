@@ -12,7 +12,8 @@ import {
 } from "./system-migration.constants";
 import { getMigrationInventory } from "./system-migration.inventory";
 import { extendedDataFilePaths, loadExtendedTables } from "./system-migration.extended.export";
-import { photoReportExportCutoff } from "./system-migration.import.files";
+import { PHOTO_REPORT_EXPORT_DAYS, photoReportExportCutoff } from "./system-migration.import.files";
+import { splitPhotoReportsForZip } from "./system-migration.photo-zip";
 import {
   loadTenantSettingsExtra,
   SETTINGS_EXTRA_JSON_PATH
@@ -71,20 +72,33 @@ async function safeFindManyByIds<T>(
   return out;
 }
 
-async function loadReferenceTables(tenantId: number) {
-  const [tradeDirections, salesChannels, warehouses, users, clients, products, cashDesks, stock] =
-    await Promise.all([
-      safeFindMany("trade_directions", () => prisma.tradeDirection.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("sales_channel_refs", () =>
-        prisma.salesChannelRef.findMany({ where: { tenant_id: tenantId } })
-      ),
-      safeFindMany("warehouses", () => prisma.warehouse.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("users", () => prisma.user.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("clients", () => prisma.client.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("products", () => prisma.product.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("cash_desks", () => prisma.cashDesk.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("stock", () => prisma.stock.findMany({ where: { tenant_id: tenantId } }))
-    ]);
+async function loadReferenceTables(
+  tenantId: number,
+  onProgress?: (message: string) => void
+) {
+  onProgress?.("Spravochniklar: ombor / user…");
+  const [tradeDirections, salesChannels, warehouses, users] = await Promise.all([
+    safeFindMany("trade_directions", () => prisma.tradeDirection.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("sales_channel_refs", () =>
+      prisma.salesChannelRef.findMany({ where: { tenant_id: tenantId } })
+    ),
+    safeFindMany("warehouses", () => prisma.warehouse.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("users", () => prisma.user.findMany({ where: { tenant_id: tenantId } }))
+  ]);
+
+  // 10k+ mijoz — boshqa jadvallar bilan parallel emas (RAM cho‘qqisi).
+  onProgress?.("Spravochniklar: mijozlar…");
+  const clients = await safeFindMany("clients", () =>
+    prisma.client.findMany({ where: { tenant_id: tenantId } })
+  );
+
+  onProgress?.("Spravochniklar: mahsulot / kassa / stock…");
+  const [products, cashDesks, stock] = await Promise.all([
+    safeFindMany("products", () => prisma.product.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("cash_desks", () => prisma.cashDesk.findMany({ where: { tenant_id: tenantId } })),
+    safeFindMany("stock", () => prisma.stock.findMany({ where: { tenant_id: tenantId } }))
+  ]);
+
   return {
     trade_directions: tradeDirections,
     sales_channel_refs: salesChannels,
@@ -161,6 +175,31 @@ async function loadTransactionalTables(tenantId: number) {
   };
 }
 
+/** GPS pinglar — sahifalab yuklash (katta tenantda OOM oldini olish). */
+async function loadAllAgentLocationPings(tenantId: number) {
+  const PAGE = 5_000;
+  const all: Awaited<ReturnType<typeof prisma.agentLocationPing.findMany>> = [];
+  let lastId = 0;
+  const cutoff = photoReportExportCutoff();
+  for (;;) {
+    const page = await safeFindMany("agent_location_pings_page", () =>
+      prisma.agentLocationPing.findMany({
+        where: {
+          tenant_id: tenantId,
+          id: { gt: lastId },
+          ...(cutoff ? { recorded_at: { gte: cutoff } } : {})
+        },
+        orderBy: { id: "asc" },
+        take: PAGE
+      })
+    );
+    if (!page.length) break;
+    lastId = page[page.length - 1]!.id;
+    all.push(...page);
+  }
+  return all;
+}
+
 async function loadFieldActivityTables(tenantId: number) {
   const [clientRefusals, agentVisits, agentLocationPings, expenses, paymentAllocations] =
     await Promise.all([
@@ -168,9 +207,7 @@ async function loadFieldActivityTables(tenantId: number) {
         prisma.clientRefusal.findMany({ where: { tenant_id: tenantId } })
       ),
       safeFindMany("agent_visits", () => prisma.agentVisit.findMany({ where: { tenant_id: tenantId } })),
-      safeFindMany("agent_location_pings", () =>
-        prisma.agentLocationPing.findMany({ where: { tenant_id: tenantId } })
-      ),
+      loadAllAgentLocationPings(tenantId),
       safeFindMany("expenses", () => prisma.expense.findMany({ where: { tenant_id: tenantId } })),
       safeFindMany("payment_allocations", () =>
         prisma.paymentAllocation.findMany({ where: { tenant_id: tenantId } })
@@ -200,7 +237,6 @@ async function loadBonusAndFilesTables(tenantId: number) {
     salesPlans,
     kpiResults,
     priceMatrix,
-    clientPhotoReports,
     bonusStrategies
   ] = await Promise.all([
     safeFindManyByIds("kpi_group_products", kpiGroupIds, (chunk) =>
@@ -219,14 +255,6 @@ async function loadBonusAndFilesTables(tenantId: number) {
     safeFindMany("sales_kpi_plans", () => prisma.salesKpiPlan.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("kpi_results", () => prisma.kpiResult.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("price_matrix", () => prisma.priceMatrix.findMany({ where: { tenant_id: tenantId } })),
-    safeFindMany("client_photo_reports", () =>
-      prisma.clientPhotoReport.findMany({
-        where: {
-          tenant_id: tenantId,
-          created_at: { gte: photoReportExportCutoff() }
-        }
-      })
-    ),
     safeFindMany("bonus_strategies", () =>
       prisma.bonusStrategy.findMany({ where: { tenant_id: tenantId } })
     )
@@ -270,9 +298,55 @@ async function loadBonusAndFilesTables(tenantId: number) {
     sales_kpi_plan_targets: planTargets,
     kpi_results: kpiResults,
     price_matrix: priceMatrix,
-    client_photo_reports: clientPhotoReports,
     bonus_strategies: bonusStrategies,
     bonus_strategy_members: bonusStrategyMembers
+  };
+}
+
+/** Fotootchyotlar: 40 tadan chunk — barcha base64 birga RAM ga sig‘masin. */
+async function appendClientPhotoReportsToZip(
+  zip: JSZip,
+  tenantId: number
+): Promise<{ exported_count: number; binary_files: number; stripped_unreadable: number }> {
+  const PAGE = 40;
+  const metaRows: Array<Record<string, unknown> & { id: number; image_url: string }> = [];
+  let binaryFiles = 0;
+  let stripped = 0;
+  let lastId = 0;
+
+  const cutoff = photoReportExportCutoff();
+  for (;;) {
+    const page = await safeFindMany("client_photo_reports_page", () =>
+      prisma.clientPhotoReport.findMany({
+        where: {
+          tenant_id: tenantId,
+          id: { gt: lastId },
+          ...(cutoff ? { created_at: { gte: cutoff } } : {})
+        },
+        orderBy: { id: "asc" },
+        take: PAGE
+      })
+    );
+    if (!page.length) break;
+    lastId = page[page.length - 1]!.id;
+
+    const split = await splitPhotoReportsForZip(
+      page as Array<Record<string, unknown> & { id: number; image_url: string }>
+    );
+    metaRows.push(...split.rows);
+    stripped += split.strippedCount;
+    for (const bin of split.binaries) {
+      // JPEG allaqachon siqilgan — DEFLATE faqat sekinlashtiradi.
+      zip.file(bin.path, bin.buffer, { compression: "STORE" });
+      binaryFiles += 1;
+    }
+  }
+
+  zip.file("data/client_photo_reports.json", jsonFileContent(metaRows));
+  return {
+    exported_count: metaRows.length,
+    binary_files: binaryFiles,
+    stripped_unreadable: stripped
   };
 }
 
@@ -306,14 +380,24 @@ async function buildMigrationSetupXlsx(tenantId: number): Promise<{ buf: Buffer;
   }
 }
 
-export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> {
+type ExportProgressFn = (p: { stage: string; percent: number; message: string }) => void;
+
+export async function buildTenantBackupZip(
+  ctx: ExportContext,
+  onProgress?: ExportProgressFn
+): Promise<Buffer> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: ctx.tenantId },
     select: { id: true, slug: true, name: true }
   });
   if (!tenant) throw new Error("NOT_FOUND");
 
+  const report = (stage: string, percent: number, message: string) => {
+    onProgress?.({ stage, percent, message });
+  };
+
   // Avval yengil meta, keyin og‘ir jadvallar — pool/RAM cho‘qqisini pasaytiradi.
+  report("meta", 5, "Profil va inventar…");
   const [inventory, profile, settingsExtra, xlsxResult] = await Promise.all([
     getMigrationInventory(ctx.tenantId),
     getTenantProfile(ctx.tenantId),
@@ -321,16 +405,36 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
     buildMigrationSetupXlsx(ctx.tenantId)
   ]);
 
-  const [references, tables, bonusAndFiles, extended] = await Promise.all([
-    loadReferenceTables(ctx.tenantId),
-    loadTransactionalTables(ctx.tenantId),
-    loadBonusAndFilesTables(ctx.tenantId),
-    loadExtendedTables(ctx.tenantId)
-  ]);
+  report("references", 15, "Spravochniklar…");
+  const references = await loadReferenceTables(ctx.tenantId, (m) => report("references", 20, m));
 
-  const photoCount = Array.isArray(bonusAndFiles.client_photo_reports)
-    ? bonusAndFiles.client_photo_reports.length
-    : 0;
+  report("transactional", 35, "Buyurtmalar / to‘lovlar…");
+  const tables = await loadTransactionalTables(ctx.tenantId);
+
+  report("bonus", 50, "Bonus / KPI…");
+  const bonusAndFiles = await loadBonusAndFilesTables(ctx.tenantId);
+
+  report("extended", 60, "Kengaytirilgan jadvallar…");
+  const extended = await loadExtendedTables(ctx.tenantId);
+
+  const zip = new JSZip();
+
+  // Fotolar alohida (chunked) — base64 OOM oldini olish.
+  report("photos", 70, "Fotootchyotlar…");
+  const photoStats = await appendClientPhotoReportsToZip(zip, ctx.tenantId);
+
+  const retentionDays = PHOTO_REPORT_EXPORT_DAYS > 0 ? PHOTO_REPORT_EXPORT_DAYS : null;
+  const exportNotes = [
+    ...(xlsxResult.note ? [xlsxResult.note] : []),
+    ...(photoStats.binary_files ? [`photo_binaries:${photoStats.binary_files}`] : []),
+    ...(photoStats.stripped_unreadable
+      ? [`photo_stripped_unreadable:${photoStats.stripped_unreadable}`]
+      : []),
+    retentionDays
+      ? `agent_location_pings:last_${retentionDays}_days`
+      : "agent_location_pings:full",
+    retentionDays ? `client_photo_reports:last_${retentionDays}_days` : "client_photo_reports:full"
+  ];
 
   const manifest = {
     format_version: BACKUP_FORMAT_VERSION,
@@ -343,11 +447,15 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
     },
     modules: inventory.modules,
     photo_reports: {
-      retention_days: 30,
-      exported_count: photoCount,
-      note_uz: "Faqat oxirgi 30 kunlik fotootchyotlar; import barcha jadvallardan keyin."
+      retention_days: retentionDays,
+      exported_count: photoStats.exported_count,
+      binary_files: photoStats.binary_files,
+      stripped_unreadable: photoStats.stripped_unreadable,
+      note_uz: retentionDays
+        ? `Oxirgi ${retentionDays} kunlik fotootchyotlar; files/client_photos/* (JPEG ≤1280px); import oxirida.`
+        : "Barcha fotootchyotlar; files/client_photos/* (JPEG ≤1280px); import oxirida."
     },
-    export_notes: xlsxResult.note ? [xlsxResult.note] : [],
+    export_notes: exportNotes,
     files: {
       spravochniki: [PROFILE_JSON_PATH, SETTINGS_EXTRA_JSON_PATH, INITIAL_SETUP_XLSX_PATH],
       data: [
@@ -396,12 +504,16 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
       transactional: { supported: true, phase: 2 },
       field_activity: { supported: true, phase: 3 },
       bonus_plans: { supported: true, phase: 4 },
-      files: { supported: true, phase: 5, after: "extended", retention_days: 30 },
+      files: {
+        supported: true,
+        phase: 5,
+        after: "extended",
+        retention_days: retentionDays
+      },
       extended: { supported: true, phase: 4, tables: extendedDataFilePaths().length }
     }
   };
 
-  const zip = new JSZip();
   zip.file(MANIFEST_PATH, jsonFileContent(manifest));
   zip.file(PROFILE_JSON_PATH, jsonFileContent(profile));
   zip.file(SETTINGS_EXTRA_JSON_PATH, jsonFileContent(settingsExtra));
@@ -430,17 +542,35 @@ export async function buildTenantBackupZip(ctx: ExportContext): Promise<Buffer> 
       `Exported: ${manifest.exported_at}`,
       `Source tenant: ${tenant.slug}`,
       "",
-      "Import: bo'sh tenantga to'liq import (profil + spravochniklar + operatsion tarix).",
+      "Import: bo'sh tenantga to'liq import yoki to'ldirilgan tenantga «almashtirish» (replace).",
       "Format v6: to'liq zaxira — multi-slot, bonus strategiya, bank inbox, katalog/RBAC.",
+      "Fotolar: barcha client_photo_reports → files/client_photos/* (siqilgan JPEG).",
+      "GPS: barcha agent_location_pings (data/agent_location_pings.json).",
       ""
     ].join("\n")
   );
 
+  report("zip", 90, "ZIP yig‘ilmoqda…");
+  // level 1: JSON tez; fotolar allaqachon STORE.
   return zip.generateAsync({
     type: "nodebuffer",
     compression: "DEFLATE",
-    compressionOptions: { level: 6 }
+    compressionOptions: { level: 1 },
+    streamFiles: true
   });
+}
+
+/** ZIP ni diskka yozadi — HTTP javobida butun buffer ushlab turmaslik uchun. */
+export async function buildTenantBackupZipToFile(
+  ctx: ExportContext,
+  outPath: string,
+  onProgress?: ExportProgressFn
+): Promise<{ byteLength: number; filename: string }> {
+  const { writeFile } = await import("fs/promises");
+  const buf = await buildTenantBackupZip(ctx, onProgress);
+  await writeFile(outPath, buf);
+  onProgress?.({ stage: "done", percent: 100, message: "Zaxira tayyor" });
+  return { byteLength: buf.length, filename: backupDownloadFilename(ctx.tenantSlug) };
 }
 
 export function backupDownloadFilename(tenantSlug: string): string {

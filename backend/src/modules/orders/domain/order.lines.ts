@@ -356,15 +356,6 @@ export async function updateOrderLines(
     const prevBonusAlert = (existing as { bonus_alert?: string | null }).bonus_alert ?? null;
 
     let discountAlert = discountRes.alert;
-    // Tahrirlashda soxta «not_applied» qo‘ymaymiz (oldingi alert yo‘q va kutilgan skidka ham yo‘q).
-    if (
-      prevDiscountAlert == null &&
-      discountAlert === "not_applied" &&
-      (discountRes.expectedSum <= 0 || discountRes.discountPct == null)
-    ) {
-      discountAlert = null;
-    }
-
     if (discountAlert != null) {
       linesComment = mergeOrderAutoComments(linesComment, [
         buildDiscountAlertComment(discountAlert, {

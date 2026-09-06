@@ -92,15 +92,21 @@ function makeOrder(
     tenantName: "T",
     tenantPhone: null,
     clientName: `Client ${id}`,
+    clientPhone: null,
     clientBalanceNum: null,
     clientAddress: "—",
     currencyLabel: "So'm (UZS)",
-    agentLine: `A${id}- [Agent] 99890${id}00000`,
+    agentLine: `A${id} - [Agent] 20/05/26`,
+    invoiceAgentLine: `A${id} [Agent] TOSHKENT 20.05.2026 (99890100000)`,
     expeditorLine: id % 2 === 0 ? "[T1] Exp One" : "[T2] Exp Two",
+    expeditorName: id % 2 === 0 ? "Exp One" : "Exp Two",
     territory: id % 2 === 0 ? "TOSHKENT" : "SAMARQAND",
     warehouseName: "Склад",
     agentId: id,
     expeditorUserId: id % 2 === 0 ? 1 : 2,
+    isConsignment: false,
+    paymentMethodRef: "cash",
+    orderType: "order",
     lines,
     paidLines: [],
     bonusLines: [],
@@ -158,7 +164,7 @@ function main() {
   assert(mergedLines[0]!.qty === 15, "merged qty 15", issues);
   assert(mergedLines[0]!.bonusQty === 1, "merged bonus 1", issues);
   assert(mergedLines[0]!.sum === 16000, "merged sum 16000", issues);
-  assert(mergedLines[0]!.price === 16000 / 15, "merged avg price", issues);
+  assert(mergedLines[0]!.price === Math.round(16000 / 15), "merged avg price", issues);
 
   const ctx2 = buildWarehouseAggregateContext([o2a, o2b], opts);
   const doc2 = buildExpeditorLoading520Document(ctx2, opts, def.versionLabel);
@@ -174,7 +180,34 @@ function main() {
   );
   assert(doc3.totals.bonus === 3, "bonus-only bonus total", issues);
   assert(parseMoney(doc3.totals.sum) === 0, "bonus-only sum 0", issues);
-  assert(doc3.groups[0]!.lines[0]!.qty === null, "bonus-only qty empty in doc", issues);
+  assert(doc3.groups[0]!.lines[0]!.qty === 0, "bonus-only qty empty in doc", issues);
+
+  // 4) Возврат с полки — alohida guruh, tovar guruhlaridan keyin
+  const sale = makeOrder(5, [line(1, "T-0108", "Monno N3", 10, 0, 72000, 720000, "Monno trusik mini")]);
+  const ret = makeOrder(6, [line(1, "T-0108", "Monno N3", 4, 4, 72000, 288000, "Возврат с полки")], {
+    orderType: "return"
+  });
+  const doc4 = buildExpeditorLoading520Document(
+    buildWarehouseAggregateContext([sale, ret], opts),
+    opts,
+    def.versionLabel
+  );
+  const names = doc4.groups.map((g) => g.name);
+  assert(names.includes("Возврат с полки"), "shelf-return group present", issues);
+  assert(names[names.length - 1] === "Возврат с полки", "shelf-return group last", issues);
+  const retGroup = doc4.groups.find((g) => g.name === "Возврат с полки");
+  assert(retGroup?.qty === 4, "shelf-return qty", issues);
+  assert(retGroup?.bonus === 4, "shelf-return bonus", issues);
+  assert(doc4.shelfReturnOnly === false, "mixed sheet is not return-only", issues);
+
+  const docRetOnly = buildExpeditorLoading520Document(
+    buildWarehouseAggregateContext([ret], opts),
+    opts,
+    def.versionLabel
+  );
+  assert(docRetOnly.shelfReturnOnly === true, "return-only sheet", issues);
+  assert(docRetOnly.groups.length === 1, "return-only one group", issues);
+  assert(docRetOnly.groups[0]!.name === "Возврат с полки", "return-only group name", issues);
 
   const ok = issues.length === 0;
   console.log(JSON.stringify({ ok, issueCount: issues.length, issues }, null, 2));

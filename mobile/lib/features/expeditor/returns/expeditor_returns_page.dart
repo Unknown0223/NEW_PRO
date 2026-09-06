@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../config/expeditor_config_enforcement.dart';
 import '../expeditor_providers.dart';
 import '../shared/expeditor_order_picker.dart';
+import '../shell/expeditor_drawer.dart';
 
 class ExpeditorReturnsPage extends ConsumerStatefulWidget {
   const ExpeditorReturnsPage({super.key});
@@ -154,6 +155,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
 
     if (!policy.returnsEnabled) {
       return Scaffold(
+        drawer: const ExpeditorDrawer(),
         appBar: AppBar(title: const Text('Qaytarishlar')),
         body: const Center(child: Text('Qaytarish admin panelda o\'chirilgan')),
       );
@@ -171,6 +173,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     final detail = ref.watch(expeditorOrderDetailProvider(orderId));
 
     return Scaffold(
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(title: Text('Qaytarish #$orderId')),
       body: detail.when(
         data: (order) {

@@ -77,15 +77,41 @@ export function buildListWhere(tenantId: number, filters: ListWorkSlotsFilters):
   if (directionIds.length === 1) where.direction_id = directionIds[0];
   else if (directionIds.length > 1) where.direction_id = { in: directionIds };
 
-  if (filters.q?.trim()) {
-    const q = filters.q.trim();
-    where.OR = [
-      { slot_code: { contains: q, mode: "insensitive" } },
-      { label: { contains: q, mode: "insensitive" } }
-    ];
-  }
-
   const and: Prisma.WorkSlotWhereInput[] = [];
+
+  if (filters.q?.trim()) {
+    const tokens = filters.q
+      .trim()
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    for (const token of tokens) {
+      and.push({
+        OR: [
+          { slot_code: { contains: token, mode: "insensitive" } },
+          { label: { contains: token, mode: "insensitive" } },
+          {
+            user_links: {
+              some: {
+                ended_at: null,
+                user: {
+                  OR: [
+                    { name: { contains: token, mode: "insensitive" } },
+                    { first_name: { contains: token, mode: "insensitive" } },
+                    { last_name: { contains: token, mode: "insensitive" } },
+                    { middle_name: { contains: token, mode: "insensitive" } },
+                    { login: { contains: token, mode: "insensitive" } },
+                    { code: { contains: token, mode: "insensitive" } }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      });
+    }
+  }
 
   const branchCodes = normStrings(
     filters.branch_codes?.length ? filters.branch_codes : filters.branch_code ? [filters.branch_code] : []

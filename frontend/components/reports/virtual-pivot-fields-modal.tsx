@@ -56,6 +56,10 @@ import {
   type PivotBuilderZone,
   type ZoneChipEntry
 } from "@/lib/pivot-fields-dnd";
+import {
+  paletteLabelClickAction,
+  paletteLabelDoubleClickAction
+} from "@/lib/pivot-interaction";
 import { cn } from "@/lib/utils";
 
 type BuilderZone = PivotBuilderZone;
@@ -196,6 +200,7 @@ function FlatSortableRow({
     id: `${FLAT_PREFIX}${id}`,
     disabled: !checked
   });
+  const checkedAtPointerDown = useRef(false);
 
   return (
     <div
@@ -214,8 +219,28 @@ function FlatSortableRow({
         className="h-3.5 w-3.5 accent-[#555]"
         checked={checked}
         onChange={(e) => onCheckedChange(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
       />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate text-left hover:underline"
+        title={checked ? "Двойной клик — убрать из макета" : "Клик — добавить в макет"}
+        onMouseDown={() => {
+          checkedAtPointerDown.current = checked;
+        }}
+        onClick={(e) => {
+          if (e.detail > 1) return;
+          if (paletteLabelClickAction(checked) === "add") onCheckedChange(true);
+        }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          if (paletteLabelDoubleClickAction(checkedAtPointerDown.current) === "remove") {
+            onCheckedChange(false);
+          }
+        }}
+      >
+        {label}
+      </button>
       <button
         type="button"
         className={cn(
@@ -334,6 +359,13 @@ function ZoneChip({
         "relative z-[1] flex w-full max-w-full items-center gap-1 rounded-sm px-1.5 py-1 text-[11px]",
         sortableId && "cursor-grab touch-none active:cursor-grabbing"
       )}
+      title={!hideRemove && onRemove ? "Двойной клик — убрать из макета" : undefined}
+      onDoubleClick={(e) => {
+        if (hideRemove || !onRemove) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onRemove();
+      }}
       {...(sortableId ? { ...sortable.attributes, ...sortable.listeners } : {})}
     >
       {sigma ? <span className="shrink-0 font-semibold text-[#555]">Σ</span> : null}
@@ -442,6 +474,7 @@ function PaletteRow({
     data: { fieldId: field.id, type: "palette" }
   });
   const isValueField = isNumeric(field);
+  const checkedAtPointerDown = useRef(false);
 
   return (
     <div
@@ -455,22 +488,49 @@ function PaletteRow({
         opacity: isDragging ? 0.5 : 1,
         background: LIGHT.bg
       }}
+      data-testid={`palette-field-${field.id}`}
+      onMouseDown={() => {
+        checkedAtPointerDown.current = checked;
+      }}
+      onClick={(e) => {
+        if (e.detail > 1) return;
+        const t = e.target as HTMLElement;
+        if (t.closest("input,button[aria-label='Перетащить']")) return;
+        if (paletteLabelClickAction(checked) === "add") onToggle(true);
+      }}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        const t = e.target as HTMLElement;
+        if (t.closest("input,button[aria-label='Перетащить']")) return;
+        if (paletteLabelDoubleClickAction(checkedAtPointerDown.current) === "remove") {
+          onToggle(false);
+        }
+      }}
     >
       <input
         type="checkbox"
         className="h-3.5 w-3.5 accent-[#555]"
         checked={checked}
         onChange={(e) => onToggle(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
       />
+      <span
+        className="min-w-0 flex-1 cursor-pointer truncate text-left hover:underline"
+        title={checked ? "Двойной клик — убрать из макета" : "Клик — добавить в макет"}
+      >
+        {displayLabel ?? field.label}
+      </span>
       <button
         ref={setNodeRef}
         type="button"
-        className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1.5 truncate text-left active:cursor-grabbing"
+        className="flex shrink-0 cursor-grab touch-none items-center gap-1 px-0.5 active:cursor-grabbing"
+        aria-label="Перетащить"
+        title="Перетащить"
+        onClick={(e) => e.stopPropagation()}
         {...listeners}
         {...attributes}
       >
-        <DragLines className="shrink-0 opacity-70" />
-        <span className="min-w-0 truncate">{displayLabel ?? field.label}</span>
+        <DragLines className="opacity-70" />
       </button>
       {isValueField ? (
         <span

@@ -6,7 +6,7 @@ import type { WarehouseLayoutId } from "@/lib/bulk-export-templates";
 /** Backend `bulk/nakladnoy` `template` qiymatlari bilan mos. */
 export const NAKLADNOY_TEMPLATE_OPTIONS = [
   { id: "nakladnoy_warehouse", label: "Загруз зав.склада 5.1.8" },
-  { id: "nakladnoy_expeditor", label: "Накладные 2.1.0 (2 нусха)" }
+  { id: "nakladnoy_expeditor", label: "Накладные 2.1.7 (2 нусха)" }
 ] as const;
 
 export type NakladnoyTemplateId = (typeof NAKLADNOY_TEMPLATE_OPTIONS)[number]["id"];

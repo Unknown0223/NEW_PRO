@@ -61,7 +61,9 @@ function mapAssignError(reply: Parameters<typeof sendApiError>[0], request: Para
     msg === "BAD_DIRECTION" ||
     msg === "BAD_WAREHOUSE" ||
     msg === "BAD_CASH_DESK" ||
+    msg === "BAD_SUPERVISOR" ||
     msg === "BAD_SUPERVISEE_AGENT_SLOTS" ||
+    msg === "BAD_SLOT_CODE_PREFIX" ||
     msg === "NO_ACTIVE_USER" ||
     msg === "CASH_DESK_ROLE_UNSUPPORTED"
   ) {

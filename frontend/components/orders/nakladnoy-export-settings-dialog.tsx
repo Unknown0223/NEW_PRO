@@ -37,7 +37,7 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
         <DialogHeader>
           <DialogTitle>Nakladnoy eksport sozlamalari</DialogTitle>
           <DialogDescription>
-            SKU/shtrix-kod, «Загруз зав.склада 5.1.8» va «Накладные 2.1.0» uchun varaqlar bo‘yicha ajratish
+            SKU/shtrix-kod, «Загруз зав.склада» va «Накладные 2.1.7» uchun varaqlar bo‘yicha ajratish
             (bitta fayl ichida).
           </DialogDescription>
         </DialogHeader>
@@ -75,8 +75,8 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
               Varqlarga ajratish (Отделить по листам)
             </label>
             <p className="text-xs text-muted-foreground">
-              Ochiq bo‘lsa, har bir guruh alohida varaqda (5.1.8 va 2.1.0). Yopiq bo‘lsa, 5.1.8da bitta jadval,
-              2.1.0da esa bitta varaqda zakazlar tepadan pastga (har birida chap/o‘ng 2 nusxa).
+              Ochiq bo‘lsa, har bir guruh alohida varaqda. Yopiq bo‘lsa, загрузda bitta jadval,
+              2.1.7da esa bitta varaqda zakazlar tepadan pastga (har birida chap/o‘ng 2 nusxa).
             </p>
           </div>
 
@@ -117,11 +117,11 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
           </fieldset>
 
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <Label className="text-[11px] uppercase tracking-wide">Накладные 2.1.0</Label>
+            <Label className="text-[11px] uppercase tracking-wide">Накладные 2.1.7</Label>
             <p className="mt-1">
-              Chop: A4 portrait, ikki nusxa yonma-yon. Yuqorida chapda nomlar, o‘ngda qiymatlar. «Varaqlarga
-              ajratish» yopiq — barcha zakazlar bitta varaqda ustma-ust; ochiq — agent / hudud / ekspeditor
-              bo‘yicha alohida varaqlar. (Консигнация — keyingi bosqich, hozir emas.)
+              Chop: A4 portrait, ikki nusxa yonma-yon. To‘liq qator: клиент (тел), баланс, адрес, агент,
+              экспедитор (nom), дата накладной. Konsignatsiyada «НА КОНСИГНАЦИЮ». Yakun: Итог товары / бонус /
+              Общий итог (сумма — faqat tovarlar) va to‘lov yozuvi.
             </p>
           </div>
         </div>

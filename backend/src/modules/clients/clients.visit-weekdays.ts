@@ -1,7 +1,7 @@
 /**
  * Hafta kunlari: import / eksport standarti.
- * - 1..7 (1=Du … 7=Ya)
- * - rus qisqartmalari: Пн, Вт, Ср, Чт, Пт, Сб, Вс (2 harf, har qanday registr)
+ * - Raqam: faqat 1..7 (1=Du … 7=Ya). `0` va boshqa qiymatlar — qabul qilinmaydi (o‘tkazib yuboriladi).
+ * - Matn: Пн…Вс / o‘zbek nomlari (du, shanba, …)
  */
 
 /** 1=Du … 7=Ya */
@@ -15,6 +15,7 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   понедельник: 1,
   ду: 1,
   du: 1,
+  dushanba: 1,
   вт: 2,
   vt: 2,
   tue: 2,
@@ -23,6 +24,7 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   вторник: 2,
   се: 2,
   se: 2,
+  seshanba: 2,
   ср: 3,
   sr: 3,
   wed: 3,
@@ -30,6 +32,8 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   среда: 3,
   чо: 3,
   cho: 3,
+  chor: 3,
+  chorshanba: 3,
   чт: 4,
   ct: 4,
   ch: 4,
@@ -40,12 +44,15 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   четверг: 4,
   четвер: 4,
   pa: 4,
+  pay: 4,
+  payshanba: 4,
   пт: 5,
   pt: 5,
   fri: 5,
   friday: 5,
   пятница: 5,
   ju: 5,
+  juma: 5,
   сб: 6,
   sb: 6,
   sat: 6,
@@ -53,6 +60,8 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   суббота: 6,
   sh: 6,
   sha: 6,
+  shanba: 6,
+  шанба: 6,
   вс: 7,
   vs: 7,
   vos: 7,
@@ -60,7 +69,10 @@ const VISIT_WEEKDAY_TOKEN_MAP: Record<string, number> = {
   sunday: 7,
   воскресенье: 7,
   вск: 7,
-  ya: 7
+  ya: 7,
+  yak: 7,
+  yakshanba: 7,
+  якшанба: 7
 };
 
 function normalizeVisitWeekdayToken(raw: string): string {
@@ -72,7 +84,7 @@ function normalizeVisitWeekdayToken(raw: string): string {
     .replace(/\s+/g, "");
 }
 
-/** Excel / matn: «Чт,Сб,Пт,Ср» yoki «1,3» yoki aralash. */
+/** Excel / matn: «Чт,Сб,Пт,Ср» yoki «1,3,6» (faqat 1..7). `0` — o‘tkazib yuboriladi. */
 export function parseVisitWeekdaysFromCell(
   raw: string | null | undefined
 ): { days: number[]; unknownTokens: string[] } {
@@ -106,6 +118,9 @@ export function parseVisitWeekdaysFromCell(
         out.push(num);
         continue;
       }
+      // 0 va boshqa raqamlar — qabul qilinmaydi
+      unknownTokens.push(part.trim());
+      continue;
     }
 
     const n = VISIT_WEEKDAY_TOKEN_MAP[p];

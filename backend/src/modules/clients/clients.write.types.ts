@@ -99,6 +99,14 @@ export type CreateClientMinimalInput = {
   sales_channel?: string | null;
   product_category_ref?: string | null;
   logistics_service?: string | null;
+  /** Yaratishdan oldin unikal tekshiruv (insert qilinmaydi — keyin update). */
+  inn?: string | null;
+  client_code?: string | null;
+  client_pinfl?: string | null;
+  /** Agent ilovasidan: hudud avto-biriktirish yaratuvchini yemasin. */
+  skipTerritoryAutoAssign?: boolean;
+  /** Agent: «Подтверждение нового клиента» yoqilgan bo‘lsa true. */
+  is_active?: boolean;
 };
 
 /** Minimal yangi mijoz (keyin to‘liq tahrir sahifasida to‘ldiriladi). */

@@ -4,6 +4,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import type { NakladnoyLine, NakladnoyOrderPayload } from "../order-nakladnoy-xlsx";
+import {
+  consignment217AgentValue,
+  isLoading520ShelfReturnType,
+  LOADING_520_SHELF_RETURN_GROUP,
+  loading520AgentLabel
+} from "../order-nakladnoy-xlsx.consignment-217";
 
 export const NAKLADNOY_TEMPLATE_IDS = ["nakladnoy_warehouse", "nakladnoy_expeditor"] as const;
 export type NakladnoyTemplateId = (typeof NAKLADNOY_TEMPLATE_IDS)[number];
@@ -21,6 +27,9 @@ type OrderNakladnoyDb = {
   number: string;
   agent_id: number | null;
   expeditor_user_id: number | null;
+  is_consignment: boolean;
+  payment_method_ref: string | null;
+  order_type: string | null;
   created_at: Date;
   tenant: { name: string; phone: string | null };
   warehouse: { name: string } | null;
@@ -81,16 +90,24 @@ function fmtRuDateShort(d: Date): string {
 export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderPayload {
   const bal = o.client.client_balances[0]?.balance ?? null;
   const ag = o.agent;
-  const agentLine = ag
-    ? `${ag.code?.trim() || ag.login}- [${ag.name}]${ag.phone?.trim() ? ` ${ag.phone.trim()}` : ""}`
+  const agentTerritory = ag?.territory?.trim() || o.client.region?.trim() || "—";
+  const territory = o.client.region?.trim() || ag?.territory?.trim() || "—";
+  const agentCode = (ag?.code?.trim() || ag?.login || "—").trim();
+  const agentLine = ag ? loading520AgentLabel(agentCode, ag.name, ag.created_at) : "—";
+  const invoiceAgentLine = ag
+    ? consignment217AgentValue({
+        code: agentCode,
+        name: ag.name,
+        territory: agentTerritory,
+        createdAt: ag.created_at,
+        phone: ag.phone
+      })
     : "—";
   const ex = o.expeditor_user;
   const tag = (ex?.branch ?? ex?.code ?? ex?.login ?? "").toString().trim() || "—";
   const expeditorLine = ex
     ? `[${tag}] ${ex.name} (${fmtRuDateShort(ex.created_at)})${ex.phone?.trim() ? ` ${ex.phone.trim()}` : ""}`
     : "—";
-  const territory =
-    o.client.region?.trim() || ag?.territory?.trim() || "—";
   const addrParts = [
     o.client.region,
     o.client.city,
@@ -111,9 +128,11 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
   }
 
   const groupTitleOf = (it: (typeof o.items)[0]) =>
-    it.product.product_group?.name?.trim() ||
-    it.product.category?.name?.trim() ||
-    "Прочее";
+    isLoading520ShelfReturnType(o.order_type)
+      ? LOADING_520_SHELF_RETURN_GROUP
+      : it.product.product_group?.name?.trim() ||
+        it.product.category?.name?.trim() ||
+        "Прочее";
 
   const lines: NakladnoyLine[] = [];
   const paidLines: NakladnoyLine[] = [];
@@ -185,13 +204,19 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
     tenantName: o.tenant.name,
     tenantPhone: o.tenant.phone,
     clientName: o.client.name,
+    clientPhone: o.client.phone?.trim() || null,
     clientBalanceNum: bal,
     clientAddress,
     currencyLabel: "So'm (UZS)",
     agentLine,
+    invoiceAgentLine,
     expeditorLine,
+    expeditorName: ex?.name?.trim() || null,
     territory,
     warehouseName: o.warehouse?.name ?? null,
+    isConsignment: o.is_consignment === true,
+    paymentMethodRef: o.payment_method_ref?.trim() || null,
+    orderType: o.order_type?.trim() || "order",
     lines,
     paidLines,
     bonusLines

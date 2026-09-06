@@ -21,7 +21,6 @@ import '../../../core/clients/agent_client_balance.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
 import 'clients_list_provider.dart';
 import '../orders/order_draft_provider.dart';
-import 'create_client_sheet.dart';
 
 export 'clients_list_provider.dart';
 
@@ -61,14 +60,8 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
   Future<void> _openCreateIfAllowed() async {
     final canCreate = ref.read(sessionProvider).mobileConfig?.client.canCreate ?? false;
     if (!canCreate || !mounted) return;
-    final ok = await showCreateClientSheet(context);
-    if (ok == true && mounted) {
-      resetOutletFilters(ref);
-      ref.invalidate(clientsListProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Savdo nuqtasi yaratildi'), backgroundColor: AppColors.success),
-      );
-    }
+    // To‘liq forma (shahar / GPS / foto) — sheet emas.
+    context.push('/clients/new');
   }
 
   Future<void> _maybeLoadClients() async {
@@ -169,6 +162,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: S.outlets,
+        useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/clients')),
           _syncing

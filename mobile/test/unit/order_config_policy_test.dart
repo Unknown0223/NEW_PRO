@@ -61,11 +61,12 @@ void main() {
       expect(isBonusModeKeyAllowed(orders, 'manual'), isFalse);
     });
 
-    test('all_required and auto_fill_remaining allow only auto', () {
+    test('all_required and auto_fill_remaining still allow none (like discount)', () {
       for (final mode in ['all_required', 'auto_fill_remaining']) {
         final orders = OrdersConfig(bonusFillMode: mode);
         expect(isBonusModeKeyAllowed(orders, 'auto'), isTrue);
-        expect(isBonusModeKeyAllowed(orders, 'none'), isFalse);
+        expect(isBonusModeKeyAllowed(orders, 'none'), isTrue);
+        expect(isBonusModeKeyAllowed(orders, 'manual'), isFalse);
       }
     });
   });

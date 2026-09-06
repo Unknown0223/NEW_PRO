@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
+import '../shell/expeditor_drawer.dart';
 
 /// «Mening qaytarishlarim» — ekspeditor omborga TOPSHIRADIGAN qaytarish
 /// hujjatlari (vozvratnaya nakladnaya): mahsulot + miqdor va zavsklad qabul
@@ -16,6 +17,7 @@ class ExpeditorMyReturnsPage extends ConsumerWidget {
     final async = ref.watch(expeditorMyReturnsProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
+      drawer: const ExpeditorDrawer(),
       appBar: AppBar(
         title: const Text('Mening qaytarishlarim'),
         backgroundColor: AppColors.surface,

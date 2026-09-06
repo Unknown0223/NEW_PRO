@@ -54,6 +54,12 @@ describe("order agent Access scope", () => {
     expect(isOrderAgentAllowedForActor(8, actor)).toBe(false);
   });
 
+  it("expeditor — o‘z vizit/GPS yozuvi (bound agents bo‘sh)", () => {
+    const actor: ScopedReportActor = { userId: 55, role: "expeditor", bound_agent_ids: [] };
+    expect(isOrderAgentAllowedForActor(55, actor)).toBe(true);
+    expect(isOrderAgentAllowedForActor(7, actor)).toBe(false);
+  });
+
   it("kassir — to‘liq savdo katalogi yo‘q", () => {
     const actor: ScopedReportActor = { userId: 4, role: "cashier", bound_agent_ids: [] };
     expect(resolveAllowedAgentIdsForActor(actor)).toEqual([]);

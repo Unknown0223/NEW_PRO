@@ -94,6 +94,11 @@ function assertRequiredValue(val: unknown): boolean {
   return String(val).trim() !== "";
 }
 
+function hasVisitDayValue(input: MobileClientInput): boolean {
+  if (assertRequiredValue(input.visit_date)) return true;
+  return Array.isArray(input.visit_weekdays) && input.visit_weekdays.length > 0;
+}
+
 export function assertMobileClientPolicy(
   cfg: AgentMobileClientConfig | undefined,
   input: MobileClientInput,
@@ -112,6 +117,7 @@ export function assertMobileClientPolicy(
     if (input.name !== undefined) {
       const name = input.name.trim();
       if (name.length < 1) throw new Error("VALIDATION");
+      assertFieldFormat("name", name);
     }
   }
 
@@ -121,6 +127,7 @@ export function assertMobileClientPolicy(
   }
 
   for (const { field, key } of CONFIG_FIELD_TO_INPUT) {
+    if (field === "visit_day") continue;
     if (mode === "patch" && (input as Record<string, unknown>)[key] === undefined) continue;
     if (!fieldRequired(cfg, field)) continue;
     const val = (input as Record<string, unknown>)[key];
@@ -128,7 +135,21 @@ export function assertMobileClientPolicy(
     assertFieldFormat(field, val as string);
   }
 
+  if (fieldRequired(cfg, "visit_day")) {
+    const visitTouched =
+      mode === "create" ||
+      input.visit_date !== undefined ||
+      input.visit_weekdays !== undefined;
+    if (visitTouched && !hasVisitDayValue(input)) throw new Error("VALIDATION");
+  }
+
   for (const { field, key } of CONFIG_FIELD_TO_INPUT) {
+    if (field === "visit_day") {
+      if (input.visit_date != null && String(input.visit_date).trim() !== "") {
+        assertFieldFormat("visit_day", input.visit_date);
+      }
+      continue;
+    }
     if (mode === "patch" && (input as Record<string, unknown>)[key] === undefined) continue;
     const val = (input as Record<string, unknown>)[key];
     if (val == null || String(val).trim() === "") continue;
@@ -179,6 +200,8 @@ export function mobileClientInputToUpdateFields(input: MobileClientInput) {
 }
 
 const PATCH_KEY_MAP: { api: keyof MobileClientInput; update: string }[] = [
+  { api: "name", update: "name" },
+  { api: "phone", update: "phone" },
   { api: "address", update: "address" },
   { api: "latitude", update: "latitude" },
   { api: "longitude", update: "longitude" },
@@ -189,6 +212,8 @@ const PATCH_KEY_MAP: { api: keyof MobileClientInput; update: string }[] = [
   { api: "sales_channel", update: "sales_channel" },
   { api: "client_type_code", update: "client_type_code" },
   { api: "region", update: "region" },
+  { api: "zone", update: "zone" },
+  { api: "city", update: "city" },
   { api: "visit_date", update: "visit_date" },
   { api: "client_code", update: "client_code" },
   { api: "bank_name", update: "bank_name" },

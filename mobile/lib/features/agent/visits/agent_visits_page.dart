@@ -125,6 +125,7 @@ class AgentVisitsPage extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AgentAppBar(
         title: S.visits,
+        useShellDrawer: true,
         actions: [
           AgentIconButton(icon: Icons.search, onPressed: () => context.push('/search?from=/visits')),
           Stack(

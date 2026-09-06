@@ -22,6 +22,8 @@ import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/agent_template_form.dart';
 import '../../../core/clients/agent_outlet_filters_provider.dart';
+import '../../../core/clients/client_outlet_filters.dart';
+import '../../../core/clients/client_local_uniques.dart';
 import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/time/work_region_time.dart';
 import '../route/agent_route_provider.dart';
@@ -184,14 +186,22 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
 
   bool get _territoryVisible => isClientFieldVisible(_cfg, 'territory');
 
+  bool get _useCityPicker {
+    if (!_territoryVisible) return false;
+    return ref.read(agentCitiesProvider).isNotEmpty;
+  }
+
+  Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
+
   String? _validateForSave() {
-    if (_territoryVisible) {
-      final agentCities = ref.read(agentCitiesProvider);
-      if (agentCities.isNotEmpty && (_city == null || _city!.trim().isEmpty)) {
-        return 'Выберите город';
-      }
+    if (_useCityPicker && (_city == null || _city!.trim().isEmpty)) {
+      return 'Выберите город';
     }
-    return ClientDynamicFormFields.validate(_cfg, _controllers);
+    return ClientDynamicFormFields.validate(
+      _cfg,
+      _controllers,
+      hiddenFieldKeys: _hiddenFormKeys,
+    );
   }
 
   Future<void> _save() async {
@@ -255,6 +265,37 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final phoneRaw = body.remove('phone') ?? _c('phone').text.trim();
       final phone = normalizePhoneWithPrefix(_cfg, phoneRaw.toString());
 
+      final regionForUnique = (_territoryVisible && _region != null && _region!.trim().isNotEmpty)
+          ? _region!.trim()
+          : (body['region']?.toString());
+      final zoneForUnique = (_territoryVisible && _zone != null && _zone!.trim().isNotEmpty)
+          ? _zone!.trim()
+          : null;
+      final cityForUnique = (_territoryVisible && _city != null && _city!.trim().isNotEmpty)
+          ? _city!.trim()
+          : null;
+
+      final localDup = findLocalClientDuplicateMessage(
+        await AppDatabase().getAllClients(activeOnly: false),
+        name: name,
+        phone: phone,
+        inn: body['inn']?.toString(),
+        clientPinfl: body['client_pinfl']?.toString(),
+        clientCode: body['client_code']?.toString(),
+        region: regionForUnique,
+        zone: zoneForUnique,
+        city: cityForUnique,
+      );
+      if (localDup != null) {
+        if (mounted) {
+          setState(() {
+            _saving = false;
+            _error = localDup;
+          });
+        }
+        return;
+      }
+
       final row = await ref.read(mobileApiProvider).createClient(slug, {
         'name': name,
         'phone': phone,
@@ -306,11 +347,11 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       ref.read(outletDebtsOnlyProvider.notifier).state = false;
       final todayWd = serverTodayWeekday();
       ref.read(outletWeekdayTabProvider.notifier).state =
-          visitWeekdays.contains(todayWd) ? todayWd : 0;
+          weekdayTabAfterCreatedClient(visitWeekdays, todayWd);
 
       if (!mounted) return;
 
-      final pending = _cfg.requireNewClientApproval || row['is_active'] == false;
+      final pending = row['is_active'] == false;
       if (pending) {
         _showFormSnack(
           'Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.',
@@ -421,7 +462,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                       config: cfg,
                       controllers: _controllers,
                       showGpsHint: showCoordinatesField(cfg),
-                      hiddenFieldKeys: showCityPicker ? const {'territory'} : const {},
+                      hiddenFieldKeys: showCityPicker ? const {'territory'} : const <String>{},
                     ),
                     if (showCityPicker) ...[
                       const SizedBox(height: 8),

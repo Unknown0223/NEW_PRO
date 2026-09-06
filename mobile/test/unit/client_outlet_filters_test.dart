@@ -121,4 +121,19 @@ void main() {
       isFalse,
     );
   });
+
+  test('weekdayTabAfterCreatedClient — bugungi reja yo‘q bo‘lsa Все', () {
+    expect(weekdayTabAfterCreatedClient([], 3), 0);
+    expect(weekdayTabAfterCreatedClient([1, 5], 3), 0);
+    expect(weekdayTabAfterCreatedClient([3, 5], 3), 3);
+  });
+
+  test('applyOutletFilters — yangi klient Все tabida darhol ko‘rinadi', () {
+    final clients = [
+      {'id': 10, 'name': 'Yangi', 'visit_weekdays': []},
+      {'id': 11, 'name': 'Reja', 'visit_weekdays': [1]},
+    ];
+    final all = applyOutletFilters(clients, weekdayTab: 0);
+    expect(all.map((c) => c['id']).toList(), [10, 11]);
+  });
 }

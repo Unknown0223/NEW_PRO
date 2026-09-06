@@ -1,5 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { unlink } from "fs/promises";
+import { createReadStream } from "fs";
+import { mkdir, unlink } from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { z } from "zod";
 import { sendApiError } from "../../lib/api-error";
 import { writeMigrationImportTempFile } from "../../jobs/import-temp-file";
@@ -12,7 +15,18 @@ import {
   mapMigrationApplyError
 } from "./system-migration.apply-errors";
 import { getMigrationInventory } from "./system-migration.inventory";
-import { backupDownloadFilename, buildTenantBackupZip } from "./system-migration.export";
+import {
+  backupDownloadFilename,
+  buildTenantBackupZip,
+  buildTenantBackupZipToFile
+} from "./system-migration.export";
+import {
+  completeMigrationExportSession,
+  createMigrationExportSession,
+  failMigrationExportSession,
+  getMigrationExportSession,
+  reportMigrationExportProgress
+} from "./system-migration.export-session";
 import { applyBackupZip, parseBackupZip } from "./system-migration.import";
 import {
   completeMigrationImportSession,
@@ -23,8 +37,8 @@ import {
 } from "./system-migration.progress";
 
 const adminRoles = ["admin"] as const;
-/** Zaxira ZIP (foto URI bilans) katta bo‘lishi mumkin. */
-const MIGRATION_UPLOAD_BYTES = 256 * 1024 * 1024;
+/** Zaxira ZIP (siqilgan fotolar bilan) — eski 2GB arxivlar uchun ham bosh. */
+const MIGRATION_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 const applyBodySchema = z
   .object({
@@ -53,24 +67,48 @@ function parseModulesField(raw: string | undefined): string[] | undefined {
     .filter(Boolean);
 }
 
-async function readUploadedBuffer(request: {
-  parts: () => AsyncIterableIterator<{
-    type: string;
-    toBuffer?: () => Promise<Buffer>;
-  }>;
-}): Promise<Buffer | null> {
-  // apply bilan bir xil: parts() — field tartibi va Content-Type edge-case lariga chidamli.
+type MultipartPart = {
+  type: string;
+  fieldname?: string;
+  filename?: string;
+  toBuffer?: () => Promise<Buffer>;
+  value?: unknown;
+};
+
+async function readUploadedBuffer(
+  request: {
+    parts: (opts?: { limits?: { fileSize?: number } }) => AsyncIterableIterator<MultipartPart>;
+    file?: () => Promise<MultipartPart | undefined>;
+    log?: { warn: (obj: unknown, msg?: string) => void };
+  }
+): Promise<{ buf: Buffer | null; truncated: boolean; error?: string }> {
+  let truncated = false;
   try {
-    for await (const part of request.parts()) {
-      if (part.type === "file" && typeof part.toBuffer === "function") {
+    // Ba’zi klientlar `zip` maydoni bilan yuboradi.
+    for await (const part of request.parts({ limits: { fileSize: MIGRATION_UPLOAD_BYTES } })) {
+      if (part.type !== "file" || typeof part.toBuffer !== "function") continue;
+      try {
         const buf = await part.toBuffer();
-        if (buf?.length) return buf;
+        if (buf?.length) return { buf, truncated: false };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/limit|too large|file size|max.*size/i.test(msg)) {
+          truncated = true;
+          request.log?.warn({ err: e }, "system-migration.upload truncated");
+          return { buf: null, truncated: true, error: msg };
+        }
+        request.log?.warn({ err: e }, "system-migration.upload part failed");
       }
     }
-  } catch {
-    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/limit|too large|file size|max.*size/i.test(msg)) {
+      return { buf: null, truncated: true, error: msg };
+    }
+    request.log?.warn({ err: e }, "system-migration.upload parts failed");
+    return { buf: null, truncated: false, error: msg };
   }
-  return null;
+  return { buf: null, truncated };
 }
 
 export async function registerSystemMigrationRoutes(app: FastifyInstance) {
@@ -114,14 +152,124 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
         if (e instanceof Error && e.message === "NOT_FOUND") {
           return sendApiError(reply, request, 404, "NotFound");
         }
+        const detail =
+          e instanceof Error ? e.message.replace(/\s+/g, " ").trim().slice(0, 160) : "unknown";
         return sendApiError(
           reply,
           request,
           500,
           "ExportFailed",
-          "Zaxira arxivini yaratib bo‘lmadi. Qayta urinib ko‘ring yoki supportga murojaat qiling."
+          `Zaxira arxivini yaratib bo‘lmadi. Qayta urinib ko‘ring yoki supportga murojaat qiling. (${detail})`
         );
       }
+    }
+  );
+
+  /** Async eksport: HTTP timeout/proxy uzilishidan himoya (katta tenant). */
+  app.post(
+    "/api/:slug/system-migration/export/start",
+    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const tenant = request.tenant!;
+      const session = createMigrationExportSession(tenant.id, tenant.slug);
+      const outDir = path.join(os.tmpdir(), "salesdoc-exports");
+      const outPath = path.join(outDir, `${session.id}.zip`);
+
+      void (async () => {
+        try {
+          await mkdir(outDir, { recursive: true });
+          reportMigrationExportProgress(session.id, {
+            stage: "export",
+            percent: 2,
+            message: "Eksport boshlandi…"
+          });
+          const { byteLength, filename } = await buildTenantBackupZipToFile(
+            { tenantId: tenant.id, tenantSlug: tenant.slug },
+            outPath,
+            (p) => reportMigrationExportProgress(session.id, p)
+          );
+          completeMigrationExportSession(session.id, outPath, filename, byteLength);
+          request.log.info(
+            { sessionId: session.id, bytes: byteLength },
+            "system-migration.export.async completed"
+          );
+        } catch (e) {
+          request.log.error({ err: e, sessionId: session.id }, "system-migration.export.async failed");
+          await unlink(outPath).catch(() => undefined);
+          const detail =
+            e instanceof Error ? e.message.replace(/\s+/g, " ").trim().slice(0, 200) : "unknown";
+          failMigrationExportSession(
+            session.id,
+            `Zaxira arxivini yaratib bo‘lmadi. (${detail})`
+          );
+        }
+      })();
+
+      return reply.status(202).send({
+        async: true,
+        sessionId: session.id,
+        message: "Eksport boshlandi. Progress: GET …/export/sessions/:sessionId"
+      });
+    }
+  );
+
+  app.get(
+    "/api/:slug/system-migration/export/sessions/:sessionId",
+    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const { sessionId } = request.params as { sessionId: string };
+      const session = getMigrationExportSession(sessionId, request.tenant!.id);
+      if (!session) {
+        return sendApiError(reply, request, 404, "NotFound", "Eksport sessiyasi topilmadi");
+      }
+      return reply.send({
+        id: session.id,
+        state: session.state,
+        progress: session.progress,
+        filename: session.filename,
+        byte_length: session.byte_length,
+        error: session.error
+      });
+    }
+  );
+
+  app.get(
+    "/api/:slug/system-migration/export/sessions/:sessionId/download",
+    { preHandler: [jwtAccessVerify, requireRoles(...adminRoles)] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const { sessionId } = request.params as { sessionId: string };
+      const session = getMigrationExportSession(sessionId, request.tenant!.id);
+      if (!session) {
+        return sendApiError(reply, request, 404, "NotFound", "Eksport sessiyasi topilmadi");
+      }
+      if (session.state === "failed") {
+        return sendApiError(
+          reply,
+          request,
+          500,
+          "ExportFailed",
+          session.error || "Zaxira arxivini yaratib bo‘lmadi"
+        );
+      }
+      if (session.state !== "completed" || !session.file_path) {
+        return sendApiError(
+          reply,
+          request,
+          409,
+          "ExportNotReady",
+          "Zaxira hali tayyor emas — biroz kuting"
+        );
+      }
+      const filename = session.filename || backupDownloadFilename(request.tenant!.slug);
+      const stream = createReadStream(session.file_path);
+      return reply
+        .header("Content-Type", "application/zip")
+        .header("Content-Disposition", `attachment; filename="${filename}"`)
+        .header("Content-Length", String(session.byte_length ?? 0))
+        .send(stream);
     }
   );
 
@@ -133,8 +281,17 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const buf = await readUploadedBuffer(request);
-      if (!buf?.length) {
+      const uploaded = await readUploadedBuffer(request);
+      if (uploaded.truncated) {
+        return sendApiError(
+          reply,
+          request,
+          413,
+          "FileTooLarge",
+          "ZIP juda katta (limit 512 MB). Yangi «To‘liq zaxira» ni yuklab oling — fotolar siqiladi, keyin qayta import qiling."
+        );
+      }
+      if (!uploaded.buf?.length) {
         return sendApiError(
           reply,
           request,
@@ -143,7 +300,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           "ZIP fayl yuklanmadi. «ZIP tanlash» orqali zaxira arxivini tanlang."
         );
       }
-      const preview = await parseBackupZip(buf, request.tenant!.id);
+      const preview = await parseBackupZip(uploaded.buf, request.tenant!.id);
       return reply.send(preview);
     }
   );
@@ -173,14 +330,37 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
 
       const fields: Record<string, string> = {};
       let fileBuf: Buffer | null = null;
+      let truncated = false;
 
-      const parts = request.parts();
-      for await (const part of parts) {
-        if (part.type === "file") {
-          fileBuf = await part.toBuffer();
-        } else if (part.type === "field") {
-          fields[part.fieldname] = String(part.value);
+      try {
+        const parts = request.parts({ limits: { fileSize: MIGRATION_UPLOAD_BYTES } });
+        for await (const part of parts) {
+          if (part.type === "file") {
+            try {
+              fileBuf = await part.toBuffer();
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              if (/limit|too large|file size|max.*size/i.test(msg)) truncated = true;
+              else request.log.warn({ err: e }, "system-migration.apply file part failed");
+            }
+          } else if (part.type === "field") {
+            fields[part.fieldname] = String(part.value);
+          }
         }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/limit|too large|file size|max.*size/i.test(msg)) truncated = true;
+        else request.log.warn({ err: e }, "system-migration.apply parts failed");
+      }
+
+      if (truncated) {
+        return sendApiError(
+          reply,
+          request,
+          413,
+          "FileTooLarge",
+          "ZIP juda katta (limit 512 MB). Yangi «To‘liq zaxira» ni yuklab oling — fotolar siqiladi, keyin qayta import qiling."
+        );
       }
 
       if (!fileBuf?.length) {

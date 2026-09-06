@@ -1,14 +1,19 @@
 "use client";
 
+import { useRef } from "react";
 import type { PivotRow as PivotRowType } from "@salec/pivot-engine";
 import { PivotCell } from "./PivotCell";
 import { ExpandSpacer, ExpandToggle } from "./ExpandToggle";
 import { cn } from "@/lib/utils";
 import { resolveLayoutForm } from "@/lib/pivot-layout-form";
 import { formatPivotMemberLabel } from "@/lib/pivot-member-labels";
-import { blankRepeatedParentLabels, classicPathPrefixKey, splitPivotRowPath } from "@/lib/pivot-flatten";
+import { blankRepeatedParentLabels, splitPivotRowPath } from "@/lib/pivot-flatten";
+import {
+  classicDimClickToggleKey,
+  rowLabelClickAction
+} from "@/lib/pivot-interaction";
 import styles from "./pivot-grid.module.css";
-import { isStickyRowDimLeft, ROW_GUTTER_W } from "./columnSizing";
+import { isStickyRowDimLeft } from "./columnSizing";
 import { SheetBufferBodyCell } from "./SheetBufferCell";
 import type { RangeSelection, SelectionVisual } from "./selection";
 import { selectionCellClassNames } from "./selectionStyles";
@@ -22,6 +27,33 @@ type CellPointerHandlers = {
     cell?: import("@salec/pivot-engine").PivotCell | null
   ) => void;
 };
+
+type ExpandArm = { key: string; x: number; y: number };
+
+/** beginSelect mousedown da preventDefault qiladi — click yo‘qoladi; expand mouseup da. */
+function armExpandPointer(
+  e: React.MouseEvent,
+  toggleKey: string | null | undefined,
+  armRef: { current: ExpandArm | null }
+) {
+  if (e.button !== 0 || !toggleKey) {
+    armRef.current = null;
+    return;
+  }
+  armRef.current = { key: toggleKey, x: e.clientX, y: e.clientY };
+}
+
+function fireArmedExpand(
+  e: React.MouseEvent,
+  armRef: { current: ExpandArm | null },
+  onToggleKey: (key: string) => void
+) {
+  const arm = armRef.current;
+  armRef.current = null;
+  if (!arm || e.button !== 0) return;
+  if (Math.abs(e.clientX - arm.x) > 4 || Math.abs(e.clientY - arm.y) > 4) return;
+  onToggleKey(arm.key);
+}
 
 type Props = {
   row: PivotRowType;
@@ -119,6 +151,7 @@ export function PivotRowView({
   dataColCount = 0,
   selection = null
 }: Props) {
+  const expandArmRef = useRef<ExpandArm | null>(null);
   const bufferCell =
     emptySheetCols > 0 ? (
       <SheetBufferBodyCell
@@ -197,19 +230,26 @@ export function PivotRowView({
 
           if (isCompactMulti) {
             const showToggle = hasChildren && colIdx === depth && Boolean(text);
+            const compactToggleKey = showToggle ? row.key : null;
             return (
               <td
                 key={`row-dim-${colIdx}`}
-                className={cn(dimClass, showToggle && onSortLabel && "cursor-pointer")}
+                className={cn(dimClass, showToggle && "cursor-pointer")}
                 style={{
                   ...baseStyle,
                   ...(colIdx === depth ? { paddingLeft: `${6 + depth * 12}px` } : undefined)
                 }}
-                onClick={() => {
-                  onSelectCell?.(dimKey);
-                  if (showToggle) onSortLabel?.();
+                title={showToggle ? (expanded ? "Свернуть" : "Развернуть") : undefined}
+                onClick={() => onSelectCell?.(dimKey)}
+                onMouseDown={(e) => {
+                  armExpandPointer(e, compactToggleKey, expandArmRef);
+                  cellPointer?.onMouseDownSelect?.(dimKey, e);
                 }}
-                onMouseDown={(e) => cellPointer?.onMouseDownSelect?.(dimKey, e)}
+                onMouseUp={(e) => {
+                  fireArmedExpand(e, expandArmRef, () => {
+                    if (rowLabelClickAction(Boolean(showToggle)) === "toggle-expand") onToggle?.();
+                  });
+                }}
                 onMouseEnter={() => cellPointer?.onMouseEnterSelect?.(dimKey)}
                 onContextMenu={(e) => cellPointer?.onContextMenuSelect?.(dimKey, e)}
               >
@@ -227,35 +267,36 @@ export function PivotRowView({
             );
           }
 
-          // Classic: ± faqat matn ko‘rinadigan katakda (blank katakda − bo‘lmasin)
-          const isLeafCol = colIdx >= rowFieldCount - 1;
-          const fullAtCol = fullLabels[colIdx] ?? "";
-          const prefixKey = !isLeafCol ? classicPathPrefixKey(fullLabels, colIdx) : null;
-          const showToggle = Boolean(prefixKey && text && fullAtCol);
-          const colExpanded = prefixKey ? (expandedRows?.has(prefixKey) ?? expanded) : false;
+          // Classic: ± faqat matn ko‘rinadigan katakda; toggle — path PREFIX (leaf rowKey emas)
+          const prefixKey = classicDimClickToggleKey(fullLabels, colIdx, rowFieldCount, text);
+          const showToggle = Boolean(prefixKey);
+          const colExpanded = prefixKey ? (expandedRows?.has(prefixKey) ?? false) : false;
+          const toggleClassic = () => {
+            if (!prefixKey) return;
+            if (onTogglePath) onTogglePath(prefixKey);
+            else onToggle?.();
+          };
           return (
             <td
               key={`row-dim-${colIdx}`}
-              className={cn(dimClass, showToggle && onSortLabel && "cursor-pointer")}
+              className={cn(dimClass, showToggle && "cursor-pointer")}
               style={baseStyle}
-              onClick={() => {
-                onSelectCell?.(dimKey);
-                if (showToggle) onSortLabel?.();
+              title={showToggle ? (colExpanded ? "Свернуть" : "Развернуть") : undefined}
+              onClick={() => onSelectCell?.(dimKey)}
+              onMouseDown={(e) => {
+                armExpandPointer(e, prefixKey, expandArmRef);
+                cellPointer?.onMouseDownSelect?.(dimKey, e);
               }}
-              onMouseDown={(e) => cellPointer?.onMouseDownSelect?.(dimKey, e)}
+              onMouseUp={(e) => {
+                fireArmedExpand(e, expandArmRef, () => toggleClassic());
+              }}
               onMouseEnter={() => cellPointer?.onMouseEnterSelect?.(dimKey)}
               onContextMenu={(e) => cellPointer?.onContextMenuSelect?.(dimKey, e)}
             >
               {text || showToggle ? (
                 <div className={styles.cellInner}>
                   {showToggle && prefixKey ? (
-                    <ExpandToggle
-                      expanded={colExpanded}
-                      onToggle={() => {
-                        if (onTogglePath) onTogglePath(prefixKey);
-                        else onToggle?.();
-                      }}
-                    />
+                    <ExpandToggle expanded={colExpanded} onToggle={toggleClassic} />
                   ) : null}
                   {text ? <span className={styles.cellText}>{text}</span> : null}
                 </div>
@@ -306,7 +347,7 @@ export function PivotRowView({
             styles.tdRowDim,
             styles.tdLabel,
             selectionCellClassNames(labelVisual, { rowDim: true }),
-            onSortLabel && "cursor-pointer"
+            hasChildren && "cursor-pointer"
           )}
           style={{
             minWidth: columnWidthsResolved?.["__row_label__"] ?? cellStyle?.("__row_label__")?.width ?? 100,
@@ -314,11 +355,18 @@ export function PivotRowView({
             maxWidth: columnWidthsResolved?.["__row_label__"] ?? cellStyle?.("__row_label__")?.width ?? 100,
             paddingLeft: `${6 + depth * 14}px`
           }}
-          onClick={() => {
-            onSelectCell?.("__row_label__");
-            onSortLabel?.();
+          title={hasChildren ? (expanded ? "Свернуть" : "Развернуть") : undefined}
+          data-testid="pivot-row-label"
+          onClick={() => onSelectCell?.("__row_label__")}
+          onMouseDown={(e) => {
+            armExpandPointer(e, hasChildren ? row.key : null, expandArmRef);
+            cellPointer?.onMouseDownSelect?.("__row_label__", e);
           }}
-          onMouseDown={(e) => cellPointer?.onMouseDownSelect?.("__row_label__", e)}
+          onMouseUp={(e) => {
+            fireArmedExpand(e, expandArmRef, () => {
+              if (rowLabelClickAction(hasChildren) === "toggle-expand") onToggle?.();
+            });
+          }}
           onMouseEnter={() => cellPointer?.onMouseEnterSelect?.("__row_label__")}
           onContextMenu={(e) => cellPointer?.onContextMenuSelect?.("__row_label__", e, labelCell)}
         >

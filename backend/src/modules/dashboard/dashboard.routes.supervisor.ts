@@ -11,7 +11,7 @@ import {
   getSupervisorSummary,
   getSupervisorVisits
 } from "./dashboard.supervisor.snapshot.partials";
-import { listSupervisorAgentPhotoReports, fetchSupervisorPhotoImages } from "./dashboard.supervisor.photo-reports";
+import { listSupervisorAgentPhotoReports, fetchSupervisorPhotoImages, loadSupervisorPhotoContent } from "./dashboard.supervisor.photo-reports";
 import {
   getExpeditorsDashboard,
   parseExpeditorsDashboardFilters
@@ -141,7 +141,11 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       }
       const accessUser = getAccessUser(request);
       const t0 = Date.now();
-      const data = await fetchSupervisorPhotoImages(request.tenant!.id, ids);
+      const data = await fetchSupervisorPhotoImages(
+        request.tenant!.id,
+        request.tenant!.slug,
+        ids
+      );
       recordDashboardPerf(request.log, reply, {
         route: "supervisor-photo-images",
         tenantId: request.tenant!.id,
@@ -149,6 +153,33 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         supervisorRole: accessUser.role === "supervisor"
       });
       return reply.send({ data });
+    }
+  );
+
+  app.get(
+    "/api/:slug/dashboard/supervisor/photo-reports/:photoId/content",
+    { preHandler: dashboardSupervisorPreHandler },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const photoId = Number.parseInt(
+        String((request.params as { photoId?: string }).photoId ?? ""),
+        10
+      );
+      if (!Number.isFinite(photoId) || photoId <= 0) {
+        return sendApiError(reply, request, 400, "ValidationError", "photoId is required");
+      }
+      const content = await loadSupervisorPhotoContent(request.tenant!.id, photoId);
+      if (!content) {
+        return sendApiError(reply, request, 404, "NotFound", "Photo not found");
+      }
+      if (content.kind === "redirect") {
+        return reply.redirect(content.url);
+      }
+      return reply
+        .header("Content-Type", content.contentType)
+        .header("Cache-Control", "private, max-age=3600, immutable")
+        .header("Content-Length", String(content.buffer.length))
+        .send(content.buffer);
     }
   );
 

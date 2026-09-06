@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
 import { prisma } from "../../config/database";
-import { isWorkSlotType } from "./work-slots.constants";
+import { toFio } from "../staff/staff.shared.helpers";
+import { assertSlotCodeMatchesType, normalizeSlotCode } from "./work-slots.codes";
+import { isWorkSlotType, WORK_SLOT_TYPES } from "./work-slots.constants";
 
 export type WorkSlotImportRow = {
   slot_code: string;
@@ -21,7 +23,9 @@ export async function buildWorkSlotsExportBuffer(tenantId: number): Promise<Buff
       user_links: {
         where: { ended_at: null },
         take: 1,
-        include: { user: { select: { login: true, name: true } } }
+        include: {
+          user: { select: { login: true, name: true, first_name: true, last_name: true, middle_name: true } }
+        }
       }
     }
   });
@@ -37,7 +41,7 @@ export async function buildWorkSlotsExportBuffer(tenantId: number): Promise<Buff
       is_active: r.is_active ? "yes" : "no",
       sort_order: r.sort_order,
       active_user_login: link?.user.login ?? "",
-      active_user_name: link?.user.name ?? ""
+      active_user_name: link?.user ? toFio(link.user) : ""
     };
   });
 
@@ -85,11 +89,9 @@ export async function importWorkSlotsFromBuffer(
       }
       return "";
     };
-    const code = String(
-      pick("slot_code", "Slot_code", "slot code", "Код слота", "код слота")
-    )
-      .trim()
-      .toUpperCase();
+    const code = normalizeSlotCode(
+      String(pick("slot_code", "Slot_code", "slot code", "Код слота", "код слота"))
+    );
     if (!code) continue;
 
     let slotType = String(pick("slot_type", "Slot_type", "Тип слота", "тип слота") || "agent")
@@ -107,11 +109,36 @@ export async function importWorkSlotsFromBuffer(
       супервайзер: "supervisor",
       supervisor: "supervisor",
       аудитор: "auditor",
-      auditor: "auditor"
+      auditor: "auditor",
+      оператор: "operator",
+      operator: "operator",
+      директор: "director",
+      director: "director",
+      "директор по продажам": "sales_director",
+      sales_director: "sales_director",
+      менеджер: "manager",
+      manager: "manager",
+      "региональный менеджер": "regional_manager",
+      regional_manager: "regional_manager",
+      бухгалтер: "accountant",
+      accountant: "accountant",
+      "заведующий складом": "warehouse_manager",
+      warehouse_manager: "warehouse_manager"
     };
     slotType = slotTypeMap[slotType] ?? slotType;
     if (!isWorkSlotType(slotType)) {
-      errors.push(`Строка ${i + 2}: неверный тип слота «${slotType}»`);
+      errors.push(
+        `Строка ${i + 2}: неверный тип слота «${slotType}» (допустимо: ${WORK_SLOT_TYPES.join(", ")})`
+      );
+      continue;
+    }
+
+    try {
+      assertSlotCodeMatchesType(code, slotType);
+    } catch {
+      errors.push(
+        `Строка ${i + 2}: smart-код «${code}» не соответствует типу «${slotType}»`
+      );
       continue;
     }
 

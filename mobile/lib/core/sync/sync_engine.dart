@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../device/mobile_device_info.dart';
+import '../api/field_api.dart';
 import '../api/mobile_api.dart';
 import '../auth/session.dart';
 import '../config/mobile_config.dart';
@@ -12,6 +13,7 @@ import '../config/sync_policy_provider.dart';
 import '../connectivity/connectivity_service.dart';
 import '../database/app_database.dart';
 import '../errors/error_reporter.dart';
+import '../gps/gps_ping_queue.dart';
 import '../time/work_region_time.dart';
 import 'photo_report_queue.dart';
 import 'sync_payload_parser.dart';
@@ -20,6 +22,7 @@ import '../../features/shared/services/sync_service.dart';
 /// Sync engine — full/delta sync + offline queue flush
 class SyncEngine {
   final MobileApi _mobileApi;
+  final FieldApi _fieldApi;
   final AppDatabase _db;
   final String _slug;
   final String? _userRole;
@@ -28,12 +31,14 @@ class SyncEngine {
 
   SyncEngine({
     required MobileApi mobileApi,
+    required FieldApi fieldApi,
     required AppDatabase db,
     required String slug,
     String? userRole,
     SyncConfig syncConfig = const SyncConfig(),
     SyncConflictResolver conflictResolver = syncConflictResolver,
   })  : _mobileApi = mobileApi,
+        _fieldApi = fieldApi,
         _db = db,
         _slug = slug,
         _userRole = userRole,
@@ -115,6 +120,7 @@ class SyncEngine {
     final deviceFuture = MobileDeviceInfo.syncPayload();
     final offlineFuture = flushOfflineQueue(policySync: _syncConfig);
     final photoFuture = flushPendingPhotoReports();
+    final gpsFuture = flushPendingLocationPings();
     final device = await deviceFuture;
     final payload = await _mobileApi.syncFullParsed(
       _slug,
@@ -145,8 +151,8 @@ class SyncEngine {
     );
 
     onPhase?.call(5);
-    // Navbat + foto to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
-    await Future.wait([offlineFuture, photoFuture]);
+    // Navbat + foto + GPS to‘liq tugaguncha kutamiz — aks holda «OK» erta chiqadi.
+    await Future.wait([offlineFuture, photoFuture, gpsFuture]);
     return payload;
   }
 
@@ -215,6 +221,28 @@ class SyncEngine {
     );
   }
 
+  /// Oflayn GPS trek pinglarini batch yuborish (internet oyna cheklovisiz).
+  Future<int> flushPendingLocationPings() async {
+    try {
+      return await flushPendingLocationPingsToServer(
+        db: _db,
+        fieldApi: _fieldApi,
+        slug: _slug,
+      );
+    } catch (e, st) {
+      ErrorReporter.instance?.reportCaught(
+        e,
+        stack: st,
+        module: ErrorModules.gps,
+        code: 'GpsPingFlushFailed',
+        message: 'GPS: sync flush не отправился',
+        path: '/mobile/field/location/batch',
+        severity: 'warning',
+      );
+      return 0;
+    }
+  }
+
   /// Server pending + local queue
   Future<int> pendingCount() async {
     try {
@@ -263,6 +291,7 @@ final syncEngineProvider = Provider<SyncEngine?>((ref) {
 
   return SyncEngine(
     mobileApi: ref.read(mobileApiProvider),
+    fieldApi: ref.read(fieldApiProvider),
     db: AppDatabase(),
     slug: slug,
     userRole: role,
@@ -280,6 +309,11 @@ final autoFlushProvider = Provider<void>((ref) {
   isOnline.whenData((online) async {
     if (!online || syncEngine == null) return;
     try {
+      // GPS trek: internet chiqishi bilan darhol (oyna cheklovi yo‘q).
+      final gpsPending = await AppDatabase().pendingLocationPingCount();
+      if (gpsPending > 0) {
+        await syncEngine.flushPendingLocationPings();
+      }
       // Fotolar: yig‘ilgan rasmlarni istalgan vaqtda yuborish (oyna cheklovi yo‘q).
       final photoCfg = ref.read(sessionProvider).mobileConfig?.photo;
       final photoPending = await AppDatabase().pendingPhotoReportCount();

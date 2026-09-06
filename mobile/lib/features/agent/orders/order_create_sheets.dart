@@ -1695,9 +1695,10 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   bool get _discountSectionHasWarning {
-    if (_discountMode == DiscountMode.none) return false;
     final discounts = _applicableDiscounts();
     if (discounts.isEmpty) return false;
+    // Agent «Без скидки» tanlagan, lekin mos skidka bor — ogohlantirish.
+    if (_discountMode == DiscountMode.none) return true;
     if (!_preview.discountCashDeskAvailable) return true;
     if (_discountMode == DiscountMode.auto && _preview.autoDiscountRuleId == null) return true;
     return discounts.any(_discountRuleHasWarning);
@@ -2111,9 +2112,17 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
   }
 
   String _buildDiscountShortageComment() {
-    if (_discountMode == DiscountMode.none) return '';
     final discounts = _applicableDiscounts();
     if (discounts.isEmpty) return '';
+    // «Без скидки» — mos qoida bor edi, lekin agent o‘chirdi.
+    if (_discountMode == DiscountMode.none) {
+      final activeRule = discounts.first;
+      return buildDiscountShortageComment(
+        reasonKey: 'not_applied',
+        discountPct: activeRule.discountPct ?? _preview.autoDiscountPct,
+        expectedSum: (_preview.expectedDiscountSum ?? _preview.discountSum ?? 0).toDouble(),
+      );
+    }
 
     final applied =
         _preview.discountCashDeskAvailable &&
