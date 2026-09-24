@@ -5,6 +5,7 @@ import { registerActivityRoutes } from "./modules/activity/activity.route";
 import { registerErrorEventRoutes } from "./modules/error-events/error-events.route";
 import { registerAuditEventRoutes } from "./modules/audit-events/audit-events.route";
 import { registerAuthRoutes } from "./modules/auth/auth.route";
+import { registerTelegramBotRoutes } from "./modules/telegram-bot/telegram-bot.route";
 import { registerBonusRuleRoutes } from "./modules/bonus-rules/bonus-rules.route";
 import { registerBonusStrategyRoutes } from "./modules/bonus-strategies/bonus-strategies.route";
 import { registerCashDeskRoutes } from "./modules/cash-desks/cash-desks.route";
@@ -59,6 +60,7 @@ type RouteRegistrar = (app: FastifyInstance) => void | Promise<void>;
 /** Barcha API route register funksiyalari — tartib `app.ts` dagi avvalgi tartib bilan mos. */
 export const routeRegistrars: RouteRegistrar[] = [
   registerAuthRoutes,
+  registerTelegramBotRoutes,
   registerAccessRoutes,
   registerUserUiRoutes,
   registerClientRoutes,

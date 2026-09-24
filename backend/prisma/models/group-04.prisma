@@ -277,6 +277,7 @@ model Payment {
   @@index([tenant_id, number])
   edit_grants          PaymentEditGrant[]
   bank_transfer_inbox  BankTransferInbox[]
+  opening_balance_entries ClientOpeningBalanceEntry[]
   @@map("client_payments")
 }
 

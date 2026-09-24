@@ -43,6 +43,7 @@ backend/.env
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.production.example
 mobile/.env.local
 mobile/.env.*.local
 **/*.backup-*/
@@ -116,4 +117,7 @@ backend/uploads/
 
 **/*.bak-*
 **/*.bak.*
+
+
+backend/tmp/
 

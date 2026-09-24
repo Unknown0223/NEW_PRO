@@ -13,6 +13,7 @@
     "bench:pivot": "npm run build:pivot-engine && node packages/pivot-engine/scripts/benchmark-smoke.mjs",
     "pivot-demo": "npm run build:pivot-engine && npm run dev --workspace=@salec/pivot-demo",
     "hr-hub": "npm run dev --workspace=@salec/hr-hub",
+    "bot:clients": "npm run dev --prefix telegram-client-bot",
     "hr-hub:db:up": "npm run db:up --workspace=@salec/hr-hub",
     "hr-hub:db:push": "npm run db:push --workspace=@salec/hr-hub",
     "hr-hub:db:seed": "npm run db:seed --workspace=@salec/hr-hub",

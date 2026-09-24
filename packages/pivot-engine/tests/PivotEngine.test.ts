@@ -258,4 +258,27 @@ describe("PivotEngine", () => {
     expect(amountRow?.cells[0]?.formatted).toBe("Summa");
     expect(amountRow?.cells.length).toBeGreaterThan(2);
   });
+
+  it("valuesPosition rows + drillDown multi-row — ota guruh summasi ko‘rinadi", () => {
+    const config: PivotConfig = {
+      ...DEFAULT_PIVOT_CONFIG,
+      rows: ["region", "product"],
+      values: [{ fieldId: "amount", aggregation: "SUM" }],
+      options: {
+        ...DEFAULT_PIVOT_CONFIG.options,
+        valuesPosition: "rows",
+        drillDown: true,
+        showSubtotals: true
+      }
+    };
+    const result = engine.compute(ROWS, FIELDS, config);
+    const toshkent = result.rows.find((r) => r.key.includes("Toshkent"));
+    expect(toshkent?.children?.length).toBeGreaterThan(0);
+    // Ota (region) — metrika bolasi emas, guruh SUM
+    expect(toshkent?.cells[1]?.rawValue).toBe(2_300_000);
+    // Leaf product otasi measure children bilan; metrika bolada
+    const productLeaf = toshkent?.children?.[0];
+    expect(productLeaf?.children?.length).toBe(1);
+    expect(productLeaf?.children?.[0]?.cells[1]?.rawValue).toBeGreaterThan(0);
+  });
 });

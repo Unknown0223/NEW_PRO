@@ -52,12 +52,20 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       userId: actorUserIdOrNull(request),
       role: jwtUser.role ?? ""
     });
+    const statusRaw = q.statuses?.trim() || q.status?.trim() || "";
+    const statuses = statusRaw
+      ? [...new Set(statusRaw.split(/[,|]+/).map((s) => s.trim()).filter(Boolean))]
+      : [];
     const data = await listExpenses(
       request.tenant!.id,
       {
         page: q.page ? parseInt(q.page) : 1,
         limit: q.limit ? parseInt(q.limit) : 20,
-        status: q.status,
+        ...(statuses.length > 1
+          ? { statuses }
+          : statuses.length === 1
+            ? { status: statuses[0] }
+            : {}),
         expense_type: q.type,
         agent_id: q.agentId ? parseInt(q.agentId) : undefined,
         warehouse_id: q.warehouseId ? parseInt(q.warehouseId) : undefined,

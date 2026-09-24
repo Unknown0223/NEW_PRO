@@ -432,7 +432,7 @@ export function VirtualPivotConditionalDialog({
   );
 }
 
-/** Map format state onto pivot value formats. */
+/** Map format state onto pivot value formats (classic) yoki flat fieldFormats. */
 export function applyCellFormatToConfig(config: PivotConfig, state: CellFormatState): PivotConfig {
   const decimals = Number.parseInt(state.decimalPlaces, 10);
   const safeDecimals = Number.isFinite(decimals) ? decimals : 2;
@@ -455,6 +455,33 @@ export function applyCellFormatToConfig(config: PivotConfig, state: CellFormatSt
     ...(type === "currency" ? { currency: state.currency } : {})
   };
 
+  const isFlat =
+    config.options.layoutForm === "flat" ||
+    (config.values.length === 0 && (config.rows.length > 0 || config.columns.length > 0));
+
+  if (isFlat) {
+    const prev =
+      ((config.options as { fieldFormats?: Record<string, FieldFormat> }).fieldFormats ?? {}) as Record<
+        string,
+        FieldFormat
+      >;
+    const nextFormats = { ...prev };
+    const targetIds =
+      state.valueScope === "selected" && state.selectedFieldId
+        ? [state.selectedFieldId]
+        : [...config.rows, ...config.columns].filter(Boolean);
+    for (const id of targetIds) {
+      nextFormats[id] = { ...format };
+    }
+    return {
+      ...config,
+      options: {
+        ...config.options,
+        fieldFormats: nextFormats
+      } as PivotConfig["options"]
+    };
+  }
+
   const values: PivotValue[] = config.values.map((v) => {
     if (state.valueScope === "selected" && state.selectedFieldId && v.fieldId !== state.selectedFieldId) {
       return v;
@@ -466,7 +493,9 @@ export function applyCellFormatToConfig(config: PivotConfig, state: CellFormatSt
 }
 
 export function cellFormatFromConfig(config: PivotConfig): Partial<CellFormatState> {
-  const first = config.values[0]?.format;
+  const flatFmt = (config.options as { fieldFormats?: Record<string, FieldFormat> }).fieldFormats;
+  const firstFlat = flatFmt ? Object.values(flatFmt)[0] : undefined;
+  const first = config.values[0]?.format ?? firstFlat;
   if (!first) return {};
   return {
     decimalPlaces: String(first.decimals ?? 2),
@@ -479,6 +508,6 @@ export function cellFormatFromConfig(config: PivotConfig): Partial<CellFormatSta
     nullValue: first.nullDisplay ?? "",
     pattern: first.numberPattern ?? "#,##0.00",
     align: "right",
-    selectedFieldId: config.values[0]?.fieldId ?? ""
+    selectedFieldId: config.values[0]?.fieldId ?? Object.keys(flatFmt ?? {})[0] ?? ""
   };
 }

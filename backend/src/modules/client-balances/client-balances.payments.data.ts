@@ -45,7 +45,7 @@ export async function loadPaymentNetNormByClient(
       Array<{ client_id: number; payment_type: string; entry_kind: string; net: Prisma.Decimal }>
     >`
       SELECT p.client_id, p.payment_type, p.entry_kind,
-        SUM(CASE WHEN p.entry_kind IN ('payment', 'discount_settlement') THEN p.amount
+        SUM(CASE WHEN p.entry_kind IN ('payment', 'discount_settlement', 'refund') THEN p.amount
                  WHEN p.entry_kind = 'client_expense' THEN -p.amount
                  ELSE 0 END)::decimal(15,2) AS net
       FROM client_payments p

@@ -1,4 +1,6 @@
 import { prisma } from "../../config/database";
+import { enrichScopedReportActor } from "./access-agent-scope";
+import { actorHasUnrestrictedDataScope, uniquePositiveIds } from "./access-staff-scope";
 
 export type DirectoryScopeActor = {
   userId: number | null;
@@ -8,32 +10,24 @@ export type DirectoryScopeActor = {
 /**
  * Staff directory Access binds.
  * Admin → `null` (full catalog).
- * Boshqa rollar → linked ids; zero links → `[]` (empty list, safer than all).
+ * Boshqa rollar → Dostup + ish o‘rni ids; zero links → `[]` (empty list).
  */
 export async function resolveActorCashDeskDirectoryIds(
-  _tenantId: number,
+  tenantId: number,
   actor?: DirectoryScopeActor
 ): Promise<number[] | null> {
-  if (!actor?.userId || actor.role === "admin") return null;
-  const links = await prisma.cashDeskUserLink.findMany({
-    where: { user_id: actor.userId },
-    select: { cash_desk_id: true },
-    orderBy: { cash_desk_id: "asc" }
-  });
-  return [...new Set(links.map((l) => l.cash_desk_id))];
+  if (!actor?.userId || actorHasUnrestrictedDataScope(actor.role)) return null;
+  const enriched = await enrichScopedReportActor(tenantId, actor);
+  return uniquePositiveIds(enriched.cash_desk_ids ?? []);
 }
 
 export async function resolveActorWarehouseDirectoryIds(
-  _tenantId: number,
+  tenantId: number,
   actor?: DirectoryScopeActor
 ): Promise<number[] | null> {
-  if (!actor?.userId || actor.role === "admin") return null;
-  const links = await prisma.warehouseUserLink.findMany({
-    where: { user_id: actor.userId },
-    select: { warehouse_id: true },
-    orderBy: { warehouse_id: "asc" }
-  });
-  return [...new Set(links.map((l) => l.warehouse_id))];
+  if (!actor?.userId || actorHasUnrestrictedDataScope(actor.role)) return null;
+  const enriched = await enrichScopedReportActor(tenantId, actor);
+  return uniquePositiveIds(enriched.warehouse_ids ?? []);
 }
 
 export async function resolveActorTradeDirectionDirectoryIds(

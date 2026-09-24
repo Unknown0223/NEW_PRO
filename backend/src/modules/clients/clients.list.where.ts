@@ -55,23 +55,32 @@ export async function buildClientListWhereInput(
 ): Promise<Prisma.ClientWhereInput | null> {
   const andList: Prisma.ClientWhereInput[] = [{ tenant_id: tenantId, merged_into_client_id: null }];
 
-  const regionQ = q.region?.trim();
+  const regionList = [
+    ...(q.regions?.map((r) => r.trim()).filter(Boolean) ?? []),
+    ...(q.region?.trim() ? [q.region.trim()] : [])
+  ];
+  const regionKeys = [...new Set(regionList)];
   const zoneList = [
     ...(q.zones?.map((z) => z.trim()).filter(Boolean) ?? []),
     ...(q.zone?.trim() ? [q.zone.trim()] : [])
   ];
   const zoneKeys = [...new Set(zoneList)];
   const territoryBundle =
-    regionQ || zoneKeys.length > 0
+    regionKeys.length > 0 || zoneKeys.length > 0
       ? await loadClientTerritoryFilterBundle(tenantId)
       : { hints: {}, ref: undefined };
 
   if (q.is_active === true) andList.push({ is_active: true });
   if (q.is_active === false) andList.push({ is_active: false });
-  const cat = q.category?.trim();
-  if (cat) andList.push({ category: cat });
-  if (regionQ) {
-    const clause = clientWhereForRegionFilter(territoryBundle, [regionQ]);
+  const categories = [
+    ...(q.categories?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.category?.trim() ? [q.category.trim()] : [])
+  ];
+  const categoryKeys = [...new Set(categories)];
+  if (categoryKeys.length === 1) andList.push({ category: categoryKeys[0] });
+  else if (categoryKeys.length > 1) andList.push({ category: { in: categoryKeys } });
+  if (regionKeys.length > 0) {
+    const clause = clientWhereForRegionFilter(territoryBundle, regionKeys);
     if (clause) andList.push(clause);
   }
   const district = q.district?.trim();
@@ -82,14 +91,34 @@ export async function buildClientListWhereInput(
     const clause = clientWhereForZoneFilter(territoryBundle, zoneKeys);
     if (clause) andList.push(clause);
   }
-  const city = q.city?.trim();
-  if (city) andList.push({ city });
-  const ctc = q.client_type_code?.trim();
-  if (ctc) andList.push({ client_type_code: ctc });
-  const cf = q.client_format?.trim();
-  if (cf) andList.push({ client_format: cf });
-  const sc = q.sales_channel?.trim();
-  if (sc) andList.push({ sales_channel: sc });
+  const cities = [
+    ...(q.cities?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.city?.trim() ? [q.city.trim()] : [])
+  ];
+  const cityKeys = [...new Set(cities)];
+  if (cityKeys.length === 1) andList.push({ city: cityKeys[0] });
+  else if (cityKeys.length > 1) andList.push({ city: { in: cityKeys } });
+  const typeCodes = [
+    ...(q.client_type_codes?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.client_type_code?.trim() ? [q.client_type_code.trim()] : [])
+  ];
+  const typeKeys = [...new Set(typeCodes)];
+  if (typeKeys.length === 1) andList.push({ client_type_code: typeKeys[0] });
+  else if (typeKeys.length > 1) andList.push({ client_type_code: { in: typeKeys } });
+  const formats = [
+    ...(q.client_formats?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.client_format?.trim() ? [q.client_format.trim()] : [])
+  ];
+  const formatKeys = [...new Set(formats)];
+  if (formatKeys.length === 1) andList.push({ client_format: formatKeys[0] });
+  else if (formatKeys.length > 1) andList.push({ client_format: { in: formatKeys } });
+  const channels = [
+    ...(q.sales_channels?.map((c) => c.trim()).filter(Boolean) ?? []),
+    ...(q.sales_channel?.trim() ? [q.sales_channel.trim()] : [])
+  ];
+  const channelKeys = [...new Set(channels)];
+  if (channelKeys.length === 1) andList.push({ sales_channel: channelKeys[0] });
+  else if (channelKeys.length > 1) andList.push({ sales_channel: { in: channelKeys } });
 
   const agentIds = [
     ...(q.agent_ids?.filter((n) => Number.isFinite(n) && n > 0) ?? []),
@@ -186,8 +215,13 @@ export async function buildClientListWhereInput(
     });
   }
 
-  const equipQ = q.equipment_kind?.trim();
-  if (equipQ) {
+  const equipKinds = [
+    ...(q.equipment_kinds?.map((k) => k.trim()).filter(Boolean) ?? []),
+    ...(q.equipment_kind?.trim() ? [q.equipment_kind.trim()] : [])
+  ];
+  const equipKeys = [...new Set(equipKinds)];
+  if (equipKeys.length === 1) {
+    const equipQ = equipKeys[0]!;
     andList.push({
       client_equipment: {
         some: {
@@ -196,6 +230,18 @@ export async function buildClientListWhereInput(
             { equipment_kind: { contains: equipQ, mode: "insensitive" } },
             { inventory_type: { contains: equipQ, mode: "insensitive" } }
           ]
+        }
+      }
+    });
+  } else if (equipKeys.length > 1) {
+    andList.push({
+      client_equipment: {
+        some: {
+          removed_at: null,
+          OR: equipKeys.flatMap((equipQ) => [
+            { equipment_kind: { contains: equipQ, mode: "insensitive" as const } },
+            { inventory_type: { contains: equipQ, mode: "insensitive" as const } }
+          ])
         }
       }
     });

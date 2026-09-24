@@ -1297,7 +1297,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           comment: _comment.isEmpty ? null : _comment,
         );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
+        await ensureVisitCompletedForClientTodayWithRef(
+          ref,
           _selectedClientId,
           clientName: _selectedClient?['name']?.toString(),
         );
@@ -1353,8 +1354,13 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           delayMinutes: delayMin,
           existingId: _heldOrderId,
         );
+        await ensureVisitCompletedForClientTodayWithRef(
+          ref,
+          _selectedClientId,
+          clientName: _selectedClient?['name']?.toString(),
+        );
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        // Vizit hold oynasida ochiq qoladi — «Отправить сейчас» vizit bo‘limida.
+        // Hold ham asosiy sahifada «Посещено» ga kiradi (Начать визит shart emas).
         ref.invalidate(orderDraftsProvider);
         ref.invalidate(orderDraftListProvider);
         ref.invalidate(orderDraftForClientProvider(_selectedClientId));
@@ -1450,7 +1456,8 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       if (mounted) {
         setState(() => _hasUnlinkedPhotoToday = false);
         await ref.read(orderDraftRepositoryProvider).delete(_selectedClientId);
-        await ensureVisitCompletedForClientToday(
+        await ensureVisitCompletedForClientTodayWithRef(
+          ref,
           _selectedClientId,
           clientName: _selectedClient?['name']?.toString(),
         );
@@ -1558,6 +1565,17 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
       }
       await _openSetupSheet();
       return;
+    }
+
+    final clientMap = _selectedClient;
+    if (clientMap != null) {
+      final session = ref.read(sessionProvider);
+      final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
+      final productList = session.mobileConfig?.productList ?? const ProductListConfig();
+      if (isNewClientBlockedForOrder(clientMap, clientCfg, productList)) {
+        _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
+        return;
+      }
     }
 
     final items = <OrderLineInput>[];

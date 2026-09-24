@@ -768,9 +768,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["agents", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/agents?is_active=true`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -778,9 +783,14 @@ export function ClientBalancesWorkspace() {
     queryKey: ["expeditors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(`/api/${tenantSlug}/expeditors?is_active=true`);
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 
@@ -788,11 +798,16 @@ export function ClientBalancesWorkspace() {
     queryKey: ["supervisors", tenantSlug, "client-balances-filters"],
     enabled: Boolean(tenantSlug) && hydrated,
     staleTime: STALE.reference,
+    retry: false,
     queryFn: async () => {
-      const { data } = await api.get<{ data: StaffPick[] }>(
-        `/api/${tenantSlug}/supervisors?is_active=true`
-      );
-      return data.data;
+      try {
+        const { data } = await api.get<{ data: StaffPick[] }>(
+          `/api/${tenantSlug}/supervisors?is_active=true`
+        );
+        return data.data ?? [];
+      } catch {
+        return [] as StaffPick[];
+      }
     }
   });
 

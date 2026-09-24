@@ -26,6 +26,10 @@ import {
 import { buildLedgerAgentCards } from "./client-balance-ledger.agents";
 
 import { fetchClientBalanceLedgerTable } from "./client-balance-ledger.get-table";
+import {
+  buildSalesReturnAgentClause,
+  buildSalesReturnDateClause
+} from "./client-balance-ledger.returns";
 
 export async function getClientBalanceLedger(
   tenantId: number,
@@ -65,7 +69,8 @@ export async function getClientBalanceLedger(
     deliveryMap.get(clientId)
   ).toString();
   const { agent_cards } = await buildLedgerAgentCards(tenantId, clientId, sprLabels, paymentMethodEntries);
-  const excluded = ["cancelled", "returned"] as const;
+  /** Debitor qarz qatorlari — faqat yetkazilgan savdo zakazlari (`delivered`). */
+  const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
   const page = Math.max(1, q.page);
   const maxLimit = q.ledger_detail ? 5000 : 100;
   const limit = Math.min(maxLimit, Math.max(1, q.limit));
@@ -130,22 +135,24 @@ export async function getClientBalanceLedger(
     kind === "debt"
       ? Prisma.sql`WHERE (u.row_kind = 'order' OR (u.row_kind = 'payment' AND u.entry_kind = 'client_expense'))`
       : kind === "payment"
-        ? Prisma.sql`WHERE u.row_kind = 'payment' AND u.entry_kind = 'payment'`
+        ? Prisma.sql`WHERE u.row_kind = 'payment' AND u.entry_kind IN ('payment', 'refund')`
         : Prisma.empty;
 
   const { agentIds: ledgerAgentIds, includeNoAgent: ledgerIncludeNoAgent } = resolveLedgerAgentFilter(q);
   const { orderAgentClause, payAgentClause } = buildLedgerAgentSqlClauses(ledgerAgentIds, ledgerIncludeNoAgent);
+  const returnDateClause = buildSalesReturnDateClause(df, dt);
+  const returnAgentClause = buildSalesReturnAgentClause(ledgerAgentIds, ledgerIncludeNoAgent);
 
   const payKindClauseForTypeBreakdown =
     kind === "payment"
-      ? Prisma.sql`AND p.entry_kind = 'payment'`
+      ? Prisma.sql`AND p.entry_kind IN ('payment', 'refund')`
       : kind === "debt"
         ? Prisma.sql`AND p.entry_kind = 'client_expense'`
         : Prisma.empty;
 
   const payNetRowsFiltered = await prisma.$queryRaw<Array<{ payment_type: string; net: Prisma.Decimal }>>`
     SELECT p.payment_type,
-      SUM(CASE WHEN p.entry_kind = 'payment' THEN p.amount
+      SUM(CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount
                WHEN p.entry_kind = 'client_expense' THEN -p.amount
                ELSE 0 END)::decimal(15,2) AS net
     FROM client_payments p
@@ -160,12 +167,37 @@ export async function getClientBalanceLedger(
       ${payKindClauseForTypeBreakdown}
     GROUP BY p.payment_type
   `;
+  const orphanReturnRefundRows = await prisma.$queryRaw<Array<{ payment_type: string; net: Prisma.Decimal }>>`
+    SELECT 'balance'::text AS payment_type,
+      COALESCE(SUM(sr.refund_amount), 0)::decimal(15,2) AS net
+    FROM sales_returns sr
+    JOIN clients c ON c.id = sr.client_id AND c.tenant_id = ${tenantId}
+    LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
+    WHERE sr.tenant_id = ${tenantId}
+      AND sr.client_id = ${clientId}
+      AND sr.status = 'posted'
+      AND COALESCE(sr.refund_amount, 0) > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM client_payments p
+        WHERE p.tenant_id = sr.tenant_id
+          AND p.client_id = sr.client_id
+          AND p.deleted_at IS NULL
+          AND p.entry_kind = 'refund'
+          AND (
+            p.note = ('Возврат · ' || sr.number)
+            OR p.note = ('Vazvrat: ' || sr.number)
+          )
+      )
+      ${returnDateClause}
+      ${returnAgentClause}
+      ${kind === "debt" ? Prisma.sql`AND FALSE` : Prisma.empty}
+  `;
   const summary_payment_by_type = paymentAmountsForSpravochnik(
     sprLabels,
-    buildNetNormFromRows(payNetRowsFiltered, paymentMethodEntries)
+    buildNetNormFromRows([...payNetRowsFiltered, ...orphanReturnRefundRows], paymentMethodEntries)
   );
 
-  const agentTotalsSqlBody = (orderAgent: Prisma.Sql, payAgent: Prisma.Sql) => Prisma.sql`
+  const agentTotalsSqlBody = (orderAgent: Prisma.Sql, payAgent: Prisma.Sql, retAgent: Prisma.Sql) => Prisma.sql`
     SELECT
       u.ledger_agent_id,
       SUM(
@@ -190,7 +222,7 @@ export async function getClientBalanceLedger(
       FROM orders o
       WHERE o.tenant_id = ${tenantId}
         AND o.client_id = ${clientId}
-        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.status IN (${Prisma.join(receivableStatuses)})
         AND o.order_type = 'order'
         ${orderDateClause}
         ${orderSearchClause}
@@ -203,7 +235,7 @@ export async function getClientBalanceLedger(
         'payment'::text AS row_kind,
         p.entry_kind AS entry_kind,
         CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END AS debt_amount,
-        CASE WHEN p.entry_kind = 'payment' THEN p.amount ELSE NULL END AS payment_amount
+        CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE NULL END AS payment_amount
       FROM client_payments p
       JOIN clients c ON c.id = p.client_id AND c.tenant_id = ${tenantId}
       LEFT JOIN orders ord ON ord.id = p.order_id AND ord.tenant_id = ${tenantId}
@@ -213,6 +245,35 @@ export async function getClientBalanceLedger(
         ${payDateClause}
         ${paySearchClause}
         ${payAgent}
+
+      UNION ALL
+
+      SELECT
+        COALESCE(ord.agent_id, c.agent_id) AS ledger_agent_id,
+        'payment'::text AS row_kind,
+        'refund'::text AS entry_kind,
+        NULL::decimal(15,2) AS debt_amount,
+        (sr.refund_amount)::decimal(15,2) AS payment_amount
+      FROM sales_returns sr
+      JOIN clients c ON c.id = sr.client_id AND c.tenant_id = ${tenantId}
+      LEFT JOIN orders ord ON ord.id = sr.order_id AND ord.tenant_id = ${tenantId}
+      WHERE sr.tenant_id = ${tenantId}
+        AND sr.client_id = ${clientId}
+        AND sr.status = 'posted'
+        AND COALESCE(sr.refund_amount, 0) > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM client_payments p
+          WHERE p.tenant_id = sr.tenant_id
+            AND p.client_id = sr.client_id
+            AND p.deleted_at IS NULL
+            AND p.entry_kind = 'refund'
+            AND (
+              p.note = ('Возврат · ' || sr.number)
+              OR p.note = ('Vazvrat: ' || sr.number)
+            )
+        )
+        ${returnDateClause}
+        ${retAgent}
     ) u
     ${kindWhere}
     GROUP BY u.ledger_agent_id
@@ -221,12 +282,12 @@ export async function getClientBalanceLedger(
   /** Итоги по агентам с фильтром по агенту — как у строк таблицы и net balance. */
   const agentGeneralTotals = await prisma.$queryRaw<
     Array<{ ledger_agent_id: number | null; gen_debt: Prisma.Decimal; gen_pay: Prisma.Decimal }>
-  >(agentTotalsSqlBody(orderAgentClause, payAgentClause));
+  >(agentTotalsSqlBody(orderAgentClause, payAgentClause, returnAgentClause));
 
   /** Карточки агентов: суммы без фильтра по агенту (дата/поиск/kind сохраняются), иначе невыбранные агенты показывают 0. */
   const agentGeneralTotalsForCards = await prisma.$queryRaw<
     Array<{ ledger_agent_id: number | null; gen_debt: Prisma.Decimal; gen_pay: Prisma.Decimal }>
-  >(agentTotalsSqlBody(Prisma.empty, Prisma.empty));
+  >(agentTotalsSqlBody(Prisma.empty, Prisma.empty, Prisma.empty));
 
   let ledgerNetSum = new Prisma.Decimal(0);
   for (const r of agentGeneralTotals) {
@@ -252,7 +313,7 @@ export async function getClientBalanceLedger(
   const { rows, total } = await fetchClientBalanceLedgerTable({
     tenantId,
     clientId,
-    excluded,
+    receivableStatuses,
     orderDateClause,
     payDateClause,
     orderSearchClause,
@@ -260,6 +321,8 @@ export async function getClientBalanceLedger(
     kindWhere,
     orderAgentClause,
     payAgentClause,
+    returnDateClause,
+    returnAgentClause,
     rankedCte,
     fromTable,
     limit,

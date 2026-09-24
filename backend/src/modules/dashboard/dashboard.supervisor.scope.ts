@@ -133,6 +133,9 @@ export type SupervisorVisitRow = {
   not_visited: number;
   visits_with_orders: number;
   visits_without_orders: number;
+  /** Tanlangan kunda agentning buyurtmalar soni (status filtriga mos). */
+  order_count: number;
+  cancelled_count: number;
   gps_visits: number;
   photo_reports: number;
   photo_outlets: number;

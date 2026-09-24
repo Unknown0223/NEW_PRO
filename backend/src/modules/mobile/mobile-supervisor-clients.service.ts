@@ -16,9 +16,21 @@ import {
   type CompactClientRow
 } from "./mobile-agent-sync.service";
 import { mergeMobileConfigWithDefaults } from "../staff/agent-mobile-config.defaults";
+import { resolveUserPermissionKeys } from "../access/rbac.service";
 import { listSupervisorLinkedAgents } from "./mobile-supervisor-kpi.service";
 
 type PatchClientBody = z.infer<typeof mobilePatchClientBodySchema>;
+
+/** Savdo Konfig `can_edit: false` bo‘lsa ham Dostup `clients.klient.update` ochiq bo‘lsa ruxsat. */
+async function supervisorMayEditClient(
+  tenantId: number,
+  supervisorUserId: number,
+  cfgCanEdit: boolean | undefined
+): Promise<boolean> {
+  if (cfgCanEdit !== false) return true;
+  const keys = await resolveUserPermissionKeys(tenantId, supervisorUserId, "supervisor");
+  return keys.has("clients.klient.update");
+}
 
 const supervisorClientSelect = {
   ...clientSyncSelectBase,
@@ -231,7 +243,9 @@ export async function patchMobileSupervisorClient(
 ) {
   const rawCfg = await loadAgentMobileConfig(tenantId, supervisorUserId);
   const cfg = mergeMobileConfigWithDefaults("supervisor", rawCfg ?? undefined);
-  if (cfg.client?.can_edit === false) throw new Error("CLIENT_EDIT_FORBIDDEN");
+  if (!(await supervisorMayEditClient(tenantId, supervisorUserId, cfg.client?.can_edit))) {
+    throw new Error("CLIENT_EDIT_FORBIDDEN");
+  }
 
   const ok = await assertSupervisorScopedClient(tenantId, supervisorUserId, clientId);
   if (!ok) throw new Error("NOT_FOUND");

@@ -46,6 +46,7 @@ type OutdatedUser = {
   apk_version: string | null;
   device_name: string | null;
   last_sync_at: string | null;
+  is_outdated?: boolean;
 };
 
 type ApkStatus = {
@@ -57,6 +58,8 @@ type ApkStatus = {
 
 type MobileAppReleaseResponse = {
   policy: MobileAppReleasePolicy;
+  users?: OutdatedUser[];
+  users_count?: number;
   outdated_count: number;
   outdated_users: OutdatedUser[];
   apk?: ApkStatus;
@@ -150,17 +153,41 @@ export default function MobileAppSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["settings", "mobile-app-release", tenantSlug],
     enabled: Boolean(tenantSlug) && isAdmin,
-    staleTime: STALE.profile,
+    staleTime: 0,
+    gcTime: STALE.live,
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data: body } = await api.get<MobileAppReleaseResponse>(
-        `/api/${tenantSlug}/settings/mobile-app-release`
+        `/api/${tenantSlug}/settings/mobile-app-release`,
+        { headers: { "Cache-Control": "no-cache" } }
       );
       return body;
     }
   });
+
+  const mobileUsers = Array.isArray(data?.users)
+    ? data.users
+    : (data?.outdated_users ?? []).map((u) => ({ ...u, is_outdated: true }));
+  const outdatedCount = data?.outdated_count ?? mobileUsers.filter((u) => u.is_outdated).length;
+
+  const policyKey = data?.policy
+    ? [
+        data.policy.min_version,
+        data.policy.latest_version,
+        data.policy.force_update,
+        data.policy.download_url,
+        data.policy.store_url_android,
+        data.policy.store_url_ios,
+        data.policy.release_notes,
+        data.apk?.download_url
+      ].join("|")
+    : "";
 
   useEffect(() => {
     if (!data?.policy) return;
@@ -172,7 +199,9 @@ export default function MobileAppSettingsPage() {
     setStoreAndroid(p.store_url_android ?? "");
     setStoreIos(p.store_url_ios ?? "");
     setReleaseNotes(p.release_notes ?? "");
-  }, [data]);
+    // Faqat siyosat o‘zgaganda forma yangilanadi — poll hodimlar jadvalini buzmasin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policyKey]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -357,9 +386,9 @@ export default function MobileAppSettingsPage() {
                 />
                 <StatTile
                   label="Eskirgan agentlar"
-                  value={`${data?.outdated_count ?? 0} ta`}
+                  value={`${outdatedCount} ta`}
                   hint={forceUpdate ? "Majburiy yangilash yoqilgan" : "Majburiy yangilash o‘chirilgan"}
-                  tone={(data?.outdated_count ?? 0) > 0 ? "warn" : "ok"}
+                  tone={outdatedCount > 0 ? "warn" : "ok"}
                 />
               </div>
 
@@ -618,7 +647,7 @@ export default function MobileAppSettingsPage() {
               <Button
                 variant="outline"
                 onClick={() => notifyMut.mutate()}
-                disabled={notifyMut.isPending || (data?.outdated_count ?? 0) === 0}
+                disabled={notifyMut.isPending || outdatedCount === 0}
               >
                 {notifyMut.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -627,8 +656,19 @@ export default function MobileAppSettingsPage() {
                 )}
                 Eskirganlarga eslatma
                 <Badge variant="secondary" className="ml-2">
-                  {data?.outdated_count ?? 0}
+                  {outdatedCount}
                 </Badge>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                title="Hozir yangilash"
+              >
+                <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />
+                Yangilash
               </Button>
             </div>
             {msg ? (
@@ -643,23 +683,36 @@ export default function MobileAppSettingsPage() {
             ) : null}
           </div>
 
-          {/* Eskirganlar jadvali */}
+          {/* Hodimlar APK holati */}
           <Card className="overflow-hidden hover:shadow-sm">
             <CardHeader className="bg-muted/15">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    Yangilanishi kerak
+                    Hodimlar — ilova versiyasi
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    «Versiya noma’lum» — hali yangi ilova bilan login/sync qilmagan. Ilovani ochganda
-                    majburiy yangilash chiqadi.
+                    Har ~12 soniyada avtomatik yangilanadi. «Versiya noma’lum» — hali login/sync
+                    qilmagan.
+                    {dataUpdatedAt > 0 ? (
+                      <>
+                        {" "}
+                        Oxirgi yangilanish:{" "}
+                        <span className="font-medium text-foreground/80">
+                          {formatSync(new Date(dataUpdatedAt).toISOString())}
+                        </span>
+                        {isFetching ? " · yangilanmoqda…" : null}
+                      </>
+                    ) : null}
                   </CardDescription>
                 </div>
-                <Badge variant={(data?.outdated_users.length ?? 0) > 0 ? "warning" : "success"}>
-                  {data?.outdated_users.length ?? 0} ta
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{mobileUsers.length} ta</Badge>
+                  <Badge variant={outdatedCount > 0 ? "warning" : "success"}>
+                    eskirgan: {outdatedCount}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -670,43 +723,56 @@ export default function MobileAppSettingsPage() {
                       <th className="px-4 py-2.5 font-medium">Ism / login</th>
                       <th className="px-4 py-2.5 font-medium">Rol</th>
                       <th className="px-4 py-2.5 font-medium">APK versiya</th>
+                      <th className="px-4 py-2.5 font-medium">Holat</th>
                       <th className="px-4 py-2.5 font-medium">Qurilma</th>
                       <th className="px-4 py-2.5 font-medium">Oxirgi sync</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.outdated_users ?? []).map((u) => (
-                      <tr key={u.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
-                        <td className="px-4 py-2.5">
-                          <div className="font-medium text-foreground">{u.name}</div>
-                          <div className="text-xs text-muted-foreground">{u.login}</div>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Badge variant="outline" className="font-normal capitalize">
-                            {u.role}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {u.apk_version ? (
-                            <span className="font-mono text-xs font-medium">{u.apk_version}</span>
-                          ) : (
-                            <Badge variant="warning">noma’lum</Badge>
-                          )}
-                        </td>
-                        <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted-foreground">
-                          {u.device_name ?? "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">
-                          {formatSync(u.last_sync_at)}
-                        </td>
-                      </tr>
-                    ))}
-                    {(data?.outdated_users.length ?? 0) === 0 ? (
+                    {mobileUsers.map((u) => {
+                      const outdated = u.is_outdated === true;
+                      return (
+                        <tr
+                          key={u.id}
+                          className="border-b border-border/60 last:border-0 hover:bg-muted/30"
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="font-medium text-foreground">{u.name}</div>
+                            <div className="text-xs text-muted-foreground">{u.login}</div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <Badge variant="outline" className="font-normal capitalize">
+                              {u.role}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {u.apk_version ? (
+                              <span className="font-mono text-xs font-medium">{u.apk_version}</span>
+                            ) : (
+                              <Badge variant="warning">noma’lum</Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {outdated ? (
+                              <Badge variant="warning">yangilash kerak</Badge>
+                            ) : (
+                              <Badge variant="success">joriy</Badge>
+                            )}
+                          </td>
+                          <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted-foreground">
+                            {u.device_name ?? "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted-foreground">
+                            {formatSync(u.last_sync_at)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {mobileUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                        <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                           <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500/80" />
-                          Barcha foydalanuvchilar {latest || "oxirgi"} versiyada (yoki hali sync
-                          qilmaganlar yo‘q)
+                          Mobil kirishga ochiq hodimlar topilmadi
                         </td>
                       </tr>
                     ) : null}

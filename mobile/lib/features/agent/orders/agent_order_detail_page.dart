@@ -132,8 +132,13 @@ String _bonusSubtitle(AgentOrderHistoryRow o) {
   final name = first.productName.isNotEmpty ? first.productName : 'бонус';
   final short = name.length > 18 ? '${name.substring(0, 16)}…' : name;
   final q = _formatQty(first.qty);
-  final extra = bonusItems.length > 1 ? ' +${bonusItems.length - 1}' : '';
-  return '+$q $short$extra · активны';
+  if (bonusItems.length == 1) {
+    return '+$q $short · активны';
+  }
+  // Qolgan bonus DONALARI (qatorlar soni emas) — aks holda "+1 Zerelle +1" +3 Livialni yashiradi.
+  final restQty = bonusItems.skip(1).fold<double>(0, (s, it) => s + it.qty);
+  if (restQty <= 0) return '+$q $short · активны';
+  return '+$q $short +${_formatQty(restQty)} · активны';
 }
 
 String? _discountPctLabel(AgentOrderHistoryRow o) {

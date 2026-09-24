@@ -401,7 +401,7 @@ export function AgentConfigurationsDialog({
                     label={label}
                     hint={
                       k === "require_new_client_approval"
-                        ? "Вкл — новый клиент сразу активен. Выкл — создаётся как неактивный."
+                        ? "Вкл — новый клиент сразу активен и привязан к агенту. Выкл — создаётся неактивным (ждёт подтверждения оператора); агент всё равно привязывается. При активации агент получает уведомление."
                         : undefined
                     }
                   />
@@ -687,7 +687,7 @@ export function AgentConfigurationsDialog({
               <div className="space-y-4 max-w-md">
                 <ConfigTextField
                   label="Максимальная ширина (px)"
-                  hint="Рекомендуется 4032 — полное разрешение камеры (файл до 10 МБ)"
+                  hint="Рекомендуется 1600 — фотоотчёт читается, файл ~140 КБ"
                   type="number"
                   value={draft.photo?.max_width_px ?? ""}
                   onChange={(e) =>
@@ -701,7 +701,7 @@ export function AgentConfigurationsDialog({
                 />
                 <ConfigTextField
                   label="Максимальная высота (px)"
-                  hint="Рекомендуется 4032 — обычно совпадает с шириной"
+                  hint="Рекомендуется 1600 — обычно совпадает с шириной"
                   type="number"
                   value={draft.photo?.max_height_px ?? ""}
                   onChange={(e) =>
@@ -715,7 +715,7 @@ export function AgentConfigurationsDialog({
                 />
                 <ConfigTextField
                   label="Качество JPEG (1–100)"
-                  hint="Обычно 92–100. Лимит файла — 10 МБ (Android / iOS)"
+                  hint="Рекомендуется 75. Выше — файл катта, пользы почти нет"
                   type="number"
                   value={draft.photo?.jpeg_quality ?? ""}
                   onChange={(e) =>

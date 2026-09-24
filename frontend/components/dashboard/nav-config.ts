@@ -206,14 +206,24 @@ export const dashboardKassaNav: {
       items: [
         { href: "/settings/cash-desks", label: "Касса", showIfAnyPermission: [...NAV_PERM.cashDesks] },
         { href: "/currency-rates", label: "Курс валют", showIfAnyPermission: [...NAV_PERM.cashCurrency] },
-        { href: "#", label: "Приходы", placeholder: true },
+        {
+          href: "#",
+          label: "Приходы",
+          placeholder: true,
+          showIfAnyPermission: ["cash.prihody.view"]
+        },
         { href: "/expenses", label: "Расходы", showIfAnyPermission: [...NAV_PERM.cashExpenses] },
         {
           href: "/expeditor-payment-requests",
           label: "Заявки на оплату",
           showIfAnyPermission: [...NAV_PERM.cashPaymentRequests]
         },
-        { href: "#", label: "Долги экспедитора", placeholder: true }
+        {
+          href: "#",
+          label: "Долги экспедитора",
+          placeholder: true,
+          showIfAnyPermission: [...NAV_PERM.cashExpeditorDebts]
+        }
       ]
     }
   ]

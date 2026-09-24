@@ -29,6 +29,7 @@ import { unassignUserFromSlot } from "./work-slots.assign";
 import { resolveBranchCodesPatch } from "./work-slots.multi-bindings";
 import {
   assertSupervisorUserId,
+  syncAfterAgentSlotOccupancyChange,
   syncSupervisorTeamToUsers,
   validateSuperviseeAgentSlotIds
 } from "./work-slots.supervisor-team";
@@ -253,6 +254,12 @@ export async function patchWorkSlot(
       }
       if (teamTouched) {
         await syncSupervisorTeamToUsers(tx, tenantId, slotId);
+      } else if (
+        (body.slot_type ?? existing.slot_type) === "agent" &&
+        (hasSlotConfigPatch(configPatch) || hasWorkplaceGeoAttrsPatch(body) || Boolean(branchesResolved))
+      ) {
+        // Config mirror supervisor ni o‘zgartirmaydi; jamoa bog‘lanishini qayta tiklash.
+        await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
       }
     });
   } catch (e) {
@@ -410,6 +417,13 @@ export async function bulkPatchWorkSlots(
   }
 
   const configPatch: SlotConfigPatch = {
+    ...(body.territory_zone !== undefined ? { territory_zone: body.territory_zone } : {}),
+    ...(body.territory_oblast !== undefined ? { territory_oblast: body.territory_oblast } : {}),
+    ...(body.territory_city !== undefined ? { territory_city: body.territory_city } : {}),
+    ...(body.territory_zones !== undefined ? { territory_zones: body.territory_zones } : {}),
+    ...(body.territory_oblasts !== undefined ? { territory_oblasts: body.territory_oblasts } : {}),
+    ...(body.territory_cities !== undefined ? { territory_cities: body.territory_cities } : {}),
+    ...(body.territories !== undefined ? { territories: body.territories } : {}),
     ...(body.return_warehouse_id !== undefined
       ? { return_warehouse_id: body.return_warehouse_id }
       : {}),
@@ -462,11 +476,8 @@ export async function bulkPatchWorkSlots(
   const branchCodeSingle =
     body.branch_code !== undefined ? body.branch_code?.trim() || null : undefined;
 
+  // Geo territory — faqat configPatch (daraxt resolve). Round-robin bare city saqlamasin.
   const userAttrs: ActiveUserAttrsPatch = {
-    ...(body.territory_zone !== undefined ? { territory_zone: body.territory_zone } : {}),
-    ...(body.territory_oblast !== undefined ? { territory_oblast: body.territory_oblast } : {}),
-    ...(body.territory_city !== undefined ? { territory_city: body.territory_city } : {}),
-    ...(body.territories !== undefined ? { territories: body.territories } : {}),
     ...(body.warehouse_id !== undefined ? { warehouse_id: body.warehouse_id } : {}),
     ...(body.warehouse_ids !== undefined ? { warehouse_ids: body.warehouse_ids } : {}),
     ...(body.cash_desk_id !== undefined ? { cash_desk_id: body.cash_desk_id } : {}),
@@ -476,17 +487,9 @@ export async function bulkPatchWorkSlots(
     ...(body.max_sessions !== undefined ? { max_sessions: body.max_sessions } : {})
   };
 
-  const territoryRoundRobin = {
-    ...(body.territory_zones?.length ? { territory_zones: body.territory_zones } : {}),
-    ...(body.territory_oblasts?.length ? { territory_oblasts: body.territory_oblasts } : {}),
-    ...(body.territory_cities?.length ? { territory_cities: body.territory_cities } : {})
-  };
-
   const hasBranchPatch = branchCodeSingle !== undefined || branchCodes.length > 0;
   const hasSlotDataPatch = Object.keys(data).length > 0 || hasBranchPatch;
-  const hasUserPatch =
-    hasActiveUserAttrsPatch(userAttrs) ||
-    Object.keys(territoryRoundRobin).length > 0;
+  const hasUserPatch = hasActiveUserAttrsPatch(userAttrs);
   const teamTouched = body.supervisee_agent_slot_ids !== undefined;
 
   if (!hasSlotDataPatch && !hasUserPatch && !hasConfigPatch && !teamTouched) {
@@ -540,17 +543,19 @@ export async function bulkPatchWorkSlots(
           await mirrorSlotConfigToUser(tx, tenantId, slotId, link.user_id);
           users_updated += 1;
         }
+        const slotMeta = await tx.workSlot.findFirst({
+          where: { id: slotId, tenant_id: tenantId },
+          select: { slot_type: true }
+        });
+        if (slotMeta?.slot_type === "agent") {
+          await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+        }
       });
     }
   }
 
   if (hasUserPatch) {
-    const r = await bulkPatchActiveUsersOnSlots(
-      tenantId,
-      ids,
-      userAttrs,
-      Object.keys(territoryRoundRobin).length > 0 ? territoryRoundRobin : undefined
-    );
+    const r = await bulkPatchActiveUsersOnSlots(tenantId, ids, userAttrs);
     users_updated = r.users_updated;
     skipped_no_user = r.skipped_no_user;
   }
@@ -602,6 +607,15 @@ export async function bulkPatchWorkSlots(
           skipped_no_user += 1;
         }
       });
+      const slotMeta = await prisma.workSlot.findFirst({
+        where: { id: slotId, tenant_id: tenantId },
+        select: { slot_type: true }
+      });
+      if (slotMeta?.slot_type === "agent") {
+        await prisma.$transaction(async (tx) => {
+          await syncAfterAgentSlotOccupancyChange(tx, tenantId, slotId);
+        });
+      }
       updated = Math.max(updated, ids.length);
     }
   }

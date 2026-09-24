@@ -40,7 +40,7 @@ import {
 import {
   buildPivotColumnKeys,
   computeSelectionStats,
-  copyPivotSelection,
+  copyPivotTableOrSelection,
   extractValueColumnKeys,
   getSelectionVisual,
   getSpanSelectionVisual,
@@ -598,9 +598,46 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
     [useRowDimColumns, config]
   );
 
+  const copyHeaderLabels = useMemo(() => {
+    const dataKeys = selectionColumnKeys.filter((k) => !k.startsWith("__empty_"));
+    const labels: string[] = [];
+    for (const key of dataKeys) {
+      const dim = /^__row_dim_(\d+)__$/.exec(key);
+      if (dim) {
+        const idx = Number(dim[1]);
+        labels.push(fieldLabel(config.rows[idx] ?? "") || `Dim ${idx + 1}`);
+        continue;
+      }
+      if (key === "__row_label__") {
+        labels.push(rowLabelHeaderCaption);
+        continue;
+      }
+      const leaf = data.headers[data.headers.length - 1]?.find((h) => h.key === key);
+      if (leaf) {
+        labels.push(headerCaptionLabel(leaf, leaf.key.split("|").pop()));
+        continue;
+      }
+      labels.push(fieldLabel(key) || key);
+    }
+    return labels;
+  }, [
+    selectionColumnKeys,
+    config.rows,
+    fieldLabel,
+    rowLabelHeaderCaption,
+    data.headers,
+    headerCaptionLabel
+  ]);
+
   const copySelection = useCallback(async () => {
-    return copyPivotSelection(flatRows, selectionColumnKeys, selectionRef.current, copyOpts);
-  }, [flatRows, selectionColumnKeys, copyOpts]);
+    const result = await copyPivotTableOrSelection(
+      flatRows,
+      selectionColumnKeys,
+      selectionRef.current,
+      { ...copyOpts, headerLabels: copyHeaderLabels }
+    );
+    return result !== false;
+  }, [flatRows, selectionColumnKeys, copyOpts, copyHeaderLabels]);
 
   const clearSelection = useCallback(() => {
     setSelection(null);
@@ -634,12 +671,12 @@ export const PivotTable = forwardRef<PivotTableHandle, Props>(function PivotTabl
         return;
       }
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c") return;
-      if (!selectionRef.current) return;
       const active = document.activeElement as HTMLElement | null;
       if (active) {
         const tag = active.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable) return;
       }
+      // Belgilash bo‘lmasa ham to‘liq jadvalni nusxalash
       e.preventDefault();
       void copySelection();
     };

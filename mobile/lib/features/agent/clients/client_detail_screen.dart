@@ -9,6 +9,7 @@ import '../../../core/api/media_url.dart';
 import '../../../core/api/mobile_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/agent_cities.dart';
+import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
@@ -217,6 +218,13 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   void _openCreateOrder() {
     if (!_canCreateOrder || _client == null) return;
+    final session = ref.read(sessionProvider);
+    final clientCfg = session.mobileConfig?.client ?? const ClientConfig();
+    final productList = session.mobileConfig?.productList ?? const ProductListConfig();
+    if (isNewClientBlockedForOrder(_client!, clientCfg, productList)) {
+      _toast(kClientInactiveOrderMessage, accent: AppColors.warning);
+      return;
+    }
     context.push(
       '/orders/create?client_id=${widget.clientId}',
       extra: Map<String, dynamic>.from(_client!),
@@ -840,7 +848,7 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
 
   bool get _useCityPicker {
     if (!_territoryVisible) return false;
-    return ref.read(agentCitiesProvider).isNotEmpty;
+    return true;
   }
 
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
@@ -953,8 +961,8 @@ class _EditClientSheetState extends ConsumerState<_EditClientSheet> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final maxHeight = media.size.height * 0.92 - media.viewInsets.bottom;
-    final agentCities = ref.watch(agentCitiesProvider);
-    final showCityPicker = _territoryVisible && agentCities.isNotEmpty;
+    final agentCities = ref.watch(effectiveAgentCitiesProvider);
+    final showCityPicker = _territoryVisible;
     final showGps = showCoordinatesField(widget.config);
 
     return Padding(

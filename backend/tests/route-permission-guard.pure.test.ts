@@ -38,12 +38,34 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
   });
 
-  it("has rules for core modules (orders, warehouse, cash, clients)", () => {
-    const joined = ROUTE_PERMISSION_RULES.flatMap((r) => r.anyOf).join(" ");
-    expect(joined).toContain("orders.zakaz.");
-    expect(joined).toContain("warehouse.");
-    expect(joined).toContain("cash.");
-    expect(joined).toContain("clients.klient.");
+  it("maps GET /client-balances to cash.balansy_klientov.view (not only otchety)", () => {
+    const rule = matchRule("GET", "/api/:slug/client-balances");
+    expect(rule?.anyOf).toContain("cash.balansy_klientov.view");
+    expect(rule?.anyOf).toContain("cash.otchety.view");
+  });
+
+  it("maps GET /client-balances/consignment to balansy_klientov", () => {
+    const rule = matchRule("GET", "/api/:slug/client-balances/consignment");
+    expect(rule?.anyOf).toContain("cash.balansy_klientov.view");
+  });
+
+  it("maps GET /opening-balances to nachalnye_balansy.view", () => {
+    const rule = matchRule("GET", "/api/:slug/opening-balances");
+    expect(rule?.anyOf).toContain("cash.nachalnye_balansy.view");
+  });
+
+  it("dashboard/supervisor/products → dashboard.supervayzer, not settings.tovar", () => {
+    const dash = matchRule("GET", "/api/:slug/dashboard/supervisor/products");
+    expect(dash?.anyOf).toEqual(
+      expect.arrayContaining(["dashboard.supervayzer.view", "dashboard.supervayzer"])
+    );
+    expect(dash?.anyOf).not.toContain("settings.tovar.view");
+
+    const catalog = matchRule("GET", "/api/:slug/products");
+    expect(catalog?.anyOf).toContain("settings.tovar.view");
+
+    const catalogById = matchRule("GET", "/api/:slug/products/12");
+    expect(catalogById?.anyOf).toContain("settings.tovar.view");
   });
 
   it("maps bank-transfer-inbox read/import/assign to cash.perechisleniya.*", () => {

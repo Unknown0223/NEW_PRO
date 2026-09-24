@@ -28,6 +28,9 @@ describe("agent-mobile-config", () => {
     expect(mc.client?.show_balance).toBe(true);
     expect(mc.misc?.visit_start_end_enabled).toBe(true);
     expect(mc.orders?.bonus_fill_mode).toBe("auto_fill_remaining");
+    expect(mc.photo?.jpeg_quality).toBe(75);
+    expect(mc.photo?.max_width_px).toBe(1600);
+    expect(mc.photo?.max_height_px).toBe(1600);
   });
 
   it("resolveMobileConfigForUser does not resurrect default fields_visible keys", () => {

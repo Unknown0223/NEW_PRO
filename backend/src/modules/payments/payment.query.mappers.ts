@@ -189,10 +189,34 @@ export function buildPaymentListWhere(
 ): Prisma.PaymentWhereInput {
   const andParts: Prisma.PaymentWhereInput[] = [{ tenant_id: tenantId }];
 
-  if (q.payment_status === "deleted") {
+  const statusList = [
+    ...(q.payment_statuses ?? []),
+    ...(q.payment_status && !(q.payment_statuses?.length) ? [q.payment_status] : [])
+  ];
+  const uniqStatuses = [...new Set(statusList)];
+  const wantsDeleted = uniqStatuses.includes("deleted");
+  const liveStatuses = uniqStatuses.filter((s) => s !== "deleted") as Array<
+    "pending_confirmation" | "confirmed" | "rejected"
+  >;
+
+  if (uniqStatuses.length === 0) {
+    andParts.push({ deleted_at: null });
+  } else if (wantsDeleted && liveStatuses.length === 0) {
     andParts.push({ deleted_at: { not: null } });
+  } else if (wantsDeleted && liveStatuses.length > 0) {
+    andParts.push({
+      OR: [
+        { deleted_at: { not: null } },
+        { deleted_at: null, workflow_status: { in: liveStatuses } }
+      ]
+    });
   } else {
     andParts.push({ deleted_at: null });
+    if (liveStatuses.length === 1) {
+      andParts.push({ workflow_status: liveStatuses[0] });
+    } else if (liveStatuses.length > 1) {
+      andParts.push({ workflow_status: { in: liveStatuses } });
+    }
   }
 
   if (q.client_id != null && q.client_id > 0) andParts.push({ client_id: q.client_id });
@@ -233,7 +257,9 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.payment_type != null && q.payment_type.trim() !== "" && q.payment_type !== "__all__") {
+  if (q.payment_types != null && q.payment_types.length > 0) {
+    andParts.push({ payment_type: { in: q.payment_types.map((t) => t.trim()).filter(Boolean) } });
+  } else if (q.payment_type != null && q.payment_type.trim() !== "" && q.payment_type !== "__all__") {
     andParts.push({ payment_type: q.payment_type.trim() });
   }
 
@@ -277,7 +303,21 @@ export function buildPaymentListWhere(
     });
   }
 
-  if (q.trade_direction != null && q.trade_direction.trim() !== "" && q.trade_direction !== "__all__") {
+  if (q.trade_directions != null && q.trade_directions.length > 0) {
+    clientAnd.push({
+      OR: q.trade_directions.map((tdRaw) => {
+        const td = tdRaw.trim();
+        return {
+          agent: {
+            OR: [
+              { trade_direction: { contains: td, mode: "insensitive" as const } },
+              { trade_direction_row: { name: { contains: td, mode: "insensitive" as const } } }
+            ]
+          }
+        };
+      })
+    });
+  } else if (q.trade_direction != null && q.trade_direction.trim() !== "" && q.trade_direction !== "__all__") {
     const td = q.trade_direction.trim();
     clientAnd.push({
       agent: {
@@ -324,13 +364,7 @@ export function buildPaymentListWhere(
     andParts.push({ OR: orSearch });
   }
 
-  if (q.payment_status === "pending_confirmation") {
-    andParts.push({ workflow_status: "pending_confirmation" });
-  } else if (q.payment_status === "confirmed") {
-    andParts.push({ workflow_status: "confirmed" });
-  } else if (q.payment_status === "rejected") {
-    andParts.push({ workflow_status: "rejected" });
-  }
+  // workflow_status already applied via payment_statuses / payment_status above.
 
   const ch = q.application_channel;
   if (ch === "expeditor") {

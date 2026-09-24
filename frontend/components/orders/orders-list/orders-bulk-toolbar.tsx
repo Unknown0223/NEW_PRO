@@ -32,6 +32,7 @@ import {
   ChevronDown,
   FileBarChart,
   FileText,
+  Gift,
   Truck,
   Upload,
   Wallet,
@@ -40,6 +41,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useBulkBonusGiftPicker } from "@/components/orders/orders-list/orders-bulk-bonus-gift-flow";
 import { isBulkConsignmentEligible } from "./types";
 import type { UseOrdersListPageResult } from "./use-orders-list-page";
 
@@ -57,6 +59,9 @@ type OrdersBulkToolbarProps = Pick<
   | "setBulkExpFeedback"
   | "bulkConsignmentMut"
   | "bulkConsignmentFeedback"
+  | "bulkBonusRefreshMut"
+  | "bulkBonusRefreshFeedback"
+  | "setBulkBonusRefreshFeedback"
   | "canBulkCatalog"
   | "totalsPanelOpen"
   | "setTotalsPanelOpen"
@@ -102,6 +107,9 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     setBulkExpFeedback,
     bulkConsignmentMut,
     bulkConsignmentFeedback,
+    bulkBonusRefreshMut,
+    bulkBonusRefreshFeedback,
+    setBulkBonusRefreshFeedback,
     canBulkCatalog,
     setTotalsPanelOpen,
     nakladnoyPrefs,
@@ -115,6 +123,8 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     paymentPrefill,
     expeditorsQ
   } = props;
+
+  const bonusPicker = useBulkBonusGiftPicker(tenantSlug);
 
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [statusOpen, setStatusOpen] = useState(false);
@@ -146,6 +156,11 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     [selectedRows]
   );
 
+  const newStatusOrderIds = useMemo(
+    () => selectedRows.filter((o) => o.status === "new").map((o) => o.id),
+    [selectedRows]
+  );
+
   useEffect(() => {
     if (selectedOrderIds.size === 0) {
       setViewMode("main");
@@ -160,7 +175,11 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   const count = selectedOrderIds.size;
   const ids = Array.from(selectedOrderIds);
   const feedback =
-    bulkFeedback ?? bulkExpFeedback ?? bulkConsignmentFeedback ?? nakladnoyFeedback;
+    bulkFeedback ??
+    bulkExpFeedback ??
+    bulkConsignmentFeedback ??
+    bulkBonusRefreshFeedback ??
+    nakladnoyFeedback;
 
   const exportSelectedExcel = () => {
     const order = tablePrefs.visibleColumnOrder;
@@ -501,6 +520,42 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       <button
         type="button"
         className={toolbarBtn}
+        disabled={
+          bulkBonusRefreshMut.isPending || bonusPicker.busy || newStatusOrderIds.length === 0
+        }
+        title={
+          newStatusOrderIds.length === 0
+            ? "Faqat «Новый» statusidagi zakazlar uchun"
+            : newStatusOrderIds.length === 1
+              ? "Bonusni qayta hisoblash va sovg‘ani tanlash"
+              : "Tanlangan «Новый» zakazlarda bonusni yangi mexanizm bilan qayta hisoblash"
+        }
+        onClick={async () => {
+          setBulkFeedback(null);
+          setBulkExpFeedback(null);
+          setBulkBonusRefreshFeedback(null);
+          if (newStatusOrderIds.length === 1) {
+            await bonusPicker.start(newStatusOrderIds[0]!);
+            return;
+          }
+          const ok = await confirm({
+            title: "Обновление бонуса",
+            message: `${newStatusOrderIds.length} ta «Новый» zakazda bonus avtomatik qayta hisoblanadi. Bitta zakaz tanlasangiz — sovg‘ani modalda tanlash mumkin.`,
+            confirmLabel: "Обновить бонус",
+            cancelLabel: "Отмена",
+            destructive: false
+          });
+          if (!ok) return;
+          bulkBonusRefreshMut.mutate({ order_ids: newStatusOrderIds });
+        }}
+      >
+        <Gift className="size-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        {bulkBonusRefreshMut.isPending || bonusPicker.busy ? "Обновление…" : "Обновление бонуса"}
+      </button>
+
+      <button
+        type="button"
+        className={toolbarBtn}
         onClick={() => {
           setNakladnoyFeedback(null);
           setViewMode("upload");
@@ -641,6 +696,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           );
         }}
       />
+      {bonusPicker.modal}
       {confirmDialog}
     </>
   );

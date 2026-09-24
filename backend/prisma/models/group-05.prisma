@@ -419,6 +419,10 @@ model AgentLocationPing {
   latitude        Decimal  @db.Decimal(11, 8)
   longitude       Decimal  @db.Decimal(11, 8)
   accuracy_meters Float?
+  /// Qurilma batareyasi 0–100 (mobil yuboradi)
+  battery_pct     Int?
+  /// Tarmoq: 4G / 3G / WiFi / —
+  network_type    String?  @db.VarChar(16)
   recorded_at     DateTime @default(now())
   agent           User     @relation(fields: [agent_id], references: [id], onDelete: Cascade)
   tenant          Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)

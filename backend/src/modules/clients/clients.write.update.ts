@@ -256,6 +256,7 @@ export async function updateClientFields(
     const pinflTouched = data.client_pinfl !== undefined;
     const codeTouched = data.client_code !== undefined;
     const phoneTouched = data.phone !== undefined || data.phone_normalized !== undefined;
+    const geoTouched = data.latitude !== undefined || data.longitude !== undefined;
     const identityTouched = nameTouched || territoryTouched || innTouched || pinflTouched;
 
     const nextName = typeof data.name === "string" ? data.name : existing.name;
@@ -278,6 +279,22 @@ export async function updateClientFields(
       data.phone_normalized !== undefined
         ? (data.phone_normalized as string | null)
         : existing.phone_normalized;
+    const nextLat =
+      data.latitude !== undefined
+        ? data.latitude == null
+          ? null
+          : Number(data.latitude)
+        : existing.latitude == null
+          ? null
+          : Number(existing.latitude);
+    const nextLon =
+      data.longitude !== undefined
+        ? data.longitude == null
+          ? null
+          : Number(data.longitude)
+        : existing.longitude == null
+          ? null
+          : Number(existing.longitude);
 
     await throwIfClientUniqueConflicts(
       tenantId,
@@ -290,7 +307,9 @@ export async function updateClientFields(
         client_pinfl: pinflTouched || identityTouched ? nextPinfl : undefined,
         region: identityTouched ? nextRegion : undefined,
         zone: identityTouched ? nextZone : undefined,
-        city: identityTouched ? nextCity : undefined
+        city: identityTouched ? nextCity : undefined,
+        latitude: nameTouched || geoTouched ? nextLat : undefined,
+        longitude: nameTouched || geoTouched ? nextLon : undefined
       },
       id
     );
@@ -313,9 +332,22 @@ export async function updateClientFields(
     addressTouched &&
     !hasAssignments &&
     input.agent_assignments === undefined &&
-    input.agent_id === undefined
+    input.agent_id === undefined &&
+    input.skip_territory_auto_assign !== true
   ) {
     await applyTerritoryAutoAssignAfterAddressChange(tenantId, id);
+  }
+
+  if (input.is_active === true && existing.is_active !== true) {
+    const { notifyAgentsClientActivated } = await import("../notifications/notifications.service");
+    await notifyAgentsClientActivated({
+      tenant_id: tenantId,
+      client_id: id,
+      client_name: String(
+        (typeof data.name === "string" ? data.name : null) ?? existing.name ?? ""
+      ),
+      actor_user_id: actorUserId ?? null
+    });
   }
 
   const detail: Record<string, unknown> = { ...input };

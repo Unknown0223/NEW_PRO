@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  ClientsTemplateSelectField
+} from "@/components/clients/clients-template-select-field";
+import {
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,7 +80,7 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pnl, setPnl] = useState<PnlReport | null>(null);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(""); // pipe-joined draft|approved|rejected
   const [showArchive, setShowArchive] = useState(false);
   const [voidTargetId, setVoidTargetId] = useState<number | null>(null);
   const [voidPending, setVoidPending] = useState(false);
@@ -106,9 +113,16 @@ export default function ExpensesPage() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
+      const statusParts = splitMultiFilterValues(statusFilter).filter((s) =>
+        ["draft", "approved", "rejected"].includes(s)
+      );
       const params = new URLSearchParams({
         page: String(page), limit: "20",
-        ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+        ...(statusParts.length === 1
+          ? { status: statusParts[0]! }
+          : statusParts.length > 1
+            ? { statuses: statusParts.join(",") }
+            : {}),
         ...(showArchive ? { archive: "true" } : {})
       });
       const [data, pnlData] = await Promise.all([
@@ -293,21 +307,22 @@ export default function ExpensesPage() {
                 {isSoftVoidUiEnabled() ? <SelectItem value="archive">Arxiv</SelectItem> : null}
               </SelectContent>
             </Select>
-            <Select
-              value={statusFilter}
-              onValueChange={(v: string) => {
-                setStatusFilter(v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barchasi</SelectItem>
-                <SelectItem value="draft">Qoralama</SelectItem>
-                <SelectItem value="approved">Tasdiqlangan</SelectItem>
-                <SelectItem value="rejected">Rad etilgan</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="w-56">
+              <ClientsTemplateSelectField
+                label="Статус"
+                multi
+                options={[
+                  { value: "draft", label: "Qoralama" },
+                  { value: "approved", label: "Tasdiqlangan" },
+                  { value: "rejected", label: "Rad etilgan" }
+                ]}
+                values={splitMultiFilterValues(statusFilter)}
+                onChange={(v) => {
+                  setStatusFilter(joinMultiFilterValues(v));
+                  setPage(1);
+                }}
+              />
+            </div>
             </div>
           </div>
         </CardHeader>

@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../config/database";
 import { appendTenantAuditEvent, AuditEntityType } from "../../../lib/tenant-audit";
 import { emitOrderUpdated } from "../../../lib/order-event-bus";
-import { invalidateStock } from "../../../lib/redis-cache";
+import { invalidateOrdersListCache, invalidateStock } from "../../../lib/redis-cache";
 import { getProductPrice } from "../../products/product-prices.service";
 import { resolveStoredPaymentMethodRef } from "../../tenant-settings/finance-refs";
 import {
@@ -37,6 +37,7 @@ import {
   enrichOrderDetailRow,
   parseBonusGiftSelectionsJson,
   roundOrderMoney,
+  validateBonusGiftLines,
   validateBonusGiftOverrides
 } from "./order.detail-mappers";
 import { assertOrderLinesCreditAndPayments } from "./order.lines-guards";
@@ -116,6 +117,19 @@ export async function updateOrderLines(
     : new Map<number, number>();
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
+
+  const validatedGiftSplits =
+    input.bonus_gift_lines?.length ?
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines)
+    : new Map<number, Map<number, number>>();
+
+  // Gift lines bo‘lsa — birinchi mahsulotni selection sifatida ham saqlaymiz (swap UI).
+  for (const [ruleId, lines] of validatedGiftSplits) {
+    const firstPid = lines.keys().next().value;
+    if (typeof firstPid === "number" && firstPid > 0) {
+      giftSelectionMap.set(ruleId, firstPid);
+    }
+  }
 
   // Agent, ombor doim qulflangan. To‘lov usuli — faqat «new» da o‘zgartiriladi.
   if (input.agent_id !== undefined && !sameNullableId(input.agent_id, existing.agent_id)) {
@@ -288,11 +302,16 @@ export async function updateOrderLines(
         stackPolicy,
         usedRuleIds,
         giftSelectionMap,
-        new Map<number, ReadonlyMap<number, number>>(),
+        validatedGiftSplits,
         warehouseId,
         { referenceAt: existing.created_at, excludeOrderId: orderId },
         orderAgentForBonus,
-        { applyDiscount, applyBonusLines: applyBonus, is_consignment: existing.is_consignment === true }
+        {
+          applyDiscount,
+          applyBonusLines: applyBonus,
+          is_consignment: existing.is_consignment === true,
+          strategy_selections: input.bonus_strategy_selections
+        }
       );
       paidAfterDisc = resolved.lines;
       paidTotal = resolved.total;
@@ -537,6 +556,7 @@ export async function updateOrderLines(
   });
 
   emitOrderUpdated(tenantId, orderId);
+  void invalidateOrdersListCache(tenantId);
   if (warehouseId != null) {
     void invalidateStock(tenantId, warehouseId);
   }

@@ -40,7 +40,7 @@ export async function bulkSetClientsActive(
 
   const existing = await prisma.client.findMany({
     where: { tenant_id: tenantId, merged_into_client_id: null, id: { in: ids } },
-    select: { id: true }
+    select: { id: true, name: true, is_active: true, agent_id: true }
   });
   const ok = existing.map((e) => e.id);
   if (ok.length === 0) {
@@ -54,6 +54,21 @@ export async function bulkSetClientsActive(
 
   await appendClientAuditLogsBatch(tenantId, ok, actorUserId, "client.bulk_set_active", { is_active });
   await Promise.all(ok.map((id) => invalidateClientDetailCache(tenantId, id)));
+
+  if (is_active === true) {
+    const { notifyAgentsClientActivated } = await import("../notifications/notifications.service");
+    const newlyActive = existing.filter((e) => e.is_active !== true);
+    await Promise.all(
+      newlyActive.map((e) =>
+        notifyAgentsClientActivated({
+          tenant_id: tenantId,
+          client_id: e.id,
+          client_name: e.name,
+          actor_user_id: actorUserId
+        })
+      )
+    );
+  }
 
   return { updated: ok.length };
 }

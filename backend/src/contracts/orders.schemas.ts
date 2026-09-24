@@ -464,7 +464,44 @@ export const patchOrderLinesBodySchema = z.object({
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount: z.boolean().optional(),
   bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
+  /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona (web tahrir tasdiqlash). */
+  bonus_gift_lines: z.array(bonusGiftLineSchema).optional(),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional(),
   items: z.array(orderLineItemSchema).min(1)
+});
+
+/** POST `/api/:slug/orders/bonus-preview` — web tahrir (agent_id majburiy). */
+export const orderBonusPreviewBodySchema = z.object({
+  client_id: z.number().int().positive(),
+  warehouse_id: z.number().int().positive(),
+  agent_id: z.number().int().positive(),
+  price_type: z.string().trim().min(1).max(128).optional(),
+  items: z.array(orderLineItemSchema).min(1),
+  bonus_gift_overrides: z.array(bonusGiftOverrideSchema).optional(),
+  is_consignment: z.boolean().optional(),
+  exclude_order_id: z.number().int().positive().optional(),
+  bonus_strategy_selections: z
+    .array(
+      z.object({
+        strategy_id: z.number().int().positive(),
+        rule_ids: z.array(z.number().int().positive()).min(1).max(200)
+      })
+    )
+    .max(50)
+    .optional()
+});
+
+/** POST `/api/:slug/orders/bulk/bonus-refresh` — «Новый» zakazlarda yangi bonus mexanizmi. */
+export const bulkOrderBonusRefreshBodySchema = z.object({
+  order_ids: orderIdsBulkSchema
 });
 
 /** PATCH `/api/:slug/orders/:id` meta maydonlari */

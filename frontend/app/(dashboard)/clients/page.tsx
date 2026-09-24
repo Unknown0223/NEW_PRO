@@ -54,6 +54,9 @@ import {
   type ClientImportMappingPayload
 } from "@/components/clients/client-import-mapping-dialog";
 import { ClientImportLaunchDialog } from "@/components/clients/client-import-launch-dialog";
+import { ClientImportResultDialog } from "@/components/clients/client-import-result-dialog";
+import { ClientImportReviewDialog } from "@/components/clients/client-import-review-dialog";
+import type { ClientImportDecisionPreviewDto } from "@/components/clients/client-import-result-dialog";
 import { QueryErrorState } from "@/components/common/query-error-state";
 import { getUserFacingError, withApiSupportLine } from "@/lib/error-utils";
 import { humanizeClientImportJobError } from "@/lib/clients-import-errors";
@@ -103,6 +106,8 @@ type ClientImportApiResult = {
   created: number;
   updated?: number;
   errors: string[];
+  needsDecision?: boolean;
+  decisionPreview?: ClientImportDecisionPreviewDto;
   importStats?: {
     totalRows: number;
     processedRows: number;
@@ -177,6 +182,13 @@ export default function ClientsPage() {
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importResultOpen, setImportResultOpen] = useState(false);
+  const [importResultErrors, setImportResultErrors] = useState<string[]>([]);
+  const [importNeedsDecision, setImportNeedsDecision] = useState(false);
+  const [importDecisionPreview, setImportDecisionPreview] =
+    useState<ClientImportDecisionPreviewDto | null>(null);
+  const [importReviewOpen, setImportReviewOpen] = useState(false);
+  const [importLastMapping, setImportLastMapping] = useState<ClientImportMappingPayload | null>(null);
   const [importProgress, setImportProgress] = useState<ClientImportProgressState | null>(null);
   const [importMapOpen, setImportMapOpen] = useState(false);
   const [importDialogMode, setImportDialogMode] = useState<"create" | "update">("create");
@@ -322,6 +334,12 @@ export default function ClientsPage() {
   };
 
   const buildImportSummaryMessage = (data: ClientImportApiResult): string => {
+    if (data.needsDecision) {
+      const p = data.decisionPreview;
+      const valid = p?.validCount ?? 0;
+      const errN = (p?.errorCount ?? 0) + (p?.duplicateCount ?? 0);
+      return `Xatolar aniqlandi (${errN}). To‘g‘ri qatorlar: ${valid}. Hali hech narsa yozilmadi — tanlang.`;
+    }
     const errPart =
       data.errors.length > 0
         ? ` Сообщения сервера (${data.errors.length}): ${data.errors.slice(0, 3).join("; ")}${data.errors.length > 3 ? "…" : ""}`
@@ -426,12 +444,15 @@ export default function ClientsPage() {
   };
 
   const importMut = useMutation({
-    mutationFn: async (payload: { file: File; importMode: "create" | "update" } & ClientImportMappingPayload) => {
+    mutationFn: async (
+      payload: { file: File; importMode: "create" | "update"; commitDecision?: "accept_valid" | "reject_all" } & ClientImportMappingPayload
+    ) => {
       if (!tenantSlug) throw new Error("TenantRequired");
       logClientImport("boshlash", {
         fayl: payload.file.name,
         hajmBytes: payload.file.size,
         importMode: payload.importMode,
+        commitDecision: payload.commitDecision ?? null,
         sheetName: payload.sheetName,
         headerRowIndex: payload.headerRowIndex,
         columnMap: payload.columnMap,
@@ -446,6 +467,7 @@ export default function ClientsPage() {
       fd.append("sheetName", payload.sheetName);
       fd.append("headerRowIndex", String(payload.headerRowIndex));
       fd.append("importMode", payload.importMode);
+      if (payload.commitDecision) fd.append("commitDecision", payload.commitDecision);
       if (payload.duplicateKeyFields != null && payload.duplicateKeyFields.length > 0) {
         fd.append("duplicateKeyFields", JSON.stringify(payload.duplicateKeyFields));
       }
@@ -608,21 +630,31 @@ export default function ClientsPage() {
     },
     onSuccess: async (data) => {
       logClientImport("UI onSuccess (tahlil yuqorida mutation yakunida yozilgan bo‘lishi kerak)", {
-        errorsCount: data.errors.length
+        errorsCount: data.errors.length,
+        needsDecision: Boolean(data.needsDecision)
       });
-      await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
-      await qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
+      if (!data.needsDecision) {
+        await qc.invalidateQueries({ queryKey: ["clients", tenantSlug] });
+        await qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
+      }
       setImportProgress((prev) =>
         normalizeImportProgress({
           ...prev,
           stage: "done",
           percent: 100,
-          message: "Импорт завершен."
+          message: data.needsDecision ? "Tanlov kutilyapti." : "Импорт завершен."
         })
       );
       setImportMsg(buildImportSummaryMessage(data));
+      setImportResultErrors(data.errors ?? []);
+      setImportNeedsDecision(Boolean(data.needsDecision));
+      setImportDecisionPreview(data.decisionPreview ?? null);
+      setImportResultOpen(true);
       setImportMapOpen(false);
-      setImportStagingFile(null);
+      if (!data.needsDecision) {
+        setImportStagingFile(null);
+        setImportLastMapping(null);
+      }
     },
     onError: (e: unknown) => {
       console.error("[clients import] xato", e);
@@ -1152,9 +1184,10 @@ export default function ClientsPage() {
         open={importMapOpen}
         onOpenChange={(next) => {
           setImportMapOpen(next);
-          if (!next) {
+          if (!next && !importNeedsDecision) {
             setImportStagingFile(null);
             setImportProgress(null);
+            setImportLastMapping(null);
           }
         }}
         file={importStagingFile}
@@ -1164,6 +1197,9 @@ export default function ClientsPage() {
         onConfirm={(mappingPayload) => {
           if (!importStagingFile || !tenantSlug) return;
           setImportMsg(null);
+          setImportNeedsDecision(false);
+          setImportDecisionPreview(null);
+          setImportLastMapping(mappingPayload);
           setImportProgress({
             stage: "queued",
             percent: 0,
@@ -1178,6 +1214,53 @@ export default function ClientsPage() {
           {importMsg}
         </p>
       ) : null}
+      <ClientImportResultDialog
+        open={importResultOpen}
+        onOpenChange={(next) => {
+          setImportResultOpen(next);
+          if (!next && !importNeedsDecision) {
+            setImportDecisionPreview(null);
+          }
+        }}
+        summary={importMsg ?? "Import yakunlandi."}
+        errors={importResultErrors}
+        needsDecision={importNeedsDecision}
+        decisionPreview={importDecisionPreview}
+        busy={importMut.isPending}
+        onOpenReview={() => setImportReviewOpen(true)}
+        onRejectAll={() => {
+          setImportNeedsDecision(false);
+          setImportResultOpen(false);
+          setImportStagingFile(null);
+          setImportLastMapping(null);
+          setImportDecisionPreview(null);
+          setImportMsg("Import bekor qilindi — hech narsa yozilmadi.");
+        }}
+        onAcceptValid={() => {
+          if (!importStagingFile || !importLastMapping) return;
+          setImportProgress({
+            stage: "queued",
+            percent: 0,
+            processedRows: 0,
+            totalRows: 0
+          });
+          importMut.mutate({
+            file: importStagingFile,
+            importMode: importDialogMode,
+            commitDecision: "accept_valid",
+            ...importLastMapping
+          });
+        }}
+      />
+      <ClientImportReviewDialog
+        open={importReviewOpen}
+        onOpenChange={setImportReviewOpen}
+        file={importStagingFile}
+        sheetName={importLastMapping?.sheetName ?? ""}
+        headerRowIndex={importLastMapping?.headerRowIndex ?? 0}
+        columnMap={importLastMapping?.columnMap ?? {}}
+        decisionPreview={importDecisionPreview}
+      />
 
       <div className="shrink-0 px-4 sm:px-6">
       <ClientsTemplateFiltersPanel

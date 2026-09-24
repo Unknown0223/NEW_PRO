@@ -16,8 +16,13 @@ export const ALLOWED_DUPLICATE_KEY_FIELDS = [
 
 export type AllowedDuplicateKeyField = (typeof ALLOWED_DUPLICATE_KEY_FIELDS)[number];
 
-/** Telefon/INN/PINFL majburiy emas — default: kod (asosiy biznes id). */
-export const DEFAULT_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = ["client_code"];
+/** Default: telefon / INN / PINFL / kod. */
+export const DEFAULT_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = [
+  "client_code",
+  "inn",
+  "client_pinfl",
+  "phone"
+];
 
 /** Maslahat: eng ishonchli unikal kalitlar (UI yordam matni). */
 export const RECOMMENDED_DUPLICATE_KEY_FIELDS: AllowedDuplicateKeyField[] = [

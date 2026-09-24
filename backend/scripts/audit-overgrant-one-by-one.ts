@@ -95,6 +95,7 @@ const NAV_PERM = {
   cashPayments: ["cash.oplaty_klientov.view"],
   cashReports: ["cash.otchety.view"],
   cashReportsOrOrders: ["cash.otchety.view"],
+  cashClientBalances: ["cash.balansy_klientov.view", "cash.balansy.view"],
   staffAgent: ["staff.agent.view", "staff.agent.spisok_agentov", "staff.agent.prosmotr_agenta"],
   staffSkladchik: ["staff.skladchik.view"],
   staffConsignment: ["staff.konsignatsiya.view"],
@@ -187,6 +188,15 @@ const CAP_FLAGS: CapFlag[] = [
     label: "Sidebar: Касса отчёты",
     okForGrant: (g) => g === "cash.otchety.view" || g.startsWith("cash.otchety."),
     trueWhen: (k) => hasAny(k, NAV_PERM.cashReports)
+  },
+  {
+    id: "nav.cash.clientBalances",
+    label: "Sidebar: Балансы клиентов",
+    okForGrant: (g) =>
+      g === "cash.balansy_klientov.view" ||
+      g === "cash.balansy.view" ||
+      g.startsWith("cash.balansy_klientov."),
+    trueWhen: (k) => hasAny(k, NAV_PERM.cashClientBalances)
   },
   {
     id: "nav.cash.reportWithOrders",

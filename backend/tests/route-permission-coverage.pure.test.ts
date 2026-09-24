@@ -42,6 +42,9 @@ describe("route-permission-guard coverage", () => {
     expect(matchRule("POST", "/api/auth/login")).toBeNull();
     expect(matchRule("GET", "/health")).toBeNull();
     expect(matchRule("GET", "/api/:slug/access/me-permissions")).toBeNull();
+    expect(matchRule("POST", "/api/telegram-bot/staff/lookup")).toBeNull();
+    expect(matchRule("POST", "/api/telegram-bot/staff/register")).toBeNull();
+    expect(matchRule("POST", "/api/telegram-bot/staff/intake-scope")).toBeNull();
   });
 
   it("mobil API veb CRUD kalitlarini talab qilmaydi", () => {

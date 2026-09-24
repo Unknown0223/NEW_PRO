@@ -102,11 +102,23 @@ export async function registerSupplierCrudRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
-      const supplier_id = parseOptPositiveInt(q.supplier_id);
-      const cash_desk_id = parseOptPositiveInt(q.cash_desk_id);
+      const supplierIds = (q.supplier_ids ?? q.supplier_id ?? "")
+        .split(/[,|]+/)
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const uniqSup = [...new Set(supplierIds)];
+      const cashDeskIds = (q.cash_desk_ids ?? q.cash_desk_id ?? "")
+        .split(/[,|]+/)
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const uniqDesk = [...new Set(cashDeskIds)];
+      const methods = (q.payment_methods ?? q.payment_method ?? "")
+        .split(/[,|]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const uniqMethods = [...new Set(methods)];
       const page = parseOptPositiveInt(q.page) ?? 1;
       const limit = Math.min(100, parseOptPositiveInt(q.limit) ?? 20);
-      const payment_method = q.payment_method?.trim() || undefined;
       const paid_from = parseDayStartUtc(q.from ?? q.date_from);
       const paid_to = parseDayEndUtc(q.to ?? q.date_to);
       const amount_from =
@@ -136,9 +148,21 @@ export async function registerSupplierCrudRoutes(app: FastifyInstance) {
       const af = amount_from != null && Number.isFinite(amount_from) ? amount_from : undefined;
       const at = amount_to != null && Number.isFinite(amount_to) ? amount_to : undefined;
       const result = await listSupplierPayments(request.tenant!.id, {
-        supplier_id,
-        cash_desk_id,
-        payment_method: payment_method ?? null,
+        ...(uniqSup.length === 1
+          ? { supplier_id: uniqSup[0] }
+          : uniqSup.length > 1
+            ? { supplier_ids: uniqSup }
+            : {}),
+        ...(uniqDesk.length === 1
+          ? { cash_desk_id: uniqDesk[0] }
+          : uniqDesk.length > 1
+            ? { cash_desk_ids: uniqDesk }
+            : {}),
+        ...(uniqMethods.length === 1
+          ? { payment_method: uniqMethods[0] }
+          : uniqMethods.length > 1
+            ? { payment_methods: uniqMethods }
+            : {}),
         paid_from,
         paid_to,
         amount_from: af,

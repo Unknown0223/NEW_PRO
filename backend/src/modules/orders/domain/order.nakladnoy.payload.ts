@@ -30,6 +30,8 @@ type OrderNakladnoyDb = {
   is_consignment: boolean;
   payment_method_ref: string | null;
   order_type: string | null;
+  comment: string | null;
+  discount_sum: Prisma.Decimal;
   created_at: Date;
   tenant: { name: string; phone: string | null };
   warehouse: { name: string } | null;
@@ -53,6 +55,7 @@ type OrderNakladnoyDb = {
   client: {
     name: string;
     address: string | null;
+    landmark: string | null;
     region: string | null;
     city: string | null;
     district: string | null;
@@ -93,6 +96,8 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
   const agentTerritory = ag?.territory?.trim() || o.client.region?.trim() || "—";
   const territory = o.client.region?.trim() || ag?.territory?.trim() || "—";
   const agentCode = (ag?.code?.trim() || ag?.login || "—").trim();
+  const agentName = ag?.name?.trim() || null;
+  const agentPhone = ag?.phone?.trim() || null;
   const agentLine = ag ? loading520AgentLabel(agentCode, ag.name, ag.created_at) : "—";
   const invoiceAgentLine = ag
     ? consignment217AgentValue({
@@ -105,6 +110,8 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
     : "—";
   const ex = o.expeditor_user;
   const tag = (ex?.branch ?? ex?.code ?? ex?.login ?? "").toString().trim() || "—";
+  const expeditorName = ex?.name?.trim() || null;
+  const expeditorPhone = ex?.phone?.trim() || null;
   const expeditorLine = ex
     ? `[${tag}] ${ex.name} (${fmtRuDateShort(ex.created_at)})${ex.phone?.trim() ? ` ${ex.phone.trim()}` : ""}`
     : "—";
@@ -118,7 +125,10 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
   ]
     .map((x) => (x ?? "").trim())
     .filter(Boolean);
-  const clientAddress = (o.client.address?.trim() || addrParts.join(", ") || "—").trim();
+  const clientAddress = (o.client.address?.trim() || addrParts.join(", ") || "").trim();
+  const clientLandmark = o.client.landmark?.trim() || null;
+  const orderComment = o.comment?.trim() || null;
+  const discountSum = Number(o.discount_sum?.toString?.() ?? o.discount_sum ?? 0);
 
   const bonusQtyByProduct = new Map<number, Prisma.Decimal>();
   for (const it of o.items) {
@@ -207,12 +217,19 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
     clientPhone: o.client.phone?.trim() || null,
     clientBalanceNum: bal,
     clientAddress,
+    clientLandmark,
+    orderComment,
+    discountSum: Number.isFinite(discountSum) && discountSum > 0 ? discountSum : 0,
     currencyLabel: "So'm (UZS)",
     agentLine,
     invoiceAgentLine,
+    agentName,
+    agentPhone,
     expeditorLine,
-    expeditorName: ex?.name?.trim() || null,
+    expeditorName,
+    expeditorPhone,
     territory,
+    invoiceTerritory: agentTerritory,
     warehouseName: o.warehouse?.name ?? null,
     isConsignment: o.is_consignment === true,
     paymentMethodRef: o.payment_method_ref?.trim() || null,
@@ -277,6 +294,7 @@ export async function loadBulkNakladnoyOrderPayloads(
         select: {
           name: true,
           address: true,
+          landmark: true,
           region: true,
           city: true,
           district: true,

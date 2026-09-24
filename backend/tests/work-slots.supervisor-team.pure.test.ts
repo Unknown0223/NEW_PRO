@@ -86,6 +86,36 @@ describe("work-slots.supervisor-team", () => {
     });
   });
 
+  it("syncSupervisorTeamToUsers preserves agent links when SVR slot is vacant", async () => {
+    const { syncSupervisorTeamToUsers } = await import(
+      "../src/modules/work-slots/work-slots.supervisor-team"
+    );
+
+    const userUpdate = vi.fn(async () => ({}));
+    const tx = {
+      workSlot: {
+        findFirst: vi.fn(async () => ({
+          id: 100,
+          slot_type: "supervisor",
+          supervisee_agent_slot_ids: [11, 12]
+        }))
+      },
+      slotUserLink: {
+        findFirst: vi.fn().mockResolvedValueOnce(null), // vacant SVR
+        findMany: vi.fn()
+      },
+      user: {
+        update: userUpdate,
+        findMany: vi.fn()
+      }
+    };
+
+    await syncSupervisorTeamToUsers(tx as never, 1, 100);
+
+    expect(tx.slotUserLink.findMany).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
   it("findSupervisorSlotsForAgentSlot queries has filter", async () => {
     const { findSupervisorSlotsForAgentSlot } = await import(
       "../src/modules/work-slots/work-slots.supervisor-team"

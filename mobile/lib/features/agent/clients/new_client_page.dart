@@ -17,6 +17,7 @@ import '../../../core/camera/photo_service.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/agent_cities.dart';
+import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
@@ -188,7 +189,8 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
 
   bool get _useCityPicker {
     if (!_territoryVisible) return false;
-    return ref.read(agentCitiesProvider).isNotEmpty;
+    // Viloyat ro‘yxati o‘rniga har doim shahar tanlash (agent yoki daraxt).
+    return true;
   }
 
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
@@ -399,7 +401,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   }
 
   Widget _citySelect() {
-    final agentCities = ref.watch(agentCitiesProvider);
+    final agentCities = ref.watch(effectiveAgentCitiesProvider);
     final seen = <String>{};
     final unique = agentCities.where((c) => seen.add(c.value)).toList();
     final options = unique.map((c) => c.value).toList();
@@ -409,21 +411,35 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final byLabel = unique.where((c) => c.label == value).toList();
       value = byLabel.length == 1 ? byLabel.first.value : null;
     }
-    return AgentOutlineSelect(
-      label: 'Город',
-      value: value,
-      options: options,
-      optionLabels: labels,
-      onChanged: agentCities.isEmpty
-          ? null
-          : (stored) {
-              if (stored == null) {
-                _applyCitySelection(null);
-                return;
-              }
-              final picked = unique.where((c) => c.value == stored).toList();
-              _applyCitySelection(picked.isNotEmpty ? picked.first : null);
-            },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AgentOutlineSelect(
+          label: 'Город',
+          value: value,
+          options: options,
+          optionLabels: labels,
+          showRequiredStar: true,
+          onChanged: agentCities.isEmpty
+              ? null
+              : (stored) {
+                  if (stored == null) {
+                    _applyCitySelection(null);
+                    return;
+                  }
+                  final picked = unique.where((c) => c.value == stored).toList();
+                  _applyCitySelection(picked.isNotEmpty ? picked.first : null);
+                },
+        ),
+        if (agentCities.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'Shaharlar topilmadi. Admin agentga hudud/shahar biriktirishi kerak.',
+              style: TextStyle(fontSize: 12, color: Colors.orange),
+            ),
+          ),
+      ],
     );
   }
 
@@ -431,8 +447,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
   Widget build(BuildContext context) {
     final cfg = ref.watch(sessionProvider).mobileConfig?.client ?? const ClientConfig();
     final territoryVisible = isClientFieldVisible(cfg, 'territory');
-    final agentCities = ref.watch(agentCitiesProvider);
-    final showCityPicker = territoryVisible && agentCities.isNotEmpty;
+    final showCityPicker = territoryVisible;
     final showGpsCapture = showCoordinatesField(cfg);
     final showPhotoCapture = cfg.showPhotos;
     final showLocationSection = showGpsCapture || showPhotoCapture;

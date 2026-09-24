@@ -24,7 +24,7 @@ async function loadSlotNameLookups(
     for (const id of effectiveWarehouseIds(row)) warehouseIds.add(id);
     for (const id of effectiveCashDeskIds(row)) cashDeskIds.add(id);
   }
-  const [warehouses, cashDesks] = await Promise.all([
+  const [warehouses, cashDesks, tenantRow] = await Promise.all([
     warehouseIds.size > 0
       ? prisma.warehouse.findMany({
           where: { tenant_id: tenantId, id: { in: [...warehouseIds] } },
@@ -36,11 +36,30 @@ async function loadSlotNameLookups(
           where: { tenant_id: tenantId, id: { in: [...cashDeskIds] } },
           select: { id: true, name: true }
         })
-      : Promise.resolve([])
+      : Promise.resolve([]),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settings: true }
+    })
   ]);
+
+  let territoryNodes: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null = null;
+  try {
+    const { asRecord } = await import("../tenant-settings/tenant-settings.shared");
+    const { referencesWithResolvedTerritoryNodes } = await import("../tenant-settings/tenant-settings.service");
+    const { territoryNodesFromUnknown } = await import("../tenant-settings/tenant-settings.refs");
+    const settings = asRecord(tenantRow?.settings);
+    const refInner = asRecord(settings.references);
+    const refT = referencesWithResolvedTerritoryNodes(refInner);
+    territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
+  } catch {
+    territoryNodes = null;
+  }
+
   return {
     warehouseNames: new Map(warehouses.map((w) => [w.id, w.name])),
-    cashDeskNames: new Map(cashDesks.map((c) => [c.id, c.name]))
+    cashDeskNames: new Map(cashDesks.map((c) => [c.id, c.name])),
+    territoryNodes
   };
 }
 
@@ -274,6 +293,8 @@ export async function listSlotDebtCollectors(
 export type ActiveWorkSlotInfo = {
   slot_id: number;
   slot_code: string;
+  /** Joydagi barcha hudud satrlari (multi). */
+  territories: string[];
   consignment: boolean;
   consignment_limit_amount: import("@prisma/client").Prisma.Decimal | null;
   consignment_ignore_previous_months_debt: boolean;
@@ -295,6 +316,8 @@ export async function loadActiveWorkSlotsByUserIds(
         select: {
           id: true,
           slot_code: true,
+          territory: true,
+          territories: true,
           consignment: true,
           consignment_limit_amount: true,
           consignment_ignore_previous_months_debt: true,
@@ -307,9 +330,16 @@ export async function loadActiveWorkSlotsByUserIds(
   });
   const map = new Map<number, ActiveWorkSlotInfo>();
   for (const l of links) {
+    const fromArr = Array.isArray(l.slot.territories)
+      ? l.slot.territories.map((t) => String(t).trim()).filter(Boolean)
+      : [];
+    const primary = l.slot.territory?.trim() || null;
+    const territories =
+      fromArr.length > 0 ? fromArr : primary ? [primary] : [];
     map.set(l.user_id, {
       slot_id: l.slot.id,
       slot_code: l.slot.slot_code,
+      territories,
       consignment: l.slot.consignment,
       consignment_limit_amount: l.slot.consignment_limit_amount,
       consignment_ignore_previous_months_debt: l.slot.consignment_ignore_previous_months_debt,

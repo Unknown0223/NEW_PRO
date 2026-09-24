@@ -43,9 +43,6 @@ import {
   type WorkSlotsLocationBulkModes,
   type WorkSlotsLocationValues
 } from "./work-slots-location-fields";
-import {
-  expandTerritoryTreeDescendants
-} from "@/lib/territory-client-filters";
 
 export type WorkSlotsBulkResult = {
   updated?: number;
@@ -166,36 +163,8 @@ export function WorkSlotsBulkDialog({
     }
 
     if (!destructive) {
-      // Zona/oblast tanlangan, shahar bo‘sh — apply oldidan avto to‘ldirish
-      let locationForSubmit = location;
-      const terrSet =
-        locationModes.territoryZone === "set" ||
-        locationModes.territoryOblast === "set" ||
-        locationModes.territoryCity === "set";
-      if (
-        terrSet &&
-        (location.territoryZoneList.length > 0 || location.territoryOblastList.length > 0) &&
-        location.territoryCityList.length === 0
-      ) {
-        const expanded = expandTerritoryTreeDescendants(
-          territoryNodes,
-          location.territoryZoneList,
-          location.territoryOblastList
-        );
-        const nextCities = expanded.cities;
-        const nextRegions =
-          location.territoryOblastList.length > 0
-            ? location.territoryOblastList
-            : expanded.regions;
-        if (nextCities.length > 0 || nextRegions.length > 0) {
-          locationForSubmit = {
-            ...location,
-            territoryOblastList: nextRegions,
-            territoryCityList: nextCities
-          };
-          setLocation(locationForSubmit);
-        }
-      }
+      // Shaharlarni avtomatik kengaytirmaymiz — foydalanuvchi tanlagan zona/oblast/gorod saqlanadi.
+      const locationForSubmit = location;
 
       const validationError = validateBulkForm(
         fields,

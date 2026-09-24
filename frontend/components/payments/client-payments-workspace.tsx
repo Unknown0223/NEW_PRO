@@ -50,7 +50,7 @@ type DealType = "regular" | "consignment" | "both";
 export type ClientPaymentsWorkspaceVariant = "payments" | "client_expenses";
 
 type StaffPick = { id: number; fio: string; code?: string | null };
-type PaymentStatusFilter = "" | "pending_confirmation" | "confirmed" | "deleted";
+type PaymentStatusFilter = string;
 type DateFieldFilter = "created_at" | "paid_at" | "confirmed_at";
 
 type FilterForm = {
@@ -59,6 +59,7 @@ type FilterForm = {
   date_to: string;
   date_field: DateFieldFilter;
   client_id: string;
+  /** Pipe-joined: pending_confirmation|confirmed|deleted */
   payment_status: PaymentStatusFilter;
   cash_desk_id: string;
   agent_id: string;
@@ -136,14 +137,28 @@ function buildPaymentsQuery(
   if (form.expeditor_user_id.trim()) {
     appendPositiveIntListParam(p, "expeditor_user_id", "expeditor_user_ids", form.expeditor_user_id);
   }
-  if (form.payment_type.trim()) p.set("payment_type", form.payment_type.trim());
-  if (form.trade_direction.trim()) p.set("trade_direction", form.trade_direction.trim());
+  if (form.payment_type.trim()) {
+    const types = splitMultiFilterValues(form.payment_type);
+    if (types.length === 1) p.set("payment_type", types[0]!);
+    else if (types.length > 1) p.set("payment_types", types.join(","));
+  }
+  if (form.trade_direction.trim()) {
+    const dirs = splitMultiFilterValues(form.trade_direction);
+    if (dirs.length === 1) p.set("trade_direction", dirs[0]!);
+    else if (dirs.length > 1) p.set("trade_directions", dirs.join(","));
+  }
   if (form.territory_zone.trim()) p.set("territory_zone", form.territory_zone.trim());
   if (form.territory_region.trim()) p.set("territory_region", form.territory_region.trim());
   if (form.territory_city.trim()) p.set("territory_city", form.territory_city.trim());
   if (form.territory_district.trim()) p.set("territory_district", form.territory_district.trim());
   if (form.deal_type !== "both") p.set("deal_type", form.deal_type);
-  if (form.payment_status) p.set("payment_status", form.payment_status);
+  if (form.payment_status.trim()) {
+    const statuses = splitMultiFilterValues(form.payment_status).filter((s) =>
+      ["pending_confirmation", "confirmed", "deleted", "rejected"].includes(s)
+    );
+    if (statuses.length === 1) p.set("payment_status", statuses[0]!);
+    else if (statuses.length > 1) p.set("payment_statuses", statuses.join(","));
+  }
   if (form.cash_desk_id.trim()) {
     const deskIds = splitMultiFilterValues(form.cash_desk_id)
       .map((s) => Number.parseInt(s, 10))
@@ -554,8 +569,8 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
 
   const statusOptions = useMemo(
     () => [
-      { value: "pending_confirmation", label: "CREATED" },
-      { value: "confirmed", label: "CONFIRMED" },
+      { value: "pending_confirmation", label: "Создан" },
+      { value: "confirmed", label: "Подтверждён" },
       { value: "deleted", label: "Архив" }
     ],
     []

@@ -534,6 +534,18 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
     return list.filter((w) => w.stock_purpose === purpose && w.stock_purpose != null);
   }, [warehousesQ.data, purpose]);
 
+  // Bitta bog‘langan ombor bo‘lsa — avtomatik tanlash (boshqa filial yig‘indisiga tushmaslik).
+  useEffect(() => {
+    if (warehousesQ.isLoading) return;
+    if (warehousesForPurpose.length !== 1) return;
+    const onlyId = String(warehousesForPurpose[0]!.id);
+    if (draftWh !== onlyId) setDraftWh(onlyId);
+    if (applied.warehouseId !== onlyId) {
+      setApplied((prev) => ({ ...prev, warehouseId: onlyId }));
+      setPage(1);
+    }
+  }, [warehousesForPurpose, warehousesQ.isLoading, draftWh, applied.warehouseId]);
+
   const balancesEnabled =
     Boolean(tenantSlug) &&
     (balanceView !== "valuation" || Boolean(applied.priceType.trim()));
@@ -750,7 +762,11 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                 value={draftWh}
                 onChange={(e) => setDraftWh(e.target.value)}
               >
-                <option value="">Все ({PURPOSE_TABS.find((x) => x.value === purpose)?.label})</option>
+                {warehousesForPurpose.length > 1 ? (
+                  <option value="">
+                    Мои склады ({PURPOSE_TABS.find((x) => x.value === purpose)?.label})
+                  </option>
+                ) : null}
                 {warehousesForPurpose.map((w) => (
                   <option key={w.id} value={String(w.id)}>
                     {w.name}

@@ -126,6 +126,29 @@ class PhotoReportQueue {
           await file.delete();
         } catch (_) {}
         sent++;
+        await db.recordPhotosSyncedToday(1);
+        await db.recordPhotoSyncedClientToday(clientId);
+        // Lokal vizit — bosh sahifa «Посещено» (Начать визит shart emas).
+        try {
+          final visits = await db.getVisitsForDay();
+          final already = visits.any((r) => (r['client_id'] as num?)?.toInt() == clientId);
+          if (!already) {
+            final client = await db.getClientById(clientId);
+            final now = DateTime.now().toIso8601String();
+            await db.insertVisit({
+              'client_id': clientId,
+              'client_name': client?['name']?.toString() ?? 'Клиент',
+              'latitude': (client?['latitude'] as num?)?.toDouble(),
+              'longitude': (client?['longitude'] as num?)?.toDouble(),
+              'start_time': now,
+              'end_time': now,
+              'notes': 'photo',
+              'photo_paths': '[]',
+              'refusal_reason_ref': null,
+              'status': 'completed',
+            });
+          }
+        } catch (_) {}
       } catch (e, st) {
         ErrorReporter.instance?.reportCaught(
           e,

@@ -291,8 +291,15 @@ export function LoginPage() {
         return;
       }
       const from = searchParams.get("from") ?? "/dashboard";
-      router.replace(from);
-      router.refresh();
+      const dest = from.startsWith("/") ? from : "/dashboard";
+      // Soft router.replace + refresh → «Загрузка…» osilib qoladi (RQ clear + Suspense).
+      // Hard nav: yangi QueryClient + toza bootstrap.
+      try {
+        window.localStorage.removeItem("salec:rq:v1");
+      } catch {
+        /* ignore */
+      }
+      window.location.assign(dest);
     } catch (err: unknown) {
       if (isAxiosError(err)) {
         const st = err.response?.status;

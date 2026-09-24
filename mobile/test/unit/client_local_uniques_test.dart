@@ -86,4 +86,22 @@ void main() {
       isNull,
     );
   });
+
+  test('inactive duplicate uses statusi nofaol message', () {
+    expect(
+      findLocalClientDuplicateMessage(
+        [
+          {
+            'id': 9,
+            'name': 'Old Shop',
+            'phone': '+998901112233',
+            'is_active': 0,
+          },
+        ],
+        name: 'New',
+        phone: '901112233',
+      ),
+      kClientDuplicateInactiveMessage,
+    );
+  });
 }

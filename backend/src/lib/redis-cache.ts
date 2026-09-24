@@ -222,7 +222,7 @@ export async function invalidateClientDetailCache(tenantId: number, clientId: nu
 }
 
 export function tenantSettingsCacheKey(tenantId: number): string {
-  return tenantRedisKey(tenantId, "settings", "v2");
+  return tenantRedisKey(tenantId, "settings", "v3");
 }
 
 /** Tenant profil (settings) cache — patch/seed dan keyin */

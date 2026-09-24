@@ -195,22 +195,39 @@ export function metadataToPivotFields(metadata: ReportBuilderMetadata): PivotFie
 
 /** Saqlangan hisobot konfigini Virtual Pivot `PivotConfig` ga aylantiradi. */
 export function savedReportConfigToPivotConfig(config: unknown): PivotConfig | null {
-  if (isWdrSavedReportConfig(config)) {
-    return wdrReportToPivotConfig(config);
-  }
   if (config && typeof config === "object") {
     const c = config as Record<string, unknown>;
+    // SALEC virtual pivot: to‘liq PivotConfig (format/layoutForm/fieldFormats).
+    // Muhim: save wrapper da `slice: {}` bor — WDR adapterdan OLDIN tekshirish kerak,
+    // aks holda bo‘sh slice formatlarni «yutib» yuboradi.
     if (c.salecPivotConfig && typeof c.salecPivotConfig === "object" && "values" in c.salecPivotConfig) {
       return c.salecPivotConfig as PivotConfig;
     }
-    if ("values" in c) {
+    if ("values" in c && Array.isArray(c.values) && ("rows" in c || "columns" in c)) {
       return config as PivotConfig;
     }
+  }
+  if (isWdrSavedReportConfig(config)) {
+    return wdrReportToPivotConfig(config);
   }
   return null;
 }
 
 export type SavePivotConfigMeta = DatasetFiltersPayload;
+
+function buildSavedPivotReportPayload(pivotConfig: PivotConfig, meta: SavePivotConfigMeta) {
+  return {
+    dataSource: { type: "salec-pivot-engine" },
+    // Bo‘sh emas: WDR detector uchun zones yo‘q, lekin salecPivotConfig birinchi o‘qiladi.
+    slice: {},
+    salecPivotConfig: pivotConfig,
+    savdoDatasetFilters: meta,
+    datasetId: meta.datasetId ?? "orders_sales_lines",
+    dateMode: meta.dateMode ?? "order_date",
+    dateFrom: meta.dateFrom,
+    dateTo: meta.dateTo
+  };
+}
 
 /** Virtual Pivot konfiguratsiyasini saqlangan hisobot sifatida yozadi (WDR wrapper). */
 export async function savePivotConfigReport(
@@ -223,17 +240,70 @@ export async function savePivotConfigReport(
     `/api/${tenantSlug}/reports/report-builder/saved`,
     {
       name,
-      config: {
-        dataSource: { type: "salec-pivot-engine" },
-        slice: {},
-        salecPivotConfig: pivotConfig,
-        savdoDatasetFilters: meta,
-        datasetId: meta.datasetId ?? "orders_sales_lines",
-        dateMode: meta.dateMode ?? "order_date",
-        dateFrom: meta.dateFrom,
-        dateTo: meta.dateTo
-      }
+      config: buildSavedPivotReportPayload(pivotConfig, meta)
     }
+  );
+  return data.data;
+}
+
+/** Mavjud saqlangan hisobotni format/layout bilan yangilaydi. */
+export async function updatePivotConfigReport(
+  tenantSlug: string,
+  id: number,
+  name: string,
+  pivotConfig: PivotConfig,
+  meta: SavePivotConfigMeta
+) {
+  const { data } = await api.put<{ data: { id: number; name: string } }>(
+    `/api/${tenantSlug}/reports/report-builder/saved/${id}`,
+    {
+      name,
+      config: buildSavedPivotReportPayload(pivotConfig, meta)
+    }
+  );
+  return data.data;
+}
+
+/** Faqat nomini o‘zgartirish (config saqlanadi). */
+export async function renamePivotConfigReport(
+  tenantSlug: string,
+  id: number,
+  name: string
+) {
+  const { data } = await api.put<{ data: { id: number; name: string } }>(
+    `/api/${tenantSlug}/reports/report-builder/saved/${id}`,
+    { name }
+  );
+  return data.data;
+}
+
+/** Soft-delete (void) saqlangan hisobot. */
+export async function deletePivotConfigReport(tenantSlug: string, id: number) {
+  await api.delete(`/api/${tenantSlug}/reports/report-builder/saved/${id}`);
+}
+
+export type ReportBuilderShareCandidate = {
+  id: number;
+  name: string;
+  login: string;
+  role: string;
+};
+
+export async function fetchReportBuilderShareCandidates(tenantSlug: string) {
+  const { data } = await api.get<{ data: ReportBuilderShareCandidate[] }>(
+    `/api/${tenantSlug}/reports/report-builder/saved/share-candidates`
+  );
+  return data.data;
+}
+
+export async function sharePivotConfigReport(
+  tenantSlug: string,
+  savedId: number,
+  userIds: number[]
+) {
+  const { data } = await api.post<{ data: { sharedCount: number; skipped: number } }>(
+    `/api/${tenantSlug}/reports/report-builder/saved/${savedId}/share`,
+    { userIds }
   );
   return data.data;
 }

@@ -105,7 +105,11 @@ export type PaymentListQuery = {
   expeditor_user_id?: number;
   expeditor_user_ids?: number[];
   payment_type?: string;
+  /** Bir nechta to‘lov usuli */
+  payment_types?: string[];
   trade_direction?: string;
+  /** Bir nechta savdo yo‘nalishi */
+  trade_directions?: string[];
   territory_region?: string;
   territory_city?: string;
   territory_district?: string;
@@ -114,6 +118,8 @@ export type PaymentListQuery = {
   deal_type?: "regular" | "consignment" | "both";
   /** Filtr: `deleted` — faqat arxiv (deleted_at bor); `rejected` — rad etilgan ariza */
   payment_status?: "pending_confirmation" | "confirmed" | "deleted" | "rejected";
+  /** Bir nechta status (CSV / massiv) — `payment_status` o‘rniga yoki bilan */
+  payment_statuses?: Array<"pending_confirmation" | "confirmed" | "deleted" | "rejected">;
   /**
    * «Заявки на оплату» kanali (heuristika `payment_type` / `note` / agent yo‘nalishi).
    * `expeditor` — zakaz yoki to‘lovdagi ekspeditor bog‘langan.

@@ -19,7 +19,8 @@ import { resolveConstraintScope } from "../linkage/linkage.service";
 import { collectWarehouseIdsForUsers } from "../linkage/linkage.warehouse-ids";
 import {
   executionPctFromPlanFact,
-  loadMonitoringPlanAggregates
+  loadMonitoringPlanAggregates,
+  WORKING_KPI_PLAN_STATUSES
 } from "../plans/plans.monitoring-aggregates";
 import { assertOrderAgentAllowedForClient } from "../work-slots/work-slots.lock";
 import { getMobileOrderClientFinance } from "./mobile-order-client-finance";
@@ -428,7 +429,7 @@ export async function getMobileAgentDashboard(tenantId: number, userId: number) 
       territory_2_list: [],
       territory_3_list: [],
       territory_terms: []
-    })
+    }, WORKING_KPI_PLAN_STATUSES)
   ]);
 
   const ordersSumToday = Number(ordersAgg._sum.total_sum ?? 0);
@@ -615,7 +616,8 @@ export async function getMobileAgentDailySales(tenantId: number, userId: number)
 
 /** Veb mijoz kartochkasi: joriy agent bo‘yicha «Общий» (to‘lov − dolg, boshqa agentlar emas). */
 export async function listMobileAgentClientLedgerBalances(tenantId: number, agentUserId: number) {
-  const excluded = ["cancelled", "returned"] as const;
+  const { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } = await import("../orders/order-status");
+  const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
 
   const rows = await prisma.$queryRaw<Array<{ client_id: number; balance: Prisma.Decimal }>>`
     SELECT u.client_id,
@@ -642,7 +644,7 @@ export async function listMobileAgentClientLedgerBalances(tenantId: number, agen
       FROM orders o
       JOIN clients c ON c.id = o.client_id AND c.tenant_id = ${tenantId}
       WHERE o.tenant_id = ${tenantId}
-        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.status IN (${Prisma.join(receivableStatuses)})
         AND o.order_type = 'order'
         AND c.is_active = true
         AND c.merged_into_client_id IS NULL

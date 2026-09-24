@@ -53,6 +53,8 @@ const SECTION_ALIAS: Record<string, string> = {
   "cash.oplaty_klientov": "cash.oplaty_klientov",
   "cash.rashody_klienta": "cash.rashody_klienta",
   "cash.nachalnye_balansy_klientov": "cash.nachalnye_balansy",
+  "cash.balansy_klientov": "cash.balansy_klientov",
+  "cash.balansy": "cash.balansy_klientov",
   "cash.otchety": "cash.otchety",
   "cash": "cash.kassa",
   "cash.kurs_valyuty": "cash.kurs_valyuty",
@@ -114,13 +116,18 @@ const MODULE_VIEW_COMPANIONS: Record<string, string[]> = {
   "suppliers.postavshchik.view": ["suppliers.view"],
   "cash.view": ["cash.kassa.view"],
   "cash.kassa.view": ["cash.view"],
+  "cash.nachalnye_balansy.view": ["cash.nachalnye_balansy_klientov.view"],
+  "cash.nachalnye_balansy_klientov.view": ["cash.nachalnye_balansy.view"],
+  "cash.balansy_klientov.view": ["cash.balansy.view"],
+  "cash.balansy.view": ["cash.balansy_klientov.view"],
   "reports.view": ["reports.otchety.view", "reports.konstruktor.view"],
   "reports.otchety.view": ["reports.view"],
   "reports.konstruktor.view": ["reports.view", "pivot.otchety.view"],
   "pivot.view": ["pivot.otchety.view", "reports.konstruktor.view"],
   "pivot.otchety.view": ["pivot.view", "reports.konstruktor.view"],
-  "warehouse.view": ["warehouse.ostatki.view"],
-  "warehouse.ostatki.view": ["warehouse.view"]
+  "warehouse.view": ["warehouse.ostatki.view", "warehouse.ostatki_tovarov.view"],
+  "warehouse.ostatki.view": ["warehouse.view", "warehouse.ostatki_tovarov.view"],
+  "warehouse.ostatki_tovarov.view": ["warehouse.ostatki.view", "warehouse.view"]
 };
 
 let explicitReverseCache: Map<string, string[]> | null = null;
@@ -205,6 +212,12 @@ export const EXPLICIT_MAP: Record<string, string> = {
   "suppliers.udalenie_postavshchikov": "suppliers.postavshchik.delete",
   "cash.spisok_kassy": "cash.kassa.view",
   "cash.zakryt_kassu": "cash.kassa.status",
+  // Balanslar avval «Отчеты» ostida edi — endi alohida section.
+  "cash.otchety.spisok_balansy_klientov": "cash.balansy_klientov.view",
+  "cash.otchety.detal_balans_klienta": "cash.balansy_klientov.view",
+  "cash.otchety.spisok_balansy_klientov_po_konsignatsii": "cash.balansy_klientov.view",
+  "cash.otchety.detal_balans_klienta_po_konsignatsii": "cash.balansy_klientov.view",
+  "cash.balansy.view": "cash.balansy_klientov.view",
   "gps.dostup_k_gps": "gps.gps.view",
   "gps.planiruemaya_posledovatelnost_vizita_sotrudnikov_izmenenie": "gps.gps.update",
   "access.manage": "access.manage"

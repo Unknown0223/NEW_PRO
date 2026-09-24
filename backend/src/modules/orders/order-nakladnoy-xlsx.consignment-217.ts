@@ -58,16 +58,91 @@ export function consignment217DateLine(at: Date): string {
   return `Дата накладной: ${fmtDate(at)}`;
 }
 
-export function consignment217AddressLine(address: string | null | undefined): string {
-  const t = String(address ?? "").trim() || "—";
-  return `Адрес: ${t}`;
+function hasNakladnoyText(raw: string | null | undefined): boolean {
+  const t = String(raw ?? "").trim();
+  return t.length > 0 && t !== "—";
 }
 
-export function consignment217ExpeditorLine(name: string | null | undefined): string {
+/**
+ * Uzun matnni pechatga sig‘adigan qilib qatorlarga bo‘lish (maxLines).
+ * Ortiqcha qisqartiriladi («…») — varaq kengayib ketmasin.
+ */
+export function wrapNakladnoyFieldText(
+  raw: string,
+  maxCharsPerLine = 88,
+  maxLines = 3
+): string {
+  const t = raw.trim().replace(/\s+/g, " ");
+  if (!t) return "";
+  if (t.length <= maxCharsPerLine && !t.includes("\n")) return t;
+  const lines: string[] = [];
+  let rest = t;
+  while (rest.length > 0 && lines.length < maxLines) {
+    if (rest.length <= maxCharsPerLine) {
+      lines.push(rest);
+      rest = "";
+      break;
+    }
+    let cut = rest.lastIndexOf(" ", maxCharsPerLine);
+    if (cut < Math.floor(maxCharsPerLine / 2)) cut = maxCharsPerLine;
+    lines.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest.length > 0 && lines.length > 0) {
+    const last = lines[lines.length - 1]!;
+    const clipped = last.length > 1 ? last.slice(0, Math.max(1, maxCharsPerLine - 1)) : last;
+    lines[lines.length - 1] = `${clipped}…`;
+  }
+  return lines.join("\n");
+}
+
+/** Bo‘sh / «—» bo‘lsa null — chaqiruvchi qatorni yozmaydi. */
+export function consignment217AddressLine(address: string | null | undefined): string | null {
+  if (!hasNakladnoyText(address)) return null;
+  return `Адрес: ${wrapNakladnoyFieldText(String(address).trim())}`;
+}
+
+export function consignment217LandmarkLine(landmark: string | null | undefined): string | null {
+  if (!hasNakladnoyText(landmark)) return null;
+  return `Ориентир: ${wrapNakladnoyFieldText(String(landmark).trim())}`;
+}
+
+export function consignment217CommentLine(comment: string | null | undefined): string | null {
+  if (!hasNakladnoyText(comment)) return null;
+  return `Комментарий: ${wrapNakladnoyFieldText(String(comment).trim())}`;
+}
+
+/** Skidka > 0 bo‘lsa chiqadi; aks holda null. */
+export function consignment217DiscountLine(discountSum: number | null | undefined): string | null {
+  const n = Number(discountSum ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return `Скидка: ${fmtMoney2(n)} UZS`;
+}
+
+export function consignment217ExpeditorLine(name: string | null | undefined): string | null {
   const t = String(name ?? "").trim();
-  return t ? `Экспедитор: ${t}` : "Экспедитор:";
+  return t ? `Экспедитор: ${t}` : null;
 }
 
+/** 2.1.7: faqat ism; telefon keyingi qatorda. Ism bo‘lmasa null. */
+export function consignment217PersonBlock(
+  label: string,
+  name: string | null | undefined,
+  phone: string | null | undefined
+): string | null {
+  const n = String(name ?? "").trim();
+  if (!n || n === "—") return null;
+  const tel = formatNakladnoyClientPhone(phone);
+  if (tel) return `${label}: ${n}\n${tel}`;
+  return `${label}: ${n}`;
+}
+
+export function consignment217TerritoryLine(territory: string | null | undefined): string | null {
+  if (!hasNakladnoyText(territory)) return null;
+  return `Территория: ${wrapNakladnoyFieldText(String(territory).trim(), 88, 2)}`;
+}
+
+/** Legacy bir qator (5.2.0 telefon parse va eski testlar). 2.1.7 chopda ishlatilmaydi. */
 export function consignment217AgentValue(opts: {
   code: string;
   name: string;

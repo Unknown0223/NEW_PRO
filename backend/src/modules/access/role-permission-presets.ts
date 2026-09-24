@@ -185,6 +185,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "kpi", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view", "approve"]),
       secOnly("work_slots", "raboche_mesto", ["view", "create", "update", "assign", "history"]),
+      /** Kassa: mijoz balanslari (qarz/to‘lov) — Access orqali ham beriladi. */
+      secOnly("cash", "balansy_klientov", ["view", "copy"]),
       mod("dashboard"),
       sec("gps", "gps")
     ),

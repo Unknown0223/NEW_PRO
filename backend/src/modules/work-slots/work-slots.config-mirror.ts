@@ -12,10 +12,15 @@ import {
   effectiveCashDeskIds,
   effectiveTerritories,
   effectiveWarehouseIds,
+  findCityParentsInTerritoryTree,
+  findOblastParentsInTerritoryTree,
   resolveCashDeskIdsPatch,
   resolveTerritoriesPatch,
   resolveWarehouseIdsPatch
 } from "./work-slots.multi-bindings";
+import { asRecord } from "../tenant-settings/tenant-settings.shared";
+import { territoryNodesFromUnknown } from "../tenant-settings/tenant-settings.refs";
+import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-settings.territory";
 
 /**
  * Slot entitlements → user mirror.
@@ -98,12 +103,18 @@ function cashDeskLinkRoleForUser(userRole: string): string | null {
       return "supervisor";
     case "operator":
       return "operator";
+    case "director":
+    case "sales_director":
+    case "commercial_director":
+    case "regional_manager":
+    case "manager":
+      return userRole;
     default:
       return null;
   }
 }
 
-/** Ombor bog‘lamasi — dastavchik/agent joy omborlari zakaz linkage da ko‘rinsin. */
+/** Ombor bog‘lamasi — dastavchik/agent/direktor joy omborlari linkage da ko‘rinsin. */
 export function warehouseLinkRoleForUser(userRole: string): string | null {
   if (userRole === "skladchik") return "skladchik";
   return cashDeskLinkRoleForUser(userRole);
@@ -174,40 +185,42 @@ export async function mirrorSlotConfigToUser(
     user.agent_entitlements
   );
 
+  const data: Prisma.UserUpdateInput = {
+    // Bir nechta territories[] bo‘lsa primary ni yozamiz; to‘liq ro‘yxat slotda qoladi.
+    territory: primaryTerritory,
+    branch: slot.branch_code,
+    trade_direction: directionName,
+    price_type: slot.price_type,
+    agent_price_types: slot.price_types ?? [],
+    agent_entitlements: mergedEntitlements as Prisma.InputJsonValue,
+    consignment: slot.consignment,
+    consignment_limit_amount: slot.consignment_limit_amount,
+    consignment_ignore_previous_months_debt: slot.consignment_ignore_previous_months_debt,
+    consignment_close_day: slot.consignment_close_day,
+    consignment_close_hour: slot.consignment_close_hour,
+    consignment_close_minute: slot.consignment_close_minute,
+    warehouse_staff_entitlements: slot.warehouse_staff_entitlements ?? {},
+    expeditor_assignment_rules: slot.expeditor_assignment_rules ?? {},
+    warehouse:
+      primaryWarehouseId == null
+        ? { disconnect: true }
+        : { connect: { id: primaryWarehouseId } },
+    return_warehouse:
+      slot.return_warehouse_id == null
+        ? { disconnect: true }
+        : { connect: { id: slot.return_warehouse_id } },
+    trade_direction_row:
+      slot.direction_id == null
+        ? { disconnect: true }
+        : { connect: { id: slot.direction_id } }
+  };
+  if (slot.supervisor_user_id != null) {
+    data.supervisor = { connect: { id: slot.supervisor_user_id } };
+  }
+
   await tx.user.update({
     where: { id: userId },
-    data: {
-      territory: primaryTerritory,
-      branch: slot.branch_code,
-      trade_direction: directionName,
-      price_type: slot.price_type,
-      agent_price_types: slot.price_types ?? [],
-      agent_entitlements: mergedEntitlements as Prisma.InputJsonValue,
-      consignment: slot.consignment,
-      consignment_limit_amount: slot.consignment_limit_amount,
-      consignment_ignore_previous_months_debt: slot.consignment_ignore_previous_months_debt,
-      consignment_close_day: slot.consignment_close_day,
-      consignment_close_hour: slot.consignment_close_hour,
-      consignment_close_minute: slot.consignment_close_minute,
-      warehouse_staff_entitlements: slot.warehouse_staff_entitlements ?? {},
-      expeditor_assignment_rules: slot.expeditor_assignment_rules ?? {},
-      warehouse:
-        primaryWarehouseId == null
-          ? { disconnect: true }
-          : { connect: { id: primaryWarehouseId } },
-      return_warehouse:
-        slot.return_warehouse_id == null
-          ? { disconnect: true }
-          : { connect: { id: slot.return_warehouse_id } },
-      trade_direction_row:
-        slot.direction_id == null
-          ? { disconnect: true }
-          : { connect: { id: slot.direction_id } },
-      supervisor:
-        slot.supervisor_user_id == null
-          ? { disconnect: true }
-          : { connect: { id: slot.supervisor_user_id } }
-    }
+    data
   });
 
   const warehouseLinkRole = warehouseLinkRoleForUser(user.role);
@@ -266,6 +279,8 @@ export async function clearWorkplaceFieldsOnUser(
 
   const clearedEntitlements = personalEntitlementsAfterClearWorkplace(user.agent_entitlements);
 
+  // supervisor_user_id va territory_user_links tegilmaydi — ular staff/SVR jamoa va access
+  // scope manbalari; joydan chiqish ularni «tasodifan» uzmasligi kerak.
   await tx.user.update({
     where: { id: userId },
     data: {
@@ -285,8 +300,7 @@ export async function clearWorkplaceFieldsOnUser(
       expeditor_assignment_rules: {},
       warehouse: { disconnect: true },
       return_warehouse: { disconnect: true },
-      trade_direction_row: { disconnect: true },
-      supervisor: { disconnect: true }
+      trade_direction_row: { disconnect: true }
     }
   });
 
@@ -406,10 +420,20 @@ export async function applySlotConfigPatch(
       territory: undefined
     });
   } else if (hasTerritoryPartLists) {
+    const tenantRow = await tx.tenant.findUnique({
+      where: { id: tenantId },
+      select: { settings: true }
+    });
+    const settings = asRecord(tenantRow?.settings);
+    const refInner = asRecord(settings.references);
+    const refT = referencesWithResolvedTerritoryNodes(refInner);
+    const territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
     const built = buildTerritoriesFromPartLists({
       zones: patch.territory_zones,
       oblasts: patch.territory_oblasts,
-      cities: patch.territory_cities
+      cities: patch.territory_cities,
+      resolveCityParents: (city) => findCityParentsInTerritoryTree(territoryNodes, city),
+      resolveOblastParents: (oblast) => findOblastParentsInTerritoryTree(territoryNodes, oblast)
     });
     territoriesResolved = {
       territories: built,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,10 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
       setLoading(false);
     }
   }, [tenant, dateFrom, dateTo, slotType, branchCode]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return (
     <Card>

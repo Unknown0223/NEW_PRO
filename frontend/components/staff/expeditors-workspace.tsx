@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { STALE } from "@/lib/query-stale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,6 +90,7 @@ export type ExpeditorRow = {
   created_at: string;
   app_access: boolean;
   territory: string | null;
+  work_slot_territories?: string[];
   login: string;
   is_active: boolean;
   max_sessions: number;
@@ -166,6 +168,7 @@ function randomPassword(len = 10) {
 type Props = { tenantSlug: string };
 
 export function ExpeditorsWorkspace({ tenantSlug }: Props) {
+  const perms = useStaffCrudPermissions("ekspeditor");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [draftBranch, setDraftBranch] = useState("");
@@ -457,7 +460,9 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
       case "pinfl":
         return r.pinfl ?? "";
       case "territory":
-        return r.territory ?? "";
+        return (r.work_slot_territories?.length
+          ? r.work_slot_territories.join(" · ")
+          : null) ?? r.territory ?? "";
       case "device_name":
         return r.device_name ?? "";
       case "last_sync":
@@ -495,7 +500,12 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
       case "pinfl":
         return <StaffKomandaPinflCell pinfl={r.pinfl} />;
       case "territory":
-        return <StaffKomandaTerritoryCell territory={r.territory} />;
+        return (
+          <StaffKomandaTerritoryCell
+            territory={r.territory}
+            territories={r.work_slot_territories}
+          />
+        );
       case "device_name":
         return <StaffKomandaDeviceCell name={r.device_name} />;
       case "last_sync":
@@ -515,6 +525,7 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         title="Экспедиторы"
         subtitle="Управление экспедиторами, привязками к заявкам и доступом к приложению"
         addLabel="Добавить экспедитора"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateExpeditorError(null);
           setAddOpen(true);
@@ -550,18 +561,24 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, коду, логину…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map((id) => EXPEDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
-          const exportData = filteredRows.map((r) => order.map((colId) => expeditorExportCellString(r, colId)));
-          downloadXlsxSheet(
-            `expeditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Экспедиторы",
-            headers,
-            exportData
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map((id) => EXPEDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+                const exportData = filteredRows.map((r) =>
+                  order.map((colId) => expeditorExportCellString(r, colId))
+                );
+                downloadXlsxSheet(
+                  `expeditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Экспедиторы",
+                  headers,
+                  exportData
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -596,16 +613,21 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
           renderExpeditorDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
-                <KeyRound className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton title="Деактивировать" onClick={() => setDeactivateExpeditor(r)}>
                   <UserMinus className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
@@ -615,13 +637,19 @@ export function ExpeditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <StaffBulkFloatingBar
-        count={selectedIds.size}
-        isActiveTab={tab === "active"}
-        busy={bulk.bulkBusy}
-        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSelection={() => setSelectedIds(new Set())}
-      />
+      {perms.canUpdate || perms.canDeactivate || perms.canActivate ? (
+        <StaffBulkFloatingBar
+          count={selectedIds.size}
+          isActiveTab={tab === "active"}
+          busy={bulk.bulkBusy}
+          onToggleActive={
+            (tab === "active" && perms.canDeactivate) || (tab === "inactive" && perms.canActivate)
+              ? () => bulk.onRequestToggleActive(tab === "active")
+              : undefined
+          }
+          onClearSelection={() => setSelectedIds(new Set())}
+        />
+      ) : null}
 
       <AgentTemplateConfirmDialog
         open={bulk.confirmBulk != null}

@@ -211,6 +211,11 @@ export type ClientXlsxImportOptions = {
   onProgress?: ClientImportProgressSink;
   /** Import aktori (yo‘q bo‘lsa audit null-safe). */
   actorUserId?: number | null;
+  /**
+   * Yangi klient: xato bo‘lsa default — yozmasdan `needsDecision`.
+   * `accept_valid` — faqat to‘g‘ri qatorlar; `reject_all` — hech narsa.
+   */
+  commitDecision?: "accept_valid" | "reject_all";
 };
 
 /** Import tugagach job/API javobida qatorlar bo‘yicha aniq hisob (UI «N / M» uchun). */
@@ -225,10 +230,13 @@ export type ClientImportFinalStats = {
 
 export type ClientXlsxImportResult = {
   created: number;
-  /** «Обновление с Excel»: `ИД` ustuni bo‘lsa */
+  /** «Обновление с Excel»: `client_db_id`/`ИД` ustuni bo‘lsa */
   updated: number;
   errors: string[];
   importStats?: ClientImportFinalStats;
+  /** Xato+to‘g‘ri aralash: foydalanuvchi tanlovi kerak (hech narsa yozilmagan) */
+  needsDecision?: boolean;
+  decisionPreview?: import("./clients.import.commit-policy").ClientImportDecisionPreview;
 };
 
 export type ImportFlowContext = {

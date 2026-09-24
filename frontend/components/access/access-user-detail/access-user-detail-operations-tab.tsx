@@ -71,8 +71,8 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                 <p className="max-w-2xl text-[11px] leading-snug text-muted-foreground">
                   Показаны только операции, которые пользователь может выполнять. Базовые права — из основной роли;
                   пакеты других ролей — через «Добавить права роли»; отдельные операции — через «Добавить операции».
-                  Колонка «Предоставление доступа» — может ли этот аккаунт выдавать каждую операцию другим
-                  (только для него, не через роль). Снять саму операцию — «Открепить» / «Снять».
+                  Колонка «Выдача другим» — может ли этот аккаунт выдавать каждую операцию другим
+                  (это НЕ сама операция). Саму операцию добавить: «Добавить операции». Снять — «Снять».
                 </p>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   <Button
@@ -363,9 +363,9 @@ export function AccessUserDetailOperationsTab({ vm }: { vm: AccessUserDetailVm }
                         <div className="flex flex-col items-center justify-center gap-1.5 py-0.5">
                           <span
                             className="w-full max-w-[10rem] px-0.5 text-center text-[9px] font-semibold leading-snug sm:text-[10px]"
-                            title="Может выдавать эту операцию другим пользователям в «Доступ» (только для этого аккаунта)"
+                            title="НЕ сама операция. Вкл = может выдавать эту операцию другим. Операцию себе: «Добавить операции». Снять операцию — «Снять»."
                           >
-                            Предоставление доступа
+                            Выдача другим
                           </span>
                           {tableMatrix.length > 0 ? (
                             <label className="relative mx-auto flex h-6 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">

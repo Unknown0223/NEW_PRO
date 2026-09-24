@@ -12,9 +12,12 @@ import '../../../core/l10n/app_strings_ru.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/errors/error_reporter.dart';
 import '../../../core/errors/user_facing_error.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/time/work_region_time.dart';
 import '../../../core/ui/agent_ui.dart';
+import '../home/sync_count_provider.dart';
+import '../visits/visit_stats_helper.dart';
 
 /// Standart foto sabablari (veb spravochnik bo‘sh bo‘lsa).
 /// Asosiy ro‘yxat: Sozlamalar → Причины и категории → Причины фотоотчёта.
@@ -258,19 +261,23 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   final caption = category ?? await pickPhotoReportCategory(context, ref);
   if (caption == null || !context.mounted) return null;
 
-  final cam = await Permission.camera.request();
-  if (!cam.isGranted) {
-    if (context.mounted) {
-      showAgentToast(context, 'Kamera ruxsati kerak');
+  final photo = await withAppLockSuppressed(ref, () async {
+    final cam = await Permission.camera.request();
+    if (!cam.isGranted) return null;
+    return ref.read(photoServiceProvider).takeClientPhoto();
+  });
+  if (photo == null || !context.mounted) {
+    if (photo == null && context.mounted) {
+      final cam = await Permission.camera.status;
+      if (!cam.isGranted) {
+        showAgentToast(context, 'Kamera ruxsati kerak');
+      }
     }
     return null;
   }
 
-  final photo = await withAppLockSuppressed(
-    ref,
-    () => ref.read(photoServiceProvider).takeClientPhoto(),
-  );
-  if (photo == null || !context.mounted) return null;
+  // Siqish/upload paytida process o‘lishi mumkin — PIN skip TTL ni yangilaymiz.
+  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
 
   var loadingShown = false;
   void hideLoading() {
@@ -306,13 +313,22 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
   }
 
   try {
-    return await ref.read(mobileApiProvider).postClientPhotoReport(
+    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
           orderId: orderId,
         );
+    await AppDatabase().recordPhotosSyncedToday(1);
+    await AppDatabase().recordPhotoSyncedClientToday(clientId);
+    await ensureVisitCompletedForClientTodayWithRef(ref, clientId);
+    refreshVisitStatsProviders(ref.invalidate);
+    ref.invalidate(syncedPhotoCountTodayProvider);
+    ref.invalidate(pendingPhotoCountProvider);
+    ref.invalidate(failedPhotoCountProvider);
+    await clearExternalCaptureSkipLock();
+    return uploaded;
   } on NetworkException {
     final queued = await PhotoReportQueue.enqueue(
       clientId: clientId,
@@ -338,6 +354,10 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
             : 'Окно съёмки закрыто или фото сақланмади',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
+    }
+    if (queued) {
+      ref.invalidate(pendingPhotoCountProvider);
+      ref.invalidate(failedPhotoCountProvider);
     }
     return null;
   } catch (e) {
@@ -367,6 +387,10 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
             : UserFacingError.toast(e, action: 'Не удалось загрузить фото'),
         accentColor: queued ? AppColors.warning : AppColors.error,
       );
+    }
+    if (queued) {
+      ref.invalidate(pendingPhotoCountProvider);
+      ref.invalidate(failedPhotoCountProvider);
     }
     return null;
   }
@@ -401,19 +425,22 @@ Future<ClientPhotoReport?> replacePhotoReport({
     return null;
   }
 
-  final cam = await Permission.camera.request();
-  if (!cam.isGranted) {
-    if (context.mounted) {
-      showAgentToast(context, 'Kamera ruxsati kerak');
+  final photo = await withAppLockSuppressed(ref, () async {
+    final cam = await Permission.camera.request();
+    if (!cam.isGranted) return null;
+    return ref.read(photoServiceProvider).takeClientPhoto();
+  });
+  if (photo == null || !context.mounted) {
+    if (photo == null && context.mounted) {
+      final cam = await Permission.camera.status;
+      if (!cam.isGranted) {
+        showAgentToast(context, 'Kamera ruxsati kerak');
+      }
     }
     return null;
   }
 
-  final photo = await withAppLockSuppressed(
-    ref,
-    () => ref.read(photoServiceProvider).takeClientPhoto(),
-  );
-  if (photo == null || !context.mounted) return null;
+  await markExternalCaptureSkipLock(ttl: const Duration(minutes: 5));
 
   var loadingShown = false;
   void hideLoading() {
@@ -450,13 +477,15 @@ Future<ClientPhotoReport?> replacePhotoReport({
 
   try {
     await ref.read(mobileApiProvider).deleteClientPhotoReport(slug, clientId, existing.id);
-    return await ref.read(mobileApiProvider).postClientPhotoReport(
+    final uploaded = await ref.read(mobileApiProvider).postClientPhotoReport(
           slug,
           clientId,
           imageBase64: b64,
           caption: caption,
           orderId: existing.orderId,
         );
+    await clearExternalCaptureSkipLock();
+    return uploaded;
   } catch (e) {
     ErrorReporter.instance?.reportCaught(
       e,

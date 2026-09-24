@@ -9,6 +9,7 @@ import { STALE } from "@/lib/query-stale";
 import { BonusRuleTemplateCheckbox } from "@/components/bonus-rules/bonus-rule-form-fields";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { wholeCategoryIncludesAllSkus } from "@/components/bonus-rules/bonus-rule-category-scope.logic";
 
 type ProductCategoryRow = {
   id: number;
@@ -204,6 +205,8 @@ type CategoryProductsPanelProps = {
   querySuffix?: string;
   /** Qulflangan qoida: faqat tanlangan mahsulotlar */
   visibleProductIds?: Set<number>;
+  /** Kategoriya tanlangan, SKU ro‘yxati bo‘sh — barcha tovarlar shu qoidaga kiradi */
+  includeAllFromCategory?: boolean;
 };
 
 function CategoryProductsPanel({
@@ -217,7 +220,8 @@ function CategoryProductsPanel({
   selectionDisabled = false,
   search = "",
   querySuffix = "tree",
-  visibleProductIds
+  visibleProductIds,
+  includeAllFromCategory = false
 }: CategoryProductsPanelProps) {
   const searchTrim = search.trim();
   const q = useQuery({
@@ -242,10 +246,13 @@ function CategoryProductsPanel({
     if (!visibleProductIds?.size) return data;
     return data.filter((p) => visibleProductIds.has(p.id));
   }, [q.data, visibleProductIds]);
-  const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
-  const someSelected = ids.some((id) => selected.has(id)) && !allSelected;
-  const checkDis = disabled || selectionDisabled;
-  const readOnlyList = Boolean(visibleProductIds?.size) && selectionDisabled;
+  const allSelected =
+    includeAllFromCategory || (ids.length > 0 && ids.every((id) => selected.has(id)));
+  const someSelected =
+    !includeAllFromCategory && ids.some((id) => selected.has(id)) && !allSelected;
+  const checkDis = disabled || selectionDisabled || includeAllFromCategory;
+  const readOnlyList =
+    includeAllFromCategory || (Boolean(visibleProductIds?.size) && selectionDisabled);
 
   const toggleAll = (checked: boolean) => {
     onToggleCategoryIds(ids, checked);
@@ -293,7 +300,7 @@ function CategoryProductsPanel({
           <li key={p.id} className="flex items-start gap-2 rounded-md px-1 py-0.5 hover:bg-muted/50">
             <TreeCheckbox
               id={`br-prod-${querySuffix}-${p.id}`}
-              checked={selected.has(p.id)}
+              checked={includeAllFromCategory || selected.has(p.id)}
               disabled={checkDis}
               onChange={(checked) => onToggleProduct(p.id, checked)}
             />
@@ -332,6 +339,8 @@ type CategoryNodeProps = {
   /** Kategoriya checkbox — ichidagi barcha mahsulotlarni tanlaydi (KPI va h.k.) */
   categoryCheckSelectsProducts?: boolean;
   flatCategories?: ProductCategoryRow[];
+  coveredCategoryIds?: Set<number>;
+  wholeCategoryNoSkuFilter?: boolean;
 };
 
 function CategoryNode({
@@ -352,11 +361,15 @@ function CategoryNode({
   allowExpandWhenDisabled = false,
   visibleProductIds,
   categoryCheckSelectsProducts = false,
-  flatCategories = []
+  flatCategories = [],
+  coveredCategoryIds,
+  wholeCategoryNoSkuFilter = false
 }: CategoryNodeProps) {
   const isOpen = expanded.has(node.id);
   const categoryPickEnabled = Boolean(onToggleCategoryScope && categoryScopeSelected);
   const categoryChecked = categoryScopeSelected?.has(node.id) ?? false;
+  const includeAllFromCategory =
+    wholeCategoryNoSkuFilter && (coveredCategoryIds?.has(node.id) ?? false);
   const expandDisabled = disabled && !allowExpandWhenDisabled;
   const searchTrim = search.trim();
 
@@ -434,6 +447,8 @@ function CategoryNode({
                   visibleProductIds={visibleProductIds}
                   categoryCheckSelectsProducts={categoryCheckSelectsProducts}
                   flatCategories={flatCategories}
+                  coveredCategoryIds={coveredCategoryIds}
+                  wholeCategoryNoSkuFilter={wholeCategoryNoSkuFilter}
                 />
               ))}
             </div>
@@ -451,6 +466,7 @@ function CategoryNode({
               search={search}
               querySuffix={querySuffix}
               visibleProductIds={visibleProductIds}
+              includeAllFromCategory={includeAllFromCategory}
             />
           </div>
         </div>
@@ -526,6 +542,21 @@ export function BonusRuleProductCategoryTree({
   });
 
   const tree = useMemo(() => nestCategories(catsQ.data ?? []), [catsQ.data]);
+
+  const wholeCategoryNoSkuFilter = wholeCategoryIncludesAllSkus(categoryScopeIds ?? [], value);
+
+  const coveredCategoryIds = useMemo(() => {
+    const into = new Set<number>();
+    const flat = catsQ.data ?? [];
+    if (!flat.length) {
+      for (const id of categoryScopeIds ?? []) into.add(id);
+      return into;
+    }
+    for (const id of categoryScopeIds ?? []) {
+      addCategoryDescendants(id, flat, into);
+    }
+    return into;
+  }, [catsQ.data, categoryScopeIds]);
 
   const scopeOnlyCategories =
     restrictToSelection && (categoryScopeIds?.length ?? 0) > 0 && value.length === 0;
@@ -756,6 +787,8 @@ export function BonusRuleProductCategoryTree({
           visibleProductIds={visibleProductIds}
           categoryCheckSelectsProducts={categoryCheckSelectsProducts}
           flatCategories={catsQ.data ?? []}
+          coveredCategoryIds={coveredCategoryIds}
+          wholeCategoryNoSkuFilter={wholeCategoryNoSkuFilter}
         />
         </div>
       ))}

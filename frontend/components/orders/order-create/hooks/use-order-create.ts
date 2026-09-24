@@ -65,6 +65,11 @@ import { applyPolkiOrderPieceRebalance } from "../view/polki-shelf-return/polki-
 import { usePolkiAutoBonus } from "./use-polki-auto-bonus";
 import { usePolkiPeresort } from "./use-polki-peresort";
 import { computePolkiDebtHintSum, parsePolkiQty } from "../polki-bonus-balance.logic";
+import {
+  hydrateApplyBonusForNewOrderEdit,
+  shouldConfirmBonusOnWebNewEdit,
+  type OrderBonusPreviewResponse
+} from "../order-edit-bonus-confirm.logic";
 
 const EMPTY_CREATE_PRODUCTS: ProductRow[] = [];
 
@@ -106,6 +111,12 @@ export function useOrderCreate({
   const [warehouseId, setWarehouseId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [applyBonus, setApplyBonus] = useState(true);
+  const [bonusConfirmOpen, setBonusConfirmOpen] = useState(false);
+  const [bonusPreviewLoading, setBonusPreviewLoading] = useState(false);
+  const [bonusPreviewError, setBonusPreviewError] = useState<string | null>(null);
+  const [bonusPreview, setBonusPreview] = useState<OrderBonusPreviewResponse | null>(
+    null
+  );
   /** Bo‘sh = barcha kategoriyalar; bo‘sh emas = faqat tanlangan id lar */
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
   /** Pastdagi katalog tablari: faqat `selectedCategoryIds` bo‘sh emas; jadval faqat shu kategoriya mahsulotlari */
@@ -400,7 +411,7 @@ export function useOrderCreate({
     setExpeditorUserId(
       row.expeditor_id != null && row.expeditor_id > 0 ? String(row.expeditor_id) : "__none__"
     );
-    setApplyBonus(Boolean(row.apply_bonus));
+    setApplyBonus(hydrateApplyBonusForNewOrderEdit());
     setOrderIsConsignment(Boolean(row.is_consignment));
     setConsignmentDueDate((row.consignment_due_date ?? "").trim().slice(0, 10));
     setRequestTypeRef((row.request_type_ref ?? "").trim());
@@ -1855,7 +1866,11 @@ export function useOrderCreate({
       }
       if (!warehouseId) return false;
       const s = stockMap.get(p.id);
-      return availableOrderQty(s) > 0;
+      if (availableOrderQty(s) > 0) return true;
+      const reserved = editReservedQtyByProduct[p.id] ?? 0;
+      const raw = qtyByProductId[p.id];
+      const lineQ = Number.parseFloat(String(raw ?? "").replace(",", "."));
+      return reserved > 0 || (Number.isFinite(lineQ) && lineQ > 0);
     });
     const seen = new Set<number>();
     const deduped: ProductRow[] = [];
@@ -1865,7 +1880,15 @@ export function useOrderCreate({
       deduped.push(p);
     }
     return deduped;
-  }, [products, categoryFilterActive, categoryFilterSet, warehouseId, stockQ.data]);
+  }, [
+    products,
+    categoryFilterActive,
+    categoryFilterSet,
+    warehouseId,
+    stockQ.data,
+    editReservedQtyByProduct,
+    qtyByProductId
+  ]);
 
   /**
    * Tanlangan ombor bo‘yicha: katalog mahsulotlari ichida Mavjud (fakt − bron) > 0 bo‘lgan kategoriyalar.
@@ -1880,10 +1903,16 @@ export function useOrderCreate({
     for (const p of products) {
       const cid = p.category_id;
       if (cid == null || !Number.isFinite(cid)) continue;
-      if (availableOrderQty(stockMap.get(p.id)) > 0) ids.add(cid);
+      if (availableOrderQty(stockMap.get(p.id)) > 0) {
+        ids.add(cid);
+        continue;
+      }
+      const reserved = editReservedQtyByProduct[p.id] ?? 0;
+      const lineQ = Number.parseFloat(String(qtyByProductId[p.id] ?? "").replace(",", "."));
+      if (reserved > 0 || (Number.isFinite(lineQ) && lineQ > 0)) ids.add(cid);
     }
     return ids;
-  }, [products, warehouseId, stockProductIdsKey, stockQ.isSuccess, stockQ.data]);
+  }, [products, warehouseId, stockProductIdsKey, stockQ.isSuccess, stockQ.data, editReservedQtyByProduct, qtyByProductId]);
 
   /** Ombor qoldiqlari kutilganda `null`; tayyor bo‘lsa faqat Mavjud (fakt − bron) > 0 bo‘lgan kategoriyalar; xato bo‘lsa `[]`. */
   const categoriesWithWarehouseSellableStock = useMemo(() => {
@@ -2192,7 +2221,12 @@ export function useOrderCreate({
   }, [isPolkiSheet, polkiUsesAutoBonus, polkiAutoBonusDebtAmount, polkiDebtHintSum]);
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (
+      bonusConfirm?: {
+        bonus_gift_lines?: { bonus_rule_id: number; product_id: number; qty: number }[];
+        bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
+      } | void
+    ) => {
       if (isPolkiSheet) {
         const cid = Number.parseInt(clientId, 10);
         if (!Number.isFinite(cid) || cid < 1) throw new Error("client");
@@ -2553,13 +2587,14 @@ export function useOrderCreate({
         Number.isFinite(wid) &&
         wid === editSourceWarehouseId;
       const qtyAgg = new Map<number, number>();
-      for (const p of catalogProducts) {
-        const raw = qtyByProductId[p.id];
+      for (const [idStr, raw] of Object.entries(qtyByProductId)) {
         if (!raw || !raw.trim()) continue;
+        const productId = Number.parseInt(idStr, 10);
+        if (!Number.isFinite(productId) || productId < 1) continue;
         const q = Number.parseFloat(raw.replace(",", "."));
         if (!Number.isFinite(q) || q < 0) throw new Error("qty");
         if (q === 0) continue;
-        qtyAgg.set(p.id, (qtyAgg.get(p.id) ?? 0) + q);
+        qtyAgg.set(productId, (qtyAgg.get(productId) ?? 0) + q);
       }
       const items: { product_id: number; qty: number }[] = [];
       for (const [productId, totalQ] of Array.from(qtyAgg.entries())) {
@@ -2597,6 +2632,12 @@ export function useOrderCreate({
           apply_bonus: applyBonus,
           items
         };
+        if (bonusConfirm?.bonus_gift_lines?.length) {
+          linesBody.bonus_gift_lines = bonusConfirm.bonus_gift_lines;
+        }
+        if (bonusConfirm?.bonus_strategy_selections?.length) {
+          linesBody.bonus_strategy_selections = bonusConfirm.bonus_strategy_selections;
+        }
         if (validatedOrderType === "order" && (showOrderPaymentMethodSelector || Boolean(pmOut))) {
           if (pmOut) linesBody.payment_method_ref = pmOut;
         }
@@ -2728,6 +2769,9 @@ export function useOrderCreate({
       setConsignmentDueOpen(false);
       setPaymentMethodRef("");
       clearOldPrices();
+      setBonusConfirmOpen(false);
+      setBonusPreview(null);
+      setBonusPreviewError(null);
       onCreated();
     },
     onError: (e: Error) => {
@@ -3229,6 +3273,129 @@ export function useOrderCreate({
     paymentMethodRef
   ]);
 
+  const needsWebBonusConfirm = shouldConfirmBonusOnWebNewEdit({
+    isEditMode,
+    hasEditOrderId: editOrderId != null,
+    applyBonus,
+    isPolkiSheet,
+    isExchangeFlow
+  });
+
+  const requestSubmit = useCallback(() => {
+    if (!needsWebBonusConfirm) {
+      mutation.mutate(undefined);
+      return;
+    }
+
+    const cid = Number.parseInt(clientId, 10);
+    const warehouseRaw =
+      warehouseId.trim() ||
+      (editSourceWarehouseId != null ? String(editSourceWarehouseId) : "");
+    const wid = Number.parseInt(warehouseRaw, 10);
+    const agentParsed = agentId.trim() ? Number.parseInt(agentId, 10) : NaN;
+    const agent_id = Number.isFinite(agentParsed) && agentParsed > 0 ? agentParsed : null;
+
+    if (!Number.isFinite(cid) || cid < 1) {
+      reportLocalError("Avval klientni tanlang", "client");
+      return;
+    }
+    if (!warehouseRaw.trim() || !Number.isFinite(wid) || wid < 1) {
+      reportLocalError("Avval omborni tanlang", "warehouse");
+      return;
+    }
+    if (agent_id == null) {
+      reportLocalError("Agent majburiy", "agent");
+      return;
+    }
+
+    const stockRows = stockQ.data ?? [];
+    const stockMap = new Map(stockRows.map((s) => [s.product_id, s]));
+    const sameWh =
+      editSourceWarehouseId != null && Number.isFinite(wid) && wid === editSourceWarehouseId;
+    const qtyAgg = new Map<number, number>();
+    for (const [idStr, raw] of Object.entries(qtyByProductId)) {
+      if (!raw || !raw.trim()) continue;
+      const productId = Number.parseInt(idStr, 10);
+      if (!Number.isFinite(productId) || productId < 1) continue;
+      const q = Number.parseFloat(raw.replace(",", "."));
+      if (!Number.isFinite(q) || q < 0) {
+        reportLocalError("Miqdor noto‘g‘ri", "catalog");
+        return;
+      }
+      if (q === 0) continue;
+      qtyAgg.set(productId, (qtyAgg.get(productId) ?? 0) + q);
+    }
+    const items: { product_id: number; qty: number }[] = [];
+    for (const [productId, totalQ] of Array.from(qtyAgg.entries())) {
+      if (totalQ <= 0) continue;
+      let avail = availableOrderQty(stockMap.get(productId));
+      if (sameWh) avail += editReservedQtyByProduct[productId] ?? 0;
+      if (totalQ > avail + 1e-9) {
+        reportLocalError("Omborda yetarli qoldiq yo‘q", "catalog");
+        return;
+      }
+      items.push({ product_id: productId, qty: totalQ });
+    }
+    if (items.length === 0) {
+      reportLocalError("Kamida bitta mahsulot miqdorini kiriting", "catalog");
+      return;
+    }
+
+    setBonusConfirmOpen(true);
+    setBonusPreview(null);
+    setBonusPreviewError(null);
+    setBonusPreviewLoading(true);
+    void (async () => {
+      try {
+        const { data } = await api.post<OrderBonusPreviewResponse>(
+          `/api/${tenantSlug}/orders/bonus-preview`,
+          {
+            client_id: cid,
+            warehouse_id: wid,
+            agent_id,
+            price_type: priceType.trim() || "retail",
+            items,
+            is_consignment: orderIsConsignment,
+            exclude_order_id: editOrderId
+          }
+        );
+        setBonusPreview(data);
+      } catch (e) {
+        setBonusPreviewError(
+          getUserFacingError(e, "Bonus preview olinmadi. Qayta urinib ko‘ring.")
+        );
+      } finally {
+        setBonusPreviewLoading(false);
+      }
+    })();
+  }, [
+    needsWebBonusConfirm,
+    mutation,
+    clientId,
+    warehouseId,
+    editSourceWarehouseId,
+    agentId,
+    catalogProducts,
+    qtyByProductId,
+    stockQ.data,
+    editReservedQtyByProduct,
+    tenantSlug,
+    priceType,
+    orderIsConsignment,
+    editOrderId,
+    reportLocalError
+  ]);
+
+  const confirmBonusAndSave = useCallback(
+    (payload: {
+      bonus_gift_lines: { bonus_rule_id: number; product_id: number; qty: number }[];
+      bonus_strategy_selections: { strategy_id: number; rule_ids: number[] }[];
+    }) => {
+      mutation.mutate(payload);
+    },
+    [mutation]
+  );
+
   return {
     tenantSlug,
     onCreated,
@@ -3312,6 +3479,14 @@ export function useOrderCreate({
     lockedWarehouseLabel,
     missingPriceProductNames,
     mutation,
+    requestSubmit,
+    needsWebBonusConfirm,
+    bonusConfirmOpen,
+    setBonusConfirmOpen,
+    bonusPreview,
+    bonusPreviewLoading,
+    bonusPreviewError,
+    confirmBonusAndSave,
     normalizedType,
     orderClientPickerScopeIds,
     orderComment,

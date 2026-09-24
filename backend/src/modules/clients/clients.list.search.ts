@@ -45,6 +45,15 @@ export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientW
     { product_category_ref: { contains: search, mode: ins } }
   ];
 
+  // Telefon: formatlangan `phone` o‘rniga raqamlar bo‘yicha ham qidirish.
+  const digits = search.replace(/\D/g, "");
+  if (digits.length >= 7) {
+    orClause.push({ phone_normalized: { contains: digits } });
+    if (digits.length > 9) {
+      orClause.push({ phone_normalized: { endsWith: digits.slice(-9) } });
+    }
+  }
+
   const agentMatch: Prisma.UserWhereInput = {
     OR: [
       { name: { contains: search, mode: ins } },

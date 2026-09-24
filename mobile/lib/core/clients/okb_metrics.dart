@@ -122,6 +122,15 @@ Set<int> resolveDailyVisitPlanIds({
   );
 }
 
+/// Bosh sahifa «Посещено»: vizit + bugungi zakaz + sinxron foto mijozlari.
+Set<int> mergeVisitedActivityIds({
+  required Set<int> visitClientIds,
+  Set<int> orderClientIds = const {},
+  Set<int> photoSyncedClientIds = const {},
+}) {
+  return {...visitClientIds, ...orderClientIds, ...photoSyncedClientIds};
+}
+
 DateTime okbLookbackSince([DateTime? now]) {
   final n = now ?? workRegionNow();
   final today = DateTime(n.year, n.month, n.day);

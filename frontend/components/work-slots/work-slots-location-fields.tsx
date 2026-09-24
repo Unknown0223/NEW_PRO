@@ -105,8 +105,8 @@ function applyTerritoryBulkField(
   }
   if (mode !== "set") return;
   const codes = trimCodes(list);
-  if (codes.length === 1) body[singleKey] = codes[0]!;
-  else if (codes.length > 1) body[multiKey] = codes;
+  // Har doim multi — backend daraxt bilan zona/oblast/gorod yig‘adi (singular merge chalkashmasin).
+  if (codes.length >= 1) body[multiKey] = codes;
 }
 
 export function buildTerritoryPatchFromBulk(
@@ -511,9 +511,18 @@ export function WorkSlotsLocationFields({
             onCascadeListsChange={(patch) =>
               onChange({
                 ...patch,
-                territoryZone: patch.territoryZoneList?.[0] ?? values.territoryZone,
-                territoryOblast: patch.territoryOblastList?.[0] ?? values.territoryOblast,
-                territoryCity: patch.territoryCityList?.[0] ?? values.territoryCity
+                territoryZone:
+                  patch.territoryZoneList !== undefined
+                    ? (patch.territoryZoneList[0] ?? "")
+                    : values.territoryZone,
+                territoryOblast:
+                  patch.territoryOblastList !== undefined
+                    ? (patch.territoryOblastList[0] ?? "")
+                    : values.territoryOblast,
+                territoryCity:
+                  patch.territoryCityList !== undefined
+                    ? (patch.territoryCityList[0] ?? "")
+                    : values.territoryCity
               })
             }
             cascade={territoryCascade}

@@ -40,6 +40,7 @@ import { OrderCreateViewAlerts } from "./order-create-view-alerts";
 import { OrderCreateFormSection } from "./order-create-form-section";
 import { OrderCreateCatalogSection } from "./order-create-catalog-section";
 import { OrderCreateViewFooter } from "./order-create-view-footer";
+import { OrderEditBonusConfirmModal } from "../order-edit-bonus-confirm-modal";
 
 export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
   if (vm.isPolkiSheet) {
@@ -55,6 +56,15 @@ export function OrderCreateView({ vm }: { vm: OrderCreateVm }) {
         <OrderCreateCatalogSection vm={vm} />
       </div>
       <OrderCreateViewFooter vm={vm} />
+      <OrderEditBonusConfirmModal
+        open={vm.bonusConfirmOpen}
+        onOpenChange={vm.setBonusConfirmOpen}
+        loading={vm.bonusPreviewLoading}
+        error={vm.bonusPreviewError}
+        preview={vm.bonusPreview}
+        saving={vm.mutation.isPending}
+        onConfirm={vm.confirmBonusAndSave}
+      />
     </PageShell>
   );
 }

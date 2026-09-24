@@ -6,12 +6,13 @@ import {
   buildOrderAgentScopeWhere,
   buildScopedStaffDirectoryWhere,
   resolveAllowedAgentIdsForActor,
+  resolveStaffVisibilityByExplicitAndGeo,
   resolveVisibleStaffIds,
   type ScopedReportActor
 } from "../src/modules/access/access-staff-scope";
 import { mergeDirectoryAllowedIds, isDirectoryIdAllowed } from "../src/modules/access/access-directory-scope";
 
-describe("resolveVisibleStaffIds — hodim ∪ hudud", () => {
+describe("resolveVisibleStaffIds — hodim ∩ hudud", () => {
   it("hech narsa belgilanmagan — bo‘sh", () => {
     expect(resolveVisibleStaffIds([], [], [99, 100])).toEqual([]);
     expect(resolveVisibleStaffIds([], [], [])).toEqual([]);
@@ -21,16 +22,30 @@ describe("resolveVisibleStaffIds — hodim ∪ hudud", () => {
     expect(resolveVisibleStaffIds([10, 11, 10], [], [99])).toEqual([10, 11]);
   });
 
-  it("faqat hudud — hududdagi hodimlar", () => {
+  it("faqat hudud — hududdagi barcha hodimlar", () => {
     expect(resolveVisibleStaffIds([], [5], [20, 21])).toEqual([20, 21]);
   });
 
-  it("hudud belgilangan lekin hodim yo‘q — bo‘sh", () => {
+  it("hudud belgilangan lekin geo bo‘sh — bo‘sh", () => {
     expect(resolveVisibleStaffIds([], [5], [])).toEqual([]);
   });
 
   it("hodim + hudud — faqat kesishma (begonalar yo‘q)", () => {
     expect(resolveVisibleStaffIds([10, 11, 12], [5], [11, 99])).toEqual([11]);
+  });
+
+  it("hodim + hudud lekin geo topilmasa — jamoa saqlanadi", () => {
+    expect(resolveVisibleStaffIds([10, 11], [5], [])).toEqual([10, 11]);
+  });
+
+  it("resolveStaffVisibilityByExplicitAndGeo — filial geo ham xuddi shu", () => {
+    expect(
+      resolveStaffVisibilityByExplicitAndGeo({
+        explicitStaffIds: [1, 2],
+        geoStaffIds: [2, 3],
+        hasGeoBinding: true
+      })
+    ).toEqual([2]);
   });
 });
 

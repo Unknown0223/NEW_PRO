@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
+import { ClientsTemplateSelectField } from "@/components/clients/clients-template-select-field";
 import { TableColumnSettingsDialog } from "@/components/data-table/table-column-settings-dialog";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -11,6 +12,12 @@ import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-ra
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  appendNamedStringListParam,
+  appendPositiveIntListParam,
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { cn } from "@/lib/utils";
 import { formatGroupedDecimal } from "@/lib/format-numbers";
@@ -282,9 +289,9 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
       const p = new URLSearchParams();
       p.set("page", String(page));
       p.set("limit", String(tablePrefs.pageSize));
-      if (applied.warehouseId) p.set("warehouse_id", applied.warehouseId);
-      if (applied.supplierId) p.set("supplier_id", applied.supplierId);
-      if (applied.status) p.set("status", applied.status);
+      appendPositiveIntListParam(p, "warehouse_id", "warehouse_ids", applied.warehouseId);
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", applied.supplierId);
+      appendNamedStringListParam(p, "status", "statuses", applied.status);
       if (applied.dateFrom) p.set("date_from", applied.dateFrom);
       if (applied.dateTo) p.set("date_to", applied.dateTo);
       if (applied.q) p.set("q", applied.q);
@@ -535,49 +542,44 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter Panel</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Склад</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftWh}
-                onChange={(e) => setDraftWh(e.target.value)}
-              >
-                <option value="">Все</option>
-                {(warehousesQ.data ?? []).map((w) => (
-                  <option key={w.id} value={String(w.id)}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Склад"
+                multi
+                options={(warehousesQ.data ?? []).map((w) => ({
+                  value: String(w.id),
+                  label: w.name
+                }))}
+                values={splitMultiFilterValues(draftWh)}
+                onChange={(v) => setDraftWh(joinMultiFilterValues(v))}
+              />
             </div>
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Поставщики</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftSupplier}
-                onChange={(e) => setDraftSupplier(e.target.value)}
-              >
-                <option value="">Все</option>
-                {(suppliersQ.data ?? []).map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Поставщики"
+                multi
+                options={(suppliersQ.data ?? []).map((s) => ({
+                  value: String(s.id),
+                  label: s.name
+                }))}
+                values={splitMultiFilterValues(draftSupplier)}
+                onChange={(v) => setDraftSupplier(joinMultiFilterValues(v))}
+              />
             </div>
-            <div className="grid min-w-[9rem] gap-1.5">
-              <Label className="text-xs">Статус</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={draftStatus}
-                onChange={(e) => setDraftStatus(e.target.value)}
-              >
-                <option value="">Все</option>
-                <option value="draft">Новый</option>
-                <option value="editing">Редактирование</option>
-                <option value="posted">Одобренный</option>
-                <option value="cancelled">Отменен</option>
-              </select>
+            <div className="grid min-w-[11rem] gap-1.5">
+              <ClientsTemplateSelectField
+                label="Статус"
+                multi
+                searchable={false}
+                options={[
+                  { value: "draft", label: "Новый" },
+                  { value: "editing", label: "Редактирование" },
+                  { value: "posted", label: "Одобренный" },
+                  { value: "cancelled", label: "Отменен" }
+                ]}
+                values={splitMultiFilterValues(draftStatus)}
+                onChange={(v) => setDraftStatus(joinMultiFilterValues(v))}
+              />
             </div>
             <div className="grid min-w-[11rem] max-w-[16rem] gap-1.5">
               <Label className="text-xs">Период</Label>

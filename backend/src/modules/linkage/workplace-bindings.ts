@@ -52,7 +52,10 @@ export type AgentCityLite = {
   region: string | null;
 };
 
-/** Filter mobile tenant territory catalogs to agent assignment. Empty cities → leave catalog as-is. */
+/** Filter mobile tenant territory catalogs to agent assignment.
+ * Always clear `regions` — agent client forms must never show viloyat pickers.
+ * Empty agent cities → still clear regions (do not leave full national catalog).
+ */
 export function filterTerritoryRefsByAgentCities<T extends Record<string, unknown>>(
   refs: T & {
     regions?: string[];
@@ -62,14 +65,13 @@ export function filterTerritoryRefsByAgentCities<T extends Record<string, unknow
   },
   agentCities: AgentCityLite[]
 ): T {
-  if (agentCities.length === 0) return refs;
+  if (agentCities.length === 0) {
+    return { ...refs, regions: [] } as T;
+  }
 
   const norm = (s: string) => s.trim().toLowerCase();
   const cityValues = new Set(agentCities.map((c) => norm(c.value)).filter(Boolean));
   const cityLabels = new Set(agentCities.map((c) => norm(c.label)).filter(Boolean));
-  const regions = new Set(
-    agentCities.map((c) => (c.region ? norm(c.region) : "")).filter(Boolean)
-  );
   const zones = new Set(agentCities.map((c) => (c.zone ? norm(c.zone) : "")).filter(Boolean));
 
   const next = { ...refs } as T & {
@@ -79,9 +81,7 @@ export function filterTerritoryRefsByAgentCities<T extends Record<string, unknow
     territory_cascade?: Record<string, string[]>;
   };
 
-  if (Array.isArray(refs.regions) && regions.size > 0) {
-    next.regions = refs.regions.filter((r) => regions.has(norm(r)));
-  }
+  next.regions = [];
   if (Array.isArray(refs.zones) && zones.size > 0) {
     next.zones = refs.zones.filter((z) => zones.has(norm(z)));
   }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exceptions.dart';
+import '../../../core/api/field_api.dart';
 import '../../../core/api/orders_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/database/app_database.dart';
@@ -149,6 +150,8 @@ class HeldOrderScheduler {
       await ensureVisitCompletedForClientToday(
         order.clientId,
         clientName: order.clientName,
+        fieldApi: _ref.read(fieldApiProvider),
+        tenantSlug: _ref.read(sessionProvider).tenantSlug,
       );
       await MobileLocalNotificationService.instance.notifyHeldOrderSent(
         clientName: order.clientName,

@@ -8,6 +8,7 @@ import '../database/app_database.dart';
 import '../l10n/app_strings_ru.dart';
 import '../prefs/agent_local_prefs_provider.dart';
 import 'client_outlet_filters.dart';
+import 'okb_metrics.dart';
 
 /// 0=Все, 1..7=Du..Ya — default bugungi kun.
 final outletWeekdayTabProvider = StateProvider<int>((ref) => DateTime.now().weekday);
@@ -44,15 +45,25 @@ final clientAgentLedgerBalancesProvider = FutureProvider<Map<int, double>>((ref)
 });
 
 final visitedTodayClientIdsProvider = FutureProvider<Set<int>>((ref) async {
-  final rows = await AppDatabase().getVisitsForDay();
-  final ids = <int>{};
+  final db = AppDatabase();
+  final rows = await db.getVisitsForDay();
+  final visitIds = <int>{};
   for (final r in rows) {
     final status = r['status']?.toString();
     if (status != 'completed' && status != 'in_progress' && status != 'refused') continue;
     final cid = (r['client_id'] as num?)?.toInt();
-    if (cid != null) ids.add(cid);
+    if (cid != null) visitIds.add(cid);
   }
-  return ids;
+  // «Начать визит»siz: oddiy zakaz + sinxron foto ham «Посещено» ga kiradi.
+  final orderIds = await db.getClientIdsWithOrdersToday();
+  final pendingOrderIds = await db.getClientIdsWithPendingOrdersToday();
+  final heldOrderIds = await db.getClientIdsWithPendingHeldOrdersToday();
+  final photoIds = await db.getPhotoSyncedClientIdsToday();
+  return mergeVisitedActivityIds(
+    visitClientIds: visitIds,
+    orderClientIds: {...orderIds, ...pendingOrderIds, ...heldOrderIds},
+    photoSyncedClientIds: photoIds,
+  );
 });
 
 final filteredClientsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {

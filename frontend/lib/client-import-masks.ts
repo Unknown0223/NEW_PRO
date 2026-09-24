@@ -10,8 +10,13 @@ export const CLIENT_IMPORT_DUPLICATE_KEY_OPTIONS: { key: string; label: string }
   { key: "city_code", label: "Город (код) — в ключе как город" }
 ];
 
-/** Default: kod (asosiy biznes id). */
-export const DEFAULT_DUPLICATE_KEY_FIELDS = ["client_code"];
+/** Default: telefon / INN / PINFL / kod. */
+export const DEFAULT_DUPLICATE_KEY_FIELDS = [
+  "client_code",
+  "inn",
+  "client_pinfl",
+  "phone"
+];
 
 /** Maslahat: eng ishonchli unikal kalitlar. */
 export const RECOMMENDED_DUPLICATE_KEY_FIELDS = [

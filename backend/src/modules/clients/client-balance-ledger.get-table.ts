@@ -3,11 +3,16 @@ import { prisma } from "../../config/database";
 import { resolvePaymentMethodRefToLabel, type PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import type { ClientLedgerRow, UnionRaw } from "./client-balance-ledger.types";
 import { mapUnionToLedgerRow } from "./client-balance-ledger.helpers";
+import {
+  salesReturnRefundLedgerCountSql,
+  salesReturnRefundLedgerUnionSql
+} from "./client-balance-ledger.returns";
 
 export type LedgerTableQueryCtx = {
   tenantId: number;
   clientId: number;
-  excluded: readonly string[];
+  /** Faqat shu statusdagi savdo zakazlari debitor qarz sifatida (odatda `delivered`). */
+  receivableStatuses: readonly string[];
   orderDateClause: import("@prisma/client").Prisma.Sql;
   payDateClause: import("@prisma/client").Prisma.Sql;
   orderSearchClause: import("@prisma/client").Prisma.Sql;
@@ -15,6 +20,8 @@ export type LedgerTableQueryCtx = {
   kindWhere: import("@prisma/client").Prisma.Sql;
   orderAgentClause: import("@prisma/client").Prisma.Sql;
   payAgentClause: import("@prisma/client").Prisma.Sql;
+  returnDateClause: import("@prisma/client").Prisma.Sql;
+  returnAgentClause: import("@prisma/client").Prisma.Sql;
   rankedCte: import("@prisma/client").Prisma.Sql;
   fromTable: import("@prisma/client").Prisma.Sql;
   limit: number;
@@ -28,7 +35,7 @@ export async function fetchClientBalanceLedgerTable(
   const {
     tenantId,
     clientId,
-    excluded,
+    receivableStatuses,
     orderDateClause,
     payDateClause,
     orderSearchClause,
@@ -36,19 +43,35 @@ export async function fetchClientBalanceLedgerTable(
     kindWhere,
     orderAgentClause,
     payAgentClause,
+    returnDateClause,
+    returnAgentClause,
     rankedCte,
     fromTable,
     limit,
     offset,
     paymentMethodEntries
   } = ctx;
+
+  const returnCount = salesReturnRefundLedgerCountSql({
+    tenantId,
+    clientId,
+    dateClause: returnDateClause,
+    agentClause: returnAgentClause
+  });
+  const returnUnion = salesReturnRefundLedgerUnionSql({
+    tenantId,
+    clientId,
+    dateClause: returnDateClause,
+    agentClause: returnAgentClause
+  });
+
   const [countRow] = await prisma.$queryRaw<Array<{ cnt: bigint }>>`
     SELECT COUNT(*)::bigint AS cnt FROM (
       SELECT 'order'::text AS row_kind, 'order'::text AS entry_kind
       FROM orders o
       WHERE o.tenant_id = ${tenantId}
         AND o.client_id = ${clientId}
-        AND o.status NOT IN (${Prisma.join(excluded)})
+        AND o.status IN (${Prisma.join(receivableStatuses)})
         AND o.order_type = 'order'
         ${orderDateClause}
         ${orderSearchClause}
@@ -64,6 +87,8 @@ export async function fetchClientBalanceLedgerTable(
         ${payDateClause}
         ${paySearchClause}
         ${payAgentClause}
+      UNION ALL
+      ${returnCount}
     ) u
     ${kindWhere}
   `;
@@ -111,7 +136,7 @@ export async function fetchClientBalanceLedgerTable(
         LEFT JOIN users ex ON ex.id = o.expeditor_user_id
         WHERE o.tenant_id = ${tenantId}
           AND o.client_id = ${clientId}
-          AND o.status NOT IN (${Prisma.join(excluded)})
+          AND o.status IN (${Prisma.join(receivableStatuses)})
           AND o.order_type = 'order'
           ${orderDateClause}
           ${orderSearchClause}
@@ -126,7 +151,7 @@ export async function fetchClientBalanceLedgerTable(
           p.id AS payment_id,
           NULL::text AS order_number,
           CASE WHEN p.entry_kind = 'client_expense' THEN p.amount ELSE NULL END AS debt_amount,
-          CASE WHEN p.entry_kind = 'payment' THEN p.amount ELSE NULL END AS payment_amount,
+          CASE WHEN p.entry_kind IN ('payment', 'refund') THEN p.amount ELSE NULL END AS payment_amount,
           p.payment_type,
           CASE
             WHEN ord.id IS NOT NULL THEN (ord.is_consignment OR COALESCE(oag.consignment, false))
@@ -154,6 +179,10 @@ export async function fetchClientBalanceLedgerTable(
           ${payDateClause}
           ${paySearchClause}
           ${payAgentClause}
+
+        UNION ALL
+
+        ${returnUnion}
       ) u
       ${kindWhere}
     )

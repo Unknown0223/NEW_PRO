@@ -100,6 +100,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         return reply.send(data);
       } catch (e) {
         const msg = getErrorCode(e) ?? "";
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+          );
+        }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
         if (msg === "BAD_AGENT") return sendApiError(reply, request, 400, "BadAgent");
@@ -162,6 +171,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         }
         if (msg === "SHIPMENT_DATE_REQUIRED" || msg === "SHIPMENT_DATE_INVALID") {
           return sendApiError(reply, request, 400, "ShipmentDateRequired");
+        }
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+          );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");
@@ -327,6 +345,15 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
         const msg = getErrorCode(e) ?? "";
         if (msg === "PHOTO_REPORT_REQUIRED") {
           return sendApiError(reply, request, 400, "PhotoReportRequired");
+        }
+        if (msg === "CLIENT_INACTIVE") {
+          return sendApiError(
+            reply,
+            request,
+            400,
+            "ClientInactive",
+            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+          );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
         if (msg === "BAD_WAREHOUSE") return sendApiError(reply, request, 400, "BadWarehouse");

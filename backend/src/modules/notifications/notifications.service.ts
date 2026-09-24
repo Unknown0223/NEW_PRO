@@ -114,3 +114,53 @@ export async function notifyOrderParticipantsStatusChange(params: {
     }
   }
 }
+
+/** Yangi klient operator tomonidan aktivlashtirilganda bog‘langan agent(lar)ga. */
+export async function notifyAgentsClientActivated(params: {
+  tenant_id: number;
+  client_id: number;
+  client_name: string;
+  actor_user_id?: number | null;
+}): Promise<void> {
+  const { clientActivationNotifyRecipientIds } = await import("./client-activation-notify");
+  const client = await prisma.client.findFirst({
+    where: {
+      id: params.client_id,
+      tenant_id: params.tenant_id,
+      merged_into_client_id: null
+    },
+    select: {
+      agent_id: true,
+      agent_assignments: { select: { agent_id: true }, take: 8 }
+    }
+  });
+  if (!client) return;
+
+  const recipients = clientActivationNotifyRecipientIds({
+    agent_id: client.agent_id,
+    assignment_agent_ids: client.agent_assignments.map((a) => a.agent_id),
+    actor_user_id: params.actor_user_id
+  });
+  if (recipients.length === 0) return;
+
+  const title = "Клиент подтверждён";
+  const body = `«${params.client_name.trim() || `#${params.client_id}`}» активирован оператором. Можно принимать заказы.`.slice(
+    0,
+    4000
+  );
+  const link_href = `/clients/${params.client_id}`;
+
+  for (const user_id of recipients) {
+    try {
+      await createNotification({
+        tenant_id: params.tenant_id,
+        user_id,
+        title,
+        body,
+        link_href
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+}

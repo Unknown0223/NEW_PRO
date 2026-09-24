@@ -9,10 +9,20 @@ import {
 } from "../dashboard/dashboard.supervisor.scope";
 import { decToString } from "../dashboard/dashboard.helpers";
 
-/** Rasmiy KPI — faqat tasdiqlangan rejalar (dashboard / hisobot). */
-export const OFFICIAL_KPI_PLAN_STATUSES = ["approved"] as const;
+/**
+ * Faqat to‘liq «Одобрено» (qattiq filtr kerak bo‘lsa).
+ * Oddiy KPI/dashboard defaulti — OFFICIAL / WORKING (quyida).
+ */
+export const APPROVED_ONLY_KPI_PLAN_STATUSES = ["approved"] as const;
 
-/** Agent mobil — tasdiqlash jarayonidagi reja ham ko‘rinsin. */
+/**
+ * Rasmiy KPI / dashboard / monitoring / hisobot:
+ * «Одобрено» + «На согласовании» (docs: pending ham hisobga olinadi).
+ * «Подтвердить» dan keyin reja ko‘rinsin; «Одобрить» yakuniy tasdiq.
+ */
+export const OFFICIAL_KPI_PLAN_STATUSES = ["approved", "pending_approval"] as const;
+
+/** Agent mobil / kunlik KPI — OFFICIAL bilan bir xil. */
 export const WORKING_KPI_PLAN_STATUSES = ["approved", "pending_approval"] as const;
 
 export type PlanUserScopeInput = {
@@ -24,6 +34,8 @@ export type PlanUserScopeInput = {
   territory_2_list: string[];
   territory_3_list: string[];
   territory_terms: string[];
+  /** Trade direction code/name — plans.trade_direction_id bo‘yicha filtrlash. */
+  trade_direction_terms?: string[];
 };
 
 export type MonitoringPlanAggregates = {
@@ -100,6 +112,18 @@ function planUserScopeSql(scope: PlanUserScopeInput, userAlias = "u"): Prisma.Sq
   return Prisma.join(parts, " AND ");
 }
 
+function planTradeDirectionSql(terms: string[] | undefined): Prisma.Sql {
+  if (!terms || terms.length === 0) return Prisma.sql`TRUE`;
+  const pick = terms.map((p) => Prisma.sql`${p}`);
+  return Prisma.sql`EXISTS (
+    SELECT 1 FROM trade_directions td
+    WHERE td.id = p.trade_direction_id
+      AND td.tenant_id = p.tenant_id
+      AND td.is_active = true
+      AND (td.code IN (${Prisma.join(pick)}) OR td.name IN (${Prisma.join(pick)}))
+  )`;
+}
+
 function planScopeFromMonitoringFilters(
   tenantId: number,
   filters: SalesMonitoringFilters,
@@ -113,7 +137,8 @@ function planScopeFromMonitoringFilters(
     territory_1_list: filters.territory_1_list,
     territory_2_list: filters.territory_2_list,
     territory_3_list: filters.territory_3_list,
-    territory_terms: territoryTerms
+    territory_terms: territoryTerms,
+    trade_direction_terms: []
   };
 }
 
@@ -129,7 +154,8 @@ export function planScopeFromSupervisorFilters(
     territory_1_list: filters.territory_1_list,
     territory_2_list: filters.territory_2_list,
     territory_3_list: filters.territory_3_list,
-    territory_terms: []
+    territory_terms: [],
+    trade_direction_terms: filters.trade_directions
   };
 }
 
@@ -137,6 +163,10 @@ function planStatusSql(statuses: readonly string[]): Prisma.Sql {
   return Prisma.sql`p.status IN (${Prisma.join(statuses.map((s) => Prisma.sql`${s}`))})`;
 }
 
+/**
+ * Reja yig‘indisi — faqat agent targetlari (SVR/filial qatorlari UI rollup;
+ * DB da ham bo‘lsa double-count bo‘lmasin — totals-section bilan bir xil).
+ */
 export async function loadMonitoringPlanAggregates(
   tenantId: number,
   month: number,
@@ -146,6 +176,7 @@ export async function loadMonitoringPlanAggregates(
 ): Promise<MonitoringPlanAggregates> {
   const userFilter = planUserScopeSql(userScope);
   const statusFilter = planStatusSql(statuses);
+  const directionFilter = planTradeDirectionSql(userScope.trade_direction_terms);
 
   const [totalRows, branchRows, supervisorRows, agentRows] = await Promise.all([
     prisma.$queryRaw<Array<{ total: Prisma.Decimal }>>`
@@ -156,7 +187,9 @@ export async function loadMonitoringPlanAggregates(
       WHERE p.tenant_id = ${tenantId}
         AND p.month = ${month}
         AND p.year = ${year}
+        AND u.role = 'agent'
         AND ${statusFilter}
+        AND ${directionFilter}
         AND ${userFilter}
     `,
     prisma.$queryRaw<Array<{ branch: string; plan_sales: Prisma.Decimal }>>`
@@ -169,16 +202,15 @@ export async function loadMonitoringPlanAggregates(
       WHERE p.tenant_id = ${tenantId}
         AND p.month = ${month}
         AND p.year = ${year}
+        AND u.role = 'agent'
         AND ${statusFilter}
+        AND ${directionFilter}
         AND ${userFilter}
       GROUP BY 1
     `,
     prisma.$queryRaw<Array<{ supervisor_id: number | null; plan_sales: Prisma.Decimal }>>`
       SELECT
-        CASE
-          WHEN u.role = 'supervisor' THEN u.id
-          ELSE u.supervisor_user_id
-        END AS supervisor_id,
+        u.supervisor_user_id AS supervisor_id,
         COALESCE(SUM(t.cost), 0)::numeric(18,2) AS plan_sales
       FROM sales_kpi_plan_targets t
       INNER JOIN sales_kpi_plans p ON p.id = t.plan_id
@@ -186,7 +218,9 @@ export async function loadMonitoringPlanAggregates(
       WHERE p.tenant_id = ${tenantId}
         AND p.month = ${month}
         AND p.year = ${year}
+        AND u.role = 'agent'
         AND ${statusFilter}
+        AND ${directionFilter}
         AND ${userFilter}
       GROUP BY 1
     `,
@@ -200,9 +234,10 @@ export async function loadMonitoringPlanAggregates(
       WHERE p.tenant_id = ${tenantId}
         AND p.month = ${month}
         AND p.year = ${year}
-        AND ${statusFilter}
-        AND ${userFilter}
         AND u.role = 'agent'
+        AND ${statusFilter}
+        AND ${directionFilter}
+        AND ${userFilter}
       GROUP BY 1
     `
   ]);
@@ -232,8 +267,8 @@ export async function loadMonitoringPlanAggregatesForFilters(
 
 export function monitoringPlanNote(hasApprovedPlans: boolean): string {
   return hasApprovedPlans
-    ? "План из KPI «Установка планов» (статус «Одобрено»)."
-    : "Нет одобренных KPI-планов на выбранный месяц. Задайте и утвердите в «Установка планов».";
+    ? "План из KPI «Установка планов» (статус «Одобрено» или «На согласовании»)."
+    : "Нет KPI-планов на выбранный месяц. Задайте план и нажмите «Подтвердить» / «Одобрить» в «Установка планов».";
 }
 
 export function executionPctFromPlanFact(plan: Prisma.Decimal | number, fact: number): number | null {
@@ -258,7 +293,13 @@ export async function loadSupervisorMonthlyKpiPlanBlock(
   const mtdScope = orderScopeSql(tenantId, monthStart, dayEnd, mtdExpanded);
 
   const [planAgg, mtdRows] = await Promise.all([
-    loadMonitoringPlanAggregates(tenantId, month, year, planScopeFromSupervisorFilters(tenantId, filters)),
+    loadMonitoringPlanAggregates(
+      tenantId,
+      month,
+      year,
+      planScopeFromSupervisorFilters(tenantId, filters),
+      OFFICIAL_KPI_PLAN_STATUSES
+    ),
     prisma.$queryRaw<Array<{ s: Prisma.Decimal }>>`
       SELECT COALESCE(SUM(oi.total), 0)::numeric(15,2) AS s
       FROM orders o

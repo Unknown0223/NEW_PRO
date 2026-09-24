@@ -65,7 +65,8 @@ export function buildReportBuilderWhereSql(
   if (c.statuses.length > 0) {
     parts.push(Prisma.sql`o.status IN (${sqlInStrings(c.statuses)})`);
   } else {
-    parts.push(Prisma.sql`o.status <> 'cancelled'`);
+    // Supervayzer Fact MTD bilan: cancelled + returned chiqariladi
+    parts.push(Prisma.sql`o.status NOT IN ('cancelled', 'returned')`);
   }
 
   if (c.orderTypes.length > 0) {

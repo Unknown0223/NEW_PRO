@@ -6,6 +6,7 @@ import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { canTransitionOrderStatus, normalizeOrderType } from "../orders/order-status";
 import { applyClientBonusDebt } from "./returns-enhanced.bonus-debt";
 import { applyClientDiscountDebt } from "./returns-enhanced.discount-debt";
+import { applyClientReturnRefund } from "./returns-enhanced.refund-ledger";
 import { autoMarkReturnedOrders } from "./returns-enhanced.auto-mark";
 
 /**
@@ -29,7 +30,10 @@ export async function acceptSalesReturn(
 
   const ret = await prisma.salesReturn.findFirst({
     where: { tenant_id: tenantId, id: returnId },
-    include: { lines: { select: { product_id: true, qty: true } } }
+    include: {
+      lines: { select: { product_id: true, qty: true } },
+      order: { select: { agent_id: true } }
+    }
   });
   if (!ret) throw new Error("RETURN_NOT_FOUND");
   if (ret.status === "posted") throw new Error("RETURN_ALREADY_ACCEPTED");
@@ -70,15 +74,13 @@ export async function acceptSalesReturn(
       });
     }
 
-    // 2) Mijoz balansi (refund)
+    // 2) Mijoz balansi (refund) + ledger payment (entry_kind=refund)
     if (refund.gt(0) && ret.client_id != null) {
-      const bal = await tx.clientBalance.upsert({
-        where: { tenant_id_client_id: { tenant_id: tenantId, client_id: ret.client_id } },
-        create: { tenant_id: tenantId, client_id: ret.client_id, balance: refund },
-        update: { balance: { increment: refund } }
-      });
-      await tx.clientBalanceMovement.create({
-        data: { client_balance_id: bal.id, delta: refund, note: `Vazvrat: ${ret.number}`, user_id: uid }
+      await applyClientReturnRefund(tx, tenantId, ret.client_id, refund, uid, {
+        returnNumber: ret.number,
+        orderId: ret.order_id,
+        ledgerAgentId: ret.order?.agent_id ?? null,
+        paidAt: new Date()
       });
     }
 

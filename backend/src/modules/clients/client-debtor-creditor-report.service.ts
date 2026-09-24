@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
 
 export type DebtorCreditorMonthCell = {
   debit: string;
@@ -36,8 +37,8 @@ export async function getClientDebtorCreditorMonthly(
     throw new Error("NOT_FOUND");
   }
 
-  /** Aylana hisob: oyda yaratilgan zakazlar debeti; `cancelled`/`returned` yo‘q. (Заявки «Долг» emas — u faqat отгружен/доставлен.) */
-  const excluded = ["cancelled", "returned"] as const;
+  /** Debet: faqat yetkazilgan (`delivered`) savdo zakazlari — «Новый» va boshqa statuslar kirmaydi. */
+  const receivableStatuses = [...ORDER_STATUSES_OUTSTANDING_RECEIVABLE];
 
   const orderRows = await prisma.$queryRaw<Array<{ month_key: string; debit: Prisma.Decimal }>>`
     SELECT to_char(date_trunc('month', o.created_at AT TIME ZONE 'UTC'), 'YYYY-MM') AS month_key,
@@ -45,7 +46,7 @@ export async function getClientDebtorCreditorMonthly(
     FROM orders o
     WHERE o.tenant_id = ${tenantId}
       AND o.client_id = ${clientId}
-      AND o.status NOT IN (${Prisma.join(excluded)})
+      AND o.status IN (${Prisma.join(receivableStatuses)})
       AND o.order_type = 'order'
     GROUP BY 1
   `;

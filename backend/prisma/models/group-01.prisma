@@ -94,6 +94,7 @@ model Tenant {
   agent_consignment_month_status AgentConsignmentMonthStatus[]
   face_verification_logs        FaceVerificationLog[]
   face_verification_daily_states FaceVerificationDailyState[]
+  telegram_staff_links          TelegramStaffLink[]
 
   @@map("tenants")
 }
@@ -251,6 +252,7 @@ model User {
   consignment_month_status            AgentConsignmentMonthStatus[]
   face_verification_logs              FaceVerificationLog[]       @relation("FaceVerificationLogs")
   face_verification_daily_states      FaceVerificationDailyState[] @relation("FaceVerificationDailyStates")
+  telegram_staff_link                 TelegramStaffLink?
 
   @@unique([tenant_id, login])
   @@index([tenant_id, role])
@@ -259,6 +261,21 @@ model User {
   @@index([supervisor_user_id])
   @@index([tenant_id, is_active])
   @@map("users")
+}
+
+/// Telegram bot: har bir hodimga bitta Telegram ID (boshqa akkauntdan qayta ro‘yxat yo‘q).
+model TelegramStaffLink {
+  id           Int      @id @default(autoincrement())
+  tenant_id    Int
+  user_id      Int      @unique
+  telegram_id  BigInt   @unique
+  bound_at     DateTime @default(now())
+  last_seen_at DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@map("telegram_staff_links")
 }
 
 /// Konsignatsiya oyi: avtomatik yopilish va qarzdorlik to‘liq yopilgan sana (agent bo‘yicha).

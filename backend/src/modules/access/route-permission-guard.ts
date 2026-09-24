@@ -45,8 +45,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/orders\/bulk\/(expeditor)$/, "orders.zakaz.assign"),
   r(WRITE, /\/orders\/bulk\/(nakladnoy)/, "orders.zakaz.copy"),
   r(WRITE, /\/orders\/bulk\/(consignment)$/, "orders.drugie_operacii.update"),
+  r(WRITE, /\/orders\/bulk\/(bonus-refresh)$/, "orders.zakaz.update"),
   r(WRITE, /\/orders\/:id\/status$/, "orders.zakaz.status"),
   r(WRITE, /\/orders\/:id\/milestone-at$/, "orders.zakaz.status"),
+  r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update"),
   r(["POST"], /\/orders$/, "orders.zakaz.create"),
   r(["PUT", "PATCH"], /\/orders\/:id(\/meta)?$/, "orders.zakaz.update"),
   r(["DELETE"], /\/orders\/:id$/, "orders.zakaz.delete"),
@@ -82,7 +84,19 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/stock-takes/, "warehouse.korrektirovka.create", "warehouse.korrektirovka.update"),
   r(READ, /\/stock-takes/, "warehouse.korrektirovka.view"),
   r(WRITE, /\/warehouses(\/|$)/, "warehouse.sklady.create", "warehouse.sklady.update", "warehouse.sklady.delete"),
-  r(READ, /\/warehouses(\/|$)/, "warehouse.sklady.view"),
+  r(
+    READ,
+    /\/warehouses(\/|$)/,
+    "warehouse.sklady.view",
+    "warehouse.ostatki.view",
+    "warehouse.ostatki_na_datu.view",
+    "warehouse.rekomendovannyy_zapas.view",
+    "warehouse.materialnyy_otchet.view",
+    "warehouse.postuplenie.view",
+    "warehouse.peremeshchenie.view",
+    "warehouse.bloki.view",
+    "warehouse.korrektirovka.view"
+  ),
 
   // ─────────── Касса (payments / cash-desks / currency / expenses) ───────────
   r(WRITE, /\/bank-transfer-inbox\/(ingest|import|manual)$/, "cash.perechisleniya.import", "cash.perechisleniya.create"),
@@ -105,9 +119,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["PUT", "PATCH"], /\/expenses\/:id$/, "cash.rashody_klienta.update"),
   r(["DELETE"], /\/expenses\/:id$/, "cash.rashody_klienta.delete"),
   r(READ, /\/expenses(\/|$)/, "cash.rashody_klienta.view"),
-  r(READ, /\/client-balances(\/|$)/, "cash.otchety.view"),
-  r(WRITE, /\/opening-balances/, "cash.nachalnye_balansy.create", "cash.nachalnye_balansy.update"),
-  r(READ, /\/opening-balances/, "cash.nachalnye_balansy.view"),
+  // Balanslar: yangi `balansy_klientov`; `otchety.view` — eski grantlar uchun moslik.
+  r(READ, /\/client-balances(\/|$)/, "cash.balansy_klientov.view", "cash.otchety.view", "cash.otchety.spisok_balansy_klientov", "cash.otchety.spisok_balansy_klientov_po_konsignatsii", "cash.otchety.detal_balans_klienta", "cash.otchety.detal_balans_klienta_po_konsignatsii", "cash.balansy.view"),
+  r(WRITE, /\/opening-balances/, "cash.nachalnye_balansy.create", "cash.nachalnye_balansy.update", "cash.nachalnye_balansy.void", "cash.nachalnye_balansy.restore"),
+  r(READ, /\/opening-balances/, "cash.nachalnye_balansy.view", "cash.nachalnye_balansy_klientov.view", "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"),
 
   // ─────────── Поставщики (suppliers) ───────────
   r(WRITE, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.create", "suppliers.oplaty.update"),
@@ -141,18 +156,20 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/order-automation/, "automation.zaiavki.view"),
 
   // ─────────── Настройки: Товар / Цена (products) ───────────
-  r(WRITE, /\/products\/(import|import-catalog)/, "settings.tovar.import"),
-  r(READ, /\/products\/export-catalog/, "settings.tovar.copy"),
-  r(WRITE, /\/products\/prices\/import/, "settings.tsena.import", "settings.tsena.create"),
-  r(WRITE, /\/products\/prices\/matrix$/, "settings.tsena.update"),
-  r(WRITE, /\/products\/:id\/prices$/, "settings.tsena.update"),
-  r(READ, /\/products\/:id\/prices$/, "settings.tsena.view"),
+  // Faqat katalog moduli: `/api/:slug/products…`.
+  // `/dashboard/supervisor/products` ga tushmasin (aks holda settings.tovar.view talab qilinadi).
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/(import|import-catalog)/, "settings.tovar.import"),
+  r(READ, /\/api\/(?::slug|[^/]+)\/products\/export-catalog/, "settings.tovar.copy"),
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/prices\/import/, "settings.tsena.import", "settings.tsena.create"),
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/prices\/matrix$/, "settings.tsena.update"),
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/:id\/prices$/, "settings.tsena.update"),
+  r(READ, /\/api\/(?::slug|[^/]+)\/products\/:id\/prices$/, "settings.tsena.view"),
   r(READ, /\/product-prices/, "settings.tsena.view"),
-  r(WRITE, /\/products\/bulk$/, "settings.tovar.update"),
-  r(["POST"], /\/products$/, "settings.tovar.create"),
-  r(["PUT", "PATCH"], /\/products\/:id$/, "settings.tovar.update"),
-  r(["DELETE"], /\/products\/:id$/, "settings.tovar.delete"),
-  r(READ, /\/products(\/|$)/, "settings.tovar.view"),
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/bulk$/, "settings.tovar.update"),
+  r(["POST"], /\/api\/(?::slug|[^/]+)\/products$/, "settings.tovar.create"),
+  r(["PUT", "PATCH"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.update"),
+  r(["DELETE"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.delete"),
+  r(READ, /\/api\/(?::slug|[^/]+)\/products(\/|$)/, "settings.tovar.view"),
   r(WRITE, /\/settings\/profile$/, "settings.profil_kompanii.update"),
   r(READ, /\/settings\/profile$/, "settings.profil_kompanii.view"),
   r(WRITE, /\/settings\/mobile-app-release/, "settings.mobile_app.update"),
@@ -247,8 +264,14 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/dashboard\/sales-monitoring/, "dashboard.prodazhi.view"),
   r(READ, /\/dashboard\/sales/, "dashboard.prodazhi.view"),
   r(READ, /\/dashboard\/finance/, "dashboard.finansy.view", "finance.obzor.view"),
-  r(READ, /\/dashboard\/supervisor\/photo-reports/, "clients.foto.view"),
-  r(READ, /\/dashboard\/supervisor/, "dashboard.supervayzer.view"),
+  r(
+    READ,
+    /\/dashboard\/supervisor\/photo-reports/,
+    "dashboard.supervayzer.view",
+    "dashboard.supervayzer",
+    "clients.foto.view"
+  ),
+  r(READ, /\/dashboard\/supervisor/, "dashboard.supervayzer.view", "dashboard.supervayzer"),
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
   // ─────────── Отчёты ───────────
@@ -325,6 +348,7 @@ function matchRule(method: string, routePath: string): RoutePermissionRule | nul
     // Mobil API o‘z JWT+rol guardida; veb CRUD kalitlari (`clients.foto.view` va h.k.)
     // `/mobile/clients/:id/photo-reports` ga tushmasin.
     if (candidate.includes("/mobile/")) return null;
+    if (candidate.includes("/telegram-bot/")) return null;
     for (const rule of ROUTE_PERMISSION_RULES) {
       if (!rule.methods.includes(method as Method)) continue;
       if (rule.test.test(candidate)) return rule;

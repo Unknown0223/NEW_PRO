@@ -23,6 +23,7 @@ export type ImportClientsXlsxJobData = {
   importMode?: "create" | "update";
   duplicateKeyFields?: string[];
   updateApplyFields?: string[];
+  commitDecision?: "accept_valid" | "reject_all";
 };
 
 export type ImportStockXlsxJobData = {
@@ -75,6 +76,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
         importMode: d.importMode,
         duplicateKeyFields: d.duplicateKeyFields,
         updateApplyFields: d.updateApplyFields,
+        commitDecision: d.commitDecision,
         actorUserId: d.requested_by_user_id ?? null,
         onProgress: async (progress) => {
           await job.updateProgress(progress);

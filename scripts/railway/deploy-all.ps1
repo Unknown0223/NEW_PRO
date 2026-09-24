@@ -109,7 +109,7 @@ if (-not $SkipMobile) {
   # --- 3. APK serverga yuklash ---
   Write-Host ""
   Write-Host "[3/3] APK serverga yuklanmoqda..." -ForegroundColor Yellow
-  & $UploadScript -Api $ApiUrl -Slug $TenantSlug -AdminPassword $AdminPassword -ApkPath $latestApk -LatestVersion $appVer
+  & $UploadScript -Api $ApiUrl -Slug $TenantSlug -AdminPassword $AdminPassword -ApkPath $latestApk -LatestVersion $appVer -NoForce
 } else {
   Write-Host "[2/3] Mobil o'tkazib yuborildi (-SkipMobile)" -ForegroundColor DarkYellow
   Write-Host "[3/3] APK yuklash o'tkazib yuborildi" -ForegroundColor DarkYellow

@@ -7,6 +7,7 @@ import '../../../core/api/supervisor_api.dart';
 import '../../../core/auth/session.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
+import '../../../core/config/tenant_refs_provider.dart';
 import '../../../core/gps/gps_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -98,7 +99,7 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
   }
 
   bool get _territoryVisible => isClientFieldVisible(_cfg, 'territory');
-  bool get _useCityPicker => _territoryVisible && ref.read(agentCitiesProvider).isNotEmpty;
+  bool get _useCityPicker => _territoryVisible;
   Set<String> get _hiddenFormKeys => _useCityPicker ? const {'territory'} : const {};
 
   Future<void> _captureGps() async {
@@ -195,8 +196,8 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
   Widget build(BuildContext context) {
     const accent = AppColors.supervisorAccent;
     final policy = SupervisorConfigPolicy(ref.watch(sessionProvider).mobileConfig);
-    final agentCities = ref.watch(agentCitiesProvider);
-    final showCityPicker = _territoryVisible && agentCities.isNotEmpty;
+    final agentCities = ref.watch(effectiveAgentCitiesProvider);
+    final showCityPicker = _territoryVisible;
     final showGps = showCoordinatesField(_cfg) && policy.canChangeClientLocation;
     final title = _client?['name']?.toString() ?? 'Клиент';
 

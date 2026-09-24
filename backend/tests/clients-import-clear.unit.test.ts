@@ -258,4 +258,19 @@ describe("clients import clear-on-empty", () => {
     ]);
     expect(warnings.some((w) => w.includes("olib tashlandi"))).toBe(true);
   });
+
+  it("create: unknown agent smart code is hard error", () => {
+    const warnings: string[] = [];
+    const out = buildAgentAssignmentPatchesFromImportRow(
+      ["SVR-SMART-01"],
+      { import_agent_1: 0 },
+      emptyStaffLookup(),
+      3,
+      (m) => warnings.push(m)
+    );
+    expect(out.createPatches).toEqual([]);
+    expect(out.hardErrors.some((e) => e.includes("topilmadi"))).toBe(true);
+    expect(out.hardErrorFields).toContain("import_agent_1");
+    expect(warnings).toEqual([]);
+  });
 });

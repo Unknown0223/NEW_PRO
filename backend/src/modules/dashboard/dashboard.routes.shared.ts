@@ -2,6 +2,7 @@ import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
 import { getAccessUser, jwtAccessVerify, requireAnyPermission, requireRoles } from "../auth/auth.prehandlers";
 import { enrichScopedReportActor, intersectRequestedAgentIds } from "../access/access-agent-scope";
 import { actorHasUnrestrictedDataScope, agentIdsForRestrictedSql } from "../access/access-staff-scope";
+import { expandSupervisorFiltersToAgentIds } from "./dashboard.supervisor-team-expand";
 
 export const catalogRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 
@@ -77,21 +78,25 @@ export function applySupervisorSelfScope(
 /**
  * Access: admin bo‘lmaganlar uchun dashboard agent_ids ni bound doirasiga majburlaydi.
  * Bo‘sh ruxsat — `agent_ids: [0]` (SQL IN () o‘rniga hech narsa mos kelmasin).
+ * Keyin SVR jamoa → agent_ids (sync bo‘lmasa ham).
  */
 export async function applyAccessAgentIdsScope(
   tenantId: number,
   accessUser: { role: string; sub: string },
-  parsed: { agent_ids?: number[] }
+  parsed: { agent_ids?: number[]; supervisor_ids?: number[] }
 ): Promise<void> {
   const role = accessUser.role ?? "";
-  if (actorHasUnrestrictedDataScope(role)) return;
-  const userId = Number.parseInt(accessUser.sub, 10);
-  if (!Number.isFinite(userId) || userId < 1) return;
-  const actor = await enrichScopedReportActor(tenantId, { userId, role });
-  const hit = intersectRequestedAgentIds(parsed.agent_ids, actor);
-  if (hit.restricted) {
-    parsed.agent_ids = agentIdsForRestrictedSql(hit.agentIds);
+  if (!actorHasUnrestrictedDataScope(role)) {
+    const userId = Number.parseInt(accessUser.sub, 10);
+    if (Number.isFinite(userId) && userId > 0) {
+      const actor = await enrichScopedReportActor(tenantId, { userId, role });
+      const hit = intersectRequestedAgentIds(parsed.agent_ids, actor);
+      if (hit.restricted) {
+        parsed.agent_ids = agentIdsForRestrictedSql(hit.agentIds);
+      }
+    }
   }
+  await expandSupervisorFiltersToAgentIds(tenantId, parsed);
 }
 
 export function applySalesMonitoringSupervisorScope(

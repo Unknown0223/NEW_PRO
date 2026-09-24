@@ -12,8 +12,10 @@ import '../../../core/sync/photo_report_queue.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/errors/user_facing_error.dart';
 import '../../auth/auth_provider.dart';
+import '../home/agent_home_page.dart';
 import '../home/sync_count_provider.dart';
 import '../shell/agent_scaffold_key.dart';
+import '../visits/visit_stats_helper.dart';
 import 'manual_sync_provider.dart';
 
 void _showSyncSnack(String msg, {Color? color}) {
@@ -85,6 +87,10 @@ Future<void> startPhotoSyncWithContainer(ProviderContainer container) async {
       photoConfig: container.read(sessionProvider).mobileConfig?.photo,
     );
     container.invalidate(pendingPhotoCountProvider);
+    container.invalidate(syncedPhotoCountTodayProvider);
+    container.invalidate(failedPhotoCountProvider);
+    container.invalidate(homeStatsProvider);
+    refreshVisitStatsProviders(container.invalidate);
     if (result.failed > 0 && result.sent == 0) {
       _showSyncSnack(
         'Фото не отправлены ($pending). Проверьте интернет.',

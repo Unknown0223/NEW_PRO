@@ -18,6 +18,8 @@ export type AgentLocationPingRow = {
   latitude: string;
   longitude: string;
   accuracy_meters: number | null;
+  battery_pct: number | null;
+  network_type: string | null;
   recorded_at: string;
 };
 
@@ -28,6 +30,8 @@ export async function recordAgentLocationPing(
     latitude: number;
     longitude: number;
     accuracy_meters?: number | null;
+    battery_pct?: number | null;
+    network_type?: string | null;
     recorded_at?: Date | null;
   }
 ): Promise<AgentLocationPingRow> {
@@ -43,6 +47,14 @@ export async function recordAgentLocationPing(
   if (!user) throw new Error("AgentNotFound");
 
   const recordedAt = clampClientRecordedAt(input.recorded_at ?? null);
+  const battery =
+    input.battery_pct != null && Number.isFinite(input.battery_pct)
+      ? Math.max(0, Math.min(100, Math.round(input.battery_pct)))
+      : null;
+  const network =
+    input.network_type != null && String(input.network_type).trim()
+      ? String(input.network_type).trim().slice(0, 16)
+      : null;
 
   const row = await prisma.agentLocationPing.create({
     data: {
@@ -54,6 +66,8 @@ export async function recordAgentLocationPing(
         input.accuracy_meters != null && Number.isFinite(input.accuracy_meters)
           ? input.accuracy_meters
           : null,
+      battery_pct: battery,
+      network_type: network,
       ...(recordedAt ? { recorded_at: recordedAt } : {})
     }
   });
@@ -63,6 +77,8 @@ export async function recordAgentLocationPing(
     latitude: row.latitude.toString(),
     longitude: row.longitude.toString(),
     accuracy_meters: row.accuracy_meters,
+    battery_pct: row.battery_pct,
+    network_type: row.network_type,
     recorded_at: row.recorded_at.toISOString()
   };
 }
@@ -84,6 +100,8 @@ export async function recordAgentLocationPingsBatch(
     latitude: number;
     longitude: number;
     accuracy_meters?: number | null;
+    battery_pct?: number | null;
+    network_type?: string | null;
     recorded_at?: Date | null;
   }>
 ): Promise<{ inserted: number }> {
@@ -102,6 +120,14 @@ export async function recordAgentLocationPingsBatch(
   const now = new Date();
   const data = pings.slice(0, 200).map((p) => {
     const recordedAt = clampClientRecordedAt(p.recorded_at ?? null, now);
+    const battery =
+      p.battery_pct != null && Number.isFinite(p.battery_pct)
+        ? Math.max(0, Math.min(100, Math.round(p.battery_pct)))
+        : null;
+    const network =
+      p.network_type != null && String(p.network_type).trim()
+        ? String(p.network_type).trim().slice(0, 16)
+        : null;
     return {
       tenant_id: tenantId,
       agent_id: agentId,
@@ -109,6 +135,8 @@ export async function recordAgentLocationPingsBatch(
       longitude: new Prisma.Decimal(p.longitude),
       accuracy_meters:
         p.accuracy_meters != null && Number.isFinite(p.accuracy_meters) ? p.accuracy_meters : null,
+      battery_pct: battery,
+      network_type: network,
       recorded_at: recordedAt ?? now
     };
   });
@@ -140,6 +168,8 @@ export async function listAgentLocationPings(
       latitude: r.latitude.toString(),
       longitude: r.longitude.toString(),
       accuracy_meters: r.accuracy_meters,
+      battery_pct: r.battery_pct,
+      network_type: r.network_type,
       recorded_at: r.recorded_at.toISOString()
     })),
     truncated

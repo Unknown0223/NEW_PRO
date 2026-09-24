@@ -12,6 +12,7 @@ import {
   formatAgentCreatedDate,
   formatAgentDateTime
 } from "@/components/staff/agent-workspace-template-ui";
+import { WorkSlotsTerritoryOverflowCell } from "@/components/work-slots/work-slots-territory-overflow-cell";
 import type { PersonNameParts } from "@/lib/person-display";
 import { formatApkVersion, formatDeviceName } from "@/lib/mobile-device-display";
 import { cn } from "@/lib/utils";
@@ -115,8 +116,19 @@ export function StaffKomandaTradeDirectionCell({ value }: { value?: string | nul
   );
 }
 
-export function StaffKomandaTerritoryCell({ territory }: { territory?: string | null }) {
-  return <span className="max-w-[14rem] text-xs text-slate-700">{territory ?? "—"}</span>;
+export function StaffKomandaTerritoryCell({
+  territory,
+  territories
+}: {
+  territory?: string | null;
+  /** Ish o‘rnidagi barcha bog‘langan hududlar. */
+  territories?: string[] | null;
+}) {
+  const fromSlot = (territories ?? []).map((t) => t.trim()).filter(Boolean);
+  const items = fromSlot.length > 0 ? fromSlot : territory?.trim() ? [territory.trim()] : [];
+  return (
+    <WorkSlotsTerritoryOverflowCell items={items} className="text-xs text-slate-700" />
+  );
 }
 
 export function StaffKomandaAppAccessToggle({

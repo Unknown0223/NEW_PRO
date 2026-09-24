@@ -134,8 +134,26 @@ export function buildMergedLoadingPayload(
     createdAt: new Date(minT),
     dateTo,
     agentLine: uniqJoin(orders.map((o) => o.agentLine)),
+    invoiceAgentLine: uniqJoin(orders.map((o) => o.invoiceAgentLine)),
+    agentName: (() => {
+      const v = uniqJoin(orders.map((o) => o.agentName ?? ""));
+      return v === "—" ? null : v;
+    })(),
+    agentPhone: (() => {
+      const v = uniqJoin(orders.map((o) => o.agentPhone ?? ""));
+      return v === "—" ? null : v;
+    })(),
     expeditorLine: uniqJoin(orders.map((o) => o.expeditorLine)),
+    expeditorName: (() => {
+      const v = uniqJoin(orders.map((o) => o.expeditorName ?? ""));
+      return v === "—" ? null : v;
+    })(),
+    expeditorPhone: (() => {
+      const v = uniqJoin(orders.map((o) => o.expeditorPhone ?? ""));
+      return v === "—" ? null : v;
+    })(),
     territory: uniqJoin(orders.map((o) => o.territory)),
+    invoiceTerritory: uniqJoin(orders.map((o) => o.invoiceTerritory || o.territory)),
     warehouseName: (() => {
       const names = orders
         .map((o) => o.warehouseName)

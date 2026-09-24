@@ -490,6 +490,112 @@ export function matchTerritoryNamesToOptionValues(
   return out;
 }
 
+function collectTreeNamesByDepth(
+  nodes: TerritoryNode[] | undefined
+): { zones: Set<string>; regions: Set<string>; cities: Set<string>; zoneByRegion: Map<string, string> } {
+  const zones = new Set<string>();
+  const regions = new Set<string>();
+  const cities = new Set<string>();
+  const zoneByRegion = new Map<string, string>();
+
+  const walk = (list: TerritoryNode[], depth: number, path: string[]) => {
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = trimText(n.name);
+      if (!name) continue;
+      const next = [...path, name];
+      if (depth === 0) zones.add(name);
+      else if (depth === 1) {
+        regions.add(name);
+        if (next[0]) zoneByRegion.set(normKeyTerritoryMatch(name), next[0]);
+      } else if (depth === 2) cities.add(name);
+      if (n.children?.length) walk(n.children, depth + 1, next);
+    }
+  };
+  walk(nodes ?? [], 0, []);
+  return { zones, regions, cities, zoneByRegion };
+}
+
+function setHasTerritoryName(set: Set<string>, raw: string): string | null {
+  const t = trimText(raw);
+  if (!t) return null;
+  for (const name of set) {
+    if (territoryNamesEqual(name, t)) return name;
+  }
+  return null;
+}
+
+/**
+ * Work-slot multi-select: noto‘g‘ri saqlangan tokenlarni daraxtga moslab qayta joylashtirish.
+ * Masalan oblastlar `zones` ga tushib qolgan bo‘lsa — regions ga ko‘chiriladi va ota zona qo‘shiladi.
+ */
+export function normalizeWorkSlotTerritoryLists(
+  lists: { zones: string[]; regions: string[]; cities: string[] },
+  territoryNodes: TerritoryNode[] | undefined
+): { zones: string[]; regions: string[]; cities: string[] } {
+  if (!territoryNodes?.length) {
+    return {
+      zones: uniqSorted(lists.zones),
+      regions: uniqSorted(lists.regions),
+      cities: uniqSorted(lists.cities)
+    };
+  }
+
+  const tree = collectTreeNamesByDepth(territoryNodes);
+  const zones: string[] = [];
+  const regions: string[] = [];
+  const cities: string[] = [];
+  const pushUnique = (arr: string[], value: string) => {
+    if (!arr.some((x) => territoryNamesEqual(x, value))) arr.push(value);
+  };
+
+  const classifyToken = (raw: string) => {
+    const asZone = setHasTerritoryName(tree.zones, raw);
+    if (asZone) {
+      pushUnique(zones, asZone);
+      return;
+    }
+    const asRegion = setHasTerritoryName(tree.regions, raw);
+    if (asRegion) {
+      pushUnique(regions, asRegion);
+      const parent = tree.zoneByRegion.get(normKeyTerritoryMatch(asRegion));
+      if (parent) pushUnique(zones, parent);
+      return;
+    }
+    const asCity = setHasTerritoryName(tree.cities, raw);
+    if (asCity) {
+      pushUnique(cities, asCity);
+      return;
+    }
+    // Daraxtga mos kelmasa — zona sifatida saqlaymiz (eski erkin matn).
+    pushUnique(zones, trimText(raw));
+  };
+
+  for (const z of lists.zones) classifyToken(z);
+  for (const r of lists.regions) classifyToken(r);
+  for (const c of lists.cities) {
+    const asCity = setHasTerritoryName(tree.cities, c);
+    if (asCity) {
+      pushUnique(cities, asCity);
+      continue;
+    }
+    // Shahar o‘rniga oblast yozilgan bo‘lishi mumkin
+    classifyToken(c);
+  }
+
+  // Oblastlar uchun ota zonani kafolatlash
+  for (const r of [...regions]) {
+    const parent = tree.zoneByRegion.get(normKeyTerritoryMatch(r));
+    if (parent) pushUnique(zones, parent);
+  }
+
+  return {
+    zones: uniqSorted(zones),
+    regions: uniqSorted(regions),
+    cities: uniqSorted(cities)
+  };
+}
+
 function toSelectOptions(values: string[], currentValue: string): RefSelectOption[] {
   const merged = uniqSorted([currentValue, ...values]);
   return merged.map((v) => ({ value: v, label: v }));
@@ -606,9 +712,9 @@ export function buildTerritoryTreeOnlyCascade(
           zoneSel.length === 0 || zoneSel.some((z) => territoryNamesEqual(z, zoneName));
         const regionOk =
           regionSel.length === 0 || regionSel.some((r) => territoryNamesEqual(r, regionName));
-        // Agar oblast tanlangan bo‘lsa — faqat shu oblast; aks holda zona ostidagi barcha shahar
+        // Oblast tanlanganda ham zona mosligi majburiy (nomlar takrorlanmasin).
         if (regionSel.length > 0) {
-          if (regionOk) cities.add(name);
+          if (zoneOk && regionOk) cities.add(name);
         } else if (zoneOk) {
           cities.add(name);
         }

@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { findNearbySimilarNameConflict } from "./clients.import.geo-uniques";
 import { normalizePhoneDigits } from "./clients.types";
 import {
   hasAnyTerritory,
@@ -8,7 +9,7 @@ import {
 } from "./clients.unique-territory";
 
 export type ImportUpdateUniqueConflict = {
-  field: "name" | "phone" | "client_code" | "inn" | "client_pinfl" | "identity";
+  field: "name" | "phone" | "client_code" | "inn" | "client_pinfl" | "identity" | "geo_name";
   value: string;
   otherClientId: number;
   otherIsActive: boolean;
@@ -32,6 +33,8 @@ export async function findImportUpdateUniqueConflicts(
     region?: string | null;
     zone?: string | null;
     city?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   }
 ): Promise<ImportUpdateUniqueConflict[]> {
   const conflicts: ImportUpdateUniqueConflict[] = [];
@@ -146,6 +149,13 @@ export async function findImportUpdateUniqueConflicts(
     });
     if (hit) conflicts.push({ field: "client_pinfl", value: pinfl, otherClientId: hit.id, otherIsActive: hit.is_active });
   }
+
+  const geo = await findNearbySimilarNameConflict(tenantId, clientId, {
+    name: patch.name,
+    latitude: patch.latitude,
+    longitude: patch.longitude
+  });
+  if (geo) conflicts.push(geo);
 
   return conflicts;
 }

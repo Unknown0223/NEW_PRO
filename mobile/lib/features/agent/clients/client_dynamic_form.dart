@@ -9,6 +9,7 @@ import '../../../core/config/client_field_constraints.dart';
 import '../../../core/config/client_field_policy.dart';
 import '../../../core/config/mobile_config.dart';
 import '../../../core/config/tenant_refs_provider.dart';
+import '../../../core/ui/agent_template_form.dart';
 
 const kVisitWeekdayChipOptions = <(int, String)>[
   (1, 'ПН'),
@@ -19,6 +20,14 @@ const kVisitWeekdayChipOptions = <(int, String)>[
   (6, 'СБ'),
   (7, 'ВС'),
 ];
+
+/// Spravochnikdan tanlanadigan maydonlar — hech qachon qo‘lda yozilmasin.
+/// `territory` ataylab yo‘q: agentda faqat «Город» (viloyat ro‘yxati chiqmasin).
+const kClientSelectFieldKeys = <String>{
+  'category',
+  'client_type',
+  'sales_channel',
+};
 
 /// Agent mijoz yaratish/tahrirlash — config maydonlari + format validatsiya.
 class ClientDynamicFormFields extends ConsumerWidget {
@@ -83,19 +92,20 @@ class ClientDynamicFormFields extends ConsumerWidget {
     }
   }
 
-  List<String>? _options(WidgetRef ref, String key) {
+  List<String> _options(WidgetRef ref, String key) {
     final refs = ref.watch(sessionTenantRefsProvider);
     switch (key) {
       case 'category':
-        return refs.clientCategories.isNotEmpty ? refs.clientCategories : null;
+        return refs.clientCategories;
       case 'client_type':
-        return refs.clientTypeCodes.isNotEmpty ? refs.clientTypeCodes : null;
+        return refs.clientTypeCodes;
       case 'sales_channel':
-        return refs.salesChannels.isNotEmpty ? refs.salesChannels : null;
+        return refs.salesChannels;
       case 'territory':
-        return refs.regions.isNotEmpty ? refs.regions : null;
+        // Hech qachon viloyat ro‘yxati — bo‘sh.
+        return const [];
       default:
-        return null;
+        return const [];
     }
   }
 
@@ -142,7 +152,48 @@ class ClientDynamicFormFields extends ConsumerWidget {
     );
   }
 
+  Widget _buildSelectField(WidgetRef ref, String key) {
+    final options = _options(ref, key);
+    final ctrl = _ctrl(key);
+    final current = ctrl.text.trim();
+    final value = current.isNotEmpty && options.contains(current) ? current : null;
+    final required = isClientFieldRequired(config, key);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AgentOutlineSelect(
+            label: clientFieldLabel(key),
+            value: value,
+            options: options,
+            showRequiredStar: required,
+            padding: EdgeInsets.zero,
+            onChanged: options.isEmpty
+                ? null
+                : (v) {
+                    ctrl.text = v ?? '';
+                  },
+          ),
+          if (options.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 4),
+              child: Text(
+                'Справочник пуст — заполните в настройках',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildField(BuildContext context, WidgetRef ref, String key) {
+    // Agentda hudud faqat «Город» picker orqali — viloyat TextField/select chiqmasin.
+    if (key == 'territory') {
+      return const SizedBox.shrink();
+    }
+
     if (key == 'coordinates') {
       if (showGpsHint) {
         return Padding(
@@ -169,21 +220,8 @@ class ClientDynamicFormFields extends ConsumerWidget {
       return _buildVisitDayField(context);
     }
 
-    final options = _options(ref, key);
-    if (options != null) {
-      final current = _ctrl(key).text.trim();
-      final value = current.isNotEmpty && options.contains(current) ? current : null;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: DropdownButtonFormField<String>(
-          initialValue: value,
-          decoration: _decoration(key),
-          items: options
-              .map((o) => DropdownMenuItem(value: o, child: Text(o, overflow: TextOverflow.ellipsis)))
-              .toList(),
-          onChanged: (v) => _ctrl(key).text = v ?? '',
-        ),
-      );
+    if (kClientSelectFieldKeys.contains(key)) {
+      return _buildSelectField(ref, key);
     }
 
     final c = constraintForField(key);

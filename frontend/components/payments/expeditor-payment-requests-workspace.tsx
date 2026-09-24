@@ -37,6 +37,7 @@ import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types"
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
+import { splitMultiFilterValues } from "@/lib/client-filter-select-value";
 import { formatNumberGrouped } from "@/lib/format-numbers";
 import { paymentMethodSelectOptions, type ProfilePaymentMethodEntry } from "@/lib/payment-method-options";
 import type { PaymentListApiResponse, PaymentListApiRow } from "@/lib/payment-list-types";
@@ -156,12 +157,27 @@ function buildListQuery(
   if (f.dateTo.trim()) p.set("date_to", f.dateTo.trim());
   if (f.dealType !== "both") p.set("deal_type", f.dealType);
   p.set("application_channel", f.tab);
-  if (args.archive) p.set("payment_status", "deleted");
-  else if (f.status) p.set("payment_status", f.status);
+  if (args.archive) {
+    p.set("payment_status", "deleted");
+  } else if (f.status.trim()) {
+    const statuses = splitMultiFilterValues(f.status).filter((s) =>
+      ["pending_confirmation", "confirmed", "rejected", "deleted"].includes(s)
+    );
+    if (statuses.length === 1) p.set("payment_status", statuses[0]!);
+    else if (statuses.length > 1) p.set("payment_statuses", statuses.join(","));
+  }
   if (f.expeditorIds.length > 0) p.set("expeditor_user_ids", f.expeditorIds.join(","));
   if (f.agentIds.length > 0) p.set("agent_ids", f.agentIds.join(","));
-  if (f.paymentType.trim() && f.paymentType !== "__all__") p.set("payment_type", f.paymentType.trim());
-  if (f.tradeDirection.trim() && f.tradeDirection !== "__all__") p.set("trade_direction", f.tradeDirection.trim());
+  if (f.paymentType.trim() && f.paymentType !== "__all__") {
+    const types = splitMultiFilterValues(f.paymentType).filter((t) => t && t !== "__all__");
+    if (types.length === 1) p.set("payment_type", types[0]!);
+    else if (types.length > 1) p.set("payment_types", types.join(","));
+  }
+  if (f.tradeDirection.trim() && f.tradeDirection !== "__all__") {
+    const dirs = splitMultiFilterValues(f.tradeDirection).filter((d) => d && d !== "__all__");
+    if (dirs.length === 1) p.set("trade_direction", dirs[0]!);
+    else if (dirs.length > 1) p.set("trade_directions", dirs.join(","));
+  }
   if (f.territoryZone.trim()) p.set("territory_zone", f.territoryZone.trim());
   if (f.territoryRegion.trim()) p.set("territory_region", f.territoryRegion.trim());
   if (f.territoryCity.trim()) p.set("territory_city", f.territoryCity.trim());
@@ -1194,7 +1210,11 @@ export function ExpeditorPaymentRequestsWorkspace() {
             </table>
           </div>
 
-          {!archiveView && applied.status === "pending_confirmation" && total === 0 && !listQ.isFetching ? (
+          {!archiveView &&
+          splitMultiFilterValues(applied.status).length === 1 &&
+          splitMultiFilterValues(applied.status)[0] === "pending_confirmation" &&
+          total === 0 &&
+          !listQ.isFetching ? (
             <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 text-xs text-amber-800">
               Нет заявок в статусе «Ожидание подтверждения». Экспедитор создаёт их в мобильном приложении при
               приёме оплаты; после подтверждения они переходят в «Подтверждено».

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { STALE } from "@/lib/query-stale";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,7 @@ function renderOperatorDataCell(colId: string, r: WebStaffRow) {
 type Props = { tenantSlug: string };
 
 export function OperatorsWorkspace({ tenantSlug }: Props) {
+  const perms = useStaffCrudPermissions("sotrudniki");
   const qc = useQueryClient();
   const { confirm, dialog: confirmDialog } = useAppConfirm();
   const [tab, setTab] = useState<"active" | "inactive">("active");
@@ -249,6 +251,7 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
         title="Сотрудники"
         subtitle="Веб-пользователи: логин и учётные данные"
         addLabel="Добавить сотрудника"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateOperatorFormKey((k) => k + 1);
           setCreateOperatorOpen(true);
@@ -272,24 +275,29 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, логину, телефону…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map(
-            (id) => OPERATOR_COLUMN_LABEL_BY_ID.get(id as (typeof OPERATOR_COLUMN_IDS)[number]) ?? id
-          );
-          const dataRows = rows.map((r) =>
-            order.map((colId) =>
-              operatorExportCellString(r, colId as (typeof OPERATOR_COLUMN_IDS)[number])
-            )
-          );
-          downloadXlsxSheet(
-            `sotrudniki_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Сотрудники",
-            headers,
-            dataRows
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map(
+                  (id) =>
+                    OPERATOR_COLUMN_LABEL_BY_ID.get(id as (typeof OPERATOR_COLUMN_IDS)[number]) ?? id
+                );
+                const dataRows = rows.map((r) =>
+                  order.map((colId) =>
+                    operatorExportCellString(r, colId as (typeof OPERATOR_COLUMN_IDS)[number])
+                  )
+                );
+                downloadXlsxSheet(
+                  `sotrudniki_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Сотрудники",
+                  headers,
+                  dataRows
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -335,16 +343,21 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           return renderOperatorDataCell(colId as (typeof OPERATOR_COLUMN_IDS)[number], r);
         }}
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Сменить пароль" onClick={() => setPasswordRow(r)}>
-                <KeyRound className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Сменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton
                   title="Деактивировать"
                   onClick={() => {
@@ -362,11 +375,12 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
                 >
                   <UserRoundX className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
-              ) : (
+              ) : null}
+              {tab === "inactive" && perms.canActivate ? (
                 <AgentIconButton title="Активировать" onClick={() => deactivateMut.mutate(r)}>
                   <UserRoundCheck className="h-4 w-4 text-teal-600" />
                 </AgentIconButton>
-              )}
+              ) : null}
             </div>
           );
         }}

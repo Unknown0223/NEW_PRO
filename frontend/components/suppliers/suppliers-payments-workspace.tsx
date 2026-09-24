@@ -1,6 +1,7 @@
 "use client";
 
 import { TableColumnSettingsDialog, type ColumnDefItem } from "@/components/data-table/table-column-settings-dialog";
+import { ClientsTemplateSelectField } from "@/components/clients/clients-template-select-field";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,12 @@ import { Label } from "@/components/ui/label";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import {
+  appendNamedStringListParam,
+  appendPositiveIntListParam,
+  joinMultiFilterValues,
+  splitMultiFilterValues
+} from "@/lib/client-filter-select-value";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatNumberGrouped } from "@/lib/format-numbers";
@@ -241,11 +248,9 @@ export function SuppliersPaymentsWorkspace() {
       p.set("sort_dir", sortDir);
       if (appliedFrom) p.set("from", appliedFrom);
       if (appliedTo) p.set("to", appliedTo);
-      const sid = Number.parseInt(appliedSupplier, 10);
-      if (Number.isFinite(sid) && sid > 0) p.set("supplier_id", String(sid));
-      if (appliedMethod.trim()) p.set("payment_method", appliedMethod.trim());
-      const cid = Number.parseInt(appliedCashDesk, 10);
-      if (Number.isFinite(cid) && cid > 0) p.set("cash_desk_id", String(cid));
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", appliedSupplier);
+      appendNamedStringListParam(p, "payment_method", "payment_methods", appliedMethod);
+      appendPositiveIntListParam(p, "cash_desk_id", "cash_desk_ids", appliedCashDesk);
       if (appliedSearch.trim()) p.set("search", appliedSearch.trim());
       const { data } = await api.get<{ data: PaymentRow[]; total: number }>(
         `/api/${tenantSlug}/suppliers/accounting/payments?${p.toString()}`
@@ -363,11 +368,9 @@ export function SuppliersPaymentsWorkspace() {
       p.set("sort_dir", sortDir);
       if (appliedFrom) p.set("from", appliedFrom);
       if (appliedTo) p.set("to", appliedTo);
-      const sid = Number.parseInt(appliedSupplier, 10);
-      if (Number.isFinite(sid) && sid > 0) p.set("supplier_id", String(sid));
-      if (appliedMethod.trim()) p.set("payment_method", appliedMethod.trim());
-      const cid = Number.parseInt(appliedCashDesk, 10);
-      if (Number.isFinite(cid) && cid > 0) p.set("cash_desk_id", String(cid));
+      appendPositiveIntListParam(p, "supplier_id", "supplier_ids", appliedSupplier);
+      appendNamedStringListParam(p, "payment_method", "payment_methods", appliedMethod);
+      appendPositiveIntListParam(p, "cash_desk_id", "cash_desk_ids", appliedCashDesk);
       if (appliedSearch.trim()) p.set("search", appliedSearch.trim());
       const { data } = await api.get<{ data: PaymentRow[] }>(
         `/api/${tenantSlug}/suppliers/accounting/payments?${p.toString()}`
@@ -535,51 +538,33 @@ export function SuppliersPaymentsWorkspace() {
         />
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="grid gap-1.5">
-            <Label>Поставщики</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftSupplier}
-              onChange={(e) => setDraftSupplier(e.target.value)}
-            >
-              <option value="">Все</option>
-              {(suppliersQ.data ?? []).map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Способ оплаты</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftMethod}
-              onChange={(e) => setDraftMethod(e.target.value)}
-            >
-              <option value="">Все</option>
-              {payMethodOpts.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Касса</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={draftCashDesk}
-              onChange={(e) => setDraftCashDesk(e.target.value)}
-            >
-              <option value="">Все</option>
-              {(cashDesksQ.data ?? []).map((d) => (
-                <option key={d.id} value={String(d.id)}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ClientsTemplateSelectField
+            label="Поставщики"
+            multi
+            options={(suppliersQ.data ?? []).map((s) => ({
+              value: String(s.id),
+              label: s.name
+            }))}
+            values={splitMultiFilterValues(draftSupplier)}
+            onChange={(v) => setDraftSupplier(joinMultiFilterValues(v))}
+          />
+          <ClientsTemplateSelectField
+            label="Способ оплаты"
+            multi
+            options={payMethodOpts}
+            values={splitMultiFilterValues(draftMethod)}
+            onChange={(v) => setDraftMethod(joinMultiFilterValues(v))}
+          />
+          <ClientsTemplateSelectField
+            label="Касса"
+            multi
+            options={(cashDesksQ.data ?? []).map((d) => ({
+              value: String(d.id),
+              label: d.name
+            }))}
+            values={splitMultiFilterValues(draftCashDesk)}
+            onChange={(v) => setDraftCashDesk(joinMultiFilterValues(v))}
+          />
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-1">

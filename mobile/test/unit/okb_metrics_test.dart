@@ -98,4 +98,21 @@ void main() {
     expect(r.remainingOnPlan, 1);
     expect(r.visitedOffPlan, 1);
   });
+
+  test('mergeVisitedActivityIds — zakaz va foto vizitsiz ham kiradi', () {
+    final merged = mergeVisitedActivityIds(
+      visitClientIds: {1},
+      orderClientIds: {2, 3},
+      photoSyncedClientIds: {3, 4},
+    );
+    expect(merged, {1, 2, 3, 4});
+    final progress = splitVisitProgress(
+      planIds: {1, 2, 5},
+      visitedIds: merged,
+    );
+    // 1,2 reja ichida; 3,4 tashqarida
+    expect(progress.visitedOnPlan, 2);
+    expect(progress.remainingOnPlan, 1);
+    expect(progress.visitedOffPlan, 2);
+  });
 }

@@ -166,6 +166,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         latitude: z.number().finite().gte(-90).lte(90),
         longitude: z.number().finite().gte(-180).lte(180),
         accuracy_meters: z.number().finite().positive().max(5000).optional().nullable(),
+        battery_pct: z.number().finite().min(0).max(100).optional().nullable(),
+        network_type: z.string().trim().max(16).optional().nullable(),
         /** Oflayn yig‘ilgan ping — client UTC ISO. */
         recorded_at: z.string().min(10).optional().nullable(),
         agent_id: z.number().int().positive().optional()
@@ -208,6 +210,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
         latitude: body.latitude,
         longitude: body.longitude,
         accuracy_meters: body.accuracy_meters,
+        battery_pct: body.battery_pct,
+        network_type: body.network_type,
         recorded_at: recordedAt
       });
       return reply.status(201).send({ data });
@@ -232,6 +236,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
               latitude: z.number().finite().gte(-90).lte(90),
               longitude: z.number().finite().gte(-180).lte(180),
               accuracy_meters: z.number().finite().positive().max(5000).optional().nullable(),
+              battery_pct: z.number().finite().min(0).max(100).optional().nullable(),
+              network_type: z.string().trim().max(16).optional().nullable(),
               recorded_at: z.string().min(10).optional().nullable()
             })
           )
@@ -274,6 +280,8 @@ export async function registerFieldRoutes(app: FastifyInstance) {
           latitude: p.latitude,
           longitude: p.longitude,
           accuracy_meters: p.accuracy_meters,
+          battery_pct: p.battery_pct,
+          network_type: p.network_type,
           recorded_at: p.recorded_at ? new Date(p.recorded_at) : null
         }))
       );

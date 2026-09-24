@@ -46,6 +46,7 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
     isExchangeFlow,
     isEditMode,
     mutation,
+    requestSubmit,
     polkiRangeAnchorRef,
     polkiRangeOpen,
     polkiSubmitBlockedReason,
@@ -73,7 +74,7 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
             <Button
               type="button"
               disabled={!canSubmit}
-              onClick={() => mutation.mutate()}
+              onClick={() => requestSubmit()}
               className="bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-700"
             >
               {mutation.isPending

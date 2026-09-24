@@ -34,12 +34,23 @@ export function applyOrderDetailToListCaches(
   tenantSlug: string | null | undefined,
   detail: OrderDetailRow
 ): void {
+  const bonusQtyFromItems = (detail.items ?? [])
+    .filter((i) => i.is_bonus)
+    .reduce((acc, i) => acc + (Number.parseFloat(String(i.qty).replace(",", ".")) || 0), 0);
+  const storedBonus = Number.parseFloat(String(detail.bonus_qty ?? "").replace(",", ".")) || 0;
+  const bonusQtyNum = Math.max(storedBonus, bonusQtyFromItems);
+  const bonusQty = bonusQtyNum > 0 ? String(bonusQtyNum) : detail.bonus_qty;
+
   patchOrderInOrdersListCaches(qc, tenantSlug, detail.id, (r) => ({
     ...r,
     status: detail.status,
     allowed_next_statuses: detail.allowed_next_statuses,
     shipped_at: detail.shipped_at ?? r.shipped_at,
     delivered_at: detail.delivered_at ?? r.delivered_at,
-    expected_ship_date: detail.expected_ship_date ?? r.expected_ship_date
+    expected_ship_date: detail.expected_ship_date ?? r.expected_ship_date,
+    bonus_qty: bonusQty ?? r.bonus_qty,
+    bonus_sum: detail.bonus_sum ?? r.bonus_sum,
+    discount_sum: detail.discount_sum ?? r.discount_sum,
+    total_sum: detail.total_sum ?? r.total_sum
   }));
 }

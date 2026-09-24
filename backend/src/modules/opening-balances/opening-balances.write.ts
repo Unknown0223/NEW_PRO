@@ -17,28 +17,61 @@ export function openingBalanceLedgerNote(
   return `Добавлено через начальный баланс #${entryId} (${kind})`;
 }
 
-function noteMatchesEntry(note: string | null | undefined, entryId: number): boolean {
-  if (!note) return false;
-  return note.toLowerCase().includes(`начальный баланс #${entryId}`);
+/**
+ * Note ichida `#12` `#123` ga mos kelmasligi kerak (digit boundary).
+ * Export: unit test.
+ */
+export function noteMatchesEntry(note: string | null | undefined, entryId: number): boolean {
+  if (!note || !Number.isFinite(entryId) || entryId < 1) return false;
+  const re = new RegExp(`начальный баланс #${entryId}(?!\\d)`, "i");
+  return re.test(note);
 }
 
-async function findLinkedPayment(
+async function findLinkedPaymentByNote(
   tenantId: number,
   clientId: number,
   entryId: number,
   voided: boolean
-) {
+): Promise<{ id: number; note: string | null; deleted_at: Date | null } | null> {
+  const needle = `начальный баланс #${entryId}`;
   const rows = await prisma.payment.findMany({
     where: {
       tenant_id: tenantId,
       client_id: clientId,
-      deleted_at: voided ? { not: null } : null
+      deleted_at: voided ? { not: null } : null,
+      note: { contains: needle, mode: "insensitive" }
     },
     orderBy: { id: "desc" },
-    take: 40,
+    take: 20,
     select: { id: true, note: true, deleted_at: true }
   });
   return rows.find((p) => noteMatchesEntry(p.note, entryId)) ?? null;
+}
+
+async function resolveLinkedPayment(
+  tenantId: number,
+  entry: { id: number; client_id: number; payment_id: number | null },
+  voided: boolean
+): Promise<{ id: number } | null> {
+  if (entry.payment_id != null && entry.payment_id > 0) {
+    const byId = await prisma.payment.findFirst({
+      where: {
+        id: entry.payment_id,
+        tenant_id: tenantId,
+        client_id: entry.client_id,
+        deleted_at: voided ? { not: null } : null
+      },
+      select: { id: true }
+    });
+    if (byId) return byId;
+  }
+  const byNote = await findLinkedPaymentByNote(tenantId, entry.client_id, entry.id, voided);
+  if (byNote && entry.payment_id == null) {
+    await prisma.clientOpeningBalanceEntry
+      .update({ where: { id: entry.id }, data: { payment_id: byNote.id } })
+      .catch(() => undefined);
+  }
+  return byNote ? { id: byNote.id } : null;
 }
 
 export async function createOpeningBalance(
@@ -102,7 +135,7 @@ export async function createOpeningBalance(
   const paymentNote = userNote ? `${ledgerNote}. ${userNote}` : ledgerNote;
 
   try {
-    await createPayment(
+    const payment = await createPayment(
       tenantId,
       {
         client_id: input.client_id,
@@ -117,6 +150,10 @@ export async function createOpeningBalance(
       },
       actorUserId
     );
+    await prisma.clientOpeningBalanceEntry.update({
+      where: { id: created.id },
+      data: { payment_id: payment.id }
+    });
   } catch (e) {
     await prisma.clientOpeningBalanceEntry.delete({ where: { id: created.id } }).catch(() => undefined);
     throw e;
@@ -132,7 +169,8 @@ export async function createOpeningBalance(
     amount: input.amount,
     balance_type: input.balance_type,
     payment_type: pt,
-    ledger_note: ledgerNote
+    ledger_note: ledgerNote,
+    payment_id: row.payment_id
   });
 
   void invalidateDashboard(tenantId);
@@ -160,7 +198,7 @@ export async function deleteOpeningBalance(
   if (entry.deleted_at != null) throw new Error("ALREADY_VOIDED");
   clientId = entry.client_id;
 
-  const linked = await findLinkedPayment(tenantId, entry.client_id, entry.id, false);
+  const linked = await resolveLinkedPayment(tenantId, entry, false);
   if (linked) {
     await deletePayment(tenantId, linked.id, actorUserId, note ?? `Начальный баланс #${entry.id}`);
     await prisma.clientOpeningBalanceEntry.update({
@@ -168,7 +206,8 @@ export async function deleteOpeningBalance(
       data: {
         deleted_at: now,
         deleted_by_user_id: uid,
-        delete_reason_ref: note
+        delete_reason_ref: note,
+        payment_id: linked.id
       }
     });
   } else {
@@ -226,12 +265,17 @@ export async function restoreOpeningBalance(
   if (!entry) throw new Error("NOT_FOUND");
   if (entry.deleted_at == null) throw new Error("NOT_VOIDED");
 
-  const linked = await findLinkedPayment(tenantId, entry.client_id, entry.id, true);
+  const linked = await resolveLinkedPayment(tenantId, entry, true);
   if (linked) {
     await restorePayment(tenantId, linked.id, actorUserId, `Начальный баланс #${entry.id}`);
     await prisma.clientOpeningBalanceEntry.update({
       where: { id: entryId },
-      data: { deleted_at: null, deleted_by_user_id: null, delete_reason_ref: null }
+      data: {
+        deleted_at: null,
+        deleted_by_user_id: null,
+        delete_reason_ref: null,
+        payment_id: linked.id
+      }
     });
   } else {
     const uid =

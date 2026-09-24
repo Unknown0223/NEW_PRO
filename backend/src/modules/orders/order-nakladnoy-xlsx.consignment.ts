@@ -13,12 +13,16 @@ import {
   consignment217BalanceLine,
   consignment217BonusTitle,
   consignment217ClientLine,
+  consignment217CommentLine,
   consignment217DateLine,
-  consignment217ExpeditorLine,
+  consignment217DiscountLine,
+  consignment217LandmarkLine,
   consignment217MoneyWithPay,
   consignment217OrderTitle,
   consignment217PaymentLabel,
-  consignment217SheetName
+  consignment217PersonBlock,
+  consignment217SheetName,
+  consignment217TerritoryLine
 } from "./order-nakladnoy-xlsx.consignment-217";
 
 const MONEY_FMT = "#,##0";
@@ -41,6 +45,24 @@ function writeFullLine(
     wrapText: true
   };
   applyBorderRange(sheet, r, c0, r, cEnd);
+  const lineCount = Math.max(1, value.split("\n").length);
+  // Pechat: 1 qator ~14–15pt; max ~3 qator (uzun orient/komment)
+  sheet.getRow(r).height = Math.min(48, Math.max(15, 14 * lineCount + 2));
+}
+
+/** Bo‘sh/null qatorlarni o‘tkazib yuboradi (nakladnoyda faqat bor maydonlar). */
+function writeOptionalFullLine(
+  sheet: ExcelJS.Worksheet,
+  r: number,
+  c0: number,
+  cEnd: number,
+  value: string | null | undefined,
+  opts?: { bold?: boolean; size?: number; align?: ExcelJS.Alignment["horizontal"] }
+): number {
+  const t = value?.trim();
+  if (!t) return r;
+  writeFullLine(sheet, r, c0, cEnd, t, opts);
+  return r + 1;
 }
 
 function writeColHeaders(sheet: ExcelJS.Worksheet, r: number, c0: number, cEnd: number) {
@@ -122,15 +144,31 @@ function writeConsignmentBlock(
 
   writeFullLine(sheet, r++, c0, cEnd, consignment217ClientLine(order.clientName, order.clientPhone));
   writeFullLine(sheet, r++, c0, cEnd, consignment217BalanceLine(bal));
-  writeFullLine(sheet, r++, c0, cEnd, consignment217AddressLine(order.clientAddress));
-  writeFullLine(
+  r = writeOptionalFullLine(sheet, r, c0, cEnd, consignment217AddressLine(order.clientAddress));
+  r = writeOptionalFullLine(sheet, r, c0, cEnd, consignment217LandmarkLine(order.clientLandmark));
+  r = writeOptionalFullLine(
     sheet,
-    r++,
+    r,
     c0,
     cEnd,
-    `Агент: ${order.invoiceAgentLine || order.agentLine || "—"}`
+    consignment217PersonBlock("Агент", order.agentName, order.agentPhone)
   );
-  writeFullLine(sheet, r++, c0, cEnd, consignment217ExpeditorLine(order.expeditorName));
+  r = writeOptionalFullLine(
+    sheet,
+    r,
+    c0,
+    cEnd,
+    consignment217PersonBlock("Экспедитор", order.expeditorName, order.expeditorPhone)
+  );
+  r = writeOptionalFullLine(
+    sheet,
+    r,
+    c0,
+    cEnd,
+    consignment217TerritoryLine(order.invoiceTerritory || order.territory)
+  );
+  r = writeOptionalFullLine(sheet, r, c0, cEnd, consignment217DiscountLine(order.discountSum));
+  r = writeOptionalFullLine(sheet, r, c0, cEnd, consignment217CommentLine(order.orderComment));
   writeFullLine(sheet, r++, c0, cEnd, consignment217DateLine(printAt));
 
   writeFullLine(sheet, r++, c0, cEnd, consignment217OrderTitle(order.number, cons), {

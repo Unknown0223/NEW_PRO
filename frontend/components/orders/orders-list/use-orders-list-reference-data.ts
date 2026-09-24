@@ -212,7 +212,9 @@ export function useOrdersListReferenceData(
     return sale.map((o) => ({ value: o.key, label: o.label }));
   }, [ordersProfileRefsQ.data?.price_type_entries, ordersProfileRefsQ.data?.payment_types]);
 
-  const territoryNodes = ordersProfileRefsQ.data?.territory_nodes;
+  const territoryNodes =
+    (clientRefsQ.data as { territory_nodes?: TerritoryNode[] } | undefined)?.territory_nodes ??
+    ordersProfileRefsQ.data?.territory_nodes;
 
   const buildTerritoryCascade = useCallback(
     (current: { zone: string; region: string; city: string }) =>

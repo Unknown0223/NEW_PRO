@@ -1,19 +1,4 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "../../config/database";
-import {
-  applyTerritoryAutoAssignAfterAddressChange,
-  clientUpdateTouchesAddress
-} from "../work-slots/work-slots.territory-auto";
 import type { AgentAssignmentPatch, ContactPersonSlot } from "./clients.types";
-import { normalizePhoneDigits } from "./clients.types";
-import { CONTACT_SLOTS, contactPersonsToJson } from "./clients.helpers";
-import {
-  replaceClientAgentAssignments,
-  syncAssignmentSlotOneWithClientRow
-} from "./clients.agent-assignments";
-import { appendClientAuditLog } from "./clients.audit";
-import type { ClientDetailRow } from "./clients.detail";
-import { getClientDetail } from "./clients.detail";
 
 export type UpdateClientInput = {
   name?: string;
@@ -64,26 +49,9 @@ export type UpdateClientInput = {
   allow_order_with_debt?: boolean;
   allow_consignment?: boolean;
   allow_consignment_with_debt?: boolean;
+  /** Agent mobil tahriri: manzil o‘zgaganda territory auto agentni yeb qo‘ymasın. */
+  skip_territory_auto_assign?: boolean;
 };
-
-function parseOptionalLatitude(v: string | number | null | undefined): Prisma.Decimal | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim().replace(",", ".");
-  if (s === "") return null;
-  const n = Number.parseFloat(s);
-  if (!Number.isFinite(n) || n < -90 || n > 90) throw new Error("VALIDATION");
-  return new Prisma.Decimal(s);
-}
-
-function parseOptionalLongitude(v: string | number | null | undefined): Prisma.Decimal | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim().replace(",", ".");
-  if (s === "") return null;
-  const n = Number.parseFloat(s);
-  if (!Number.isFinite(n) || n < -180 || n > 180) throw new Error("VALIDATION");
-  return new Prisma.Decimal(s);
-}
-
 
 export type CreateClientMinimalInput = {
   name: string;
@@ -108,5 +76,3 @@ export type CreateClientMinimalInput = {
   /** Agent: «Подтверждение нового клиента» yoqilgan bo‘lsa true. */
   is_active?: boolean;
 };
-
-/** Minimal yangi mijoz (keyin to‘liq tahrir sahifasida to‘ldiriladi). */

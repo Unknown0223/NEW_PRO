@@ -9,7 +9,7 @@ export type StaffBulkFloatingBarProps = {
   busy: boolean;
   /** App access toggle — omit to hide (moved to Рабочее место). */
   onToggleAccess?: () => void;
-  onToggleActive: () => void;
+  onToggleActive?: () => void;
   /** Clear sessions — omit to hide (moved to Рабочее место / sessions UI). */
   onClearSessions?: () => void;
   onClearSelection: () => void;
@@ -108,6 +108,7 @@ export function StaffBulkFloatingBar({
           </>
         ) : null}
 
+        {onToggleActive ? (
         <button
           type="button"
           onClick={onToggleActive}
@@ -120,6 +121,7 @@ export function StaffBulkFloatingBar({
         >
           {isActiveTab ? "🚫" : "✔"}
         </button>
+        ) : null}
 
         {onClearSessions ? (
           <>

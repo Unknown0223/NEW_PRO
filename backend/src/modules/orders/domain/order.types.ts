@@ -71,6 +71,10 @@ export type UpdateOrderLinesInput = {
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
   apply_discount?: boolean;
   bonus_gift_overrides?: BonusGiftOverrideInput[];
+  /** Qty bonus: bir qoida uchun bir nechta mahsulot/dona. */
+  bonus_gift_lines?: BonusGiftLineInput[];
+  /** Strategiya tanlovlari (ixtiyoriy — yo‘q bo‘lsa avto). */
+  bonus_strategy_selections?: { strategy_id: number; rule_ids: number[] }[];
 };
 
 export type OrderItemRow = {

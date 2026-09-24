@@ -30,6 +30,7 @@ import { getUserFacingError } from "@/lib/error-utils";
 import {
   ME_PERMISSIONS_REFETCH_INTERVAL_MS,
   ME_PERMISSIONS_STALE_MS,
+  decodeAccessTokenUserId,
   mePermissionKeySet,
   mePermissionsQueryKey,
   normalizeMePermissionKeys
@@ -331,7 +332,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [hydrated, accessToken]);
 
   const mePermsQ = useQuery({
-    queryKey: mePermissionsQueryKey(tenantSlug),
+    queryKey: mePermissionsQueryKey(tenantSlug, decodeAccessTokenUserId(accessToken)),
     enabled: Boolean(tenantSlug),
     staleTime: ME_PERMISSIONS_STALE_MS,
     refetchOnWindowFocus: true,
@@ -427,8 +428,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
-    router.replace("/login");
-    router.refresh();
+    window.location.assign("/login");
   }
 
   /** Sticky jadval sahifalari — viewport to‘liq; qolganlari kontent bo‘yicha */

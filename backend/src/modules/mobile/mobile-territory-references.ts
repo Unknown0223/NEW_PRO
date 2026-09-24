@@ -158,3 +158,37 @@ export function mergeMobileCitiesByZoneRegion(input: {
     Object.entries(map).map(([k, set]) => [k, [...set].sort((a, b) => a.localeCompare(b, "ru"))])
   );
 }
+
+type TerritoryTreeNode = {
+  name?: string;
+  active?: boolean;
+  children?: TerritoryTreeNode[];
+};
+
+/** `territory_nodes` → `zone|||region` → shaharlar (mobil cascade / agent_cities). */
+export function citiesByZoneRegionFromTerritoryNodes(
+  nodes: TerritoryTreeNode[] | null | undefined
+): Record<string, string[]> {
+  const map: Record<string, Set<string>> = {};
+  if (!nodes?.length) return {};
+
+  const walk = (list: TerritoryTreeNode[], depth: number, path: string[]) => {
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = typeof n.name === "string" ? n.name.trim() : "";
+      if (!name) continue;
+      const nextPath = [...path, name];
+      if (depth >= 2) {
+        const zone = nextPath[0] ?? "";
+        const region = nextPath[1] ?? "";
+        if (region) addCitiesToMap(map, zone, region, [name]);
+      }
+      if (n.children?.length) walk(n.children, depth + 1, nextPath);
+    }
+  };
+  walk(nodes, 0, []);
+
+  return Object.fromEntries(
+    Object.entries(map).map(([k, set]) => [k, [...set].sort((a, b) => a.localeCompare(b, "ru"))])
+  );
+}

@@ -250,7 +250,8 @@ export async function importClientsFromXlsx(
       refResolver,
       staffLookup,
       ctx,
-      duplicateKeyFields
+      duplicateKeyFields,
+      opts?.commitDecision
     );
     await reportImportRowProgress(ctx, "finalizing", true);
     return finalizeResult(
@@ -258,6 +259,8 @@ export async function importClientsFromXlsx(
         created: r.created,
         updated: r.updated,
         errors: r.errors,
+        needsDecision: r.needsDecision,
+        decisionPreview: r.decisionPreview,
         importStats: {
           totalRows: ctx.totalRows,
           processedRows: ctx.processedRows,
@@ -352,7 +355,8 @@ export async function importClientsFromXlsx(
     refResolver,
     staffLookup,
     ctx,
-    duplicateKeyFields
+    duplicateKeyFields,
+    opts?.commitDecision
   );
   await reportImportRowProgress(ctx, "finalizing", true);
   return finalizeResult(
@@ -360,6 +364,8 @@ export async function importClientsFromXlsx(
       created: r.created,
       updated: r.updated,
       errors: r.errors,
+      needsDecision: r.needsDecision,
+      decisionPreview: r.decisionPreview,
       importStats: {
         totalRows: ctx.totalRows,
         processedRows: ctx.processedRows,

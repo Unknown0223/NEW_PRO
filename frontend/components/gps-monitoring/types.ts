@@ -34,7 +34,7 @@ export interface VisitPoint {
   wasAtPoint?: boolean;
   placeType: string;
   accuracy: number;
-  internet: "4G" | "3G" | "—";
+  internet: "4G" | "3G" | "WiFi" | "—";
   batteryAt: number | null;
   module: VisitModule;
   cashExpected: number;
@@ -59,9 +59,12 @@ export interface Employee {
   type: "agent" | "delivery" | "supervisor" | "inkasator" | "vansell";
   supervisorId: string | null;
   battery: number | null;
+  network?: "4G" | "3G" | "WiFi" | "—" | null;
   online: boolean;
   lastSeen: string;
   region?: string;
+  /** Tanlangan kunda faoliyat (GPS/zakaz/vizit/foto) */
+  activeOnDate?: boolean;
 }
 
 export interface SupervisorOption {

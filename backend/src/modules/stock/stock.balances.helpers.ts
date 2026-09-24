@@ -23,6 +23,13 @@ export type BalanceFilterOpts = {
   q: string;
   /** Кол-во: все / только с остатком / нулевые */
   qty_mode: StockBalanceQtyMode;
+  /**
+   * Actor ombor scope (Access / warehouse_user_links).
+   * `null` / `undefined` — cheklov yo‘q (admin).
+   * `[]` — hech narsa.
+   * ids — faqat shu omborlar («Все» ham shu to‘plam ichida).
+   */
+  allowed_warehouse_ids?: number[] | null;
 };
 
 type AggRow = {
@@ -51,13 +58,19 @@ export async function fetchWarehouseIdsForBalances(
   tenantId: number,
   opts: BalanceFilterOpts
 ): Promise<number[]> {
+  const allowed = opts.allowed_warehouse_ids;
+  if (allowed != null && allowed.length === 0) return [];
+
   const whWhere: Prisma.WarehouseWhereInput = {
     tenant_id: tenantId,
     is_active: true,
     stock_purpose: opts.purpose
   };
   if (opts.warehouse_id != null && Number.isFinite(opts.warehouse_id)) {
+    if (allowed != null && !allowed.includes(opts.warehouse_id)) return [];
     whWhere.id = opts.warehouse_id;
+  } else if (allowed != null) {
+    whWhere.id = { in: allowed };
   }
   const warehouses = await prisma.warehouse.findMany({
     where: whWhere,

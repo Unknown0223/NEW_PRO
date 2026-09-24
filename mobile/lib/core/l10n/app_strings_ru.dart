@@ -22,6 +22,11 @@ abstract final class S {
   static const visited = 'Посещено';
   static const remaining = 'Осталось';
   static const unsyncedPhotos = 'Несинхр. фото';
+  static const syncedPhotos = 'Синхр. фото';
+  static const photoSyncStatus = 'Статус фото';
+  static const photoSyncOk = 'Синхронизировано';
+  static const photoSyncPending = 'В очереди';
+  static const photoSyncFailed = 'Ошибка отправки';
   static const lastSync = 'Последняя синхронизация';
   static const sync = 'Синхронизация';
   static const ordersSumToday = 'Сумма заказов сегодня';

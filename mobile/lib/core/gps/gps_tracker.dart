@@ -6,7 +6,9 @@ import '../api/field_api.dart';
 import '../auth/session.dart';
 import '../config/gps_config_policy.dart';
 import '../config/mobile_config.dart';
+import '../connectivity/connectivity_service.dart';
 import '../database/app_database.dart';
+import '../device/battery_level.dart';
 import '../errors/error_reporter.dart';
 import 'gps_ping_queue.dart';
 
@@ -290,10 +292,14 @@ class GpsTracker extends StateNotifier<GpsState> {
       if (!shouldEnqueue) return;
 
       final recordedAt = DateTime.now().toUtc();
+      final batteryPct = await readBatteryLevelPercent();
+      final networkType = await ConnectivityService().networkTypeLabel();
       await AppDatabase().enqueueLocationPing(
         latitude: position.latitude,
         longitude: position.longitude,
         accuracyMeters: position.accuracy,
+        batteryPct: batteryPct,
+        networkType: networkType,
         recordedAt: recordedAt,
       );
 

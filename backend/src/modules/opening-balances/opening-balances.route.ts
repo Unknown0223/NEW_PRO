@@ -14,8 +14,7 @@ import {
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { actorUserIdOrNull } from "../../lib/request-actor";
-import { ADMIN_AND_OPERATOR_LIKE_ROLES } from "../../lib/tenant-user-roles";
-import { getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
+import { getAccessUser, jwtAccessVerify, requireAnyPermission } from "../auth/auth.prehandlers";
 import { enrichScopedReportActor } from "../access/access-agent-scope";
 import {
   createOpeningBalance,
@@ -41,7 +40,28 @@ async function readOpeningBalanceImportBuffer(
   return { ok: true, buf };
 }
 
-const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
+/** Ko‘rish — Access kaliti (SVR ham). */
+const openingViewPre = [
+  jwtAccessVerify,
+  requireAnyPermission([
+    "cash.nachalnye_balansy.view",
+    "cash.nachalnye_balansy_klientov.view",
+    "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"
+  ])
+] as const;
+const openingWritePre = [
+  jwtAccessVerify,
+  requireAnyPermission([
+    "cash.nachalnye_balansy.create",
+    "cash.nachalnye_balansy.update",
+    "cash.nachalnye_balansy.void",
+    "cash.nachalnye_balansy.restore"
+  ])
+] as const;
+const openingImportPre = [
+  jwtAccessVerify,
+  requireAnyPermission(["cash.nachalnye_balansy.create", "cash.nachalnye_balansy.update"])
+] as const;
 
 const createBody = z.object({
   client_id: z.number().int().positive(),
@@ -135,7 +155,7 @@ function parseListQuery(q: Record<string, string | undefined>): OpeningBalanceLi
 export async function openingBalanceRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/opening-balances",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingViewPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
@@ -151,7 +171,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/opening-balances",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = createBody.safeParse(request.body);
@@ -187,7 +207,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/opening-balances/bulk",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    { preHandler: [...openingWritePre], ...writeApiRateLimitRouteOpts },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = z
@@ -232,7 +252,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/opening-balances/import-template",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingImportPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const buf = buildOpeningBalanceImportTemplateBuffer();
@@ -247,7 +267,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/opening-balances/import.xlsx",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingImportPre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const read = await readOpeningBalanceImportBuffer(request);
@@ -279,7 +299,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.delete(
     "/api/:slug/opening-balances/:id(\\d+)",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);
@@ -310,7 +330,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/:slug/opening-balances/:id(\\d+)/restore",
-    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)] },
+    { preHandler: [...openingWritePre] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const id = Number.parseInt((request.params as { id: string }).id, 10);

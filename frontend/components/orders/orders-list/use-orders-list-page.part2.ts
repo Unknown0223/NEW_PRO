@@ -31,6 +31,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setNakladnoyFeedback,
     setBulkExpFeedback,
     setBulkConsignmentFeedback,
+    setBulkBonusRefreshFeedback,
     setBulkExpeditorChoice,
     statusRowError,
     setStatusRowError,
@@ -176,6 +177,34 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     }
   });
 
+  const bulkBonusRefreshMut = useMutation({
+    mutationFn: async (payload: { order_ids: number[] }) => {
+      const { data } = await api.post<{
+        updated: number[];
+        failed: { id: number; error: string }[];
+        skipped: { id: number; reason: string }[];
+      }>(`/api/${tenantSlug}/orders/bulk/bonus-refresh`, payload);
+      return data;
+    },
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["order", tenantSlug] });
+      const ok = res.updated.length;
+      const fail = res.failed.length;
+      const skip = res.skipped.length;
+      const parts: string[] = [];
+      if (ok > 0) parts.push(`${ok} ta zakazda bonus yangilandi`);
+      if (skip > 0) parts.push(`${skip} ta o‘tkazib yuborildi (faqat «Новый»)`);
+      if (fail > 0) parts.push(`${fail} ta xato`);
+      setBulkBonusRefreshFeedback(
+        parts.length > 0 ? `${parts.join(". ")}.` : "Yangilanadigan zakaz topilmadi."
+      );
+    },
+    onError: (err: unknown) => {
+      setBulkBonusRefreshFeedback(ordersMutationFeedback(err, "Bonusni yangilab bo‘lmadi."));
+    }
+  });
+
   const bulkExpeditorMut = useMutation({
     mutationFn: async (payload: { order_ids: number[]; expeditor_user_id: number | null }) => {
       const { data } = await api.post<BulkExpeditorResponse>(
@@ -299,10 +328,12 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkFeedback(null);
     setNakladnoyFeedback(null);
     setBulkConsignmentFeedback(null);
+    setBulkBonusRefreshFeedback(null);
   }, [
     allOnPageSelected,
     rows,
     setBulkConsignmentFeedback,
+    setBulkBonusRefreshFeedback,
     setBulkFeedback,
     setNakladnoyFeedback,
     setSelectedOrderIds
@@ -315,11 +346,12 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     setBulkExpeditorChoice("");
     setBulkExpFeedback(null);
     setBulkConsignmentFeedback(null);
+    setBulkBonusRefreshFeedback(null);
     p1.setDownloadsOpen(false);
     p1.setNakladnoySettingsOpen(false);
     p1.setTotalsPanelOpen(false);
     setNakladnoyFeedback(null);
-  }, [p1, setBulkConsignmentFeedback, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
+  }, [p1, setBulkBonusRefreshFeedback, setBulkConsignmentFeedback, setBulkExpFeedback, setBulkExpeditorChoice, setBulkFeedback, setBulkTargetStatus, setNakladnoyFeedback, setSelectedOrderIds]);
 
   return {
     selectedRows,
@@ -330,6 +362,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
     nakladnoyMut,
     bulkExpeditorMut,
     bulkConsignmentMut,
+    bulkBonusRefreshMut,
     bulkStatusMut,
     allOnPageSelected,
     toggleOrderSelect,

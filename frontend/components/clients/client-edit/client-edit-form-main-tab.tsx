@@ -36,6 +36,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
     city, onCitySelect,
     zone, onZoneSelect,
     terrOpts, cascadedCityOpts, cascadedZoneOpts,
+    creatorScoped,
     street, setStreet,
     houseNumber, setHouseNumber,
     apartment, setApartment,
@@ -226,10 +227,21 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption>Адрес (детально, необязательно)</Caption>
               <p className="mt-1 text-xs text-muted-foreground">
-                Список задаётся в{" "}
-                <SpravochnikAdminLink href="/settings/spravochnik/client-lists#ref-city">справочниках клиента</SpravochnikAdminLink>
-                ; значения из существующих клиентов тоже попадают в список. При выборе города область и зона подставляются из дерева
-                территорий (если оно настроено).
+                {creatorScoped ? (
+                  <>
+                    Список области / города / зоны — по территориям, привязанным к вам (можно выбрать любой из
+                    нескольких). Текущее значение клиента всегда доступно.
+                  </>
+                ) : (
+                  <>
+                    Список задаётся в{" "}
+                    <SpravochnikAdminLink href="/settings/spravochnik/client-lists#ref-city">
+                      справочниках клиента
+                    </SpravochnikAdminLink>
+                    ; значения из существующих клиентов тоже попадают в список. При выборе города область и зона
+                    подставляются из дерева территорий (если оно настроено).
+                  </>
+                )}
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
@@ -443,9 +455,10 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
               </p>
               {territoryAgentPickerCtxQ.data?.territory_matched ? (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Списки агента и доставщика ограничены территорией по адресу (область / город / зона) или точке на
-                  карте — только пользователи, привязанные к этой территории в разделе территорий; уже выбранные в
-                  командах остаются в списке.
+                  {territoryAgentPickerCtxQ.data.agent_ids.length > 0 ||
+                  (territoryAgentPickerCtxQ.data.expeditor_ids?.length ?? 0) > 0
+                    ? "Списки агента и доставщика ограничены территорией по адресу (зона / область / город) и рабочим местам: только сотрудники, привязанные к этой территории; уже выбранные в командах остаются в списке."
+                    : "По адресу территория выбрана, но на рабочих местах (или в «Территории») нет привязанных агентов/доставщиков для этой зоны/области/города. Список пуст — сначала привяжите сотрудника к территории, либо очистите адресный фильтр."}
                 </p>
               ) : null}
               {(() => {

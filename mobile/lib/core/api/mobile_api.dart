@@ -282,6 +282,46 @@ class MobileApi {
     }
   }
 
+  Future<List<Map<String, dynamic>>> listInAppNotifications(
+    String slug, {
+    bool unreadOnly = false,
+    int limit = 40,
+  }) async {
+    try {
+      final r = await _dio.get(
+        '/api/$slug/notifications',
+        queryParameters: {
+          if (unreadOnly) 'unread_only': 'true',
+          'limit': limit,
+        },
+      );
+      final data = r.data;
+      final list = data is Map ? (data['data'] as List? ?? const []) : const [];
+      return list
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> markInAppNotificationRead(String slug, int id) async {
+    try {
+      await _dio.patch('/api/$slug/notifications/$id/read', data: _jsonBody());
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
+  Future<void> markAllInAppNotificationsRead(String slug) async {
+    try {
+      await _dio.post('/api/$slug/notifications/read-all', data: _jsonBody());
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   Future<List<DebtorClient>> getDebtors(String slug) async {
     try {
       final r = await _dio.get('/api/$slug/mobile/clients/debtors');

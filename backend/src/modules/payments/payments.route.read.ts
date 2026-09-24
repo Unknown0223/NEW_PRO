@@ -267,26 +267,53 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const page = Math.max(1, Number.parseInt(q.page ?? "1", 10) || 1);
       const limit = Math.min(200, Math.max(1, Number.parseInt(q.limit ?? "10", 10) || 10));
-      const accessUserId = parseOptPositiveInt(q.access_user_id);
-      const statusRaw = q.status?.trim();
-      let status: "completed" | "deleted" | "restored" | undefined;
-      if (statusRaw === "completed" || statusRaw === "deleted" || statusRaw === "restored") {
-        status = statusRaw;
-      } else if (statusRaw === "COMPLETED") {
-        status = "completed";
-      } else if (statusRaw === "DELETED") {
-        status = "deleted";
-      } else if (statusRaw === "RESTORED") {
-        status = "restored";
-      }
+      const accessUserIds = (q.access_user_ids ?? q.access_user_id ?? "")
+        .split(/[,|]+/)
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const uniqAccess = [...new Set(accessUserIds)];
+      const reasonRefs = (q.cancel_reason_refs ?? q.cancel_reason_ref ?? "")
+        .split(/[,|]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const uniqReasons = [...new Set(reasonRefs)];
+      const statusRaw = (q.statuses?.trim() || q.status?.trim() || "");
+      const statusParts = [
+        ...new Set(
+          statusRaw
+            .split(/[,|]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((s) => {
+              const low = s.toLowerCase();
+              if (low === "completed" || s === "COMPLETED") return "completed" as const;
+              if (low === "deleted" || s === "DELETED") return "deleted" as const;
+              if (low === "restored" || s === "RESTORED") return "restored" as const;
+              return null;
+            })
+            .filter((s): s is "completed" | "deleted" | "restored" => s != null)
+        )
+      ];
       const payload = await listPaymentEditGrants(request.tenant!.id, {
         page,
         limit,
         date_from: q.date_from?.trim() || undefined,
         date_to: q.date_to?.trim() || undefined,
-        status,
-        access_user_id: accessUserId,
-        cancel_reason_ref: q.cancel_reason_ref?.trim() || undefined,
+        ...(statusParts.length > 1
+          ? { statuses: statusParts }
+          : statusParts.length === 1
+            ? { status: statusParts[0] }
+            : {}),
+        ...(uniqAccess.length === 1
+          ? { access_user_id: uniqAccess[0] }
+          : uniqAccess.length > 1
+            ? { access_user_ids: uniqAccess }
+            : {}),
+        ...(uniqReasons.length === 1
+          ? { cancel_reason_ref: uniqReasons[0] }
+          : uniqReasons.length > 1
+            ? { cancel_reason_refs: uniqReasons }
+            : {}),
         search: q.search?.trim() || undefined
       });
       return reply.send(payload);

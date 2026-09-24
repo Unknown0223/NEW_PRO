@@ -41,14 +41,27 @@ export const NAV_PERM = {
   cashPayments: ["cash.oplaty_klientov.view"],
   cashBankTransfers: ["cash.perechisleniya.view"],
   cashClientExpenses: ["cash.rashody_klienta.view"],
-  cashOpeningBalances: ["cash.nachalnye_balansy.view", "cash.nachalnye_balansy_klientov.view"],
-  cashClientBalances: ["cash.otchety.view", "cash.balansy.view"],
-  /** Faqat kassa otchet — reports.view barcha kassa otchetlarini ochmasin. */
+  cashOpeningBalances: [
+    "cash.nachalnye_balansy.view",
+    "cash.nachalnye_balansy_klientov.view",
+    "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"
+  ],
+  /** Faqat balanslar — `cash.otchety` barcha kassa otchetlarini ochmasin. Legacy Access «Дополнительно» ham. */
+  cashClientBalances: [
+    "cash.balansy_klientov.view",
+    "cash.balansy.view",
+    "cash.otchety.spisok_balansy_klientov",
+    "cash.otchety.spisok_balansy_klientov_po_konsignatsii",
+    "cash.otchety.detal_balans_klienta",
+    "cash.otchety.detal_balans_klienta_po_konsignatsii"
+  ],
+  /** Faqat kassa otchet — balanslar menyusini ochmasin. */
   cashReports: ["cash.otchety.view"],
   cashDesks: ["cash.kassa.view", "cash.view"],
   cashCurrency: ["cash.kurs_valyuty.view"],
   cashExpenses: ["cash.rashody_klienta.view", "cash.rashody.view"],
   cashPaymentRequests: ["cash.zayavki_na_oplatu.view"],
+  cashExpeditorDebts: ["cash.dolgi_ekspeditora.view"],
 
   suppliers: ["suppliers.postavshchik.view", "suppliers.view"],
   suppliersPayments: ["suppliers.oplaty.view", "suppliers.oplaty_postavshchikam.view"],

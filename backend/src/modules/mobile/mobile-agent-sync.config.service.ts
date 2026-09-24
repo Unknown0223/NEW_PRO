@@ -13,9 +13,9 @@ import {
 } from "../staff/agent-mobile-config";
 import { getTenantProfile } from "../tenant-settings/tenant-settings.service";
 import {
+  buildCityTerritoryHints,
   referencesWithResolvedTerritoryNodes,
-  territoryRegionPickerNames,
-  type CityTerritoryHintDto
+  territoryRegionPickerNames
 } from "../tenant-settings/tenant-settings.territory";
 import { paymentMethodStorageKey, priceTypeEntriesFromUnknown, priceTypeKey } from "../tenant-settings/finance-refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
@@ -28,7 +28,10 @@ import {
 import { loadActiveWorkSlotsByUserIds } from "../work-slots/work-slots.query";
 import { resolveAppUpdateForTenant } from "./app-release.service";
 import { getMobileAgentAssignedCities } from "./mobile-agent-cities";
-import { mergeMobileCitiesByZoneRegion } from "./mobile-territory-references";
+import {
+  citiesByZoneRegionFromTerritoryNodes,
+  mergeMobileCitiesByZoneRegion
+} from "./mobile-territory-references";
 import {
   filterPriceTypeOptionsByAllowed,
   parsePriceTypeList,
@@ -309,7 +312,9 @@ export const clientSyncSelectBase = {
   client_balances: { select: { balance: true }, take: 1 }
 } as const;
 
-/** Mobil sync — joriy agent yoki vacant work_slot tashrif jadvali. */
+/** Mobil sync — joriy agent yoki vacant work_slot tashrif jadvali.
+ * `image_url` ataylab select qilinmaydi: base64 `data:` matnlari Prisma napi stringni yiqitadi.
+ */
 export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | null) {
   const assignmentOr: Prisma.ClientAgentAssignmentWhereInput[] = [{ agent_id: agentId }];
   if (workSlotId != null && workSlotId > 0) {
@@ -317,12 +322,6 @@ export function clientSyncSelectForAgent(agentId: number, workSlotId?: number | 
   }
   return {
     ...clientSyncSelectBase,
-    client_photo_reports: {
-      where: { deleted_at: null },
-      orderBy: { created_at: "desc" as const },
-      take: 1,
-      select: { image_url: true }
-    },
     agent_assignments: {
       where: { OR: assignmentOr },
       select: { visit_weekdays: true, visit_date: true, agent_id: true, work_slot_id: true },
@@ -386,7 +385,7 @@ async function loadMobileTenantReferences(tenantId: number) {
   const ref = profile.references;
   const refT = referencesWithResolvedTerritoryNodes(ref as unknown as Record<string, unknown>);
   const territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
-  const hints: Record<string, CityTerritoryHintDto> = {};
+  const hints = buildCityTerritoryHints(refT as Record<string, unknown>);
   const tenantRow = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -394,7 +393,7 @@ async function loadMobileTenantReferences(tenantId: number) {
   const st = asRecord(tenantRow?.settings);
   const refInner = asRecord(st.references);
   const citiesByZoneRegion = mergeMobileCitiesByZoneRegion({
-    fromTree: {},
+    fromTree: citiesByZoneRegionFromTerritoryNodes(territoryNodes),
     fromClientRows: {},
     cities: ref.client_cities ?? [],
     hints
@@ -513,14 +512,14 @@ export async function getMobileAgentConfigPayload(
   const refInner = profile.references as unknown as Record<string, unknown>;
   const refT = referencesWithResolvedTerritoryNodes(refInner);
   const territoryNodes = territoryNodesFromUnknown(refT.territory_nodes);
-  const hints: Record<string, CityTerritoryHintDto> = {};
+  const hints = buildCityTerritoryHints(refT as Record<string, unknown>);
   const tenantRow = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true, slug: true }
   });
   const st = asRecord(tenantRow?.settings);
   const citiesByZoneRegion = mergeMobileCitiesByZoneRegion({
-    fromTree: {},
+    fromTree: citiesByZoneRegionFromTerritoryNodes(territoryNodes),
     fromClientRows: {},
     cities: profile.references.client_cities ?? [],
     hints

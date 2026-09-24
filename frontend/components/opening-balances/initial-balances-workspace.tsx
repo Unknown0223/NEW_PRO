@@ -315,13 +315,19 @@ export function InitialBalancesWorkspace() {
     setDraft({ ...applied });
   }, [applied]);
 
+  const invalidateAfterBalanceChange = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
+    void qc.invalidateQueries({ queryKey: ["dashboard-stats", tenantSlug] });
+    void qc.invalidateQueries({ queryKey: ["client-balances", tenantSlug] });
+    void qc.invalidateQueries({ queryKey: ["client-balance-ledger", tenantSlug] });
+  }, [qc, tenantSlug]);
+
   const deleteMut = useMutation({
     mutationFn: async (id: number) => {
       await api.delete(`/api/${tenantSlug}/opening-balances/${id}`);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["dashboard-stats", tenantSlug] });
+      invalidateAfterBalanceChange();
     }
   });
 
@@ -330,8 +336,7 @@ export function InitialBalancesWorkspace() {
       await api.post(`/api/${tenantSlug}/opening-balances/${id}/restore`);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["dashboard-stats", tenantSlug] });
+      invalidateAfterBalanceChange();
     }
   });
 
@@ -422,8 +427,7 @@ export function InitialBalancesWorkspace() {
       const failed = data.data.failed ?? [];
       const ok = data.data.ok ?? [];
       setSelectedIds(new Set());
-      void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
-      void qc.invalidateQueries({ queryKey: ["dashboard-stats", tenantSlug] });
+      invalidateAfterBalanceChange();
       if (failed.length > 0) {
         setBulkMsg(
           `Удалено: ${ok.length}. Ошибок: ${failed.length}${
@@ -941,7 +945,7 @@ export function InitialBalancesWorkspace() {
                 onOpenChange={setAddOpen}
                 tenantSlug={tenantSlug}
                 onCreated={() => {
-                  void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
+                  invalidateAfterBalanceChange();
                 }}
               />
               <OpeningBalanceImportDialog
@@ -949,10 +953,9 @@ export function InitialBalancesWorkspace() {
                 onOpenChange={setImportOpen}
                 tenantSlug={tenantSlug}
                 onImported={() => {
-                  void qc.invalidateQueries({ queryKey: ["opening-balances", tenantSlug] });
+                  invalidateAfterBalanceChange();
                 }}
-              />
-            </>
+              />            </>
           ) : null}
         </div>
       )}

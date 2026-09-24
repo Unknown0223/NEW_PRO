@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { isClientPhotoStorageKey, readStoredClientPhoto } from "../../lib/client-photo-storage";
 import type { SupervisorDashboardFilters } from "./dashboard.supervisor.scope";
 
 export type SupervisorPhotoReportImageMeta = {
@@ -76,6 +77,9 @@ export function resolvePhotoUrlForClient(
     return supervisorPhotoContentPath(tenantSlug, photoId);
   }
   const t = storedUrl.trim();
+  if (isClientPhotoStorageKey(t)) {
+    return supervisorPhotoContentPath(tenantSlug, photoId);
+  }
   return t || supervisorPhotoContentPath(tenantSlug, photoId);
 }
 
@@ -302,7 +306,8 @@ export async function loadSupervisorPhotoContent(
   if (/^https?:\/\//i.test(stored) || stored.startsWith("/")) {
     return { kind: "redirect", url: stored };
   }
-  const decoded = decodeStoredPhotoContent(stored);
+  const fromStore = await readStoredClientPhoto(stored);
+  const decoded = fromStore ?? decodeStoredPhotoContent(stored);
   if (!decoded) return null;
   rememberPhotoContent(photoId, decoded.buffer, decoded.contentType);
   return { kind: "bytes", buffer: decoded.buffer, contentType: decoded.contentType };

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  bulkOrderBonusRefreshBodySchema,
   bulkOrderConsignmentBodySchema,
   bulkOrderDetailsBodySchema,
   bulkOrderExpeditorBodySchema,
@@ -37,6 +38,7 @@ import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkag
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
+  bulkRefreshOrderBonuses,
   bulkUpdateOrderConsignment,
   bulkUpdateOrderExpeditor,
   bulkUpdateOrderStatus,
@@ -159,6 +161,34 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           parsed.data.consignment_due_date ?? null,
           actorUserId,
           parsed.data.conditions_note ?? null
+        );
+        return reply.send(result);
+      } catch (e) {
+        if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+        throw e;
+      }
+    }
+  );
+
+  app.post(
+    "/api/:slug/orders/bulk/bonus-refresh",
+    { preHandler: [jwtAccessVerify, requireRoles(...catalogRoles)], ...writeApiRateLimitRouteOpts },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const parsed = bulkOrderBonusRefreshBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      const actor = getAccessUser(request);
+      const actorSub = Number.parseInt(actor.sub, 10);
+      const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
+      try {
+        await assertDocsWritableByIds(request, "orders", parsed.data.order_ids);
+        const result = await bulkRefreshOrderBonuses(
+          request.tenant!.id,
+          parsed.data.order_ids,
+          actorUserId,
+          actor.role
         );
         return reply.send(result);
       } catch (e) {

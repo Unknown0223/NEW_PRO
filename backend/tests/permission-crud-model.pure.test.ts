@@ -72,6 +72,12 @@ describe("legacy-key-map (eski → yangi)", () => {
     );
   });
 
+  it("cash balanslar → balansy_klientov (otchety emas)", () => {
+    expect(mapLegacyKeyToStructured("cash.otchety.spisok_balansy_klientov")).toBe("cash.balansy_klientov.view");
+    expect(mapLegacyKeyToStructured("cash.otchety.detal_balans_klienta")).toBe("cash.balansy_klientov.view");
+    expect(mapLegacyKeyToStructured("cash.otchety.otchyot_po_prihodam")).toBe("cash.otchety.view");
+  });
+
   it("noma'lum kalit uchun null", () => {
     expect(mapLegacyKeyToStructured("nope")).toBeNull();
   });

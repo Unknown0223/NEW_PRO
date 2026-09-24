@@ -1,0 +1,30 @@
+{
+  "name": "telegram-client-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mustaqil Telegram bot: yangi klient yig‘ish va SALEC import shabloni Excel",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "start:prod": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.3.1",
+    "exceljs": "^4.4.0",
+    "grammy": "^1.38.3",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.19.15",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

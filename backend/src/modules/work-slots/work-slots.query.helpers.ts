@@ -4,7 +4,8 @@ import {
   effectiveCashDeskIds,
   effectiveTerritories,
   effectiveWarehouseIds,
-  effectiveBranchCodes
+  effectiveBranchCodes,
+  summarizeTerritoriesForDisplay
 } from "./work-slots.multi-bindings";
 
 export function parseUserTerritoryParts(raw: string | null | undefined): {
@@ -24,6 +25,13 @@ export function parseUserTerritoryParts(raw: string | null | undefined): {
     city: parts[2] ?? null
   };
 }
+
+export type SlotNameLookups = {
+  warehouseNames: Map<number, string>;
+  cashDeskNames: Map<number, string>;
+  /** Tenant territory_nodes — list ustunlarini to‘g‘ri klassifikatsiya qilish */
+  territoryNodes?: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null;
+};
 
 export type SlotRowSource = {
   id: number;
@@ -79,11 +87,6 @@ export type SlotRowSource = {
   }>;
 };
 
-export type SlotNameLookups = {
-  warehouseNames?: Map<number, string>;
-  cashDeskNames?: Map<number, string>;
-};
-
 export function mapSlotRow(s: SlotRowSource, lookups?: SlotNameLookups): WorkSlotRow {
   const active = s.user_links[0];
   const u = active?.user;
@@ -132,7 +135,7 @@ export function mapSlotRow(s: SlotRowSource, lookups?: SlotNameLookups): WorkSlo
     if (n?.trim() && !cashNames.includes(n)) cashNames.push(n);
   }
 
-  const parts = parseUserTerritoryParts(territory);
+  const parts = summarizeTerritoriesForDisplay(territories, lookups?.territoryNodes ?? null);
 
   return {
     id: s.id,

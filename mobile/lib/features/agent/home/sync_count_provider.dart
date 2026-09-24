@@ -6,3 +6,9 @@ final syncCountTodayProvider = FutureProvider<int>((ref) => AppDatabase().getSyn
 
 final pendingPhotoCountProvider =
     FutureProvider<int>((ref) => AppDatabase().pendingPhotoReportCount());
+
+final syncedPhotoCountTodayProvider =
+    FutureProvider<int>((ref) => AppDatabase().getPhotosSyncedToday());
+
+final failedPhotoCountProvider =
+    FutureProvider<int>((ref) => AppDatabase().failedPhotoReportCount());

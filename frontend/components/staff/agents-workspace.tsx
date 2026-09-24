@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/lib/auth-store";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { api } from "@/lib/api";
 import { messageFromAgentsBulkError } from "@/lib/agents-bulk-errors";
 import { messageFromStaffCreateError } from "@/lib/staff-api-errors";
@@ -192,6 +193,7 @@ function buildAgentSearchHaystack(r: AgentRow): string {
 }
 
 export function AgentsWorkspace({ tenantSlug }: Props) {
+  const perms = useStaffCrudPermissions("agent");
   const accessToken = useAuthStore((s) => s.accessToken);
   const actorUserId = decodeAccessTokenUserId(accessToken);
   const qc = useQueryClient();
@@ -525,6 +527,7 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         title="Агент"
         subtitle="Управление агентами, доступом к приложению и мобильной конфигурацией"
         addLabel="Добавить агента"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateAgentError(null);
           setAddOpen(true);
@@ -560,18 +563,24 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, логину…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map((id) => AGENT_COLUMN_LABEL_BY_ID.get(id) ?? id);
-          const exportData = filteredRows.map((r) => order.map((colId) => agentExportCellString(r, colId)));
-          downloadXlsxSheet(
-            `agents_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Агенты",
-            headers,
-            exportData
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map((id) => AGENT_COLUMN_LABEL_BY_ID.get(id) ?? id);
+                const exportData = filteredRows.map((r) =>
+                  order.map((colId) => agentExportCellString(r, colId))
+                );
+                downloadXlsxSheet(
+                  `agents_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Агенты",
+                  headers,
+                  exportData
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -606,16 +615,21 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
           renderAgentDataCell(colId, pageRows.find((r) => r.id === row.id)!)
         }
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
-                <KeyRound className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton title="Деактивировать" onClick={() => setDeactivateAgent(r)}>
                   <UserMinus className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
@@ -625,14 +639,20 @@ export function AgentsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
+      {perms.canUpdate || perms.canDeactivate || perms.canActivate ? (
       <StaffBulkFloatingBar
         count={selectedIds.size}
         isActiveTab={tab === "active"}
         busy={bulkBusy}
-        onBulkEdit={() => setBulkEditOpen(true)}
-        onToggleActive={() => setConfirmBulk(tab === "active" ? "deactivate" : "activate")}
+        onBulkEdit={perms.canUpdate ? () => setBulkEditOpen(true) : undefined}
+        onToggleActive={
+          (tab === "active" && perms.canDeactivate) || (tab === "inactive" && perms.canActivate)
+            ? () => setConfirmBulk(tab === "active" ? "deactivate" : "activate")
+            : undefined
+        }
         onClearSelection={() => setSelectedIds(new Set())}
       />
+      ) : null}
 
       <AgentsBulkEditDialog
         open={bulkEditOpen}

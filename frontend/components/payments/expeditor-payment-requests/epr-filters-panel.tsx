@@ -5,10 +5,10 @@ import {
   type TemplateSelectOption
 } from "@/components/clients/clients-template-select-field";
 import { DateRangePopover, formatDateRangeButton } from "@/components/ui/date-range-popover";
-import { joinMultiFilterValues, splitMultiFilterValues, uiFromSingleValue } from "@/lib/client-filter-select-value";
+import { joinMultiFilterValues, splitMultiFilterValues } from "@/lib/client-filter-select-value";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useRef, useState } from "react";
-import type { DealType, EprFilterState, StatusFilter } from "./expeditor-payment-requests-types";
+import type { DealType, EprFilterState } from "./expeditor-payment-requests-types";
 
 function shiftYmd(ymd: string, deltaMonths: number): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
@@ -50,7 +50,6 @@ export function EprFiltersPanel({
       : "Выберите период";
 
   const statusOptions: TemplateSelectOption[] = [
-    { value: "", label: "Все" },
     { value: "pending_confirmation", label: "Ожидание подтверждения" },
     { value: "confirmed", label: "Подтверждено" },
     { value: "rejected", label: "Отклонено" }
@@ -167,26 +166,29 @@ export function EprFiltersPanel({
         <div className="w-[170px]">
           <ClientsTemplateSelectField
             label="Направление торговли"
+            multi
             options={tradeDirectionOptions}
-            values={uiFromSingleValue(draft.tradeDirection)}
-            onChange={(v) => onDraftChange({ tradeDirection: v[0]?.trim() ?? "" })}
+            values={splitMultiFilterValues(draft.tradeDirection)}
+            onChange={(v) => onDraftChange({ tradeDirection: joinMultiFilterValues(v) })}
           />
         </div>
         <div className="w-[170px]">
           <ClientsTemplateSelectField
             label="Способ оплаты"
+            multi
             options={paymentMethodOptions}
-            values={uiFromSingleValue(draft.paymentType)}
-            onChange={(v) => onDraftChange({ paymentType: v[0]?.trim() ?? "" })}
+            values={splitMultiFilterValues(draft.paymentType)}
+            onChange={(v) => onDraftChange({ paymentType: joinMultiFilterValues(v) })}
           />
         </div>
         <div className="w-[170px]">
           <ClientsTemplateSelectField
             label="Статус"
+            multi
             searchable={false}
             options={statusOptions}
-            values={uiFromSingleValue(draft.status)}
-            onChange={(v) => onDraftChange({ status: (v[0]?.trim() ?? "") as StatusFilter })}
+            values={splitMultiFilterValues(draft.status)}
+            onChange={(v) => onDraftChange({ status: joinMultiFilterValues(v) })}
           />
         </div>
         <div className="w-[170px]">

@@ -38,8 +38,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
     id: r.agent_id,
     name: r.agent_name,
     agent_code: r.agent_code,
-    order_count: r.visits_with_orders,
-    cancelled_count: 0,
+    order_count: r.order_count,
+    cancelled_count: r.cancelled_count,
     planned_visits: r.planned_visits,
     visited_total: r.visited_total,
     rejected_visits: r.visits_without_orders,
@@ -69,7 +69,8 @@ function buildEfficiencyReport(mappedVisitRows: Awaited<ReturnType<typeof loadSu
       photo_count: 0,
       total_sales_sum: "0"
     };
-    prev.order_count += row.visits_with_orders;
+    prev.order_count += row.order_count;
+    prev.cancelled_count += row.cancelled_count;
     prev.planned_visits += row.planned_visits;
     prev.visited_total += row.visited_total;
     prev.rejected_visits += row.visits_without_orders;

@@ -5,12 +5,17 @@ import {
   consignment217BalanceLine,
   consignment217BonusTitle,
   consignment217ClientLine,
+  consignment217CommentLine,
   consignment217DateLine,
+  consignment217DiscountLine,
   consignment217ExpeditorLine,
+  consignment217LandmarkLine,
   consignment217MoneyWithPay,
   consignment217OrderTitle,
   consignment217PaymentLabel,
+  consignment217PersonBlock,
   consignment217SheetName,
+  consignment217TerritoryLine,
   formatNakladnoyClientPhone,
   isLoading520ShelfReturnType,
   LOADING_520_SHELF_RETURN_GROUP,
@@ -18,7 +23,8 @@ import {
   loading520IsShelfReturnOnly,
   loading520SheetName,
   loading520Title,
-  sortLoading520GroupKeys
+  sortLoading520GroupKeys,
+  wrapNakladnoyFieldText
 } from "../src/modules/orders/order-nakladnoy-xlsx.consignment-217";
 
 describe("nakladnoy 2.1.7 / 5.2.0 shablon matnlari", () => {
@@ -32,13 +38,45 @@ describe("nakladnoy 2.1.7 / 5.2.0 shablon matnlari", () => {
   it("writes full-line headers and consignment titles", () => {
     expect(consignment217BalanceLine(-7333490)).toMatch(/Баланс клиента: -7\s333\s490,00 UZS/);
     expect(consignment217AddressLine("ASAKA, UZ")).toBe("Адрес: ASAKA, UZ");
+    expect(consignment217AddressLine("")).toBeNull();
+    expect(consignment217AddressLine("—")).toBeNull();
+    expect(consignment217LandmarkLine("ro'yxat yonida")).toBe("Ориентир: ro'yxat yonida");
+    expect(consignment217LandmarkLine("  ")).toBeNull();
+    expect(consignment217CommentLine("tez yetkazilsin")).toBe("Комментарий: tez yetkazilsin");
+    expect(consignment217CommentLine(null)).toBeNull();
+    expect(consignment217DiscountLine(150000)).toMatch(/Скидка: .* UZS/);
+    expect(consignment217DiscountLine(0)).toBeNull();
+    expect(consignment217DiscountLine(null)).toBeNull();
     expect(consignment217ExpeditorLine("AAND ASQAROV AZIZBEK")).toBe(
       "Экспедитор: AAND ASQAROV AZIZBEK"
     );
+    expect(consignment217ExpeditorLine("")).toBeNull();
+    expect(consignment217PersonBlock("Агент", "Murodqulova Nargiza", "99899375125")).toBe(
+      "Агент: Murodqulova Nargiza\n99899375125"
+    );
+    expect(consignment217PersonBlock("Агент", "Murodqulova Nargiza", "998993751250")).toBe(
+      "Агент: Murodqulova Nargiza\n+998 (99) 375-12-50"
+    );
+    expect(consignment217PersonBlock("Экспедитор", "ASQAROV AZIZBEK", null)).toBe(
+      "Экспедитор: ASQAROV AZIZBEK"
+    );
+    expect(consignment217PersonBlock("Агент", null, "99890")).toBeNull();
+    expect(consignment217TerritoryLine("SOUTH-WEST / Samarqand / BULUNGUR")).toBe(
+      "Территория: SOUTH-WEST / Samarqand / BULUNGUR"
+    );
+    expect(consignment217TerritoryLine("—")).toBeNull();
     expect(consignment217DateLine(new Date(2026, 8, 5))).toBe("Дата накладной: 05.09.2026");
     expect(consignment217OrderTitle("1657030", true)).toBe("Заказ (№1657030) - НА КОНСИГНАЦИЮ");
     expect(consignment217BonusTitle("1657030", true)).toBe("Бонус(№1657030) - НА КОНСИГНАЦИЮ");
     expect(consignment217OrderTitle("1", false)).toBe("Заказ (№1)");
+  });
+
+  it("wraps long orient/comment without unbounded growth", () => {
+    const long = "A".repeat(200) + " " + "B".repeat(50);
+    const wrapped = wrapNakladnoyFieldText(long, 40, 3);
+    expect(wrapped.split("\n").length).toBeLessThanOrEqual(3);
+    expect(wrapped.length).toBeLessThan(long.length + 10);
+    expect(consignment217LandmarkLine(long)?.startsWith("Ориентир:")).toBe(true);
   });
 
   it("keeps общий итог payment as goods-only NAQD PUL", () => {

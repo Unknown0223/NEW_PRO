@@ -10,11 +10,17 @@ import {
   resolvePaymentMethodEntries,
   resolvePaymentMethodRefToLabel
 } from "../tenant-settings/finance-refs";
-import { mergeTerritoryFilterOptions } from "./territory-nodes";
+import { mergeTerritoryFilterOptions, parseTerritoryNodes } from "./territory-nodes";
 import type { ReportActor } from "./client-sales-2.types";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 
 export async function getClientSales2FilterOptions(tenantId: number, actor?: ReportActor) {
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
@@ -25,11 +31,9 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
       : {};
   const profilePriceTypeEntries = priceTypeEntriesFromUnknown(refs.price_type_entries).filter((x) => x.active !== false);
 
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
-
   const [agents, categories, products, groups, segments] = await Promise.all([
     prisma.user.findMany({
-      where: whereAgent,
+      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -56,7 +60,7 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
     })
   ]);
 
-  const [clientCats, territoryRows, orderTypes] = await Promise.all([
+  const [clientCats, territoryRowsRaw, orderTypes] = await Promise.all([
     prisma.$queryRaw<Array<{ v: string }>>`
       SELECT DISTINCT c.category AS v
       FROM clients c
@@ -78,21 +82,18 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
     `
   ]);
 
-  const zoneRegionMap = new Map<string, Set<string>>();
-  const zoneRegionCityMap = new Map<string, Set<string>>();
-  for (const row of territoryRows) {
-    const z = (row.t1 ?? "").trim();
-    const r = (row.t2 ?? "").trim();
-    const c = (row.t3 ?? "").trim();
-    if (!z) continue;
-    if (!zoneRegionMap.has(z)) zoneRegionMap.set(z, new Set<string>());
-    if (r) zoneRegionMap.get(z)!.add(r);
-    if (r) {
-      const zr = `${z}|||${r}`;
-      if (!zoneRegionCityMap.has(zr)) zoneRegionCityMap.set(zr, new Set<string>());
-      if (c) zoneRegionCityMap.get(zr)!.add(c);
-    }
-  }
+  const territoryRows = filterTerritoryRowsByTerms(territoryRowsRaw, scope.territoryTerms);
+  const refsForTerritory =
+    scope.territoryTerms === null
+      ? refs
+      : {
+          ...refs,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refs.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const territoryOpts = mergeTerritoryFilterOptions(refsForTerritory, territoryRows);
 
   const priceTypeOptions = profilePriceTypeEntries
     .map((x) => ({ id: priceTypeKey(x), label: x.name.trim() || priceTypeKey(x) }))
@@ -137,20 +138,12 @@ export async function getClientSales2FilterOptions(tenantId: number, actor?: Rep
     price_type_options: priceTypeOptions,
     order_types: orderTypes.map((x) => x.v),
     client_categories: clientCats.map((x) => x.v),
-    territory_1: [...new Set(territoryRows.map((x) => (x.t1 ?? "").trim()).filter(Boolean))].sort(),
-    territory_2: [...new Set(territoryRows.map((x) => (x.t2 ?? "").trim()).filter(Boolean))].sort(),
-    territory_3: [...new Set(territoryRows.map((x) => (x.t3 ?? "").trim()).filter(Boolean))].sort(),
-    territory_tree: territoryRows.map((x) => ({
-      zone: (x.t1 ?? "").trim(),
-      region: (x.t2 ?? "").trim(),
-      city: (x.t3 ?? "").trim()
-    })),
-    regions_by_zone: Object.fromEntries(
-      [...zoneRegionMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
-    ),
-    cities_by_zone_region: Object.fromEntries(
-      [...zoneRegionCityMap.entries()].map(([k, v]) => [k, [...v].sort((a, b) => a.localeCompare(b, "ru"))])
-    )
+    territory_1: territoryOpts.territory_1,
+    territory_2: territoryOpts.territory_2,
+    territory_3: territoryOpts.territory_3,
+    territory_tree: territoryOpts.territory_tree,
+    regions_by_zone: territoryOpts.regions_by_zone,
+    cities_by_zone_region: territoryOpts.cities_by_zone_region
   };
 }
 

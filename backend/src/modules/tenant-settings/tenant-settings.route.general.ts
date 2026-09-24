@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   getMobileAppReleasePolicy,
-  listOutdatedMobileUsers,
+  listMobileAppUsers,
   patchMobileAppReleasePolicy
 } from "../mobile/app-release.service";
 import { notifyAppUpdateToOutdatedUsers } from "../mobile/fcm-push.service";
@@ -135,15 +135,19 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const policy = await getMobileAppReleasePolicy(request.tenant!.id);
-      const outdated = await listOutdatedMobileUsers(request.tenant!.id);
+      const users = await listMobileAppUsers(request.tenant!.id);
+      const outdated = users.filter((u) => u.is_outdated);
       const { mobileApkReady, buildMobileApkDownloadUrl } = await import("../mobile/mobile-apk.service");
       const {
         resolveRequestOrigin
       } = await import("../mobile/app-release.service");
       const apk = await mobileApkReady(request.tenant!.slug);
       const origin = resolveRequestOrigin(request.headers);
+      reply.header("Cache-Control", "no-store");
       return reply.send({
         policy,
+        users,
+        users_count: users.length,
         outdated_count: outdated.length,
         outdated_users: outdated,
         apk: {

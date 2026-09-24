@@ -163,16 +163,16 @@ class PhotoConfig {
 
   const PhotoConfig({
     this.requiredForOrder = false,
-    this.jpegQuality = 92,
-    this.maxWidthPx = 4032,
-    this.maxHeightPx = 4032,
+    this.jpegQuality = 75,
+    this.maxWidthPx = 1600,
+    this.maxHeightPx = 1600,
   });
 
   factory PhotoConfig.fromJson(Map<String, dynamic> j) => PhotoConfig(
         requiredForOrder: j['required_for_order'] ?? false,
-        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 80,
-        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1280,
-        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1280,
+        jpegQuality: (j['jpeg_quality'] as num?)?.toInt() ?? 75,
+        maxWidthPx: (j['max_width_px'] as num?)?.toInt() ?? 1600,
+        maxHeightPx: (j['max_height_px'] as num?)?.toInt() ?? 1600,
       );
 }
 

@@ -80,6 +80,10 @@ export async function syncSupervisorTeamToUsers(
   const teamIds = uniquePositiveIds(slot.supervisee_agent_slot_ids ?? []);
   const svrUserId = await activeUserIdOnSlot(tx, supervisorSlotId);
 
+  // SVR joyi bo‘sh bo‘lsa — agent.supervisor_user_id ni o‘chirmaymiz.
+  // Aks holda vaqtinchalik unassign / swap paytida butun jamoa «uzilib» qolardi.
+  if (svrUserId == null) return;
+
   const teamLinks =
     teamIds.length > 0
       ? await tx.slotUserLink.findMany({
@@ -97,27 +101,25 @@ export async function syncSupervisorTeamToUsers(
   }
 
   // Jamoadan chiqqan / boshqa agent slotdagi xodimlar — faqat shu SVR bo‘lsa tozalash
-  if (svrUserId != null) {
-    const leftovers = await tx.user.findMany({
-      where: {
-        tenant_id: tenantId,
-        supervisor_user_id: svrUserId,
-        ...(teamUserIds.size > 0 ? { id: { notIn: [...teamUserIds] } } : {})
-      },
-      select: { id: true }
+  const leftovers = await tx.user.findMany({
+    where: {
+      tenant_id: tenantId,
+      supervisor_user_id: svrUserId,
+      ...(teamUserIds.size > 0 ? { id: { notIn: [...teamUserIds] } } : {})
+    },
+    select: { id: true }
+  });
+  for (const u of leftovers) {
+    const activeLink = await tx.slotUserLink.findFirst({
+      where: { user_id: u.id, ended_at: null, slot: { tenant_id: tenantId, deleted_at: null } },
+      select: { slot_id: true, slot: { select: { slot_type: true } } }
     });
-    for (const u of leftovers) {
-      const activeLink = await tx.slotUserLink.findFirst({
-        where: { user_id: u.id, ended_at: null, slot: { tenant_id: tenantId, deleted_at: null } },
-        select: { slot_id: true, slot: { select: { slot_type: true } } }
-      });
-      if (!activeLink || activeLink.slot.slot_type !== "agent") continue;
-      if (teamIds.includes(activeLink.slot_id)) continue;
-      await tx.user.update({
-        where: { id: u.id },
-        data: { supervisor_user_id: null }
-      });
-    }
+    if (!activeLink || activeLink.slot.slot_type !== "agent") continue;
+    if (teamIds.includes(activeLink.slot_id)) continue;
+    await tx.user.update({
+      where: { id: u.id },
+      data: { supervisor_user_id: null }
+    });
   }
 }
 

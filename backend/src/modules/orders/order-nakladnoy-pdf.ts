@@ -62,18 +62,46 @@ function renderOrderBlock(
     .font("Helvetica")
     .fontSize(9)
     .text(`Sana: ${dateTime(order.createdAt)}`, 36, y)
-    .text(`Mijoz: ${order.clientName}`, 196, y, { width: 260 })
-    .text(`Hudud: ${order.territory || "—"}`, 460, y, { width: 106, align: "right" });
+    .text(`Mijoz: ${order.clientName}`, 196, y, { width: 260 });
+  if (order.territory?.trim() && order.territory.trim() !== "—") {
+    doc.text(`Hudud: ${order.territory}`, 460, y, { width: 106, align: "right" });
+  }
   y += 13;
 
-  doc
-    .text(`Agent: ${order.agentLine || "—"}`, 36, y, { width: 340 })
-    .text(`Ekspeditor: ${order.expeditorLine || "—"}`, 380, y, { width: 186, align: "right" });
+  if (order.agentName?.trim() || order.agentLine?.trim()) {
+    const agentTxt = order.agentName?.trim()
+      ? `Agent: ${order.agentName}${order.agentPhone?.trim() ? ` ${order.agentPhone.trim()}` : ""}`
+      : `Agent: ${order.agentLine}`;
+    doc.text(agentTxt, 36, y, { width: 340 });
+  }
+  if (order.expeditorName?.trim() || (order.expeditorLine?.trim() && order.expeditorLine !== "—")) {
+    const exTxt = order.expeditorName?.trim()
+      ? `Ekspeditor: ${order.expeditorName}`
+      : `Ekspeditor: ${order.expeditorLine}`;
+    doc.text(exTxt, 380, y, { width: 186, align: "right" });
+  }
   y += 13;
 
-  doc
-    .text(`Manzil: ${order.clientAddress || "—"}`, 36, y, { width: 530 });
-  y += 16;
+  if (order.clientAddress?.trim() && order.clientAddress.trim() !== "—") {
+    const addrH = doc.heightOfString(`Manzil: ${order.clientAddress}`, { width: 530 });
+    doc.text(`Manzil: ${order.clientAddress}`, 36, y, { width: 530 });
+    y += Math.min(36, Math.max(13, addrH + 2));
+  }
+  if (order.clientLandmark?.trim()) {
+    const h = doc.heightOfString(`Orientir: ${order.clientLandmark}`, { width: 530 });
+    doc.text(`Orientir: ${order.clientLandmark}`, 36, y, { width: 530 });
+    y += Math.min(36, Math.max(13, h + 2));
+  }
+  if (order.discountSum > 0) {
+    doc.text(`Skidka: ${money(order.discountSum)} UZS`, 36, y, { width: 530 });
+    y += 13;
+  }
+  if (order.orderComment?.trim()) {
+    const h = doc.heightOfString(`Izoh: ${order.orderComment}`, { width: 530 });
+    doc.text(`Izoh: ${order.orderComment}`, 36, y, { width: 530 });
+    y += Math.min(36, Math.max(13, h + 2));
+  }
+  y += 3;
 
   y = tableHeader(doc, y);
 

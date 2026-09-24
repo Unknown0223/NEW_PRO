@@ -28,12 +28,7 @@ import {
   type WorkSlotsColumnId
 } from "./work-slots-utils";
 import { SlotBadge } from "./slot-badge";
-
-function cellTerritory(raw: string | null | undefined, resolve?: (s: string) => string) {
-  const t = raw?.trim();
-  if (!t) return "—";
-  return resolve ? resolve(t) : t;
-}
+import { WorkSlotsTerritoryOverflowCell } from "./work-slots-territory-overflow-cell";
 
 /** Ustun qiymati — Agents/Expeditors jadval uslubida. */
 export function renderWorkSlotDataCell(
@@ -91,11 +86,11 @@ export function renderWorkSlotDataCell(
         <span className="italic text-muted-foreground">Пусто</span>
       );
     case "territory_zone":
-      return cellTerritory(slot.active_territory_zone, resolve);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_zone} resolve={resolve} />;
     case "territory_oblast":
-      return cellTerritory(slot.active_territory_oblast, resolve);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_oblast} resolve={resolve} />;
     case "territory_city":
-      return cellTerritory(slot.active_territory_city, resolve);
+      return <WorkSlotsTerritoryOverflowCell raw={slot.active_territory_city} resolve={resolve} />;
     case "warehouse":
       return (
         <span className="block max-w-[10rem] truncate">{slot.active_warehouse_name ?? "—"}</span>

@@ -94,6 +94,8 @@ describe("work-slots.config-territory", () => {
     expect(warehouseLinkRoleForUser("agent")).toBe("agent");
     expect(warehouseLinkRoleForUser("skladchik")).toBe("skladchik");
     expect(warehouseLinkRoleForUser("collector")).toBe("collector");
+    expect(warehouseLinkRoleForUser("sales_director")).toBe("sales_director");
+    expect(warehouseLinkRoleForUser("director")).toBe("director");
     expect(warehouseLinkRoleForUser("admin")).toBeNull();
   });
 

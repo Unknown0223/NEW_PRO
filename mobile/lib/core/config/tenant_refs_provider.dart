@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/session.dart';
+import 'agent_cities.dart';
 import 'territory_cascade.dart';
 import 'tenant_references.dart';
 
@@ -61,4 +62,11 @@ final sessionTenantRefsProvider = Provider<ClientFormTenantRefs>((ref) {
       nodes: refs?.territoryNodesList ?? const [],
     ),
   );
+});
+
+/// Agent `agent_cities`; bo‘sh bo‘lsa daraxt shaharlari — viloyat (oblast) emas.
+final effectiveAgentCitiesProvider = Provider<List<AgentCityOption>>((ref) {
+  final assigned = ref.watch(agentCitiesProvider);
+  if (assigned.isNotEmpty) return assigned;
+  return agentCitiesFromCascade(ref.watch(sessionTenantRefsProvider).cascadeIndex);
 });

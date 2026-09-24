@@ -71,6 +71,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
         importMode: parsed.importMode,
         duplicateKeyFields: parsed.duplicateKeyFields,
         updateApplyFields: parsed.updateApplyFields,
+        commitDecision: parsed.commitDecision,
         actorUserId
       });
       return reply.send(result);
@@ -97,7 +98,8 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
           columnMap: parsed.columnMap,
           importMode: parsed.importMode,
           duplicateKeyFields: parsed.duplicateKeyFields,
-          updateApplyFields: parsed.updateApplyFields
+          updateApplyFields: parsed.updateApplyFields,
+          commitDecision: parsed.commitDecision
         });
         tempPath = null;
         return reply.status(202).send({

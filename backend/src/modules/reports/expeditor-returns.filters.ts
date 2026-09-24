@@ -1,19 +1,22 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
-import { ORDER_STATUSES, ORDER_TYPES, ORDER_TYPE_LABELS } from "../orders/order-status";
+import { ORDER_STATUSES } from "../orders/order-status";
 import {
   paymentMethodStorageKey,
   resolveCurrencyEntries,
   resolvePaymentMethodEntries
 } from "../tenant-settings/finance-refs";
 import type { ReportActor } from "./client-sales-4-report.service";
-import { mergeTerritoryFilterOptions } from "./territory-nodes";
-import type { ExpeditorReturnsFilters } from "./expeditor-returns.types";
+import { mergeTerritoryFilterOptions, parseTerritoryNodes } from "./territory-nodes";
 import { KNOWN_ORDER_TYPES, ORDER_STATUS_LABEL_RU, orderTypeLabelRu } from "./expeditor-returns.helpers";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 
 export async function getExpeditorReturnsFilterOptions(tenantId: number, actor?: ReportActor) {
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -35,14 +38,14 @@ export async function getExpeditorReturnsFilterOptions(tenantId: number, actor?:
   }
   const payment_methods = [...paymentMethodMap.values()].sort((a, b) => a.label.localeCompare(b.label, "ru"));
 
-  const [agents, expeditors, categories, territoryRows] = await Promise.all([
+  const [agents, expeditors, categories, territoryRowsRaw] = await Promise.all([
     prisma.user.findMany({
-      where: whereAgent,
+      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
     prisma.user.findMany({
-      where: { tenant_id: tenantId, role: "expeditor", is_active: true },
+      where: staffWhereForFilterOptions(tenantId, scope, "expeditor"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -57,7 +60,18 @@ export async function getExpeditorReturnsFilterOptions(tenantId: number, actor?:
       WHERE c.tenant_id = ${tenantId}
     `
   ]);
-  const territoryOpts = mergeTerritoryFilterOptions(refs, territoryRows);
+  const territoryRows = filterTerritoryRowsByTerms(territoryRowsRaw, scope.territoryTerms);
+  const refsForTerritory =
+    scope.territoryTerms === null
+      ? refs
+      : {
+          ...refs,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refs.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const territoryOpts = mergeTerritoryFilterOptions(refsForTerritory, territoryRows);
 
   return {
     date_types: [

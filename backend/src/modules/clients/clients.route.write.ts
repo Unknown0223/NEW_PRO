@@ -7,9 +7,23 @@ import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { writeApiRateLimitRouteOpts } from "../../lib/rate-limit-config";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify, requireRoles, getAccessUser } from "../auth/auth.prehandlers";
+import { actorUserIdOrNull } from "../../lib/request-actor";
+import { assertClientAllowedForActor } from "../access/access-agent-scope";
 import { createClientMinimal, updateClientFields } from "./clients.service";
 import { clientUniqueHttp } from "./clients.write.uniques";
 import { bulkActiveBodySchema, createClientBodySchema } from "./clients.route.schemas";
+
+async function assertWriteClientInScope(
+  request: Parameters<typeof getAccessUser>[0],
+  tenantId: number,
+  clientId: number
+): Promise<void> {
+  const viewer = getAccessUser(request);
+  await assertClientAllowedForActor(tenantId, clientId, {
+    userId: actorUserIdOrNull(request),
+    role: viewer.role ?? ""
+  });
+}
 
 export async function registerClientWriteRoutes(app: FastifyInstance) {
   app.post(
@@ -180,6 +194,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         const sub = Number.parseInt(actor.sub, 10);
         const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
         const body = parsed.data;
+        await assertWriteClientInScope(request, request.tenant!.id, id);
         const mapped = {
           ...body,
           contact_persons: body.contact_persons?.map((s) => ({
@@ -193,6 +208,9 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "CLIENT_OUT_OF_SCOPE") {
+          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+        }
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "DUPLICATE_AGENT_DIRECTION") {

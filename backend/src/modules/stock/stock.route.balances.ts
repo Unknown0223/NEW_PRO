@@ -1,21 +1,34 @@
 import type { FastifyInstance } from "fastify";
-import { adminRoles, catalogRoles } from "./stock.route.shared";
+import { catalogRoles } from "./stock.route.shared";
 
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
 import { ensureTenantContext } from "../../lib/tenant-context";
 import { jwtAccessVerify } from "../auth/auth.prehandlers";
-import { requireRolesOrSkladchikEntitlement } from "../staff/skladchik-access.prehandler";
+import {
+  requireRolesOrSkladchikEntitlement,
+  STOCK_BALANCES_EXPORT_PERMISSIONS,
+  STOCK_BALANCES_VIEW_PERMISSIONS
+} from "../staff/skladchik-access.prehandler";
+import { isStockWarehouseAllowed, resolveStockActorWarehouseIds } from "./stock.actor-scope";
 import { buildStockBalancesExportBuffer, listStockBalances } from "./stock.service";
 import {
   stockBalancesExportQuerySchema,
   stockBalancesQuerySchema
 } from "./stock.route.schemas";
 
-
 export async function registerStockBalancesRoutes(app: FastifyInstance) {
   app.get(
     "/api/:slug/stock/balances/export",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(
+          catalogRoles,
+          "stock_balance_list",
+          STOCK_BALANCES_EXPORT_PERMISSIONS
+        )
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = stockBalancesExportQuerySchema.safeParse(request.query);
@@ -33,6 +46,10 @@ export async function registerStockBalancesRoutes(app: FastifyInstance) {
       if (q.view === "valuation" && !q.price_type?.trim()) {
         return sendApiError(reply, request, 400, "PriceTypeRequired");
       }
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       try {
         const buf = await buildStockBalancesExportBuffer(request.tenant!.id, {
           purpose: q.purpose,
@@ -44,7 +61,8 @@ export async function registerStockBalancesRoutes(app: FastifyInstance) {
           q: q.q ?? "",
           view: q.view,
           price_type: q.price_type?.trim() ?? null,
-          sort: q.sort
+          sort: q.sort,
+          allowed_warehouse_ids: allowedWarehouseIds
         });
         reply.header(
           "Content-Type",
@@ -67,7 +85,16 @@ export async function registerStockBalancesRoutes(app: FastifyInstance) {
 
   app.get(
     "/api/:slug/stock/balances",
-    { preHandler: [jwtAccessVerify, requireRolesOrSkladchikEntitlement(catalogRoles, "stock_balance_list")] },
+    {
+      preHandler: [
+        jwtAccessVerify,
+        requireRolesOrSkladchikEntitlement(
+          catalogRoles,
+          "stock_balance_list",
+          STOCK_BALANCES_VIEW_PERMISSIONS
+        )
+      ]
+    },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const parsed = stockBalancesQuerySchema.safeParse(request.query);
@@ -85,6 +112,10 @@ export async function registerStockBalancesRoutes(app: FastifyInstance) {
       if (q.view === "valuation" && !q.price_type?.trim()) {
         return sendApiError(reply, request, 400, "PriceTypeRequired");
       }
+      const allowedWarehouseIds = await resolveStockActorWarehouseIds(request, request.tenant!.id);
+      if (!isStockWarehouseAllowed(allowedWarehouseIds, q.warehouse_id)) {
+        return sendApiError(reply, request, 403, "ForbiddenWarehouse");
+      }
       try {
         const result = await listStockBalances(request.tenant!.id, {
           purpose: q.purpose,
@@ -98,7 +129,8 @@ export async function registerStockBalancesRoutes(app: FastifyInstance) {
           price_type: q.price_type?.trim() ?? null,
           page: q.page,
           limit: q.limit,
-          sort: q.sort
+          sort: q.sort,
+          allowed_warehouse_ids: allowedWarehouseIds
         });
         return reply.send(result);
       } catch (e) {

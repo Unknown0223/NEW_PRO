@@ -28,13 +28,25 @@ export type NakladnoyOrderPayload = {
   clientPhone: string | null;
   clientBalanceNum: Prisma.Decimal | null;
   clientAddress: string;
+  /** Mijoz «ориентир» (landmark) — bo‘sh bo‘lsa nakladnoyda chiqmaydi */
+  clientLandmark: string | null;
+  /** Zakaz izohi — bo‘sh bo‘lsa chiqmaydi */
+  orderComment: string | null;
+  /** Chegirma summasi — 0 / null bo‘lsa chiqmaydi */
+  discountSum: number;
   currencyLabel: string;
   agentLine: string;
-  /** Накладные 2.1.7 — `код [имя] территория дата (телефон)` */
+  /** Накладные 2.1.7 — legacy bir qator (5.2.0 telefon parse uchun saqlanadi) */
   invoiceAgentLine: string;
+  /** 2.1.7: faqat agent F.I.Sh */
+  agentName: string | null;
+  agentPhone: string | null;
   expeditorLine: string;
   expeditorName: string | null;
+  expeditorPhone: string | null;
   territory: string;
+  /** 2.1.7 «Территория» qatori (agent hududi, bo‘lmasa mijoz) */
+  invoiceTerritory: string;
   warehouseName: string | null;
   agentId: number | null;
   expeditorUserId: number | null;

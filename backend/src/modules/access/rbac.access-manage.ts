@@ -117,6 +117,26 @@ async function loadEffectivePermissionSets(
   return buildEffectivePermissionSets(rows, userRoleLinks, userPerms, allRoleByKey);
 }
 
+/** Kimda hisobot konstruktori (veb) ruxsati bor. */
+export async function getUsersHaveReportConstructorAccess(
+  tenantId: number,
+  rows: UserRoleRow[],
+  roleCatalog?: AccessManageRoleCatalog
+): Promise<Set<number>> {
+  const effective = await loadEffectivePermissionSets(tenantId, rows, roleCatalog);
+  const out = new Set<number>();
+  for (const [userId, keys] of effective) {
+    if (
+      keys.has("reports.konstruktor.view") ||
+      keys.has("pivot.otchety.view") ||
+      keys.has("reports.view")
+    ) {
+      out.add(userId);
+    }
+  }
+  return out;
+}
+
 /** Kimda «Доступ» moduli ko‘rinadi (view). */
 export async function getUsersHaveAccessModuleView(
   tenantId: number,

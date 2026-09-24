@@ -43,8 +43,16 @@ final homeStatsProvider = FutureProvider<Map<String, int>>((ref) async {
     'orders': await db.orderCount(),
     'pending': await db.pendingCount(),
     'pending_photos': await db.pendingPhotoReportCount(),
+    'synced_photos': await db.getPhotosSyncedToday(),
+    'failed_photos': await db.failedPhotoReportCount(),
   };
 });
+
+String _photoSyncStatusLabel({required int pending, required int failed}) {
+  if (pending > 0) return '${S.photoSyncPending}: $pending';
+  if (failed > 0) return '${S.photoSyncFailed}: $failed';
+  return S.photoSyncOk;
+}
 
 class AgentHomePage extends ConsumerStatefulWidget {
   const AgentHomePage({super.key});
@@ -415,16 +423,29 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                     ),
                     const SizedBox(height: 16),
                     statsAsync.when(
-                        data: (s) => Column(
-                          children: [
-                            _infoRow(
-                              S.unsyncedPhotos,
-                              '${ref.watch(pendingPhotoCountProvider).valueOrNull ?? s['pending_photos'] ?? 0}',
-                            ),
-                            _infoRow(S.lastSync, _formatSync(session.lastSyncAt)),
-                            _infoRow('Клиенты (лок.)', '${s['clients'] ?? 0}'),
-                          ],
-                        ),
+                        data: (s) {
+                          final pending = ref.watch(pendingPhotoCountProvider).valueOrNull ??
+                              s['pending_photos'] ??
+                              0;
+                          final synced = ref.watch(syncedPhotoCountTodayProvider).valueOrNull ??
+                              s['synced_photos'] ??
+                              0;
+                          final failed = ref.watch(failedPhotoCountProvider).valueOrNull ??
+                              s['failed_photos'] ??
+                              0;
+                          return Column(
+                            children: [
+                              _infoRow(S.unsyncedPhotos, '$pending'),
+                              _infoRow(S.syncedPhotos, '$synced'),
+                              _infoRow(
+                                S.photoSyncStatus,
+                                _photoSyncStatusLabel(pending: pending, failed: failed),
+                              ),
+                              _infoRow(S.lastSync, _formatSync(session.lastSyncAt)),
+                              _infoRow('Клиенты (лок.)', '${s['clients'] ?? 0}'),
+                            ],
+                          );
+                        },
                         loading: () => const Padding(
                           padding: EdgeInsets.all(8),
                           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),

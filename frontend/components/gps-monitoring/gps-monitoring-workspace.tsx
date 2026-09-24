@@ -122,6 +122,15 @@ export function GpsMonitoringWorkspace() {
   const employees = employeesQ.data?.employees ?? [];
   const supervisors = employeesQ.data?.supervisors ?? [];
 
+  useEffect(() => {
+    if (!selected) return;
+    const row = employees.find((e) => e.id === selected.id);
+    if (row && row.activeOnDate === false) {
+      setSelected(null);
+      setSelectedPointId(null);
+    }
+  }, [employees, selected]);
+
   const dayQ = useQuery({
     queryKey: ["gps-monitoring-day", tenantSlug, selected?.id, dateIso],
     enabled: Boolean(tenantSlug) && hydrated && Boolean(selected) && !isSupervisor,

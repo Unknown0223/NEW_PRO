@@ -6,6 +6,8 @@ import type { ClientSortField } from "@/lib/client-list-sort";
 
 import {
 
+  appendNamedStringListParam,
+
   appendPositiveIntListParam,
 
   appendStringListParam,
@@ -148,21 +150,19 @@ export function appendClientListFilterParams(params: URLSearchParams, p: ClientL
 
   if (p.activeFilter !== "all") params.set("is_active", p.activeFilter);
 
-  if (p.categoryFilter.trim()) params.set("category", p.categoryFilter.trim());
+  appendNamedStringListParam(params, "category", "categories", p.categoryFilter);
 
-  if (p.regionFilter.trim()) params.set("region", p.regionFilter.trim());
+  appendNamedStringListParam(params, "region", "regions", p.regionFilter);
 
-  if (p.cityFilter.trim()) params.set("city", p.cityFilter.trim());
+  appendNamedStringListParam(params, "city", "cities", p.cityFilter);
 
   if (p.districtFilter.trim()) params.set("district", p.districtFilter.trim());
 
-  if (p.clientTypeFilter.trim()) params.set("client_type_code", p.clientTypeFilter.trim());
+  appendNamedStringListParam(params, "client_type_code", "client_type_codes", p.clientTypeFilter);
 
-  if (p.clientFormatFilter.trim()) params.set("client_format", p.clientFormatFilter.trim());
+  appendNamedStringListParam(params, "client_format", "client_formats", p.clientFormatFilter);
 
-  if (p.salesChannelFilter.trim()) params.set("sales_channel", p.salesChannelFilter.trim());
-
-
+  appendNamedStringListParam(params, "sales_channel", "sales_channels", p.salesChannelFilter);
 
   appendPositiveIntListParam(params, "agent_id", "agent_ids", p.agentFilter);
 
@@ -198,7 +198,7 @@ export function appendClientListFilterParams(params: URLSearchParams, p: ClientL
 
   if (p.hasInventoryFilter === "no") params.set("has_active_equipment", "false");
 
-  if (p.equipmentKindFilter.trim()) params.set("equipment_kind", p.equipmentKindFilter.trim());
+  appendNamedStringListParam(params, "equipment_kind", "equipment_kinds", p.equipmentKindFilter);
 
   if (p.creditAllowedFilter === "yes") params.set("has_credit", "true");
 

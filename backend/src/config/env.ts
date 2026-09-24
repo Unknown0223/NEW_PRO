@@ -118,6 +118,9 @@ const envSchema = z.object({
   /** `/ready` endpoint: `x-internal-token` header bilan himoya (ixtiyoriy). */
   INTERNAL_HEALTH_TOKEN: z.string().min(16).optional(),
 
+  /** Telegram klient-bot (PC) → platforma API. Kamida 16 belgi. */
+  TELEGRAM_BOT_API_SECRET: z.string().min(16).optional(),
+
   /** Sentry DSN — berilmasa Sentry o‘chiq. */
   SENTRY_DSN: z.preprocess(
     (v) => (typeof v === "string" && (!v.trim() || v.includes("<") || v.includes("your-")) ? undefined : v),

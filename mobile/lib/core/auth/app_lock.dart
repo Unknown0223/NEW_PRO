@@ -91,9 +91,16 @@ class _ResumeObserver with WidgetsBindingObserver {
 }
 
 /// Tizim kamerasi / galereya ochilganda qulflashni vaqtincha o‘chirish.
-Future<T?> withAppLockSuppressed<T>(WidgetRef ref, Future<T?> Function() action) async {
+///
+/// Disk bayroqni `finally`da o‘chirmaymiz: kamera qaytgach siqish/upload paytida
+/// Android processni o‘ldirsa, cold start hali PIN o‘tkaza oladi (TTL ichida).
+Future<T?> withAppLockSuppressed<T>(
+  WidgetRef ref,
+  Future<T?> Function() action, {
+  Duration ttl = const Duration(minutes: 5),
+}) async {
   final suppression = ref.read(appLockSuppressionProvider.notifier);
-  await markExternalCaptureSkipLock();
+  await markExternalCaptureSkipLock(ttl: ttl);
   suppression.begin();
   try {
     return await action();
@@ -102,14 +109,18 @@ Future<T?> withAppLockSuppressed<T>(WidgetRef ref, Future<T?> Function() action)
     await _waitUntilResumed();
     suppression.skipNextResumeLock = true;
     suppression.end();
-    // Process tirik qaytdi — disk bayroq endi kerak emas.
-    await clearExternalCaptureSkipLock();
+    // Encode/upload OOM oynasi uchun TTL ni yangilab qo‘yamiz (clear qilmaymiz).
+    await markExternalCaptureSkipLock(ttl: ttl);
   }
 }
 
-Future<T?> withAppLockSuppressedRef<T>(Ref ref, Future<T?> Function() action) async {
+Future<T?> withAppLockSuppressedRef<T>(
+  Ref ref,
+  Future<T?> Function() action, {
+  Duration ttl = const Duration(minutes: 5),
+}) async {
   final suppression = ref.read(appLockSuppressionProvider.notifier);
-  await markExternalCaptureSkipLock();
+  await markExternalCaptureSkipLock(ttl: ttl);
   suppression.begin();
   try {
     return await action();
@@ -117,6 +128,6 @@ Future<T?> withAppLockSuppressedRef<T>(Ref ref, Future<T?> Function() action) as
     await _waitUntilResumed();
     suppression.skipNextResumeLock = true;
     suppression.end();
-    await clearExternalCaptureSkipLock();
+    await markExternalCaptureSkipLock(ttl: ttl);
   }
 }

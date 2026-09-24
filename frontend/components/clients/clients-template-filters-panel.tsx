@@ -8,8 +8,7 @@ import {
   parseLocationUi,
   parseTristateUi,
   splitMultiFilterValues,
-  tristateToUi,
-  uiFromSingleValue
+  tristateToUi
 } from "@/lib/client-filter-select-value";
 import type { ClientToolbarFiltersState } from "@/lib/client-list-toolbar-filters";
 import type { RefSelectOption } from "@/lib/ref-select-options";
@@ -152,23 +151,26 @@ export function ClientsTemplateFiltersPanel({
     {
       id: "clientType",
       label: "Тип клиента",
+      multi: true,
       options: clientTypeSelectOptions,
-      values: uiFromSingleValue(draft.clientTypeFilter),
-      onChange: (v) => patch({ clientTypeFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.clientTypeFilter),
+      onChange: (v) => patch({ clientTypeFilter: joinMultiFilterValues(v) })
     },
     {
       id: "category",
       label: "Категория клиента",
+      multi: true,
       options: categorySelectOptions,
-      values: uiFromSingleValue(draft.categoryFilter),
-      onChange: (v) => patch({ categoryFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.categoryFilter),
+      onChange: (v) => patch({ categoryFilter: joinMultiFilterValues(v) })
     },
     {
       id: "format",
       label: "Формат клиента",
+      multi: true,
       options: clientFormatSelectOptions,
-      values: uiFromSingleValue(draft.clientFormatFilter),
-      onChange: (v) => patch({ clientFormatFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.clientFormatFilter),
+      onChange: (v) => patch({ clientFormatFilter: joinMultiFilterValues(v) })
     },
     {
       id: "supervisor",
@@ -181,9 +183,10 @@ export function ClientsTemplateFiltersPanel({
     {
       id: "channel",
       label: "Канал продаж",
+      multi: true,
       options: salesChannelSelectOptions,
-      values: uiFromSingleValue(draft.salesChannelFilter),
-      onChange: (v) => patch({ salesChannelFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.salesChannelFilter),
+      onChange: (v) => patch({ salesChannelFilter: joinMultiFilterValues(v) })
     },
     {
       id: "day",
@@ -214,9 +217,10 @@ export function ClientsTemplateFiltersPanel({
     {
       id: "equipment",
       label: "Тип оборудования",
+      multi: true,
       options: equipmentSelectOptions,
-      values: uiFromSingleValue(draft.equipmentKindFilter),
-      onChange: (v) => patch({ equipmentKindFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.equipmentKindFilter),
+      onChange: (v) => patch({ equipmentKindFilter: joinMultiFilterValues(v) })
     },
     {
       id: "inn",
@@ -290,16 +294,18 @@ export function ClientsTemplateFiltersPanel({
     {
       id: "region",
       label: "Область",
+      multi: true,
       options: territoryCascade.regions,
-      values: uiFromSingleValue(draft.regionFilter),
-      onChange: (v) => patch({ regionFilter: v[0]?.trim() ?? "", cityFilter: "" })
+      values: splitMultiFilterValues(draft.regionFilter),
+      onChange: (v) => patch({ regionFilter: joinMultiFilterValues(v), cityFilter: "" })
     },
     {
       id: "city",
       label: "Город",
+      multi: true,
       options: territoryCascade.cities,
-      values: uiFromSingleValue(draft.cityFilter),
-      onChange: (v) => patch({ cityFilter: v[0]?.trim() ?? "" })
+      values: splitMultiFilterValues(draft.cityFilter),
+      onChange: (v) => patch({ cityFilter: joinMultiFilterValues(v) })
     }
   ];
 

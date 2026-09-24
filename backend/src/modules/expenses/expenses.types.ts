@@ -2,6 +2,8 @@ export type ExpenseListQuery = {
   page: number;
   limit: number;
   status?: string;
+  /** Bir nechta status */
+  statuses?: string[];
   expense_type?: string;
   agent_id?: number | null;
   warehouse_id?: number | null;

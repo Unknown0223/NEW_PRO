@@ -1,5 +1,9 @@
 import { prisma } from "../../config/database";
 import type { ReportActor } from "./client-sales-4-report.service";
+import {
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 
 function agentLabel(name: string, code: string | null) {
   const cleaned =
@@ -8,9 +12,10 @@ function agentLabel(name: string, code: string | null) {
   return c ? `${cleaned} (${c})` : cleaned;
 }
 
-export async function getGpsDeliveryRoutesFilterOptions(tenantId: number, _actor?: ReportActor) {
+export async function getGpsDeliveryRoutesFilterOptions(tenantId: number, actor?: ReportActor) {
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
   const expeditors = await prisma.user.findMany({
-    where: { tenant_id: tenantId, role: "expeditor", is_active: true },
+    where: staffWhereForFilterOptions(tenantId, scope, "expeditor"),
     select: {
       id: true,
       name: true,

@@ -96,6 +96,8 @@ export type StaffRow = {
   created_at: string;
   app_access: boolean;
   territory: string | null;
+  /** Ish o‘rnidagi barcha bog‘langan hududlar (slot territories). */
+  work_slot_territories?: string[];
   login: string;
   is_active: boolean;
   max_sessions: number;

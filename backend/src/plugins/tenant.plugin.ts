@@ -14,7 +14,7 @@ function tenantSlugFromApiPath(path: string): string | undefined {
   const parts = path.split("/").filter(Boolean);
   if (parts.length < 2 || parts[0] !== "api") return undefined;
   const seg = parts[1];
-  if (!seg || seg === "auth" || seg === "mobile") return undefined;
+  if (!seg || seg === "auth" || seg === "mobile" || seg === "telegram-bot") return undefined;
   try {
     return decodeURIComponent(seg);
   } catch {
@@ -25,7 +25,13 @@ function tenantSlugFromApiPath(path: string): string | undefined {
 export const tenantPlugin = fp(async (app) => {
   app.addHook("preHandler", async (request, reply) => {
     const path = requestPath(request.url);
-    if (path === "/health" || path === "/ready" || path.startsWith("/auth/") || path.startsWith("/api/auth/")) {
+    if (
+      path === "/health" ||
+      path === "/ready" ||
+      path.startsWith("/auth/") ||
+      path.startsWith("/api/auth/") ||
+      path.startsWith("/api/telegram-bot/")
+    ) {
       return;
     }
 

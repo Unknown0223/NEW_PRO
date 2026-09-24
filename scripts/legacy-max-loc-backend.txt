@@ -37,6 +37,7 @@ backend/src/contracts/orders.schemas.ts
 backend/src/modules/bonus-rules/bonus-rules.crud.update.ts
 
 backend/src/modules/clients/clients.import.assign.ts
+backend/src/modules/clients/clients.import.rows-create.ts
 
 backend/src/modules/orders/domain/order.consignment-auto.ts
 
@@ -98,3 +99,12 @@ backend/src/modules/bank-transfer-inbox/bank-transfer-inbox.actions.ts
 backend/src/modules/mobile/mobile.expeditor.workflow.deliver.ts
 
 backend/src/modules/payments/payment.query.mappers.ts
+
+backend/src/modules/work-slots/work-slots.multi-bindings.ts
+backend/src/modules/access/access-agent-scope.ts
+backend/src/modules/field/field.service.ts
+backend/src/modules/mobile/mobile.route.agent.orders.ts
+backend/src/modules/access/route-permission-guard.ts
+backend/src/modules/orders/orders.route.bulk.ts
+backend/src/modules/dashboard/dashboard.supervisor.snapshot-visits.query.ts
+backend/src/modules/report-builder/report-builder.service.ts

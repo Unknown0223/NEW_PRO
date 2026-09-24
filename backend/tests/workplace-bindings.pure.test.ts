@@ -56,10 +56,22 @@ describe("workplace-bindings", () => {
     const filtered = filterTerritoryRefsByAgentCities(refs, [
       { value: "Asaka", label: "Asaka", zone: "Z1", region: "Andijon" }
     ]);
-    expect(filtered.regions).toEqual(["Andijon"]);
+    expect(filtered.regions).toEqual([]);
     expect(filtered.zones).toEqual(["Z1"]);
     expect(filtered.cities).toEqual(["Asaka"]);
     expect(filtered.territory_cascade).toEqual({ "Z1|Andijon": ["Asaka"] });
     expect(filtered.extra).toBe(true);
+  });
+
+  it("clears regions when agent cities empty", () => {
+    const refs = {
+      regions: ["Andijon", "Toshkent"],
+      zones: ["Z1"],
+      cities: ["Asaka"]
+    };
+    const filtered = filterTerritoryRefsByAgentCities(refs, []);
+    expect(filtered.regions).toEqual([]);
+    expect(filtered.zones).toEqual(["Z1"]);
+    expect(filtered.cities).toEqual(["Asaka"]);
   });
 });

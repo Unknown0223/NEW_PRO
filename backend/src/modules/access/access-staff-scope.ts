@@ -40,7 +40,7 @@ export function actorHasUnrestrictedDataScope(role: string): boolean {
 }
 
 /**
- * Dostup: hodimlar ∪/∩ hudud.
+ * Dostup: hodimlar ∩ hudud.
  * — hech narsa belgilanmagan → []
  * — faqat hodimlar → shu hodimlar
  * — faqat hudud → shu hududdagi hodimlar
@@ -51,16 +51,36 @@ export function resolveVisibleStaffIds(
   territoryIds: number[],
   territoryStaffIds: number[]
 ): number[] {
-  const supervisees = uniquePositiveIds(superviseeIds);
-  const territories = uniquePositiveIds(territoryIds);
-  const fromTerritory = uniquePositiveIds(territoryStaffIds);
-  const hasS = supervisees.length > 0;
-  const hasT = territories.length > 0;
-  if (!hasS && !hasT) return [];
-  if (hasS && !hasT) return supervisees;
-  if (!hasS && hasT) return fromTerritory;
-  const allowed = new Set(fromTerritory);
-  return supervisees.filter((id) => allowed.has(id));
+  return resolveStaffVisibilityByExplicitAndGeo({
+    explicitStaffIds: superviseeIds,
+    geoStaffIds: territoryStaffIds,
+    hasGeoBinding: uniquePositiveIds(territoryIds).length > 0
+  });
+}
+
+/**
+ * Umumiy qoida (Dostup + ish o‘rni filial/hudud):
+ * — faqat geo → geo dagi barcha hodimlar (va ularning savdolari)
+ * — faqat belgilangan hodimlar → shu hodimlar
+ * — geo + hodim → faqat geo ichidagi belgilangan hodimlar
+ * — geo belgilangan lekin geo topilmasa → explicit saqlanadi (jamoa nollanmasin)
+ */
+export function resolveStaffVisibilityByExplicitAndGeo(input: {
+  explicitStaffIds: number[];
+  geoStaffIds: number[];
+  hasGeoBinding: boolean;
+}): number[] {
+  const explicit = uniquePositiveIds(input.explicitStaffIds);
+  const geo = uniquePositiveIds(input.geoStaffIds);
+  const hasE = explicit.length > 0;
+  const hasG = input.hasGeoBinding;
+  if (!hasE && !hasG) return [];
+  if (hasE && !hasG) return explicit;
+  if (!hasE && hasG) return geo;
+  // Geo resolve bo‘sh — kesishma o‘rniga jamoani saqlaymiz (string mismatch / sync kechikishi)
+  if (geo.length === 0) return explicit;
+  const allowed = new Set(geo);
+  return explicit.filter((id) => allowed.has(id));
 }
 
 /**

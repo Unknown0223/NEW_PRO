@@ -35,7 +35,7 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
       product_list: { show_out_of_stock: false, allow_submit_for_new_client: true },
       misc: { visit_start_end_enabled: true },
       sync: { allowed_window_from: "06:00", allowed_window_to: "22:00" },
-      photo: { jpeg_quality: 92, max_width_px: 4032, max_height_px: 4032 },
+      photo: { jpeg_quality: 75, max_width_px: 1600, max_height_px: 1600 },
       orders: { bonus_fill_mode: "auto_fill_remaining" }
     };
   }
@@ -90,7 +90,7 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
       },
       outlet: { show_plan_in_reports: true },
       route: { daily_visit_limit: 50, readd_cooldown_days: 0 },
-      photo: { jpeg_quality: 92, max_width_px: 4032, max_height_px: 4032 },
+      photo: { jpeg_quality: 75, max_width_px: 1600, max_height_px: 1600 },
       misc: { visit_start_end_enabled: true },
       sync: { allowed_window_from: "06:00", allowed_window_to: "22:00" },
       supervision: {

@@ -17,6 +17,8 @@ import '../gps/gps_ping_queue.dart';
 import '../time/work_region_time.dart';
 import 'photo_report_queue.dart';
 import 'sync_payload_parser.dart';
+import '../../features/agent/home/agent_home_page.dart';
+import '../../features/agent/home/sync_count_provider.dart';
 import '../../features/shared/services/sync_service.dart';
 
 /// Sync engine — full/delta sync + offline queue flush
@@ -319,6 +321,11 @@ final autoFlushProvider = Provider<void>((ref) {
       final photoPending = await AppDatabase().pendingPhotoReportCount();
       if (photoPending > 0) {
         await syncEngine.flushPendingPhotoReports(photoConfig: photoCfg);
+        // UI (Главная / Уведомления) yangilansin — aks holda «Синхр. фото» 0 qoladi.
+        ref.invalidate(pendingPhotoCountProvider);
+        ref.invalidate(syncedPhotoCountTodayProvider);
+        ref.invalidate(failedPhotoCountProvider);
+        ref.invalidate(homeStatsProvider);
       }
       if (!policy.allowed) return;
       final count = await syncEngine.pendingCount();

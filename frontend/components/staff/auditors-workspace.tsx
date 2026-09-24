@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AxiosError } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useStaffCrudPermissions } from "@/lib/use-staff-crud-permissions";
 import { firstValidationUserHint, getZodFlattenFromApiErrorBody } from "@/lib/api-validation-details";
 import { withApiSupportLine } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
@@ -59,6 +60,7 @@ type AuditorRow = {
   apk_version: string | null;
   app_access: boolean;
   territory: string | null;
+  work_slot_territories?: string[];
   device_name: string | null;
   active_session_count: number;
   max_sessions: number;
@@ -102,6 +104,7 @@ const AUDITOR_COLUMN_LABEL_BY_ID = new Map<string, string>(
 type Props = { tenantSlug: string };
 
 export function AuditorsWorkspace({ tenantSlug }: Props) {
+  const perms = useStaffCrudPermissions("auditor");
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "inactive">("active");
   const [search, setSearch] = useState("");
@@ -374,7 +377,12 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
       case "phone":
         return <StaffKomandaPhoneCell phone={r.phone} />;
       case "territory":
-        return <StaffKomandaTerritoryCell territory={r.territory} />;
+        return (
+          <StaffKomandaTerritoryCell
+            territory={r.territory}
+            territories={r.work_slot_territories}
+          />
+        );
       case "apk_version":
         return <StaffKomandaApkCell version={r.apk_version} />;
       case "pinfl":
@@ -394,6 +402,7 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         title="Аудиторы"
         subtitle="Управление аудиторами: территории, доступ к приложению и контроль сессий"
         addLabel="Добавить аудитора"
+        canAdd={perms.canCreate}
         onAdd={() => {
           setCreateError(null);
           setAddOpen(true);
@@ -444,18 +453,24 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onColumnSettings={() => setColumnDialogOpen(true)}
         onSearch={setSearch}
         searchPlaceholder="Поиск по ФИО, коду, логину…"
-        onExport={() => {
-          const order = tablePrefs.visibleColumnOrder;
-          const headers = order.map((id) => AUDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
-          const exportData = filteredRows.map((r) => order.map((colId) => exportCellString(r, colId)));
-          downloadXlsxSheet(
-            `auditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
-            "Аудиторы",
-            headers,
-            exportData
-          );
-        }}
-        onImport={() => staffImport.setOpen(true)}
+        onExport={
+          perms.canExport
+            ? () => {
+                const order = tablePrefs.visibleColumnOrder;
+                const headers = order.map((id) => AUDITOR_COLUMN_LABEL_BY_ID.get(id) ?? id);
+                const exportData = filteredRows.map((r) =>
+                  order.map((colId) => exportCellString(r, colId))
+                );
+                downloadXlsxSheet(
+                  `auditors_${tab}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+                  "Аудиторы",
+                  headers,
+                  exportData
+                );
+              }
+            : undefined
+        }
+        onImport={perms.canImport ? () => staffImport.setOpen(true) : undefined}
         onRefresh={() => void listQ.refetch()}
         isFetching={listQ.isFetching}
       />
@@ -488,16 +503,21 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         onToggleAllOnPage={toggleAllOnPage}
         renderCell={(colId, row) => renderDataCell(colId, pageRows.find((r) => r.id === row.id)!)}
         renderActions={(row) => {
+          if (!perms.canAnyRowAction) return null;
           const r = pageRows.find((x) => x.id === row.id)!;
           return (
             <div className="flex items-center justify-end gap-1">
-              <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
-                <KeyRound className="h-4 w-4" />
-              </AgentIconButton>
-              <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
-                <Pencil className="h-4 w-4 text-amber-600" />
-              </AgentIconButton>
-              {tab === "active" ? (
+              {perms.canUpdate ? (
+                <AgentIconButton title="Изменить пароль" onClick={() => setPasswordRow(r)}>
+                  <KeyRound className="h-4 w-4" />
+                </AgentIconButton>
+              ) : null}
+              {perms.canUpdate ? (
+                <AgentIconButton title="Редактировать" onClick={() => setEditRow(r)}>
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </AgentIconButton>
+              ) : null}
+              {tab === "active" && perms.canDeactivate ? (
                 <AgentIconButton title="Деактивировать" onClick={() => setDeactivateRow(r)}>
                   <UserMinus className="h-4 w-4 text-rose-600" />
                 </AgentIconButton>
@@ -507,13 +527,19 @@ export function AuditorsWorkspace({ tenantSlug }: Props) {
         }}
       />
 
-      <StaffBulkFloatingBar
-        count={selected.size}
-        isActiveTab={tab === "active"}
-        busy={bulk.bulkBusy}
-        onToggleActive={() => bulk.onRequestToggleActive(tab === "active")}
-        onClearSelection={() => setSelected(new Set())}
-      />
+      {perms.canUpdate || perms.canDeactivate || perms.canActivate ? (
+        <StaffBulkFloatingBar
+          count={selected.size}
+          isActiveTab={tab === "active"}
+          busy={bulk.bulkBusy}
+          onToggleActive={
+            (tab === "active" && perms.canDeactivate) || (tab === "inactive" && perms.canActivate)
+              ? () => bulk.onRequestToggleActive(tab === "active")
+              : undefined
+          }
+          onClearSelection={() => setSelected(new Set())}
+        />
+      ) : null}
 
       <AgentTemplateConfirmDialog
         open={bulk.confirmBulk != null}

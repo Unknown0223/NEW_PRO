@@ -85,8 +85,10 @@ export function ClientImportMappingDialog({
   const [headerRowOneBased, setHeaderRowOneBased] = useState(1);
   const [mappingSelect, setMappingSelect] = useState<Record<string, string>>({});
   const [localErr, setLocalErr] = useState<string | null>(null);
-  const [checkDuplicates, setCheckDuplicates] = useState(false);
-  const [dupKeySet, setDupKeySet] = useState<Set<string>>(() => new Set(DEFAULT_DUPLICATE_KEY_FIELDS));
+  const [checkDuplicates, setCheckDuplicates] = useState(true);
+  const [dupKeySet, setDupKeySet] = useState<Set<string>>(
+    () => new Set(RECOMMENDED_DUPLICATE_KEY_FIELDS)
+  );
   const [restrictUpdate, setRestrictUpdate] = useState(importMode === "update");
   const updateFieldOptions = useMemo(() => buildUpdateApplyFieldOptions(), []);
   const baseUpdateOptions = useMemo(

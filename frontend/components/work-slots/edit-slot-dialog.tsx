@@ -10,7 +10,7 @@ import {
 import { WorkSlotsMultiSelect } from "./work-slots-multi-select";
 import { WorkSlotFormDrawer } from "./work-slot-form-drawer";
 import { apiFetch } from "@/lib/api-client";
-import { buildZoneRegionCityCascadeOptions } from "@/lib/territory-client-filters";
+import { buildZoneRegionCityCascadeOptions, normalizeWorkSlotTerritoryLists } from "@/lib/territory-client-filters";
 import { createTerritoryLabelResolver } from "@/lib/territory-filter-labels";
 import type { RefSelectOption } from "@/lib/ref-select-options";
 import type { TerritoryNode } from "@/lib/territory-tree";
@@ -54,7 +54,10 @@ type Props = {
 
 const emptyLocation = (): WorkSlotsLocationValues => emptyLocationValues();
 
-function locationFromSlot(d: WorkSlotListItem): WorkSlotsLocationValues {
+function locationFromSlot(
+  d: WorkSlotListItem,
+  territoryNodes?: TerritoryNode[]
+): WorkSlotsLocationValues {
   const warehouseIds =
     d.active_warehouse_ids?.length
       ? d.active_warehouse_ids
@@ -81,13 +84,29 @@ function locationFromSlot(d: WorkSlotListItem): WorkSlotsLocationValues {
     if (p.oblast && !oblastList.includes(p.oblast)) oblastList.push(p.oblast);
     if (p.city && !cityList.includes(p.city)) cityList.push(p.city);
   }
+  // Singular API maydonlari ham qo‘shiladi (ro‘yxat bo‘sh bo‘lsa)
+  if (d.active_territory_zone?.trim() && !zoneList.includes(d.active_territory_zone.trim())) {
+    zoneList.push(d.active_territory_zone.trim());
+  }
+  if (d.active_territory_oblast?.trim() && !oblastList.includes(d.active_territory_oblast.trim())) {
+    oblastList.push(d.active_territory_oblast.trim());
+  }
+  if (d.active_territory_city?.trim() && !cityList.includes(d.active_territory_city.trim())) {
+    cityList.push(d.active_territory_city.trim());
+  }
+
+  const normalized = normalizeWorkSlotTerritoryLists(
+    { zones: zoneList, regions: oblastList, cities: cityList },
+    territoryNodes
+  );
+
   return {
-    territoryZone: d.active_territory_zone ?? zoneList[0] ?? "",
-    territoryOblast: d.active_territory_oblast ?? oblastList[0] ?? "",
-    territoryCity: d.active_territory_city ?? cityList[0] ?? "",
-    territoryZoneList: zoneList,
-    territoryOblastList: oblastList,
-    territoryCityList: cityList,
+    territoryZone: normalized.zones[0] ?? "",
+    territoryOblast: normalized.regions[0] ?? "",
+    territoryCity: normalized.cities[0] ?? "",
+    territoryZoneList: normalized.zones,
+    territoryOblastList: normalized.regions,
+    territoryCityList: normalized.cities,
     warehouseId: warehouseIds[0] ?? null,
     warehouseIds,
     returnWarehouseId: d.return_warehouse_id ?? null,
@@ -176,11 +195,11 @@ export function EditSlotDialog({
         setDirectionId(d.direction_id != null ? String(d.direction_id) : "");
         setSlotType(d.slot_type as WorkSlotType);
         setIsActive(d.is_active);
-        setLocation(locationFromSlot(d));
+        setLocation(locationFromSlot(d, territoryNodes));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Ошибка загрузки"))
       .finally(() => setLoading(false));
-  }, [open, slotId, tenant]);
+  }, [open, slotId, tenant, territoryNodes]);
 
   const submit = async () => {
     if (!slotId || !original) return;
@@ -212,7 +231,7 @@ export function EditSlotDialog({
     if (slotType !== original.slot_type) changes.slot_type = slotType;
     if (isActive !== original.is_active) changes.is_active = isActive;
 
-    const origLoc = locationFromSlot(original);
+    const origLoc = locationFromSlot(original, territoryNodes);
 
     const sameIds = (a: number[], b: number[]) =>
       a.length === b.length && a.every((id, i) => id === b[i]);

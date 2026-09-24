@@ -142,9 +142,9 @@ class SupervisorSettingsPage extends ConsumerWidget {
             ),
           ]),
           _group('ФОТО', [
-            _ValueRow(label: 'JPEG качество', value: '${photo?.jpegQuality ?? 92}'),
-            _ValueRow(label: 'Макс. ширина', value: '${photo?.maxWidthPx ?? 4032}'),
-            _ValueRow(label: 'Макс. высота', value: '${photo?.maxHeightPx ?? 4032}'),
+            _ValueRow(label: 'JPEG качество', value: '${photo?.jpegQuality ?? 75}'),
+            _ValueRow(label: 'Макс. ширина', value: '${photo?.maxWidthPx ?? 1600}'),
+            _ValueRow(label: 'Макс. высота', value: '${photo?.maxHeightPx ?? 1600}'),
           ]),
           _group('ПРОЧИЕ', [
             _ToggleRow(

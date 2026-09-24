@@ -10,6 +10,10 @@ export const CLIENT_UNIQUE_ERROR_HTTP: Record<string, { error: string; message: 
     error: "DuplicateClient",
     message: "Bu mijoz allaqachon mavjud (hudud, nom, INN/PINFL)."
   },
+  DUPLICATE_GEO_NAME: {
+    error: "DuplicateGeoName",
+    message: "100 m radiusda o‘xshash nomli mijoz mavjud."
+  },
   DUPLICATE_INACTIVE: {
     error: "DuplicateInactive",
     message: "Bu klient allaqachon mavjud, statusi nofaol."
@@ -21,6 +25,7 @@ const CONFLICT_PRIORITY: ImportUpdateUniqueConflict["field"][] = [
   "client_code",
   "inn",
   "client_pinfl",
+  "geo_name",
   "identity",
   "name"
 ];
@@ -39,6 +44,8 @@ export function uniqueConflictErrorCode(
       return "DUPLICATE_PINFL";
     case "identity":
       return "DUPLICATE_CLIENT";
+    case "geo_name":
+      return "DUPLICATE_GEO_NAME";
     default:
       return "DUPLICATE_NAME";
   }
@@ -77,6 +84,8 @@ export type ClientUniqueFields = {
   region?: string | null;
   zone?: string | null;
   city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 /**

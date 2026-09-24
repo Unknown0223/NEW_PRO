@@ -16,8 +16,44 @@ import {
   utcOffsetHoursForTimezone
 } from "../tenant-settings/tenant-timezone";
 
-const MOBILE_SYNC_CLIENT_BATCH = 500;
+const MOBILE_SYNC_CLIENT_BATCH = 200;
 const MOBILE_SYNC_CLIENT_MAX = 20_000;
+/** Syncga faqat qisqa HTTP URL — base64 `data:` Prisma napi stringni yiqitadi. */
+const MOBILE_SYNC_PHOTO_URL_MAX = 2048;
+
+/**
+ * Katta base64 `image_url` larni Prisma orqali o‘qimasdan, faqat qisqa HTTP URL.
+ * #5668 / `Failed to convert rust String into napi string` himoyasi.
+ */
+export async function fetchSyncClientPhotoUrls(
+  tenantId: number,
+  clientIds: number[]
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (clientIds.length === 0) return out;
+
+  const rows = await prisma.$queryRaw<Array<{ client_id: number; image_url: string | null }>>`
+    SELECT DISTINCT ON (r.client_id)
+      r.client_id,
+      CASE
+        WHEN r.image_url IS NULL THEN NULL
+        WHEN lower(left(r.image_url, 5)) = 'data:' THEN NULL
+        WHEN length(r.image_url) > ${MOBILE_SYNC_PHOTO_URL_MAX} THEN NULL
+        ELSE r.image_url
+      END AS image_url
+    FROM client_photo_reports r
+    WHERE r.tenant_id = ${tenantId}
+      AND r.deleted_at IS NULL
+      AND r.client_id IN (${Prisma.join(clientIds)})
+    ORDER BY r.client_id, r.created_at DESC
+  `;
+
+  for (const row of rows) {
+    const url = row.image_url?.trim();
+    if (url) out.set(row.client_id, url);
+  }
+  return out;
+}
 
 export async function fetchSyncClients(
   tenantId: number,
@@ -33,9 +69,12 @@ export async function fetchSyncClients(
     const take = Math.min(MOBILE_SYNC_CLIENT_BATCH, MOBILE_SYNC_CLIENT_MAX - out.length);
     const rows = await prisma.client.findMany({
       where: {
-        ...agentScopedClientWhere(tenantId, agentId, workSlotId),
-        is_active: true,
-        ...(since.getTime() > 0 ? { updated_at: { gt: since } } : {})
+        AND: [
+          agentScopedClientWhere(tenantId, agentId, workSlotId),
+          // Kutayotgan (неактив) yangi klientlar ham agentga ko‘rinsin
+          { OR: [{ is_active: true }, { agent_id: agentId }] },
+          ...(since.getTime() > 0 ? [{ updated_at: { gt: since } }] : [])
+        ]
       },
       orderBy: { id: "asc" },
       skip,
@@ -43,7 +82,24 @@ export async function fetchSyncClients(
       select: clientSyncSelectForAgent(agentId, workSlotId)
     });
     if (rows.length === 0) break;
-    out.push(...rows.map((r) => compactClient(r as unknown as CompactClientRow, { agentId, workSlotId })));
+
+    const photoByClient = await fetchSyncClientPhotoUrls(
+      tenantId,
+      rows.map((r) => r.id)
+    );
+
+    out.push(
+      ...rows.map((r) => {
+        const photo = photoByClient.get(r.id);
+        return compactClient(
+          {
+            ...(r as unknown as CompactClientRow),
+            ...(photo ? { client_photo_reports: [{ image_url: photo }] } : { client_photo_reports: [] })
+          },
+          { agentId, workSlotId }
+        );
+      })
+    );
     if (rows.length < take) break;
     skip += rows.length;
   }

@@ -7,11 +7,19 @@ import {
   buildScopedAgentWhere,
   buildScopedStaffDirectoryWhere,
   isOrderAgentAllowedForActor,
+  resolveStaffVisibilityByExplicitAndGeo,
   resolveVisibleStaffIds,
   uniquePositiveIds,
   type AccessAgentScope,
   type ScopedReportActor
 } from "./access-staff-scope";
+import {
+  mergeBranchCodesForScope,
+  mergeCashDeskIdsForScope,
+  mergeGeoStaffIds,
+  mergeTerritoryTermsForScope,
+  mergeWarehouseIdsForScope
+} from "./access-scope-from-slot";
 
 export type { AccessAgentScope, ScopedReportActor } from "./access-staff-scope";
 export {
@@ -25,6 +33,7 @@ export {
   intersectRequestedAgentIds,
   isOrderAgentAllowedForActor,
   resolveAllowedAgentIdsForActor,
+  resolveStaffVisibilityByExplicitAndGeo,
   resolveVisibleStaffIds
 } from "./access-staff-scope";
 
@@ -56,18 +65,132 @@ async function listStaffIdsLinkedToTerritories(
     )
   ];
   if (terms.length > 0) {
-    const stringMatches = await prisma.user.findMany({
+    const stringMatches = await listStaffIdsByTerritoryTerms(tenantId, terms, opts);
+    for (const id of stringMatches) ids.add(id);
+  }
+  if (ids.size === 0) return [];
+  const inTenant = await prisma.user.findMany({
+    where: {
+      tenant_id: tenantId,
+      id: { in: [...ids] },
+      ...(opts.includeInactive ? {} : { is_active: true })
+    },
+    select: { id: true }
+  });
+  return inTenant.map((u) => u.id);
+}
+
+async function listStaffIdsByTerritoryTerms(
+  tenantId: number,
+  terms: string[],
+  opts: { includeInactive: boolean }
+): Promise<number[]> {
+  const cleaned = [...new Set(terms.map((t) => t.trim()).filter((t) => t.length >= 2))];
+  if (cleaned.length === 0) return [];
+  // Juda ko‘p termin (201 shahar) — OR portlashini cheklaymiz
+  const limited = cleaned.slice(0, 80);
+  const [byUserField, slotRows] = await Promise.all([
+    prisma.user.findMany({
       where: {
         tenant_id: tenantId,
         ...(opts.includeInactive ? {} : { is_active: true }),
-        OR: terms.flatMap((term) => [
-          { territory: { equals: term, mode: "insensitive" } },
-          { territory: { contains: term, mode: "insensitive" } }
+        OR: limited.flatMap((term) => [
+          { territory: { equals: term, mode: "insensitive" as const } },
+          { territory: { contains: term, mode: "insensitive" as const } }
         ])
       },
       select: { id: true }
-    });
-    for (const r of stringMatches) ids.add(r.id);
+    }),
+    // Faqat terminlarga mos slotlar — barcha territories[] tortilmasin
+    prisma.workSlot.findMany({
+      where: {
+        tenant_id: tenantId,
+        deleted_at: null,
+        OR: limited.flatMap((term) => [
+          { territory: { equals: term, mode: "insensitive" as const } },
+          { territory: { contains: term, mode: "insensitive" as const } },
+          { territories: { has: term } }
+        ])
+      },
+      select: {
+        territory: true,
+        territories: true,
+        user_links: {
+          where: { ended_at: null },
+          select: { user_id: true }
+        }
+      }
+    })
+  ]);
+  const ids = new Set<number>(byUserField.map((r) => r.id));
+  const termLower = limited.map((t) => t.toLowerCase());
+  for (const slot of slotRows) {
+    const blob = [slot.territory ?? "", ...(slot.territories ?? [])].join(" | ").toLowerCase();
+    const hit = termLower.some((t) => t.length >= 3 && blob.includes(t));
+    if (!hit) continue;
+    for (const link of slot.user_links) ids.add(link.user_id);
+  }
+  if (ids.size === 0) return [];
+  const inTenant = await prisma.user.findMany({
+    where: {
+      tenant_id: tenantId,
+      id: { in: [...ids] },
+      ...(opts.includeInactive ? {} : { is_active: true })
+    },
+    select: { id: true }
+  });
+  return inTenant.map((u) => u.id);
+}
+
+async function listStaffIdsLinkedToBranches(
+  tenantId: number,
+  branchCodes: string[],
+  opts: { includeInactive: boolean }
+): Promise<number[]> {
+  const codes = [...new Set(branchCodes.map((c) => c.trim()).filter(Boolean))];
+  if (codes.length === 0) return [];
+  const [byField, byLink, bySlot] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        tenant_id: tenantId,
+        ...(opts.includeInactive ? {} : { is_active: true }),
+        OR: codes.flatMap((code) => [
+          { branch: { equals: code, mode: "insensitive" as const } },
+          { branch: { contains: code, mode: "insensitive" as const } }
+        ])
+      },
+      select: { id: true }
+    }),
+    prisma.userBranchLink.findMany({
+      where: {
+        tenant_id: tenantId,
+        branch_code: { in: codes }
+      },
+      select: { user_id: true }
+    }),
+    prisma.workSlot.findMany({
+      where: {
+        tenant_id: tenantId,
+        deleted_at: null,
+        OR: codes.flatMap((code) => [
+          { branch_code: { equals: code, mode: "insensitive" as const } },
+          { branch_codes: { has: code } }
+        ])
+      },
+      select: {
+        user_links: {
+          where: { ended_at: null },
+          select: { user_id: true }
+        }
+      }
+    })
+  ]);
+  const ids = new Set<number>([
+    ...byField.map((u) => u.id),
+    ...byLink.map((l) => l.user_id)
+  ]);
+  for (const slot of bySlot) {
+    for (const link of slot.user_links) ids.add(link.user_id);
   }
   if (ids.size === 0) return [];
   const inTenant = await prisma.user.findMany({
@@ -94,35 +217,98 @@ export async function loadAccessDataScope(
   const includeInactive = opts?.includeInactive === true;
   const activeClause = includeInactive ? {} : { is_active: true };
 
-  const [u, supervisees, territoryLinks, warehouseLinks, cashLinks] = await Promise.all([
-    prisma.user.findFirst({
-      where: { id: userId, tenant_id: tenantId },
-      select: { trade_direction_links: { select: { trade_direction_id: true } } }
-    }),
-    prisma.user.findMany({
-      where: { tenant_id: tenantId, supervisor_user_id: userId, ...activeClause },
-      select: { id: true }
-    }),
-    prisma.territoryUserLink.findMany({
-      where: { user_id: userId, territory: { tenant_id: tenantId, deleted_at: null } },
-      select: { territory_id: true }
-    }),
-    prisma.warehouseUserLink.findMany({
-      where: { user_id: userId },
-      select: { warehouse_id: true }
-    }),
-    prisma.cashDeskUserLink.findMany({
-      where: { user_id: userId },
-      select: { cash_desk_id: true }
-    })
-  ]);
+  const [u, supervisees, territoryLinks, warehouseLinks, cashLinks, branchLinks, activeSlotLink] =
+    await Promise.all([
+      prisma.user.findFirst({
+        where: { id: userId, tenant_id: tenantId },
+        select: {
+          territory: true,
+          trade_direction_links: { select: { trade_direction_id: true } }
+        }
+      }),
+      prisma.user.findMany({
+        where: { tenant_id: tenantId, supervisor_user_id: userId, ...activeClause },
+        select: { id: true }
+      }),
+      prisma.territoryUserLink.findMany({
+        where: { user_id: userId, territory: { tenant_id: tenantId, deleted_at: null } },
+        select: { territory_id: true }
+      }),
+      prisma.warehouseUserLink.findMany({
+        where: { user_id: userId },
+        select: { warehouse_id: true }
+      }),
+      prisma.cashDeskUserLink.findMany({
+        where: { user_id: userId },
+        select: { cash_desk_id: true }
+      }),
+      prisma.userBranchLink.findMany({
+        where: { user_id: userId, tenant_id: tenantId },
+        select: { branch_code: true }
+      }),
+      prisma.slotUserLink.findFirst({
+        where: { user_id: userId, ended_at: null },
+        select: {
+          slot: {
+            select: {
+              slot_type: true,
+              supervisee_agent_slot_ids: true,
+              branch_code: true,
+              branch_codes: true,
+              territory: true,
+              territories: true,
+              warehouse_id: true,
+              warehouse_ids: true,
+              cash_desk_id: true,
+              cash_desk_ids: true
+            }
+          }
+        }
+      })
+    ]);
+
+  const slot = activeSlotLink?.slot ?? null;
+  const branchCodes = mergeBranchCodesForScope(
+    branchLinks.map((b) => b.branch_code),
+    slot
+  );
+  const territoryTerms = mergeTerritoryTermsForScope(u?.territory, slot);
 
   const territory_ids = uniquePositiveIds(territoryLinks.map((l) => l.territory_id));
-  const territoryStaffIds = await listStaffIdsLinkedToTerritories(tenantId, territory_ids, {
-    includeInactive
+  const teamSlotIds =
+    slot?.slot_type === "supervisor"
+      ? uniquePositiveIds(slot.supervisee_agent_slot_ids ?? [])
+      : [];
+  const [territoryStaffIds, branchStaffIds, termStaffIds, teamUserIds] = await Promise.all([
+    listStaffIdsLinkedToTerritories(tenantId, territory_ids, { includeInactive }),
+    listStaffIdsLinkedToBranches(tenantId, branchCodes, { includeInactive }),
+    listStaffIdsByTerritoryTerms(tenantId, territoryTerms, { includeInactive }),
+    teamSlotIds.length === 0
+      ? Promise.resolve([] as number[])
+      : prisma.slotUserLink
+          .findMany({
+            where: { slot_id: { in: teamSlotIds }, ended_at: null },
+            select: { user_id: true }
+          })
+          .then((rows) => uniquePositiveIds(rows.map((r) => r.user_id)))
+  ]);
+
+  // Dostup + ish o‘rni: geo (hudud∪filial) birlashadi; hodim/jamoa belgilansa — kesishma.
+  // SVR slotda jamoa bo‘sh ([]) — faqat geo; eski supervisor_user_id qoldiqlari «hamma» qilib yubormasin.
+  const isSupervisorSlot = slot?.slot_type === "supervisor";
+  const superviseeIds = uniquePositiveIds(
+    isSupervisorSlot && teamSlotIds.length === 0
+      ? []
+      : [...supervisees.map((s) => s.id), ...teamUserIds]
+  );
+  const geoStaffIds = mergeGeoStaffIds(territoryStaffIds, branchStaffIds, termStaffIds);
+  const hasGeoBinding =
+    territory_ids.length > 0 || branchCodes.length > 0 || territoryTerms.length > 0;
+  const bound_staff_ids = resolveStaffVisibilityByExplicitAndGeo({
+    explicitStaffIds: superviseeIds,
+    geoStaffIds,
+    hasGeoBinding
   });
-  const superviseeIds = uniquePositiveIds(supervisees.map((s) => s.id));
-  const bound_staff_ids = resolveVisibleStaffIds(superviseeIds, territory_ids, territoryStaffIds);
 
   const bound_agent_ids =
     bound_staff_ids.length === 0
@@ -143,8 +329,14 @@ export async function loadAccessDataScope(
     bound_agent_ids,
     bound_staff_ids,
     territory_ids,
-    warehouse_ids: uniquePositiveIds(warehouseLinks.map((l) => l.warehouse_id)),
-    cash_desk_ids: uniquePositiveIds(cashLinks.map((l) => l.cash_desk_id)),
+    warehouse_ids: mergeWarehouseIdsForScope(
+      warehouseLinks.map((l) => l.warehouse_id),
+      slot
+    ),
+    cash_desk_ids: mergeCashDeskIdsForScope(
+      cashLinks.map((l) => l.cash_desk_id),
+      slot
+    ),
     trade_direction_ids: u?.trade_direction_links.map((x) => x.trade_direction_id) ?? []
   };
 }

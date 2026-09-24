@@ -5,12 +5,14 @@ import {
   effectiveCashDeskIds,
   effectiveTerritories,
   effectiveWarehouseIds,
+  findOblastParentsInTerritoryTree,
   normalizePositiveIntIds,
   normalizeTerritoryList,
   resolveBranchCodesPatch,
   resolveCashDeskIdsPatch,
   resolveTerritoriesPatch,
-  resolveWarehouseIdsPatch
+  resolveWarehouseIdsPatch,
+  summarizeTerritoriesForDisplay
 } from "../src/modules/work-slots/work-slots.multi-bindings";
 
 describe("work-slots.multi-bindings", () => {
@@ -110,7 +112,90 @@ describe("work-slots.multi-bindings", () => {
     ).toEqual(["FV / ANDIJON / ASAKA", "FV / ANDIJON / BALIQCHI"]);
   });
 
+  it("buildTerritoriesFromPartLists uses tree parents for each city", () => {
+    expect(
+      buildTerritoriesFromPartLists({
+        zones: ["FV"],
+        oblasts: ["ANDIJON VILOYATI", "FARGONA VILOYATI"],
+        cities: ["ASAKA", "QUVASOY"],
+        resolveCityParents: (city) => {
+          if (city === "ASAKA") return { zone: "FV", oblast: "ANDIJON VILOYATI" };
+          if (city === "QUVASOY") return { zone: "FV", oblast: "FARGONA VILOYATI" };
+          return null;
+        }
+      })
+    ).toEqual(["FV / ANDIJON VILOYATI / ASAKA", "FV / FARGONA VILOYATI / QUVASOY"]);
+  });
+
   it("buildTerritoriesFromPartLists uses zones only", () => {
     expect(buildTerritoriesFromPartLists({ zones: ["FV", "SW"] })).toEqual(["FV", "SW"]);
+  });
+
+  it("buildTerritoriesFromPartLists resolves zone for oblast-only lists", () => {
+    expect(
+      buildTerritoriesFromPartLists({
+        oblasts: ["ANDIJON VILOYATI", "XORAZM VILOYATI"],
+        resolveOblastParents: (oblast) => {
+          if (oblast === "ANDIJON VILOYATI") return { zone: "FV" };
+          if (oblast === "XORAZM VILOYATI") return { zone: "SOUTH-WEST" };
+          return null;
+        }
+      })
+    ).toEqual(["FV / ANDIJON VILOYATI", "SOUTH-WEST / XORAZM VILOYATI"]);
+  });
+
+  it("summarizeTerritoriesForDisplay puts bare city into city column", () => {
+    const nodes = [
+      {
+        name: "SOUTH-WEST",
+        active: true,
+        children: [
+          {
+            name: "XORAZM VILOYATI",
+            active: true,
+            children: [
+              { name: "BERUNIY", active: true, children: [] },
+              { name: "XR_BERUNIY", active: true, children: [] }
+            ]
+          }
+        ]
+      }
+    ];
+    expect(summarizeTerritoriesForDisplay(["BERUNIY"], nodes)).toEqual({
+      zone: "SOUTH-WEST",
+      oblast: "XORAZM VILOYATI",
+      city: "BERUNIY"
+    });
+    expect(summarizeTerritoriesForDisplay(["BERUNIY"], null)).toEqual({
+      zone: null,
+      oblast: null,
+      city: "BERUNIY"
+    });
+  });
+
+  it("summarizeTerritoriesForDisplay classifies bare oblast", () => {
+    expect(summarizeTerritoriesForDisplay(["XORAZM VILOYATI"], null)).toEqual({
+      zone: null,
+      oblast: "XORAZM VILOYATI",
+      city: null
+    });
+  });
+
+  it("findOblastParentsInTerritoryTree finds parent zone", () => {
+    const nodes = [
+      {
+        name: "FV",
+        active: true,
+        children: [
+          {
+            name: "ANDIJON VILOYATI",
+            active: true,
+            children: [{ name: "ASAKA", active: true, children: [] }]
+          }
+        ]
+      }
+    ];
+    expect(findOblastParentsInTerritoryTree(nodes, "ANDIJON VILOYATI")).toEqual({ zone: "FV" });
+    expect(findOblastParentsInTerritoryTree(nodes, "MISSING")).toBeNull();
   });
 });

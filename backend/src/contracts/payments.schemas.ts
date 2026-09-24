@@ -23,6 +23,35 @@ function parseCommaSeparatedIds(raw: string | undefined): number[] | undefined {
   return ids.length > 0 ? ids : undefined;
 }
 
+const PAYMENT_STATUS_SET = new Set([
+  "pending_confirmation",
+  "confirmed",
+  "deleted",
+  "rejected"
+]);
+
+type PaymentStatusValue = "pending_confirmation" | "confirmed" | "deleted" | "rejected";
+
+function parsePaymentStatuses(q: Record<string, string | undefined>): PaymentStatusValue[] | undefined {
+  const fromMulti = (q.payment_statuses ?? "")
+    .split(/[,|]+/)
+    .map((s) => s.trim())
+    .filter((s): s is PaymentStatusValue => PAYMENT_STATUS_SET.has(s));
+  if (fromMulti.length > 0) return [...new Set(fromMulti)];
+  const ps = q.payment_status?.trim();
+  if (ps && PAYMENT_STATUS_SET.has(ps)) return [ps as PaymentStatusValue];
+  return undefined;
+}
+
+function parseCommaOrPipeStrings(raw: string | undefined): string[] | undefined {
+  if (raw == null || raw.trim() === "") return undefined;
+  const items = raw
+    .split(/[,|]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s !== "__all__");
+  return items.length > 0 ? [...new Set(items)] : undefined;
+}
+
 const PAYMENT_LIST_SORT_KEYS = new Set<string>([
   "payment_id",
   "paid_at",
@@ -61,16 +90,6 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
   const amount_min = parseOptAmount(q.amount_min);
   const amount_max = parseOptAmount(q.amount_max);
 
-  const payment_typeRaw = q.payment_type?.trim();
-  const payment_type =
-    payment_typeRaw && payment_typeRaw !== "" && payment_typeRaw !== "__all__" ? payment_typeRaw : undefined;
-
-  const trade_directionRaw = q.trade_direction?.trim();
-  const trade_direction =
-    trade_directionRaw && trade_directionRaw !== "" && trade_directionRaw !== "__all__"
-      ? trade_directionRaw
-      : undefined;
-
   const territory_region = q.territory_region?.trim() || undefined;
   const territory_city = q.territory_city?.trim() || undefined;
   const territory_district = q.territory_district?.trim() || undefined;
@@ -82,11 +101,15 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
     deal_type = dt;
   }
 
-  const ps = q.payment_status?.trim();
-  let payment_status: PaymentListQuery["payment_status"] | undefined;
-  if (ps === "pending_confirmation" || ps === "confirmed" || ps === "deleted" || ps === "rejected") {
-    payment_status = ps;
-  }
+  const payment_statuses = parsePaymentStatuses(q);
+  const payment_status =
+    payment_statuses?.length === 1 ? payment_statuses[0] : undefined;
+
+  const payment_types = parseCommaOrPipeStrings(q.payment_types ?? q.payment_type);
+  const payment_type = payment_types?.length === 1 ? payment_types[0] : undefined;
+
+  const trade_directions = parseCommaOrPipeStrings(q.trade_directions ?? q.trade_direction);
+  const trade_direction = trade_directions?.length === 1 ? trade_directions[0] : undefined;
 
   const acRaw = q.application_channel?.trim().toLowerCase();
   let application_channel: PaymentListQuery["application_channel"] | undefined;
@@ -141,14 +164,26 @@ export function parsePaymentsListQuery(q: Record<string, string | undefined>): P
       : expeditor_user_id !== undefined
         ? { expeditor_user_id }
         : {}),
-    ...(payment_type ? { payment_type } : {}),
-    ...(trade_direction ? { trade_direction } : {}),
+    ...(payment_types != null && payment_types.length > 1
+      ? { payment_types }
+      : payment_type
+        ? { payment_type }
+        : {}),
+    ...(trade_directions != null && trade_directions.length > 1
+      ? { trade_directions }
+      : trade_direction
+        ? { trade_direction }
+        : {}),
     ...(territory_region ? { territory_region } : {}),
     ...(territory_city ? { territory_city } : {}),
     ...(territory_district ? { territory_district } : {}),
     ...(territory_zone ? { territory_zone } : {}),
     ...(deal_type !== undefined && deal_type !== "both" ? { deal_type } : {}),
-    ...(payment_status !== undefined ? { payment_status } : {}),
+    ...(payment_statuses != null && payment_statuses.length > 1
+      ? { payment_statuses }
+      : payment_status !== undefined
+        ? { payment_status }
+        : {}),
     ...(application_channel !== undefined ? { application_channel } : {}),
     ...(transfer_channel !== undefined ? { transfer_channel } : {}),
     ...(cash_desk_ids !== undefined ? { cash_desk_ids } : {}),

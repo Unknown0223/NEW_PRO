@@ -16,6 +16,7 @@ describe("agent/web client unique fields", () => {
     expect(uniqueConflictErrorCode("inn")).toBe("DUPLICATE_INN");
     expect(uniqueConflictErrorCode("client_pinfl")).toBe("DUPLICATE_PINFL");
     expect(uniqueConflictErrorCode("identity")).toBe("DUPLICATE_CLIENT");
+    expect(uniqueConflictErrorCode("geo_name")).toBe("DUPLICATE_GEO_NAME");
   });
 
   it("prefers phone/code/INN over name when several fields collide", () => {
@@ -41,6 +42,7 @@ describe("agent/web client unique fields", () => {
     expect(clientUniqueHttp("DUPLICATE_CLIENT_CODE")?.error).toBe("DuplicateClientCode");
     expect(clientUniqueHttp("DUPLICATE_PINFL")?.error).toBe("DuplicatePinfl");
     expect(clientUniqueHttp("DUPLICATE_CLIENT")?.error).toBe("DuplicateClient");
+    expect(clientUniqueHttp("DUPLICATE_GEO_NAME")?.error).toBe("DuplicateGeoName");
     expect(clientUniqueHttp("UNKNOWN")).toBeNull();
   });
 

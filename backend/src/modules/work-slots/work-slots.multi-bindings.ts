@@ -215,14 +215,25 @@ export function effectiveBranchCodes(slot: {
   return t ? [t] : [];
 }
 
+function territoryTokenKey(s: string): string {
+  return s.trim().toUpperCase().replace(/[\s\-_]+/g, " ");
+}
+
 /**
  * Zona / oblast / shahar ro‘yxatlaridan territory satrlari.
- * Shaharlar bo‘lsa — har bir shahar + mos ota (zip yoki birinchi); aks holda oblast/zona.
+ * Shaharlar bo‘lsa — har bir shahar uchun daraxt ota-onasi (yoki tanlangan zona/oblast).
+ * Oblastlar bo‘lsa — zona daraxt/resolve orqali to‘ldiriladi (zona’siz saqlash taqiqlanadi).
  */
 export function buildTerritoriesFromPartLists(args: {
   zones?: string[] | null;
   oblasts?: string[] | null;
   cities?: string[] | null;
+  /** ixtiyoriy: shahar → haqiqiy zona/oblast (index-zip o‘rniga) */
+  resolveCityParents?: (
+    city: string
+  ) => { zone: string | null; oblast: string | null; city?: string | null } | null;
+  /** ixtiyoriy: oblast → zona (bulkda faqat viloyat tanlanganda) */
+  resolveOblastParents?: (oblast: string) => { zone: string | null } | null;
 }): string[] {
   const zones = normalizeTerritoryList(args.zones ?? []);
   const oblasts = normalizeTerritoryList(args.oblasts ?? []);
@@ -237,23 +248,35 @@ export function buildTerritoriesFromPartLists(args: {
   };
 
   if (cities.length > 0) {
-    for (let i = 0; i < cities.length; i++) {
+    for (const city of cities) {
+      const resolved = args.resolveCityParents?.(city) ?? null;
+      const zone =
+        resolved?.zone?.trim() ||
+        (zones.length === 1 ? zones[0]! : zones[0] ?? null);
+      const oblast =
+        resolved?.oblast?.trim() ||
+        (oblasts.length === 1 ? oblasts[0]! : oblasts[0] ?? null);
+      const cityName = resolved?.city?.trim() || city;
       push(
         buildUserTerritory({
-          zone: zones[Math.min(i, Math.max(0, zones.length - 1))] ?? zones[0] ?? null,
-          oblast: oblasts[Math.min(i, Math.max(0, oblasts.length - 1))] ?? oblasts[0] ?? null,
-          city: cities[i]!
+          zone,
+          oblast,
+          city: cityName
         })
       );
     }
     return out;
   }
   if (oblasts.length > 0) {
-    for (let i = 0; i < oblasts.length; i++) {
+    for (const oblast of oblasts) {
+      const resolved = args.resolveOblastParents?.(oblast) ?? null;
+      const zone =
+        resolved?.zone?.trim() ||
+        (zones.length === 1 ? zones[0]! : zones[0] ?? null);
       push(
         buildUserTerritory({
-          zone: zones[Math.min(i, Math.max(0, zones.length - 1))] ?? zones[0] ?? null,
-          oblast: oblasts[i]!,
+          zone,
+          oblast,
           city: null
         })
       );
@@ -264,4 +287,250 @@ export function buildTerritoriesFromPartLists(args: {
     push(buildUserTerritory({ zone, oblast: null, city: null }));
   }
   return out;
+}
+
+/** Hudud daraxtidan oblast ota-zonasini topish. */
+export function findOblastParentsInTerritoryTree(
+  nodes: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null | undefined,
+  oblast: string
+): { zone: string | null } | null {
+  const want = territoryTokenKey(oblast);
+  if (!want || !nodes?.length) return null;
+
+  let found: { zone: string | null } | null = null;
+
+  const walk = (
+    list: Array<{ name?: string; active?: boolean; children?: unknown[] }>,
+    depth: number,
+    path: string[]
+  ) => {
+    if (found) return;
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = typeof n.name === "string" ? n.name.trim() : "";
+      if (!name) continue;
+      const nextPath = [...path, name];
+      const key = territoryTokenKey(name);
+      if (depth === 1 && key === want) {
+        found = { zone: nextPath[0] ?? null };
+        return;
+      }
+      const children = Array.isArray(n.children)
+        ? (n.children as Array<{ name?: string; active?: boolean; children?: unknown[] }>)
+        : [];
+      if (children.length) walk(children, depth + 1, nextPath);
+    }
+  };
+
+  walk(nodes, 0, []);
+  return found;
+}
+
+/** Hudud daraxtidan shahar ota-onasini topish (nom bo‘yicha, case-insensitive). */
+export function findCityParentsInTerritoryTree(
+  nodes: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null | undefined,
+  city: string
+): { zone: string | null; oblast: string | null; city?: string } | null {
+  const want = territoryTokenKey(city);
+  if (!want || !nodes?.length) return null;
+
+  let found: { zone: string | null; oblast: string | null; city?: string } | null = null;
+
+  const nameMatches = (key: string) => {
+    if (key === want) return true;
+    // XR_BERUNIY ↔ BERUNIY
+    if (key.endsWith(` ${want}`)) return true;
+    const keyParts = key.split(/[\s_]+/).filter(Boolean);
+    const wantParts = want.split(/[\s_]+/).filter(Boolean);
+    if (wantParts.length === 1 && keyParts.length >= 2 && keyParts[keyParts.length - 1] === wantParts[0]) {
+      return true;
+    }
+    return false;
+  };
+
+  const walk = (
+    list: Array<{ name?: string; active?: boolean; children?: unknown[] }>,
+    depth: number,
+    path: string[]
+  ) => {
+    if (found) return;
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = typeof n.name === "string" ? n.name.trim() : "";
+      if (!name) continue;
+      const nextPath = [...path, name];
+      const key = territoryTokenKey(name);
+      if (depth >= 2 && nameMatches(key)) {
+        found = { zone: nextPath[0] ?? null, oblast: nextPath[1] ?? null, city: name };
+        return;
+      }
+      const children = Array.isArray(n.children)
+        ? (n.children as Array<{ name?: string; active?: boolean; children?: unknown[] }>)
+        : [];
+      if (children.length) walk(children, depth + 1, nextPath);
+    }
+  };
+
+  walk(nodes, 0, []);
+  return found;
+}
+
+type TerritoryDepthIndex = {
+  zones: Map<string, string>;
+  regions: Map<string, { name: string; zone: string }>;
+  cities: Map<string, { name: string; zone: string; oblast: string }>;
+};
+
+function buildTerritoryDepthIndex(
+  nodes: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null | undefined
+): TerritoryDepthIndex {
+  const zones = new Map<string, string>();
+  const regions = new Map<string, { name: string; zone: string }>();
+  const cities = new Map<string, { name: string; zone: string; oblast: string }>();
+
+  const walk = (
+    list: Array<{ name?: string; active?: boolean; children?: unknown[] }>,
+    depth: number,
+    path: string[]
+  ) => {
+    for (const n of list) {
+      if (n.active === false) continue;
+      const name = typeof n.name === "string" ? n.name.trim() : "";
+      if (!name) continue;
+      const next = [...path, name];
+      const key = territoryTokenKey(name);
+      if (depth === 0) zones.set(key, name);
+      else if (depth === 1 && next[0]) regions.set(key, { name, zone: next[0] });
+      else if (depth >= 2 && next[0] && next[1]) {
+        cities.set(key, { name, zone: next[0], oblast: next[1] });
+        const parts = key.split(/[\s_]+/).filter(Boolean);
+        if (parts.length >= 2) {
+          const tail = parts[parts.length - 1]!;
+          if (tail && !cities.has(tail)) {
+            cities.set(tail, { name, zone: next[0], oblast: next[1] });
+          }
+        }
+      }
+      const children = Array.isArray(n.children)
+        ? (n.children as Array<{ name?: string; active?: boolean; children?: unknown[] }>)
+        : [];
+      if (children.length) walk(children, depth + 1, next);
+    }
+  };
+  walk(nodes ?? [], 0, []);
+  return { zones, regions, cities };
+}
+
+function heuristicBareTokenKind(token: string): "zone" | "oblast" | "city" {
+  const u = token.trim().toUpperCase();
+  if (!u) return "city";
+  if (
+    u.includes("VILOYATI") ||
+    u === "QORAQALPOQISTON" ||
+    u === "QOQON" ||
+    u === "QO'QON" ||
+    u === "SAMARQAND" ||
+    u === "TOSHKENT SHAHAR"
+  ) {
+    return "oblast";
+  }
+  if (
+    u === "FV" ||
+    u === "SOUTH-WEST" ||
+    u === "SOUTH WEST" ||
+    u === "TASH OBL" ||
+    u === "TASHKENT" ||
+    u === "TASHKENT CITY"
+  ) {
+    return "zone";
+  }
+  return "city";
+}
+
+/**
+ * Saqlangan territory satrlaridan list ustunlari uchun zona/oblast/gorod.
+ * Daraxt bo‘lsa — tokenlarni chuqurlik bo‘yicha klassifikatsiya + ota-onalarni to‘ldirish.
+ */
+export function summarizeTerritoriesForDisplay(
+  territories: string[],
+  nodes?: Array<{ name?: string; active?: boolean; children?: unknown[] }> | null
+): { zone: string | null; oblast: string | null; city: string | null } {
+  const zones: string[] = [];
+  const oblasts: string[] = [];
+  const cities: string[] = [];
+  const push = (arr: string[], v: string | null | undefined) => {
+    const t = v?.trim();
+    if (!t) return;
+    if (!arr.some((x) => territoryTokenKey(x) === territoryTokenKey(t))) arr.push(t);
+  };
+
+  const index = nodes?.length ? buildTerritoryDepthIndex(nodes) : null;
+
+  for (const raw of territories) {
+    const t = raw?.trim();
+    if (!t) continue;
+    const parts = t
+      .split(/\s*\/\s*|[,;|]\s*/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (parts.length >= 3) {
+      push(zones, parts[0]);
+      push(oblasts, parts[1]);
+      push(cities, parts[2]);
+      continue;
+    }
+    if (parts.length === 2) {
+      const a = parts[0]!;
+      const b = parts[1]!;
+      if (index) {
+        const aKey = territoryTokenKey(a);
+        const bKey = territoryTokenKey(b);
+        if (index.zones.has(aKey) && index.regions.has(bKey)) {
+          push(zones, index.zones.get(aKey)!);
+          push(oblasts, index.regions.get(bKey)!.name);
+          continue;
+        }
+        if (index.regions.has(aKey) && index.cities.has(bKey)) {
+          const city = index.cities.get(bKey)!;
+          push(zones, city.zone);
+          push(oblasts, city.oblast);
+          push(cities, city.name);
+          continue;
+        }
+      }
+      push(zones, a);
+      push(oblasts, b);
+      continue;
+    }
+
+    const only = parts[0]!;
+    const key = territoryTokenKey(only);
+    if (index) {
+      if (index.zones.has(key)) {
+        push(zones, index.zones.get(key)!);
+        continue;
+      }
+      if (index.regions.has(key)) {
+        const r = index.regions.get(key)!;
+        push(zones, r.zone);
+        push(oblasts, r.name);
+        continue;
+      }
+      if (index.cities.has(key)) {
+        const c = index.cities.get(key)!;
+        push(zones, c.zone);
+        push(oblasts, c.oblast);
+        push(cities, c.name);
+        continue;
+      }
+    }
+    const kind = heuristicBareTokenKind(only);
+    if (kind === "zone") push(zones, only);
+    else if (kind === "oblast") push(oblasts, only);
+    else push(cities, only);
+  }
+
+  const join = (arr: string[]) => (arr.length ? arr.join(", ") : null);
+  return { zone: join(zones), oblast: join(oblasts), city: join(cities) };
 }

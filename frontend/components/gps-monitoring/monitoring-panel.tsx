@@ -208,10 +208,18 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
   const regions = useMemo(() => Array.from(new Set(employees.map(regionOf))).sort(), [employees]);
 
   const list = useMemo(() => {
-    return employees.filter((e) => e.type === seg)
+    return employees
+      .filter((e) => e.type === seg)
       .filter((e) => (sup === "all" ? true : sup === "none" ? e.supervisorId === null : e.supervisorId === sup))
       .filter((e) => (region === "all" ? true : regionOf(e) === region))
-      .filter((e) => (`${e.code} ${e.name} ${e.territory}`).toLowerCase().includes(query.trim().toLowerCase()));
+      .filter((e) => (`${e.code} ${e.name} ${e.territory}`).toLowerCase().includes(query.trim().toLowerCase()))
+      .slice()
+      .sort((a, b) => {
+        const aa = a.activeOnDate === false ? 1 : 0;
+        const bb = b.activeOnDate === false ? 1 : 0;
+        if (aa !== bb) return aa - bb;
+        return a.name.localeCompare(b.name, "uz");
+      });
   }, [employees, seg, sup, region, query]);
 
   useEffect(() => {
@@ -367,25 +375,31 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
         <ol key={seg + sup + region} className="space-y-1.5">
           {list.map((e, i) => {
             const active = selected?.id === e.id;
+            const idle = e.activeOnDate === false;
             return (
               <li key={e.id} className="rise" style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}>
                 <div
                   role="button"
-                  tabIndex={0}
-                  onClick={() => onSelectEmployee(e)}
-                  onKeyDown={(ev) => ev.key === "Enter" && onSelectEmployee(e)}
+                  tabIndex={idle ? -1 : 0}
+                  aria-disabled={idle}
+                  title={idle ? "Bu kunda ishlamagan — tanlash mumkin emas" : undefined}
+                  onClick={() => { if (!idle) onSelectEmployee(e); }}
+                  onKeyDown={(ev) => { if (!idle && ev.key === "Enter") onSelectEmployee(e); }}
                   className={cn(
-                    "group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-xl border bg-gps-card p-3 text-left transition-all",
-                    active
+                    "group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border bg-gps-card p-3 text-left transition-all",
+                    idle
+                      ? "cursor-not-allowed border-slate-100 opacity-40 grayscale"
+                      : "cursor-pointer",
+                    !idle && active
                       ? "border-teal-brand shadow-[0_6px_18px_-8px_rgba(15,158,142,0.55)]"
-                      : "border-slate-200 hover:-translate-y-0.5 hover:border-teal-brand/40 hover:shadow-md"
+                      : !idle && "border-slate-200 hover:-translate-y-0.5 hover:border-teal-brand/40 hover:shadow-md"
                   )}
                 >
-                  {active && <span className="absolute inset-y-0 left-0 w-1 bg-teal-brand" />}
+                  {active && !idle && <span className="absolute inset-y-0 left-0 w-1 bg-teal-brand" />}
                   <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-50 text-teal-deep">
                     <UserRound className="h-4.5 w-4.5" />
                     <span className={cn("absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-gps-card",
-                      e.online ? "bg-emerald-500" : "bg-slate-300")} />
+                      idle ? "bg-slate-300" : e.online ? "bg-emerald-500" : "bg-slate-300")} />
                   </span>
                   <span className="min-w-0 flex-1 leading-tight">
                     <span className="flex items-center gap-1.5">
@@ -396,6 +410,11 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                       <span className="truncate text-[12.5px] font-bold text-ink">
                         {e.type === "supervisor" ? e.name : `${e.code} [${e.name}]`}
                       </span>
+                      {idle && (
+                        <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[8.5px] font-bold uppercase text-slate-500">
+                          ishlamagan
+                        </span>
+                      )}
                     </span>
                     {e.type === "supervisor" ? (
                       <span className="mt-0.5 flex items-center gap-2 text-[10.5px] font-semibold text-ink-soft">
@@ -414,24 +433,27 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                     )}
                     <span className="mt-0.5 block text-[10.5px] tabular-nums text-ink-soft/80">
                       {fmtDateShort(date)} {e.lastSeen}
+                      {e.network ? ` · ${e.network}` : ""}
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1.5">
                     <Battery level={e.battery} />
                     <span className="flex items-center gap-1">
                       <button
-                        onClick={(ev) => { ev.stopPropagation(); onLocate(e); }}
+                        disabled={idle}
+                        onClick={(ev) => { ev.stopPropagation(); if (!idle) onLocate(e); }}
                         aria-label="Показать на карте"
                         title="Показать на карте"
-                        className="grid h-6 w-6 place-items-center rounded-md text-teal-deep transition-all hover:bg-teal-50 hover:scale-110"
+                        className="grid h-6 w-6 place-items-center rounded-md text-teal-deep transition-all hover:bg-teal-50 hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
                       >
                         <Crosshair className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={(ev) => { ev.stopPropagation(); onSelectEmployee(e); }}
+                        disabled={idle}
+                        onClick={(ev) => { ev.stopPropagation(); if (!idle) onSelectEmployee(e); }}
                         aria-label="Маршрут"
                         title="Открыть маршрут"
-                        className="grid h-6 w-6 place-items-center rounded-md text-teal-deep transition-all hover:bg-teal-50 hover:scale-110"
+                        className="grid h-6 w-6 place-items-center rounded-md text-teal-deep transition-all hover:bg-teal-50 hover:scale-110 disabled:opacity-30 disabled:hover:scale-100"
                       >
                         <RouteIcon className="h-4 w-4" />
                       </button>
@@ -902,7 +924,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
                     <td className="px-2.5 py-2 tabular-nums text-ink-soft">{Math.round(p.distance * 1250) || "—"}</td>
                     <td className="px-2.5 py-2 tabular-nums text-ink-soft">{p.accuracy} м</td>
                     <td className="px-2.5 py-2"><span className={cn("font-bold", (p.batteryAt ?? 0) > 40 ? "text-emerald-600" : (p.batteryAt ?? 0) > 20 ? "text-amber-600" : "text-rose-600")}>{p.batteryAt == null ? "—" : `${p.batteryAt}%`}</span></td>
-                    <td className="px-2.5 py-2"><span className={cn("font-bold", p.internet === "4G" ? "text-teal-deep" : p.internet === "3G" ? "text-amber-600" : "text-slate-400")}>{p.internet}</span></td>
+                    <td className="px-2.5 py-2"><span className={cn("font-bold", p.internet === "4G" || p.internet === "WiFi" ? "text-teal-deep" : p.internet === "3G" ? "text-amber-600" : "text-slate-400")}>{p.internet}</span></td>
                     {role === "inkasator" && (
                       <>
                         <td className="px-2.5 py-2 tabular-nums text-ink">{p.cashExpected.toFixed(1).replace(".", ",")}</td>

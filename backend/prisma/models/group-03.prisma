@@ -153,6 +153,8 @@ model ClientOpeningBalanceEntry {
   trade_direction    String?   @db.VarChar(128)
   note               String?
   paid_at            DateTime?
+  /// Ledger `client_payments.id` — void/restore shu orqali (note qidiruviga tayanmaslik).
+  payment_id         Int?
   created_at         DateTime  @default(now())
   created_by_user_id Int?
   deleted_at         DateTime?
@@ -161,12 +163,14 @@ model ClientOpeningBalanceEntry {
   client             Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   tenant             Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   cash_desk          CashDesk? @relation(fields: [cash_desk_id], references: [id], onDelete: SetNull)
+  payment            Payment?  @relation(fields: [payment_id], references: [id], onDelete: SetNull)
   created_by         User?     @relation("OpeningBalanceCreator", fields: [created_by_user_id], references: [id])
   deleted_by         User?     @relation("OpeningBalanceVoidedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
 
   @@index([tenant_id, created_at(sort: Desc)])
   @@index([tenant_id, client_id])
   @@index([tenant_id, deleted_at])
+  @@index([tenant_id, payment_id])
   @@map("client_opening_balance_entries")
 }
 

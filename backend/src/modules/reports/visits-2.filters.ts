@@ -1,11 +1,16 @@
 import { prisma } from "../../config/database";
 import type { ReportActor } from "./client-sales-4-report.service";
-import { mergeTerritoryFilterOptions } from "./territory-nodes";
+import { mergeTerritoryFilterOptions, parseTerritoryNodes } from "./territory-nodes";
 import { WEEKDAY_LABEL_RU } from "./visits-2.constants";
-import { buildScopedAgentWhereForActor } from "../access/access-agent-scope";
+import {
+  filterTerritoryRowsByTerms,
+  pruneTerritoryNodesByTerms,
+  resolveFilterOptionsScope,
+  staffWhereForFilterOptions
+} from "../access/access-filter-options-scope";
 
 export async function getVisits2FilterOptions(tenantId: number, actor?: ReportActor) {
-  const whereAgent = await buildScopedAgentWhereForActor(tenantId, actor);
+  const scope = await resolveFilterOptionsScope(tenantId, actor);
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -16,9 +21,9 @@ export async function getVisits2FilterOptions(tenantId: number, actor?: ReportAc
       ? ((tenant.settings as Record<string, unknown>).references as Record<string, unknown> | undefined) ?? {}
       : {};
 
-  const [agents, territoryRows, clientCats, productCats] = await Promise.all([
+  const [agents, territoryRowsRaw, clientCats, productCats] = await Promise.all([
     prisma.user.findMany({
-      where: whereAgent,
+      where: staffWhereForFilterOptions(tenantId, scope, "agent"),
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" }
     }),
@@ -43,7 +48,18 @@ export async function getVisits2FilterOptions(tenantId: number, actor?: ReportAc
     `
   ]);
 
-  const territoryOpts = mergeTerritoryFilterOptions(refs, territoryRows);
+  const territoryRows = filterTerritoryRowsByTerms(territoryRowsRaw, scope.territoryTerms);
+  const refsForTerritory =
+    scope.territoryTerms === null
+      ? refs
+      : {
+          ...refs,
+          territory_nodes: pruneTerritoryNodesByTerms(
+            parseTerritoryNodes(refs.territory_nodes),
+            scope.territoryTerms
+          )
+        };
+  const territoryOpts = mergeTerritoryFilterOptions(refsForTerritory, territoryRows);
 
   const weekdays = [1, 2, 3, 4, 5, 6, 7].map((id) => ({
     id,
@@ -52,9 +68,9 @@ export async function getVisits2FilterOptions(tenantId: number, actor?: ReportAc
 
   return {
     agents: agents.map((a) => ({ id: a.id, name: a.name, code: a.code ?? "" })),
+    weekdays,
     client_categories: clientCats.map((x) => x.v),
     product_categories: productCats.map((x) => x.v),
-    weekdays,
     territory_1: territoryOpts.territory_1,
     territory_2: territoryOpts.territory_2,
     territory_3: territoryOpts.territory_3,
@@ -65,4 +81,3 @@ export async function getVisits2FilterOptions(tenantId: number, actor?: ReportAc
     cities_by_zone_region: territoryOpts.cities_by_zone_region
   };
 }
-

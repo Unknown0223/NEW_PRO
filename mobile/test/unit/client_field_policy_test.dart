@@ -34,6 +34,13 @@ void main() {
       expect(isNewClientBlockedForOrder({'is_active': true}, cfg, product), isFalse);
     });
 
+    test('inactive client always blocked even if allowSubmitForNewClient', () {
+      const cfg = ClientConfig();
+      const product = ProductListConfig(allowSubmitForNewClient: true);
+      expect(isNewClientBlockedForOrder({'is_active': 0}, cfg, product), isTrue);
+      expect(isNewClientBlockedForOrder({'is_active': false}, cfg, product), isTrue);
+    });
+
     test('clientFormFieldKeys respects fields_visible', () {
       const cfg = ClientConfig(fieldsVisible: {'name': true, 'inn': true, 'bank': true});
       expect(clientFormFieldKeys(cfg), ['name', 'inn', 'bank']);

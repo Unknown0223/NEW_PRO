@@ -19,7 +19,7 @@ export async function getGpsMonitoringDay(
   employeeId: number,
   dateIso: string
 ): Promise<GpsDayResponse | null> {
-  const employee = await buildGpsEmployeeDto(tenantId, employeeId);
+  const employee = await buildGpsEmployeeDto(tenantId, employeeId, dateIso);
   if (!employee) return null;
 
   const from = startOfLocalDay(dateIso);

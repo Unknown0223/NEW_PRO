@@ -22,6 +22,9 @@ describe("supervisor photo report url helpers", () => {
       "/api/demo/dashboard/supervisor/photo-reports/7/content"
     );
     expect(resolvePhotoUrlForClient("demo", 7, "https://cdn/x.jpg")).toBe("https://cdn/x.jpg");
+    expect(resolvePhotoUrlForClient("demo", 9, "client-photos/1/2/a.jpg")).toBe(
+      "/api/demo/dashboard/supervisor/photo-reports/9/content"
+    );
   });
 
   it("decodes data-url photos", () => {
