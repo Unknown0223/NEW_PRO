@@ -68,7 +68,7 @@ services:
     expose:
       - "4000"
     ports:
-      - "127.0.0.1:4000:4000"
+      - "4000:4000"
     environment:
       NODE_ENV: production
       PORT: "4000"
@@ -80,11 +80,6 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS}
       RBAC_ENFORCE_PERMISSIONS: "1"
       INTERNAL_HEALTH_TOKEN: ${INTERNAL_HEALTH_TOKEN:-}
-      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
-      STORAGE_BUCKET: ${STORAGE_BUCKET:-}
-      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-}
-      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
-      STORAGE_PUBLIC_BASE_URL: ${STORAGE_PUBLIC_BASE_URL:-}
       PHOTO_CONTENT_RETENTION_DAYS: ${PHOTO_CONTENT_RETENTION_DAYS:-60}
     volumes:
       - backend_uploads:/app/uploads
@@ -113,7 +108,7 @@ services:
     expose:
       - "3000"
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     environment:
       NODE_ENV: production
       TZ: Asia/Tashkent

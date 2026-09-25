@@ -1,6 +1,6 @@
-# Production Railway API ga APK yuklash + versiya siyosati
+# Production (Hetzner) API ga APK yuklash + versiya siyosati
 param(
-  [string]$Api = "https://backend-production-3cf2.up.railway.app",
+  [string]$Api = "http://157.180.116.50:4000",
   [string]$Slug = "test1",
   [string]$AdminLogin = "admin",
   [string]$AdminPassword = "secret123",
@@ -111,4 +111,4 @@ Invoke-RestMethod -Uri "$Api/api/$Slug/settings/mobile-app-release" `
 Write-Host "Yuklandi: $($upload.bytes) bayt" -ForegroundColor Green
 Write-Host "latest=$LatestVersion min=$minVer force=$force" -ForegroundColor DarkGray
 Write-Host "download_url: $Api/api/mobile/apk-download?slug=$Slug"
-Write-Host "Veb: https://sales-arena.up.railway.app/settings/mobile-app"
+Write-Host "Veb: http://157.180.116.50:3000/settings/mobile-app"

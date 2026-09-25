@@ -1,15 +1,15 @@
-# Mobil ilova - Railway production API (release APK / server test)
+# Mobil ilova - Hetzner production API (release APK / server test)
 # Ishlatish: repo ildizidan  .\scripts\env\switch-production-mobile.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 
-Write-Host "=== MOBIL: PRODUCTION API ===" -ForegroundColor Cyan
+Write-Host "=== MOBIL: PRODUCTION API (Hetzner) ===" -ForegroundColor Cyan
 
 $mobEnv = Join-Path $Root "mobile\.env"
 $mobProd = Join-Path $Root "mobile\.env.production"
 Copy-Item $mobProd $mobEnv -Force
-Write-Host "mobile\.env <= .env.production (Railway backend)"
+Write-Host "mobile\.env <= .env.production (Hetzner backend)"
 
 Write-Host ""
 Write-Host "Keyingi qadamlar:" -ForegroundColor Green

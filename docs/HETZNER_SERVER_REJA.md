@@ -50,12 +50,12 @@ Kod xatosi / noto‘g‘ri qarz **server almashishi bilan tuzalmaydi**. Tezlik (
 | 11 | Test dump Railway → yangi Postgres | Ikkala | ⏳ |
 | 8 | Cloudflare R2 bucket + kalitlar | Foydalanuvchi | ⏳ |
 | 9 | Domen (`app.` / `api.`) DNS | Foydalanuvchi | ⏳ |
-| 10 | Env: JWT (Railway bilan bir xil), CORS, R2 | Agent + foydalanuvchi | ⏳ |
-| 11 | Test dump Railway → yangi Postgres | Ikkala | ⏳ |
-| 12 | Smoke (login, zakaz, to‘lov, mobil) | Ikkala | ⏳ |
-| 13 | Cutover (final dump, DNS, 15–30 daqiqa yozish yo‘q) | Ikkala | ⏳ |
+| 10 | Env: JWT (Railway bilan bir xil), CORS, R2 | Agent + foydalanuvchi | ✅ JWT sync (R2 hali ixtiyoriy) |
+| 11 | Test dump Railway → yangi Postgres | Ikkala | ✅ to‘liq restore: 124 table, 15168 client, 502 order |
+| 12 | Smoke (login, zakaz, to‘lov, mobil) | Ikkala | 🔄 IP orqali ochiq: app `:3000`, api `:4000` |
+| 13 | Cutover (final dump, DNS, 15–30 daqiqa yozish yo‘q) | Ikkala | ⏳ domen/DNS |
 | 14 | Railway 7 kun zaxira, keyin o‘chirish | Foydalanuvchi | ⏳ |
-| 15 | Mobil OTA (agar API `*.railway.app` da qolgan bo‘lsa) | Agent + foydalanuvchi | ⏳ |
+| 15 | Mobil OTA (agar API `*.railway.app` da qolgan bo‘lsa) | Agent + foydalanuvchi | ✅ 3.1.33 force OTA → Hetzner API |
 
 **Hozirgi to‘siq:** Hetzner loyiha ochishdan oldin hisobni tasdiqlash shart. Verification sahifasida **Credit card → $25** tanlandi (kredit server to‘loviga ketadi). **Document** (passport) alternativi — sekinroq. Chap menyudagi `Invoices → Credit` verificationdan **oldin** ishlamaydi.
 
