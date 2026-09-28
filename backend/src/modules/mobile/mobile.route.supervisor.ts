@@ -167,10 +167,10 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "CLIENT_CREATE_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Mijoz yaratish ruxsat etilmagan");
+          return sendApiError(reply, request, 403, "Forbidden", "Создание клиента запрещено");
         }
         if (msg === "CLIENT_LOCATION_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+          return sendApiError(reply, request, 403, "Forbidden", "Изменение координат запрещено");
         }
         if (msg === "AGENT_OUT_OF_SCOPE") {
           return sendApiError(
@@ -178,7 +178,7 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentOutOfScope",
-            "Agent sizning jamoangizga biriktirilmagan"
+            "Агент не закреплён за вашей командой"
           );
         }
         if (msg === "AGENT_NOT_ON_SLOT") {
@@ -187,7 +187,7 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz yaratish taqiqlangan."
+            "Агент не закреплён за рабочим местом — создание новых клиентов запрещено."
           );
         }
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
@@ -251,10 +251,10 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "CLIENT_EDIT_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Mijozni tahrirlash ruxsat etilmagan");
+          return sendApiError(reply, request, 403, "Forbidden", "Редактирование клиента запрещено");
         }
         if (msg === "CLIENT_LOCATION_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+          return sendApiError(reply, request, 403, "Forbidden", "Изменение координат запрещено");
         }
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         throw e;

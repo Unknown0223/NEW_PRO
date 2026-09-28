@@ -401,9 +401,9 @@ export function OperatorsWorkspace({ tenantSlug }: Props) {
           showCloseButton
         >
           <DialogHeader>
-            <DialogTitle>Yangi veb xodim</DialogTitle>
+            <DialogTitle>Новый веб-сотрудник</DialogTitle>
             <DialogDescription>
-              Login va parol noyob bo‘lishi kerak.
+              Логин и пароль должны быть уникальными.
             </DialogDescription>
           </DialogHeader>
           <WebOperatorCreateWorkspace
@@ -487,22 +487,22 @@ function WebStaffPasswordDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Parolni o‘zgartirish — {row.login}</DialogTitle>
+          <DialogTitle>Смена пароля — {row.login}</DialogTitle>
         </DialogHeader>
         <label className="grid gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Yangi parol (min 6)</span>
+          <span className="text-xs text-muted-foreground">Новый пароль (мин. 6)</span>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
             disabled={mut.isPending || password.trim().length < 6}
             onClick={() => mut.mutate()}
           >
-            {mut.isPending ? "…" : "Saqlash"}
+            {mut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -565,24 +565,24 @@ function WebStaffEditDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Tahrirlash — {row.login}</DialogTitle>
+          <DialogTitle>Редактирование — {row.login}</DialogTitle>
         </DialogHeader>
         <WorkplaceMovedNotice />
         <div className="grid gap-2 text-sm">
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Ism *</span>
+            <span className="text-xs text-muted-foreground">Имя *</span>
             <Input value={first_name} onChange={(e) => setFirst(e.target.value)} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Familiya</span>
+            <span className="text-xs text-muted-foreground">Фамилия</span>
             <Input value={last_name} onChange={(e) => setLast(e.target.value)} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Otasining ismi</span>
+            <span className="text-xs text-muted-foreground">Отчество</span>
             <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Login *</span>
+            <span className="text-xs text-muted-foreground">Логин *</span>
             <Input
               className="font-mono"
               value={login}
@@ -590,7 +590,7 @@ function WebStaffEditDialog({
             />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Telefon</span>
+            <span className="text-xs text-muted-foreground">Телефон</span>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </label>
           <label className="grid gap-1">
@@ -598,20 +598,20 @@ function WebStaffEditDialog({
             <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">PINFL</span>
+            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           </label>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuth(e.target.checked)} />
-            Kirish ruxsati
+            Доступ для входа
           </label>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor
+            Отмена
           </Button>
           <Button type="button" disabled={patchMut.isPending || !login.trim()} onClick={() => patchMut.mutate()}>
-            {patchMut.isPending ? "…" : "Saqlash"}
+            {patchMut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

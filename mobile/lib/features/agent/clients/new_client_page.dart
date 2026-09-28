@@ -137,7 +137,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         action: openSettings == null
             ? null
             : SnackBarAction(
-                label: 'Sozlamalar',
+                label: 'Настройки',
                 textColor: Colors.white,
                 onPressed: openSettings,
               ),
@@ -150,7 +150,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
     final cam = await Permission.camera.request();
     if (!cam.isGranted) {
       if (mounted) {
-        _showFormSnack('Kamera ruxsati kerak', backgroundColor: AppColors.error);
+        _showFormSnack('Нужно разрешение на камеру', backgroundColor: AppColors.error);
       }
       return;
     }
@@ -315,7 +315,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         } catch (_) {
           savedPhotoUrl = _photoPath;
           if (mounted) {
-            _showFormSnack('Klient saqlandi, lekin foto yuklanmadi', backgroundColor: AppColors.warning);
+            _showFormSnack('Клиент сохранён, но фото не загружено', backgroundColor: AppColors.warning);
           }
         }
       }
@@ -356,7 +356,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
       final pending = row['is_active'] == false;
       if (pending) {
         _showFormSnack(
-          'Savdo nuqtasi yaratildi. Operator tasdiqlashi kutilishi mumkin.',
+          'Торговая точка создана. Возможно, потребуется подтверждение оператора.',
           backgroundColor: AppColors.info,
         );
         context.go('/clients');
@@ -367,7 +367,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Клиент добавлен'),
-          content: const Text('Yangi savdo nuqtasi uchun buyurtma yaratilsinmi?'),
+          content: const Text('Создать заказ для новой торговой точки?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Позже')),
             FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Создать заказ')),
@@ -435,7 +435,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
           const Padding(
             padding: EdgeInsets.only(top: 4, left: 4),
             child: Text(
-              'Shaharlar topilmadi. Admin agentga hudud/shahar biriktirishi kerak.',
+              'Города не найдены. Администратор должен назначить агенту территорию/город.',
               style: TextStyle(fontSize: 12, color: Colors.orange),
             ),
           ),
@@ -488,7 +488,7 @@ class _NewClientPageState extends ConsumerState<NewClientPage> {
                 if (showLocationSection)
                   AgentTemplateSection(
                     title: 'Локация',
-                    subtitle: showGpsCapture ? 'GPS orqali nuqtani biriktiring.' : null,
+                    subtitle: showGpsCapture ? 'Привяжите точку по GPS.' : null,
                     children: [
                       if (showGpsCapture || showPhotoCapture)
                         Row(

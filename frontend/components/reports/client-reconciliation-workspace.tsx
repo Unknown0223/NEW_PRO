@@ -543,7 +543,7 @@ export function ClientReconciliationWorkspace() {
               </TabsContent>
               <TabsContent value="mov" className="mt-3">
                 <SimpleTable
-                  headers={["Дата", "Delta", "Примечание"]}
+                  headers={["Дата", "Изменение", "Примечание"]}
                   rows={payload.balance_movements.map((m) => [fmtDt(m.created_at), m.delta, m.note ?? "—"])}
                 />
               </TabsContent>

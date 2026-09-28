@@ -198,7 +198,7 @@ export function GroupProcessingDebtWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       let skipped = 0;
       const failed: string[] = [];
       const items: ClientBulkItem[] = [];

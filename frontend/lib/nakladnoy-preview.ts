@@ -80,10 +80,10 @@ export async function fetchNakladnoyPreview(args: {
 }): Promise<NakladnoyPreviewResponse> {
   const { tenantSlug, orderIds, template, prefs, warehouseExportOptions } = args;
   if (!template.apiTemplate) {
-    throw new Error("Shablon API bilan bog‘lanmagan.");
+    throw new Error("Шаблон не связан с API.");
   }
   if (orderIds.length === 0) {
-    throw new Error("Zakaz tanlanmagan.");
+    throw new Error("Заказ не выбран.");
   }
   try {
     const { data } = await api.post<NakladnoyPreviewResponse>(
@@ -104,6 +104,6 @@ export async function fetchNakladnoyPreview(args: {
     );
     return data;
   } catch (e: unknown) {
-    throw new Error(getUserFacingError(e, "Ko‘rinishni yuklab bo‘lmadi."));
+    throw new Error(getUserFacingError(e, "Не удалось загрузить предпросмотр."));
   }
 }

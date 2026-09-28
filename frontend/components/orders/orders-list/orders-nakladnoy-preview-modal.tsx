@@ -80,7 +80,7 @@ export function OrdersNakladnoyPreviewModal({
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Xato");
+          setError(e instanceof Error ? e.message : "Ошибка");
         }
       })
       .finally(() => {
@@ -189,7 +189,7 @@ export function OrdersNakladnoyPreviewModal({
               {loading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin" />
-                  Yuklanmoqda…
+                  Загрузка…
                 </div>
               ) : error ? (
                 <p className="py-8 text-center text-sm text-destructive">{error}</p>

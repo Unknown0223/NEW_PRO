@@ -10,7 +10,7 @@ const slugQuery = z
   .min(1)
   .max(64)
   .transform((s) => s.trim())
-  .refine((s) => s.length > 0, { message: "slug required" });
+  .refine((s) => s.length > 0, { message: "Требуется slug" });
 
 /** Public mobile: slug trim + case-insensitive (TenantNotFound kamaytirish). */
 async function findActiveTenantBySlug(rawSlug: string) {
@@ -72,7 +72,7 @@ export async function registerMobilePublicRoutes(app: FastifyInstance) {
     await ensureMobileApkLocal(row.slug);
     const stream = await openMobileApkReadable(row.slug);
     if (!stream) {
-      return sendApiError(reply, request, 404, "ApkNotFound", "Mobil APK hali yuklanmagan");
+      return sendApiError(reply, request, 404, "ApkNotFound", "Мобильный APK ещё не загружен");
     }
     reply.header("Content-Type", "application/vnd.android.package-archive");
     reply.header("Content-Disposition", 'attachment; filename="salesdoc.apk"');

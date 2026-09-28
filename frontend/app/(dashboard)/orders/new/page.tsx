@@ -14,7 +14,7 @@ const OrderCreateWorkspace = dynamic(
       default: m.OrderCreateWorkspace
     })),
   {
-    loading: () => <p className="text-sm text-muted-foreground">Buyurtma formasi yuklanmoqda…</p>
+    loading: () => <p className="text-sm text-muted-foreground">Загрузка формы заказа…</p>
   }
 );
 

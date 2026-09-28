@@ -194,10 +194,10 @@ export function SettingsShell({ children }: { children: ReactNode }) {
     ) : settingsRoleGate ? (
     <div className="flex flex-1 items-start justify-center py-8">
       <AccessDeniedBanner
-        title="Нет доступа / Ruxsat yo‘q"
-        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав. / Bu sozlama bo‘limi sizning rolingiz yoki ruxsatlaringiz uchun yopiq.`}
+        title="Нет доступа"
+        message={`Раздел «${settingsRoleGate.title}» недоступен для вашей роли или прав.`}
         primaryHref="/settings"
-        primaryLabel="К настройкам / Sozlamalar"
+        primaryLabel="К настройкам"
       />
     </div>
   ) : (

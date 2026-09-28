@@ -23,7 +23,7 @@ export function OrderHistoryPageHeader({
           )}
         >
           <ArrowLeft size={15} aria-hidden />
-          Back
+          Назад
         </Link>
         <h1 className="text-xl font-bold text-foreground">История заказа</h1>
         <span className="text-base font-bold text-teal-700 dark:text-teal-400">
@@ -37,7 +37,7 @@ export function OrderHistoryPageHeader({
         className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground shadow-sm"
       >
         <FileDown size={15} aria-hidden />
-        Export PDF
+        Экспорт в PDF
       </button>
     </div>
   );

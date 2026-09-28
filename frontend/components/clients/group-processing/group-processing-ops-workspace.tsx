@@ -274,7 +274,7 @@ export function GroupProcessingOpsWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       let skipped = 0;
       const failed: string[] = [];

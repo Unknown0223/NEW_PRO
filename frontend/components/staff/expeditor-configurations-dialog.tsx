@@ -321,7 +321,7 @@ export function ExpeditorConfigurationsDialog({
             </div>
 
             <div>
-              <ConfigSectionTitle>Gps</ConfigSectionTitle>
+              <ConfigSectionTitle>GPS</ConfigSectionTitle>
               <div className="mb-3 grid max-w-xl gap-3 sm:grid-cols-2">
                 <ConfigTextField
                   label="Минимальный уровень батареи"

@@ -38,10 +38,10 @@ export function activePaymentMethodEntries(
 export type PaymentMethodSelectOption = { value: string; label: string };
 
 const FALLBACK_OPTIONS: PaymentMethodSelectOption[] = [
-  { value: "naqd", label: "Naqd" },
-  { value: "plastik", label: "Plastik" },
-  { value: "o‘tkazma", label: "O‘tkazma" },
-  { value: "boshqa", label: "Boshqa" }
+  { value: "naqd", label: "Наличные" },
+  { value: "plastik", label: "Пластик" },
+  { value: "o‘tkazma", label: "Перечисление" },
+  { value: "boshqa", label: "Другое" }
 ];
 
 /**

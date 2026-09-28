@@ -106,7 +106,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
             request,
             400,
             "ClientInactive",
-            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
           );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
@@ -178,7 +178,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
             request,
             400,
             "ClientInactive",
-            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
           );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");
@@ -308,7 +308,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
       }
       const offlineCreatedAtParsed = parseDateLike(parsed.data.offline_created_at);
       if (offlineCreatedAtParsed === undefined) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid date format", {
+        return sendApiError(reply, request, 400, "ValidationError", "Неверный формат даты", {
           field: "offline_created_at"
         });
       }
@@ -352,7 +352,7 @@ export async function registerMobileAgentOrderRoutes(app: FastifyInstance) {
             request,
             400,
             "ClientInactive",
-            "Mijoz nofaol — operator tasdiqlamaguncha aksiya/zakaz mumkin emas"
+            "Клиент неактивен — акции и заказы недоступны до подтверждения оператором"
           );
         }
         if (msg === "BAD_CLIENT") return sendApiError(reply, request, 400, "BadClient");

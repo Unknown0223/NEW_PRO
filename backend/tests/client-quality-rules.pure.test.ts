@@ -16,7 +16,7 @@ describe("client quality rules", () => {
   it("rejects leftover non-latin letters after transliteration", () => {
     const bad = applyLatinUpperName("Shop 商店");
     expect(bad.ok).toBe(false);
-    if (!bad.ok) expect(bad.message).toMatch(/lotin/i);
+    if (!bad.ok) expect(bad.message).toMatch(/латин/i);
   });
 
   it("accepts latin names of 3+ chars", () => {
@@ -48,7 +48,7 @@ describe("client quality rules", () => {
       [{ id: 4, name: "Дўкон Али", lat: 41.3, lon: 69.27 }]
     );
     expect(issue?.kind).toBe("geo_name");
-    expect(issue?.message).toMatch(/100 m/i);
+    expect(issue?.message).toMatch(/100 м/i);
   });
 
   it("allows similar name farther than 100 m", () => {

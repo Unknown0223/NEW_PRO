@@ -53,8 +53,8 @@ interface PnlReport {
 }
 
 const typeMap: Record<string, string> = {
-  transport: "Transport", marketing: "Marketing", rent: "Ijara", salary: "Ish haqi",
-  office: "Ofis", other: "Boshqa", draft: "Qoralama", approved: "Tasdiqlangan", rejected: "Rad etilgan"
+  transport: "Транспорт", marketing: "Маркетинг", rent: "Аренда", salary: "Зарплата",
+  office: "Офис", other: "Прочее", draft: "Черновик", approved: "Утверждён", rejected: "Отклонён"
 };
 
 type SettingsProfile = {
@@ -169,7 +169,7 @@ export default function ExpensesPage() {
       await fetchAll();
     } catch (e) {
       console.error(e);
-      setVoidError("Chiqimni arxivga o‘tkazib bo‘lmadi.");
+      setVoidError("Не удалось перенести расход в архив.");
     } finally {
       setVoidPending(false);
     }
@@ -214,23 +214,23 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Chiqimlar (Expenses)</h1>
+      <h1 className="text-2xl font-bold">Расходы</h1>
 
       {!showArchive ? (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Yangi chiqim</CardTitle>
+          <CardTitle className="text-base">Новый расход</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Tur —{" "}
+            Тип — из справочника{" "}
             <Link href="/settings/reasons/finance-categories" className="text-primary underline-offset-4 hover:underline">
               «Категория доходов/расходов»
-            </Link>{" "}
-            katalogidan; bo‘sh bo‘lsa, quyida qo‘lda yozish mumkin.
+            </Link>
+            ; если он пуст, тип можно ввести вручную ниже.
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="grid gap-1.5 sm:col-span-2">
-            <Label>Tur / kategoriya</Label>
+            <Label>Тип / категория</Label>
             {financeCategoryOptions.length > 0 ? (
               <Select
                 key={categorySelectKey}
@@ -238,7 +238,7 @@ export default function ExpensesPage() {
                 onValueChange={(v) => setNewType(v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Tanlang" />
+                  <SelectValue placeholder="Выберите" />
                 </SelectTrigger>
                 <SelectContent>
                   {financeCategoryOptions.map((o) => (
@@ -250,14 +250,14 @@ export default function ExpensesPage() {
               </Select>
             ) : (
               <Input
-                placeholder="masalan: transport, marketing"
+                placeholder="например: транспорт, маркетинг"
                 value={newType}
                 onChange={(e) => setNewType(e.target.value)}
               />
             )}
           </div>
           <div className="grid gap-1.5">
-            <Label>Summa ({defaultCurrency})</Label>
+            <Label>Сумма ({defaultCurrency})</Label>
             <GroupedNumberInput
               maxFractionDigits={2}
               placeholder="0"
@@ -266,12 +266,12 @@ export default function ExpensesPage() {
             />
           </div>
           <div className="grid gap-1.5 sm:col-span-2 lg:col-span-1">
-            <Label>Izoh (ixtiyoriy)</Label>
+            <Label>Комментарий (необязательно)</Label>
             <Input value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="—" />
           </div>
           <div className="flex items-end">
             <Button type="button" disabled={createBusy || !tenant} onClick={() => void handleCreateExpense()}>
-              {createBusy ? "Jo‘natilmoqda…" : "Qoralama sifatida yaratish"}
+              {createBusy ? "Отправка…" : "Создать как черновик"}
             </Button>
           </div>
         </CardContent>
@@ -281,10 +281,10 @@ export default function ExpensesPage() {
       {/* PnL Summary */}
       {!showArchive && pnl ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Daromad</p><p className="text-2xl font-bold tabular-nums">{formatNumberGrouped(pnl.revenue, { maxFractionDigits: 2 })}</p></CardContent></Card>
-          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tasdiqlangan chiqimlar</p><p className="text-2xl font-bold tabular-nums text-orange-600">{formatNumberGrouped(pnl.total_expenses_approved, { maxFractionDigits: 2 })}</p></CardContent></Card>
-          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Qoralama chiqimlar</p><p className="text-2xl font-bold tabular-nums text-gray-500">{formatNumberGrouped(pnl.total_expenses_draft, { maxFractionDigits: 2 })}</p></CardContent></Card>
-          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Sof foyda</p><p className="text-2xl font-bold tabular-nums text-green-600">{formatNumberGrouped(pnl.net_profit, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Выручка</p><p className="text-2xl font-bold tabular-nums">{formatNumberGrouped(pnl.revenue, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Утверждённые расходы</p><p className="text-2xl font-bold tabular-nums text-orange-600">{formatNumberGrouped(pnl.total_expenses_approved, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Черновые расходы</p><p className="text-2xl font-bold tabular-nums text-gray-500">{formatNumberGrouped(pnl.total_expenses_draft, { maxFractionDigits: 2 })}</p></CardContent></Card>
+          <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Чистая прибыль</p><p className="text-2xl font-bold tabular-nums text-green-600">{formatNumberGrouped(pnl.net_profit, { maxFractionDigits: 2 })}</p></CardContent></Card>
         </div>
       ) : null}
 
@@ -292,7 +292,7 @@ export default function ExpensesPage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Chiqimlar ro‘yxati</CardTitle>
+            <CardTitle>Список расходов</CardTitle>
             <div className="flex flex-wrap gap-2">
             <Select
               value={showArchive ? "archive" : "active"}
@@ -303,8 +303,8 @@ export default function ExpensesPage() {
             >
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">Faol</SelectItem>
-                {isSoftVoidUiEnabled() ? <SelectItem value="archive">Arxiv</SelectItem> : null}
+                <SelectItem value="active">Активные</SelectItem>
+                {isSoftVoidUiEnabled() ? <SelectItem value="archive">Архив</SelectItem> : null}
               </SelectContent>
             </Select>
             <div className="w-56">
@@ -312,9 +312,9 @@ export default function ExpensesPage() {
                 label="Статус"
                 multi
                 options={[
-                  { value: "draft", label: "Qoralama" },
-                  { value: "approved", label: "Tasdiqlangan" },
-                  { value: "rejected", label: "Rad etilgan" }
+                  { value: "draft", label: "Черновик" },
+                  { value: "approved", label: "Утверждён" },
+                  { value: "rejected", label: "Отклонён" }
                 ]}
                 values={splitMultiFilterValues(statusFilter)}
                 onChange={(v) => {
@@ -331,18 +331,18 @@ export default function ExpensesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tur</TableHead>
-                  <TableHead>Summa</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Holat</TableHead>
-                  <TableHead>Sana</TableHead>
-                  <TableHead>Ombor</TableHead>
-                  <TableHead className="text-right">Amallar</TableHead>
+                  <TableHead>Тип</TableHead>
+                  <TableHead>Сумма</TableHead>
+                  <TableHead>Агент</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead>Дата</TableHead>
+                  <TableHead>Склад</TableHead>
+                  <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {expenses.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Ma’lumot yo‘q</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Нет данных</TableCell></TableRow>
                 ) : expenses.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell>{expenseTypeLabel(e.expense_type)}</TableCell>
@@ -364,9 +364,9 @@ export default function ExpensesPage() {
                         </Button>
                       ) : e.status === "draft" ? (
                         <div className="flex flex-wrap gap-1 justify-end">
-                          <Button size="sm" variant="default" onClick={() => void handleAction(e.id, "approve")}>Tasdiqlash</Button>
-                          <Button size="sm" variant="destructive" onClick={() => void handleAction(e.id, "reject")}>Rad etish</Button>
-                          <Button size="sm" variant="outline" onClick={() => { setVoidError(null); setVoidTargetId(e.id); }}>Arxivga</Button>
+                          <Button size="sm" variant="default" onClick={() => void handleAction(e.id, "approve")}>Подтвердить</Button>
+                          <Button size="sm" variant="destructive" onClick={() => void handleAction(e.id, "reject")}>Отклонить</Button>
+                          <Button size="sm" variant="outline" onClick={() => { setVoidError(null); setVoidTargetId(e.id); }}>В архив</Button>
                         </div>
                       ) : null}
                     </TableCell>
@@ -378,10 +378,10 @@ export default function ExpensesPage() {
 
           {total > 20 && (
             <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-muted-foreground">Jami: {formatNumberGrouped(total, { maxFractionDigits: 0 })}</span>
+              <span className="text-sm text-muted-foreground">Всего: {formatNumberGrouped(total, { maxFractionDigits: 0 })}</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Oldingi</Button>
-                <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)}>Keyingi</Button>
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Назад</Button>
+                <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)}>Далее</Button>
               </div>
             </div>
           )}

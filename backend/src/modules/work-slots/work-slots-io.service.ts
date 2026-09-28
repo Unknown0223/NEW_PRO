@@ -198,7 +198,7 @@ export async function importWorkSlotsFromBuffer(
         if (!user) {
           errors.push(`Строка ${i + 2}: логин не найден «${assignLogin}»`);
         } else {
-          await assignUserToSlot(tenantId, slotId, user.id, actorUserId, "Excel import");
+          await assignUserToSlot(tenantId, slotId, user.id, actorUserId, "Импорт из Excel");
           assigned += 1;
         }
       }

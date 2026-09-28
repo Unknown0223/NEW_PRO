@@ -67,36 +67,6 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
   }, [data]);
 }
 
-export function useSalesCoverageColumns(data: CategoryRow[]) {
-  void data;
-  return useMemo(() => {
-    const cols: SalesTableColumn<CategoryRow>[] = [
-      {
-        id: "category",
-        header: "По категориям",
-        searchText: (r) => r.category,
-        cell: (r) => <span className="font-semibold">{r.category}</span>
-      },
-      {
-        id: "akb",
-        header: "АКБ",
-        cell: (r) => fmtCount(r.akb)
-      },
-      {
-        id: "share_pct",
-        header: "Процент",
-        cell: (r) => `${r.share_pct.toFixed(1)} %`
-      },
-      {
-        id: "sales_sum",
-        header: "Сумма продаж",
-        cell: (r) => fmtMoney(r.sales_sum)
-      }
-    ];
-    return cols;
-  }, []);
-}
-
 export function useSalesTerritoryColumns(resolveTerritory: (t: string) => string) {
   return useMemo(() => {
     const cols: SalesTableColumn<TerritoryRow>[] = [

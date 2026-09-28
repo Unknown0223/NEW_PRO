@@ -107,7 +107,7 @@ class _TabelDaySheetBody extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 12),
             child: _infoBanner(
               icon: Icons.lock_outline_rounded,
-              text: 'Период заблокирован (payroll lock).',
+              text: 'Период заблокирован (расчёт зарплаты закрыт).',
               tone: const Color(0xFFB45309),
               bg: const Color(0xFFFFFBEB),
             ),

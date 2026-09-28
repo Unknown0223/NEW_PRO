@@ -120,7 +120,7 @@ export function buildApp() {
         request,
         413,
         "PayloadTooLarge",
-        `Fayl juda katta. Global multipart limit: ${Math.round(env.MULTIPART_MAX_FILE_BYTES / (1024 * 1024))} MB. Excel import uchun MULTIPART_EXCEL_MAX_BYTES, APK uchun MULTIPART_APK_MAX_BYTES ni tekshiring.`,
+        `Файл слишком большой. Общий лимит загрузки: ${Math.round(env.MULTIPART_MAX_FILE_BYTES / (1024 * 1024))} МБ. Для импорта Excel проверьте MULTIPART_EXCEL_MAX_BYTES, для APK — MULTIPART_APK_MAX_BYTES.`,
         { maxBytes: env.MULTIPART_MAX_FILE_BYTES }
       );
     }
@@ -142,7 +142,7 @@ export function buildApp() {
     const sc = (error as { statusCode?: number }).statusCode;
     if (sc) {
       if (sc === 429) {
-        return sendApiError(reply, request, 429, "TooManyRequests", error.message || "Rate limit exceeded");
+        return sendApiError(reply, request, 429, "TooManyRequests", error.message || "Слишком много запросов. Повторите позже.");
       }
       return sendApiError(reply, request, sc, error.name, error.message);
     }
@@ -159,7 +159,7 @@ export function buildApp() {
         request,
         503,
         "DatabaseSchemaMismatch",
-        "Baza migratsiyalari to‘liq qo‘llanmagan (jadval/ustun yetishmayapti). Backend papkasida: npm run db:deploy",
+        "Миграции базы данных применены не полностью (не хватает таблицы/столбца). В папке backend выполните: npm run db:deploy",
         { prismaCode }
       );
     }
@@ -167,7 +167,7 @@ export function buildApp() {
     if (errName === "PrismaClientValidationError") {
       return sendApiError(reply, request, 400, "DatabaseValidationError", (error as Error).message);
     }
-    return sendApiError(reply, request, 500, "InternalServerError", "Unexpected server error");
+    return sendApiError(reply, request, 500, "InternalServerError", "Непредвиденная ошибка сервера");
   });
 
   return app;

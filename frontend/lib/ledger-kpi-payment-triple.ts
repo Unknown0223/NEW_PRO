@@ -1,6 +1,6 @@
 /** KPI kartochkalari va balance-detail: spravochnik «способы оплаты» → Naqd / Perechis / Terminal */
 
-export const KPI_TRIPLE_LABELS = ["Naqd", "Perechis", "Terminal"] as const;
+export const KPI_TRIPLE_LABELS = ["Наличные", "Перечисление", "Терминал"] as const;
 
 export function parseLedgerKpiAmount(s: string | null | undefined): number {
   const t = String(s ?? "")

@@ -116,13 +116,13 @@ class _ClientLocationMapPageState extends ConsumerState<ClientLocationMapPage> {
                                   const Icon(Icons.map_outlined, size: 48, color: AppColors.textMuted),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'Xarita yuklanmadi',
+                                    'Не удалось загрузить карту',
                                     style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(height: 12),
                                   TextButton(
                                     onPressed: holder.retryLoad,
-                                    child: const Text('Qayta urinish'),
+                                    child: const Text('Повторить'),
                                   ),
                                 ],
                               ),

@@ -35,7 +35,7 @@ export function WorkSlotsPendingBell({ tenantSlug }: { tenantSlug: string | null
         "relative flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background",
         "text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
-      title={`${count} ta agent tanlash kutilmoqda`}
+      title={`Ожидают выбора агента: ${count}`}
     >
       <Briefcase className="h-4 w-4" aria-hidden />
       <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">

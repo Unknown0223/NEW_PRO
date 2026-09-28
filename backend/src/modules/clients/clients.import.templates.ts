@@ -96,7 +96,7 @@ export async function buildClientImportTemplateBuffer(): Promise<Buffer> {
   });
   const example: string[] = headers.map((h) => {
     if (h === "ИД") return "";
-    if (h === "Наименование") return "Misol do'kon";
+    if (h === "Наименование") return "Магазин (пример)";
     if (h === "Телефон") return "+998901112233";
     if (h === "Город (код)") return "ANDIJON SHAXAR";
     if (h.startsWith("Агент ") && !h.includes("день") && !h.startsWith("Агент 1")) return "---";

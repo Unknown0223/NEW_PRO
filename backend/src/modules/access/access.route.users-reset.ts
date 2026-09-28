@@ -19,7 +19,7 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
     const user = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { role: true } });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
@@ -71,7 +71,7 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
       if (!ok) return;
       const tenantId = request.tenant!.id;
       const id = Number((request.params as { id: string }).id);
-      if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+      if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
       const user = await prisma.user.findFirst({
         where: { id, tenant_id: tenantId },
         select: { id: true, role: true }
@@ -80,7 +80,7 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
 
       const resetLog = await findLatestAccessResetLog(tenantId, id);
       if (!resetLog) {
-        return sendApiError(reply, request, 404, "NoResetSnapshot", "No access.reset log found for this user");
+        return sendApiError(reply, request, 404, "NoResetSnapshot", "Для этого пользователя не найдена запись о сбросе доступа");
       }
       if (!isAccessResetSnapshot(resetLog.old_value)) {
         return sendApiError(
@@ -88,7 +88,7 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
           request,
           409,
           "SnapshotIncomplete",
-          "Latest access.reset log has no full grants snapshot (pre-Phase 2 reset)"
+          "В последней записи о сбросе доступа нет полного снимка прав (сброс выполнен в старой версии)"
         );
       }
 

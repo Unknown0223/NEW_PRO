@@ -47,7 +47,7 @@ export function createMigrationExportSession(
     progress: {
       stage: "queued",
       percent: 0,
-      message: "Navbatda…",
+      message: "В очереди…",
       updated_at: new Date().toISOString()
     },
     created_at: new Date().toISOString()
@@ -94,7 +94,7 @@ export function completeMigrationExportSession(
   s.progress = {
     stage: "done",
     percent: 100,
-    message: "Zaxira tayyor",
+    message: "Резервная копия готова",
     updated_at: new Date().toISOString()
   };
 }

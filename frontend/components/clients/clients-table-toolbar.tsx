@@ -516,7 +516,7 @@ export function ClientsTemplateListToolbar({
               disabled={groupProcessingDisabled}
               onClick={onGroupProcessing}
               className={toolbarBtn}
-              title={groupProcessingDisabled ? "Avval klientlarni belgilang" : undefined}
+              title={groupProcessingDisabled ? "Сначала отметьте клиентов" : undefined}
             >
               <Layers className="h-3.5 w-3.5 shrink-0 text-gray-600" aria-hidden />
               Групповые обработки

@@ -244,7 +244,7 @@ export default function ReportGpsPage() {
       URL.revokeObjectURL(url);
     } catch (e) {
       setExportError(
-        isAxiosError(e) ? getUserFacingError(e) : e instanceof Error ? e.message : "Export xato"
+        isAxiosError(e) ? getUserFacingError(e) : e instanceof Error ? e.message : "Ошибка экспорта"
       );
     } finally {
       setExporting(false);
@@ -294,7 +294,7 @@ export default function ReportGpsPage() {
               checked={draft.app_users_only}
               onChange={(e) => setDraft((d) => ({ ...d, app_users_only: e.target.checked }))}
             />
-            Ilova foydalanuvchilari
+            Пользователи приложения
           </label>
           <button
             ref={dateAnchorRef}
@@ -394,7 +394,7 @@ export default function ReportGpsPage() {
             <p className="text-sm text-destructive">
               {isAxiosError(reportQ.error)
                 ? getUserFacingError(reportQ.error)
-                : "Hisobot yuklanmadi"}
+                : "Не удалось загрузить отчёт"}
             </p>
           ) : null}
           <div className="overflow-x-auto rounded-md border">
@@ -417,7 +417,7 @@ export default function ReportGpsPage() {
                 {(reportQ.data?.rows ?? []).length === 0 && !reportQ.isLoading ? (
                   <tr>
                     <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
-                      Маълумот топилмади
+                      Данные не найдены
                     </td>
                   </tr>
                 ) : null}

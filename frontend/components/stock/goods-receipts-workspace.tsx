@@ -452,7 +452,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
       await qc.invalidateQueries({ queryKey: ["goods-receipts", tenantSlug] });
       await qc.invalidateQueries({ queryKey: ["stock", tenantSlug] });
     } catch {
-      setNotice({ kind: "error", text: "Статусni o‘zgartirib bo‘lmadi (workflow cheklovi yoki ruxsat)." });
+      setNotice({ kind: "error", text: "Не удалось изменить статус (ограничение процесса или нет прав)." });
     } finally {
       setStatusBusyId(null);
     }
@@ -475,7 +475,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                   disabled={uploading}
                 >
                   <Upload className="mr-1 size-3.5" />
-                  {uploading ? "Импорт..." : "Импортировать с excel"}
+                  {uploading ? "Импорт…" : "Импорт из Excel"}
                 </Button>
               </ExcelDropTarget>
               <Link
@@ -506,7 +506,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock">
-          ← Kirim / qoldiq
+          ← Приход / остатки
         </Link>
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock/balances">
           Остатки товаров
@@ -539,7 +539,7 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="space-y-4 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filter Panel</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Панель фильтров</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
             <div className="grid min-w-[11rem] gap-1.5">
@@ -836,10 +836,10 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 <FileSpreadsheet className="size-5" />
               </div>
               <div className="min-w-0 space-y-1 pr-6">
-                <DialogTitle className="text-base font-semibold leading-tight">Excel eksport</DialogTitle>
+                <DialogTitle className="text-base font-semibold leading-tight">Экспорт в Excel</DialogTitle>
                 <DialogDescription className="text-xs leading-relaxed text-muted-foreground">
-                  Joriy sahifa va filtrlangan qatorlar eksport qilinadi. Fayl{" "}
-                  <span className="font-medium text-foreground/80">.xlsx</span> formatida.
+                  Экспортируются текущая страница и отфильтрованные строки. Файл в формате{" "}
+                  <span className="font-medium text-foreground/80">.xlsx</span>.
                 </DialogDescription>
               </div>
             </div>
@@ -856,9 +856,9 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
                 "disabled:pointer-events-none disabled:opacity-45"
               )}
             >
-              <span className="text-sm font-medium">Umumiy ro‘yxat</span>
+              <span className="text-sm font-medium">Общий список</span>
               <span className="text-xs text-muted-foreground">
-                Hujjatlar ro‘yxati: status, sana, sklad, summalar va izoh
+                Список документов: статус, дата, склад, суммы и комментарий
               </span>
             </button>
             <button
@@ -873,15 +873,15 @@ export function GoodsReceiptsWorkspace({ tenantSlug }: Props) {
               )}
             >
               <span className="text-sm font-medium">
-                {exportBusy ? "Загрузка…" : "Batafsil (mahsulot qatorlari)"}
+                {exportBusy ? "Загрузка…" : "Подробно (строки товаров)"}
               </span>
               <span className="text-xs text-muted-foreground">
-                Har hujjat ichidagi barcha product qatorlari bilan eksport
+                Экспорт со всеми строками товаров каждого документа
               </span>
             </button>
             {rows.length === 0 ? (
               <p className="rounded-lg bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground">
-                Eksport uchun jadvalda kamida bitta qator bo‘lishi kerak.
+                Для экспорта в таблице должна быть хотя бы одна строка.
               </p>
             ) : null}
           </div>

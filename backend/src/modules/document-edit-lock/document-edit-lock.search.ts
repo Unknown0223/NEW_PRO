@@ -246,7 +246,7 @@ export async function searchDocumentsForEditLock(input: {
           section: "stock",
           document_id: r.id,
           document_kind: "goods_receipt",
-          label: `Kirim ${r.number} · ${r.status}`,
+          label: `Приход ${r.number} · ${r.status}`,
           document_date: r.created_at.toISOString()
         });
       }
@@ -284,7 +284,7 @@ export async function searchDocumentsForEditLock(input: {
           section: "stock",
           document_id: r.id,
           document_kind: "transfer",
-          label: `Transfer #${r.id} · ${r.status}`,
+          label: `Перемещение #${r.id} · ${r.status}`,
           document_date: new Date(r.created_at).toISOString()
         });
       }
@@ -312,7 +312,7 @@ export async function searchDocumentsForEditLock(input: {
           section: "stock",
           document_id: r.id,
           document_kind: "correction",
-          label: `Korrektirovka #${r.id} · ${r.kind}`,
+          label: `Корректировка #${r.id} · ${r.kind}`,
           document_date: r.occurred_at.toISOString()
         });
       }

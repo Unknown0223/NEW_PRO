@@ -86,7 +86,7 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -135,7 +135,7 @@ export async function registerPaymentReadRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }

@@ -360,7 +360,7 @@ export function GroupProcessingTeamWorkspace() {
       if (patch.agentId !== undefined && patch.agentId !== "") {
         if (agentUsedOnOtherDirection(slots, teamIdx, patch.agentId)) {
           setStatusMsg(
-            `Klient #${clientId}: bu agent boshqa yo‘nalishda allaqachon bog‘langan. Bir yo‘nalish = bitta agent.`
+            `Клиент #${clientId}: этот агент уже привязан в другом направлении. Одно направление = один агент.`
           );
           return prev;
         }
@@ -473,9 +473,9 @@ export function GroupProcessingTeamWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       if (agentsQ.isLoading || expeditorsQ.isLoading) {
-        throw new Error("Agentlar ro‘yxati yuklanmoqda — biroz kuting");
+        throw new Error("Список агентов загружается — подождите немного");
       }
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       const failed: string[] = [];
@@ -487,7 +487,7 @@ export function GroupProcessingTeamWorkspace() {
         const allSlots = ensureClientSlots(id);
         const dup = findDuplicateAgentDirections(allSlots);
         if (dup) {
-          failed.push(`#${id}: bir agent bir necha yo‘nalishda (faqat bitta ruxsat)`);
+          failed.push(`#${id}: один агент в нескольких направлениях (допускается только одно)`);
           continue;
         }
         const { slots: scrubbed, clearedInactive } = scrubInactiveStaff(
@@ -499,8 +499,8 @@ export function GroupProcessingTeamWorkspace() {
         if (slots.length === 0) {
           failed.push(
             clearedInactive
-              ? `#${id}: faqat nofaol agent/dastavchik bor edi — faolini tanlang`
-              : `#${id}: agent yoki dastavchik bog‘lanmagan (bo‘sh yo‘nalish saqlanmaydi)`
+              ? `#${id}: были только неактивные агенты/доставщики — выберите активного`
+              : `#${id}: агент или доставщик не привязан (пустое направление не сохраняется)`
           );
           continue;
         }
@@ -510,7 +510,7 @@ export function GroupProcessingTeamWorkspace() {
             (s.expeditorUserId && parseOptionalPositiveId(s.expeditorUserId) == null)
         );
         if (badId) {
-          failed.push(`#${id}: agent yoki dastavchik ID noto‘g‘ri`);
+          failed.push(`#${id}: некорректный ID агента или доставщика`);
           continue;
         }
         items.push({
@@ -540,15 +540,15 @@ export function GroupProcessingTeamWorkspace() {
       }
       const clearedHint =
         res.clearedNotes.length > 0
-          ? ` Nofaol agent/dastavchik olib tashlandi: ${res.clearedNotes.slice(0, 5).join(", ")}${res.clearedNotes.length > 5 ? "…" : ""}.`
+          ? ` Неактивные агенты/доставщики удалены: ${res.clearedNotes.slice(0, 5).join(", ")}${res.clearedNotes.length > 5 ? "…" : ""}.`
           : "";
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}${clearedHint}`
-          : `Saqlandi: ${res.ok} ta klient.${clearedHint}`
+          ? `Сохранено: ${res.ok}. Ошибки: ${res.failed.slice(0, 3).join("; ")}${clearedHint}`
+          : `Сохранено клиентов: ${res.ok}.${clearedHint}`
       );
     },
-    onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
+    onError: (e) => setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"))
   });
 
   const selectClass =
@@ -609,14 +609,14 @@ export function GroupProcessingTeamWorkspace() {
               <option value="">—</option>
               {s.agentId && !activeAgentIds.has(s.agentId) ? (
                 <option value={s.agentId}>
-                  {(s.agentOrphanLabel || `Agent #${s.agentId}`) + " (nofaol)"}
+                  {(s.agentOrphanLabel || `Агент #${s.agentId}`) + " (неактивен)"}
                 </option>
               ) : null}
               {agentOpts.map((o) => {
                 const taken = !opts?.master && takenAgents.has(o.value) && o.value !== s.agentId;
                 return (
                   <option key={o.value} value={o.value} disabled={taken}>
-                    {taken ? `${o.label} (boshqa yo‘nalishda)` : o.label}
+                    {taken ? `${o.label} (в другом направлении)` : o.label}
                   </option>
                 );
               })}
@@ -639,7 +639,7 @@ export function GroupProcessingTeamWorkspace() {
               <option value="">—</option>
               {s.expeditorUserId && !activeExpeditorIds.has(s.expeditorUserId) ? (
                 <option value={s.expeditorUserId}>
-                  {(s.expeditorOrphanLabel || `Dastavchik #${s.expeditorUserId}`) + " (nofaol)"}
+                  {(s.expeditorOrphanLabel || `Доставщик #${s.expeditorUserId}`) + " (неактивен)"}
                 </option>
               ) : null}
               {expeditorOpts.map((o) => (
@@ -690,7 +690,7 @@ export function GroupProcessingTeamWorkspace() {
             <p
               className={cn(
                 "mt-1 text-sm",
-                /Xato:/.test(statusMsg) ? "text-amber-800" : "text-emerald-700"
+                /Ошибки:/.test(statusMsg) ? "text-amber-800" : "text-emerald-700"
               )}
             >
               {statusMsg}

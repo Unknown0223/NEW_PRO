@@ -36,13 +36,13 @@ describe("resolveImportSelection", () => {
 describe("fkSkipWarningUz", () => {
   it("product_prices uchun sodda o‘zbekcha", () => {
     const w = fkSkipWarningUz("product_prices", "product_id");
-    expect(w).toContain("Mahsulot narxi");
-    expect(w).toContain("mahsulot topilmadi");
+    expect(w).toContain("Цена товара");
+    expect(w).toContain("товар не найден");
     expect(w).not.toMatch(/Prisma|Argument|\.ts:/);
   });
 
   it("boshqa jadval — umumiy matn", () => {
     const w = fkSkipWarningUz("stock_take_lines", "product_id");
-    expect(w).toContain("mahsulot topilmadi");
+    expect(w).toContain("товар не найден");
   });
 });

@@ -312,7 +312,7 @@ export const orderCashInContextQuerySchema = z
     order_ids: z.string().max(8000).optional()
   })
   .refine((d) => Boolean(d.client_id) || Boolean(d.order_ids?.trim()), {
-    message: "client_id yoki order_ids majburiy"
+    message: "Укажите client_id или order_ids"
   });
 
 /** POST `/api/:slug/payments/order-cash-in` */

@@ -32,9 +32,10 @@ type PaymentPieProps = {
 
 type OrdersRefusalsProps = {
   kind: "orders-refusals";
-  data: Array<{ date: string; orders: number; refusals: number }>;
+  data: Array<{ date: string; orders: number; refusals: number; notVisited: number }>;
   green: string;
   red: string;
+  amber: string;
 };
 
 type RefusalBarProps = {
@@ -45,8 +46,9 @@ type RefusalBarProps = {
 
 type SalesAreaProps = {
   kind: "sales-area";
-  data: Array<{ date: string; amount: number }>;
+  data: Array<{ date: string; amount: number; returns: number }>;
   green: string;
+  red: string;
 };
 
 type Props = ProductDonutProps | PaymentPieProps | OrdersRefusalsProps | RefusalBarProps | SalesAreaProps;
@@ -162,7 +164,7 @@ export default function SalesRechartsBundle(props: Props) {
             <Line
               type="monotone"
               dataKey="orders"
-              name="Заявки"
+              name="Заказы"
               stroke={props.green}
               strokeWidth={3}
               dot={{ r: 3 }}
@@ -172,6 +174,14 @@ export default function SalesRechartsBundle(props: Props) {
               dataKey="refusals"
               name="Отказы"
               stroke={props.red}
+              strokeWidth={3}
+              dot={{ r: 3 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="notVisited"
+              name="Непосещение"
+              stroke={props.amber}
               strokeWidth={3}
               dot={{ r: 3 }}
             />
@@ -213,6 +223,10 @@ export default function SalesRechartsBundle(props: Props) {
               <stop offset="0%" stopColor={props.green} stopOpacity={0.25} />
               <stop offset="100%" stopColor={props.green} stopOpacity={0.02} />
             </linearGradient>
+            <linearGradient id="returnsGradient" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={props.red} stopOpacity={0.2} />
+              <stop offset="100%" stopColor={props.red} stopOpacity={0.02} />
+            </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-25} textAnchor="end" height={50} />
@@ -227,6 +241,16 @@ export default function SalesRechartsBundle(props: Props) {
             fill="url(#salesGradient)"
             dot={false}
           />
+          <Area
+            type="monotone"
+            dataKey="returns"
+            name="Возврат"
+            stroke={props.red}
+            strokeWidth={2.5}
+            fill="url(#returnsGradient)"
+            dot={false}
+          />
+          <Legend />
         </AreaChart>
       </ResponsiveContainer>
     </div>

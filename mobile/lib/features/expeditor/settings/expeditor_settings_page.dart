@@ -97,7 +97,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
               ),
               _ValueRow(
                 label: 'Валюта',
-                value: cfg?.expeditor?.currencySymbol ?? "so'm",
+                value: cfg?.expeditor?.currencySymbol ?? 'сум',
               ),
             ]),
             _group('НАКЛАДНЫЕ', [
@@ -181,7 +181,7 @@ class ExpeditorSettingsPage extends ConsumerWidget {
             const AgentSheetHandle(),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Язык приложении',
+              child: Text('Язык приложения',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),),
             ),
             ListTile(

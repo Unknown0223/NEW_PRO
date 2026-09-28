@@ -146,7 +146,7 @@ export async function applyProfileRows(
       (p) => p.active !== false && p.id
     );
     if (!payMethods.length) {
-      throw new Error("Avval «Способы оплаты» qadamini bajaring — narx turi to‘lov usuliga bog‘lanadi");
+      throw new Error("Сначала выполните шаг «Способы оплаты» — тип цены привязывается к способу оплаты");
     }
 
     const resolvePayId = (raw: string): string | null => {
@@ -181,7 +181,7 @@ export async function applyProfileRows(
       const payment_method_id = resolvePayId(rawPay) ?? (!rawPay ? payMethods[0]!.id : null);
       if (!payment_method_id) {
         throw new Error(
-          `Qator ${i + 1}: способ оплаты topilmadi («${rawPay}»). «Способ оплаты» qadamidagi nom yoki kodni yozing`
+          `Строка ${i + 1}: способ оплаты не найден («${rawPay}»). Укажите название или код из шага «Способ оплаты»`
         );
       }
       const codeRaw = cell(r, "code").toUpperCase().replace(/[^A-Z0-9_]/g, "").slice(0, 20);
@@ -307,7 +307,7 @@ export async function applyProfileRows(
       references: { territory_nodes: payload }
     });
     await invalidateAfterApply(tenantSlug, qc);
-    return `${preview.rows.length} zona/shahar saqlandi`;
+    return `Сохранено зон/городов: ${preview.rows.length}`;
   } else {
     const prefix =
       profileRefKey === "client_format_entries"
@@ -332,7 +332,7 @@ export async function applyProfileRows(
     references: { [profileRefKey]: await mergeWithExistingReferences(tenantSlug, profileRefKey, payload as Record<string, unknown>[]) }
   });
   await invalidateAfterApply(tenantSlug, qc);
-  return `${preview.rows.length} qator saqlandi (asosiy sozlamalar bilan bir xil API)`;
+  return `Сохранено строк: ${preview.rows.length} (тот же API, что в основных настройках)`;
 }
 
 export async function applyCompanyForm(
@@ -341,14 +341,14 @@ export async function applyCompanyForm(
   qc?: QueryClient
 ): Promise<string> {
   const row = preview.rows[0];
-  if (!row) throw new Error("Kompaniya qatori yo‘q");
+  if (!row) throw new Error("Нет строки с данными компании");
   await api.patch(`/api/${tenantSlug}/settings/profile`, {
     name: cell(row, "name"),
     phone: cell(row, "phone") || null,
     address: cell(row, "address") || null
   });
   await invalidateAfterApply(tenantSlug, qc);
-  return "Kompaniya saqlandi";
+  return "Компания сохранена";
 }
 
 export async function applyCatalogRows(
@@ -378,7 +378,7 @@ export async function applyCatalogRows(
     created++;
   }
   await invalidateAfterApply(tenantSlug, qc);
-  return created ? `${created} yangi yozuv qo‘shildi` : "Yangi yozuv yo‘q (takrorlar o‘tkazildi)";
+  return created ? `Добавлено новых записей: ${created}` : "Новых записей нет (дубликаты пропущены)";
 }
 
 export async function applyEntityRows(
@@ -406,7 +406,7 @@ export async function applyEntityRows(
       created++;
     }
     await invalidateAfterApply(tenantSlug, qc, ["warehouses"]);
-    return created ? `${created} ombor qo‘shildi` : "Yangi ombor yo‘q (takrorlar o‘tkazildi)";
+    return created ? `Добавлено складов: ${created}` : "Новых складов нет (дубликаты пропущены)";
   }
 
   const { data } = await api.get<{ data?: { id: number; name: string; code?: string | null }[] }>(
@@ -436,7 +436,7 @@ export async function applyEntityRows(
     created++;
   }
   await invalidateAfterApply(tenantSlug, qc, ["product-categories"]);
-  return created ? `${created} kategoriya qo‘shildi` : "Yangi kategoriya yo‘q (takrorlar o‘tkazildi)";
+  return created ? `Добавлено категорий: ${created}` : "Новых категорий нет (дубликаты пропущены)";
 }
 
 export async function applyImportStep(
@@ -446,7 +446,7 @@ export async function applyImportStep(
   qc?: QueryClient,
   callbacks?: ImportAsyncCallbacks
 ): Promise<string> {
-  if (!step.importApi) throw new Error("Import API yo‘q");
+  if (!step.importApi) throw new Error("Нет API импорта");
   const config = getStepTableConfig(step.id);
   const blob = buildXlsxBlobFromPreview(preview, config);
   const result = await runImportStep(
@@ -472,27 +472,27 @@ export async function applyStepPreview(
   const config = getStepTableConfig(step.id);
   if (!config) {
     if (step.importApi) return applyImportStep(tenantSlug, step, preview, qc);
-    throw new Error("Qo‘llash usuli aniqlanmadi");
+    throw new Error("Не удалось определить способ применения");
   }
 
   switch (config.mode) {
     case "company-form":
       return applyCompanyForm(tenantSlug, preview, qc);
     case "profile":
-      if (!config.profileRefKey) throw new Error("profileRefKey yo‘q");
+      if (!config.profileRefKey) throw new Error("Не задан profileRefKey");
       return applyProfileRows(tenantSlug, config.profileRefKey, preview, qc);
     case "catalog-create":
-      if (!config.catalogKind) throw new Error("catalogKind yo‘q");
+      if (!config.catalogKind) throw new Error("Не задан catalogKind");
       return applyCatalogRows(tenantSlug, config.catalogKind, preview, qc);
     case "entity-create":
-      if (!config.entityKind) throw new Error("entityKind yo‘q");
+      if (!config.entityKind) throw new Error("Не задан entityKind");
       return applyEntityRows(tenantSlug, config.entityKind, preview, qc);
     case "import":
       return applyImportStep(tenantSlug, step, preview, qc, callbacks);
     case "readonly-api":
-      throw new Error("Bu qadam faqat asosiy sozlamalarda tahrirlanadi");
+      throw new Error("Этот шаг редактируется только в основных настройках");
     default:
-      throw new Error("Noma’lum rejim");
+      throw new Error("Неизвестный режим");
   }
 }
 

@@ -325,7 +325,7 @@ export function writePivotAoAToExcel(
   const worksheet = XLSX.utils.aoa_to_sheet(numericAoA);
   const workbook = XLSX.utils.book_new();
   const sheetName =
-    (options.sheetName ?? "Pivot").replace(/[:\\/?*[\]]/g, "_").slice(0, 31) || "Pivot";
+    (options.sheetName ?? "Сводная").replace(/[:\\/?*[\]]/g, "_").slice(0, 31) || "Сводная";
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   const filename = options.filename ?? "pivot-export.xlsx";
   const output = filename.toLowerCase().endsWith(".xlsx") ? filename : `${filename}.xlsx`;

@@ -223,7 +223,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rad saqlanmadi: ${e.message}'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Отказ не сохранён: ${e.message}'), backgroundColor: AppColors.error),
           );
         }
       } catch (e, st) {
@@ -358,7 +358,7 @@ class _VisitInProgressScreenState extends ConsumerState<VisitInProgressScreen> {
                 final result = await VisitSupervisionSheet.show(context, supervision);
                 if (result != null && mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Checklist saqlandi'), backgroundColor: AppColors.success),
+                    const SnackBar(content: Text('Чек-лист сохранён'), backgroundColor: AppColors.success),
                   );
                 }
               },

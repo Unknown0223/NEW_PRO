@@ -35,7 +35,7 @@ export async function registerAuditEventRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid query",
+          "Некорректные параметры запроса",
           zodValidationExtras(parsed.error)
         );
       }
@@ -81,7 +81,7 @@ export async function registerAuditEventRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid query",
+          "Некорректные параметры запроса",
           zodValidationExtras(parsed.error)
         );
       }

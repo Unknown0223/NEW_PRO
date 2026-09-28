@@ -20,7 +20,7 @@ export default function AccessHistoryPage() {
     return (
       <div className="flex flex-1 items-start justify-center p-8">
         <AccessDeniedBanner
-          message="Недостаточно прав для раздела «Доступ» / «Доступ» bo‘limiga ruxsat yo‘q (нужны admin или access.upravlenie.view)."
+          message="Недостаточно прав для раздела «Доступ» (нужны admin или access.upravlenie.view)."
         />
       </div>
     );

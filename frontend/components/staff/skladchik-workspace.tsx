@@ -701,7 +701,7 @@ function SkladchikCreateModal({
       >
         <DialogHeader>
           <DialogTitle className="text-base font-semibold">Добавить</DialogTitle>
-          <p className="text-xs font-normal text-muted-foreground">Yangi skladchik — login noyob bo‘lishi kerak.</p>
+          <p className="text-xs font-normal text-muted-foreground">Новый кладовщик — логин должен быть уникальным.</p>
         </DialogHeader>
         {localError ? (
           <p className="text-sm text-destructive" role="alert">
@@ -710,27 +710,27 @@ function SkladchikCreateModal({
         ) : null}
         <div className="grid gap-3 text-sm">
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Ism *</span>
+            <span className="text-xs text-muted-foreground">Имя *</span>
             <Input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} />
             <FieldHint name="first_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Familiya</span>
+            <span className="text-xs text-muted-foreground">Фамилия</span>
             <Input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} />
             <FieldHint name="last_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Otasining ismi</span>
+            <span className="text-xs text-muted-foreground">Отчество</span>
             <Input value={form.middle_name} onChange={(e) => setForm((f) => ({ ...f, middle_name: e.target.value }))} />
             <FieldHint name="middle_name" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Login *</span>
+            <span className="text-xs text-muted-foreground">Логин *</span>
             <Input className="font-mono" value={form.login} onChange={(e) => setForm((f) => ({ ...f, login: e.target.value }))} />
             <FieldHint name="login" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Parol * (min 6)</span>
+            <span className="text-xs text-muted-foreground">Пароль * (мин. 6)</span>
             <Input
               type="password"
               value={form.password}
@@ -740,7 +740,7 @@ function SkladchikCreateModal({
             <FieldHint name="password" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Telefon</span>
+            <span className="text-xs text-muted-foreground">Телефон</span>
             <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
             <FieldHint name="phone" errors={fieldErrors} />
           </label>
@@ -750,7 +750,7 @@ function SkladchikCreateModal({
             <FieldHint name="email" errors={fieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">PINFL</span>
+            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={form.pinfl} onChange={(e) => setForm((f) => ({ ...f, pinfl: e.target.value }))} />
             <FieldHint name="pinfl" errors={fieldErrors} />
           </label>
@@ -761,12 +761,12 @@ function SkladchikCreateModal({
               checked={form.can_authorize}
               onChange={(e) => setForm((f) => ({ ...f, can_authorize: e.target.checked }))}
             />
-            Kirish
+            Доступ для входа
           </label>
         </div>
         <DialogFooter className="gap-2 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -822,11 +822,11 @@ function WebStaffPasswordDialog({
         if (under) setPassErr(under);
         else {
           const hint = firstValidationUserHint(flat);
-          setPassErr(hint ? withApiSupportLine(hint, e) : withApiSupportLine("Parolni tekshiring.", e));
+          setPassErr(hint ? withApiSupportLine(hint, e) : withApiSupportLine("Проверьте пароль.", e));
         }
         return;
       }
-      setPassErr(getUserFacingError(e, "Parolni saqlab bo‘lmadi."));
+      setPassErr(getUserFacingError(e, "Не удалось сохранить пароль."));
     }
   });
 
@@ -836,7 +836,7 @@ function WebStaffPasswordDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm border border-teal-800/20 shadow-lg" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Parolni o‘zgartirish — {row.login}</DialogTitle>
+          <DialogTitle>Смена пароля — {row.login}</DialogTitle>
         </DialogHeader>
         {passErr ? (
           <p className="text-sm text-destructive" role="alert">
@@ -844,12 +844,12 @@ function WebStaffPasswordDialog({
           </p>
         ) : null}
         <label className="grid gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Yangi parol (min 6)</span>
+          <span className="text-xs text-muted-foreground">Новый пароль (мин. 6)</span>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -857,7 +857,7 @@ function WebStaffPasswordDialog({
             disabled={mut.isPending || password.trim().length < 6}
             onClick={() => mut.mutate()}
           >
-            {mut.isPending ? "…" : "Saqlash"}
+            {mut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -951,7 +951,7 @@ function WebStaffEditDialog({
         if (ax.response?.status === 409 && ax.response?.data?.error === "LoginExists") {
           setPatchBannerError(withApiSupportLine("Этот логин уже занят. Укажите другой логин.", e));
         } else {
-          setPatchBannerError(getUserFacingError(e, "Saqlab bo‘lmadi."));
+          setPatchBannerError(getUserFacingError(e, "Не удалось сохранить."));
         }
       }
     }
@@ -966,7 +966,7 @@ function WebStaffEditDialog({
         showCloseButton
       >
         <DialogHeader>
-          <DialogTitle>Tahrirlash — {row.login}</DialogTitle>
+          <DialogTitle>Редактирование — {row.login}</DialogTitle>
         </DialogHeader>
         {patchBannerError ? (
           <p className="text-sm text-destructive" role="alert">
@@ -975,22 +975,22 @@ function WebStaffEditDialog({
         ) : null}
         <div className="grid gap-2 text-sm">
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Ism *</span>
+            <span className="text-xs text-muted-foreground">Имя *</span>
             <Input value={first_name} onChange={(e) => setFirst(e.target.value)} />
             <FieldHint name="first_name" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Familiya</span>
+            <span className="text-xs text-muted-foreground">Фамилия</span>
             <Input value={last_name} onChange={(e) => setLast(e.target.value)} />
             <FieldHint name="last_name" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Otasining ismi</span>
+            <span className="text-xs text-muted-foreground">Отчество</span>
             <Input value={middle_name} onChange={(e) => setMid(e.target.value)} />
             <FieldHint name="middle_name" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Login *</span>
+            <span className="text-xs text-muted-foreground">Логин *</span>
             <Input
               className="font-mono"
               value={login}
@@ -999,7 +999,7 @@ function WebStaffEditDialog({
             <FieldHint name="login" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">Telefon</span>
+            <span className="text-xs text-muted-foreground">Телефон</span>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
             <FieldHint name="phone" errors={patchFieldErrors} />
           </label>
@@ -1009,19 +1009,19 @@ function WebStaffEditDialog({
             <FieldHint name="email" errors={patchFieldErrors} />
           </label>
           <label className="grid gap-1">
-            <span className="text-xs text-muted-foreground">PINFL</span>
+            <span className="text-xs text-muted-foreground">ПИНФЛ</span>
             <Input value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
             <FieldHint name="pinfl" errors={patchFieldErrors} />
           </label>
           <WorkplaceMovedNotice />
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuth(e.target.checked)} />
-            Kirish ruxsati
+            Доступ для входа
           </label>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -1029,7 +1029,7 @@ function WebStaffEditDialog({
             disabled={patchMut.isPending || !login.trim()}
             onClick={() => patchMut.mutate()}
           >
-            {patchMut.isPending ? "…" : "Saqlash"}
+            {patchMut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

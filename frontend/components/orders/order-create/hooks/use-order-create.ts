@@ -387,7 +387,7 @@ export function useOrderCreate({
       return;
     }
     if (editOrderQ.isError) {
-      const msg = getUserFacingError(editOrderQ.error, "Zakazni yuklab bo‘lmadi.");
+      const msg = getUserFacingError(editOrderQ.error, "Не удалось загрузить заказ.");
       reportLocalError(msg, null);
       return;
     }
@@ -395,7 +395,7 @@ export function useOrderCreate({
     if (!row) return;
     if (row.status !== "new") {
       if (editHydratedOrderId !== row.id) setEditHydratedOrderId(row.id);
-      reportLocalError("Tahrirlash faqat «Новый» statusidagi zakazlar uchun.", null);
+      reportLocalError("Редактировать можно только заказы в статусе «Новый».", null);
       return;
     }
     if (editHydratedOrderId === row.id) return;
@@ -948,9 +948,9 @@ export function useOrderCreate({
       }
       return injectStored(
         [
-          { id: "naqd", name: "Naqd" },
-          { id: "terminal", name: "Terminal" },
-          { id: "perechisleniye", name: "Perechisleniye" }
+          { id: "naqd", name: "Наличные" },
+          { id: "terminal", name: "Терминал" },
+          { id: "perechisleniye", name: "Перечисление" }
         ],
         []
       );
@@ -1011,7 +1011,7 @@ export function useOrderCreate({
     }
     if (isEditMode) return;
     setPaymentMethodRef("");
-    setSelectionNotice("To‘lov usuli tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+    setSelectionNotice("Выбор способа оплаты обновлён: неподходящее значение сброшено.");
   }, [
     showOrderPaymentMethodSelector,
     paymentMethodRef,
@@ -1144,7 +1144,7 @@ export function useOrderCreate({
       return [
         {
           id: editOrderQ.data.warehouse_id,
-          name: editOrderQ.data.warehouse_name?.trim() || `Ombor #${editOrderQ.data.warehouse_id}`
+          name: editOrderQ.data.warehouse_name?.trim() || `Склад #${editOrderQ.data.warehouse_id}`
         },
         ...base
       ];
@@ -1211,7 +1211,7 @@ export function useOrderCreate({
       setPolkiOrderIds([]);
       polkiAutoCategoriesOrderRef.current = null;
       setSelectionNotice(
-        "Tanlangan klient kombinatsiyasi cheklovga tushdi: agent/ombor/qabulchi qayta tanlanadi."
+        "Выбранная комбинация для клиента попала под ограничение: агента/склад/экспедитора нужно выбрать заново."
       );
     }
   }, [
@@ -1244,7 +1244,7 @@ export function useOrderCreate({
       setWarehouseId("");
       setQtyByProductId({});
       setBlockByProductId({});
-      setSelectionNotice("Ombor tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор склада обновлён: неподходящее значение сброшено.");
     }
   }, [
     warehouseId,
@@ -1280,7 +1280,7 @@ export function useOrderCreate({
         available_expeditor_ids: exps.map((e) => e.id)
       });
       setExpeditorUserId("");
-      setSelectionNotice("Dastavchi tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор экспедитора обновлён: неподходящее значение сброшено.");
     }
   }, [
     expeditorUserId,
@@ -1323,7 +1323,7 @@ export function useOrderCreate({
         const label =
           editOrderQ.data.agent_display?.trim() ||
           editOrderQ.data.agent_name?.trim() ||
-          `Agent #${aid}`;
+          `Агент #${aid}`;
         opts.unshift({
           value: String(aid),
           label,
@@ -1354,7 +1354,7 @@ export function useOrderCreate({
         available_agents_total: agentUsers.length
       });
       setAgentId("");
-      setSelectionNotice("Agent tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор агента обновлён: неподходящее значение сброшено.");
     }
   }, [
     agentId,
@@ -1385,7 +1385,7 @@ export function useOrderCreate({
     if (isEditMode && expeditorUserId.trim() && expeditorUserId.trim() !== "__none__") {
       const eid = Number.parseInt(expeditorUserId.trim(), 10);
       if (Number.isFinite(eid) && eid > 0 && !rows.some((r) => r.value === String(eid))) {
-        const label = editOrderQ.data?.expeditor_display?.trim() || `Ekspeditor #${eid}`;
+        const label = editOrderQ.data?.expeditor_display?.trim() || `Экспедитор #${eid}`;
         rows.unshift({
           value: String(eid),
           label,
@@ -1393,7 +1393,7 @@ export function useOrderCreate({
         });
       }
     }
-    return [{ value: "__none__", label: "Ekspeditorsiz", searchText: "ekspeditorsiz без" }, ...rows];
+    return [{ value: "__none__", label: "Без экспедитора", searchText: "без экспедитора ekspeditorsiz" }, ...rows];
   }, [filteredExpeditors, isEditMode, expeditorUserId, editOrderQ.data]);
 
   useEffect(() => {
@@ -1409,7 +1409,7 @@ export function useOrderCreate({
       previous_agent_id: null
     });
     setAgentId(String(onlyAgentId));
-    setSelectionNotice("Agent klient kartasiga mos ravishda avtomatik tanlandi.");
+    setSelectionNotice("Агент выбран автоматически по карточке клиента.");
   }, [
     createCtxQ.isPlaceholderData,
     agentUsers,
@@ -1997,10 +1997,10 @@ export function useOrderCreate({
     }
     for (const [cid, prows] of byId) {
       if (known.has(cid)) continue;
-      out.push({ key: `o-${cid}`, categoryName: `Kategoriya #${cid}`, products: prows });
+      out.push({ key: `o-${cid}`, categoryName: `Категория #${cid}`, products: prows });
     }
     if (uncategorized.length > 0) {
-      out.push({ key: "none", categoryName: "Kategoriyasiz", products: uncategorized });
+      out.push({ key: "none", categoryName: "Без категории", products: uncategorized });
     }
     return out;
   }, [displayProducts, categories]);
@@ -2013,7 +2013,7 @@ export function useOrderCreate({
     }
     const aid = activeCatalogCategoryId ?? selectedCategoryIds[0]!;
     const cat = categories.find((c) => c.id === aid);
-    const name = cat?.name ?? `Kategoriya #${aid}`;
+    const name = cat?.name ?? `Категория #${aid}`;
     const prows = displayProducts.filter((p) => p.category_id === aid);
     return [{ key: `tab-${aid}`, categoryName: name, products: prows }];
   }, [catalogTabMode, displayProductGroups, displayProducts, activeCatalogCategoryId, selectedCategoryIds, categories]);
@@ -2857,56 +2857,56 @@ export function useOrderCreate({
         }
       }
       if (e.message === "warehouse") {
-        fail("Omborni tanlash shart.", "warehouse");
+        fail("Выберите склад.", "warehouse");
         return;
       }
       if (e.message === "agent") {
-        fail("Savdo zakazi uchun agentni tanlang.", "agent");
+        fail("Для торгового заказа выберите агента.", "agent");
         return;
       }
       if (e.message === "payment_method") {
-        fail("To‘lov usulini tanlang.", "payment");
+        fail("Выберите способ оплаты.", "payment");
         return;
       }
       if (e.message === "payment_method_empty") {
-        fail("To‘lov usullari ro‘yxati bo‘sh. Agent/dastavchi yoki sozlamalarni tekshiring.", "payment");
+        fail("Список способов оплаты пуст. Проверьте агента/экспедитора или настройки.", "payment");
         return;
       }
       if (e.message === "consignment_patch") {
-        fail("Konsignatsiya belgisini saqlab bo‘lmadi. Statusni tekshiring.");
+        fail("Не удалось сохранить признак консигнации. Проверьте статус.");
         return;
       }
       if (e.message === "client") {
-        fail("Klientni tanlang.", "client");
+        fail("Выберите клиента.", "client");
         return;
       }
       if (e.message === "polki_order") {
-        fail("«Zakaz bo‘yicha» rejimida kamida bitta zakazni tanlang.", "polki-orders");
+        fail("В режиме «По заказу» выберите хотя бы один заказ.", "polki-orders");
         return;
       }
       if (e.message === "polki_missing_order") {
-        fail("Qator uchun zakaz identifikatori yo‘q — qayta yuklang.", "polki-lines");
+        fail("Для строки не указан заказ — обновите страницу.", "polki-lines");
         return;
       }
       if (e.message === "polki_qty_over") {
-        fail("Qaytarish miqdori sotilgan miqdordan oshmasin.", "polki-lines");
+        fail("Количество возврата не должно превышать проданное.", "polki-lines");
         return;
       }
       if (e.message === "polki_over_max") {
-        fail("Qaytarish miqdori zakaz qoldig‘idan oshmasin.", "polki-lines");
+        fail("Количество возврата не должно превышать остаток по заказу.", "polki-lines");
         return;
       }
       if (e.message === "nolines") {
-        fail("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.", "catalog");
+        fail("Нужна хотя бы одна заполненная строка (товар + количество).", "catalog");
         return;
       }
       if (e.message === "qty") {
-        fail("Barcha qatorlarda miqdor musbat bo‘lsin.", "catalog");
+        fail("Во всех строках количество должно быть положительным.", "catalog");
         return;
       }
       if (e.message === "qty_over_stock") {
         fail(
-          "Miqdor qoldiqdan oshmasin — har bir mahsulot uchun «Qoldiq» ustunidagi miqdordan ko‘p bo‘lmasin.",
+          "Количество не должно превышать остаток — для каждого товара не больше значения в столбце «Остаток».",
           "catalog"
         );
         return;
@@ -2927,7 +2927,7 @@ export function useOrderCreate({
         const msg = d?.message?.trim();
         fail(
           msg ||
-            "Bazada kerakli ustunlar yo‘q (migratsiya qo‘llanmagan). Backend papkasida: npm run db:deploy"
+            "В базе нет нужных столбцов (миграция не применена). В папке backend выполните: npm run db:deploy"
         );
         return;
       }
@@ -2937,36 +2937,36 @@ export function useOrderCreate({
           const hint = firstValidationUserHint(flat);
           fail(
             hint
-              ? withApiSupportLine(`Server tekshiruvi: ${hint}`, e)
-              : withApiSupportLine(getUserFacingError(e, "Server tekshiruvi xatosi."), e)
+              ? withApiSupportLine(`Проверка на сервере: ${hint}`, e)
+              : withApiSupportLine(getUserFacingError(e, "Ошибка проверки на сервере."), e)
           );
         } else {
           fail(
-            `Server tekshiruvi: ${typeof d.details === "string" ? d.details : JSON.stringify(d.details)}`
+            `Проверка на сервере: ${typeof d.details === "string" ? d.details : JSON.stringify(d.details)}`
           );
         }
         return;
       }
       if (code === "BadQty") {
-        fail("Miqdor noto‘g‘ri (musbat son bo‘lsin).", "catalog");
+        fail("Неверное количество (должно быть положительным числом).", "catalog");
         return;
       }
       if (code === "BadWarehouse") {
-        fail("Tanlangan ombor topilmadi.", "warehouse");
+        fail("Выбранный склад не найден.", "warehouse");
         return;
       }
       if (code === "BadAgent") {
-        fail("Tanlangan agent topilmadi yoki faol emas.", "agent");
+        fail("Выбранный агент не найден или неактивен.", "agent");
         return;
       }
       if (code === "OrderRequiresAgent") {
-        fail("Savdo zakazi uchun agent majburiy.", "agent");
+        fail("Для торгового заказа агент обязателен.", "agent");
         return;
       }
       if (code === "AgentNotOnSlot") {
         fail(
           d?.message?.trim() ||
-            "Agent ish joyiga biriktirilmagan — yangi zakaz taqiqlangan (faqat qarz yig‘ish).",
+            "Агент не привязан к рабочему месту — новые заказы запрещены (только сбор долгов).",
           "agent"
         );
         return;
@@ -2974,23 +2974,23 @@ export function useOrderCreate({
       if (code === "ExpeditorNotOnSlot") {
         fail(
           d?.message?.trim() ||
-            "Dostavchik ish joyiga biriktirilmagan — zakazga biriktirish taqiqlangan."
+            "Экспедитор не привязан к рабочему месту — назначение на заказ запрещено."
         );
         return;
       }
       if (code === "OrderRequiresWarehouse") {
-        fail("Savdo zakazi uchun ombor majburiy.", "warehouse");
+        fail("Для торгового заказа склад обязателен.", "warehouse");
         return;
       }
       if (code === "OrderRequiresPaymentMethod") {
-        fail("To‘lov usuli majburiy.", "payment");
+        fail("Способ оплаты обязателен.", "payment");
         return;
       }
       if (code === "NoRetailPrice" || code === "NoPrice") {
         const id = ax.response?.data?.product_id as number | undefined;
         const pt = (ax.response?.data as { price_type?: string } | undefined)?.price_type ?? "retail";
         fail(
-          id != null ? `Mahsulot #${id} uchun «${pt}» narxi yo‘q.` : `Narx yo‘q («${pt}»).`,
+          id != null ? `Для товара #${id} нет цены «${pt}».` : `Нет цены («${pt}»).`,
           "price"
         );
         return;
@@ -3003,22 +3003,22 @@ export function useOrderCreate({
         };
         fail(
           stockErr?.product_id != null
-            ? `Mahsulot #${stockErr.product_id}: omborda yetarli emas (mavjud ${stockErr.available ?? "—"}, kerak ${stockErr.requested ?? "—"}).`
-            : "Omborda yetarli mahsulot yo‘q.",
+            ? `Товар #${stockErr.product_id}: недостаточно на складе (доступно ${stockErr.available ?? "—"}, требуется ${stockErr.requested ?? "—"}).`
+            : "Недостаточно товара на складе.",
           "catalog"
         );
         return;
       }
       if (code === "BadExpeditor") {
-        fail("Tanlangan ekspeditor topilmadi yoki faol emas.");
+        fail("Выбранный экспедитор не найден или неактивен.");
         return;
       }
       if (code === "BadClient") {
-        fail("Klient topilmadi yoki faol emas.", "client");
+        fail("Клиент не найден или неактивен.", "client");
         return;
       }
       if (code === "BadProduct") {
-        fail("Mahsulot topilmadi yoki faol emas.", "catalog");
+        fail("Товар не найден или неактивен.", "catalog");
         return;
       }
       if (code === "ReturnNotInterchangeable") {
@@ -3026,28 +3026,28 @@ export function useOrderCreate({
         const msg = ax.response?.data?.message;
         const text =
           id != null
-            ? `Mahsulot #${id}: faol interchangeable guruhda emas yoki tanlangan narx turi (${priceType.trim() || "retail"}) mos emas.`
+            ? `Товар #${id}: не входит в активную группу взаимозаменяемости или не подходит выбранный тип цены (${priceType.trim() || "retail"}).`
             : typeof msg === "string" && msg.trim()
               ? msg
-              : "Qaytarish uchun mahsulot interchangeable guruhda emas yoki narx turi mos emas.";
+              : "Товар для возврата не входит в группу взаимозаменяемости или не подходит тип цены.";
         setLocalError(withApiSupportLine(text, e));
         return;
       }
       if (code === "BadOrder") {
-        setLocalError("Zakaz topilmadi yoki qaytarish uchun mos emas.");
+        setLocalError("Заказ не найден или не подходит для возврата.");
         return;
       }
       if (code === "BadOrderClient") {
-        setLocalError("Zakaz bu mijozga tegishli emas yoki topilmadi.");
+        setLocalError("Заказ не принадлежит этому клиенту или не найден.");
         return;
       }
       if (code === "QtyExceedsOrdered") {
-        setLocalError("Qaytarish miqdori sotilgan / buyurtma miqdoridan oshmasin.");
+        setLocalError("Количество возврата не должно превышать проданное / заказанное количество.");
         return;
       }
       if (code === "BonusCashExceeds") {
         setLocalError(
-          "Bonus o‘rniga qaytariladigan naqd summa qolgan bonus qiymatidan oshmasin (dona + summa birgalikda hisoblanadi)."
+          "Сумма денежной компенсации вместо бонуса не должна превышать оставшуюся стоимость бонуса (шт. и сумма считаются вместе)."
         );
         return;
       }
@@ -3056,16 +3056,16 @@ export function useOrderCreate({
         return;
       }
       if (code === "NothingToReturn") {
-        setLocalError("Qaytarish uchun mos pozitsiya yo‘q yoki limit tugagan.");
+        setLocalError("Нет позиций, доступных для возврата, или лимит исчерпан.");
         return;
       }
       if (code === "DuplicateProduct") {
-        setLocalError("Bir xil mahsulotni bir nechta qatorga qo‘shib bo‘lmaydi.");
+        setLocalError("Нельзя добавить один и тот же товар в несколько строк.");
         return;
       }
       if (code === "CreditLimitExceeded" && d) {
         setLocalError(
-          `Kredit limiti yetmaydi. Limit: ${d.credit_limit ?? "—"}, ochiq zakazlar yig‘indisi: ${d.outstanding ?? "—"}, bu zakaz: ${d.order_total ?? "—"}.`
+          `Недостаточно кредитного лимита. Лимит: ${d.credit_limit ?? "—"}, сумма открытых заказов: ${d.outstanding ?? "—"}, этот заказ: ${d.order_total ?? "—"}.`
         );
         return;
       }
@@ -3088,36 +3088,36 @@ export function useOrderCreate({
         return;
       }
       if (code === "ConsignmentRequiresAgent") {
-        setLocalError("Konsignatsiya zakazi uchun agentni tanlang.");
+        setLocalError("Для заказа на консигнацию выберите агента.");
         return;
       }
       if (code === "ConsignmentAgentDisabled") {
-        setLocalError("Bu agent uchun konsignatsiya yoqilmagan (Пользователи → Консигнация).");
+        setLocalError("Для этого агента консигнация не включена (Пользователи → Консигнация).");
         return;
       }
       if (code === "ConsignmentLimitExceeded" && d) {
         setLocalError(
-          `Konsignatsiya limiti yetmaydi. Limit: ${(d as { consignment_limit?: string }).consignment_limit ?? "—"}, ochiq qarz: ${(d as { outstanding?: string }).outstanding ?? "—"}, bu zakaz: ${(d as { order_total?: string }).order_total ?? "—"}.`
+          `Недостаточно лимита консигнации. Лимит: ${(d as { consignment_limit?: string }).consignment_limit ?? "—"}, открытый долг: ${(d as { outstanding?: string }).outstanding ?? "—"}, этот заказ: ${(d as { order_total?: string }).order_total ?? "—"}.`
         );
         return;
       }
       if (code === "BadConsignmentDueDate") {
-        setLocalError("Konsignatsiya muddatini tekshiring (YYYY-MM-DD yoki to‘liq sana).");
+        setLocalError("Проверьте срок консигнации (YYYY-MM-DD или полная дата).");
         return;
       }
       if (code === "OrderNotEditable" || code === "ORDER_NOT_EDITABLE") {
-        fail("Zakaz endi tahrirlanmaydi (status «Новый» emas).");
+        fail("Заказ больше нельзя редактировать (статус не «Новый»).");
         return;
       }
       if (code === "OrderHeaderLocked" || code === "ORDER_HEADER_LOCKED") {
-        fail("Klient va agentni o‘zgartirib bo‘lmaydi. Boshqa maydonlarni saqlang.");
+        fail("Клиента и агента изменить нельзя. Сохраните остальные поля.");
         return;
       }
       if (ax.response?.status === 403) {
-        fail("Zakaz yaratish huquqi yo‘q (faqat admin / operator).");
+        fail("Нет прав на создание заказа (только администратор / оператор).");
         return;
       }
-      fail(getUserFacingError(e, "Xato"));
+      fail(getUserFacingError(e, "Ошибка"));
     }
   });
 
@@ -3300,15 +3300,15 @@ export function useOrderCreate({
     const agent_id = Number.isFinite(agentParsed) && agentParsed > 0 ? agentParsed : null;
 
     if (!Number.isFinite(cid) || cid < 1) {
-      reportLocalError("Avval klientni tanlang", "client");
+      reportLocalError("Сначала выберите клиента", "client");
       return;
     }
     if (!warehouseRaw.trim() || !Number.isFinite(wid) || wid < 1) {
-      reportLocalError("Avval omborni tanlang", "warehouse");
+      reportLocalError("Сначала выберите склад", "warehouse");
       return;
     }
     if (agent_id == null) {
-      reportLocalError("Agent majburiy", "agent");
+      reportLocalError("Агент обязателен", "agent");
       return;
     }
 
@@ -3323,7 +3323,7 @@ export function useOrderCreate({
       if (!Number.isFinite(productId) || productId < 1) continue;
       const q = Number.parseFloat(raw.replace(",", "."));
       if (!Number.isFinite(q) || q < 0) {
-        reportLocalError("Miqdor noto‘g‘ri", "catalog");
+        reportLocalError("Неверное количество", "catalog");
         return;
       }
       if (q === 0) continue;
@@ -3335,13 +3335,13 @@ export function useOrderCreate({
       let avail = availableOrderQty(stockMap.get(productId));
       if (sameWh) avail += editReservedQtyByProduct[productId] ?? 0;
       if (totalQ > avail + 1e-9) {
-        reportLocalError("Omborda yetarli qoldiq yo‘q", "catalog");
+        reportLocalError("Недостаточно остатка на складе", "catalog");
         return;
       }
       items.push({ product_id: productId, qty: totalQ });
     }
     if (items.length === 0) {
-      reportLocalError("Kamida bitta mahsulot miqdorini kiriting", "catalog");
+      reportLocalError("Укажите количество хотя бы для одного товара", "catalog");
       return;
     }
 
@@ -3366,7 +3366,7 @@ export function useOrderCreate({
         setBonusPreview(data);
       } catch (e) {
         setBonusPreviewError(
-          getUserFacingError(e, "Bonus preview olinmadi. Qayta urinib ko‘ring.")
+          getUserFacingError(e, "Не удалось получить предпросмотр бонуса. Повторите попытку.")
         );
       } finally {
         setBonusPreviewLoading(false);

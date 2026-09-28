@@ -44,16 +44,16 @@ export type TelegramBotStaffFail = {
 export type TelegramBotStaffOk = { ok: true; user: TelegramBotStaffDto };
 
 const MSG: Record<TelegramBotStaffFail["reason"], string> = {
-  not_found: "Hodim topilmadi. Panelidagi login yoki kodni yuboring.",
-  bad_creds: "Parol noto‘g‘ri.",
-  inactive: "Hisobingiz faol emas.",
+  not_found: "Сотрудник не найден. Отправьте логин или код из панели.",
+  bad_creds: "Неверный пароль.",
+  inactive: "Ваша учётная запись неактивна.",
   bad_role:
-    "Bot: agent (klient qo‘shish) yoki platforma hodimi (hudud/jamoa bo‘yicha Excel). Bu rol uchun emas.",
-  bad_smart: "Smart kod mos emas.",
-  telegram_taken: "Bu Telegram akkaunt boshqa hodimga biriktirilgan. Boshqa akkauntdan kira olmaysiz.",
+    "Бот доступен агентам (добавление клиентов) и сотрудникам платформы (Excel по территории/команде). Для этой роли он недоступен.",
+  bad_smart: "Смарт-код не совпадает.",
+  telegram_taken: "Этот аккаунт Telegram привязан к другому сотруднику. Войти с другого аккаунта нельзя.",
   staff_bound_other_telegram:
-    "Bu hodim allaqachon boshqa Telegram akkauntda ro‘yxatdan o‘tgan. Shu hodim boshqa Telegramdan o‘ta olmaydi.",
-  unbound: "Bu Telegram hali hech qaysi hodimga biriktirilmagan."
+    "Этот сотрудник уже зарегистрирован в другом аккаунте Telegram. Войти с другого Telegram нельзя.",
+  unbound: "Этот аккаунт Telegram пока не привязан ни к одному сотруднику."
 };
 
 function fail(reason: TelegramBotStaffFail["reason"], hint?: string): TelegramBotStaffFail {
@@ -62,7 +62,7 @@ function fail(reason: TelegramBotStaffFail["reason"], hint?: string): TelegramBo
     ok: false,
     reason,
     hint,
-    message: hint && reason === "bad_smart" ? `${base} Ishchi o‘rin: ${hint}` : base
+    message: hint && reason === "bad_smart" ? `${base} Рабочее место: ${hint}` : base
   };
 }
 

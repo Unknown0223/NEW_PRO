@@ -23,12 +23,12 @@ export type DocumentEditGrantRow = {
 };
 
 const SECTION_LABEL: Record<DocumentEditLockSection, string> = {
-  payments: "To‘lov",
-  orders: "Buyurtma",
-  returns: "Qaytarish",
-  stock: "Ombor",
-  expenses: "Xarajat",
-  opening_balances: "Ochilish qoldig‘i"
+  payments: "Оплата",
+  orders: "Заказ",
+  returns: "Возврат",
+  stock: "Склад",
+  expenses: "Расход",
+  opening_balances: "Начальный остаток"
 };
 
 export async function listActiveDocumentEditGrants(
@@ -151,8 +151,8 @@ export async function batchCreateDocumentEditGrants(input: {
     await createNotification({
       tenant_id: input.tenantId,
       user_id: userId,
-      title: "Davr ochildi (vaqtinchalik)",
-      body: `${labelBits}${more} — ${minutes} daqiqa`,
+      title: "Период открыт (временно)",
+      body: `${labelBits}${more} — ${minutes} мин`,
       link_href: "/settings/document-edit-lock"
     });
   }

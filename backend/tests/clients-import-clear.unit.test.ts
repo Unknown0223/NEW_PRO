@@ -256,7 +256,7 @@ describe("clients import clear-on-empty", () => {
         visit_weekdays: []
       }
     ]);
-    expect(warnings.some((w) => w.includes("olib tashlandi"))).toBe(true);
+    expect(warnings.some((w) => w.includes("снят"))).toBe(true);
   });
 
   it("create: unknown agent smart code is hard error", () => {
@@ -269,7 +269,7 @@ describe("clients import clear-on-empty", () => {
       (m) => warnings.push(m)
     );
     expect(out.createPatches).toEqual([]);
-    expect(out.hardErrors.some((e) => e.includes("topilmadi"))).toBe(true);
+    expect(out.hardErrors.some((e) => e.includes("не найдено"))).toBe(true);
     expect(out.hardErrorFields).toContain("import_agent_1");
     expect(warnings).toEqual([]);
   });

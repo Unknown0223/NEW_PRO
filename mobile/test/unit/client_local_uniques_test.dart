@@ -31,7 +31,7 @@ void main() {
         name: 'New',
         phone: '901112233',
       ),
-      contains('telefon'),
+      contains('телефон'),
     );
   });
 
@@ -42,7 +42,7 @@ void main() {
         name: 'Other name',
         inn: '123456789',
       ),
-      contains('INN'),
+      contains('ИНН'),
     );
   });
 
@@ -56,7 +56,7 @@ void main() {
         zone: 'Z1',
         city: 'Chilonzor',
       ),
-      contains('mavjud'),
+      contains('уже существует'),
     );
   });
 

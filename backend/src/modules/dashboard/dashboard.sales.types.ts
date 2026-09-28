@@ -75,11 +75,24 @@ export type SalesDashboardSnapshot = {
     period: string;
     sales_sum: string;
     orders_count: number;
+    /** `sales_returns` (posted) — shu kuni qabul qilingan vozvratlar summasi. */
+    returns_sum: string;
   }>;
   akb_okb_block: {
     akb: number;
     okb: number;
     coverage_pct: number;
+  };
+  /** ОКБ mijozlari davr bo‘yicha: zakaz / otkaz / natijasiz tashrif / непосещение (kesishmaydi). */
+  risk_zone: {
+    okb: number;
+    with_order: number;
+    with_refusal: number;
+    visited_only: number;
+    not_visited: number;
+    orders_count: number;
+    refusals_count: number;
+    daily: Array<{ date: string; orders: number; refusals: number; not_visited: number }>;
   };
   territory_analytics: Array<{
     territory: string;

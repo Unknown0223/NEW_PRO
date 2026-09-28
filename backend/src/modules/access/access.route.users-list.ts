@@ -68,7 +68,7 @@ export async function registerAccessUsersListRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const q = listUsersQuerySchema.safeParse(request.query ?? {});
     if (!q.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(q.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(q.error));
 
     if (q.data.mode === "supervisor_pick") {
       const rows = await prisma.user.findMany({

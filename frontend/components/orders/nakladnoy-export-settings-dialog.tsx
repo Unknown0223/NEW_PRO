@@ -35,10 +35,10 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md sm:max-w-md" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Nakladnoy eksport sozlamalari</DialogTitle>
+          <DialogTitle>Настройки экспорта накладных</DialogTitle>
           <DialogDescription>
-            SKU/shtrix-kod, «Загруз зав.склада» va «Накладные 2.1.7» uchun varaqlar bo‘yicha ajratish
-            (bitta fayl ichida).
+            SKU/штрих-код и разбивка по листам для «Загруз зав.склада» и «Накладные 2.1.7»
+            (в одном файле).
           </DialogDescription>
         </DialogHeader>
 
@@ -61,7 +61,7 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
                 checked={draft.codeColumn === "barcode"}
                 onChange={() => setDraft((d) => ({ ...d, codeColumn: "barcode" }))}
               />
-              Штрих-код (bo‘sh bo‘lsa SKU)
+              Штрих-код (если пусто — SKU)
             </label>
           </fieldset>
 
@@ -72,11 +72,11 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
                 checked={draft.separateSheets}
                 onChange={(e) => setDraft((d) => ({ ...d, separateSheets: e.target.checked }))}
               />
-              Varqlarga ajratish (Отделить по листам)
+              Отделить по листам
             </label>
             <p className="text-xs text-muted-foreground">
-              Ochiq bo‘lsa, har bir guruh alohida varaqda. Yopiq bo‘lsa, загрузda bitta jadval,
-              2.1.7da esa bitta varaqda zakazlar tepadan pastga (har birida chap/o‘ng 2 nusxa).
+              Если включено, каждая группа — на отдельном листе. Если выключено, в загрузе — одна таблица,
+              а в 2.1.7 — заказы на одном листе сверху вниз (у каждого 2 копии слева/справа).
             </p>
           </div>
 
@@ -119,9 +119,9 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <Label className="text-[11px] uppercase tracking-wide">Накладные 2.1.7</Label>
             <p className="mt-1">
-              Chop: A4 portrait, ikki nusxa yonma-yon. To‘liq qator: клиент (тел), баланс, адрес, агент,
-              экспедитор (nom), дата накладной. Konsignatsiyada «НА КОНСИГНАЦИЮ». Yakun: Итог товары / бонус /
-              Общий итог (сумма — faqat tovarlar) va to‘lov yozuvi.
+              Печать: A4 книжная, две копии рядом. Полная строка: клиент (тел), баланс, адрес, агент,
+              экспедитор (имя), дата накладной. Для консигнации — «НА КОНСИГНАЦИЮ». Итог: Итог товары / бонус /
+              Общий итог (сумма — только товары) и запись об оплате.
             </p>
           </div>
         </div>
@@ -134,7 +134,7 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
               setDraft(DEFAULT_NAKLADNOY_EXPORT_PREFS);
             }}
           >
-            Standart
+            По умолчанию
           </Button>
           <Button
             type="button"
@@ -145,7 +145,7 @@ export function NakladnoyExportSettingsDialog({ open, onOpenChange, prefs, onSav
               onOpenChange(false);
             }}
           >
-            Saqlash
+            Сохранить
           </Button>
         </DialogFooter>
       </DialogContent>

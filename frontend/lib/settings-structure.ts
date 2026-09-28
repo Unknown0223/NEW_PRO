@@ -59,14 +59,14 @@ export const settingsSections: SettingsSection[] = [
         status: "available"
       },
       {
-        title: "Qaytarish filtri",
+        title: "Фильтр возврата",
         slug: "qaytarish-filtri",
         href: "/settings/returns/filter",
         status: "available",
         requiredRoles: ["admin"] as const
       },
       {
-        title: "Mobil ilova",
+        title: "Мобильное приложение",
         slug: "mobil-ilova",
         href: "/settings/mobile-app",
         status: "available",
@@ -82,7 +82,7 @@ export const settingsSections: SettingsSection[] = [
       makeItem("osnovnye-nastroiki", "Единицы измерения", "available", 1),
       makeItem("osnovnye-nastroiki", "Филиалы", "available", 2),
       {
-        title: "Xarita chegaralari",
+        title: "Границы на карте",
         slug: "geo-boundaries",
         href: "/settings/geo-boundaries",
         status: "available"
@@ -93,7 +93,7 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/web-staff-position-presets",
         status: "available",
         requiredRoles: ["admin"] as const,
-        description: "Lavozimlar katalogi (rol, kod, tartib)"
+        description: "Справочник должностей (роль, код, порядок)"
       }
     ]
   },
@@ -240,7 +240,7 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/web-staff-position-presets",
         status: "available",
         requiredRoles: ["admin"] as const,
-        description: "Lavozimlar katalogi — rol, kod, tartib; xodimlar bilan bog‘langan"
+        description: "Справочник должностей — роль, код, порядок; привязка к сотрудникам"
       }
     ]
   },
@@ -249,12 +249,12 @@ export const settingsSections: SettingsSection[] = [
     slug: "period-reglament",
     items: [
       {
-        title: "Davr cheklovi",
+        title: "Ограничение периода",
         slug: "document-edit-lock",
         href: "/settings/document-edit-lock",
         status: "available",
         requiredRoles: ["admin"] as const,
-        description: "Hujjatlarni tahrirlash uchun davr cheklovi"
+        description: "Ограничение периода для редактирования документов"
       },
       {
         title: "Заказы → консигнация",
@@ -263,7 +263,7 @@ export const settingsSections: SettingsSection[] = [
         status: "available",
         requiredRoles: ["admin"] as const,
         description:
-          "Доставлен + N кун + тўланмаган заказларни консигнацияга; комментарийда ким/шартлар"
+          "Доставленные и неоплаченные в течение N дней заказы — в консигнацию; в комментарии кто/условия"
       }
     ]
   },
@@ -272,16 +272,16 @@ export const settingsSections: SettingsSection[] = [
     slug: "sistema",
     items: [
       {
-        title: "Vaqt mintaqasi",
+        title: "Часовой пояс",
         slug: "timezone",
         href: "/settings/timezone",
         status: "available",
         requiredRoles: ["admin"] as const,
         opensModal: "timezone",
-        description: "Ish soati / sinxron oynasi — qurilma standart IANA mintaqalari"
+        description: "Рабочие часы / окно синхронизации — стандартные часовые пояса IANA"
       },
       {
-        title: "Boshlang‘ich sozlash",
+        title: "Начальная настройка",
         slug: "initial-setup",
         href: "/settings/initial-setup",
         status: "available",
@@ -293,10 +293,10 @@ export const settingsSections: SettingsSection[] = [
         href: "/settings/web-staff-position-presets",
         status: "available",
         requiredRoles: ["admin"] as const,
-        description: "Tizim lavozimlari va rollar bog‘lanishi"
+        description: "Системные должности и привязка к ролям"
       },
       {
-        title: "Tizim migratsiyasi",
+        title: "Миграция системы",
         slug: "system-migration",
         href: "/settings/system-migration",
         status: "available",
@@ -366,6 +366,8 @@ const existingHrefByItemTitle: Record<string, string> = {
   "boshlang‘ich sozlash": "/settings/initial-setup",
   "начальная настройка": "/settings/initial-setup",
   "davr cheklovi": "/settings/document-edit-lock",
+  "ограничение периода": "/settings/document-edit-lock",
+  "границы на карте": "/settings/geo-boundaries",
   "заказы → консигнация": "/settings/period/orders-consignment",
   "консигнация (oy yopish)": "/settings/spravochnik/consignment"
 };

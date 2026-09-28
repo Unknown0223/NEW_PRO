@@ -57,7 +57,7 @@ class AgentSearchHeader extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.controller,
     required this.onBack,
-    this.hint = 'Qidiruv...',
+    this.hint = 'Поиск...',
   });
 
   @override
@@ -1300,7 +1300,7 @@ class AgentExpandableStockGroup extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
-                      child: const Text('Bo\'sh', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                      child: const Text('Пусто', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                     )
                   : Container(
                       decoration: BoxDecoration(color: AppColors.surfaceReport, borderRadius: BorderRadius.circular(10)),
@@ -2010,9 +2010,9 @@ class AgentErrorPanel extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             if (_is401 && onLogin != null)
-              AgentPrimaryButton(label: 'Qayta kirish', height: 44, onPressed: onLogin)
+              AgentPrimaryButton(label: 'Войти снова', height: 44, onPressed: onLogin)
             else if (onRetry != null)
-              AgentPrimaryButton(label: 'Qayta urinish', height: 44, onPressed: onRetry),
+              AgentPrimaryButton(label: 'Повторить', height: 44, onPressed: onRetry),
           ],
         ),
       ),
@@ -2064,7 +2064,7 @@ class AgentClientDetailHeader extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text.rich(
                         TextSpan(
-                          text: 'Umumiy balans: ',
+                          text: 'Общий баланс: ',
                           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                           children: [
                             TextSpan(
@@ -2099,9 +2099,9 @@ class AgentClientDetailHeader extends StatelessWidget {
           IntrinsicHeight(
             child: Row(
               children: [
-                Expanded(child: _act(Icons.phone_outlined, 'Qo\'ng\'iroq', onCall)),
+                Expanded(child: _act(Icons.phone_outlined, 'Позвонить', onCall)),
                 const VerticalDivider(width: 1, color: AppColors.borderLight),
-                Expanded(child: _act(Icons.location_on_outlined, 'Lokatsiya', onRoute)),
+                Expanded(child: _act(Icons.location_on_outlined, 'Локация', onRoute)),
               ],
             ),
           ),
@@ -2148,7 +2148,7 @@ class AgentRouteInfoBox extends StatelessWidget {
               Expanded(
                 child: Text.rich(
                   TextSpan(
-                    text: 'Marshrut: ',
+                    text: 'Маршрут: ',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                     children: [
                       TextSpan(
@@ -2167,7 +2167,7 @@ class AgentRouteInfoBox extends StatelessWidget {
             children: [
               Icon(Icons.schedule, size: 16, color: AppColors.textMuted),
               SizedBox(width: 8),
-              Expanded(child: Text('Marshrut chizilgan — mijozga biriktirilgan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+              Expanded(child: Text('Маршрут построен — клиент закреплён', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
             ],
           ),
         ],
@@ -2256,7 +2256,7 @@ Future<void> showAgentClientActionsSheet(
             if (editEnabled && onEdit != null)
               actionTile(icon: Icons.edit_outlined, title: 'Редактировать', onTap: onEdit),
             if (supervisionEnabled && onSupervisionChecklist != null)
-              actionTile(icon: Icons.checklist_outlined, title: 'Audit checklist', onTap: onSupervisionChecklist),
+              actionTile(icon: Icons.checklist_outlined, title: 'Чек-лист аудита', onTap: onSupervisionChecklist),
             const SizedBox(height: 8),
           ],
         ),
@@ -2298,7 +2298,7 @@ class AgentOrdersHeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'МЕНИНГ ЗАКАЗЛАРИМ',
+            'МОИ ЗАКАЗЫ',
             style: AppTypography.caption.copyWith(
               color: Colors.white.withValues(alpha: 0.85),
               fontWeight: FontWeight.w800,
@@ -2313,9 +2313,9 @@ class AgentOrdersHeroCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _stat('Жами', '$totalCount')),
+              Expanded(child: _stat('Всего', '$totalCount')),
               Expanded(child: _stat('В процессе', '$inProgressCount')),
-              Expanded(child: _stat('Қарз', debtLabel)),
+              Expanded(child: _stat('Долг', debtLabel)),
             ],
           ),
         ],

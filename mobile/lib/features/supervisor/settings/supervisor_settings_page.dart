@@ -133,7 +133,7 @@ class SupervisorSettingsPage extends ConsumerWidget {
               value: '${route?.dailyVisitLimit ?? 50}',
             ),
             _ValueRow(
-              label: 'Cooldown повторного добавления (дн.)',
+              label: 'Пауза перед повторным добавлением (дн.)',
               value: '${route?.readdCooldownDays ?? 0}',
             ),
             _ToggleRow(

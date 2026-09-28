@@ -396,7 +396,7 @@ export async function getMobileAgentKpi(
     const todayRemainingPrimary = Math.max(0, todayPlanPrimary - todayFactPrimary);
     let hint: string | null = null;
     if (!hasProducts && visibleTargets.length > 1) {
-      hint = "SKU bog‘lanmagan — fakt guruh bo‘yicha yo‘q";
+      hint = "SKU не привязаны — факта по группе нет";
     } else if (remaining != null && remaining > 0 && primary === "cost") {
       hint = `до плана: ${Math.round(remaining).toLocaleString("ru-RU").replace(/\u00A0/g, " ")}`;
     } else if (hasProducts) {

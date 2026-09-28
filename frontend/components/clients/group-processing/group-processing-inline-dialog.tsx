@@ -293,8 +293,8 @@ export function GroupProcessingInlineDialog({
         return (
           <div className="space-y-2">
             <div className="flex gap-2">
-              <Button type="button" size="sm" variant={teamMode === "attach" ? "default" : "outline"} onClick={() => setTeamMode("attach")}>Бириктириш</Button>
-              <Button type="button" size="sm" variant={teamMode === "detach" ? "default" : "outline"} onClick={() => setTeamMode("detach")}>Ечиш</Button>
+              <Button type="button" size="sm" variant={teamMode === "attach" ? "default" : "outline"} onClick={() => setTeamMode("attach")}>Привязать</Button>
+              <Button type="button" size="sm" variant={teamMode === "detach" ? "default" : "outline"} onClick={() => setTeamMode("detach")}>Отвязать</Button>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Слот (1–10)</Label>
@@ -320,8 +320,8 @@ export function GroupProcessingInlineDialog({
       case "active":
         return (
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant={isActive ? "default" : "outline"} onClick={() => setIsActive(true)}>Актив</Button>
-            <Button type="button" size="sm" variant={!isActive ? "default" : "outline"} onClick={() => setIsActive(false)}>Ноактив</Button>
+            <Button type="button" size="sm" variant={isActive ? "default" : "outline"} onClick={() => setIsActive(true)}>Активен</Button>
+            <Button type="button" size="sm" variant={!isActive ? "default" : "outline"} onClick={() => setIsActive(false)}>Неактивен</Button>
           </div>
         );
 
@@ -342,10 +342,10 @@ export function GroupProcessingInlineDialog({
       case "territory":
         return (
           <div className="space-y-2">
-            <SelectField label="Регион" value={region} onChange={setRegion} options={refs.regions} />
+            <SelectField label="Область" value={region} onChange={setRegion} options={refs.regions} />
             <SelectField label="Район" value={district} onChange={setDistrict} options={refs.districts} />
             <SelectField label="Город" value={city} onChange={setCity} options={refs.cities} />
-            <SelectField label="МФЙ" value={neighborhood} onChange={setNeighborhood} options={refs.neighborhoods} />
+            <SelectField label="Махалля" value={neighborhood} onChange={setNeighborhood} options={refs.neighborhoods} />
             <SelectField label="Зона" value={zone} onChange={setZone} options={refs.zones} />
           </div>
         );
@@ -361,8 +361,8 @@ export function GroupProcessingInlineDialog({
       case "allow_order_with_debt":
         return (
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant={allowDebt ? "default" : "outline"} onClick={() => setAllowDebt(true)}>Рухсат</Button>
-            <Button type="button" size="sm" variant={!allowDebt ? "default" : "outline"} onClick={() => setAllowDebt(false)}>Тақиқ</Button>
+            <Button type="button" size="sm" variant={allowDebt ? "default" : "outline"} onClick={() => setAllowDebt(true)}>Разрешить</Button>
+            <Button type="button" size="sm" variant={!allowDebt ? "default" : "outline"} onClick={() => setAllowDebt(false)}>Запретить</Button>
           </div>
         );
 
@@ -372,7 +372,7 @@ export function GroupProcessingInlineDialog({
       case "credit_limit":
         return (
           <div className="space-y-1">
-            <Label className="text-xs">Лимит (сўм)</Label>
+            <Label className="text-xs">Лимит (сум)</Label>
             <Input className="h-8" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} />
           </div>
         );
@@ -384,7 +384,7 @@ export function GroupProcessingInlineDialog({
         return (
           <div className="space-y-2">
             <div className="space-y-1">
-              <Label className="text-xs">Қўшиш</Label>
+              <Label className="text-xs">Добавить</Label>
               <div className="flex flex-wrap gap-1">
                 {refs.tags.map((t) => (
                   <Button key={`a-${t.id}`} type="button" size="sm" variant={addTagIds.includes(t.id) ? "default" : "outline"} onClick={() => toggleTag(t.id, "add")} className="h-7 px-2 text-xs">{t.name}</Button>
@@ -392,7 +392,7 @@ export function GroupProcessingInlineDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Ечиш</Label>
+              <Label className="text-xs">Снять</Label>
               <div className="flex flex-wrap gap-1">
                 {refs.tags.map((t) => (
                   <Button key={`r-${t.id}`} type="button" size="sm" variant={removeTagIds.includes(t.id) ? "destructive" : "outline"} onClick={() => toggleTag(t.id, "remove")} className="h-7 px-2 text-xs">{t.name}</Button>
@@ -400,7 +400,7 @@ export function GroupProcessingInlineDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Янги тег номи</Label>
+              <Label className="text-xs">Название нового тега</Label>
               <Input className="h-8" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} maxLength={128} />
             </div>
           </div>

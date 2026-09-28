@@ -79,7 +79,7 @@ export function PriceMatrixCategoryPicker({
       </label>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {filtered.length === 0 ? (
-          <p className="px-3 py-4 text-center text-xs text-muted-foreground">Kategoriya topilmadi.</p>
+          <p className="px-3 py-4 text-center text-xs text-muted-foreground">Категории не найдены.</p>
         ) : (
           filtered.map((c) => {
             const on = selected.has(c.id);

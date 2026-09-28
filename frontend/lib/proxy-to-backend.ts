@@ -30,7 +30,7 @@ export async function proxyToBackend(
   const base = backendOriginForProxy();
   if (!base) {
     return NextResponse.json(
-      { error: "SERVICE_MISCONFIGURED", message: "Set API_INTERNAL_ORIGIN or NEXT_PUBLIC_API_URL on the frontend service." },
+      { error: "SERVICE_MISCONFIGURED", message: "Задайте API_INTERNAL_ORIGIN или NEXT_PUBLIC_API_URL в сервисе фронтенда." },
       { status: 503 }
     );
   }

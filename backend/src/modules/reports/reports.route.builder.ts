@@ -116,7 +116,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.get("/api/:slug/reports/report-builder/saved", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const q = request.query as Record<string, string | undefined>;
     const archive = q.archive === "true" || q.archive === "1";
     const data = await reportBuilderSaved.list(request.tenant!.id, userId, { archive });
@@ -126,7 +126,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.post("/api/:slug/reports/report-builder/saved", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const body = parseZodOr400<{ name: string; config: ReportBuilderSavedConfigValidated }>(
       reply,
       request,
@@ -148,7 +148,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.put("/api/:slug/reports/report-builder/saved/:id", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     const body = request.body as { name?: string; config?: ReportBuilderConfigPayload };
@@ -174,7 +174,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.delete("/api/:slug/reports/report-builder/saved/:id", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     try {
@@ -192,7 +192,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
   app.post("/api/:slug/reports/report-builder/saved/:id/restore", { preHandler: reportViewPreHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const userId = actorUserIdOrNull(request);
-    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+    if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
     const id = Number.parseInt((request.params as { id: string }).id, 10);
     if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
     try {
@@ -214,7 +214,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const userId = actorUserIdOrNull(request);
-      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
       const data = await reportBuilderSaved.listShareCandidates(request.tenant!.id, userId);
       return reply.send({ data });
     }
@@ -227,7 +227,7 @@ export async function registerReportsBuilderRoutes(app: FastifyInstance, guards:
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const userId = actorUserIdOrNull(request);
-      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "User context required");
+      if (userId == null) return sendApiError(reply, request, 401, "Unauthorized", "Требуется контекст пользователя");
       const id = Number.parseInt((request.params as { id: string }).id, 10);
       if (!Number.isFinite(id)) return sendApiError(reply, request, 400, "InvalidId");
       const body = request.body as { userIds?: unknown };

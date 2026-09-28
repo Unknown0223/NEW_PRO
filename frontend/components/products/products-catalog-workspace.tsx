@@ -179,7 +179,7 @@ function EquipmentItemsTab({
     const name = editName.trim();
     const sku = editSku.trim();
     if (!name || !sku) {
-      setMsg("Название ва SKU majburiy.");
+      setMsg("Название и SKU обязательны.");
       return;
     }
     try {
@@ -206,7 +206,7 @@ function EquipmentItemsTab({
     if (!tenantSlug) return;
     const ids = Array.from(pickedIds).filter((x) => Number.isFinite(x) && x > 0);
     if (ids.length === 0) {
-      setMsg("Камида битта маҳсулотни танланг.");
+      setMsg("Выберите хотя бы один товар.");
       return;
     }
     try {
@@ -228,8 +228,8 @@ function EquipmentItemsTab({
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Бу жадвалда фақат `Оборудование` учун белгиланган товарлар кўринади. `Добавить` орқали актив ва неактив
-        маҳсулотлардан танлаб қўшасиз; `Тahrirlash` билан номи/SKU ва активлиги ўзгаради.
+        В этой таблице отображаются только товары, отмеченные как «Оборудование». Через «Добавить» можно выбрать
+        активные и неактивные товары; через «Редактировать» меняются название/SKU и активность.
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
@@ -291,14 +291,14 @@ function EquipmentItemsTab({
                   <td className="px-3 py-2 text-xs text-muted-foreground">{r.category?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-xs">{r.is_active ? "Активный" : "Не активный"}</td>
                   <td className="px-3 py-2">
-                    <TableRowActionGroup className="justify-end" ariaLabel="Оборудование товар">
+                    <TableRowActionGroup className="justify-end" ariaLabel="Товар-оборудование">
                       <Button
                         type="button"
                         variant="outline"
                         size="icon-sm"
                         className="text-muted-foreground hover:text-foreground"
-                        title="Tahrirlash"
-                        aria-label="Tahrirlash"
+                        title="Редактировать"
+                        aria-label="Редактировать"
                         onClick={() => openEdit(r)}
                       >
                         <Pencil className="size-3.5" aria-hidden />
@@ -339,11 +339,11 @@ function EquipmentItemsTab({
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-[700px]" showCloseButton>
           <DialogHeader>
-            <DialogTitle>Оборудование товарыга қўшиш</DialogTitle>
+            <DialogTitle>Добавить в товары-оборудование</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-              Бир вақтда бир нечта маҳсулот танланади. Танланганлар:{" "}
+              Можно выбрать сразу несколько товаров. Выбрано:{" "}
               <span className="font-semibold text-foreground">{formatGroupedInteger(selectedPickCount)}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -351,7 +351,7 @@ function EquipmentItemsTab({
                 className="h-9 min-w-[220px] flex-1"
                 value={pickerSearch}
                 onChange={(e) => setPickerSearch(e.target.value)}
-                placeholder="Маҳсулот қидириш (ном/SKU)"
+                placeholder="Поиск товара (название/SKU)"
               />
               <Button
                 type="button"
@@ -361,7 +361,7 @@ function EquipmentItemsTab({
                 onClick={() => setPickedIds(new Set(pickRows.map((r) => r.id)))}
                 disabled={pickRows.length === 0}
               >
-                Ҳаммасини белгилаш
+                Выбрать все
               </Button>
               <Button
                 type="button"
@@ -371,14 +371,14 @@ function EquipmentItemsTab({
                 onClick={() => setPickedIds(new Set())}
                 disabled={selectedPickCount === 0}
               >
-                Белгини олиш
+                Снять выбор
               </Button>
             </div>
             <div className="max-h-[360px] overflow-auto rounded-md border border-border/80 bg-background">
               {pickQ.isLoading ? (
                 <div className="px-3 py-6 text-center text-sm text-muted-foreground">Загрузка…</div>
               ) : pickRows.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-muted-foreground">Қидирув бўйича маҳсулот топилмади.</div>
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">По запросу товары не найдены.</div>
               ) : (
                 <div className="divide-y">
                   {pickRows.map((r) => {
@@ -423,7 +423,7 @@ function EquipmentItemsTab({
                 disabled={savingId != null || selectedPickCount === 0}
                 onClick={() => void addPickedEquipment()}
               >
-                Қўшиш ({formatGroupedInteger(selectedPickCount)})
+                Добавить ({formatGroupedInteger(selectedPickCount)})
               </Button>
             </div>
           </div>
@@ -433,7 +433,7 @@ function EquipmentItemsTab({
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-[520px]" showCloseButton>
           <DialogHeader>
-            <DialogTitle>Оборудование товар — tahrirlash</DialogTitle>
+            <DialogTitle>Товар-оборудование — редактирование</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Название" />
@@ -680,10 +680,10 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
         qc.invalidateQueries({ queryKey: ["products", tenantSlug] }),
         qc.invalidateQueries({ queryKey: ["kpi-groups", tenantSlug] })
       ]);
-      setImportMsg(`KPI группа: обновлено ${res.updated} товар(ов)`);
+      setImportMsg(`Группа KPI: обновлено ${res.updated} товар(ов)`);
       setSelectedIds(new Set());
     },
-    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "KPI группу не удалось назначить"))
+    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "Не удалось назначить группу KPI"))
   });
 
   const priceImportMut = useMutation({
@@ -697,11 +697,11 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
       return body;
     },
     onSuccess: async (res) => {
-      setImportMsg(`Narxlar: ${res.upserted}`);
+      setImportMsg(`Цены: ${res.upserted}`);
       await qc.invalidateQueries({ queryKey: ["products", tenantSlug] });
       if (priceFileRef.current) priceFileRef.current.value = "";
     },
-    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "Narx import xatosi."))
+    onError: (e: unknown) => setImportMsg(getUserFacingError(e, "Ошибка импорта цен."))
   });
 
   const rows = listQ.data?.data ?? [];
@@ -806,7 +806,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid shrink-0 gap-1 text-xs text-muted-foreground">
-          <span className="leading-none">Sahifa</span>
+          <span className="leading-none">На странице</span>
           <select
             className={`${inputCls} h-9 min-w-[4rem]`}
             value={pageSize}
@@ -917,7 +917,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                         router.push(`${productsBasePath}/excel`);
                       }}
                     >
-                      Exceldan import
+                      Импорт из Excel
                     </button>
                   </div>
                 ) : null}
@@ -934,7 +934,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                 onClick={() => priceFileRef.current?.click()}
                 disabled={priceImportMut.isPending}
               >
-                Narx import
+                Импорт цен
               </Button>
             </ExcelDropTarget>
           </>
@@ -947,7 +947,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           onClick={() => setColumnDialogOpen(true)}
         >
           <ListOrdered className="h-4 w-4" />
-          Ustunlar
+          Столбцы
         </Button>
         <Button
           type="button"
@@ -957,7 +957,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
           onClick={() => void listQ.refetch()}
         >
           <RefreshCw className="h-4 w-4" />
-          Yangilash
+          Обновить
         </Button>
         <Button
           type="button"
@@ -987,8 +987,8 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlarni boshqarish"
-        description="Ko‘rinadigan ustunlar va tartib. Sizning akkauntingiz uchun saqlanadi (server)."
+        title="Настройка столбцов"
+        description="Видимые столбцы и порядок сохраняются для вашей учётной записи (на сервере)."
         columns={PRODUCT_ITEMS_COLUMNS}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -1006,7 +1006,7 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
 
       {listQ.isError ? (
         <QueryErrorState
-          message={getUserFacingError(listQ.error, "Mahsulotlar yuklanmadi.")}
+          message={getUserFacingError(listQ.error, "Не удалось загрузить товары.")}
           onRetry={() => void listQ.refetch()}
         />
       ) : (
@@ -1091,14 +1091,14 @@ function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
                     ))}
                     <td className="px-2 py-1.5 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Mahsulot">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Товар">
                           <Button
                             type="button"
                             size="icon-sm"
                             variant="outline"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => {
                               setFullProductId(r.id);
                               setFullProductOpen(true);
@@ -1476,9 +1476,9 @@ function ProductsCatalogWorkspaceInner({
 
             <div className="px-3 pb-3 pt-2 sm:px-4">
               {!hydrated ? (
-                <p className="text-sm text-muted-foreground">Sessiya…</p>
+                <p className="text-sm text-muted-foreground">Загрузка сессии…</p>
               ) : !tenantSlug ? (
-                <p className="text-sm text-destructive">Tenant yo‘q</p>
+                <p className="text-sm text-destructive">Организация не выбрана</p>
               ) : (
                 main
               )}

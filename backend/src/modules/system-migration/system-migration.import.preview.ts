@@ -63,11 +63,11 @@ export async function parseBackupZip(buf: Buffer, targetTenantId: number): Promi
   try {
     zip = await JSZip.loadAsync(buf);
   } catch {
-    return emptyPreview(["Fayl yaroqli ZIP arxiv emas. Faqat .zip zaxira faylini yuklang."]);
+    return emptyPreview(["Файл не является корректным ZIP-архивом. Загрузите только файл резервной копии .zip."]);
   }
 
   const manifestRaw = await readZipText(zip, MANIFEST_PATH);
-  if (!manifestRaw) errors.push("manifest.json topilmadi — bu to‘liq SALEC zaxira emas.");
+  if (!manifestRaw) errors.push("manifest.json не найден — это не полная резервная копия SALEC.");
 
   let manifest: Record<string, unknown> | null = null;
   let formatVersion: number | null = null;
@@ -76,7 +76,7 @@ export async function parseBackupZip(buf: Buffer, targetTenantId: number): Promi
       manifest = JSON.parse(manifestRaw) as Record<string, unknown>;
       formatVersion = Number(manifest.format_version);
       if (manifest.kind !== BACKUP_KIND) {
-        errors.push("Bu SALEC zaxira arxivi emas. «To‘liq zaxira yuklab olish» dan olingan ZIP ni tanlang.");
+        errors.push("Это не архив резервной копии SALEC. Выберите ZIP, полученный через «Скачать полную резервную копию».");
       }
       if (
         formatVersion !== BACKUP_FORMAT_VERSION &&
@@ -87,11 +87,11 @@ export async function parseBackupZip(buf: Buffer, targetTenantId: number): Promi
         formatVersion !== 1
       ) {
         errors.push(
-          `Arxiv formati eskirgan yoki noma’lum (versiya: ${String(manifest.format_version)}). Yangi zaxira yuklab oling.`
+          `Формат архива устарел или неизвестен (версия: ${String(manifest.format_version)}). Скачайте новую резервную копию.`
         );
       }
     } catch {
-      errors.push("manifest.json buzilgan — arxivni qayta eksport qiling.");
+      errors.push("manifest.json повреждён — выполните экспорт архива заново.");
     }
   }
 
@@ -128,14 +128,14 @@ export async function parseBackupZip(buf: Buffer, targetTenantId: number): Promi
       zip.file("data/expenses.json")
   );
   if (!has_profile) {
-    errors.push("Kompaniya profili topilmadi (tenant-profile.json). Arxiv to‘liq emas.");
+    errors.push("Профиль компании не найден (tenant-profile.json). Архив неполный.");
   } else {
     const profileRaw = await readZipText(zip, PROFILE_JSON_PATH);
     if (profileRaw) {
       try {
         JSON.parse(profileRaw);
       } catch {
-        errors.push("Kompaniya profili buzilgan (JSON). Arxivni qayta eksport qiling.");
+        errors.push("Профиль компании повреждён (JSON). Выполните экспорт архива заново.");
       }
     }
   }

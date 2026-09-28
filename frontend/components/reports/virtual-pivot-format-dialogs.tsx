@@ -288,7 +288,7 @@ export function VirtualPivotConditionalDialog({
               className="ml-auto h-7 text-xs"
               onClick={() => onChange(withHeatmapPresets([]))}
             >
-              Heatmap presets
+              Пресеты тепловой карты
             </Button>
           </div>
           {rules.length === 0 ? (

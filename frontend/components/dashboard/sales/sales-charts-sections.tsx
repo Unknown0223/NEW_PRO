@@ -2,6 +2,7 @@
 
 import { fmtCount, formatReasonLabel } from "@/components/dashboard/sales/format";
 import {
+  SALES_AMBER,
   SALES_CHART_COLORS,
   SALES_GREEN,
   SALES_RED,
@@ -76,7 +77,7 @@ export function SalesPaymentRail({
   return (
     <SalesSectionPanel
       title="По способам оплаты"
-      subtitle="Payment mix savdo oqimini va inkassatsiya risklarini tez ajratadi."
+      subtitle="Структура оплат: поток продаж и риски инкассации."
       action={<SalesIconBadge icon={CreditCard} tone="blue" />}
     >
       <RechartsBundle kind="payment-pie" items={items} />
@@ -86,47 +87,64 @@ export function SalesPaymentRail({
 
 export function SalesOrdersRefusalsChart({ data }: { data: SalesDashboardSnapshot }) {
   const chartData = useMemo(() => {
-    const ratio =
-      data.orders_refusals.total > 0
-        ? data.orders_refusals.rejected / data.orders_refusals.total
-        : 0;
-    return data.sales_dynamics.map((r) => {
-      const label = r.period.length >= 10 ? r.period.slice(8, 10) + "." + r.period.slice(5, 7) : r.period;
-      const orders = r.orders_count;
-      return {
-        date: label,
-        orders,
-        refusals: Math.max(0, Math.round(orders * ratio))
-      };
-    });
-  }, [data.sales_dynamics, data.orders_refusals]);
+    const dayLabel = (d: string) => (d.length >= 10 ? d.slice(8, 10) + "." + d.slice(5, 7) : d);
+    const daily = data.risk_zone?.daily;
+    if (daily) {
+      return daily.map((r) => ({
+        date: dayLabel(r.date),
+        orders: r.orders,
+        refusals: r.refusals,
+        notVisited: r.not_visited
+      }));
+    }
+    return data.sales_dynamics.map((r) => ({
+      date: dayLabel(r.period),
+      orders: r.orders_count,
+      refusals: 0,
+      notVisited: 0
+    }));
+  }, [data.sales_dynamics, data.risk_zone]);
 
   const { akb, okb, coverage_pct } = data.akb_okb_block;
+  const notVisited = data.risk_zone?.not_visited ?? 0;
 
   return (
     <SalesSectionPanel
       title="Заказы / Отказы"
-      subtitle="OKБ dan AKБ ga o'tishdagi uzilishlar kunlar kesimida ko'rinadi."
+      subtitle="Потери на пути от ОКБ к АКБ в разрезе дней."
       className="sales-motion-delay-150"
     >
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-sm font-semibold text-slate-500">ОКБ</p>
           <p className="mt-2 text-2xl font-black text-slate-950">{fmtCount(okb)}</p>
-          <p className="mt-1 text-xs text-slate-400">planned customers</p>
+          <p className="mt-1 text-xs text-slate-400">Закреплённые клиенты</p>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm font-semibold text-slate-500">АКБ</p>
           <p className="mt-2 text-2xl font-black text-emerald-600">{fmtCount(akb)}</p>
-          <p className="mt-1 text-xs text-slate-400">actual ordered customers</p>
+          <p className="mt-1 text-xs text-slate-400">Клиенты с заказом</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-slate-500">Непосещение</p>
+          <p className="mt-2 text-2xl font-black text-amber-600">{fmtCount(notVisited)}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Клиенты без визита{okb > 0 ? ` · ${((notVisited / okb) * 100).toFixed(1)}% ОКБ` : ""}
+          </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-sm font-semibold text-slate-500">Conversion</p>
+          <p className="text-sm font-semibold text-slate-500">Конверсия</p>
           <p className="mt-2 text-2xl font-black text-slate-950">{coverage_pct.toFixed(1)}%</p>
           <p className="mt-1 text-xs text-slate-400">АКБ / ОКБ × 100</p>
         </div>
       </div>
-      <RechartsBundle kind="orders-refusals" data={chartData} green={SALES_GREEN} red={SALES_RED} />
+      <RechartsBundle
+        kind="orders-refusals"
+        data={chartData}
+        green={SALES_GREEN}
+        red={SALES_RED}
+        amber={SALES_AMBER}
+      />
     </SalesSectionPanel>
   );
 }
@@ -142,18 +160,9 @@ export function SalesRefusalReasonsBlock({ data }: { data: SalesDashboardSnapsho
   );
 
   return (
-    <div className="grid gap-4">
-      <SalesSectionPanel title="Причина отказа" className="sales-motion-delay-200">
-        <RechartsBundle kind="refusal-bar" data={refusals} teal={SALES_TEAL} />
-      </SalesSectionPanel>
-      <SalesSectionPanel title="Динамика причин отказов" className="sales-motion-delay-250">
-        <p className="mb-3 text-sm text-slate-500">
-          Показатели по дням будут доступны в следующем обновлении API. Сейчас — сводка по причинам
-          за период.
-        </p>
-        <RechartsBundle kind="refusal-bar" data={refusals} teal={SALES_TEAL} />
-      </SalesSectionPanel>
-    </div>
+    <SalesSectionPanel title="Причина отказа" className="sales-motion-delay-200">
+      <RechartsBundle kind="refusal-bar" data={refusals} teal={SALES_TEAL} />
+    </SalesSectionPanel>
   );
 }
 
@@ -162,14 +171,15 @@ export function SalesTrendAreaChart({ data }: { data: SalesDashboardSnapshot }) 
     () =>
       data.sales_dynamics.map((r) => ({
         date: r.period.length >= 10 ? r.period.slice(5, 10) : r.period,
-        amount: Number(r.sales_sum) || 0
+        amount: Number(r.sales_sum) || 0,
+        returns: Number(r.returns_sum) || 0
       })),
     [data.sales_dynamics]
   );
 
   return (
     <SalesSectionPanel title="Динамика продаж" className="sales-motion-delay-250">
-      <RechartsBundle kind="sales-area" data={trend} green={SALES_GREEN} />
+      <RechartsBundle kind="sales-area" data={trend} green={SALES_GREEN} red={SALES_RED} />
     </SalesSectionPanel>
   );
 }

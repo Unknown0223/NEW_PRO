@@ -16,7 +16,7 @@ export default function WebStaffPositionPresetsPage() {
   if (role !== "admin") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-destructive">Bu bo‘lim faqat administrator uchun.</p>
+        <p className="text-sm text-destructive">Этот раздел только для администратора.</p>
         <Link href="/settings" className="text-sm text-primary underline">
           ← Настройки
         </Link>
@@ -33,12 +33,13 @@ export default function WebStaffPositionPresetsPage() {
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Lavozim nomi xodim kartasidagi «Должность» maydoniga yoziladi; «Роль» tizim roli bilan bog‘lanadi
-        (agent, ekspeditor, ofis…). Nom o‘zgartirilsa, bog‘langan xodimlar avtomatik yangilanadi. Ro‘yxat{" "}
+        Название должности записывается в поле «Должность» карточки сотрудника; «Роль» связывается с системной
+        ролью (агент, экспедитор, офис…). При переименовании связанные сотрудники обновляются автоматически. Список
+        используется для выбора в формах{" "}
         <Link href="/settings/spravochnik/operators" className="text-primary underline">
           Пользователи
         </Link>{" "}
-        va KOMANDA formalarida tanlov sifatida ishlatiladi.
+        и «Команда».
       </p>
       <WebStaffPositionPresetsWorkspace tenantSlug={tenantSlug} />
     </div>

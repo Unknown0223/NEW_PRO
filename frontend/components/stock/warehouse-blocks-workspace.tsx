@@ -84,7 +84,7 @@ function blockMutationError(err: unknown): string {
     return withApiSupportLine("В одном блоке может быть только один доставщик.", err);
   }
   if (code === "BadGruzchikUser") {
-    return withApiSupportLine("Выберите действующего грузчика (роль «gruzchik»).", err);
+    return withApiSupportLine("Выберите действующего грузчика (роль «Грузчик»).", err);
   }
   if (code === "EmptyName") return withApiSupportLine("Укажите название блока.", err);
   if (status === 404) return withApiSupportLine("Блок не найден.", err);

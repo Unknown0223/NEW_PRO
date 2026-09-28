@@ -5,7 +5,7 @@ export { isWebPanelDeniedRole };
 export const WEB_ACCESS_DENIED = "WEB_ACCESS_DENIED";
 
 export const WEB_ACCESS_DENIED_MESSAGE =
-  "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна. / Bu hisob faqat mobil ilovada ishlaydi. Veb-panel yopiq.";
+  "Этот аккаунт работает только в мобильном приложении. Веб-панель недоступна.";
 
 /** Brauzer (veb-panel) so‘rovi — Origin yoki Mozilla UA; Flutter/Dart emas. */
 export function isBrowserWebRequest(headers: {

@@ -297,7 +297,7 @@ class _StatusHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ҚАРЗДОРЛИК',
+                        'ЗАДОЛЖЕННОСТЬ',
                         style: AppTypography.captionSmall.copyWith(
                           fontWeight: FontWeight.w800,
                           color: AppColors.textMuted,
@@ -614,7 +614,7 @@ class _ViewOnlyStatus extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'агент статусни ўзгартирмайди',
+                        'агент не меняет статус',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11.5,

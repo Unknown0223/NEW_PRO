@@ -147,7 +147,7 @@ export function CompareMergeOverlay(props: {
               </span>
             </div>
           ) : (
-            <span>Preview недоступен — выберите мастера.</span>
+            <span>Предпросмотр недоступен — выберите мастера.</span>
           )}
         </div>
         <div className="flex items-start gap-2 text-sm text-rose-700">

@@ -188,7 +188,7 @@ export default function ProductCategoriesSettingsPage() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["product-categories", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
       setOpen(false);
       resetForm();
     },
@@ -201,14 +201,14 @@ export default function ProductCategoriesSettingsPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Xatolik yoki ruxsat yo‘q."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка или нет доступа."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Xatolik yoki ruxsat yo‘q."));
+      setMsg(getUserFacingError(e, "Ошибка или нет доступа."));
     }
   });
 
@@ -281,12 +281,12 @@ export default function ProductCategoriesSettingsPage() {
     if (mainTab !== "category") {
       const raw = parentId.trim();
       if (!raw) {
-        setMsg("Ota elementni tanlang.");
+        setMsg("Выберите родительский элемент.");
         return;
       }
       resolvedParent = Number.parseInt(raw, 10);
       if (!Number.isFinite(resolvedParent)) {
-        setMsg("Ota elementni tanlang.");
+        setMsg("Выберите родительский элемент.");
         return;
       }
     }
@@ -376,7 +376,7 @@ export default function ProductCategoriesSettingsPage() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Сессия...</p>
       </PageShell>
     );
   }
@@ -385,7 +385,7 @@ export default function ProductCategoriesSettingsPage() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>
@@ -396,7 +396,7 @@ export default function ProductCategoriesSettingsPage() {
     <PageShell>
       <PageHeader
         title="Категория продукта"
-        description="Uch daraja: kategoriya → guruh → pastki kategoriya. Mahsulot formasi xuddi shu ro‘yxatdan foydalanadi."
+        description="Три уровня: категория → группа → подкатегория. Форма товара использует этот же список."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={!isAdmin} onClick={openAdd}>
@@ -406,7 +406,7 @@ export default function ProductCategoriesSettingsPage() {
               Excel
             </Button>
             <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Katalog
+              Каталог
             </Link>
           </div>
         }
@@ -496,14 +496,14 @@ export default function ProductCategoriesSettingsPage() {
                     <td className="px-3 py-2">{r.comment ?? "—"}</td>
                     <td className="px-3 py-2 text-right">
                       {isAdmin ? (
-                        <TableRowActionGroup className="justify-end" ariaLabel="Kategoriya">
+                        <TableRowActionGroup className="justify-end" ariaLabel="Категория">
                           <Button
                             variant="outline"
                             size="icon-sm"
                             type="button"
                             className="text-muted-foreground hover:text-foreground"
-                            title="Tahrirlash"
-                            aria-label="Tahrirlash"
+                            title="Редактировать"
+                            aria-label="Редактировать"
                             onClick={() => openEdit(r)}
                           >
                             <Pencil className="size-3.5" aria-hidden />
@@ -555,7 +555,7 @@ export default function ProductCategoriesSettingsPage() {
             </table>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Ko‘rsatilgan: {filtered.length} / {rowsForTab.length} (joriy tab)
+            Показано: {filtered.length} / {rowsForTab.length} (текущая вкладка)
           </p>
         </div>
       </SettingsWorkspace>
@@ -577,10 +577,10 @@ export default function ProductCategoriesSettingsPage() {
             <DialogTitle>{editId ? "Редактировать" : "Добавить"}</DialogTitle>
             <DialogDescription>
               {mainTab === "category"
-                ? "Asosiy kategoriya (parent yo‘q)."
+                ? "Основная категория (без родителя)."
                 : mainTab === "group"
-                  ? "Kategoriya ostidagi guruh."
-                  : "Guruh ostidagi pastki kategoriya."}
+                  ? "Группа внутри категории."
+                  : "Подкатегория внутри группы."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">

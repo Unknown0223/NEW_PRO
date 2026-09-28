@@ -61,7 +61,7 @@ export async function importClientDataRows(
   const pushIssue = (issue: ClientImportRowIssue) => {
     totalRowErrors += 1;
     rowIssues.push(issue);
-    const line = `Qator ${issue.excelRow}: ${issue.message}`;
+    const line = `Строка ${issue.excelRow}: ${issue.message}`;
     if (errors.length < IMPORT_MAX_ERRORS_RETURNED) errors.push(line);
   };
 
@@ -78,7 +78,7 @@ export async function importClientDataRows(
       created: 0,
       updated: 0,
       errors: [
-        `Sarlavha ${headerRowIdx + 1}-qatorda («${sheetLabel}»), lekin undan keyin ma’lumot qatori yo‘q.`
+        `Заголовок найден в строке ${headerRowIdx + 1} («${sheetLabel}»), но после него нет строк с данными.`
       ],
       skippedDuplicate: 0,
       skippedEmpty: 0
@@ -150,7 +150,7 @@ export async function importClientDataRows(
         pushIssue({
           excelRow,
           kind: "error",
-          message: `noto‘g‘ri id — ${idParse.detail}`,
+          message: `неверный id — ${idParse.detail}`,
           fields: ["client_db_id"]
         });
         continue;
@@ -160,7 +160,7 @@ export async function importClientDataRows(
           pushIssue({
             excelRow,
             kind: "error",
-            message: `id=${idParse.id} boshqa tenantga tegishli — cross-tenant id taqiqlangan.`,
+            message: `id=${idParse.id} принадлежит другой компании — использовать чужие id запрещено.`,
             fields: ["client_db_id"]
           });
           continue;
@@ -169,7 +169,7 @@ export async function importClientDataRows(
           pushIssue({
             excelRow,
             kind: "error",
-            message: `id=${idParse.id} birlashtirilgan mijoz — import qilinmaydi.`,
+            message: `id=${idParse.id} — объединённый клиент, импорт невозможен.`,
             fields: ["client_db_id"]
           });
           continue;
@@ -178,7 +178,7 @@ export async function importClientDataRows(
           pushIssue({
             excelRow,
             kind: "error",
-            message: `id=${idParse.id} faylda takrorlanmoqda.`,
+            message: `id=${idParse.id} повторяется в файле.`,
             fields: ["client_db_id"]
           });
           continue;
@@ -190,7 +190,7 @@ export async function importClientDataRows(
           pushIssue({
             excelRow,
             kind: "error",
-            message: `ИД/kod «${idParse.code}» faylda takrorlanmoqda.`,
+            message: `ИД/код «${idParse.code}» повторяется в файле.`,
             fields: ["client_db_id"]
           });
           continue;
@@ -346,16 +346,16 @@ export async function importClientDataRows(
     await reportImportRowProgress(ctx, "finalizing", true);
     const out = [...errors];
     out.unshift(
-      `Importda ${totalRowErrors} ta xato / dublikat bor. ${pending.length} ta to‘g‘ri qator kutmoqda — «faqat to‘g‘rilarni qabul» yoki «hammasini bekor» tanlang.`
+      `В импорте ошибок / дубликатов: ${totalRowErrors}. Корректных строк в ожидании: ${pending.length} — выберите «принять только корректные» или «отменить всё».`
     );
     if (skippedDuplicate > 0) {
       out.push(
-        `Dublikatlar hech qachon qabul qilinmaydi: ${skippedDuplicate} qator (kalit: ${duplicateKeyFields.join(", ") || "—"}).`
+        `Дубликаты никогда не принимаются: строк — ${skippedDuplicate} (ключ: ${duplicateKeyFields.join(", ") || "—"}).`
       );
     }
     if (totalRowErrors > IMPORT_MAX_ERRORS_RETURNED) {
       out.push(
-        `… va yana ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} ta qator xatosi (faqat birinchi ${IMPORT_MAX_ERRORS_RETURNED} matn).`
+        `… и ещё ошибок в строках: ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} (показаны только первые ${IMPORT_MAX_ERRORS_RETURNED}).`
       );
     }
     for (const line of refResolver.summarizeMisses()) out.push(line);
@@ -375,18 +375,18 @@ export async function importClientDataRows(
     await reportImportRowProgress(ctx, "finalizing", true);
     const out = [...errors];
     if (commitDecision === "reject_all") {
-      out.unshift("Import bekor qilindi: hech qaysi qator yozilmadi.");
+      out.unshift("Импорт отменён: ни одна строка не записана.");
     } else if (pending.length === 0 && totalRowErrors > 0) {
-      out.unshift("To‘g‘ri qator yo‘q — hech narsa qo‘shilmadi.");
+      out.unshift("Нет корректных строк — ничего не добавлено.");
     }
     if (skippedDuplicate > 0) {
       out.push(
-        `Dublikatlar qabul qilinmadi: ${skippedDuplicate} qator (kalit: ${duplicateKeyFields.join(", ") || "—"}).`
+        `Дубликаты не приняты: строк — ${skippedDuplicate} (ключ: ${duplicateKeyFields.join(", ") || "—"}).`
       );
     }
     if (totalRowErrors > IMPORT_MAX_ERRORS_RETURNED) {
       out.push(
-        `… va yana ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} ta qator xatosi (faqat birinchi ${IMPORT_MAX_ERRORS_RETURNED} matn).`
+        `… и ещё ошибок в строках: ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} (показаны только первые ${IMPORT_MAX_ERRORS_RETURNED}).`
       );
     }
     for (const line of refResolver.summarizeMisses()) out.push(line);
@@ -410,24 +410,24 @@ export async function importClientDataRows(
   const out = [...errors];
   if (writeRes.created === 0 && writeRes.updated === 0 && errors.length === 0 && skippedEmpty > 0) {
     out.push(
-      `Hech kim qo‘shilmadi: Excel ${headerRowIdx + 2}–${rows.length} qatorlarda «name» bo‘sh yoki --- (${skippedEmpty} qator o‘tkazildi).`
+      `Никто не добавлен: в строках Excel ${headerRowIdx + 2}–${rows.length} поле «name» пустое или --- (пропущено строк: ${skippedEmpty}).`
     );
   }
   if (skippedDuplicate > 0) {
     out.push(
-      `Dublikat klientlar qabul qilinmadi: ${skippedDuplicate} qator (kalit maydonlar: ${duplicateKeyFields.join(", ")}).`
+      `Клиенты-дубликаты не приняты: строк — ${skippedDuplicate} (ключевые поля: ${duplicateKeyFields.join(", ")}).`
     );
   }
   if (commitDecision === "accept_valid" && totalRowErrors > 0) {
     out.unshift(
-      `Faqat to‘g‘ri qatorlar yozildi: +${writeRes.created} qo‘shildi` +
-        (writeRes.updated > 0 ? `, ${writeRes.updated} yangilandi` : "") +
-        `; ${totalRowErrors} ta xato/dublikat o‘tkazib yuborildi.`
+      `Записаны только корректные строки: добавлено +${writeRes.created}` +
+        (writeRes.updated > 0 ? `, обновлено ${writeRes.updated}` : "") +
+        `; пропущено ошибок/дубликатов: ${totalRowErrors}.`
     );
   }
   if (totalRowErrors > IMPORT_MAX_ERRORS_RETURNED) {
     out.push(
-      `… va yana ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} ta qator xatosi (faqat birinchi ${IMPORT_MAX_ERRORS_RETURNED} matn qaytarildi).`
+      `… и ещё ошибок в строках: ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} (возвращены только первые ${IMPORT_MAX_ERRORS_RETURNED}).`
     );
   }
   for (const line of refResolver.summarizeMisses()) out.push(line);

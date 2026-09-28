@@ -34,7 +34,7 @@ const MapView = dynamic(() => import("./map-view"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full items-center justify-center bg-paper text-sm text-ink-soft">
-      Xarita yuklanmoqda…
+      Загрузка карты…
     </div>
   )
 });

@@ -62,11 +62,11 @@ export async function registerTelegramBotRoutes(app: FastifyInstance) {
 
   app.post("/api/telegram-bot/staff/lookup", rate, async (request, reply) => {
     if (!assertBotSecret(request)) {
-      return sendApiError(reply, request, 401, "BotUnauthorized", "Telegram bot API kaliti noto‘g‘ri.");
+      return sendApiError(reply, request, 401, "BotUnauthorized", "Неверный API-ключ Telegram-бота.");
     }
     const parsed = lookupBody.safeParse(request.body);
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
     const result = await lookupTelegramStaff(parsed.data.telegram_id);
     if (!result.ok) {
@@ -83,11 +83,11 @@ export async function registerTelegramBotRoutes(app: FastifyInstance) {
 
   app.post("/api/telegram-bot/staff/register", rate, async (request, reply) => {
     if (!assertBotSecret(request)) {
-      return sendApiError(reply, request, 401, "BotUnauthorized", "Telegram bot API kaliti noto‘g‘ri.");
+      return sendApiError(reply, request, 401, "BotUnauthorized", "Неверный API-ключ Telegram-бота.");
     }
     const parsed = registerBody.safeParse(request.body);
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
     const result = await registerTelegramStaff({
       tenantSlug: parsed.data.slug,
@@ -112,11 +112,11 @@ export async function registerTelegramBotRoutes(app: FastifyInstance) {
   /** Platforma Dostup scope — bot Excel/statistika uchun agent_ids. */
   app.post("/api/telegram-bot/staff/intake-scope", rate, async (request, reply) => {
     if (!assertBotSecret(request)) {
-      return sendApiError(reply, request, 401, "BotUnauthorized", "Telegram bot API kaliti noto‘g‘ri.");
+      return sendApiError(reply, request, 401, "BotUnauthorized", "Неверный API-ключ Telegram-бота.");
     }
     const parsed = lookupBody.safeParse(request.body);
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
     const staff = await lookupTelegramStaff(parsed.data.telegram_id);
     if (!staff.ok) {
@@ -134,7 +134,7 @@ export async function registerTelegramBotRoutes(app: FastifyInstance) {
         request,
         403,
         "bad_role",
-        "Excel/statistika agentdan boshqa rollar uchun (platforma scope)."
+        "Excel и статистика доступны ролям, кроме агента (область платформы)."
       );
     }
     const scope = await resolveTelegramIntakeScope({

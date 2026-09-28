@@ -57,7 +57,7 @@ export async function writePendingImportCreates(
                 softPreserveDebtLockedStaff: true
               }).then((res) => {
                 for (const b of res.debtBlocks) {
-                  ctx.warnings.push(`Qator ${item.excelRow}: ${b.messageRu}`);
+                  ctx.warnings.push(`Строка ${item.excelRow}: ${b.messageRu}`);
                 }
               });
             }
@@ -81,7 +81,7 @@ export async function writePendingImportCreates(
               softPreserveDebtLockedStaff: true
             }).then((res) => {
               for (const b of res.debtBlocks) {
-                ctx.warnings.push(`Qator ${item.excelRow}: ${b.messageRu}`);
+                ctx.warnings.push(`Строка ${item.excelRow}: ${b.messageRu}`);
               }
             });
           }
@@ -95,13 +95,13 @@ export async function writePendingImportCreates(
       updatedIds.push(...batchUpdatedIds);
       await reportImportRowProgress(ctx, "writing");
     } catch (e) {
-      const raw = e instanceof Error ? e.message : "xato";
+      const raw = e instanceof Error ? e.message : "ошибка";
       const hint =
         raw.includes("Unique constraint") || raw.includes("unique constraint")
-          ? " (ehtimol id yoki noyob maydon boshqa yozuvda band)"
+          ? " (вероятно, id или уникальное поле уже занято другой записью)"
           : "";
       errors.push(
-        `Batch ${batch[0]?.excelRow ?? "?"}-${batch[batch.length - 1]?.excelRow ?? "?"}: ${raw.slice(0, 200)}${hint}`
+        `Пакет строк ${batch[0]?.excelRow ?? "?"}-${batch[batch.length - 1]?.excelRow ?? "?"}: ${raw.slice(0, 200)}${hint}`
       );
       ctx.processedRows += batch.length;
     }

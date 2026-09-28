@@ -105,7 +105,7 @@ export async function createWebStaff(
         slotId,
         createdOp.id,
         actorUserId,
-        "Yangi xodim yaratishda biriktirish"
+        "Назначение при создании сотрудника"
       );
       const rowsAfter = await listStaff(tenantId, "operator");
       const rowAfter = rowsAfter.find((x) => x.id === createdOp.id);

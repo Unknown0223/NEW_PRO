@@ -141,7 +141,7 @@ export function buildExpeditorLoading520Document(
       territory: dashOrEmpty(territory) || "—",
       expeditor: expVal || null,
       expeditorVisible: true,
-      currency: merged.currencyLabel || "So'm (UZS)"
+      currency: merged.currencyLabel || "сум (UZS)"
     },
     groups,
     totals: {

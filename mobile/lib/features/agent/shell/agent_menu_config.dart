@@ -44,7 +44,7 @@ List<AgentMenuItem> agentMenuItems(MobileConfig? config) {
     const AgentMenuItem(label: 'Черновик', route: '/draft'),
     const AgentMenuItem(label: 'Задачи', route: '', soon: true),
     const AgentMenuItem(label: 'Моя локация', route: '/map'),
-    const AgentMenuItem(label: 'Табель · jadval', route: '/tabel'),
+    const AgentMenuItem(label: 'Табель', route: '/tabel'),
     const AgentMenuItem(label: 'Настройки', route: '/settings'),
   ];
   return items.where((it) => it.visible?.call(config) ?? true).toList();

@@ -270,7 +270,7 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
     if (photo == null && context.mounted) {
       final cam = await Permission.camera.status;
       if (!cam.isGranted) {
-        showAgentToast(context, 'Kamera ruxsati kerak');
+        showAgentToast(context, 'Нужно разрешение на камеру');
       }
     }
     return null;
@@ -350,8 +350,8 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Foto oflayn saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
-            : 'Окно съёмки закрыто или фото сақланмади',
+            ? 'Фото сохранено офлайн — его можно отправить в любое время через «Синхронизация фото»'
+            : 'Окно съёмки закрыто или фото не сохранено',
         accentColor: queued ? AppColors.success : AppColors.error,
       );
     }
@@ -383,7 +383,7 @@ Future<ClientPhotoReport?> captureAndUploadPhotoReport({
       showAgentToast(
         context,
         queued
-            ? 'Foto saqlandi — «Синхронизация фото» orqali istalgan vaqtda yuboriladi'
+            ? 'Фото сохранено — его можно отправить в любое время через «Синхронизация фото»'
             : UserFacingError.toast(e, action: 'Не удалось загрузить фото'),
         accentColor: queued ? AppColors.warning : AppColors.error,
       );
@@ -420,7 +420,7 @@ Future<ClientPhotoReport?> replacePhotoReport({
   final caption = (existing.caption ?? '').trim();
   if (caption.isEmpty) {
     if (context.mounted) {
-      showAgentToast(context, 'Kategoriya topilmadi');
+      showAgentToast(context, 'Категория не найдена');
     }
     return null;
   }
@@ -434,7 +434,7 @@ Future<ClientPhotoReport?> replacePhotoReport({
     if (photo == null && context.mounted) {
       final cam = await Permission.camera.status;
       if (!cam.isGranted) {
-        showAgentToast(context, 'Kamera ruxsati kerak');
+        showAgentToast(context, 'Нужно разрешение на камеру');
       }
     }
     return null;

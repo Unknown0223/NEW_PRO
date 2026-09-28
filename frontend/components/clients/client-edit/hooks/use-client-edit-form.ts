@@ -824,9 +824,9 @@ export function useClientEditForm({
         applyPickedCoords(byAddress.lat, byAddress.lon);
         return;
       }
-      setMapSearchNotice("Koordinata yoki manzil aniqlanmadi. Matn formatini tekshiring.");
+      setMapSearchNotice("Не удалось определить координаты или адрес. Проверьте формат текста.");
     } catch {
-      setMapSearchNotice("Yandex карта yuklanmadi. Internet yoki API kalitini tekshiring.");
+      setMapSearchNotice("Не удалось загрузить Yandex карту. Проверьте интернет или API-ключ.");
     } finally {
       setMapSearchPending(false);
     }

@@ -93,7 +93,7 @@ class ExpeditorDebtorsPage extends ConsumerWidget {
                         Text('Общий баланс:',
                             style: AppTypography.bodyMedium
                                 .copyWith(color: AppColors.textSecondary),),
-                        Text('-${formatMoneyUz(total)} So\'m',
+                        Text('-${formatMoneyUz(total)} сум',
                             style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.error,),),
@@ -223,7 +223,7 @@ class _DebtorCard extends StatelessWidget {
                           style: AppTypography.bodyMedium
                               .copyWith(color: AppColors.textMuted),),
                       const Spacer(),
-                      Text("${formatMoneyUz(balance)} So'm",
+                      Text('${formatMoneyUz(balance)} сум',
                           style: TextStyle(
                               fontWeight: FontWeight.w800,
                               color: colorForClientBalance(balance),

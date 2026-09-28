@@ -51,12 +51,12 @@ type GrantRow = {
 type AccessUser = { id: number; full_name: string; login: string; role: string };
 
 const SECTION_LABELS: { key: SectionKey; label: string; hint: string }[] = [
-  { key: "payments", label: "To‘lovlar", hint: "Kassa, tasdiq, bekor, taqsimlash" },
-  { key: "orders", label: "Buyurtmalar", hint: "Qator, status, tasdiq, bulk" },
-  { key: "returns", label: "Qaytarishlar", hint: "Yaratish, qabul, rad" },
-  { key: "stock", label: "Ombor", hint: "Kirim, transfer, korrektirovka" },
-  { key: "expenses", label: "Xarajatlar", hint: "Yaratish, tasdiq, bekor" },
-  { key: "opening_balances", label: "Ochilish qoldiqlari", hint: "Yaratish, o‘chirish, tiklash" }
+  { key: "payments", label: "Оплаты", hint: "Касса, подтверждение, отмена, распределение" },
+  { key: "orders", label: "Заказы", hint: "Строки, статус, подтверждение, массовые действия" },
+  { key: "returns", label: "Возвраты", hint: "Создание, приёмка, отклонение" },
+  { key: "stock", label: "Склад", hint: "Приход, перемещение, корректировка" },
+  { key: "expenses", label: "Расходы", hint: "Создание, подтверждение, отмена" },
+  { key: "opening_balances", label: "Начальные остатки", hint: "Создание, удаление, восстановление" }
 ];
 
 const MINUTE_PRESETS = [15, 30, 60, 120] as const;
@@ -185,11 +185,11 @@ export function DocumentEditLockWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!settings) throw new Error("Sozlama yuklanmagan");
+      if (!settings) throw new Error("Настройки не загружены");
       await api.patch(`/api/${tenantSlug}/settings/document-edit-lock`, settings);
     },
     onSuccess: async () => {
-      setMsg("Qoidalar saqlandi");
+      setMsg("Правила сохранены");
       setDraft(null);
       setDirty(false);
       await qc.invalidateQueries({ queryKey: ["document-edit-lock", tenantSlug] });
@@ -199,8 +199,8 @@ export function DocumentEditLockWorkspace() {
 
   const grantMut = useMutation({
     mutationFn: async () => {
-      if (basket.length === 0) throw new Error("Savatcha bo‘sh");
-      if (pickedUsers.length === 0) throw new Error("Kamida bitta xodim tanlang");
+      if (basket.length === 0) throw new Error("Корзина пуста");
+      if (pickedUsers.length === 0) throw new Error("Выберите хотя бы одного сотрудника");
       await api.post(`/api/${tenantSlug}/settings/document-edit-lock/grants`, {
         items: basket.map((b) => ({
           section: b.section,
@@ -212,7 +212,7 @@ export function DocumentEditLockWorkspace() {
       });
     },
     onSuccess: async () => {
-      setMsg("Vaqtinchalik ochish saqlandi — bildirishnoma yuborildi");
+      setMsg("Временное открытие сохранено — уведомление отправлено");
       setBasket([]);
       setSelected({});
       setUserPick({});
@@ -228,7 +228,7 @@ export function DocumentEditLockWorkspace() {
       await api.post(`/api/${tenantSlug}/settings/document-edit-lock/grants/${id}/revoke`);
     },
     onSuccess: async () => {
-      setMsg("Ochish bekor qilindi");
+      setMsg("Открытие отменено");
       await qc.invalidateQueries({ queryKey: ["document-edit-lock-grants", tenantSlug] });
     },
     onError: (e) => setMsg(getUserFacingError(e))
@@ -272,7 +272,7 @@ export function DocumentEditLockWorkspace() {
       );
       setHits(data.data);
       setSelected({});
-      if (data.data.length === 0) setMsg("Hech narsa topilmadi — filtrni tekshiring");
+      if (data.data.length === 0) setMsg("Ничего не найдено — проверьте фильтр");
     } catch (e) {
       setMsg(getUserFacingError(e));
     } finally {
@@ -282,7 +282,7 @@ export function DocumentEditLockWorkspace() {
 
   const addToBasket = () => {
     if (!selectedHits.length) {
-      setMsg("Natijadan kamida bitta hujjatni belgilang");
+      setMsg("Отметьте в результатах хотя бы один документ");
       return;
     }
     setBasket((prev) => {
@@ -291,7 +291,7 @@ export function DocumentEditLockWorkspace() {
       return [...map.values()];
     });
     setSelected({});
-    setMsg(`${selectedHits.length} ta hujjat savatchaga qo‘shildi`);
+    setMsg(`Добавлено в корзину документов: ${selectedHits.length}`);
   };
 
   if (!hydrated) return null;
@@ -299,11 +299,11 @@ export function DocumentEditLockWorkspace() {
   if (!isAdmin) {
     return (
       <div className="mx-auto max-w-xl space-y-3 py-10">
-        <h1 className="text-lg font-semibold">Davr cheklovi</h1>
+        <h1 className="text-lg font-semibold">Ограничение периода</h1>
         <p className="text-sm text-muted-foreground">
-          Bu bo‘lim faqat admin uchun.{" "}
+          Этот раздел доступен только администратору.{" "}
           <Link href="/settings" className="text-primary underline">
-            Sozlamalarga qaytish
+            Вернуться в настройки
           </Link>
         </p>
       </div>
@@ -314,10 +314,10 @@ export function DocumentEditLockWorkspace() {
     <div className="w-full space-y-6 pb-10">
       {/* Header — tizim sozlamalari uslubi */}
       <header className="space-y-2">
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Davr cheklovi</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">Ограничение периода</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Bo‘limlar bo‘yicha necha kun ichida yozish mumkin. Kun o‘tsa oddiy xodim
-          tahrirlay/o‘chira olmaydi — admin kerak bo‘lsa vaqtinchalik ochadi.
+          Сколько дней по каждому разделу можно вносить изменения. По истечении срока обычный сотрудник
+          не может редактировать/удалять — при необходимости администратор временно открывает доступ.
         </p>
       </header>
 
@@ -327,21 +327,21 @@ export function DocumentEditLockWorkspace() {
           <div className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
             <span>
-              <span className="font-medium text-foreground">Qoidalar</span> — har bo‘lim uchun kun
+              <span className="font-medium text-foreground">Правила</span> — число дней для каждого раздела
             </span>
           </div>
           <div className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
             <span>
-              <span className="font-medium text-foreground">Avto-yopish</span> — N kundan keyin yozish
-              yopiladi
+              <span className="font-medium text-foreground">Автозакрытие</span> — через N дней изменения
+              закрываются
             </span>
           </div>
           <div className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
             <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
             <span>
-              <span className="font-medium text-foreground">Vaqtinchalik</span> — aniq hujjat + aniq
-              xodim
+              <span className="font-medium text-foreground">Временно</span> — конкретный документ +
+              конкретный сотрудник
             </span>
           </div>
         </div>
@@ -359,7 +359,7 @@ export function DocumentEditLockWorkspace() {
           )}
           onClick={() => setTab("rules")}
         >
-          Qoidalar
+          Правила
         </button>
         <button
           type="button"
@@ -371,7 +371,7 @@ export function DocumentEditLockWorkspace() {
           )}
           onClick={() => setTab("open")}
         >
-          Vaqtinchalik ochish
+          Временное открытие
         </button>
       </div>
 
@@ -386,13 +386,13 @@ export function DocumentEditLockWorkspace() {
 
       {tab === "rules" ? (
         settingsQ.isLoading || !settings ? (
-          <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
+          <p className="text-sm text-muted-foreground">Загрузка…</p>
         ) : (
           <div className="space-y-5">
             {/* Blok 1: asosiy yoqish */}
             <Block
-              title="1. Asosiy yoqish"
-              subtitle="Bu o‘chirilgan bo‘lsa, pastdagi kunlar ishlamaydi — hech narsa yopilmaydi."
+              title="1. Основное включение"
+              subtitle="Если выключено, указанные ниже дни не действуют — ничего не закрывается."
             >
               <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
                 <input
@@ -402,9 +402,9 @@ export function DocumentEditLockWorkspace() {
                   onChange={(e) => updateDraft({ ...settings, enabled: e.target.checked })}
                 />
                 <span className="text-sm">
-                  <span className="font-medium text-foreground">Davr cheklovini yoqish</span>
+                  <span className="font-medium text-foreground">Включить ограничение периода</span>
                   <span className="mt-1 block text-muted-foreground">
-                    Yoqilganda faqat «Yoqilgan» bo‘limlar cheklanadi. Admin har doim ochiq.
+                    При включении ограничиваются только разделы, отмеченные «Да». Для администратора всегда открыто.
                   </span>
                 </span>
               </label>
@@ -420,21 +420,21 @@ export function DocumentEditLockWorkspace() {
                 <Info className="mt-0.5 h-4 w-4 shrink-0 opacity-70" aria-hidden />
                 <p className="leading-relaxed">
                   {settings.enabled
-                    ? "Cheklov yoqilgan — quyidagi jadvalda kunlarni belgilang va saqlang."
-                    : "Hozir o‘chirilgan — xodimlar (ruxsatlari bo‘lsa) eski hujjatlarni ham o‘zgartira oladi."}
+                    ? "Ограничение включено — укажите дни в таблице ниже и сохраните."
+                    : "Сейчас выключено — сотрудники (при наличии прав) могут изменять и старые документы."}
                 </p>
               </div>
             </Block>
 
             {/* Blok 2: bo‘limlar */}
             <Block
-              title="2. Bo‘limlar bo‘yicha kun"
-              subtitle="Misol: To‘lovlar = 1 kun — bugungi to‘lov ochiq, kechagi yopiq (grant bo‘lmasa)."
+              title="2. Дни по разделам"
+              subtitle="Пример: Оплаты = 1 день — сегодняшняя оплата открыта, вчерашняя закрыта (если нет временного доступа)."
               className={cn(!settings.enabled && "opacity-60")}
               footer={
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">
-                    O‘qish / hisobot hech qachon yopilmaydi.
+                    Просмотр и отчёты никогда не закрываются.
                   </p>
                   <Button
                     type="button"
@@ -444,7 +444,7 @@ export function DocumentEditLockWorkspace() {
                       saveMut.mutate();
                     }}
                   >
-                    {saveMut.isPending ? "Saqlanmoqda…" : "Qoidalarni saqlash"}
+                    {saveMut.isPending ? "Сохранение…" : "Сохранить правила"}
                   </Button>
                 </div>
               }
@@ -453,9 +453,9 @@ export function DocumentEditLockWorkspace() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/60 text-left text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2.5 font-medium">Bo‘lim</th>
-                      <th className="w-28 px-3 py-2.5 font-medium">Cheklash</th>
-                      <th className="w-36 px-3 py-2.5 font-medium">Kun</th>
+                      <th className="px-3 py-2.5 font-medium">Раздел</th>
+                      <th className="w-28 px-3 py-2.5 font-medium">Ограничить</th>
+                      <th className="w-36 px-3 py-2.5 font-medium">Дней</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -478,7 +478,7 @@ export function DocumentEditLockWorkspace() {
                                   patchSection(key, { enabled: e.target.checked })
                                 }
                               />
-                              {row.enabled ? "Ha" : "Yo‘q"}
+                              {row.enabled ? "Да" : "Нет"}
                             </label>
                           </td>
                           <td className="px-3 py-3">
@@ -495,7 +495,7 @@ export function DocumentEditLockWorkspace() {
                                   if (Number.isFinite(n)) patchSection(key, { days: n });
                                 }}
                               />
-                              <span className="text-xs text-muted-foreground">kun</span>
+                              <span className="text-xs text-muted-foreground">дн.</span>
                             </div>
                           </td>
                         </tr>
@@ -512,19 +512,19 @@ export function DocumentEditLockWorkspace() {
           <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <p className="leading-relaxed">
-              Ketma-ketlik: toping → savatchaga → kimlarga → daqiqa → saqlang. Butun bo‘lim
-              hammaga ochilmaydi.
+              Порядок: найдите → в корзину → кому → минуты → сохраните. Весь раздел целиком
+              для всех не открывается.
             </p>
           </div>
 
           <Block
             step={1}
-            title="Hujjatlarni topish"
-            subtitle="Bo‘lim, ID va/yoki sana oralig‘i (eng ko‘pi 50 ta)."
+            title="Поиск документов"
+            subtitle="Раздел, ID и/или диапазон дат (не более 50 шт.)."
           >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
-                <Label>Bo‘lim</Label>
+                <Label>Раздел</Label>
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                   value={searchSection}
@@ -538,15 +538,15 @@ export function DocumentEditLockWorkspace() {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label>Hujjat ID</Label>
+                <Label>ID документа</Label>
                 <Input
                   value={docId}
                   onChange={(e) => setDocId(e.target.value)}
-                  placeholder="ixtiyoriy"
+                  placeholder="необязательно"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Sana dan</Label>
+                <Label>Дата с</Label>
                 <Input
                   type="date"
                   value={dateFrom}
@@ -554,17 +554,17 @@ export function DocumentEditLockWorkspace() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Sana gacha</Label>
+                <Label>Дата по</Label>
                 <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={clearSearch}>
-                Tozalash
+                Очистить
               </Button>
               <Button type="button" disabled={searching} onClick={() => void runSearch()}>
-                {searching ? "Qidirilmoqda…" : "Qidirish"}
+                {searching ? "Поиск…" : "Поиск"}
               </Button>
               <Button
                 type="button"
@@ -572,7 +572,7 @@ export function DocumentEditLockWorkspace() {
                 disabled={!selectedHits.length}
                 onClick={addToBasket}
               >
-                Tanlanganlarni savatchaga ({selectedHits.length})
+                Выбранные в корзину ({selectedHits.length})
               </Button>
             </div>
 
@@ -583,8 +583,8 @@ export function DocumentEditLockWorkspace() {
                     <tr>
                       <th className="w-10 px-2 py-2" />
                       <th className="px-2 py-2">ID</th>
-                      <th className="px-2 py-2">Sana</th>
-                      <th className="px-2 py-2">Yozuv</th>
+                      <th className="px-2 py-2">Дата</th>
+                      <th className="px-2 py-2">Запись</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -618,12 +618,12 @@ export function DocumentEditLockWorkspace() {
 
           <Block
             step={2}
-            title={`Savatcha (${basket.length})`}
-            subtitle="Turli bo‘limlarni birga ochish mumkin."
+            title={`Корзина (${basket.length})`}
+            subtitle="Можно открывать документы из разных разделов одновременно."
           >
             {basket.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
-                Hali hujjat yo‘q — 1-bosqichdan qo‘shing
+                Документов пока нет — добавьте на шаге 1
               </p>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border">
@@ -649,7 +649,7 @@ export function DocumentEditLockWorkspace() {
                         setBasket((prev) => prev.filter((x) => basketKey(x) !== basketKey(b)))
                       }
                     >
-                      Olib tashlash
+                      Убрать
                     </button>
                   </li>
                 ))}
@@ -659,11 +659,11 @@ export function DocumentEditLockWorkspace() {
 
           <Block
             step={3}
-            title={`Kimlarga (${pickedUsers.length})`}
-            subtitle="Faqat belgilangan xodimlar. Adminlarga grant kerak emas."
+            title={`Кому (${pickedUsers.length})`}
+            subtitle="Только отмеченные сотрудники. Администраторам временный доступ не нужен."
           >
             {usersQ.isLoading ? (
-              <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
+              <p className="text-sm text-muted-foreground">Загрузка…</p>
             ) : (
               <div className="max-h-48 space-y-0.5 overflow-auto rounded-lg border border-border p-2">
                 {activeUsers.map((u) => (
@@ -689,12 +689,12 @@ export function DocumentEditLockWorkspace() {
 
           <Block
             step={4}
-            title="Qancha daqiqa ochiq"
-            subtitle="Muddat tugagach yoki «Bekor» qilinsa yana yopiladi."
+            title="На сколько минут открыть"
+            subtitle="По истечении срока или после нажатия «Отменить» доступ снова закрывается."
             footer={
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
-                  {basket.length} hujjat · {pickedUsers.length} xodim · {minutes} daqiqa
+                  Документов: {basket.length} · сотрудников: {pickedUsers.length} · {minutes} мин.
                 </p>
                 <Button
                   type="button"
@@ -706,7 +706,7 @@ export function DocumentEditLockWorkspace() {
                     grantMut.mutate();
                   }}
                 >
-                  {grantMut.isPending ? "Saqlanmoqda…" : "Ochishni saqlash"}
+                  {grantMut.isPending ? "Сохранение…" : "Сохранить открытие"}
                 </Button>
               </div>
             }
@@ -723,7 +723,7 @@ export function DocumentEditLockWorkspace() {
                     setUseCustom(false);
                   }}
                 >
-                  {m} daq
+                  {m} мин
                 </Button>
               ))}
               <Input
@@ -737,29 +737,29 @@ export function DocumentEditLockWorkspace() {
                   setUseCustom(true);
                 }}
               />
-              <span className="text-xs text-muted-foreground">qo‘lda</span>
+              <span className="text-xs text-muted-foreground">вручную</span>
             </div>
           </Block>
 
           <Block
-            title="Faol ochishlar"
-            subtitle="Hozir amal qilayotgan grantlar. Muddatdan oldin bekor qilish mumkin."
+            title="Активные открытия"
+            subtitle="Действующие временные доступы. Их можно отменить досрочно."
           >
             {grantsQ.isLoading ? (
-              <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
+              <p className="text-sm text-muted-foreground">Загрузка…</p>
             ) : (grantsQ.data ?? []).length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
-                Faol ochish yo‘q
+                Активных открытий нет
               </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/60 text-left text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-2 font-medium">Bo‘lim</th>
+                      <th className="px-3 py-2 font-medium">Раздел</th>
                       <th className="px-3 py-2 font-medium">ID</th>
-                      <th className="px-3 py-2 font-medium">Kimga</th>
-                      <th className="px-3 py-2 font-medium">Tugash</th>
+                      <th className="px-3 py-2 font-medium">Кому</th>
+                      <th className="px-3 py-2 font-medium">Окончание</th>
                       <th className="px-3 py-2 font-medium" />
                     </tr>
                   </thead>
@@ -787,7 +787,7 @@ export function DocumentEditLockWorkspace() {
                             disabled={revokeMut.isPending}
                             onClick={() => revokeMut.mutate(g.id)}
                           >
-                            Bekor
+                            Отменить
                           </Button>
                         </td>
                       </tr>

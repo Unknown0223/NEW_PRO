@@ -67,7 +67,7 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
     const tenantId = request.tenant!.id;
     const parsed = bulkAccessPatchBodySchema.safeParse(request.body ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     const actorId = actorUserIdOrNull(request);
     const rawItems = parsed.data.items;
     /** Bir xil `user_id` uchun bir nechta qator — oxirgisi (kam commit, deadlock kam). */
@@ -82,7 +82,7 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
       select: { id: true, role: true, is_active: true }
     });
     if (users.length !== userIds.length) {
-      return sendApiError(reply, request, 400, "SomeUsersNotFound", "One or more users are missing in this tenant");
+      return sendApiError(reply, request, 400, "SomeUsersNotFound", "Некоторые пользователи не найдены в этой компании");
     }
     const byId = new Map(users.map((u) => [u.id, u]));
     const allTyped = items as BulkAccessPatchItem[];

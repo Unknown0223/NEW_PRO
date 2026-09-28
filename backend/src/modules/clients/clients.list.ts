@@ -87,31 +87,31 @@ function mapBulkPatchInput(patch: PatchClientBody) {
 function bulkClientPatchErrorMessage(code: string): string {
   switch (code) {
     case "NOT_FOUND":
-      return "Klient topilmadi";
+      return "Клиент не найден";
     case "DUPLICATE_PHONE":
-      return "Bu telefon mavjud.";
+      return "Этот телефон уже используется.";
     case "DUPLICATE_NAME":
-      return "Shu nomga o‘xshash klient mavjud.";
+      return "Клиент с похожим названием уже существует.";
     case "DUPLICATE_CLIENT_CODE":
-      return "Bu klient kodi band.";
+      return "Этот код клиента уже занят.";
     case "DUPLICATE_INN":
-      return "Bu STIR (INN) band.";
+      return "Этот ИНН уже занят.";
     case "DUPLICATE_PINFL":
-      return "Bu JSHSHIR (PINFL) band.";
+      return "Этот ПИНФЛ уже занят.";
     case "DUPLICATE_INACTIVE":
-      return "Bu klient allaqachon mavjud, statusi nofaol.";
+      return "Такой клиент уже существует, но он неактивен.";
     case "DUPLICATE_AGENT_DIRECTION":
-      return "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent.";
+      return "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент.";
     case "AGENT_NOT_FOUND":
-      return "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang.";
+      return "Выбранный агент не найден или неактивен. Выберите активного агента.";
     case "AGENT_NOT_ON_SLOT":
-      return "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish).";
+      return "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга).";
     case "EXPEDITOR_NOT_ON_SLOT":
-      return "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan.";
+      return "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена.";
     case "ASSIGNMENT_PERSON_HAS_DEBT":
-      return "Qarzdorlik bor: agent yoki ekspeditorni olib tashlab / almashtirib bo‘lmaydi. Faqat qoldiq 0 bo‘lganda ruxsat (peredoplata ham 0 hisoblanadi).";
+      return "Есть задолженность: нельзя снять или заменить агента или экспедитора. Разрешено только при остатке 0 (переплата тоже считается нулём).";
     case "EXPEDITOR_NOT_FOUND":
-      return "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang.";
+      return "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора.";
     case "VALIDATION":
       return "ValidationError";
     default:

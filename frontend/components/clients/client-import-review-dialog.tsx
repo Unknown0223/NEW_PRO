@@ -86,7 +86,7 @@ export function ClientImportReviewDialog({
         const sn = sheetName && wb.SheetNames.includes(sheetName) ? sheetName : wb.SheetNames[0];
         const ws = sn ? wb.Sheets[sn] : undefined;
         if (!ws) {
-          if (!cancelled) setParseErr("Varaq topilmadi.");
+          if (!cancelled) setParseErr("Лист не найден.");
           return;
         }
         const matrix = XLSX.utils.sheet_to_json(ws, {
@@ -128,7 +128,7 @@ export function ClientImportReviewDialog({
           setSortField(null);
         }
       } catch (e) {
-        if (!cancelled) setParseErr(e instanceof Error ? e.message : "Fayl o‘qilmadi");
+        if (!cancelled) setParseErr(e instanceof Error ? e.message : "Не удалось прочитать файл");
       }
     })();
     return () => {
@@ -209,18 +209,18 @@ export function ClientImportReviewDialog({
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
             <h3 id="client-import-review-title" className="text-lg font-bold text-foreground">
-              Import tekshiruvi
+              Проверка импорта
             </h3>
             <p className="text-xs text-muted-foreground">
-              Qabul: {decisionPreview?.validCount ?? 0} · Xato:{" "}
-              {(decisionPreview?.errorCount ?? 0) + (decisionPreview?.duplicateCount ?? 0)} · Ko‘rsatilgan:{" "}
+              Принято: {decisionPreview?.validCount ?? 0} · Ошибок:{" "}
+              {(decisionPreview?.errorCount ?? 0) + (decisionPreview?.duplicateCount ?? 0)} · Показано:{" "}
               {filtered.length}
             </p>
           </div>
           <button
             type="button"
             className="rounded-lg p-1 hover:bg-muted"
-            aria-label="Yopish"
+            aria-label="Закрыть"
             onClick={() => onOpenChange(false)}
           >
             <X className="h-5 w-5 text-muted-foreground" />
@@ -251,7 +251,7 @@ export function ClientImportReviewDialog({
                     });
                   }}
                 >
-                  <option value="">Hammasi</option>
+                  <option value="">Все</option>
                   {(cascadeOptions.opts[key] ?? []).map((o) => (
                     <option key={o} value={o}>
                       {o}
@@ -271,7 +271,7 @@ export function ClientImportReviewDialog({
               <thead className="sticky top-0 z-10 bg-muted/95">
                 <tr>
                   <th className="border-b border-border px-2 py-2 font-semibold">#</th>
-                  <th className="border-b border-border px-2 py-2 font-semibold">Holat</th>
+                  <th className="border-b border-border px-2 py-2 font-semibold">Статус</th>
                   {mappedKeys.map((key) => {
                     const hasErr = errorFieldSet.has(key);
                     const active = sortField === key && errorSort !== "none";
@@ -286,7 +286,7 @@ export function ClientImportReviewDialog({
                         <button
                           type="button"
                           className="inline-flex items-center gap-1"
-                          title="Faqat shu ustundagi xatolarni tartiblash"
+                          title="Сортировать по ошибкам в этом столбце"
                           onClick={() => cycleErrorSort(key)}
                         >
                           <span>{fieldLabel(key)}</span>
@@ -301,7 +301,7 @@ export function ClientImportReviewDialog({
                       </th>
                     );
                   })}
-                  <th className="border-b border-border px-2 py-2 font-semibold">Xato</th>
+                  <th className="border-b border-border px-2 py-2 font-semibold">Ошибка</th>
                 </tr>
               </thead>
               <tbody>
@@ -318,9 +318,9 @@ export function ClientImportReviewDialog({
                       {r.status === "ok" ? (
                         <span className="text-emerald-700">OK</span>
                       ) : r.status === "duplicate" ? (
-                        <span className="font-medium text-red-700">Dublikat</span>
+                        <span className="font-medium text-red-700">Дубликат</span>
                       ) : (
-                        <span className="font-medium text-red-700">Xato</span>
+                        <span className="font-medium text-red-700">Ошибка</span>
                       )}
                     </td>
                     {mappedKeys.map((key) => (

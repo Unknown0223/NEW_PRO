@@ -195,7 +195,7 @@ export function StockByDateWorkspace({ tenantSlug }: { tenantSlug: string }) {
 
   return (
     <PageShell>
-      <PageHeader title="Остатки на определенную дату" description="Historical warehouse snapshot на выбранную дату." />
+      <PageHeader title="Остатки на определенную дату" description="Исторический срез остатков склада на выбранную дату." />
 
       <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">
         <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">

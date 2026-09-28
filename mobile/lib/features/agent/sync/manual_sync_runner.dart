@@ -41,7 +41,7 @@ Future<void> startManualSyncWithContainer(
     if (!policy.allowed) {
       final slot = container.read(sessionProvider).user?.workSlotCode?.trim();
       final base = policy.denialMessage ?? 'Синхронизация недоступна';
-      final msg = (slot != null && slot.isNotEmpty) ? '$base · Slot: $slot' : base;
+      final msg = (slot != null && slot.isNotEmpty) ? '$base · Рабочее место: $slot' : base;
       if (kDebugMode) {
         debugPrint('startManualSync denied: $msg');
       }
@@ -72,7 +72,7 @@ Future<void> startPhotoSyncWithContainer(ProviderContainer container) async {
   try {
     final slug = container.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
-      _showSyncSnack('Нет tenant', color: AppColors.error);
+      _showSyncSnack('Компания не выбрана', color: AppColors.error);
       return;
     }
     final pending = await AppDatabase().pendingPhotoReportCount();

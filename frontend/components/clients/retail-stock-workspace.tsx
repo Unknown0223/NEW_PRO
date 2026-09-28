@@ -215,7 +215,7 @@ export function RetailStockWorkspace() {
     <PageShell>
       <PageHeader
         title="Остатки в торговых точках"
-        description="Retail stock monitoring, shelf presence control, sell-through analytics"
+        description="Мониторинг остатков в рознице, контроль присутствия на полке, аналитика продаж"
       />
 
       <div className="grid gap-3 md:grid-cols-2">

@@ -65,7 +65,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     const d = job.data as ImportClientsXlsxJobData;
     const fp = d.file_path;
     if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
-      throw new Error("Noto‘g‘ri import fayl yo‘li");
+      throw new Error("Неверный путь к файлу импорта");
     }
     try {
       const buf = await readFile(fp);
@@ -93,7 +93,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     const d = job.data as ImportStockXlsxJobData;
     const fp = d.file_path;
     if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
-      throw new Error("Noto‘g‘ri import fayl yo‘li");
+      throw new Error("Неверный путь к файлу импорта");
     }
     try {
       const buf = await readFile(fp);
@@ -116,7 +116,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     const d = job.data as ImportProductsXlsxJobData;
     const fp = d.file_path;
     if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
-      throw new Error("Noto‘g‘ri import fayl yo‘li");
+      throw new Error("Неверный путь к файлу импорта");
     }
     const actor = d.actor_user_id ?? null;
     try {
@@ -137,7 +137,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     const d = job.data as ImportProductPricesXlsxJobData;
     const fp = d.file_path;
     if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
-      throw new Error("Noto‘g‘ri import fayl yo‘li");
+      throw new Error("Неверный путь к файлу импорта");
     }
     try {
       const buf = await readFile(fp);
@@ -159,7 +159,7 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     };
     const fp = d.file_path;
     if (typeof fp !== "string" || !fp || !isSafeImportTempPath(fp)) {
-      throw new Error("Noto‘g‘ri import fayl yo‘li");
+      throw new Error("Неверный путь к файлу импорта");
     }
     try {
       const buf = await readFile(fp);
@@ -197,5 +197,5 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     return { ok: true, kind: "cleanup_old_logs", at: new Date().toISOString() };
   }
 
-  throw new Error(`Noma’lum job: ${job.name}`);
+  throw new Error(`Неизвестная задача: ${job.name}`);
 }

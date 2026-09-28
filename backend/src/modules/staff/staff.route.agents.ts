@@ -301,7 +301,7 @@ export async function registerStaffAgentRoutes(app: FastifyInstance) {
             request,
             409,
             "WorkplaceOnSlot",
-            "Workplace fields are managed on the work slot. Open Рабочее место → Конфигурация."
+            "Поля рабочего места редактируются в рабочем месте. Откройте «Рабочее место → Конфигурация»."
           );
         }
         if (msg === "BAD_MOBILE_CONFIG_SYNC_WINDOW") {

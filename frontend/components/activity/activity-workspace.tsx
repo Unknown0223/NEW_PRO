@@ -302,7 +302,7 @@ export function ActivityWorkspace({ tenantSlug }: { tenantSlug: string }) {
                 <th className="px-3 py-2 font-medium">Кто</th>
                 <th className="px-3 py-2 font-medium">Объект</th>
                 <th className="px-3 py-2 font-medium">Действие</th>
-                <th className="px-3 py-2 font-medium">Payload</th>
+                <th className="px-3 py-2 font-medium">Данные</th>
               </tr>
             </thead>
             <tbody>

@@ -45,10 +45,10 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         if (msg === "CLIENT_CREATE_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Mijoz yaratish ruxsat etilmagan");
+          return sendApiError(reply, request, 403, "Forbidden", "Создание клиента запрещено");
         }
         if (msg === "CLIENT_LOCATION_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+          return sendApiError(reply, request, 403, "Forbidden", "Изменение координат запрещено");
         }
         if (msg === "AGENT_NOT_ON_SLOT") {
           return sendApiError(
@@ -56,7 +56,7 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz yaratish taqiqlangan (faqat qarz yig‘ish)."
+            "Агент не закреплён за рабочим местом — создание новых клиентов запрещено (только сбор долгов)."
           );
         }
         throw e;
@@ -101,10 +101,10 @@ export async function registerMobileAgentClientRoutes(app: FastifyInstance) {
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
         if (msg === "CLIENT_EDIT_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Mijozni tahrirlash ruxsat etilmagan");
+          return sendApiError(reply, request, 403, "Forbidden", "Редактирование клиента запрещено");
         }
         if (msg === "CLIENT_LOCATION_FORBIDDEN") {
-          return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+          return sendApiError(reply, request, 403, "Forbidden", "Изменение координат запрещено");
         }
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         throw e;

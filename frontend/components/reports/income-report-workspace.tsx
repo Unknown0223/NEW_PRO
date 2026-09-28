@@ -333,7 +333,7 @@ export function IncomeReportWorkspace() {
 
   return (
     <PageShell>
-      <PageHeader title="Отчёт по приходам" description="Касса bo‘yicha kirimlar hisobotlari" />
+      <PageHeader title="Отчёт по приходам" description="Отчёты по поступлениям в разрезе касс" />
       <Card className="shadow-panel">
         <CardContent className="space-y-2 p-3">
           <div className="flex flex-wrap items-center justify-end gap-2">

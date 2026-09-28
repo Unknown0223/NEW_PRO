@@ -61,7 +61,7 @@ export async function fetchExpeditorLoading520Preview(args: {
 }): Promise<ExpeditorLoading520Preview> {
   const { tenantSlug, orderIds, prefs } = args;
   if (orderIds.length === 0) {
-    throw new Error("Zakaz tanlanmagan.");
+    throw new Error("Заказ не выбран.");
   }
   try {
     const { data } = await api.post<{ pages: Array<{ loading520?: ExpeditorLoading520Preview }> }>(
@@ -74,10 +74,10 @@ export async function fetchExpeditorLoading520Preview(args: {
       }
     );
     const doc = data.pages[0]?.loading520;
-    if (!doc) throw new Error("Preview bo‘sh.");
+    if (!doc) throw new Error("Предпросмотр пуст.");
     return doc;
   } catch (e: unknown) {
-    throw new Error(getUserFacingError(e, "Ko‘rinishni yuklab bo‘lmadi."));
+    throw new Error(getUserFacingError(e, "Не удалось загрузить предпросмотр."));
   }
 }
 

@@ -48,7 +48,7 @@ export async function registerMobileProfileRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         if (msg === "AVATAR_TOO_LARGE") {
-          return sendApiError(reply, request, 400, "ValidationError", "Rasm juda katta");
+          return sendApiError(reply, request, 400, "ValidationError", "Изображение слишком большое");
         }
         throw e;
       }
@@ -73,7 +73,7 @@ export async function registerMobileProfileRoutes(app: FastifyInstance) {
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
         if (msg === "INVALID_OLD_PASSWORD") {
-          return sendApiError(reply, request, 400, "ValidationError", "Eski parol noto'g'ri");
+          return sendApiError(reply, request, 400, "ValidationError", "Неверный текущий пароль");
         }
         throw e;
       }

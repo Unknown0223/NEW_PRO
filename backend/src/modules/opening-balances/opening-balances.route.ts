@@ -223,7 +223,7 @@ export async function openingBalanceRoutes(app: FastifyInstance) {
           request,
           400,
           "ValidationError",
-          "Invalid request body",
+          "Некорректные данные запроса",
           zodValidationExtras(parsed.error)
         );
       }

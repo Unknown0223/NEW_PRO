@@ -42,9 +42,9 @@ export async function importClientsFromXlsx(
       percent: 100,
       processedRows: 0,
       totalRows: 0,
-      message: "Import fayli bo‘sh yoki juda kichik."
+      message: "Файл импорта пуст или слишком мал."
     });
-    return { created: 0, updated: 0, errors: ["Fayl bo‘sh yoki juda kichik."] };
+    return { created: 0, updated: 0, errors: ["Файл пуст или слишком мал."] };
   }
   if (raw[0] !== 0x50 || raw[1] !== 0x4b) {
     await emitClientImportProgress(opts?.onProgress, {
@@ -52,13 +52,13 @@ export async function importClientsFromXlsx(
       percent: 100,
       processedRows: 0,
       totalRows: 0,
-      message: "Noto‘g‘ri fayl formati."
+      message: "Неверный формат файла."
     });
     return {
       created: 0,
       updated: 0,
       errors: [
-        "Bu fayl standart .xlsx (zip) ko‘rinishida emas. Ehtimol .xls yoki boshqa dastur eksporti. Excelda «Fayl → Saqlash tur» dan .xlsx tanlang."
+        "Файл не является стандартным .xlsx (zip). Возможно, это .xls или выгрузка из другой программы. В Excel выберите «Файл → Сохранить как» и формат .xlsx."
       ]
     };
   }
@@ -87,14 +87,14 @@ export async function importClientsFromXlsx(
       percent: 100,
       processedRows: 0,
       totalRows: 0,
-      message: "XLSX o‘qilmadi."
+      message: "Не удалось прочитать XLSX."
     });
     return {
       created: 0,
       updated: 0,
       errors: [
-        "Fayl o‘qilmadi. Buzilgan .xlsx yoki noto‘g‘ri format. Excelda qayta saqlang (.xlsx) yoki loyiha shablonidan foydalaning.",
-        `Texnik: ${hint.slice(0, 200)}`
+        "Не удалось прочитать файл: повреждённый .xlsx или неверный формат. Пересохраните его в Excel (.xlsx) или используйте шаблон системы.",
+        `Техническая информация: ${hint.slice(0, 200)}`
       ]
     };
   }
@@ -105,9 +105,9 @@ export async function importClientsFromXlsx(
       percent: 100,
       processedRows: 0,
       totalRows: 0,
-      message: "Varaqlar topilmadi."
+      message: "Листы не найдены."
     });
-    return { created: 0, updated: 0, errors: ["Jadvalda varaq yo‘q."] };
+    return { created: 0, updated: 0, errors: ["В файле нет листов."] };
   }
 
   const resolveStarted = Date.now();
@@ -160,7 +160,7 @@ export async function importClientsFromXlsx(
         created: 0,
         updated: 0,
         errors: [
-          "Yangi import (importMode=create): xaritada «Наименование» (name) ustuni bo‘lishi kerak. Ixtiyoriy «ИД» — raqam (DB id) yoki matnli kod (ks_1652, g3_516…); berilsa shu bilan yaratiladi/yangilanadi."
+          "Новый импорт (importMode=create): в сопоставлении должен быть столбец «Наименование» (name). Необязательный «ИД» — число (ID в базе) или текстовый код (ks_1652, g3_516…); если указан, запись создаётся/обновляется по нему."
         ]
       };
     }
@@ -173,12 +173,12 @@ export async function importClientsFromXlsx(
       return {
         created: 0,
         updated: 0,
-        errors: [`Varaq topilmadi: «${wantSheet}». Mavjud: ${wb.SheetNames.join(", ")}.`]
+        errors: [`Лист не найден: «${wantSheet}». Доступные листы: ${wb.SheetNames.join(", ")}.`]
       };
     }
     const ws = sheetName ? wb.Sheets[sheetName] : undefined;
     if (!ws) {
-      return { created: 0, updated: 0, errors: ["Varaq o‘qilmadi."] };
+      return { created: 0, updated: 0, errors: ["Не удалось прочитать лист."] };
     }
     const rows = sheetToRowsMatrix(ws);
     let headerRowIdx =
@@ -189,13 +189,13 @@ export async function importClientsFromXlsx(
       return {
         created: 0,
         updated: 0,
-        errors: [`Sarlavha qatori noto‘g‘ri (0…${Math.max(0, rows.length - 1)}).`]
+        errors: [`Неверная строка заголовка (допустимо 0…${Math.max(0, rows.length - 1)}).`]
       };
     }
     const unknownHeaders = collectUnknownAssignmentHeaders(rows[headerRowIdx]);
     if (unknownHeaders.length > 0) {
       warnings.push(
-        `Import: agentga oid tanilmagan ustunlar topildi (${unknownHeaders.slice(0, 10).join(", ")}).`
+        `Импорт: найдены нераспознанные столбцы, относящиеся к агентам (${unknownHeaders.slice(0, 10).join(", ")}).`
       );
     }
     const totalRows = estimateImportTotalRows(rows, headerRowIdx);
@@ -288,10 +288,10 @@ export async function importClientsFromXlsx(
       created: 0,
       updated: 0,
       errors: [
-        `Hech bir varaqning dastlabki ${IMPORT_HEADER_SCAN_ROWS} qatorida majburiy ustun (наименование yoki ИД) topilmadi.`,
+        `Ни на одном листе в первых ${IMPORT_HEADER_SCAN_ROWS} строках не найден обязательный столбец (наименование или ИД).`,
         preview
-          ? `Birinchi varaq, 1-qator (namuna): ${preview}`
-          : "Birinchi varaq bo‘sh yoki o‘qilmadi."
+          ? `Первый лист, строка 1 (образец): ${preview}`
+          : "Первый лист пуст или не читается."
       ]
     };
   }
@@ -300,7 +300,7 @@ export async function importClientsFromXlsx(
   const unknownHeaders = collectUnknownAssignmentHeaders(rows[headerRowIdx]);
   if (unknownHeaders.length > 0) {
     warnings.push(
-      `Import: agentga oid tanilmagan ustunlar topildi (${unknownHeaders.slice(0, 10).join(", ")}).`
+      `Импорт: найдены нераспознанные столбцы, относящиеся к агентам (${unknownHeaders.slice(0, 10).join(", ")}).`
     );
   }
   const totalRows = estimateImportTotalRows(rows, headerRowIdx);

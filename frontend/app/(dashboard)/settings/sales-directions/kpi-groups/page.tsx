@@ -17,11 +17,11 @@ export default function KpiGroupsSettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Группа KPI</h1>
         <Link href="/settings/company" className="text-sm text-primary underline-offset-4 hover:underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
       <p className="text-sm text-muted-foreground">
-        Mahsulotlar va agentlar bilan bog‘lanadi; hisobot va KPI logikasida keyinroq ishlatish uchun ma’lumotlar bazasida saqlanadi.
+        Связывается с товарами и агентами; хранится в базе данных для дальнейшего использования в отчётах и логике KPI.
       </p>
       <KpiGroupsWorkspace tenantSlug={tenantSlug} />
     </div>

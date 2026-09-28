@@ -95,7 +95,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
         }
         out.add({
           'id': cid,
-          'name': raw['client_name']?.toString() ?? 'Mijoz #$cid',
+          'name': raw['client_name']?.toString() ?? 'Клиент #$cid',
           'client_code': raw['client_code'],
           'latitude': raw['latitude'],
           'longitude': raw['longitude'],
@@ -188,7 +188,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
     final id = client['id'];
     if (id is! int && id is! num) return;
     final clientId = (id as num).toInt();
-    final name = client['name']?.toString() ?? 'Mijoz';
+    final name = client['name']?.toString() ?? 'Клиент';
     final slug = ref.read(sessionProvider).tenantSlug ?? '';
 
     final block = await evaluateAgentOrderGuards(ref, clientId: clientId);
@@ -230,7 +230,7 @@ class _StartVisitScreenState extends ConsumerState<StartVisitScreen> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Vizit xato: ${e.message}'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Ошибка визита: ${e.message}'), backgroundColor: AppColors.error),
           );
         }
       } catch (e, st) {

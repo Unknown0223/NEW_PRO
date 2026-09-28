@@ -191,11 +191,11 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
       setMsg(null);
       setFieldErrs({});
       if (!form.label.trim()) {
-        setFieldErrs({ label: "Nom majburiy" });
+        setFieldErrs({ label: "Название обязательно" });
         return;
       }
       if (!form.role.trim()) {
-        setFieldErrs({ role: "Rolni tanlang" });
+        setFieldErrs({ role: "Выберите роль" });
         return;
       }
       try {
@@ -207,20 +207,20 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
             const per = firstMessagePerField(flat);
             setFieldErrs(per);
             const hint = firstValidationUserHint(flat);
-            setMsg(hint ? withApiSupportLine(hint, e) : getUserFacingError(e, "Saqlashda xatolik."));
+            setMsg(hint ? withApiSupportLine(hint, e) : getUserFacingError(e, "Ошибка при сохранении."));
             return;
           }
           const code = (e.response?.data as { error?: string } | undefined)?.error;
           if (code === "DuplicateLabel") {
-            setMsg("Bunday nom allaqachon mavjud.");
+            setMsg("Такое название уже существует.");
             return;
           }
           if (code === "BadRole") {
-            setFieldErrs({ role: "Noto‘g‘ri rol" });
+            setFieldErrs({ role: "Некорректная роль" });
             return;
           }
         }
-        setMsg(getUserFacingError(e, "Saqlashda xatolik."));
+        setMsg(getUserFacingError(e, "Ошибка при сохранении."));
       }
     })();
   }
@@ -233,8 +233,8 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
 
   const emptyMsg =
     tab === "active"
-      ? "Faol lavozim yo‘q — «Добавить» bilan qo‘shing."
-      : "Nofaol lavozim yo‘q.";
+      ? "Активных должностей нет — добавьте кнопкой «Добавить»."
+      : "Неактивных должностей нет.";
 
   return (
     <div className="space-y-4">
@@ -274,7 +274,7 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            aria-label="Rol filtri"
+            aria-label="Фильтр по роли"
           >
             <option value="">Все роли</option>
             {POSITION_CATALOG_ROLE_OPTIONS.map((o) => (
@@ -296,7 +296,7 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
           <DialogHeader>
             <DialogTitle>{editId ? "Изменить" : "Добавить"}</DialogTitle>
             <DialogDescription>
-              Lavozim nomi xodim kartasida saqlanadi; rol — tizim `User.role` bilan bog‘lanadi.
+              Название должности сохраняется в карточке сотрудника; роль связана с системной ролью пользователя.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -398,7 +398,7 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
                 <th className="px-3 py-2.5">Сортировка</th>
                 <th className="px-3 py-2.5">Код</th>
                 <th className="px-3 py-2.5">Комментарий</th>
-                <th className="px-3 py-2.5 text-center" title="Xodimlar soni">
+                <th className="px-3 py-2.5 text-center" title="Количество сотрудников">
                   Связь
                 </th>
                 <th className="w-24 px-2 py-2.5 text-center">Действия</th>
@@ -451,7 +451,7 @@ export function WebStaffPositionPresetsWorkspace({ tenantSlug }: Props) {
                           onClick={() =>
                             void toggleMut
                               .mutateAsync({ id: r.id, is_active: !r.is_active })
-                              .catch((e) => setBanner(getUserFacingError(e, "Xatolik.")))
+                              .catch((e) => setBanner(getUserFacingError(e, "Ошибка.")))
                           }
                         >
                           {r.is_active ? "Выкл" : "Вкл"}

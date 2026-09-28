@@ -62,7 +62,7 @@ export async function registerGeoBoundaryRoutes(app: FastifyInstance) {
           conflicts: e.conflicts
         });
       }
-      const msg = e instanceof Error ? e.message : "Save failed";
+      const msg = e instanceof Error ? e.message : "Не удалось сохранить";
       return sendApiError(reply, request, 400, "GeoBoundarySaveFailed", msg);
     }
   });
@@ -70,7 +70,7 @@ export async function registerGeoBoundaryRoutes(app: FastifyInstance) {
   app.delete("/api/:slug/geo-boundaries/:id", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const id = String((request.params as { id: string }).id ?? "").trim();
-    if (!id) return sendApiError(reply, request, 400, "ValidationError", "id required");
+    if (!id) return sendApiError(reply, request, 400, "ValidationError", "Требуется id");
     try {
       await deleteGeoBoundary(request.tenant!.id, id, actorUserIdOrNull(request));
       return reply.send({ ok: true });
@@ -85,7 +85,7 @@ export async function registerGeoBoundaryRoutes(app: FastifyInstance) {
   app.post("/api/:slug/geo-boundaries/:id/restore", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const id = String((request.params as { id: string }).id ?? "").trim();
-    if (!id) return sendApiError(reply, request, 400, "ValidationError", "id required");
+    if (!id) return sendApiError(reply, request, 400, "ValidationError", "Требуется id");
     try {
       await restoreGeoBoundary(request.tenant!.id, id, actorUserIdOrNull(request));
       return reply.send({ ok: true });
@@ -100,12 +100,12 @@ export async function registerGeoBoundaryRoutes(app: FastifyInstance) {
   app.post("/api/:slug/geo-boundaries/:id/assign-clients", { preHandler }, async (request, reply) => {
     if (!ensureTenantContext(request, reply)) return;
     const id = String((request.params as { id: string }).id ?? "").trim();
-    if (!id) return sendApiError(reply, request, 400, "ValidationError", "id required");
+    if (!id) return sendApiError(reply, request, 400, "ValidationError", "Требуется id");
     try {
       const updated = await assignClientsInBoundaryById(request.tenant!.id, id);
       return reply.send({ updated });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Assign failed";
+      const msg = e instanceof Error ? e.message : "Не удалось привязать клиентов";
       return sendApiError(reply, request, 400, "GeoBoundaryAssignFailed", msg);
     }
   });

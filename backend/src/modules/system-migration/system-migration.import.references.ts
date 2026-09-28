@@ -58,7 +58,7 @@ export async function importReferenceTables(
     ]);
 
   if (!warehouses.length && !users.length && !clients.length) {
-    warnings.push("data/warehouses|users|clients.json yo‘q — operatsion import o‘tkazib yuboriladi.");
+    warnings.push("Нет data/warehouses|users|clients.json — операционный импорт будет пропущен.");
     return { maps, counts, warnings };
   }
 
@@ -373,7 +373,7 @@ export async function importReferenceTables(
           });
         } else if (existingByName && !existing) {
           warnings.push(
-            `product name skip: «${productName}» already exists as SKU ${existingByName.sku} (incoming SKU ${sku || "—"})`
+            `Товар пропущен: «${productName}» уже существует с SKU ${existingByName.sku} (входящий SKU ${sku || "—"})`
           );
         }
         maps.product.set(oldId, resolved.id);
@@ -395,7 +395,7 @@ export async function importReferenceTables(
       const warehouseId = remapId(maps.warehouse, data.warehouse_id);
       const productId = remapId(maps.product, data.product_id);
       if (warehouseId == null || productId == null) {
-        warnings.push(`Stock qatori o‘tkazib yuborildi (warehouse/product map yo‘q).`);
+        warnings.push(`Строка остатков пропущена (нет соответствия склада/товара).`);
         continue;
       }
       if (conflictPolicy === "keep") {

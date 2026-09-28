@@ -91,7 +91,7 @@ export default function BonusStackHubPage() {
     <PageShell>
       <PageHeader
         title="Бонусы и скидки"
-        description="Настройка bonus stack и разделы правил."
+        description="Настройка наложения бонусов и разделы правил."
         actions={
           <Link href="/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
             Каталог
@@ -104,7 +104,7 @@ export default function BonusStackHubPage() {
           <div className="flex items-start gap-3">
             <Settings className="mt-0.5 size-5 text-muted-foreground" />
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-medium">Bonus stack тенанта</h3>
+              <h3 className="text-sm font-medium">Наложение бонусов компании</h3>
               {stackQ.isLoading ? (
                 <p className="mt-1 text-sm text-muted-foreground">Загрузка…</p>
               ) : stackQ.isError ? (
@@ -126,7 +126,7 @@ export default function BonusStackHubPage() {
                 </dl>
               )}
               <p className="mt-3 text-xs text-muted-foreground">
-                Изменить stack можно через API{" "}
+                Изменить настройки наложения можно через API{" "}
                 <code className="rounded bg-muted px-1">PATCH /settings/bonus-stack</code>. Именные группы
                 бонусов/скидок — в разделе{" "}
                 <Link href="/settings/bonus-strategies" className="underline hover:text-foreground">

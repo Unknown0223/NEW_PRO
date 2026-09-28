@@ -76,7 +76,7 @@ export function StaffFaceReferencePanel({
       invalidateStaffFaceAvatarCache(tenantSlug, userId);
       setTick((t) => t + 1);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Yuklash xatosi");
+      setErr(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -86,7 +86,7 @@ export function StaffFaceReferencePanel({
   async function onDelete() {
     const ok = await confirm({
       title: "Удалить",
-      message: "Etalon yuz rasmini o‘chirishni tasdiqlaysizmi?",
+      message: "Удалить эталонное фото лица?",
       confirmLabel: "Да",
       cancelLabel: "Нет",
       destructive: true
@@ -99,7 +99,7 @@ export function StaffFaceReferencePanel({
       invalidateStaffFaceAvatarCache(tenantSlug, userId);
       setTick((t) => t + 1);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "O‘chirish xatosi");
+      setErr(e instanceof Error ? e.message : "Ошибка удаления");
     } finally {
       setBusy(false);
     }
@@ -112,7 +112,7 @@ export function StaffFaceReferencePanel({
           <Camera className="h-8 w-8 opacity-50" />
         </div>
         <p className="text-xs text-muted-foreground">
-          Etalon yuz rasmi — xodim saqlangandan keyin yuklanadi.
+          Эталонное фото лица можно загрузить после сохранения сотрудника.
         </p>
       </div>
     );
@@ -124,21 +124,21 @@ export function StaffFaceReferencePanel({
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-gradient-to-b from-slate-50 to-white px-4 py-5">
       <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
         <Camera className="h-4 w-4 text-teal-700" />
-        Foto profil
+        Фото профиля
       </div>
       <div key={tick} className="relative">
         <StaffFaceAvatar
           tenantSlug={tenantSlug}
           userId={userId}
           initials={initialsFromName(displayName)}
-          alt="Etalon yuz"
+          alt="Эталонное фото лица"
           size="xl"
           hasPhoto={hasPhoto}
           className="border-[3px] border-teal-100 shadow-md"
         />
       </div>
       <p className="max-w-sm text-center text-xs text-muted-foreground">
-        Bu rasm akkauntga birikadi. Mobil selfie faqat shu rasm bilan solishtiriladi.
+        Фото привязывается к учётной записи. Селфи в мобильном приложении сверяется только с ним.
       </p>
       <div className="flex flex-wrap items-center justify-center gap-2">
         <input
@@ -156,18 +156,18 @@ export function StaffFaceReferencePanel({
           onClick={() => inputRef.current?.click()}
         >
           <Upload className="mr-1.5 h-3.5 w-3.5" />
-          {hasPhoto ? "Almashtirish" : "Yuklash"}
+          {hasPhoto ? "Заменить" : "Загрузить"}
         </Button>
         {hasPhoto ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void onDelete()}>
             <Trash2 className="mr-1.5 h-3.5 w-3.5 text-destructive" />
-            O‘chirish
+            Удалить
           </Button>
         ) : null}
       </div>
       {meta?.uploaded_at ? (
         <span className="text-[11px] text-muted-foreground">
-          Yuklangan: {new Date(meta.uploaded_at).toLocaleString()}
+          Загружено: {new Date(meta.uploaded_at).toLocaleString()}
         </span>
       ) : null}
       {err ? <p className="text-xs text-destructive">{err}</p> : null}

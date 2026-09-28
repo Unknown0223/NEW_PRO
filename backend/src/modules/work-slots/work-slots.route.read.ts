@@ -263,12 +263,12 @@ export async function registerWorkSlotListRoutes(app: FastifyInstance) {
     const fromRaw = q.date_from?.trim();
     const toRaw = q.date_to?.trim();
     if (!fromRaw || !toRaw) {
-      return sendApiError(reply, request, 400, "ValidationError", "date_from and date_to required");
+      return sendApiError(reply, request, 400, "ValidationError", "Требуются date_from и date_to");
     }
     const dateFrom = new Date(fromRaw);
     const dateTo = new Date(toRaw);
     if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime())) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid date");
+      return sendApiError(reply, request, 400, "ValidationError", "Неверная дата");
     }
     try {
       const data = await getWorkSlotActivityReport(request.tenant!.id, {

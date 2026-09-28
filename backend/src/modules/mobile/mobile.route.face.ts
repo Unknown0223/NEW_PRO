@@ -100,10 +100,10 @@ export async function registerMobileFaceRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "IMAGE_TOO_LARGE" || msg === "IMAGE_TOO_SMALL") {
-          return sendApiError(reply, request, 400, "ValidationError", "Rasm hajmi noto‘g‘ri");
+          return sendApiError(reply, request, 400, "ValidationError", "Некорректный размер изображения");
         }
         if (msg === "FACE_IMAGE_BLANK") {
-          return sendApiError(reply, request, 400, "ValidationError", "Rasmda yuz aniq emas — qayta oling");
+          return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое — сделайте снимок заново");
         }
         throw e;
       }
@@ -137,13 +137,13 @@ export async function registerMobileFaceRoutes(app: FastifyInstance) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "IMAGE_TOO_LARGE" || msg === "IMAGE_TOO_SMALL") {
-          return sendApiError(reply, request, 400, "ValidationError", "Rasm hajmi noto‘g‘ri");
+          return sendApiError(reply, request, 400, "ValidationError", "Некорректный размер изображения");
         }
         if (msg === "REFERENCE_MISSING") {
-          return sendApiError(reply, request, 400, "ValidationError", "Etalon rasm yo‘q — avval yuklang");
+          return sendApiError(reply, request, 400, "ValidationError", "Нет эталонного фото — сначала загрузите его");
         }
         if (msg === "FACE_IMAGE_BLANK") {
-          return sendApiError(reply, request, 400, "ValidationError", "Rasmda yuz aniq emas — qayta oling");
+          return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое — сделайте снимок заново");
         }
         throw e;
       }

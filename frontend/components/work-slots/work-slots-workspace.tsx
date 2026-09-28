@@ -379,7 +379,7 @@ export function WorkSlotsWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent_id: agentId, lock_after: false })
       });
-      setToast("Agent tasdiqlandi");
+      setToast("Агент подтверждён");
       await load();
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Не удалось подтвердить", "error");
@@ -496,7 +496,7 @@ export function WorkSlotsWorkspace() {
       a.download = "work-slots.xlsx";
       a.click();
       URL.revokeObjectURL(url);
-      setToast("Excel eksport yuklandi");
+      setToast("Экспорт в Excel скачан");
     } catch {
       setToast("Ошибка экспорта", "error");
     }
@@ -515,8 +515,8 @@ export function WorkSlotsWorkspace() {
         });
         const r = data.data;
         setToast(
-          `Import: +${r.created} yangi, ${r.updated} yangilandi, ${r.assigned} biriktirish` +
-            (r.errors.length ? `; ${r.errors.length} xato` : "")
+          `Импорт: +${r.created} новых, ${r.updated} обновлено, ${r.assigned} закреплений` +
+            (r.errors.length ? `; ошибок: ${r.errors.length}` : "")
         );
         void load();
       } catch {
@@ -532,7 +532,7 @@ export function WorkSlotsWorkspace() {
   if (!tenant) {
     return (
       <p className="text-sm text-destructive">
-        Tenant не определён. Выйдите и войдите снова или обновите страницу.
+        Организация не определена. Выйдите и войдите снова или обновите страницу.
       </p>
     );
   }
@@ -638,15 +638,15 @@ export function WorkSlotsWorkspace() {
       {pending.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Agent tanlash kutilmoqda</CardTitle>
+            <CardTitle className="text-base">Ожидают выбора агента</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Mijoz</TableHead>
-                  <TableHead>Slot</TableHead>
-                  <TableHead>Agent</TableHead>
+                  <TableHead>Клиент</TableHead>
+                  <TableHead>Слот</TableHead>
+                  <TableHead>Агент</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -667,7 +667,7 @@ export function WorkSlotsWorkspace() {
                         }
                       >
                         <SelectTrigger className="h-8 w-48">
-                          <SelectValue placeholder="Tanlash..." />
+                          <SelectValue placeholder="Выберите..." />
                         </SelectTrigger>
                         <SelectContent>
                           {agents.map((a) => (
@@ -686,7 +686,7 @@ export function WorkSlotsWorkspace() {
                         disabled={resolvingId === p.id}
                         onClick={() => void resolvePending(p.id)}
                       >
-                        {resolvingId === p.id ? "..." : "Tasdiqlash"}
+                        {resolvingId === p.id ? "..." : "Подтвердить"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -799,7 +799,7 @@ export function WorkSlotsWorkspace() {
         defaultSlotType={filterApplied.slotType}
         defaultBranchCodes={filterApplied.branchList}
         onCreated={() => {
-          setToast("Slot yaratildi");
+          setToast("Рабочее место создано");
           void load();
         }}
       />
@@ -858,7 +858,7 @@ export function WorkSlotsWorkspace() {
         tenant={tenant}
         slotId={assignSlotId}
         onAssigned={() => {
-          setToast("Xodim biriktirildi");
+          setToast("Сотрудник закреплён");
           void load();
         }}
       />

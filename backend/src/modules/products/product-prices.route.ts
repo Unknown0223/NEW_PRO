@@ -83,7 +83,7 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const productId = Number.parseInt(q.product_id ?? "", 10);
       if (Number.isNaN(productId)) {
-        return sendApiError(reply, request, 400, "BadQuery", "product_id majburiy");
+        return sendApiError(reply, request, 400, "BadQuery", "Требуется product_id");
       }
       const priceType = (q.price_type ?? "retail").trim() || "retail";
       const product = await prisma.product.findFirst({
@@ -117,7 +117,7 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
           request,
           400,
           "BadQuery",
-          "category_id yoki category_ids va price_type majburiy"
+          "Требуются category_id или category_ids и price_type"
         );
       }
       try {
@@ -161,7 +161,7 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
             : null;
       const effectiveAt = parsed.data.effective_at ? new Date(parsed.data.effective_at) : null;
       if (effectiveAt != null && Number.isNaN(effectiveAt.getTime())) {
-        return sendApiError(reply, request, 400, "ValidationError", "effective_at noto‘g‘ri");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный effective_at");
       }
       try {
         const result = await saveMatrixPrices(
@@ -275,7 +275,7 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
           queue,
           jobId,
           message:
-            "Worker ishga tushgan bo‘lsa, natija uchun GET /api/:slug/jobs/{jobId} ni so‘rang (bir xil JWT)."
+            "Если worker запущен, результат можно получить через GET /api/:slug/jobs/{jobId} (тот же JWT)."
         });
       } catch (err) {
         if (tempPath) {
@@ -287,7 +287,7 @@ export async function registerProductPriceRoutes(app: FastifyInstance) {
           request,
           503,
           "JobQueueUnavailable",
-          "Redis yoki navbat mavjud emas. Worker va REDIS_URL ni tekshiring."
+          "Redis или очередь задач недоступны. Проверьте worker и REDIS_URL."
         );
       }
     }

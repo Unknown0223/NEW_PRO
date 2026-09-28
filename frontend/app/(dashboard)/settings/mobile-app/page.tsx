@@ -207,11 +207,11 @@ export default function MobileAppSettingsPage() {
     mutationFn: async () => {
       if (forceUpdate) {
         const ok = await confirm({
-          title: "Majburiy yangilash",
-          message: "Eski versiyadagi agentlar login qila olmaydi, ilovani yangilash majburiy bo‘ladi.",
+          title: "Принудительное обновление",
+          message: "Агенты со старой версией не смогут войти — обновление приложения станет обязательным.",
           detail:
-            "APK serverda bo‘lmasa yangilash 404 bilan yopiladi. O‘chirish shart emas — kalit mos bo‘lsa ilova ichida yangilanadi. Davom etasizmi?",
-          confirmLabel: "Ha",
+            "Если APK нет на сервере, обновление завершится ошибкой 404. Удалять приложение не нужно — при совпадении ключа подписи оно обновится изнутри. Продолжить?",
+          confirmLabel: "Да",
           cancelLabel: "Нет",
           destructive: false
         });
@@ -235,8 +235,8 @@ export default function MobileAppSettingsPage() {
       setMsgTone("ok");
       setMsg(
         forceUpdate
-          ? "Saqlandi — past versiyalar loginni yangilashsiz ocholmaydi"
-          : "Saqlandi — ixtiyoriy yangilash: «Обновить» yoki «Позже», o‘chirish shart emas"
+          ? "Сохранено — старые версии не смогут войти без обновления"
+          : "Сохранено — необязательное обновление: «Обновить» или «Позже», удалять приложение не нужно"
       );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     },
@@ -281,12 +281,12 @@ export default function MobileAppSettingsPage() {
       if (body.policy.release_notes) {
         setReleaseNotes(body.policy.release_notes);
       } else if (body.policy.latest_version) {
-        setReleaseNotes(`Production yangilash ${body.policy.latest_version}`);
+        setReleaseNotes(`Обновление ${body.policy.latest_version}`);
       }
       setMsgTone("ok");
       setMsg(
-        `APK tayyor (${formatMb(body.bytes)}). Versiya ${body.policy.latest_version ?? "—"}. ` +
-          "Majburiy yangilash yoqilmadi — agentlar ilovani o‘chirmasdan, ichida «Обновить» bilan yangilaydi."
+        `APK готов (${formatMb(body.bytes)}). Версия ${body.policy.latest_version ?? "—"}. ` +
+          "Принудительное обновление не включено — агенты обновят приложение изнутри кнопкой «Обновить», без удаления."
       );
       void qc.invalidateQueries({ queryKey: ["settings", "mobile-app-release", tenantSlug] });
     } catch (e) {
@@ -311,8 +311,8 @@ export default function MobileAppSettingsPage() {
       setMsgTone("ok");
       setMsg(
         r.fcm_configured
-          ? `Push yuborildi: ${r.tokens_sent} token (${r.users} foydalanuvchi)`
-          : `FCM sozlanmagan — agentlar ilovani ochganda baribir yangilash dialogi chiqadi (${r.users} ta)`
+          ? `Push-уведомление отправлено: токенов — ${r.tokens_sent}, пользователей — ${r.users}`
+          : `FCM не настроен — при открытии приложения агенты всё равно увидят окно обновления (пользователей: ${r.users})`
       );
     },
     onError: (e) => {
@@ -323,7 +323,7 @@ export default function MobileAppSettingsPage() {
 
   if (!hydrated) return null;
   if (!isAdmin) {
-    return <p className="text-sm text-muted-foreground">Faqat administrator uchun.</p>;
+    return <p className="text-sm text-muted-foreground">Только для администратора.</p>;
   }
 
   const apkReady = data?.apk?.ready === true;
@@ -335,14 +335,14 @@ export default function MobileAppSettingsPage() {
   return (
     <div className="w-full space-y-6 pb-10">
       <PageHeader
-        title="Mobil ilova — serverdan yangilash"
-        description="Yangi APK ni serverga yuklang. Agentlar ilovani ochganda ichida yangilanadi — o‘chirish shart emas (imzo kaliti mos bo‘lsa PIN/kesh saqlanadi). «Majburiy yangilash» ni faqat APK tayyor bo‘lganda yoqing."
+        title="Мобильное приложение — обновление с сервера"
+        description="Загрузите новый APK на сервер. Агенты получат обновление внутри приложения при его открытии — удалять не нужно (при совпадении ключа подписи PIN и кеш сохраняются). Включайте «Принудительное обновление» только когда APK готов."
       />
 
       {isLoading ? (
         <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-4 py-8 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Yuklanmoqda…
+          Загрузка…
         </div>
       ) : (
         <>
@@ -353,41 +353,41 @@ export default function MobileAppSettingsPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Smartphone className="h-4 w-4 text-muted-foreground" />
-                    Holat
+                    Статус
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    Hozirgi OTA (over-the-air) yangilash holati — bir qarashda
+                    Текущее состояние OTA-обновления (по воздуху) — кратко
                   </CardDescription>
                 </div>
                 <Badge variant={statusOk ? "success" : apkReady ? "warning" : "destructive"} className="px-2.5 py-1 text-[11px]">
-                  {statusOk ? "OTA tayyor" : apkReady ? "APK bor" : "APK yo‘q"}
+                  {statusOk ? "OTA готово" : apkReady ? "APK есть" : "APK нет"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <StatTile
-                  label="Oxirgi versiya"
+                  label="Последняя версия"
                   value={latest || "—"}
-                  hint="Agentlarga taklif qilinadigan"
+                  hint="Предлагается агентам"
                   tone={latest ? "ok" : "warn"}
                 />
                 <StatTile
-                  label="Minimal versiya"
+                  label="Минимальная версия"
                   value={minVersion || data?.policy.min_version || "—"}
-                  hint="Bundan past — blok"
+                  hint="Ниже — блокировка"
                   tone="default"
                 />
                 <StatTile
-                  label="APK fayli"
-                  value={apkReady ? formatMb(data?.apk?.bytes) : "Yo‘q"}
-                  hint={apkReady ? `Yuklangan: ${formatWhen(data?.apk?.mtime_ms)}` : "Avval APK yuklang"}
+                  label="Файл APK"
+                  value={apkReady ? formatMb(data?.apk?.bytes) : "Нет"}
+                  hint={apkReady ? `Загружен: ${formatWhen(data?.apk?.mtime_ms)}` : "Сначала загрузите APK"}
                   tone={apkReady ? "ok" : "bad"}
                 />
                 <StatTile
-                  label="Eskirgan agentlar"
-                  value={`${outdatedCount} ta`}
-                  hint={forceUpdate ? "Majburiy yangilash yoqilgan" : "Majburiy yangilash o‘chirilgan"}
+                  label="Устаревшие агенты"
+                  value={`${outdatedCount}`}
+                  hint={forceUpdate ? "Принудительное обновление включено" : "Принудительное обновление выключено"}
                   tone={outdatedCount > 0 ? "warn" : "ok"}
                 />
               </div>
@@ -408,21 +408,21 @@ export default function MobileAppSettingsPage() {
                 <div className="min-w-0 space-y-1">
                   <p className="font-medium text-foreground">
                     {statusOk
-                      ? `Ilova ichida yangilash ishlaydi — ${latest} (o‘chirish shart emas)`
+                      ? `Обновление внутри приложения работает — ${latest} (удалять не нужно)`
                       : apkReady
-                        ? "APK bor. Saqlash + ixtiyoriy dialog yetarli; majburiy belgi loginni bloklaydi"
-                        : "APK serverda yo‘q — «Обновить» 404 beradi. Avval APK yuklang, majburiyni yoqmang"}
+                        ? "APK есть. Достаточно сохранить и показать необязательное окно; принудительный флаг блокирует вход"
+                        : "APK нет на сервере — «Обновить» вернёт 404. Сначала загрузите APK и не включайте принудительное обновление"}
                   </p>
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <p>
-                      <span className="font-medium text-foreground/80">Yuklash URL:</span>{" "}
+                      <span className="font-medium text-foreground/80">URL загрузки:</span>{" "}
                       <span className="break-all font-mono">{effectiveUrl || "—"}</span>
                     </p>
                     <p>
-                      <span className="font-medium text-foreground/80">Majburiy:</span>{" "}
+                      <span className="font-medium text-foreground/80">Принудительно:</span>{" "}
                       {forceUpdate
-                        ? "ha — past versiya loginni bloklaydi (APK bo‘lmasa tuzoq)"
-                        : "yo‘q — ixtiyoriy «Обновить» / «Позже», ilova o‘chirilmaydi"}
+                        ? "да — старая версия блокирует вход (без APK агент застрянет)"
+                        : "нет — необязательно «Обновить» / «Позже», приложение не удаляется"}
                     </p>
                   </div>
                 </div>
@@ -435,15 +435,15 @@ export default function MobileAppSettingsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileUp className="h-4 w-4 text-muted-foreground" />
-                APK yuklash
+                Загрузка APK
               </CardTitle>
               <CardDescription>
-                Release APK ni tanlang. Yuklangach URL va versiya avtomatik to‘ldiriladi.
+                Выберите релизный APK. После загрузки URL и версия заполнятся автоматически.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="download_url">Server APK URL</Label>
+                <Label htmlFor="download_url">URL APK на сервере</Label>
                 <Input
                   id="download_url"
                   placeholder="https://backend.../api/mobile/apk-download?slug=..."
@@ -452,7 +452,7 @@ export default function MobileAppSettingsPage() {
                   className="font-mono text-xs sm:text-sm"
                 />
                 <FieldHint>
-                  Odatda server o‘zi beradi. Qo‘lda o‘zgartirish shart emas — APK yuklash kifoya.
+                  Обычно сервер подставляет его сам. Менять вручную не нужно — достаточно загрузить APK.
                 </FieldHint>
               </div>
 
@@ -476,12 +476,12 @@ export default function MobileAppSettingsPage() {
                   {uploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Yuklanmoqda…
+                      Загрузка…
                     </>
                   ) : (
                     <>
                       <FileUp className="mr-2 h-4 w-4" />
-                      Yangi APK ni serverga yuklash
+                      Загрузить новый APK на сервер
                     </>
                   )}
                 </Button>
@@ -492,7 +492,7 @@ export default function MobileAppSettingsPage() {
                     onClick={() => window.open(effectiveUrl, "_blank", "noopener,noreferrer")}
                   >
                     <Download className="mr-2 h-4 w-4" />
-                    Yuklab olishni sinash
+                    Проверить скачивание
                     <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-60" />
                   </Button>
                 ) : null}
@@ -504,7 +504,7 @@ export default function MobileAppSettingsPage() {
                     <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-sm font-medium">
-                        Yuklanmoqda…{" "}
+                        Загрузка…{" "}
                         {uploadProgress != null ? `${Math.round(uploadProgress)}%` : ""}
                       </p>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -518,8 +518,8 @@ export default function MobileAppSettingsPage() {
                 </div>
               ) : (
                 <FieldHint>
-                  Agent «Обновить» bosadi — APK ilova ichida o‘rnatiladi. Redeploydan keyin APK ni qayta
-                  yuklash kerak bo‘lishi mumkin.
+                  Агент нажимает «Обновить» — APK устанавливается внутри приложения. После повторного развёртывания
+                  сервера APK может потребоваться загрузить заново.
                 </FieldHint>
               )}
             </CardContent>
@@ -528,32 +528,32 @@ export default function MobileAppSettingsPage() {
           {/* Versiya siyosati */}
           <Card className="hover:shadow-sm">
             <CardHeader>
-              <CardTitle>Versiya siyosati</CardTitle>
+              <CardTitle>Политика версий</CardTitle>
               <CardDescription>
-                Minimal — undan past bloklanadi. Oxirgi — yangilash dialogida ko‘rsatiladi.
+                Минимальная — всё, что ниже, блокируется. Последняя — показывается в окне обновления.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="min_version">Minimal versiya</Label>
+                  <Label htmlFor="min_version">Минимальная версия</Label>
                   <Input
                     id="min_version"
-                    placeholder="masalan: 3.1.0"
+                    placeholder="например: 3.1.0"
                     value={minVersion}
                     onChange={(e) => setMinVersion(e.target.value)}
                   />
-                  <FieldHint>Bundan past APK — majburiy yangilash / kirish cheklovi.</FieldHint>
+                  <FieldHint>APK ниже этой версии — принудительное обновление / ограничение входа.</FieldHint>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="latest_version">Oxirgi versiya (yangi ilova)</Label>
+                  <Label htmlFor="latest_version">Последняя версия (новое приложение)</Label>
                   <Input
                     id="latest_version"
-                    placeholder="masalan: 3.1.20"
+                    placeholder="например: 3.1.20"
                     value={latestVersion}
                     onChange={(e) => setLatestVersion(e.target.value)}
                   />
-                  <FieldHint>Serverdagi joriy release raqami (masalan 3.1.20).</FieldHint>
+                  <FieldHint>Текущий номер релиза на сервере (например, 3.1.20).</FieldHint>
                 </div>
               </div>
 
@@ -575,30 +575,30 @@ export default function MobileAppSettingsPage() {
                 />
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">Majburiy yangilash</span>
+                    <span className="text-sm font-medium">Принудительное обновление</span>
                     <Badge variant={forceUpdate ? "success" : "secondary"}>
-                      {forceUpdate ? "Yoqilgan" : "O‘chirilgan"}
+                      {forceUpdate ? "Включено" : "Выключено"}
                     </Badge>
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Yoqilsa: oxirgi versiyadan past APK loginni ochmaydi. APK serverda bo‘lmasa agent
-                    tuzoqda qoladi. O‘chirilsa (tavsiya): «Обновить» / «Позже» — ilovani o‘chirish
-                    shart emas, kalit mos bo‘lsa PIN saqlanadi.
+                    Если включено: APK ниже последней версии не пускает в систему. Если APK нет на сервере, агент
+                    застрянет. Если выключено (рекомендуется): «Обновить» / «Позже» — удалять приложение
+                    не нужно, при совпадении ключа PIN сохраняется.
                   </p>
                 </div>
               </label>
 
               <div className="space-y-2">
-                <Label htmlFor="release_notes">Reliz eslatmalari</Label>
+                <Label htmlFor="release_notes">Примечания к релизу</Label>
                 <textarea
                   id="release_notes"
                   rows={3}
                   className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="Agentlarga ko‘rinadigan qisqa matn…"
+                  placeholder="Короткий текст, который увидят агенты…"
                   value={releaseNotes}
                   onChange={(e) => setReleaseNotes(e.target.value)}
                 />
-                <FieldHint>Ilova yangilash oynasida ko‘rsatiladi.</FieldHint>
+                <FieldHint>Показывается в окне обновления приложения.</FieldHint>
               </div>
             </CardContent>
           </Card>
@@ -606,8 +606,8 @@ export default function MobileAppSettingsPage() {
           {/* Do‘kon havolalari */}
           <Card className="hover:shadow-sm">
             <CardHeader>
-              <CardTitle>Do‘kon havolalari</CardTitle>
-              <CardDescription>Ixtiyoriy. Hozircha asosan server OTA ishlatiladi.</CardDescription>
+              <CardTitle>Ссылки на магазины</CardTitle>
+              <CardDescription>Необязательно. Пока в основном используется серверное OTA-обновление.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -615,7 +615,7 @@ export default function MobileAppSettingsPage() {
                   <Label htmlFor="store_android">Google Play</Label>
                   <Input
                     id="store_android"
-                    placeholder="Bo‘sh qoldiring — server OTA"
+                    placeholder="Оставьте пустым — серверное OTA"
                     value={storeAndroid}
                     onChange={(e) => setStoreAndroid(e.target.value)}
                   />
@@ -624,7 +624,7 @@ export default function MobileAppSettingsPage() {
                   <Label htmlFor="store_ios">App Store</Label>
                   <Input
                     id="store_ios"
-                    placeholder="iOS uchun keyinroq"
+                    placeholder="Для iOS — позже"
                     value={storeIos}
                     onChange={(e) => setStoreIos(e.target.value)}
                   />
@@ -642,7 +642,7 @@ export default function MobileAppSettingsPage() {
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                Saqlash
+                Сохранить
               </Button>
               <Button
                 variant="outline"
@@ -654,7 +654,7 @@ export default function MobileAppSettingsPage() {
                 ) : (
                   <RefreshCw className="mr-2 h-4 w-4" />
                 )}
-                Eskirganlarga eslatma
+                Напомнить устаревшим
                 <Badge variant="secondary" className="ml-2">
                   {outdatedCount}
                 </Badge>
@@ -665,10 +665,10 @@ export default function MobileAppSettingsPage() {
                 size="sm"
                 onClick={() => void refetch()}
                 disabled={isFetching}
-                title="Hozir yangilash"
+                title="Обновить сейчас"
               >
                 <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />
-                Yangilash
+                Обновить
               </Button>
             </div>
             {msg ? (
@@ -690,27 +690,27 @@ export default function MobileAppSettingsPage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    Hodimlar — ilova versiyasi
+                    Сотрудники — версия приложения
                   </CardTitle>
                   <CardDescription className="mt-1">
-                    Har ~12 soniyada avtomatik yangilanadi. «Versiya noma’lum» — hali login/sync
-                    qilmagan.
+                    Обновляется автоматически каждые ~12 секунд. «Версия неизвестна» — сотрудник ещё не входил и не
+                    синхронизировался.
                     {dataUpdatedAt > 0 ? (
                       <>
                         {" "}
-                        Oxirgi yangilanish:{" "}
+                        Последнее обновление:{" "}
                         <span className="font-medium text-foreground/80">
                           {formatSync(new Date(dataUpdatedAt).toISOString())}
                         </span>
-                        {isFetching ? " · yangilanmoqda…" : null}
+                        {isFetching ? " · обновление…" : null}
                       </>
                     ) : null}
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{mobileUsers.length} ta</Badge>
+                  <Badge variant="outline">Всего: {mobileUsers.length}</Badge>
                   <Badge variant={outdatedCount > 0 ? "warning" : "success"}>
-                    eskirgan: {outdatedCount}
+                    устаревших: {outdatedCount}
                   </Badge>
                 </div>
               </div>
@@ -720,12 +720,12 @@ export default function MobileAppSettingsPage() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-[1] bg-muted/80 backdrop-blur-sm">
                     <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="px-4 py-2.5 font-medium">Ism / login</th>
-                      <th className="px-4 py-2.5 font-medium">Rol</th>
-                      <th className="px-4 py-2.5 font-medium">APK versiya</th>
-                      <th className="px-4 py-2.5 font-medium">Holat</th>
-                      <th className="px-4 py-2.5 font-medium">Qurilma</th>
-                      <th className="px-4 py-2.5 font-medium">Oxirgi sync</th>
+                      <th className="px-4 py-2.5 font-medium">Имя / логин</th>
+                      <th className="px-4 py-2.5 font-medium">Роль</th>
+                      <th className="px-4 py-2.5 font-medium">Версия APK</th>
+                      <th className="px-4 py-2.5 font-medium">Статус</th>
+                      <th className="px-4 py-2.5 font-medium">Устройство</th>
+                      <th className="px-4 py-2.5 font-medium">Последняя синхронизация</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -749,14 +749,14 @@ export default function MobileAppSettingsPage() {
                             {u.apk_version ? (
                               <span className="font-mono text-xs font-medium">{u.apk_version}</span>
                             ) : (
-                              <Badge variant="warning">noma’lum</Badge>
+                              <Badge variant="warning">неизвестна</Badge>
                             )}
                           </td>
                           <td className="px-4 py-2.5">
                             {outdated ? (
-                              <Badge variant="warning">yangilash kerak</Badge>
+                              <Badge variant="warning">нужно обновить</Badge>
                             ) : (
-                              <Badge variant="success">joriy</Badge>
+                              <Badge variant="success">актуальная</Badge>
                             )}
                           </td>
                           <td className="max-w-[10rem] truncate px-4 py-2.5 text-muted-foreground">
@@ -772,7 +772,7 @@ export default function MobileAppSettingsPage() {
                       <tr>
                         <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                           <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500/80" />
-                          Mobil kirishga ochiq hodimlar topilmadi
+                          Сотрудники с доступом к мобильному приложению не найдены
                         </td>
                       </tr>
                     ) : null}

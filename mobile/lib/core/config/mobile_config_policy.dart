@@ -37,7 +37,7 @@ SyncPolicyEvaluation evaluateSyncPolicy(SyncConfig sync) {
   if (sync.blockSync) {
     return const SyncPolicyEvaluation(
       allowed: false,
-      denialMessage: 'Sinxronizatsiya bloklangan',
+      denialMessage: 'Синхронизация заблокирована',
     );
   }
   // Vaqt oynasi qo‘yilgan bo‘lsa — qaror faqat serverdan langarlangan ishonchli
@@ -48,7 +48,7 @@ SyncPolicyEvaluation evaluateSyncPolicy(SyncConfig sync) {
   if (syncWindowConfigured(sync) && !ServerClock.instance.hasAnchor) {
     return const SyncPolicyEvaluation(
       allowed: false,
-      denialMessage: 'Vaqt server bilan tasdiqlanmagan. Internetga ulanib, qayta urinib ko‘ring.',
+      denialMessage: 'Время не подтверждено сервером. Подключитесь к интернету и попробуйте ещё раз.',
     );
   }
   if (!isSyncAllowedNow(sync)) {
@@ -100,5 +100,5 @@ String syncWindowMessage(SyncConfig sync) {
   final now = syncWindowClockNow();
   final hh = now.hour.toString().padLeft(2, '0');
   final mm = now.minute.toString().padLeft(2, '0');
-  return 'Sinxron faqat $from – $to oralig‘ida mumkin (hozir $hh:$mm, ish mintaqasi)';
+  return 'Синхронизация доступна только с $from до $to (сейчас $hh:$mm, рабочий часовой пояс)';
 }

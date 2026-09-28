@@ -39,7 +39,7 @@ export async function openBonusPickerForOrder(
   const wid = detail.warehouse_id;
   const agentId = detail.agent_id;
   if (!cid || !wid || !agentId) {
-    throw new Error("Zakazda klient, ombor yoki agent yo‘q.");
+    throw new Error("В заказе не указан клиент, склад или агент.");
   }
   const { data: preview } = await api.post<OrderBonusPreviewResponse>(
     `/api/${tenantSlug}/orders/bonus-preview`,
@@ -79,7 +79,7 @@ export function useBulkBonusGiftPicker(tenantSlug: string | null) {
         setPreview(packed.preview);
         setItems(packed.items);
       } catch (e) {
-        setError(getUserFacingError(e, "Bonus preview olinmadi."));
+        setError(getUserFacingError(e, "Не удалось получить предпросмотр бонуса."));
       } finally {
         setLoading(false);
       }
@@ -114,7 +114,7 @@ export function useBulkBonusGiftPicker(tenantSlug: string | null) {
         void qc.invalidateQueries({ queryKey: ["order", tenantSlug, orderId] });
         setOpen(false);
       } catch (e) {
-        setError(getUserFacingError(e, "Bonusni saqlab bo‘lmadi."));
+        setError(getUserFacingError(e, "Не удалось сохранить бонус."));
       } finally {
         setSaving(false);
       }

@@ -16,12 +16,13 @@ import { fetchSalesSnapshotCoverageBlock } from "./dashboard.sales.snapshot.cove
 import { fetchSalesSnapshotDebtBlock } from "./dashboard.sales.snapshot.debt";
 import { fetchSalesSnapshotOrdersBlock } from "./dashboard.sales.snapshot.orders";
 import { fetchSalesSnapshotProductBlock } from "./dashboard.sales.snapshot.products";
+import { fetchSalesSnapshotRiskBlock } from "./dashboard.sales.snapshot.risk";
 
 export async function getSalesDashboardSnapshot(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:v3:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:v6:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
@@ -42,6 +43,7 @@ export async function getSalesDashboardSnapshot(
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
   const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
   const debt_aging = await fetchSalesSnapshotDebtBlock(ctx);
+  const risk_zone = await fetchSalesSnapshotRiskBlock(ctx);
 
   const result: SalesDashboardSnapshot = {
     filters,
@@ -56,6 +58,7 @@ export async function getSalesDashboardSnapshot(
     refusal_reason_analytics: ordersBlock.refusal_reason_analytics,
     sales_dynamics: ordersBlock.sales_dynamics,
     akb_okb_block: coverageBlock.akb_okb_block,
+    risk_zone,
     territory_analytics: coverageBlock.territory_analytics,
     agent_analytics: coverageBlock.agent_analytics
   };

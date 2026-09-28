@@ -1,6 +1,7 @@
 "use client";
 
 import { fmtCount, fmtMoney } from "@/components/dashboard/sales/format";
+import { RiskZoneBack, RiskZoneFrontValue, riskZonePct } from "@/components/dashboard/sales/sales-risk-zone-back";
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
 import { cn } from "@/lib/utils";
 import { Activity, CircleDollarSign, CreditCard, RotateCcw, Wallet } from "lucide-react";
@@ -116,10 +117,12 @@ function MetricCard({
   icon: Icon,
   tone,
   trend,
-  back
+  back,
+  valueNode
 }: {
   title: string;
   value: string;
+  valueNode?: React.ReactNode;
   unit?: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -149,7 +152,7 @@ function MetricCard({
         ) : null}
       </div>
       <p className="text-sm font-medium text-slate-500">{title}</p>
-      <FitValue value={value} unit={unit} />
+      {valueNode ?? <FitValue value={value} unit={unit} />}
       <p className="mt-2 truncate text-sm text-slate-500" title={description}>{description}</p>
     </>
   );
@@ -256,8 +259,8 @@ export function SalesMetricsRow({
       share_pct: b.share_pct
     }));
   }, [debt]);
-  const { coverage_pct } = data.akb_okb_block;
-  const refusalRate = Math.max(0, 100 - coverage_pct);
+  const { akb, okb, coverage_pct } = data.akb_okb_block;
+  const riskPct = riskZonePct(data.risk_zone, coverage_pct);
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -272,7 +275,7 @@ export function SalesMetricsRow({
         back={<BreakdownBack title="По типам цен" rows={priceTypeRows} barClass="bg-teal-500" />}
       />
       <MetricCard
-        title="Payment Breakdown"
+        title="Оплаты по способам"
         value={fmtMoney(totalPayment)}
         unit="UZS"
         description="Сумма по способам оплаты"
@@ -297,11 +300,13 @@ export function SalesMetricsRow({
         }
       />
       <MetricCard
-        title="Risk zone"
-        value={`${refusalRate.toFixed(1)}%`}
-        description={`Отклонено: ${fmtCount(data.orders_refusals.rejected)} из ${fmtCount(data.orders_refusals.total)}`}
+        title="Охват клиентов"
+        value={`${fmtCount(okb)} / ${fmtCount(akb)}`}
+        valueNode={<RiskZoneFrontValue okb={okb} akb={akb} />}
+        description={`Охват: ${coverage_pct.toFixed(1)}% · Без заказа: ${riskPct.toFixed(1)}%`}
         icon={Activity}
         tone="red"
+        back={<RiskZoneBack risk={data.risk_zone} />}
       />
     </div>
   );

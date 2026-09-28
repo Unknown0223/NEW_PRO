@@ -464,7 +464,7 @@ class _BankTransferInboxDetailPageState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Клиент уже сопоставлен. Создайте pending-платёж, затем подтвердите.',
+                  'Клиент уже сопоставлен. Создайте ожидающий платёж, затем подтвердите.',
                   style: AppTypography.caption.copyWith(color: AppColors.textMuted),
                 ),
               ] else if (paymentId == null && (canAssign || canReassign)) ...[
@@ -476,7 +476,7 @@ class _BankTransferInboxDetailPageState
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'После назначения создаётся pending-платёж — затем можно подтвердить здесь.',
+                    'После назначения создаётся ожидающий платёж — затем его можно подтвердить здесь.',
                     style: AppTypography.caption.copyWith(color: AppColors.textTitle),
                   ),
                 ),

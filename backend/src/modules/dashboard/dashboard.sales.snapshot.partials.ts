@@ -11,6 +11,7 @@ import { fetchSalesSnapshotCoverageBlock } from "./dashboard.sales.snapshot.cove
 import { fetchSalesSnapshotDebtBlock } from "./dashboard.sales.snapshot.debt";
 import { fetchSalesSnapshotOrdersBlock } from "./dashboard.sales.snapshot.orders";
 import { fetchSalesSnapshotProductBlock } from "./dashboard.sales.snapshot.products";
+import { fetchSalesSnapshotRiskBlock } from "./dashboard.sales.snapshot.risk";
 
 async function buildSalesCtx(tenantId: number, filters: SalesDashboardFilters): Promise<SalesSnapshotQueryCtx> {
   const from = new Date(`${filters.from}T00:00:00.000Z`);
@@ -35,6 +36,7 @@ export type SalesDashboardSummaryPayload = Pick<
   | "price_type_analytics"
   | "debt_aging"
   | "akb_okb_block"
+  | "risk_zone"
   | "orders_refusals"
 >;
 
@@ -58,7 +60,7 @@ export async function getSalesDashboardSummary(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v3:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v5:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -67,6 +69,7 @@ export async function getSalesDashboardSummary(
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
   const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
   const debt_aging = await fetchSalesSnapshotDebtBlock(ctx);
+  const risk_zone = await fetchSalesSnapshotRiskBlock(ctx);
 
   const result: SalesDashboardSummaryPayload = {
     filters,
@@ -75,6 +78,7 @@ export async function getSalesDashboardSummary(
     price_type_analytics: productBlock.price_type_analytics,
     debt_aging,
     akb_okb_block: coverageBlock.akb_okb_block,
+    risk_zone,
     orders_refusals: ordersBlock.orders_refusals
   };
   await setSnapshotCache(snapshotKey, result);
@@ -85,7 +89,7 @@ export async function getSalesDashboardAnalytics(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardAnalyticsPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v2:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v3:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardAnalyticsPayload>(snapshotKey);
   if (cached) return cached;
 

@@ -96,13 +96,13 @@ export function leftoverNonLatinLetters(latinUpper: string): string {
 export function applyLatinUpperName(raw: string): { ok: true; name: string } | { ok: false; message: string } {
   const name = toLatinUppercase(raw);
   if (name.length < 3) {
-    return { ok: false, message: "Nom kamida 3 belgidan iborat bo‘lishi kerak (lotin, bosh harf)." };
+    return { ok: false, message: "Название должно содержать не менее 3 символов (заглавные латинские буквы)." };
   }
   const leftover = leftoverNonLatinLetters(name);
   if (leftover) {
     return {
       ok: false,
-      message: `Nom faqat lotin bosh harfda bo‘lishi kerak. Qoldiq: «${leftover.slice(0, 24)}». Kiril avtomatik lotinga o‘giriladi, boshqa alifbo qabul qilinmaydi.`
+      message: `Название должно быть написано только заглавными латинскими буквами. Недопустимые символы: «${leftover.slice(0, 24)}». Кириллица автоматически переводится в латиницу, другие алфавиты не принимаются.`
     };
   }
   return { ok: true, name };
@@ -186,7 +186,7 @@ export function formatQualityIssue(issue: ClientQualityIssue): string {
 }
 
 function peerLabel(peer: ClientQualityPeer): string {
-  return peer.id != null ? `klient #${peer.id}` : "shu fayldagi boshqa qator";
+  return peer.id != null ? `клиент #${peer.id}` : "другая строка этого файла";
 }
 
 /**
@@ -204,7 +204,7 @@ export function findClientQualityIssue(
       return {
         kind: "phone",
         otherId: hit.id,
-        message: `Telefon takrorlanmoqda (${phone}) — ${peerLabel(hit)}. Har bir mijozning telefoni unikal bo‘lishi shart.`
+        message: `Телефон повторяется (${phone}) — ${peerLabel(hit)}. Телефон каждого клиента должен быть уникальным.`
       };
     }
   }
@@ -216,7 +216,7 @@ export function findClientQualityIssue(
       return {
         kind: "inn",
         otherId: hit.id,
-        message: `INN/STIR takrorlanmoqda («${String(candidate.inn).trim()}») — ${peerLabel(hit)}.`
+        message: `ИНН повторяется («${String(candidate.inn).trim()}») — ${peerLabel(hit)}.`
       };
     }
   }
@@ -228,7 +228,7 @@ export function findClientQualityIssue(
       return {
         kind: "pinfl",
         otherId: hit.id,
-        message: `PINFL/JSHSHIR takrorlanmoqda («${String(candidate.pinfl).trim()}») — ${peerLabel(hit)}.`
+        message: `ПИНФЛ повторяется («${String(candidate.pinfl).trim()}») — ${peerLabel(hit)}.`
       };
     }
   }
@@ -247,7 +247,7 @@ export function findClientQualityIssue(
           otherId: p.id,
           meters: Math.round(meters),
           otherName: p.name,
-          message: `100 m radiusda o‘xshash nomli mijoz bor: «${p.name}» (${Math.round(meters)} m, ${peerLabel(p)}). Boshqa nuqta yoki aniqroq nom kiriting.`
+          message: `В радиусе 100 м есть клиент с похожим названием: «${p.name}» (${Math.round(meters)} м, ${peerLabel(p)}). Укажите другую точку или более точное название.`
         };
       }
     }

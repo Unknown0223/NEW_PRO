@@ -356,11 +356,11 @@ class OrderClientFinance {
     final out = consignmentOutstanding ?? 0;
     final avail = consignmentAvailable;
     final parts = <String>[];
-    if (lim != null) parts.add('limit: ${_fmtLimitNum(lim)}');
-    parts.add('qarz: ${_fmtLimitNum(out)}');
-    if (avail != null) parts.add('mavjud: ${_fmtLimitNum(avail)}');
-    parts.add('buyurtma: ${_fmtLimitNum(orderTotal)}');
-    return 'Konsignatsiya limiti oshdi (${parts.join(', ')})';
+    if (lim != null) parts.add('лимит: ${_fmtLimitNum(lim)}');
+    parts.add('долг: ${_fmtLimitNum(out)}');
+    if (avail != null) parts.add('доступно: ${_fmtLimitNum(avail)}');
+    parts.add('заказ: ${_fmtLimitNum(orderTotal)}');
+    return 'Превышен лимит консигнации (${parts.join(', ')})';
   }
 
   static String _fmtLimitNum(double v) {

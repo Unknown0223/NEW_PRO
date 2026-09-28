@@ -560,7 +560,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => _callClient(c),
                           icon: const Icon(Icons.phone_rounded, size: 16),
-                          label: const Text('Call'),
+                          label: const Text('Позвонить'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
@@ -574,7 +574,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => _openClientLocation(c),
                           icon: const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFFEF4444)),
-                          label: const Text('Location'),
+                          label: const Text('Локация'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFF1F5F9),
                             foregroundColor: AppColors.textPrimary,
@@ -1451,10 +1451,10 @@ String? _categoryLine(Map<String, dynamic> client) {
   final category = client['category']?.toString().trim();
   final inn = client['inn']?.toString().trim();
   if (category != null && category.isNotEmpty && inn != null && inn.isNotEmpty) {
-    return 'Категория $category · INN $inn';
+    return 'Категория $category · ИНН $inn';
   }
   if (category != null && category.isNotEmpty) return 'Категория $category';
-  if (inn != null && inn.isNotEmpty) return 'INN $inn';
+  if (inn != null && inn.isNotEmpty) return 'ИНН $inn';
   return null;
 }
 

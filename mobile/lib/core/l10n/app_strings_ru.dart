@@ -38,12 +38,12 @@ abstract final class S {
   static const visitComplete = 'Завершить визит';
   static const visitInProgressTitle = 'Визит';
   static const visitActiveLive = 'Визит активен · LIVE';
-  static const visitEndHint = '↓ кейин 5 дақиқалик таҳрирлаш ойнаси очилади';
+  static const visitEndHint = '↓ затем откроется окно редактирования на 5 минут';
   static const noOrderToday = 'сегодня нет заказа';
   static const photoReport = 'Фотоотчёт';
   static const createOrderAction = 'Создать заказ';
   static const sendHeldOrderNow = 'Отправить сейчас';
-  static const refusalAction = 'Отказ (rad etish)';
+  static const refusalAction = 'Отказ';
   static const supervisionChecklist = 'Чек-лист супервизии';
   static const draftBadge = 'Черновик';
   static const visitedBadge = '✓ Посещено';

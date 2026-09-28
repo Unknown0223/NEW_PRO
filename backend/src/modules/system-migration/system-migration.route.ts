@@ -146,7 +146,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
             request,
             400,
             "EmptyExport",
-            "Eksport uchun ma’lumot yetarli emas — avval spravochniklarni to‘ldiring"
+            "Недостаточно данных для экспорта — сначала заполните справочники"
           );
         }
         if (e instanceof Error && e.message === "NOT_FOUND") {
@@ -159,7 +159,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           500,
           "ExportFailed",
-          `Zaxira arxivini yaratib bo‘lmadi. Qayta urinib ko‘ring yoki supportga murojaat qiling. (${detail})`
+          `Не удалось создать архив резервной копии. Повторите попытку или обратитесь в поддержку. (${detail})`
         );
       }
     }
@@ -182,7 +182,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           reportMigrationExportProgress(session.id, {
             stage: "export",
             percent: 2,
-            message: "Eksport boshlandi…"
+            message: "Экспорт начат…"
           });
           const { byteLength, filename } = await buildTenantBackupZipToFile(
             { tenantId: tenant.id, tenantSlug: tenant.slug },
@@ -201,7 +201,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
             e instanceof Error ? e.message.replace(/\s+/g, " ").trim().slice(0, 200) : "unknown";
           failMigrationExportSession(
             session.id,
-            `Zaxira arxivini yaratib bo‘lmadi. (${detail})`
+            `Не удалось создать архив резервной копии. (${detail})`
           );
         }
       })();
@@ -209,7 +209,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       return reply.status(202).send({
         async: true,
         sessionId: session.id,
-        message: "Eksport boshlandi. Progress: GET …/export/sessions/:sessionId"
+        message: "Экспорт начат. Прогресс: GET …/export/sessions/:sessionId"
       });
     }
   );
@@ -222,7 +222,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       const { sessionId } = request.params as { sessionId: string };
       const session = getMigrationExportSession(sessionId, request.tenant!.id);
       if (!session) {
-        return sendApiError(reply, request, 404, "NotFound", "Eksport sessiyasi topilmadi");
+        return sendApiError(reply, request, 404, "NotFound", "Сеанс экспорта не найден");
       }
       return reply.send({
         id: session.id,
@@ -243,7 +243,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       const { sessionId } = request.params as { sessionId: string };
       const session = getMigrationExportSession(sessionId, request.tenant!.id);
       if (!session) {
-        return sendApiError(reply, request, 404, "NotFound", "Eksport sessiyasi topilmadi");
+        return sendApiError(reply, request, 404, "NotFound", "Сеанс экспорта не найден");
       }
       if (session.state === "failed") {
         return sendApiError(
@@ -251,7 +251,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           500,
           "ExportFailed",
-          session.error || "Zaxira arxivini yaratib bo‘lmadi"
+          session.error || "Не удалось создать архив резервной копии"
         );
       }
       if (session.state !== "completed" || !session.file_path) {
@@ -260,7 +260,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           409,
           "ExportNotReady",
-          "Zaxira hali tayyor emas — biroz kuting"
+          "Резервная копия ещё не готова — подождите немного"
         );
       }
       const filename = session.filename || backupDownloadFilename(request.tenant!.slug);
@@ -288,7 +288,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           413,
           "FileTooLarge",
-          "ZIP juda katta (limit 512 MB). Yangi «To‘liq zaxira» ni yuklab oling — fotolar siqiladi, keyin qayta import qiling."
+          "ZIP слишком большой (лимит 512 МБ). Скачайте новую «Полную резервную копию» — фото будут сжаты, затем повторите импорт."
         );
       }
       if (!uploaded.buf?.length) {
@@ -297,7 +297,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           400,
           "NoFile",
-          "ZIP fayl yuklanmadi. «ZIP tanlash» orqali zaxira arxivini tanlang."
+          "ZIP-файл не загружен. Выберите архив резервной копии через «Выбрать ZIP»."
         );
       }
       const preview = await parseBackupZip(uploaded.buf, request.tenant!.id);
@@ -313,7 +313,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       const sessionId = String((request.params as { sessionId?: string }).sessionId ?? "");
       const session = getMigrationImportSession(sessionId, request.tenant!.id);
       if (!session) {
-        return sendApiError(reply, request, 404, "NotFound", "Import sessiyasi topilmadi");
+        return sendApiError(reply, request, 404, "NotFound", "Сессия импорта не найдена");
       }
       return reply.send(session);
     }
@@ -359,7 +359,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           413,
           "FileTooLarge",
-          "ZIP juda katta (limit 512 MB). Yangi «To‘liq zaxira» ni yuklab oling — fotolar siqiladi, keyin qayta import qiling."
+          "ZIP слишком большой (лимит 512 МБ). Скачайте новую «Полную резервную копию» — фото будут сжаты, затем повторите импорт."
         );
       }
 
@@ -369,7 +369,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
           request,
           400,
           "NoFile",
-          "ZIP fayl yuklanmadi. «ZIP tanlash» orqali zaxira arxivini tanlang."
+          "ZIP-файл не загружен. Выберите архив резервной копии через «Выбрать ZIP»."
         );
       }
 
@@ -426,7 +426,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
             async: true,
             queue,
             jobId,
-            message: "Import navbatga qo‘yildi. Progress: GET /api/:slug/jobs/:jobId"
+            message: "Импорт поставлен в очередь. Прогресс: GET /api/:slug/jobs/:jobId"
           });
         } catch (err) {
           if (tempPath) await unlink(tempPath).catch(() => {});
@@ -454,7 +454,7 @@ export async function registerSystemMigrationRoutes(app: FastifyInstance) {
       return reply.status(202).send({
         async: true,
         sessionId: session.id,
-        message: "Import boshlandi. Progress: GET /api/:slug/system-migration/import/sessions/:sessionId"
+        message: "Импорт начат. Прогресс: GET /api/:slug/system-migration/import/sessions/:sessionId"
       });
     }
   );

@@ -102,7 +102,7 @@ function filterPaymentItemsBySearch(
 const CONFIG_TABS = [
   { id: "client", label: "Клиент" },
   { id: "gps", label: "GPS" },
-  { id: "outlet", label: "План Outlet" },
+  { id: "outlet", label: "План торговых точек" },
   { id: "route", label: "Маршрут" },
   { id: "product_list", label: "Список товаров" },
   { id: "photo", label: "Фото" },
@@ -554,7 +554,7 @@ export function AgentConfigurationsDialog({
               />
             </div>
             <ConfigTextField
-              label="Версия плана Outlet"
+              label="Версия плана торговых точек"
               hint="Идентификатор версии плана для мобильного приложения"
               value={draft.outlet?.plan_version ?? ""}
               onChange={(e) =>

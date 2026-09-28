@@ -116,14 +116,14 @@ export async function registerDocumentEditLockRoutes(app: FastifyInstance) {
       const q = request.query as Record<string, string | undefined>;
       const section = (q.section ?? "").trim();
       if (!isDocumentEditLockSection(section)) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid section");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный раздел");
       }
       const documentIdRaw = q.document_id?.trim();
       const documentId = documentIdRaw
         ? Number.parseInt(documentIdRaw, 10)
         : undefined;
       if (documentIdRaw && (!Number.isFinite(documentId) || (documentId ?? 0) < 1)) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid document_id");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный document_id");
       }
       const data = await searchDocumentsForEditLock({
         tenantId: request.tenant!.id,

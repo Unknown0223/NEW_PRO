@@ -58,10 +58,10 @@ async function fetchTemplateBlob(
 ): Promise<Blob> {
   const { template, prefs, warehouseExportOptions } = item;
   if (template.downloadKind === "register") {
-    throw new Error("Register shablonlari registerSheet orqali beriladi.");
+    throw new Error("Шаблоны реестра передаются через registerSheet.");
   }
   if (!template.apiTemplate) {
-    throw new Error(`Shablon yuklanmaydi: ${template.label}`);
+    throw new Error(`Шаблон не загружается: ${template.label}`);
   }
   if (template.expeditorLoadingLayout) {
     const { blob } = await fetchExpeditorLoadingLayoutXlsxBlob({
@@ -109,7 +109,7 @@ export async function downloadBulkExportSelection(args: {
 }): Promise<void> {
   const { tenantSlug, orderIds, items, registerSheet, onProgress } = args;
   if (items.length === 0) {
-    throw new Error("Hech qanday shablon tanlanmagan.");
+    throw new Error("Не выбран ни один шаблон.");
   }
 
   const sources: XlsxSheetSource[] = [];
@@ -121,7 +121,7 @@ export async function downloadBulkExportSelection(args: {
 
     if (item.template.downloadKind === "register") {
       if (!registerSheet) {
-        throw new Error("Реестр uchun ma’lumot yo‘q.");
+        throw new Error("Нет данных для реестра.");
       }
       const buffer = await buildStyledXlsxBuffer("Реестр", registerSheet.headers, registerSheet.rows);
       sources.push({
@@ -176,8 +176,8 @@ export async function downloadBulkExportSelection(args: {
     try {
       await downloadAsZip(sources, `zagruzka_${day}.zip`);
     } catch (zipErr) {
-      const mergeMsg = mergeErr instanceof Error ? mergeErr.message : "Birlashtirish xatosi";
-      const zipMsg = zipErr instanceof Error ? zipErr.message : "ZIP xatosi";
+      const mergeMsg = mergeErr instanceof Error ? mergeErr.message : "Ошибка объединения";
+      const zipMsg = zipErr instanceof Error ? zipErr.message : "Ошибка ZIP";
       throw new Error(`${mergeMsg}. ZIP: ${zipMsg}`);
     }
   }

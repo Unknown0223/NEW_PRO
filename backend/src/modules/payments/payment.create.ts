@@ -155,7 +155,7 @@ export async function createClientExpense(
       data: {
         client_balance_id: bal.id,
         delta: neg,
-        note: `Rasxod klient #${p.id}`,
+        note: `Расход клиента #${p.id}`,
         user_id: uid
       }
     });
@@ -324,7 +324,7 @@ export async function createPayment(
         delta: amountDec,
         note: isDiscountSettlement
           ? paymentNote ?? `Оплата скидки #${p.id}`
-          : `To‘lov #${p.id}${input.order_id ? ` (zakaz #${input.order_id})` : ""}`,
+          : `Оплата #${p.id}${input.order_id ? ` (заказ #${input.order_id})` : ""}`,
         user_id: uid
       }
     });

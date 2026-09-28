@@ -8,7 +8,7 @@ function WorkSlotDetailInner() {
   const params = useParams();
   const id = parseInt(String(params.id ?? ""), 10);
   if (!Number.isFinite(id) || id < 1) {
-    return <p className="text-destructive">Noto‘g‘ri ID</p>;
+    return <p className="text-destructive">Некорректный ID</p>;
   }
   return <WorkSlotDetail slotId={id} />;
 }

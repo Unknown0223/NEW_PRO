@@ -312,7 +312,7 @@ export function GroupProcessingAttrsWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       let skipped = 0;
       const failed: string[] = [];
@@ -352,11 +352,11 @@ export function GroupProcessingAttrsWorkspace() {
       });
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}`
-          : `Saqlandi: ${res.ok} ta · o‘zgarmagan: ${res.skipped}`
+          ? `Сохранено: ${res.ok}. Ошибки: ${res.failed.slice(0, 3).join("; ")}`
+          : `Сохранено: ${res.ok} · без изменений: ${res.skipped}`
       );
     },
-    onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
+    onError: (e) => setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"))
   });
 
   const renderAttrSelects = (
@@ -467,13 +467,13 @@ export function GroupProcessingAttrsWorkspace() {
             {dirtyCount > 0 ? (
               <>
                 {" "}
-                · o‘zgargan: <b>{dirtyCount}</b>
+                · изменено: <b>{dirtyCount}</b>
               </>
             ) : null}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Mavjud bog‘lanishlar jadvalda. Qatorda o‘zgartirsangiz — faqat shu klient; umumiy qatordan
-            belgilangan maydonlar — tanlanganlarga.
+            Текущие привязки показаны в таблице. Изменение в строке затрагивает только этого клиента; поля,
+            отмеченные в общей строке, применяются к выбранным.
           </p>
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}
         </div>

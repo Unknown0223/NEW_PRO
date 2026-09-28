@@ -581,7 +581,7 @@ export function VirtualPivotReportBuilder() {
       });
       writePivotAoAToExcel(aoa, {
         filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.xlsx`,
-        sheetName: "Pivot"
+        sheetName: "Сводная"
       });
       setNotice({
         message: `Экспорт Excel готов — ${Math.max(0, aoa.length - 1).toLocaleString("ru-RU")} строк.`,

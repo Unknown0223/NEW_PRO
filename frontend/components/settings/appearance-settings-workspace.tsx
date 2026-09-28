@@ -280,7 +280,7 @@ function ThemePreviewCard({
         <span className="text-[11px] text-muted-foreground">
           {id === "classic"
             ? "Исходная палитра приложения"
-            : "HEX + --dash-* → shadcn (theme-palettes.css)"}
+            : "Палитра HEX + --dash-* → shadcn (theme-palettes.css)"}
         </span>
       </div>
     </button>

@@ -314,7 +314,7 @@ export function GroupProcessingMiscWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       let skipped = 0;
       const failed: string[] = [];
@@ -392,7 +392,7 @@ export function GroupProcessingMiscWorkspace() {
             }
           } catch (e) {
             for (const id of chunk) {
-              failed.push(`#${id}: ${getUserFacingError(e, "teg xato")}`);
+              failed.push(`#${id}: ${getUserFacingError(e, "ошибка тегов")}`);
             }
           }
         }
@@ -416,11 +416,11 @@ export function GroupProcessingMiscWorkspace() {
       });
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}`
-          : `Saqlandi: ${res.ok} ta · o‘zgarmagan: ${res.skipped}`
+          ? `Сохранено: ${res.ok}. Ошибки: ${res.failed.slice(0, 3).join("; ")}`
+          : `Сохранено: ${res.ok} · без изменений: ${res.skipped}`
       );
     },
-    onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
+    onError: (e) => setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"))
   });
 
   const toggleTagOnDraft = (ids: number[], tagId: number): number[] => {
@@ -483,7 +483,7 @@ export function GroupProcessingMiscWorkspace() {
       <td className="border-l border-slate-100 px-2 py-2 align-middle">
         <div className="flex max-w-[14rem] flex-wrap gap-1">
           {allTags.length === 0 ? (
-            <span className="text-[11px] text-slate-400">Teg yo‘q</span>
+            <span className="text-[11px] text-slate-400">Нет тегов</span>
           ) : (
             allTags.map((t) => {
               const on = draft.tagIds.includes(t.id);
@@ -535,7 +535,7 @@ export function GroupProcessingMiscWorkspace() {
             {dirtyCount > 0 ? (
               <>
                 {" "}
-                · o‘zgargan: <b>{dirtyCount}</b>
+                · изменено: <b>{dirtyCount}</b>
               </>
             ) : null}
           </p>
@@ -619,10 +619,10 @@ export function GroupProcessingMiscWorkspace() {
                 <th className="w-16 px-2 py-2">ID</th>
                 <th className="min-w-[10rem] px-2 py-2">Клиент</th>
                 <th className="min-w-[8rem] px-2 py-2">Показать</th>
-                <th className="border-l border-slate-200 px-2 py-2">Mahsulot kat.</th>
-                <th className="border-l border-slate-100 px-2 py-2">Kredit limit</th>
-                <th className="border-l border-slate-100 px-2 py-2">Narx turi</th>
-                <th className="border-l border-slate-100 px-2 py-2">Teglar</th>
+                <th className="border-l border-slate-200 px-2 py-2">Категория товара</th>
+                <th className="border-l border-slate-100 px-2 py-2">Кредитный лимит</th>
+                <th className="border-l border-slate-100 px-2 py-2">Тип цены</th>
+                <th className="border-l border-slate-100 px-2 py-2">Теги</th>
               </tr>
             </thead>
             <tbody>

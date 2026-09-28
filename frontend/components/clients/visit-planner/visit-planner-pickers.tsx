@@ -28,8 +28,8 @@ export function SearchablePickList({
   selected,
   onToggle,
   single = false,
-  searchPlaceholder = "Qidirish…",
-  emptyMessage = "Hech narsa topilmadi",
+  searchPlaceholder = "Поиск…",
+  emptyMessage = "Ничего не найдено",
   maxHeightClass = "max-h-[min(48vh,360px)]",
   autoFocus = true,
   showAvatar = true
@@ -133,7 +133,7 @@ export function FilterMultiSelect({
   selected,
   onChange,
   placeholder,
-  searchPlaceholder = "Qidirish…",
+  searchPlaceholder = "Поиск…",
   minPopoverWidth = 260,
   className,
   single = false,
@@ -248,7 +248,7 @@ export function FilterMultiSelect({
           onClick={() => onChange([])}
           className="mt-1 shrink-0 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50"
         >
-          Tozalash ({selected.length})
+          Очистить ({selected.length})
         </button>
       ) : null}
     </div>

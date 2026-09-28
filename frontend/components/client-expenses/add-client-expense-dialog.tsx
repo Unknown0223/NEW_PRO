@@ -247,7 +247,7 @@ export function AddClientExpenseDialog({
     const ok = filteredClients.some((c) => String(c.id) === clientId);
     if (!ok) {
       setClientId("");
-      setSelectionNotice("Klient tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор клиента обновлён: неподходящее значение удалено.");
     }
   }, [clientFixed, filteredClients, clientId]);
 
@@ -255,7 +255,7 @@ export function AddClientExpenseDialog({
     if (!cashDeskId.trim()) return;
     if (!filteredCashDesks.some((d) => String(d.id) === cashDeskId.trim())) {
       setCashDeskId("");
-      setSelectionNotice("Kassa tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор кассы обновлён: неподходящее значение удалено.");
     }
   }, [cashDeskId, filteredCashDesks]);
 
@@ -263,7 +263,7 @@ export function AddClientExpenseDialog({
     if (!expeditorUserId.trim()) return;
     if (!filteredExpeditors.some((d) => String(d.id) === expeditorUserId.trim())) {
       setExpeditorUserId("");
-      setSelectionNotice("Dastavchi tanlovi yangilandi: mos bo‘lmagan qiymat olib tashlandi.");
+      setSelectionNotice("Выбор доставщика обновлён: неподходящее значение удалено.");
     }
   }, [expeditorUserId, filteredExpeditors]);
 

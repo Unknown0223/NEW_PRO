@@ -446,7 +446,7 @@ export function GroupProcessingTerritoryWorkspace() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("No tenant");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const targets = selectedIds.size ? [...selectedIds] : rows.map((r) => r.id);
       let skipped = 0;
       const failed: string[] = [];
@@ -486,11 +486,11 @@ export function GroupProcessingTerritoryWorkspace() {
       });
       setStatusMsg(
         res.failed.length
-          ? `Saqlandi: ${res.ok}. Xato: ${res.failed.slice(0, 3).join("; ")}`
-          : `Saqlandi: ${res.ok} ta · o‘zgarmagan: ${res.skipped}`
+          ? `Сохранено: ${res.ok}. Ошибки: ${res.failed.slice(0, 3).join("; ")}`
+          : `Сохранено: ${res.ok} · без изменений: ${res.skipped}`
       );
     },
-    onError: (e) => setStatusMsg(getUserFacingError(e, "Saqlashda xato"))
+    onError: (e) => setStatusMsg(getUserFacingError(e, "Ошибка при сохранении"))
   });
 
   const renderTerritorySelects = (
@@ -593,12 +593,12 @@ export function GroupProcessingTerritoryWorkspace() {
             {dirtyCount > 0 ? (
               <>
                 {" "}
-                · o‘zgargan: <b>{dirtyCount}</b>
+                · изменено: <b>{dirtyCount}</b>
               </>
             ) : null}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Tanlovlar <b>Настройки → Территории</b> daraxtidan (kaskad). Darajalar:{" "}
+            Значения берутся из дерева <b>Настройки → Территории</b> (каскадно). Уровни:{" "}
             {levelSpecs.map((l) => l.label).join(" → ") || "Зона → Область → Город"}.
           </p>
           {statusMsg ? <p className="mt-1 text-sm text-emerald-700">{statusMsg}</p> : null}

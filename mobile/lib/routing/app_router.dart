@@ -320,7 +320,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) {
           final id = int.tryParse(state.pathParameters['clientId'] ?? '');
           if (id == null) {
-            return const Scaffold(body: Center(child: Text('Vizit topilmadi')));
+            return const Scaffold(body: Center(child: Text('Визит не найден')));
           }
           return VisitInProgressScreen(clientId: id);
         },
@@ -332,7 +332,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ClientDetailScreen(clientId: id);
         },
@@ -392,7 +392,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Buyurtma ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID заказа')),);
           }
           return ExpeditorDeliveryDetailPage(orderId: id);
         },
@@ -404,7 +404,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           final extra = state.extra;
           return ExpeditorClientDetailPage(
@@ -420,7 +420,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           final extra = state.extra;
           return ExpeditorDebtorClientPage(
@@ -436,7 +436,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ExpeditorClientOrdersPage(clientId: id);
         },
@@ -448,7 +448,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-                body: Center(child: Text('Mijoz ID noto\'g\'ri')),);
+                body: Center(child: Text('Неверный ID клиента')),);
           }
           return ExpeditorClientLedgerPage(clientId: id);
         },
@@ -537,7 +537,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '');
           if (id == null) {
             return const Scaffold(
-              body: Center(child: Text('ID noto\'g\'ri')),
+              body: Center(child: Text('Неверный ID')),
             );
           }
           return BankTransferInboxDetailPage(inboxId: id);

@@ -222,56 +222,56 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
   const code = ax.response?.data?.error;
   const d = ax.response?.data;
   if (code === "OrderNotEditable") {
-    return withApiSupportLine("Bu holatda qatorlarni tahrirlab bo‘lmaydi (faqat «Новый» yoki «Подтверждён»).", err);
+    return withApiSupportLine("В этом статусе строки редактировать нельзя (только «Новый» или «Подтверждён»).", err);
   }
   if (code === "OrderHeaderLocked") {
     return withApiSupportLine(
-      "Klient, agent, sklad va to‘lov usuli tahrirda o‘zgarmaydi — faqat qatorlar.",
+      "Клиент, агент, склад и способ оплаты при редактировании не меняются — только строки.",
       err
     );
   }
   if (code === "ForbiddenOperatorOrderLinesEdit") {
-    return withApiSupportLine("To‘lov qatorlarini tahrirlash faqat admin uchun.", err);
+    return withApiSupportLine("Редактировать строки заказа может только администратор.", err);
   }
   if (code === "NoRetailPrice" || code === "NoPrice") {
     const id = d?.product_id;
     const pt = (d as { price_type?: string } | undefined)?.price_type ?? "retail";
     return withApiSupportLine(
       id != null
-        ? `Mahsulot #${id} uchun «${pt}» narxi yo‘q.`
-        : `Narx yo‘q («${pt}»).`,
+        ? `Для товара #${id} нет цены «${pt}».`
+        : `Нет цены («${pt}»).`,
       err
     );
   }
-  if (code === "BadClient") return withApiSupportLine("Klient (zakaz) topilmadi yoki faol emas.", err);
-  if (code === "BadProduct") return withApiSupportLine("Mahsulot topilmadi yoki faol emas.", err);
-  if (code === "BadQty") return withApiSupportLine("Miqdor noto‘g‘ri.", err);
-  if (code === "DuplicateProduct") return withApiSupportLine("Bir xil mahsulotni bir nechta qatorga qo‘shib bo‘lmaydi.", err);
-  if (code === "EmptyItems") return withApiSupportLine("Kamida bitta to‘lov qatori kerak.", err);
+  if (code === "BadClient") return withApiSupportLine("Клиент (заказа) не найден или неактивен.", err);
+  if (code === "BadProduct") return withApiSupportLine("Товар не найден или неактивен.", err);
+  if (code === "BadQty") return withApiSupportLine("Неверное количество.", err);
+  if (code === "DuplicateProduct") return withApiSupportLine("Нельзя добавить один и тот же товар в несколько строк.", err);
+  if (code === "EmptyItems") return withApiSupportLine("Нужна хотя бы одна строка заказа.", err);
   if (code === "InsufficientStock") {
     const id = d?.product_id;
     const avail = d?.available;
     return withApiSupportLine(
       id != null
-        ? `Omborda qoldiq yetarli emas (mahsulot #${id}${avail != null ? `, mavjud: ${avail}` : ""}).`
-        : "Omborda qoldiq yetarli emas.",
+        ? `Недостаточно остатка на складе (товар #${id}${avail != null ? `, доступно: ${avail}` : ""}).`
+        : "Недостаточно остатка на складе.",
       err
     );
   }
   if (code === "OrderTotalBelowAllocated") {
     return withApiSupportLine(
-      `Yangi summa allaqachon taqsimlangan to‘lovlardan (${d?.allocated ?? "—"}) kichik bo‘lib qoladi. Avval to‘lovlarni tuzating.`,
+      `Новая сумма станет меньше уже распределённых оплат (${d?.allocated ?? "—"}). Сначала скорректируйте оплаты.`,
       err
     );
   }
   if (code === "CreditLimitExceeded" && d) {
     return withApiSupportLine(
-      `Kredit limiti yetmaydi. Limit: ${d.credit_limit ?? "—"}, boshqa zakazlar: ${d.outstanding ?? "—"}, bu zakaz to‘lovi: ${d.order_total ?? "—"}.`,
+      `Недостаточно кредитного лимита. Лимит: ${d.credit_limit ?? "—"}, другие заказы: ${d.outstanding ?? "—"}, сумма этого заказа: ${d.order_total ?? "—"}.`,
       err
     );
   }
   if (ax.response?.status === 403) {
-    return withApiSupportLine("Tahrirlash huquqi yo‘q (orders.zakaz.update / status).", err);
+    return withApiSupportLine("Нет прав на редактирование (orders.zakaz.update / status).", err);
   }
   return null;
 }
@@ -352,7 +352,7 @@ export function OrderDetailView({
       setCommentSaveError(null);
     },
     onError: (e: Error) => {
-      setCommentSaveError(getUserFacingError(e, "Izohni saqlab bo‘lmadi."));
+      setCommentSaveError(getUserFacingError(e, "Не удалось сохранить комментарий."));
     }
   });
 
@@ -458,7 +458,7 @@ export function OrderDetailView({
         setEditError(msg);
         return;
       }
-      setEditError(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setEditError(getUserFacingError(e, "Не удалось сохранить."));
     }
   });
 
@@ -508,15 +508,15 @@ export function OrderDetailView({
       if (axios.isAxiosError(e)) {
         const code = (e.response?.data as { error?: string } | undefined)?.error;
         if (code === "BadBonusGiftOverride") {
-          setBonusGiftError(withApiSupportLine("Tanlov qoidadagi ro‘yxatga mos kelmaydi.", e));
+          setBonusGiftError(withApiSupportLine("Выбор не соответствует списку в правиле.", e));
           return;
         }
         if (code === "InsufficientStock") {
-          setBonusGiftError(withApiSupportLine("Tanlangan bonus uchun omborda qoldiq yetarli emas.", e));
+          setBonusGiftError(withApiSupportLine("Недостаточно остатка на складе для выбранного бонуса.", e));
           return;
         }
       }
-      setBonusGiftError(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setBonusGiftError(getUserFacingError(e, "Не удалось сохранить."));
     }
   });
 
@@ -554,19 +554,19 @@ export function OrderDetailView({
       const q = Number.parseFloat(line.qty.replace(",", "."));
       if (!Number.isFinite(pid) || pid < 1) continue;
       if (selected.has(pid)) {
-        setEditError("Bir xil mahsulotni bir nechta qatorga qo‘shib bo‘lmaydi.");
+        setEditError("Нельзя добавить один и тот же товар в несколько строк.");
         return;
       }
       selected.add(pid);
       if (!Number.isFinite(q) || q <= 0) {
-        setEditError("Barcha qatorlarda miqdor musbat bo‘lsin.");
+        setEditError("Во всех строках количество должно быть положительным.");
         return;
       }
       items.push({ product_id: pid, qty: q });
       needByProduct.set(pid, (needByProduct.get(pid) ?? 0) + q);
     }
     if (items.length === 0) {
-      setEditError("Kamida bitta to‘liq qator (mahsulot + miqdor) kerak.");
+      setEditError("Нужна хотя бы одна заполненная строка (товар + количество).");
       return;
     }
     for (const [pid, need] of needByProduct) {
@@ -575,7 +575,7 @@ export function OrderDetailView({
       const maxQ = free + credit;
       if (need > maxQ + 1e-9) {
         setEditError(
-          `Mahsulot #${pid}: miqdor ombordagi qoldiqdan oshmasin (maks. ${maxQ}).`
+          `Товар #${pid}: количество не должно превышать остаток на складе (макс. ${maxQ}).`
         );
         return;
       }
@@ -626,7 +626,7 @@ export function OrderDetailView({
   }, [data?.items]);
 
   if (!tenantSlug) {
-    return <p className="text-sm text-destructive">Tenant aniqlanmadi.</p>;
+    return <p className="text-sm text-destructive">Организация не определена.</p>;
   }
 
   // Print view — render only when user clicks print button
@@ -652,7 +652,7 @@ export function OrderDetailView({
           id: item.id,
           sku: item.sku,
           name: item.name,
-          unit: "dona",
+          unit: "шт.",
           qty: item.qty,
           price: item.price,
           total: item.total,
@@ -663,7 +663,7 @@ export function OrderDetailView({
   }
 
   if (!enabled) {
-    return <p className="text-sm text-destructive">Noto’g’ri zakaz identifikatori.</p>;
+    return <p className="text-sm text-destructive">Неверный идентификатор заказа.</p>;
   }
 
   const requestTypeLabel = data?.request_type_ref?.trim()
@@ -681,7 +681,7 @@ export function OrderDetailView({
         <Card className="overflow-hidden rounded-xl border border-border">
           <CardContent className="py-8">
             <QueryErrorState
-              message={getUserFacingError(error, "Yuklab bo‘lmadi yoki zakaz topilmadi.")}
+              message={getUserFacingError(error, "Не удалось загрузить или заказ не найден.")}
               onRetry={() => void refetch()}
             />
           </CardContent>

@@ -79,25 +79,25 @@ export type MigrationApplyAsyncAccepted = {
 };
 
 export const MIGRATION_IMPORT_STAGE_LABELS: Record<string, string> = {
-  queued: "Navbatda",
-  validate: "Tekshirish",
-  profile: "Profil",
-  references: "Spravochniklar",
-  bonus: "Bonus / KPI",
-  transactional: "Operatsion tarix",
-  extended: "Kengaytirilgan",
-  done: "Tayyor",
-  failed: "Xato",
-  waiting: "Navbatda",
-  active: "Ishlamoqda",
-  completed: "Tayyor"
+  queued: "В очереди",
+  validate: "Проверка",
+  profile: "Профиль",
+  references: "Справочники",
+  bonus: "Бонусы / KPI",
+  transactional: "Операционная история",
+  extended: "Расширенные данные",
+  done: "Готово",
+  failed: "Ошибка",
+  waiting: "В очереди",
+  active: "Выполняется",
+  completed: "Готово"
 };
 
 export const MIGRATION_PHASE_LABELS_UZ: Record<number, string> = {
-  1: "Profil va boshlang‘ich sozlamalar",
-  2: "Operatsion (buyurtma, to‘lov, ombor)",
-  3: "Agent faoliyati",
-  4: "KPI, fayllar va kengaytirilgan"
+  1: "Профиль и начальные настройки",
+  2: "Операционные данные (заказы, оплаты, склад)",
+  3: "Активность агентов",
+  4: "KPI, файлы и расширенные данные"
 };
 
 /** Fayl tanlash dialogeni uchun (Windows `application/x-zip-compressed` ham). */
@@ -119,17 +119,17 @@ export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reas
   if (!looksZipName && file.type && !/zip|octet-stream/i.test(file.type)) {
     return {
       ok: false,
-      reason: "Faqat tizim zaxira ZIP fayli qabul qilinadi (.zip / .salec-backup.zip)."
+      reason: "Принимается только ZIP-файл резервной копии системы (.zip / .salec-backup.zip)."
     };
   }
   if (file.size < 4) {
-    return { ok: false, reason: "Fayl bo‘sh yoki juda kichik." };
+    return { ok: false, reason: "Файл пуст или слишком мал." };
   }
   if (file.size > MIGRATION_ZIP_MAX_BYTES) {
     const gb = (file.size / (1024 * 1024 * 1024)).toFixed(1);
     return {
       ok: false,
-      reason: `ZIP juda katta (${gb} GB). Eski arxiv (siqilmagan fotolar). Avval shu sahifadan yangi «To‘liq zaxira» ni yuklab oling, keyin import qiling.`
+      reason: `ZIP слишком большой (${gb} GB). Похоже на старый архив (несжатые фото). Сначала скачайте на этой странице новую «Полную резервную копию», затем выполните импорт.`
     };
   }
   try {
@@ -138,7 +138,7 @@ export async function isLikelyBackupZip(file: File): Promise<{ ok: boolean; reas
     if (!isPk) {
       return {
         ok: false,
-        reason: "Fayl yaroqli ZIP emas. Avval «To‘liq zaxira yuklab olish» dan olingan arxivni tanlang."
+        reason: "Файл не является корректным ZIP. Выберите архив, полученный через «Скачать полную резервную копию»."
       };
     }
   } catch {
@@ -158,7 +158,7 @@ export async function downloadMigrationBackup(
     { timeout: 60_000 }
   );
   const sessionId = started.sessionId;
-  if (!sessionId) throw new Error("Eksport sessiyasi ochilmadi");
+  if (!sessionId) throw new Error("Не удалось начать сеанс экспорта");
 
   const maxAttempts = 900; // ~7.5 daqiqa (500ms)
   for (let i = 0; i < maxAttempts; i++) {
@@ -175,11 +175,11 @@ export async function downloadMigrationBackup(
     onProgress?.({
       stage: String(session.progress?.stage ?? session.state),
       percent: typeof session.progress?.percent === "number" ? session.progress.percent : 0,
-      message: session.progress?.message || "Eksport…"
+      message: session.progress?.message || "Экспорт…"
     });
 
     if (session.state === "failed") {
-      throw new Error(session.error || "Zaxira arxivini yaratib bo‘lmadi");
+      throw new Error(session.error || "Не удалось создать архив резервной копии");
     }
     if (session.state === "completed") {
       const { data } = await api.get(
@@ -195,7 +195,7 @@ export async function downloadMigrationBackup(
       if (!isPk) {
         const text = await blob.text().catch(() => "");
         throw new Error(
-          text.trim().slice(0, 200) || "Eksport yaroqli ZIP qaytarmadi. Qayta urinib ko‘ring."
+          text.trim().slice(0, 200) || "Экспорт вернул некорректный ZIP. Попробуйте ещё раз."
         );
       }
       const date = new Date().toISOString().slice(0, 10);
@@ -208,7 +208,7 @@ export async function downloadMigrationBackup(
       return;
     }
   }
-  throw new Error("Eksport juda uzoq davom etdi — qayta urinib ko‘ring");
+  throw new Error("Экспорт выполняется слишком долго — попробуйте ещё раз");
 }
 
 export async function previewMigrationBackup(
@@ -246,11 +246,11 @@ async function pollJobUntilDone(
     onProgress({
       stage: String(job.progress?.stage ?? job.state),
       percent: job.state === "completed" ? 100 : percent,
-      message: job.progress?.message || (job.state === "waiting" ? "Navbatda…" : "Ishlamoqda…")
+      message: job.progress?.message || (job.state === "waiting" ? "В очереди…" : "Выполняется…")
     });
 
     if (job.state === "waiting" && job.workersConnected === 0 && i >= 10) {
-      throw new Error("Worker ishlamayapti — start-dev-quick yoki worker ni ishga tushiring.");
+      throw new Error("Worker не запущен — запустите start-dev-quick или worker.");
     }
     if (job.state === "completed") {
       const r = job.returnvalue;
@@ -258,10 +258,10 @@ async function pollJobUntilDone(
       return { applied: [], skipped: [], warnings: [], next_steps: [] };
     }
     if (job.state === "failed") {
-      throw new Error(job.failedReason || "Import xatosi");
+      throw new Error(job.failedReason || "Ошибка импорта");
     }
   }
-  throw new Error("Import kutish vaqti tugadi");
+  throw new Error("Истекло время ожидания импорта");
 }
 
 async function pollSessionUntilDone(
@@ -282,9 +282,9 @@ async function pollSessionUntilDone(
       updated_at: data.progress.updated_at
     });
     if (data.state === "completed" && data.result) return data.result;
-    if (data.state === "failed") throw new Error(data.error || "Import xatosi");
+    if (data.state === "failed") throw new Error(data.error || "Ошибка импорта");
   }
-  throw new Error("Import kutish vaqti tugadi");
+  throw new Error("Истекло время ожидания импорта");
 }
 
 export async function applyMigrationBackup(
@@ -323,7 +323,7 @@ export async function applyMigrationBackup(
     if (accepted.sessionId) {
       return pollSessionUntilDone(tenantSlug, accepted.sessionId, onProgress);
     }
-    throw new Error("Async import javobida jobId/sessionId yo‘q");
+    throw new Error("В ответе асинхронного импорта нет jobId/sessionId");
   }
 
   return data as MigrationApplyResult;
@@ -335,13 +335,13 @@ export function moduleCountTotal(counts: Record<string, number> | undefined): nu
 }
 
 export function importStatusLabel(status: string): string {
-  if (status === "included") return "Import qo‘llab-quvvatlanadi";
-  if (status === "partial") return "Qisman import";
-  return "Keyingi bosqich";
+  if (status === "included") return "Импорт поддерживается";
+  if (status === "partial") return "Частичный импорт";
+  return "Следующий этап";
 }
 
 export function exportStatusLabel(status: string): string {
-  return status === "included" ? "Arxivga kiritiladi" : "Rejada";
+  return status === "included" ? "Включается в архив" : "Запланировано";
 }
 
 export function groupModulesByPhase<T extends { id: string; phase?: number }>(
@@ -358,7 +358,7 @@ export function groupModulesByPhase<T extends { id: string; phase?: number }>(
     .filter((p) => map.has(p))
     .map((phase) => ({
       phase,
-      label: MIGRATION_PHASE_LABELS_UZ[phase] ?? `Bosqich ${phase}`,
+      label: MIGRATION_PHASE_LABELS_UZ[phase] ?? `Этап ${phase}`,
       items: map.get(phase) ?? []
     }));
 }

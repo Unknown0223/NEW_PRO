@@ -50,6 +50,17 @@ export interface VisitPoint {
   clientId?: number | null;
 }
 
+export const PAY_METHOD_LABEL: Record<string, string> = {
+  Naqd: "Наличные",
+  Terminal: "Терминал",
+  Perechislenie: "Перечисление",
+};
+
+export function payMethodLabel(v: string | null | undefined): string {
+  if (!v) return "";
+  return PAY_METHOD_LABEL[v] ?? v;
+}
+
 export interface Employee {
   id: string;
   code: string;
@@ -113,11 +124,11 @@ export const ROLE_META: Record<
   Employee["type"],
   { label: string; short: string; color: string; desc: string }
 > = {
-  agent: { label: "Агенты", short: "АГТ", color: "#0f9e8e", desc: "Ташриф ва буюртмалар" },
-  delivery: { label: "Доставщики", short: "DLV", color: "#3b9fe9", desc: "Етказиб бериш" },
-  supervisor: { label: "Супервайзеры", short: "SVR", color: "#7c5cff", desc: "Территория назорати" },
-  inkasator: { label: "Инкасаторы", short: "INK", color: "#d69e27", desc: "Наqd пул ва савдо суммаларини йиғиш" },
-  vansell: { label: "VanSell", short: "VS", color: "#e0567a", desc: "Буюртма + етказиш + тўлов (ванда)" }
+  agent: { label: "Агенты", short: "АГТ", color: "#0f9e8e", desc: "Визиты и заказы" },
+  delivery: { label: "Доставщики", short: "ДОС", color: "#3b9fe9", desc: "Доставка" },
+  supervisor: { label: "Супервайзеры", short: "СВР", color: "#7c5cff", desc: "Контроль территории" },
+  inkasator: { label: "Инкассаторы", short: "ИНК", color: "#d69e27", desc: "Сбор наличных и торговой выручки" },
+  vansell: { label: "Ван-селлинг", short: "ВС", color: "#e0567a", desc: "Заказ + доставка + оплата (с машины)" }
 };
 
 export const STATUS_META: Record<VisitStatus, { label: string; color: string }> = {
@@ -183,14 +194,14 @@ export function regionOf(e: Employee): string {
       t
     )
   ) {
-    return "Toshkent";
+    return "Ташкент";
   }
-  if (/(FARG'ONA|FERGANA|QO'QON|VODIYSI|ФЕРГАН)/.test(t)) return "Farg'ona";
-  if (/ANDIJON|АНДИЖАН/.test(t)) return "Andijon";
-  if (/NAMANGAN|НАМАНГАН/.test(t)) return "Namangan";
-  if (/SAMARQAND|САМАРКАНД/.test(t)) return "Samarqand";
-  if (/BUXORO|БУХАРА/.test(t)) return "Buxoro";
-  if (/NAVOIY|НАВОИ/.test(t)) return "Navoiy";
-  if (/NUKUS|НУКУС/.test(t)) return "Nukus";
-  return "Boshqa";
+  if (/(FARG'ONA|FERGANA|QO'QON|VODIYSI|ФЕРГАН)/.test(t)) return "Фергана";
+  if (/ANDIJON|АНДИЖАН/.test(t)) return "Андижан";
+  if (/NAMANGAN|НАМАНГАН/.test(t)) return "Наманган";
+  if (/SAMARQAND|САМАРКАНД/.test(t)) return "Самарканд";
+  if (/BUXORO|БУХАРА/.test(t)) return "Бухара";
+  if (/NAVOIY|НАВОИ/.test(t)) return "Навои";
+  if (/NUKUS|НУКУС/.test(t)) return "Нукус";
+  return "Другое";
 }

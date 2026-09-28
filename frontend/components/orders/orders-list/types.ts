@@ -392,7 +392,7 @@ export function buildPaymentPrefillFromSelection(
   if (delivered.length === 0) {
     return {
       href: "/orders",
-      note: "«Приход в кассу» uchun kamida bitta «Доставлен» zakaz belgilang.",
+      note: "Для «Приход в кассу» отметьте хотя бы один заказ «Доставлен».",
       disabled: true
     };
   }
@@ -403,7 +403,7 @@ export function buildPaymentPrefillFromSelection(
   if (clientIds.length === 0) {
     return {
       href: "/orders",
-      note: "Tanlangan zakazlarda mijoz yo‘q.",
+      note: "В выбранных заказах нет клиента.",
       disabled: true
     };
   }
@@ -423,12 +423,12 @@ export function buildPaymentPrefillFromSelection(
   if (delivered.length > 1) {
     notes.push(
       clientIds.length > 1
-        ? `${delivered.length} ta «Доставлен» zakaz (${clientIds.length} mijoz).`
-        : `${delivered.length} ta «Доставлен» zakaz.`
+        ? `Заказов «Доставлен»: ${delivered.length} (клиентов: ${clientIds.length}).`
+        : `Заказов «Доставлен»: ${delivered.length}.`
     );
   }
   if (skipped > 0) {
-    notes.push(`${skipped} ta yetkazilmagan zakaz o‘tkazib yuborildi.`);
+    notes.push(`Пропущено недоставленных заказов: ${skipped}.`);
   }
 
   return {
@@ -438,19 +438,19 @@ export function buildPaymentPrefillFromSelection(
 }
 
 export function rowStatusPatchError(err: unknown): string {
-  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Holatni yangilab bo‘lmadi.");
+  if (!axios.isAxiosError(err)) return getUserFacingError(err, "Не удалось обновить статус.");
   const code = (err.response?.data as { error?: string } | undefined)?.error;
   if (code === "InvalidTransition") return "Недопустимый переход статуса.";
-  if (code === "ForbiddenRevert") return "Oldingi bosqichga qaytarish faqat admin uchun.";
-  if (code === "ForbiddenReopenCancelled") return "Bekor qilingan zakazni qayta ochish faqat admin uchun.";
-  if (code === "ForbiddenOperatorCancelLate") return "Bu bosqichda bekor qilish taqiqlangan.";
-  if (code === "ApprovalPending") return "Tasdiqlash zanjirini kuting — joriy tasdiqlovchi tasdiqlashi kerak.";
-  if (code === "ApprovalRejected") return "Tasdiqlash rad etilgan — qayta sozlash kerak.";
-  if (code === "NotFound") return "Zakaz topilmadi.";
+  if (code === "ForbiddenRevert") return "Возврат на предыдущий этап доступен только администратору.";
+  if (code === "ForbiddenReopenCancelled") return "Повторно открыть отменённый заказ может только администратор.";
+  if (code === "ForbiddenOperatorCancelLate") return "На этом этапе отмена запрещена.";
+  if (code === "ApprovalPending") return "Дождитесь цепочки согласования — текущий согласующий должен подтвердить.";
+  if (code === "ApprovalRejected") return "Согласование отклонено — требуется повторная настройка.";
+  if (code === "NotFound") return "Заказ не найден.";
   const flat = getZodFlattenFromApiErrorBody(err.response?.data);
   const hint = flat ? firstValidationUserHint(flat) : undefined;
   if (hint) return withApiSupportLine(hint, err);
-  return getUserFacingError(err, "Holatni yangilab bo‘lmadi.");
+  return getUserFacingError(err, "Не удалось обновить статус.");
 }
 
 export function ordersMutationFeedback(err: unknown, fallback: string): string {

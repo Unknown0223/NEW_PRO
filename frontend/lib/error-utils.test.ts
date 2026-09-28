@@ -59,15 +59,15 @@ describe("getUserFacingError", () => {
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toContain("Sessiya");
+    expect(getUserFacingError(e)).toContain("Сессия");
   });
 
   it("409 DuplicateName / NameExists / SkuExists / BarcodeExists", () => {
     const cases: Array<{ error: string; expect: string }> = [
-      { error: "DuplicateName", expect: "nomdagi" },
-      { error: "NameExists", expect: "nomdagi" },
+      { error: "DuplicateName", expect: "названием" },
+      { error: "NameExists", expect: "названием" },
       { error: "SkuExists", expect: "SKU" },
-      { error: "BarcodeExists", expect: "shtrixkod" }
+      { error: "BarcodeExists", expect: "штрихкод" }
     ];
     for (const c of cases) {
       const e = new AxiosError("fail");
@@ -148,7 +148,7 @@ describe("getUserFacingError", () => {
       headers: {},
       config: {} as never
     };
-    expect(getUserFacingError(e)).toContain("Dostavchik");
+    expect(getUserFacingError(e)).toContain("Доставщик");
   });
 });
 

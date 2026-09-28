@@ -59,7 +59,7 @@ class _SupervisorClientEditPageState extends ConsumerState<SupervisorClientEditP
     if (slug.isEmpty) {
       setState(() {
         _loading = false;
-        _error = 'Нет tenant';
+        _error = 'Компания не выбрана';
       });
       return;
     }

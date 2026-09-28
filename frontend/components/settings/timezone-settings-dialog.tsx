@@ -91,7 +91,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
     },
     onSuccess: async () => {
       setAppTimezone(timezone);
-      setMsg("Saqlandi");
+      setMsg("Сохранено");
       await qc.invalidateQueries({ queryKey: ["settings", "profile"] });
       onOpenChange(false);
     },
@@ -108,16 +108,16 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
         <DialogHeader className="shrink-0 space-y-1 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Clock className="h-4 w-4 text-teal-700" aria-hidden />
-            Vaqt mintaqasi
+            Часовой пояс
           </DialogTitle>
           <DialogDescription className="text-xs leading-snug">
-            Qurilmalardagi standart IANA ro‘yxati. Sync oynasi va sanalar shu mintaqa bo‘yicha.
+            Стандартный список IANA на устройствах. Окно синхронизации и даты рассчитываются по этому поясу.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-3">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Yuklanmoqda…</p>
+            <p className="text-sm text-muted-foreground">Загрузка…</p>
           ) : isError ? (
             <p className="text-sm text-destructive">{getUserFacingError(error)}</p>
           ) : (
@@ -130,7 +130,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Qidirish: Tashkent, Moscow, UTC+5…"
+                  placeholder="Поиск: Tashkent, Moscow, UTC+5…"
                   className="h-9 pl-9"
                   disabled={!isAdmin || saveMut.isPending}
                   autoFocus
@@ -152,7 +152,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                       : "border-border bg-muted/40 text-muted-foreground hover:bg-muted"
                   )}
                 >
-                  <span className="font-medium text-foreground">Qurilma mintaqasi</span>
+                  <span className="font-medium text-foreground">Часовой пояс устройства</span>
                   <span className="mt-0.5 block truncate">{deviceTz}</span>
                 </button>
               ) : null}
@@ -160,11 +160,11 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
               <div
                 className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-border"
                 role="listbox"
-                aria-label="Vaqt mintaqalari"
+                aria-label="Часовые пояса"
               >
                 {filtered.length === 0 ? (
                   <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    Topilmadi
+                    Не найдено
                   </p>
                 ) : (
                   <ul className="divide-y divide-border/70">
@@ -211,7 +211,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
               </div>
 
               <p className="shrink-0 text-[11px] text-muted-foreground">
-                Tanlangan:{" "}
+                Выбрано:{" "}
                 <span className="font-medium text-foreground">{timezone}</span>
                 {selectedMeta
                   ? ` · ${formatUtcOffsetLabel(selectedMeta.offsetMinutes)}`
@@ -219,7 +219,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
               </p>
 
               {!isAdmin ? (
-                <p className="text-xs text-muted-foreground">Faqat admin o‘zgartira oladi.</p>
+                <p className="text-xs text-muted-foreground">Изменять может только администратор.</p>
               ) : null}
               {msg ? (
                 <p
@@ -241,7 +241,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
             disabled={saveMut.isPending}
             onClick={() => onOpenChange(false)}
           >
-            Yopish
+            Закрыть
           </Button>
           {isAdmin ? (
             <div className="flex gap-2">
@@ -255,7 +255,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                     setMsg(null);
                   }}
                 >
-                  Bekor
+                  Отмена
                 </Button>
               ) : null}
               <Button
@@ -263,7 +263,7 @@ export function TimezoneSettingsDialog({ open, onOpenChange }: Props) {
                 disabled={!dirty || saveMut.isPending || isLoading}
                 onClick={() => saveMut.mutate()}
               >
-                {saveMut.isPending ? "Saqlanmoqda…" : "Saqlash"}
+                {saveMut.isPending ? "Сохранение…" : "Сохранить"}
               </Button>
             </div>
           ) : null}

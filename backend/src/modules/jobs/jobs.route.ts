@@ -25,7 +25,7 @@ export async function registerJobRoutes(app: FastifyInstance) {
           request,
           503,
           "JobQueueUnavailable",
-          "Redis yoki navbat mavjud emas. Worker va REDIS_URL ni tekshiring."
+          "Redis или очередь задач недоступны. Проверьте worker и REDIS_URL."
         );
       }
     }
@@ -45,7 +45,7 @@ export async function registerJobRoutes(app: FastifyInstance) {
         return reply.send(job);
       } catch (err) {
         request.log.warn({ err }, "jobs.get failed (redis?)");
-        return sendApiError(reply, request, 503, "JobQueueUnavailable", "Redis yoki navbat mavjud emas.");
+        return sendApiError(reply, request, 503, "JobQueueUnavailable", "Redis или очередь задач недоступны.");
       }
     }
   );

@@ -55,7 +55,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Holat: $status')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Статус: ${expeditorStatusLabel(status)}')));
       }
     } catch (e) {
       if (mounted) {
@@ -93,7 +93,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
       ref.invalidate(expeditorOrderDetailProvider(widget.orderId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Koordinata yangilandi'), backgroundColor: AppColors.success),
+          const SnackBar(content: Text('Координаты обновлены'), backgroundColor: AppColors.success),
         );
       }
     } catch (e) {
@@ -112,7 +112,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
     final detail = ref.watch(expeditorOrderDetailProvider(widget.orderId));
 
     return Scaffold(
-      appBar: AppBar(title: Text('Buyurtma #${detail.valueOrNull?['number'] ?? widget.orderId}')),
+      appBar: AppBar(title: Text('Заказ #${detail.valueOrNull?['number'] ?? widget.orderId}')),
       body: detail.when(
         data: (o) {
           final client = Map<String, dynamic>.from(o['client'] as Map? ?? {});
@@ -142,22 +142,22 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Holat: ${expeditorStatusLabel(status)}', style: AppTypography.titleMedium),
+              Text('Статус: ${expeditorStatusLabel(status)}', style: AppTypography.titleMedium),
               const SizedBox(height: 8),
-              Text('Mijoz: ${client['name'] ?? '-'}', style: AppTypography.bodyLarge),
-              if (client['phone'] != null) Text('Tel: ${client['phone']}', style: AppTypography.bodyMedium),
+              Text('Клиент: ${client['name'] ?? '-'}', style: AppTypography.bodyLarge),
+              if (client['phone'] != null) Text('Тел.: ${client['phone']}', style: AppTypography.bodyMedium),
               if (client['address'] != null || client['city'] != null)
                 Text(
                   [client['address'], client['city'], client['zone']].whereType<String>().where((s) => s.isNotEmpty).join(', '),
                   style: AppTypography.bodySmall,
                 ),
               const SizedBox(height: 8),
-              Text('Summa: ${o['total_sum']} ${policy.currencySymbol}', style: AppTypography.bodyLarge),
+              Text('Сумма: ${o['total_sum']} ${policy.currencySymbol}', style: AppTypography.bodyLarge),
               if (paidConfirmed > 0)
-                Text('Tasdiqlangan to\'lov: $paidConfirmed ${policy.currencySymbol}', style: AppTypography.bodySmall),
+                Text('Подтверждённая оплата: $paidConfirmed ${policy.currencySymbol}', style: AppTypography.bodySmall),
               if (paidPending > 0)
                 Text(
-                  'Tasdiqlanishni kutmoqda: $paidPending ${policy.currencySymbol}',
+                  'Ожидает подтверждения: $paidPending ${policy.currencySymbol}',
                   style: AppTypography.bodySmall.copyWith(color: AppColors.warning),
                 ),
               if (pendingPayments.isNotEmpty) ...[
@@ -177,7 +177,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                 OutlinedButton.icon(
                   onPressed: _busy ? null : () => _openMap(client),
                   icon: const Icon(Icons.map_outlined),
-                  label: const Text('Xaritada ochish'),
+                  label: const Text('Открыть на карте'),
                 ),
               if (policy.canChangeClientLocation && clientId > 0)
                 Padding(
@@ -185,11 +185,11 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: _busy ? null : () => _updateClientLocation(clientId),
                     icon: const Icon(Icons.my_location),
-                    label: const Text('Koordinatani yangilash'),
+                    label: const Text('Обновить координаты'),
                   ),
                 ),
               const SizedBox(height: 16),
-              const Text('Mahsulotlar', style: AppTypography.titleMedium),
+              const Text('Товары', style: AppTypography.titleMedium),
               ...items.map((it) {
                 final m = Map<String, dynamic>.from(it);
                 return ListTile(
@@ -201,12 +201,12 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
               }),
               const Divider(height: 32),
               if (nextStatuses.isNotEmpty) ...[
-                const Text('Holatni yangilash', style: AppTypography.titleMedium),
+                const Text('Изменить статус', style: AppTypography.titleMedium),
                 if (policy.fingerprintRequired)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
-                      '«delivered» uchun barmoq izi talab qilinadi',
+                      'Для статуса «Доставлен» требуется отпечаток пальца',
                       style: AppTypography.bodySmall.copyWith(color: AppColors.warning),
                     ),
                   ),
@@ -230,7 +230,7 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/payments?order_id=${widget.orderId}'),
                     icon: const Icon(Icons.payment),
-                    label: const Text('To\'lov arizasi yuborish'),
+                    label: const Text('Отправить заявку на оплату'),
                   ),
                 ),
               if (policy.allowPartialReturn && status == 'delivered')
@@ -239,14 +239,14 @@ class _ExpeditorDeliveryDetailPageState extends ConsumerState<ExpeditorDeliveryD
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/returns?order_id=${widget.orderId}'),
                     icon: const Icon(Icons.replay),
-                    label: const Text('Qaytarish'),
+                    label: const Text('Возврат'),
                   ),
                 ),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Xato: $e')),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
       ),
     );
   }

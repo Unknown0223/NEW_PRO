@@ -197,7 +197,7 @@ export function PolkiClientSearchSelect({
         <Input
           ref={searchInputRef}
           className="h-9 border-input bg-background pl-9 text-sm shadow-none"
-          placeholder="ID, kod, ism, telefon, ИНН…"
+          placeholder="ID, код, имя, телефон, ИНН…"
           value={draftSearch}
           onChange={(e) => setDraftSearch(e.target.value)}
           onMouseDown={(e) => e.stopPropagation()}
@@ -206,7 +206,7 @@ export function PolkiClientSearchSelect({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {scopeBlocksServer ? (
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">Kontekst yuklanmoqda…</p>
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">Загрузка контекста…</p>
         ) : isLoadingRows ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">Загрузка…</p>
         ) : rows.length === 0 ? (
@@ -253,7 +253,7 @@ export function PolkiClientSearchSelect({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => void pickerQ.fetchNextPage()}
                 >
-                  {pickerQ.isFetchingNextPage ? "Yuklanmoqda…" : "Yana yuklash (keyingi sahifa)"}
+                  {pickerQ.isFetchingNextPage ? "Загрузка…" : "Загрузить ещё (следующая стр.)"}
                 </button>
               </div>
             ) : null}
@@ -261,14 +261,14 @@ export function PolkiClientSearchSelect({
         )}
       </div>
       <div className="shrink-0 border-t border-border/60 bg-muted/20 px-3 py-1.5 text-[10px] text-muted-foreground">
-        Yuklangan: <span className="font-medium tabular-nums text-foreground/80">{rows.length}</span>
+        Загружено: <span className="font-medium tabular-nums text-foreground/80">{rows.length}</span>
         {totalReported > rows.length ? (
           <>
             {" "}
-            / jami <span className="font-medium tabular-nums text-foreground/80">{totalReported}</span>
+            / всего <span className="font-medium tabular-nums text-foreground/80">{totalReported}</span>
           </>
         ) : null}
-        {debouncedSearch.trim() ? " · qidiruv" : ""} · {LIST_LIMIT} qator/sahifa
+        {debouncedSearch.trim() ? " · поиск" : ""} · {LIST_LIMIT} строк/стр.
       </div>
     </div>
   );

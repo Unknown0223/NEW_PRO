@@ -127,7 +127,7 @@ bool isNewClientBlockedForOrder(
 }
 
 const kClientInactiveOrderMessage =
-    'Mijoz nofaol — operator tasdiqlamaguncha zakaz va aksiya mumkin emas';
+    'Клиент неактивен — заказы и акции недоступны до подтверждения оператором';
 
 String clientFieldLabel(String key) => kClientFieldLabelsRu[key] ?? key;
 

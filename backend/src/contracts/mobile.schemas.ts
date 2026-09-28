@@ -51,7 +51,7 @@ export const mobileEnqueueBodySchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["client_id"],
-        message: "client_local_id or client_id is required"
+        message: "Укажите client_local_id или client_id"
       });
     }
   });
@@ -129,7 +129,7 @@ export const mobilePatchProfileBodySchema = z
     phone: z.string().trim().max(32).nullable().optional(),
     avatar_base64: z.string().max(180_000).nullable().optional()
   })
-  .refine((v) => Object.keys(v).length > 0, { message: "At least one field required" });
+  .refine((v) => Object.keys(v).length > 0, { message: "Укажите хотя бы одно поле" });
 
 /** POST `/api/:slug/mobile/clients/:id/photo-reports — agent mijoz fotosi */
 export const mobileClientPhotoBodySchema = z.object({
@@ -163,7 +163,7 @@ export const mobilePatchClientBodySchema = z
     visit_weekdays: z.array(z.number().int().min(1).max(7)).max(7).optional(),
     ...mobileClientOptionalFieldsSchema
   })
-  .refine((v) => Object.keys(v).length > 0, { message: "At least one field required" });
+  .refine((v) => Object.keys(v).length > 0, { message: "Укажите хотя бы одно поле" });
 
 const mobileBonusGiftOverrideSchema = z.object({
   bonus_rule_id: z.number().int().positive(),

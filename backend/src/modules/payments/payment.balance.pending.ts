@@ -52,7 +52,7 @@ export async function confirmPendingPayment(
       data: {
         client_balance_id: bal.id,
         delta: amountDec,
-        note: `To'lov #${p.id} tasdiq (ariza)`,
+        note: `Оплата #${p.id} подтверждена (заявка)`,
         user_id: uid
       }
     });
@@ -250,8 +250,8 @@ export async function returnPaymentToExpeditor(
             client_balance_id: bal.id,
             delta: payment.amount.neg(),
             note: note
-              ? `To'lov #${payment.id} ekspeditorga qaytarildi — ${note}`
-              : `To'lov #${payment.id} ekspeditorga qaytarildi`,
+              ? `Оплата #${payment.id} возвращена экспедитору — ${note}`
+              : `Оплата #${payment.id} возвращена экспедитору`,
             user_id: uid
           }
         });

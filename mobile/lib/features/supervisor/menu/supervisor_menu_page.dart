@@ -125,7 +125,7 @@ class SupervisorMenuPage extends ConsumerWidget {
       final text = [
         name,
         server,
-        'Роль: supervisor',
+        'Роль: супервайзер',
         'Sales Arena',
       ].join('\n');
       await shareSupervisorText(context, text, successLabel: l10n.copied);

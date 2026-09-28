@@ -338,7 +338,7 @@ export default function ClientsPage() {
       const p = data.decisionPreview;
       const valid = p?.validCount ?? 0;
       const errN = (p?.errorCount ?? 0) + (p?.duplicateCount ?? 0);
-      return `Xatolar aniqlandi (${errN}). To‘g‘ri qatorlar: ${valid}. Hali hech narsa yozilmadi — tanlang.`;
+      return `Обнаружены ошибки (${errN}). Корректных строк: ${valid}. Пока ничего не записано — выберите действие.`;
     }
     const errPart =
       data.errors.length > 0
@@ -447,7 +447,7 @@ export default function ClientsPage() {
     mutationFn: async (
       payload: { file: File; importMode: "create" | "update"; commitDecision?: "accept_valid" | "reject_all" } & ClientImportMappingPayload
     ) => {
-      if (!tenantSlug) throw new Error("TenantRequired");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       logClientImport("boshlash", {
         fayl: payload.file.name,
         hajmBytes: payload.file.size,
@@ -541,13 +541,13 @@ export default function ClientsPage() {
           if (isAxiosError(err)) {
             const st = err.response?.status;
             if (st === 401 || st === 403) {
-              throw new Error("Import status uchun sessiya muddati tugagan. Qayta login qiling.");
+              throw new Error("Сессия истекла при проверке статуса импорта. Войдите в систему заново.");
             }
             if (st === 404) {
-              throw new Error("Import vazifasi topilmadi yoki navbatdan o‘chgan.");
+              throw new Error("Задача импорта не найдена или удалена из очереди.");
             }
             if (st === 503) {
-              throw new Error("Job navbati/Redis vaqtincha mavjud emas.");
+              throw new Error("Очередь задач (Redis) временно недоступна.");
             }
           }
           throw err;
@@ -598,7 +598,7 @@ export default function ClientsPage() {
           attempt >= 8
         ) {
           throw new Error(
-            "Import navbati ishlamayapti: background worker yo‘q. Backend qayta deploy qiling (worker bilan) yoki admin bilan bog‘laning."
+            "Очередь импорта не работает: background worker не запущен. Переразверните backend (вместе с worker) или обратитесь к администратору."
           );
         }
 
@@ -608,7 +608,7 @@ export default function ClientsPage() {
             const bad: ClientImportApiResult = {
               created: 0,
               updated: 0,
-              errors: ["Import yakunlandi, lekin javob formati noto‘g‘ri."]
+              errors: ["Импорт завершён, но формат ответа некорректен."]
             };
             logClientImport("yakun: noto‘g‘ri returnvalue", { jobId, raw: job.returnvalue });
             logClientImportResultAnalysis(bad, { jobId });
@@ -642,7 +642,7 @@ export default function ClientsPage() {
           ...prev,
           stage: "done",
           percent: 100,
-          message: data.needsDecision ? "Tanlov kutilyapti." : "Импорт завершен."
+          message: data.needsDecision ? "Ожидается выбор действия." : "Импорт завершен."
         })
       );
       setImportMsg(buildImportSummaryMessage(data));
@@ -1222,7 +1222,7 @@ export default function ClientsPage() {
             setImportDecisionPreview(null);
           }
         }}
-        summary={importMsg ?? "Import yakunlandi."}
+        summary={importMsg ?? "Импорт завершён."}
         errors={importResultErrors}
         needsDecision={importNeedsDecision}
         decisionPreview={importDecisionPreview}
@@ -1234,7 +1234,7 @@ export default function ClientsPage() {
           setImportStagingFile(null);
           setImportLastMapping(null);
           setImportDecisionPreview(null);
-          setImportMsg("Import bekor qilindi — hech narsa yozilmadi.");
+          setImportMsg("Импорт отменён — ничего не записано.");
         }}
         onAcceptValid={() => {
           if (!importStagingFile || !importLastMapping) return;

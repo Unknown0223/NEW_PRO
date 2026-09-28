@@ -21,7 +21,7 @@ export default function ReturnsNewRedirect() {
 
   return (
     <PageShell>
-      <p className="text-sm text-muted-foreground">Qaytarish sahifasiga yo&apos;naltirilmoqda…</p>
+      <p className="text-sm text-muted-foreground">Переход на страницу возврата…</p>
     </PageShell>
   );
 }

@@ -337,7 +337,7 @@ export function StockRecommendedWorkspace({ tenantSlug }: { tenantSlug: string }
     <PageShell>
       <PageHeader
         title="Остатки товара на складе (рекомендованный запас)"
-        description="Forecast по складу: среднесуточные продажи, покрытие запаса и рекомендованный объём пополнения."
+        description="Прогноз по складу: среднесуточные продажи, покрытие запаса и рекомендованный объём пополнения."
       />
 
       <div className="orders-hub-section orders-hub-section--filters orders-hub-section--stack-tight">

@@ -87,26 +87,26 @@ export function ProductCatalogExcelPanel({
               ? j.message.trim()
               : typeof j.error === "string" && j.error.trim()
                 ? j.error.trim()
-                : "Yuklab olish rad etildi.";
+                : "Скачивание отклонено.";
           const ref = formatApiSupportReference(
             typeof j.requestId === "string" ? j.requestId.trim() : undefined
           );
           setMsg(ref ? `${base} — ${ref}` : base);
         } catch {
-          setMsg("Yuklab olish rad etildi.");
+          setMsg("Скачивание отклонено.");
         }
         return;
       }
       triggerBlobDownload(blob, filename);
       setMsg(null);
     } catch (e) {
-      setMsg(getUserFacingError(e, "Yuklab bo‘lmadi — tarmoq yoki ruxsat."));
+      setMsg(getUserFacingError(e, "Не удалось скачать — проблема с сетью или доступом."));
     }
   }
 
   async function openVirtualPreview(file: File, mode: PreviewMode) {
     if (!config || !baseStep) {
-      setMsg("Mahsulot import konfiguratsiyasi topilmadi");
+      setMsg("Не найдена конфигурация импорта товаров");
       return;
     }
     setParsing(true);
@@ -123,15 +123,15 @@ export function ProductCatalogExcelPanel({
       const errN = preview.rows.filter((r) => r.errors.length).length;
       if (errN > 0) {
         setMsg(
-          `Virtual ko‘rinish: ${preview.rows.length} qator, ${errN} ta xato/dublikat — qizil kataklarni tuzating, keyin tasdiqlang`
+          `Предпросмотр: строк — ${preview.rows.length}, с ошибками/дубликатами — ${errN}. Исправьте красные ячейки, затем подтвердите`
         );
       } else {
         setMsg(
-          `Virtual ko‘rinish: ${preview.rows.length} qator tayyor. Tekshirib tahrilang, keyin «Qo‘llash» bilan tasdiqlang`
+          `Предпросмотр: строк готово — ${preview.rows.length}. Проверьте и отредактируйте, затем подтвердите кнопкой «Применить»`
         );
       }
     } catch (e) {
-      setMsg(getUserFacingError(e, "Excel o‘qib bo‘lmadi"));
+      setMsg(getUserFacingError(e, "Не удалось прочитать файл Excel"));
       setDraft(null);
       setPreviewMode(null);
     } finally {
@@ -150,10 +150,11 @@ export function ProductCatalogExcelPanel({
       <Card className="border-primary/20">
         {showCardHeader ? (
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Excel — katalog importi</CardTitle>
+            <CardTitle className="text-base">Excel — импорт каталога</CardTitle>
             <CardDescription>
-              Avval <strong>virtual jadval</strong> ochiladi: tahrirlash, tekshiruv va dublikat
-              (qizil) ogohlantirish. Tizimga yozish faqat <strong>Qo‘llash</strong> dan keyin.
+              Сначала открывается <strong>таблица предпросмотра</strong>: редактирование, проверка и
+              предупреждение о дубликатах (красным). Запись в систему — только после нажатия{" "}
+              <strong>«Применить»</strong>.
             </CardDescription>
           </CardHeader>
         ) : null}
@@ -173,7 +174,7 @@ export function ProductCatalogExcelPanel({
                 }
               }}
             >
-              {downloading === "template" ? "…" : "Bo‘sh shablon (.xlsx)"}
+              {downloading === "template" ? "…" : "Пустой шаблон (.xlsx)"}
             </Button>
             <Button
               type="button"
@@ -189,11 +190,11 @@ export function ProductCatalogExcelPanel({
                 }
               }}
             >
-              {downloading === "export" ? "…" : "Joriy mahsulotlar (eksport)"}
+              {downloading === "export" ? "…" : "Текущие товары (экспорт)"}
             </Button>
             {draft ? (
               <Button type="button" variant="ghost" size="sm" onClick={clearPreview}>
-                Previewni yopish
+                Закрыть предпросмотр
               </Button>
             ) : null}
           </div>
@@ -201,13 +202,13 @@ export function ProductCatalogExcelPanel({
           {!draft ? (
             <>
               <div className="rounded-md border border-border/80 bg-muted/20 p-3 space-y-2">
-                <p className="font-medium text-foreground">To‘liq import (virtual → tasdiq)</p>
+                <p className="font-medium text-foreground">Полный импорт (предпросмотр → подтверждение)</p>
                 <p className="text-xs text-muted-foreground">
-                  Yangi mahsulotlar qo‘shiladi; <strong>Код</strong> (SKU) yoki nom bo‘lsa —
-                  yangilanadi. Dublikat qatorlar qizil bo‘ladi.
+                  Новые товары добавляются; если <strong>Код</strong> (SKU) или название уже есть —
+                  обновляются. Строки-дубликаты выделяются красным.
                 </p>
                 <ExcelFileDropZone
-                  emptyLabel={parsing ? "O‘qilmoqda…" : "Excel faylni tanlang yoki shu yerga tashlang"}
+                  emptyLabel={parsing ? "Чтение…" : "Выберите файл Excel или перетащите его сюда"}
                   dropHint=""
                   className="justify-start px-3 text-xs"
                   onFile={(f) => void openVirtualPreview(f, "full")}
@@ -216,13 +217,13 @@ export function ProductCatalogExcelPanel({
               </div>
 
               <div className="rounded-md border border-border/80 bg-muted/20 p-3 space-y-2">
-                <p className="font-medium text-foreground">Faqat yangilash (virtual → tasdiq)</p>
+                <p className="font-medium text-foreground">Только обновление (предпросмотр → подтверждение)</p>
                 <p className="text-xs text-muted-foreground">
-                  Avval eksport qiling, tahrirlang. Previewda tekshirib, keyin tasdiqlang — yangi SKU
-                  yaratilmaydi.
+                  Сначала выполните экспорт и отредактируйте файл. Проверьте в предпросмотре, затем
+                  подтвердите — новые SKU не создаются.
                 </p>
                 <ExcelFileDropZone
-                  emptyLabel={parsing ? "O‘qilmoqda…" : "Excel faylni tanlang yoki shu yerga tashlang"}
+                  emptyLabel={parsing ? "Чтение…" : "Выберите файл Excel или перетащите его сюда"}
                   dropHint=""
                   className="justify-start px-3 text-xs"
                   onFile={(f) => void openVirtualPreview(f, "update")}
@@ -236,7 +237,7 @@ export function ProductCatalogExcelPanel({
             <p
               className={cn(
                 "rounded-md px-3 py-2 text-sm font-medium",
-                /xato|dublikat|ошибк|не выполнен|failed|tuzating/i.test(msg)
+                /xato|dublikat|ошиб|дубликат|исправьте|не удалось|отклонено|не найден|не выполнен|failed|tuzating/i.test(msg)
                   ? "border border-destructive/30 bg-destructive/10 text-destructive"
                   : "border border-sky-200 bg-sky-50 text-sky-900"
               )}
@@ -249,13 +250,13 @@ export function ProductCatalogExcelPanel({
           {draft && stepForApply && tenantSlug ? (
             <div className="space-y-2 rounded-xl border border-sky-200/80 bg-sky-50/40 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">
-                Virtual holat
-                {previewMode === "update" ? " · faqat yangilash" : " · to‘liq import"} ·{" "}
+                Предпросмотр
+                {previewMode === "update" ? " · только обновление" : " · полный импорт"} ·{" "}
                 {draft.fileName}
               </p>
               <p className="text-xs text-muted-foreground">
-                Kataklarni tahrirlang. Dublikatlar qizil. Tayyor bo‘lgach «Qo‘llash (tizimga)» ni
-                bosing.
+                Отредактируйте ячейки. Дубликаты выделены красным. Когда всё готово, нажмите
+                «Применить (в систему)».
               </p>
               <InitialSetupStepTable
                 tenantSlug={tenantSlug}
@@ -272,7 +273,7 @@ export function ProductCatalogExcelPanel({
                   setMsg(message);
                   if (errors?.length) {
                     setImportDialog({
-                      title: "Import — xatolar",
+                      title: "Импорт — ошибки",
                       summary: message,
                       errors
                     });
@@ -287,7 +288,7 @@ export function ProductCatalogExcelPanel({
             href={backHref}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
-            ← Ro‘yxatga qaytish
+            ← Вернуться к списку
           </Link>
         </div>
       </Card>
@@ -297,7 +298,7 @@ export function ProductCatalogExcelPanel({
         onOpenChange={(open) => {
           if (!open) setImportDialog(null);
         }}
-        title={importDialog?.title ?? "Import xatolari"}
+        title={importDialog?.title ?? "Ошибки импорта"}
         summary={importDialog?.summary}
         errors={importDialog?.errors ?? []}
       />

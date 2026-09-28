@@ -57,10 +57,10 @@ export const emptyProductAddForm: ProductAddForm = {
 export const PACKAGING_TEMPLATES: Array<
   Omit<Packaging, "id" | "isMain"> & { label: string }
 > = [
-  { label: "Korobka (standart)", name: "Korobka", quantity: "12", width: "20", height: "30", length: "40" },
-  { label: "Blok (kichik)", name: "Blok", quantity: "6", width: "15", height: "20", length: "25" },
-  { label: "Pallet", name: "Pallet", quantity: "480", width: "80", height: "180", length: "120" },
-  { label: "Termoplyonka", name: "Termoplyonka", quantity: "24", width: "30", height: "25", length: "45" }
+  { label: "Коробка (стандарт)", name: "Коробка", quantity: "12", width: "20", height: "30", length: "40" },
+  { label: "Блок (малый)", name: "Блок", quantity: "6", width: "15", height: "20", length: "25" },
+  { label: "Паллета", name: "Паллета", quantity: "480", width: "80", height: "180", length: "120" },
+  { label: "Термоплёнка", name: "Термоплёнка", quantity: "24", width: "30", height: "25", length: "45" }
 ];
 
 export function calcVolume(w: string, h: string, l: string, unit: "m" | "cm"): number {

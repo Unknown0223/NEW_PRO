@@ -248,27 +248,27 @@ export class ClientImportRefResolver {
     const m = this.miss;
     if (m.category > 0) {
       out.push(
-        `Import: ${m.category} qatorda «Категория клиента (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
+        `Импорт: «Категория клиента (код)» не найдена в справочнике (строк: ${m.category}) — поле оставлено пустым.`
       );
     }
     if (m.client_type_code > 0) {
       out.push(
-        `Import: ${m.client_type_code} qatorda «Тип клиента (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
+        `Импорт: «Тип клиента (код)» не найден в справочнике (строк: ${m.client_type_code}) — поле оставлено пустым.`
       );
     }
     if (m.client_format > 0) {
       out.push(
-        `Import: ${m.client_format} qatorda «Формат (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
+        `Импорт: «Формат (код)» не найден в справочнике (строк: ${m.client_format}) — поле оставлено пустым.`
       );
     }
     if (m.sales_channel > 0) {
       out.push(
-        `Import: ${m.sales_channel} qatorda «Торговый канал (код)» spravochnikda topilmadi — maydon bo‘sh qoldirildi.`
+        `Импорт: «Торговый канал (код)» не найден в справочнике (строк: ${m.sales_channel}) — поле оставлено пустым.`
       );
     }
     if (m.city > 0) {
       out.push(
-        `Import: ${m.city} qatorda «Город (код)» spravochnik / hudud daraxtida topilmadi — maydon bo‘sh qoldirildi.`
+        `Импорт: «Город (код)» не найден в справочнике / дереве территорий (строк: ${m.city}) — поле оставлено пустым.`
       );
     }
     return out;

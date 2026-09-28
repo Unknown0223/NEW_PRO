@@ -47,9 +47,11 @@ export function SalesDataTable<T extends object>({
   className,
   compact = false,
   onExportXlsx,
-  rowKey
+  rowKey,
+  action
 }: {
   title: string;
+  action?: React.ReactNode;
   data: T[];
   columns: SalesTableColumn<T>[];
   initialPageSize?: number;
@@ -118,7 +120,7 @@ export function SalesDataTable<T extends object>({
   const hasFooter = visibleColumns.some((c) => c.footer != null);
 
   return (
-    <SalesSectionPanel title={title} className={className}>
+    <SalesSectionPanel title={title} className={className} action={action}>
       <div className="rounded-2xl border border-border bg-card">
         <div className="flex flex-wrap items-center gap-3 border-b border-border p-3">
           <div className="relative">

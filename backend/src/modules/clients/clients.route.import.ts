@@ -106,7 +106,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
           queue,
           jobId,
           message:
-            "Worker ishga tushgan bo‘lsa, natija uchun GET /api/:slug/jobs/{jobId} ni so‘rang (bir xil JWT)."
+            "Если worker запущен, результат можно получить через GET /api/:slug/jobs/{jobId} (тот же JWT)."
         });
       } catch (err) {
         if (tempPath) {
@@ -118,7 +118,7 @@ export async function registerClientImportRoutes(app: FastifyInstance) {
           request,
           503,
           "JobQueueUnavailable",
-          "Redis yoki navbat mavjud emas. Worker va REDIS_URL ni tekshiring."
+          "Redis или очередь задач недоступны. Проверьте worker и REDIS_URL."
         );
       }
     }

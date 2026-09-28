@@ -23,7 +23,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
     const user = await prisma.user.findFirst({
       where: { id, tenant_id: tenantId },
       select: {
@@ -96,10 +96,10 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     if (!ok) return;
     const tenantId = request.tenant!.id;
     const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+    if (!Number.isInteger(id) || id < 1) return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
     const parsed = patchAccessBodySchema.safeParse(request.body ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     const body = parsed.data;
 
     const existing = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { id: true, role: true, is_active: true } });
@@ -184,7 +184,7 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const targetId = Number((request.params as { id: string }).id);
     const sourceId = Number((request.body as { source_user_id?: number })?.source_user_id);
     if (!Number.isInteger(targetId) || !Number.isInteger(sourceId)) {
-      return sendApiError(reply, request, 400, "InvalidId", "Invalid user id");
+      return sendApiError(reply, request, 400, "InvalidId", "Некорректный ID пользователя");
     }
     const [sourceUser, targetUser] = await Promise.all([
       prisma.user.findFirst({ where: { id: sourceId, tenant_id: tenantId } }),

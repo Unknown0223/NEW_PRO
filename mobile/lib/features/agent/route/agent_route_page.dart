@@ -37,7 +37,7 @@ class _AgentRoutePageState extends ConsumerState<AgentRoutePage> {
       backgroundColor: AppColors.background,
       drawer: const AgentDrawer(),
       appBar: AgentAppBar(
-        title: 'Savdo nuqtalari',
+        title: 'Торговые точки',
         showBack: true,
         drawerScaffoldKey: _scaffoldKey,
         actions: [

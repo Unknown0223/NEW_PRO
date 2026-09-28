@@ -171,7 +171,7 @@ export async function downloadOrdersListExcel(args: {
 
   const date = new Date().toISOString().slice(0, 10);
   const suffix = mode === "simple" ? "oddiy" : "detalniy";
-  await downloadStyledXlsxSheet(`zakazlar_${suffix}_${date}.xlsx`, "Zakazlar", headers, dataRows, {
+  await downloadStyledXlsxSheet(`zakazlar_${suffix}_${date}.xlsx`, "Заказы", headers, dataRows, {
     rowMeta
   });
 }

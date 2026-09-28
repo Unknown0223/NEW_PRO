@@ -17,8 +17,8 @@ export default function AccessPage() {
     return (
       <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
         <AccessDeniedBanner
-          title="Нет доступа / Ruxsat yo‘q"
-          message="Недостаточно прав для раздела «Доступ» / «Доступ» bo‘limiga ruxsat yo‘q (нужны admin или access.upravlenie.view)."
+          title="Нет доступа"
+          message="Недостаточно прав для раздела «Доступ» (нужны admin или access.upravlenie.view)."
         />
       </div>
     );

@@ -54,8 +54,18 @@ export type SalesDashboardSnapshot = {
     conversion_pct: number;
   };
   refusal_reason_analytics: Array<{ reason: string; count: number; share_pct: number }>;
-  sales_dynamics: Array<{ period: string; sales_sum: string; orders_count: number }>;
+  sales_dynamics: Array<{ period: string; sales_sum: string; orders_count: number; returns_sum?: string }>;
   akb_okb_block: { akb: number; okb: number; coverage_pct: number };
+  risk_zone?: {
+    okb: number;
+    with_order: number;
+    with_refusal: number;
+    visited_only: number;
+    not_visited: number;
+    orders_count: number;
+    refusals_count: number;
+    daily?: Array<{ date: string; orders: number; refusals: number; not_visited: number }>;
+  };
   territory_analytics: Array<{
     territory: string;
     sales_sum: string;
@@ -81,6 +91,7 @@ export type SalesSummaryPayload = Pick<
   | "price_type_analytics"
   | "debt_aging"
   | "akb_okb_block"
+  | "risk_zone"
   | "orders_refusals"
 >;
 

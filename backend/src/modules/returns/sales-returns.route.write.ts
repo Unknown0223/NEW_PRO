@@ -129,7 +129,7 @@ function sendReturnNotInterchangeable(reply: FastifyReply, request: FastifyReque
     request,
     400,
     "ReturnNotInterchangeable",
-    "Mahsulot faol interchangeable guruhda emas yoki tanlangan narx turi guruh bilan mos emas. Katalogda guruhni tekshiring.",
+    "Товар не входит в активную группу взаимозаменяемых товаров или выбранный тип цены не соответствует группе. Проверьте группу в каталоге.",
     pid != null ? { product_id: pid } : undefined
   );
 }

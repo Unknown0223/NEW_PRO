@@ -59,10 +59,10 @@ export async function registerStaffFaceRoutes(app: FastifyInstance) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "IMAGE_TOO_LARGE" || msg === "IMAGE_TOO_SMALL") {
-        return sendApiError(reply, request, 400, "ValidationError", "Rasm hajmi noto‘g‘ri");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный размер изображения");
       }
       if (msg === "FACE_IMAGE_BLANK") {
-        return sendApiError(reply, request, 400, "ValidationError", "Rasmda yuz aniq emas");
+        return sendApiError(reply, request, 400, "ValidationError", "Лицо на фото нечёткое");
       }
       throw e;
     }

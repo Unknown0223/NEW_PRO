@@ -81,7 +81,7 @@ export async function importClientUpdateRows(
     return {
       updated: 0,
       errors: [
-        `Sarlavha ${headerRowIdx + 1}-qatorda («${sheetLabel}»), lekin undan keyin ma’lumot qatori yo‘q.`
+        `Заголовок найден в строке ${headerRowIdx + 1} («${sheetLabel}»), но после него нет строк с данными.`
       ],
       skippedEmpty: 0,
       unchangedRows: 0
@@ -194,7 +194,7 @@ export async function importClientUpdateRows(
       continue;
     }
     if (idParse.kind === "invalid") {
-      pushErr(`Qator ${r + 1} (Excel): noto‘g‘ri ИД — ${idParse.detail}`);
+      pushErr(`Строка ${r + 1} (Excel): неверный ИД — ${idParse.detail}`);
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "parsing");
       continue;
@@ -209,14 +209,14 @@ export async function importClientUpdateRows(
       idVal = existingByCode.get(idParse.code)?.id ?? null;
     }
     if (idVal == null) {
-      pushErr(`Qator ${r + 1} (Excel): mijoz topilmadi (ИД=${idLabel}).`);
+      pushErr(`Строка ${r + 1} (Excel): клиент не найден (ИД=${idLabel}).`);
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "parsing");
       continue;
     }
     if (seenUpdateClientIds.has(idVal)) {
       skippedDuplicate += 1;
-      pushErr(`Qator ${r + 1} (Excel): ИД=${idLabel} faylda takrorlanmoqda — ikkinchi qator o‘tkazib yuborildi.`);
+      pushErr(`Строка ${r + 1} (Excel): ИД=${idLabel} повторяется в файле — повторная строка пропущена.`);
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "parsing");
       continue;
@@ -261,7 +261,7 @@ export async function importClientUpdateRows(
       if (uniqueConflicts.length > 0) {
         const c0 = uniqueConflicts[0]!;
         pushErr(
-          `Qator ${r + 1} (Excel): dublikat — «${c0.field}»=${c0.value} allaqachon mijoz #${c0.otherClientId} da (ИД=${idLabel}).`
+          `Строка ${r + 1} (Excel): дубликат — «${c0.field}»=${c0.value} уже есть у клиента #${c0.otherClientId} (ИД=${idLabel}).`
         );
         skippedDuplicate += 1;
         ctx.processedRows += 1;
@@ -281,7 +281,7 @@ export async function importClientUpdateRows(
         const prevId = map.get(key);
         if (prevId != null && prevId !== idVal) {
           pushErr(
-            `Qator ${r + 1} (Excel): dublikat faylda — «${fieldLabel}»=${String(raw).trim()} allaqachon ИД=${prevId} qatorida.`
+            `Строка ${r + 1} (Excel): дубликат в файле — «${fieldLabel}»=${String(raw).trim()} уже указан в строке с ИД=${prevId}.`
           );
           return true;
         }
@@ -331,17 +331,17 @@ export async function importClientUpdateRows(
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "resolving");
     } catch (e) {
-      const raw = e instanceof Error ? e.message : "xato";
+      const raw = e instanceof Error ? e.message : "ошибка";
       if (raw === "NOT_FOUND") {
-        pushErr(`Qator ${r + 1} (Excel): mijoz topilmadi yoki birlashtirilgan (ИД=${idLabel}).`);
+        pushErr(`Строка ${r + 1} (Excel): клиент не найден или объединён (ИД=${idLabel}).`);
       } else {
         const short =
           raw.includes("Unique constraint") || raw.includes("unique constraint")
-            ? "noyob maydon takrorlanmoqda"
+            ? "повторяется значение уникального поля"
             : raw.length > 180
               ? `${raw.slice(0, 180)}…`
               : raw;
-        pushErr(`Qator ${r + 1} (Excel): ${short}`);
+        pushErr(`Строка ${r + 1} (Excel): ${short}`);
       }
       ctx.processedRows += 1;
       await reportImportRowProgress(ctx, "resolving");
@@ -415,8 +415,8 @@ export async function importClientUpdateRows(
       await applyTerritoryAutoAssignAfterAddressChange(tenantId, idVal);
     } catch (e) {
       ctx.warnings.push(
-        `ИД=${idVal}: hudud bo‘yicha agent avto-biriktirish xatosi — ${
-          e instanceof Error ? e.message.slice(0, 120) : "xato"
+        `ИД=${idVal}: ошибка автоназначения агента по территории — ${
+          e instanceof Error ? e.message.slice(0, 120) : "ошибка"
         }`
       );
     }
@@ -442,16 +442,16 @@ export async function importClientUpdateRows(
   const out = [...errors];
   if (updated === 0 && errors.length === 0 && skippedEmpty > 0) {
     out.push(
-      `Hech narsa yangilanmadi: «ИД» bo‘sh qatorlar (${skippedEmpty}) yoki jadval bo‘sh.`
+      `Ничего не обновлено: строки с пустым «ИД» (${skippedEmpty}) или таблица пуста.`
     );
   } else if (updated === 0 && skippedEmpty === 0 && candidateIdList.length > 0) {
     out.unshift(
-      "Hech qanday yozuv o‘zgarmadi: Excel qiymatlari bazadagi ma’lumot bilan bir xil yoki agent/ustunlar moslanmadi (konsoldagi ogohlantirishlarni ko‘ring)."
+      "Ни одна запись не изменилась: значения в Excel совпадают с данными в базе или агенты/столбцы не сопоставлены (см. предупреждения в консоли)."
     );
   }
   if (totalRowErrors > IMPORT_MAX_ERRORS_RETURNED) {
     out.push(
-      `… va yana ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} ta qator xatosi (faqat birinchi ${IMPORT_MAX_ERRORS_RETURNED} matn qaytarildi).`
+      `… и ещё ошибок в строках: ${totalRowErrors - IMPORT_MAX_ERRORS_RETURNED} (возвращены только первые ${IMPORT_MAX_ERRORS_RETURNED}).`
     );
   }
 
@@ -459,7 +459,7 @@ export async function importClientUpdateRows(
     out.push(line);
   }
   if (skippedDuplicate > 0) {
-    out.push(`Dublikat / takroriy ИД o‘tkazib yuborildi: ${skippedDuplicate} qator.`);
+    out.push(`Пропущено дубликатов / повторных ИД: ${skippedDuplicate}.`);
   }
 
   return { updated, errors: out, skippedEmpty, unchangedRows };
