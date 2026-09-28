@@ -45,6 +45,7 @@ export async function getSalesDashboardSnapshot(
     filters,
     total_sales_summary: productBlock.total_sales_summary,
     payment_method_analytics: productBlock.payment_method_analytics,
+    price_type_analytics: productBlock.price_type_analytics,
     product_category_analytics: productBlock.product_category_analytics,
     product_group_analytics: productBlock.product_group_analytics,
     category_performance_table: productBlock.category_performance_table,

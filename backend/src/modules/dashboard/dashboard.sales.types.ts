@@ -40,6 +40,7 @@ export type SalesDashboardSnapshot = {
     sales_sum: string;
     share_pct: number;
   }>;
+  price_type_analytics: Array<{ price_type: string; sales_sum: string; share_pct: number }>;
   category_performance_table: Array<{
     category: string;
     sales_sum: string;

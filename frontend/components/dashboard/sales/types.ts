@@ -27,6 +27,7 @@ export type SalesDashboardSnapshot = {
   payment_method_analytics: Array<{ payment_type: string; sales_sum: string; share_pct: number }>;
   product_category_analytics: Array<{ category: string; sales_sum: string; share_pct: number }>;
   product_group_analytics: Array<{ product_group: string; sales_sum: string; share_pct: number }>;
+  price_type_analytics?: Array<{ price_type: string; sales_sum: string; share_pct: number }>;
   category_performance_table: Array<{
     category: string;
     sales_sum: string;

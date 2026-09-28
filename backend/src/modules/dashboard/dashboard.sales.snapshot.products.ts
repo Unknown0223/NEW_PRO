@@ -3,10 +3,37 @@ import { prisma } from "../../config/database";
 import { clampPct } from "./dashboard.helpers";
 import { buildSalesTerritoryAliasClause, salesDateExprByType } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
+import {
+  findPaymentMethodEntry,
+  findPriceTypeEntry,
+  type PaymentMethodEntryDto,
+  type PriceTypeEntryDto
+} from "../tenant-settings/finance-refs";
+import {
+  loadPaymentMethodEntriesForResolve,
+  loadPriceTypeEntriesForResolve
+} from "../tenant-settings/tenant-settings.service";
+
+/** Zakazda narx turi alohida saqlanmaydi — `payment_method_ref` (narx turi yoki unga bog‘langan to‘lov usuli). */
+function priceTypeLabelForOrderRef(
+  ref: string,
+  pmEntries: PaymentMethodEntryDto[],
+  ptEntries: PriceTypeEntryDto[]
+): string {
+  if (!ref || ref === "—") return "Не указано";
+  const direct = findPriceTypeEntry(ref, ptEntries);
+  if (direct) return direct.name.trim();
+  const method = findPaymentMethodEntry(ref, pmEntries);
+  if (!method) return ref;
+  const linked = ptEntries.filter(
+    (e) => e.kind === "sale" && e.active !== false && e.payment_method_id === method.id
+  );
+  return linked.length > 0 ? linked.map((e) => e.name.trim()).join(" / ") : method.name.trim();
+}
 
 export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx) {
-  const { salesScope, productFilter } = ctx;
-  const [totalRow, paymentRows] = await Promise.all([
+  const { tenantId, salesScope, productFilter } = ctx;
+  const [totalRow, paymentRows, pmEntries, ptEntries] = await Promise.all([
     prisma.$queryRaw<Array<{ sales_sum: Prisma.Decimal; orders_count: bigint }>>`
       SELECT
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum,
@@ -32,15 +59,32 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
         ${productFilter}
       GROUP BY 1
       ORDER BY sales_sum DESC
-    `
+    `,
+    loadPaymentMethodEntriesForResolve(tenantId),
+    loadPriceTypeEntriesForResolve(tenantId)
   ]);
   const totalSales = totalRow[0]?.sales_sum ?? new Prisma.Decimal(0);
+  const shareOfTotal = (sum: Prisma.Decimal) =>
+    totalSales.gt(0) ? clampPct(sum.div(totalSales).mul(100).toNumber()) : 0;
 
   const payment_method_analytics = paymentRows.map((r) => ({
     payment_type: r.payment_type,
     sales_sum: r.sales_sum.toString(),
-    share_pct: totalSales.gt(0) ? clampPct(r.sales_sum.div(totalSales).mul(100).toNumber()) : 0
+    share_pct: shareOfTotal(r.sales_sum)
   }));
+
+  const byPriceType = new Map<string, Prisma.Decimal>();
+  for (const r of paymentRows) {
+    const label = priceTypeLabelForOrderRef(r.payment_type, pmEntries, ptEntries);
+    byPriceType.set(label, (byPriceType.get(label) ?? new Prisma.Decimal(0)).add(r.sales_sum));
+  }
+  const price_type_analytics = [...byPriceType.entries()]
+    .sort((a, b) => b[1].comparedTo(a[1]))
+    .map(([price_type, sum]) => ({
+      price_type,
+      sales_sum: sum.toString(),
+      share_pct: shareOfTotal(sum)
+    }));
 
   const [categoryRows, groupRows, perfRows] = await Promise.all([
     prisma.$queryRaw<Array<{ category: string; sales_sum: Prisma.Decimal }>>`
@@ -133,6 +177,7 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
       orders_count: Number(totalRow[0]?.orders_count ?? 0n)
     },
     payment_method_analytics,
+    price_type_analytics,
     product_category_analytics,
     product_group_analytics,
     category_performance_table

@@ -2,8 +2,9 @@
 
 import { fmtCount, fmtMoney } from "@/components/dashboard/sales/format";
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
-import { Activity, CircleDollarSign, CreditCard, Gauge } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { Activity, CircleDollarSign, CreditCard, Gauge, RotateCcw } from "lucide-react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const VALUE_MAX_PX = 24;
 const VALUE_MIN_PX = 14;
@@ -45,6 +46,47 @@ function FitValue({ value, unit }: { value: string; unit?: string }) {
   );
 }
 
+type PriceTypeRow = NonNullable<SalesDashboardSnapshot["price_type_analytics"]>[number];
+
+function PriceTypeBreakdown({ rows }: { rows: PriceTypeRow[] }) {
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-700">По типам цен</p>
+        <RotateCcw className="h-4 w-4 text-slate-400" aria-hidden />
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400">Нет данных за период</p>
+      ) : (
+        <ul className="-mr-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
+          {rows.map((r) => (
+            <li key={r.price_type} className="min-w-0">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-xs font-medium text-slate-600" title={r.price_type}>
+                  {r.price_type}
+                </span>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-slate-950">
+                  {fmtMoney(r.sales_sum)}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-teal-500" style={{ width: `${r.share_pct}%` }} />
+                </div>
+                <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
+                  {r.share_pct.toFixed(1)}%
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+const CARD_FACE = "min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm";
+
 function MetricCard({
   title,
   value,
@@ -52,7 +94,8 @@ function MetricCard({
   description,
   icon: Icon,
   tone,
-  trend
+  trend,
+  back
 }: {
   title: string;
   value: string;
@@ -61,7 +104,9 @@ function MetricCard({
   icon: React.ComponentType<{ className?: string }>;
   tone: "teal" | "green" | "blue" | "red";
   trend?: string;
+  back?: React.ReactNode;
 }) {
+  const [flipped, setFlipped] = useState(false);
   const toneRing = {
     teal: "bg-teal-100 text-teal-700 ring-teal-200",
     green: "bg-emerald-100 text-emerald-700 ring-emerald-200",
@@ -69,8 +114,8 @@ function MetricCard({
     red: "bg-red-100 text-red-700 ring-red-200"
   }[tone];
 
-  return (
-    <div className="group min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5">
+  const front = (
+    <>
       <div className="mb-5 flex items-start justify-between gap-4">
         <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${toneRing}`}>
           <Icon className="h-5 w-5" />
@@ -84,6 +129,63 @@ function MetricCard({
       <p className="text-sm font-medium text-slate-500">{title}</p>
       <FitValue value={value} unit={unit} />
       <p className="mt-2 truncate text-sm text-slate-500" title={description}>{description}</p>
+    </>
+  );
+
+  if (!back) {
+    return (
+      <div
+        className={cn(
+          CARD_FACE,
+          "group transition duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5"
+        )}
+      >
+        {front}
+      </div>
+    );
+  }
+
+  const toggle = () => setFlipped((v) => !v);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={flipped}
+      title={flipped ? "Нажмите, чтобы вернуться" : "Нажмите, чтобы увидеть по типам цен"}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      }}
+      className="group min-w-0 cursor-pointer rounded-2xl transition duration-300 [perspective:1200px] hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+    >
+      <div
+        className={cn(
+          "relative h-full transition-transform duration-500 [transform-style:preserve-3d]",
+          flipped && "[transform:rotateY(180deg)]"
+        )}
+      >
+        <div
+          className={cn(
+            CARD_FACE,
+            "h-full [backface-visibility:hidden] group-hover:border-teal-200 group-hover:shadow-xl group-hover:shadow-teal-900/5"
+          )}
+          aria-hidden={flipped}
+        >
+          {front}
+        </div>
+        <div
+          className={cn(
+            CARD_FACE,
+            "absolute inset-0 flex flex-col [backface-visibility:hidden] [transform:rotateY(180deg)] group-hover:border-teal-200"
+          )}
+          aria-hidden={!flipped}
+        >
+          {back}
+        </div>
+      </div>
     </div>
   );
 }
@@ -107,6 +209,7 @@ export function SalesMetricsRow({ data }: { data: SalesDashboardSnapshot }) {
         icon={CircleDollarSign}
         tone="teal"
         trend={`${coverage_pct.toFixed(1)}% ОКБ`}
+        back={<PriceTypeBreakdown rows={data.price_type_analytics ?? []} />}
       />
       <MetricCard
         title="Payment Breakdown"
