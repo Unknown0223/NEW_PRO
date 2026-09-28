@@ -40,7 +40,7 @@ export function SalesDashboardBody({
 
   return (
     <div className="space-y-4">
-      <SalesMetricsRow data={data} />
+      <SalesMetricsRow data={data} resolvePayment={resolvePayment} />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_480px]">
         <div ref={analyticsRef} className="space-y-4">
