@@ -28,7 +28,12 @@ async function buildSalesCtx(tenantId: number, filters: SalesDashboardFilters): 
 
 export type SalesDashboardSummaryPayload = Pick<
   SalesDashboardSnapshot,
-  "filters" | "total_sales_summary" | "payment_method_analytics" | "akb_okb_block" | "orders_refusals"
+  | "filters"
+  | "total_sales_summary"
+  | "payment_method_analytics"
+  | "price_type_analytics"
+  | "akb_okb_block"
+  | "orders_refusals"
 >;
 
 export type SalesDashboardAnalyticsPayload = Pick<
@@ -51,7 +56,7 @@ export async function getSalesDashboardSummary(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSummaryPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:summary:v2:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSummaryPayload>(snapshotKey);
   if (cached) return cached;
 
@@ -64,6 +69,7 @@ export async function getSalesDashboardSummary(
     filters,
     total_sales_summary: productBlock.total_sales_summary,
     payment_method_analytics: productBlock.payment_method_analytics,
+    price_type_analytics: productBlock.price_type_analytics,
     akb_okb_block: coverageBlock.akb_okb_block,
     orders_refusals: ordersBlock.orders_refusals
   };
@@ -75,7 +81,7 @@ export async function getSalesDashboardAnalytics(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardAnalyticsPayload> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:analytics:v2:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardAnalyticsPayload>(snapshotKey);
   if (cached) return cached;
 

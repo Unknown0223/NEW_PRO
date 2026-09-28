@@ -67,7 +67,11 @@ export type SalesDashboardSnapshot = {
 
 export type SalesSummaryPayload = Pick<
   SalesDashboardSnapshot,
-  "total_sales_summary" | "payment_method_analytics" | "akb_okb_block" | "orders_refusals"
+  | "total_sales_summary"
+  | "payment_method_analytics"
+  | "price_type_analytics"
+  | "akb_okb_block"
+  | "orders_refusals"
 >;
 
 export type SalesAnalyticsPayload = Pick<
