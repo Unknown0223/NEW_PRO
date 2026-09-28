@@ -1347,7 +1347,7 @@ export default function ClientsPage() {
             groupProcessingDisabled={selectedIds.size === 0}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-            <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-contain">
+            <div className="scrollbar-none relative min-h-0 flex-1 overflow-auto overscroll-y-contain">
             <ClientsDataTable
               rows={rows}
               visibility={getDefaultColumnVisibility()}

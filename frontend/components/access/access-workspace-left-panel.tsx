@@ -81,7 +81,7 @@ export function AccessWorkspaceLeftPanel({ ws }: { ws: UseAccessWorkspaceReturn 
                 <span className="font-normal tabular-nums text-muted-foreground">{ws.filteredSideRows.length}</span>
               </div>
             </div>
-            <div className="scrollbar-none min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-contain p-1.5 pr-0.5">
+            <div className="scrollbar-none min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-y-contain p-1.5 pr-0.5">
               {(ws.tab === "users" && ws.usersQ.isLoading) || (ws.tab !== "users" && ws.dimensionsQ.isLoading) ? (
                 <p className="px-1 py-4 text-center text-xs text-muted-foreground">Загрузка…</p>
               ) : ws.filteredSideRows.length === 0 ? (

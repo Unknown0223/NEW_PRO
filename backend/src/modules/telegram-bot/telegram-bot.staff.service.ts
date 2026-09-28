@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import {
   decideTelegramBind,
   isTelegramBotAllowedRole,
@@ -113,7 +114,7 @@ async function findStaff(tenantSlug: string, identity: string) {
     ]
   };
   const scoped = await prisma.user.findFirst({
-    where: { tenant: { slug: tenantSlug }, ...identFilter },
+    where: { tenant: { slug: resolveTenantSlugAlias(tenantSlug) }, ...identFilter },
     select: {
       id: true,
       tenant_id: true,

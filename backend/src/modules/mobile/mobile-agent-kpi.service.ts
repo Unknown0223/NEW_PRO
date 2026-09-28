@@ -8,6 +8,7 @@ import { getAgentMonthlyPlanCostSum } from "../plans/plans.agent-plan-sum";
 import { getMobileAgentTimesheet } from "./mobile-agent-timesheet.service";
 import {
   localTodayRange,
+  WORK_REGION_UTC_OFFSET_HOURS,
   workRegionDayRange,
   workRegionTodayKey
 } from "./mobile-agent-sync.config.service";
@@ -53,8 +54,8 @@ function pickPrimaryMetric(plan: MobileAgentKpiMetricBlock): keyof MobileAgentKp
 
 function monthBounds(month: string): { year: number; monthNum: number; start: Date; end: Date; daysInMonth: number } {
   const [yy, mm] = month.split("-").map((x) => Number.parseInt(x, 10));
-  const start = new Date(Date.UTC(yy, mm - 1, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(yy, mm, 1, 0, 0, 0, 0));
+  const start = new Date(Date.UTC(yy, mm - 1, 1, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
+  const end = new Date(Date.UTC(yy, mm, 1, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
   const daysInMonth = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
   return { year: yy, monthNum: mm, start, end, daysInMonth };
 }
@@ -124,6 +125,7 @@ export async function getMobileAgentKpi(
           tenant_id: tenantId,
           agent_id: userId,
           order_type: "order",
+          status: { not: "cancelled" },
           created_at: { gte: todayStart, lte: todayEnd }
         },
         _sum: { total_sum: true },
@@ -134,6 +136,7 @@ export async function getMobileAgentKpi(
           tenant_id: tenantId,
           agent_id: userId,
           order_type: "order",
+          status: { not: "cancelled" },
           created_at: { gte: monthStart, lt: monthEnd }
         },
         _sum: { total_sum: true }
@@ -202,7 +205,7 @@ export async function getMobileAgentKpi(
       JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
       WHERE o.tenant_id = ${tenantId}
         AND o.agent_id = ${userId}
-        AND o.order_type = 'order'
+        AND o.order_type = 'order' AND o.status <> 'cancelled'
         AND o.created_at >= ${monthStart}
         AND o.created_at < ${monthEnd}
         AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
@@ -241,7 +244,7 @@ export async function getMobileAgentKpi(
       JOIN kpi_group_products kgp ON kgp.product_id = oi.product_id
       WHERE o.tenant_id = ${tenantId}
         AND o.agent_id = ${userId}
-        AND o.order_type = 'order'
+        AND o.order_type = 'order' AND o.status <> 'cancelled'
         AND o.created_at >= ${todayStart}
         AND o.created_at <= ${todayEnd}
         AND kgp.kpi_group_id IN (${Prisma.join(groupIds)})
@@ -268,7 +271,7 @@ export async function getMobileAgentKpi(
     FROM orders o
     WHERE o.tenant_id = ${tenantId}
       AND o.agent_id = ${userId}
-      AND o.order_type = 'order'
+      AND o.order_type = 'order' AND o.status <> 'cancelled'
       AND o.created_at >= ${monthStart}
       AND o.created_at < ${monthEnd}
     GROUP BY 1
@@ -428,7 +431,7 @@ export async function getMobileAgentKpi(
     JOIN order_items oi ON oi.order_id = o.id AND oi.is_bonus = false
     WHERE o.tenant_id = ${tenantId}
       AND o.agent_id = ${userId}
-      AND o.order_type = 'order'
+      AND o.order_type = 'order' AND o.status <> 'cancelled'
       AND o.created_at >= ${todayStart}
       AND o.created_at <= ${todayEnd}
   `;

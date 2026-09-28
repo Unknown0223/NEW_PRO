@@ -308,7 +308,21 @@ export function writePivotAoAToExcel(
   aoa: (string | number)[][],
   options: { filename?: string; sheetName?: string } = {}
 ): void {
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  const numericAoA = aoa.map((row) =>
+    row.map((cell) => {
+      if (typeof cell === "number" && Number.isFinite(cell)) return cell;
+      if (typeof cell !== "string") return cell;
+      const trimmed = cell.trim();
+      if (!trimmed) return cell;
+      // "550 000" / "1 234,56" → number (Excel qiymat formati)
+      if (/[a-zA-Zа-яА-Я]/.test(trimmed)) return cell;
+      const normalized = trimmed.replace(/\s/g, "").replace(",", ".");
+      if (!/^-?\d+(\.\d+)?$/.test(normalized)) return cell;
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : cell;
+    })
+  );
+  const worksheet = XLSX.utils.aoa_to_sheet(numericAoA);
   const workbook = XLSX.utils.book_new();
   const sheetName =
     (options.sheetName ?? "Pivot").replace(/[:\\/?*[\]]/g, "_").slice(0, 31) || "Pivot";

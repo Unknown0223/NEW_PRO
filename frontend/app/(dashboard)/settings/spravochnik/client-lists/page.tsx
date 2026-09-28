@@ -138,7 +138,7 @@ export default function ClientListsSpravochnikPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold">Mijoz kartochkasi — spravochniklar</h1>
         <p className="text-sm text-muted-foreground">

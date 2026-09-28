@@ -333,7 +333,7 @@ export default function MobileAppSettingsPage() {
   const effectiveUrl = downloadUrl || data?.apk?.download_url || "";
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       <PageHeader
         title="Mobil ilova — serverdan yangilash"
         description="Yangi APK ni serverga yuklang. Agentlar ilovani ochganda ichida yangilanadi — o‘chirish shart emas (imzo kaliti mos bo‘lsa PIN/kesh saqlanadi). «Majburiy yangilash» ni faqat APK tayyor bo‘lganda yoqing."

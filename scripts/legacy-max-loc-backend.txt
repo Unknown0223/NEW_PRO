@@ -108,3 +108,6 @@ backend/src/modules/access/route-permission-guard.ts
 backend/src/modules/orders/orders.route.bulk.ts
 backend/src/modules/dashboard/dashboard.supervisor.snapshot-visits.query.ts
 backend/src/modules/report-builder/report-builder.service.ts
+backend/src/modules/mobile/mobile-supervisor-clients.service.ts
+backend/src/modules/plans/plans.daily-kpi.service.ts
+backend/src/modules/plans/plans.daily-kpi.day-matrix.ts

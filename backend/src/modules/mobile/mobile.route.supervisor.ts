@@ -4,7 +4,10 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { clientUniqueHttp } from "../clients/clients.write.uniques";
 import { positiveIntPathIdParamsSchema } from "../../contracts/route-params.schemas";
-import { mobilePatchClientBodySchema } from "../../contracts/mobile.schemas";
+import {
+  mobileCreateSupervisorClientBodySchema,
+  mobilePatchClientBodySchema
+} from "../../contracts/mobile.schemas";
 import {
   applyAccessAgentIdsScope,
   applySupervisorSelfScope
@@ -23,6 +26,7 @@ import {
   listSupervisorLinkedAgents
 } from "./mobile-supervisor-kpi.service";
 import {
+  createMobileSupervisorClient,
   getMobileSupervisorClient,
   listMobileSupervisorClients,
   patchMobileSupervisorClient
@@ -136,6 +140,59 @@ export async function registerMobileSupervisorRoutes(app: FastifyInstance) {
         limit: Number.parseInt(q.limit ?? "200", 10) || 200
       });
       return reply.send({ data });
+    }
+  );
+
+  /** SVR — yangi mijoz + jamoa agentiga biriktirish */
+  app.post(
+    "/api/:slug/mobile/supervisor/clients",
+    { preHandler: [...mobileSyncPreHandler] },
+    async (request, reply) => {
+      if (!ensureTenantContext(request, reply)) return;
+      const viewer = getAccessUser(request);
+      if (viewer.role !== "supervisor") {
+        return sendApiError(reply, request, 403, "ForbiddenRole");
+      }
+      const selfId = Number.parseInt(viewer.sub, 10);
+      if (!Number.isFinite(selfId)) return sendApiError(reply, request, 400, "BadUser");
+      const parsed = mobileCreateSupervisorClientBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
+      }
+      try {
+        const data = await createMobileSupervisorClient(request.tenant!.id, selfId, parsed.data);
+        return reply.status(201).send(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        const uniq = clientUniqueHttp(msg);
+        if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
+        if (msg === "CLIENT_CREATE_FORBIDDEN") {
+          return sendApiError(reply, request, 403, "Forbidden", "Mijoz yaratish ruxsat etilmagan");
+        }
+        if (msg === "CLIENT_LOCATION_FORBIDDEN") {
+          return sendApiError(reply, request, 403, "Forbidden", "Koordinatalarni o'zgartirish taqiqlangan");
+        }
+        if (msg === "AGENT_OUT_OF_SCOPE") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentOutOfScope",
+            "Agent sizning jamoangizga biriktirilmagan"
+          );
+        }
+        if (msg === "AGENT_NOT_ON_SLOT") {
+          return sendApiError(
+            reply,
+            request,
+            403,
+            "AgentNotOnSlot",
+            "Agent ish joyiga biriktirilmagan — yangi mijoz yaratish taqiqlangan."
+          );
+        }
+        if (msg === "VALIDATION") return sendApiError(reply, request, 400, "ValidationError");
+        throw e;
+      }
     }
   );
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   Calendar,
   ChevronLeft,
@@ -23,7 +23,17 @@ import {
 } from "./daily-kpi-api";
 import { DailyKpiDayTable } from "./daily-kpi-day-table";
 import { DailyKpiMonthTable } from "./daily-kpi-month-table";
-import { fmtMoney, fmtPct, formatDayLabel } from "./daily-kpi-format";
+import { fmtMoney, fmtPct } from "./daily-kpi-format";
+import { DailyKpiPeriodBar } from "./daily-kpi-period-bar";
+import { formatPeriodLabel, periodForAnchor, type DailyKpiPeriod } from "./daily-kpi-period";
+import {
+  dailyKpiFilterOptions,
+  dailyKpiTotals,
+  EMPTY_DAILY_KPI_FILTERS,
+  filterDailyKpiAgents,
+  type DailyKpiMonthFilters,
+  type DailyKpiViewMode
+} from "./daily-kpi-month-view";
 
 function shiftDay(ymd: string, delta: number): string {
   const [y, m, d] = ymd.split("-").map((x) => Number.parseInt(x, 10));
@@ -83,9 +93,16 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
     staleTime: 20_000
   });
 
+  const [period, setPeriod] = useState<DailyKpiPeriod>(() => ({ preset: "day", from: day, to: day }));
+  useEffect(() => {
+    setPeriod((prev) => periodForAnchor(prev, day));
+  }, [day]);
+
   const matrixQ = useQuery({
-    queryKey: dailyKpiDayKeys.matrix(tenantSlug, day, directionId),
-    queryFn: () => fetchDailyKpiDayMatrix(tenantSlug, { day, directionId }),
+    queryKey: dailyKpiDayKeys.matrix(tenantSlug, period.from, period.to, directionId),
+    queryFn: () =>
+      fetchDailyKpiDayMatrix(tenantSlug, { day: period.from, dayTo: period.to, directionId }),
+    placeholderData: keepPreviousData,
     staleTime: 20_000
   });
 
@@ -104,6 +121,17 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const error = overviewQ.error ?? matrixQ.error;
   const overview = overviewQ.data;
   const matrix = matrixQ.data;
+
+  const [viewMode, setViewMode] = useState<DailyKpiViewMode>("agents");
+  const [monthFilters, setMonthFilters] = useState<DailyKpiMonthFilters>(EMPTY_DAILY_KPI_FILTERS);
+  const allAgents = useMemo(() => overview?.agents ?? [], [overview]);
+  const filterOptions = useMemo(() => dailyKpiFilterOptions(allAgents), [allAgents]);
+  const filteredAgents = useMemo(
+    () => filterDailyKpiAgents(allAgents, monthFilters),
+    [allAgents, monthFilters]
+  );
+  const monthTotals = useMemo(() => dailyKpiTotals(filteredAgents), [filteredAgents]);
+  const filtersActive = filteredAgents.length !== allAgents.length;
 
   const refetchAll = () => {
     void overviewQ.refetch();
@@ -249,28 +277,41 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                   label="План месяца"
-                  value={fmtMoney(overview.totals.month_plan_sum)}
+                  value={fmtMoney(monthTotals.month_plan_sum)}
                   hint={monthPeriodLabel(monthNum, yearNum)}
                 />
                 <StatCard
                   label="Факт месяца"
-                  value={fmtMoney(overview.totals.month_fact_sum)}
-                  hint={`Исполнение ${fmtPct(overview.totals.month_execution_pct)}`}
+                  value={fmtMoney(monthTotals.month_fact_sum)}
+                  hint={`Исполнение ${fmtPct(monthTotals.month_execution_pct)}`}
                 />
                 <StatCard
                   label="План сегодня"
-                  value={fmtMoney(overview.totals.today_plan_sum)}
-                  hint={`Факт ${fmtMoney(overview.totals.today_fact_sum)}`}
+                  value={fmtMoney(monthTotals.today_plan_sum)}
+                  hint={`Факт ${fmtMoney(monthTotals.today_fact_sum)} · ${fmtPct(monthTotals.today_execution_pct)}`}
                 />
                 <StatCard
                   label="Агенты"
-                  value={String(overview.totals.agents)}
-                  hint={`${overview.totals.agents_with_plans} с планом`}
+                  value={String(monthTotals.agents)}
+                  hint={
+                    filtersActive
+                      ? `${monthTotals.agents_with_plans} с планом · из ${allAgents.length}`
+                      : `${monthTotals.agents_with_plans} с планом`
+                  }
                 />
               </div>
               <DailyKpiMonthTable
-                data={overview}
+                agents={filteredAgents}
+                totalAgents={allAgents.length}
+                totals={monthTotals}
                 periodLabel={monthPeriodLabel(monthNum, yearNum)}
+                monthNum={monthNum}
+                todayYmd={overview.period.today}
+                mode={viewMode}
+                onModeChange={setViewMode}
+                filters={monthFilters}
+                onFiltersChange={setMonthFilters}
+                options={filterOptions}
                 onPickDay={(ymd) => setDay(ymd)}
               />
             </>
@@ -284,9 +325,13 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
-                  label="План дня"
+                  label={(matrix.days_count ?? 1) > 1 ? "План периода" : "План дня"}
                   value={fmtMoney(matrix.totals.day_plan_sum)}
-                  hint={formatDayLabel(matrix.day)}
+                  hint={
+                    (matrix.days_count ?? 1) > 1
+                      ? `${formatPeriodLabel(matrix.day_from ?? matrix.day, matrix.day_to ?? matrix.day)} · раб. ${matrix.working_days_count ?? 0}`
+                      : formatPeriodLabel(matrix.day, matrix.day)
+                  }
                 />
                 <StatCard
                   label="Продажа"
@@ -304,7 +349,11 @@ export function DailyKpiWorkspace({ tenantSlug }: { tenantSlug: string }) {
                   hint={`${matrix.totals.agents} агент(ов)`}
                 />
               </div>
-              <DailyKpiDayTable data={matrix} dayLabel={formatDayLabel(matrix.day)} />
+              <DailyKpiDayTable
+                data={matrix}
+                dayLabel={formatPeriodLabel(matrix.day_from ?? matrix.day, matrix.day_to ?? matrix.day)}
+                toolbar={<DailyKpiPeriodBar period={period} anchorDay={day} onChange={setPeriod} />}
+              />
             </>
           ) : matrixQ.isLoading ? (
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">

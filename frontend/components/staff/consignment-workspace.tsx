@@ -15,8 +15,16 @@ import { MonthYearPickerPopover } from "@/components/ui/month-year-picker-popove
 import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-select-panel";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Download, FileSpreadsheet, Pencil, Search, Upload } from "lucide-react";
+import { CalendarDays, Clock, Download, FileSpreadsheet, Pencil, Search, Upload } from "lucide-react";
 import { formatConsignmentCloseSchedule } from "@/lib/consignment-close-schedule";
+import { ConsignmentCloseScheduleFields } from "@/components/staff/consignment-close-schedule-fields";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { formatNumberGrouped, normalizeNumericInput } from "@/lib/format-numbers";
 import { useActiveTradeDirectionsCatalog } from "@/hooks/use-active-trade-directions-catalog";
 import { ExcelDropTarget } from "@/components/ui/excel-file-drop-zone";
@@ -44,6 +52,12 @@ type ConsignmentAgentApi = {
   supervisor_name: string | null;
   outstanding_debt: string;
   remaining_limit: string | null;
+};
+
+type ConsignmentSettingsApi = {
+  month_close_day: number;
+  month_close_hour: number;
+  month_close_minute: number;
 };
 
 type SupervisorRow = { id: number; fio: string };
@@ -202,6 +216,11 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const [savingGroupKey, setSavingGroupKey] = useState<string | null>(null);
   const [savingAll, setSavingAll] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [closeDay, setCloseDay] = useState("25");
+  const [closeHour, setCloseHour] = useState("0");
+  const [closeMinute, setCloseMinute] = useState("0");
+  const [savingClose, setSavingClose] = useState(false);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const tradeDirectionsQ = useActiveTradeDirectionsCatalog(tenantSlug, "consignment");
   const directionSelected =
     tradeDirectionId.trim() !== "" && Number.parseInt(tradeDirectionId, 10) > 0;
@@ -212,6 +231,81 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
     setGroupSearch({});
     setEditingGroups(new Set());
   }, [tradeDirectionId]);
+
+  const settingsQ = useQuery({
+    queryKey: ["consignment", "settings", tenantSlug],
+    enabled: Boolean(tenantSlug),
+    staleTime: STALE.list,
+    queryFn: async () => {
+      const { data } = await api.get<{ data: ConsignmentSettingsApi }>(
+        `/api/${tenantSlug}/consignment/settings`
+      );
+      return data.data;
+    }
+  });
+
+  function syncCloseDraftFromSettings(s?: ConsignmentSettingsApi | null) {
+    const src = s ?? settingsQ.data;
+    if (!src) return;
+    setCloseDay(String(src.month_close_day ?? 25));
+    setCloseHour(String(src.month_close_hour ?? 0));
+    setCloseMinute(String(src.month_close_minute ?? 0));
+  }
+
+  const savedCloseLabel = useMemo(() => {
+    const s = settingsQ.data;
+    if (!s) return null;
+    return formatConsignmentCloseSchedule(
+      s.month_close_day ?? 25,
+      s.month_close_hour ?? 0,
+      s.month_close_minute ?? 0
+    );
+  }, [settingsQ.data]);
+
+  const closeScheduleDirty = useMemo(() => {
+    const s = settingsQ.data;
+    if (!s) return false;
+    return (
+      Number.parseInt(closeDay, 10) !== (s.month_close_day ?? 25) ||
+      Number.parseInt(closeHour, 10) !== (s.month_close_hour ?? 0) ||
+      Number.parseInt(closeMinute, 10) !== (s.month_close_minute ?? 0)
+    );
+  }, [settingsQ.data, closeDay, closeHour, closeMinute]);
+
+  async function saveGlobalCloseSchedule() {
+    const day = Number.parseInt(closeDay, 10);
+    const hour = Number.parseInt(closeHour, 10);
+    const minute = Number.parseInt(closeMinute, 10);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      setToast("Укажите день месяца (1–31)");
+      return;
+    }
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      setToast("Укажите часы (0–23)");
+      return;
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+      setToast("Укажите минуты (0–59)");
+      return;
+    }
+    setSavingClose(true);
+    try {
+      await api.patch(`/api/${tenantSlug}/consignment/settings`, {
+        month_close_day: day,
+        month_close_hour: hour,
+        month_close_minute: minute
+      });
+      await qc.invalidateQueries({ queryKey: ["consignment"] });
+      setCloseDialogOpen(false);
+      setToast(
+        `Время закрытия для всех: ${formatConsignmentCloseSchedule(day, hour, minute)}`
+      );
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "Не удалось сохранить время закрытия");
+    } finally {
+      setSavingClose(false);
+    }
+  }
 
   const supervisorsQ = useQuery({
     queryKey: ["supervisors", tenantSlug, "consignment"],
@@ -480,13 +574,11 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
       r.consignment_updated_at
         ? new Date(r.consignment_updated_at).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" })
         : "",
-      r.consignment
-        ? formatConsignmentCloseSchedule(
+      r.consignment ? (savedCloseLabel ?? formatConsignmentCloseSchedule(
             r.consignment_close_day ?? 25,
             r.consignment_close_hour ?? 0,
             r.consignment_close_minute ?? 0
-          )
-        : "",
+          )) : "",
       formatDateRu(r.consignment_period_closed_at),
       formatDateRu(r.consignment_debt_cleared_at),
       r.consignment_ignore_previous_months_debt ? "Да" : "Нет",
@@ -604,6 +696,21 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={settingsQ.isLoading}
+            onClick={() => {
+              syncCloseDraftFromSettings();
+              setCloseDialogOpen(true);
+            }}
+            title="Время автозакрытия консигнации для всех агентов"
+          >
+            <Clock className="size-4" />
+            {savedCloseLabel ? `Закрытие: ${savedCloseLabel}` : "Время закрытия"}
+          </Button>
           {!CONSIGNMENT_CONFIG_READONLY ? (
             <>
           <Button
@@ -683,6 +790,52 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
           </button>
         </p>
       ) : null}
+
+      <Dialog
+        open={closeDialogOpen}
+        onOpenChange={(open) => {
+          setCloseDialogOpen(open);
+          if (open) syncCloseDraftFromSettings();
+          else syncCloseDraftFromSettings();
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Закрытие консигнации</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Одно время для всех агентов и рабочих мест. Индивидуальное изменение агента на автозакрытие
+            не влияет — действует эта настройка.
+          </p>
+          <ConsignmentCloseScheduleFields
+            closeDay={closeDay}
+            closeHour={closeHour}
+            closeMinute={closeMinute}
+            onCloseDayChange={setCloseDay}
+            onCloseHourChange={setCloseHour}
+            onCloseMinuteChange={setCloseMinute}
+            className="grid grid-cols-3 gap-2"
+          />
+          <DialogFooter className="flex-row justify-end gap-2 border-0 bg-transparent p-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingClose}
+              onClick={() => setCloseDialogOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={savingClose || !closeScheduleDirty}
+              onClick={() => void saveGlobalCloseSchedule()}
+            >
+              {savingClose ? "Сохранение…" : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="orders-hub-section orders-hub-section--filters mb-8 md:mb-10">
         <Card className="rounded-none border-0 bg-transparent shadow-none hover:shadow-none">
@@ -962,7 +1115,7 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                       <th className="min-w-[9rem] px-2 py-1.5">Дата изм.</th>
                       <th
                         className="min-w-[8rem] px-2 py-1.5 leading-tight normal-case"
-                        title="Расписание закрытия — настраивается в разделе Агенты"
+                        title="Расписание закрытия — общее для всех (блок сверху)"
                       >
                         Закрытие
                       </th>
@@ -1063,11 +1216,12 @@ export function ConsignmentWorkspace({ tenantSlug }: { tenantSlug: string }) {
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">
                             {r.consignment
-                              ? formatConsignmentCloseSchedule(
-                                  r.consignment_close_day ?? 25,
-                                  r.consignment_close_hour ?? 0,
-                                  r.consignment_close_minute ?? 0
-                                )
+                              ? (savedCloseLabel ??
+                                  formatConsignmentCloseSchedule(
+                                    r.consignment_close_day ?? 25,
+                                    r.consignment_close_hour ?? 0,
+                                    r.consignment_close_minute ?? 0
+                                  ))
                               : "—"}
                           </td>
                           <td className="px-2 py-1.5 align-middle text-xs tabular-nums text-muted-foreground">

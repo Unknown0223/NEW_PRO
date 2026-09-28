@@ -27,7 +27,7 @@ export default function AccessHistoryPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-[1680px] flex-col gap-4 px-3 pb-4 pt-4 sm:px-4 lg:px-6">
+    <div className="flex min-h-0 w-full flex-col gap-4 px-3 pb-4 pt-4 sm:px-4 lg:px-6">
       <div className="flex min-h-16 flex-col justify-center gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-2">
           <Link

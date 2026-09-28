@@ -297,6 +297,40 @@ export type BulkExpeditorResponse = {
 
 export type BulkConsignmentResponse = BulkExpeditorResponse;
 
+function expeditorBulkErrorLabel(code: string): string {
+  switch (code) {
+    case "ORDER_NOT_EDITABLE":
+      return "статус не «Новый»/«Подтверждён»";
+    case "BAD_EXPEDITOR":
+      return "доставщик не найден или неактивен";
+    case "EXPEDITOR_NOT_ON_SLOT":
+      return "доставщик не на рабочем месте";
+    case "ORDER_BLOCK_EXPEDITOR_MISMATCH":
+      return "не совпадает с водителем блока склада";
+    case "NOT_FOUND":
+      return "заказ не найден";
+    default:
+      return code;
+  }
+}
+
+export function formatExpeditorBulkFeedback(res: BulkExpeditorResponse, detach: boolean): {
+  message: string;
+  isError: boolean;
+} {
+  const action = detach ? "Доставщик откреплён" : "Доставщик привязан";
+  if (res.failed.length === 0) {
+    return { message: `${action}: ${res.updated.length} заказ(ов).`, isError: false };
+  }
+  const byError = new Map<string, number>();
+  for (const f of res.failed) byError.set(f.error, (byError.get(f.error) ?? 0) + 1);
+  const parts = [...byError.entries()].map(([code, cnt]) => `${cnt} × ${expeditorBulkErrorLabel(code)}`);
+  return {
+    message: `${action}: ${res.updated.length} OK, ${res.failed.length} ошибок (${parts.join("; ")}).`,
+    isError: true
+  };
+}
+
 /** Bulk «Консигнация» — faqat «Новый» / «Подтверждён» va `order_type === order`. */
 export function isBulkConsignmentEligible(
   order: Pick<OrderListRow, "status" | "order_type">

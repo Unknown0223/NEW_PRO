@@ -1,7 +1,7 @@
 # Production (Hetzner) API ga APK yuklash + versiya siyosati
 param(
-  [string]$Api = "http://157.180.116.50:4000",
-  [string]$Slug = "test1",
+  [string]$Api = "https://api.salesarena.sale",
+  [string]$Slug = "aksit",
   [string]$AdminLogin = "admin",
   [string]$AdminPassword = "secret123",
   [string]$ApkPath = "",

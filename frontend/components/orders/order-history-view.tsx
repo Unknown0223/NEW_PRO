@@ -72,7 +72,7 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <OrderHistoryPageHeader orderId={orderId} backHref={`/orders/${orderId}`} />
 
       <div className="space-y-5">

@@ -84,6 +84,8 @@ ApiException mapDioException(DioException e, {Map<String, String>? extraCodes}) 
     'APP_ACCESS_DENIED': 'Ilova kirish o\'chirilgan',
     'USER_NOT_ON_SLOT':
         'Не назначен на рабочее место. Обратитесь к администратору.',
+    'WORKDAY_OFF':
+        'Сегодня нерабочий день по графику «Рабочие дни» — пользоваться системой нельзя.',
     'ForbiddenRole': 'Это действие недоступно для вашей роли. Обратитесь к администратору.',
     'ForbiddenPermission': 'Нет доступа к этому действию. Обратитесь к администратору.',
     'DuplicatePhone': 'Bu telefon allaqachon mavjud',

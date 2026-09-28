@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../auth/session_expired.dart';
+import '../auth/workday_off.dart';
 import '../time/server_clock.dart';
 import '../config/app_env.dart';
 import '../errors/error_reporter.dart';
@@ -122,6 +123,11 @@ class AuthInterceptor extends Interceptor {
     if (isAppAccessDeniedResponse(err.response?.statusCode, err.response?.data)) {
       await clearAuthTokens(_ref);
       Future.microtask(() => notifyAppAccessDenied(_ref));
+      handler.next(err);
+      return;
+    }
+    if (isWorkdayOffResponse(err.response?.statusCode, err.response?.data)) {
+      _ref.read(workdayOffProvider.notifier).state = workdayOffFromErrorBody(err.response?.data);
       handler.next(err);
       return;
     }

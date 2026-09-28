@@ -55,6 +55,19 @@ class _SupervisorClientsPageState extends ConsumerState<SupervisorClientsPage> {
           ),
         ],
       ),
+      floatingActionButton: policy.canCreateClient
+          ? FloatingActionButton.extended(
+              backgroundColor: AppColors.supervisorAccent,
+              onPressed: () async {
+                final ok = await context.push('/sv-clients/new');
+                if (mounted && ok == true) {
+                  ref.invalidate(_svClientsProvider(_query));
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Новая ТТ'),
+            )
+          : null,
       body: Column(
         children: [
           Padding(

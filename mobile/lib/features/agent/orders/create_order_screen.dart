@@ -171,11 +171,43 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           clientId: clientId,
           warehouseId: wh,
         );
+    // Bo‘sh ombor javobini keshga yozmaslik — aks holda 5 daqiqa «Склад не назначен».
+    if (ctx.warehouses.isEmpty) {
+      _createContextCache = null;
+      _createContextCacheClientId = null;
+      _createContextCacheWarehouseId = null;
+      _createContextCacheAt = null;
+      return ctx;
+    }
     _createContextCache = ctx;
     _createContextCacheClientId = clientId;
     _createContextCacheWarehouseId = wh;
     _createContextCacheAt = now;
     return ctx;
+  }
+
+  /// create-context bo‘sh/xato bo‘lsa — agent omborlari (warehouse-stock).
+  Future<bool> _fallbackWarehousesFromStockView() async {
+    try {
+      final slug = ref.read(sessionProvider).tenantSlug ?? '';
+      if (slug.isEmpty) return false;
+      final raw = await ref.read(ordersApiProvider).getWarehouseStockView(slug);
+      final list = (raw['warehouses'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      if (list.isEmpty || !mounted) return false;
+      final def = (raw['warehouse_id'] as num?)?.toInt() ??
+          (list.first['id'] as num?)?.toInt();
+      setState(() {
+        _warehouses = list;
+        _defaultWarehouseId = def;
+        _warehouseId ??= def;
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _refreshAgentConfigIfStale() async {
@@ -599,7 +631,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
   Future<void> _prefetchWarehouses() async {
     if (_effectiveClientId <= 0) return;
     try {
-      final ctx = await _getCreateContext();
+      final ctx = await _getCreateContext(forceRefresh: true);
       if (ctx == null || !mounted) return;
       setState(() {
         _applyCreateContextMeta(ctx);
@@ -618,7 +650,17 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen> {
           }
         }
       });
-    } catch (_) {}
+      if (_warehouses.isEmpty) {
+        await _fallbackWarehousesFromStockView();
+      }
+    } catch (e) {
+      final ok = await _fallbackWarehousesFromStockView();
+      if (!ok && mounted) {
+        _toast(
+          'Не удалось загрузить склад. Проверьте интернет и синхронизацию.',
+        );
+      }
+    }
   }
 
   /// create-context + session: narx turlari / label / moliya (retail-placeholder ni almashtirish).

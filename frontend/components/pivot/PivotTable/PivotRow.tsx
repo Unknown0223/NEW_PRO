@@ -70,6 +70,8 @@ type Props = {
   conditionalFormats?: import("@salec/pivot-engine").ConditionalFormatRule[];
   customizeCell?: import("@salec/pivot-engine").CustomizeCellFn;
   config?: import("@salec/pivot-engine").PivotConfig;
+  /** Expand chuqurligiga qarab chiziladigan row-dim ustunlari soni */
+  displayRowFieldCount?: number;
   rowKey?: string;
   cellStyle?: (columnKey: string) => React.CSSProperties;
   onSortLabel?: () => void;
@@ -133,6 +135,8 @@ export function PivotRowView({
   conditionalFormats,
   customizeCell,
   config,
+  /** Classic/compact: faqat shu qadar row-dim ustunlari chiziladi (expand chuqurligi). */
+  displayRowFieldCount,
   rowKey,
   cellStyle,
   onSortLabel,
@@ -168,6 +172,10 @@ export function PivotRowView({
   const hasChildren = Boolean(row.children?.length);
   const layoutForm = resolveLayoutForm(config?.options);
   const rowFieldCount = config?.rows.length ?? 0;
+  const renderDimCount =
+    displayRowFieldCount != null && displayRowFieldCount > 0
+      ? Math.min(rowFieldCount, displayRowFieldCount)
+      : rowFieldCount;
   const isClassic = layoutForm === "classic" && rowFieldCount > 1;
   const isCompactMulti = layoutForm === "compact" && rowFieldCount > 1;
   /** Flat / raw rows have no synthetic label — do NOT clone cells[0] into a sticky col. */
@@ -199,7 +207,7 @@ export function PivotRowView({
             {rowGutterNumber}
           </td>
         )}
-        {Array.from({ length: rowFieldCount }, (_, colIdx) => {
+        {Array.from({ length: renderDimCount }, (_, colIdx) => {
           const rawLabel = labels[colIdx] ?? "";
           const text = rawLabel
             ? formatPivotMemberLabel(config?.rows[colIdx], rawLabel)

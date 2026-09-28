@@ -245,13 +245,13 @@ export function WebOperatorCreateWorkspace({
         }
       />
 
-      <div className="mx-auto max-w-2xl space-y-6 pb-24">
+      <div className="w-full space-y-6 pb-24">
         {errorAlert}
         {formCard}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => router.push("/settings/spravochnik/operators")}>
             Отмена
           </Button>

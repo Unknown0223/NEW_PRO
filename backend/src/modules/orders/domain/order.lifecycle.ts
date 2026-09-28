@@ -512,8 +512,8 @@ export async function bulkUpdateOrderStatus(
 
   if (updated.length > 0) {
     // Bitta SSE — front debounce bilan bir refetch; har bir id uchun alohida emas.
+    await invalidateOrdersListCache(tenantId);
     emitOrderUpdated(tenantId, updated[0]!);
-    void invalidateOrdersListCache(tenantId);
     void invalidateDashboard(tenantId);
     for (const whId of warehouseIds) {
       void invalidateStock(tenantId, whId);
@@ -542,6 +542,7 @@ export async function bulkUpdateOrderExpeditor(
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderExpeditorResult["failed"] = [];
+  const defer = { deferSideEffects: true, skipEnrich: true } as const;
   for (const id of ids) {
     try {
       await updateOrderMeta(
@@ -549,12 +550,17 @@ export async function bulkUpdateOrderExpeditor(
         id,
         { expeditor_user_id: expeditorUserId },
         viewerRole,
-        actorUserId
+        actorUserId,
+        defer
       );
       updated.push(id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
     }
+  }
+  if (updated.length > 0) {
+    await invalidateOrdersListCache(tenantId);
+    emitOrderUpdated(tenantId, updated[0]!);
   }
   return { updated, failed };
 }
@@ -601,21 +607,40 @@ export async function bulkUpdateOrderConsignment(
     ? consignmentDueDate.toLocaleDateString("ru-RU", { timeZone: "Asia/Tashkent" })
     : "—";
 
+  const existingRows = await prisma.order.findMany({
+    where: { id: { in: ids }, tenant_id: tenantId },
+    select: {
+      id: true,
+      status: true,
+      order_type: true,
+      is_consignment: true,
+      consignment_due_date: true,
+      comment: true,
+      agent_id: true,
+      total_sum: true
+    }
+  });
+  const existingById = new Map(existingRows.map((r) => [r.id, r]));
+  const agentIds = [
+    ...new Set(existingRows.map((r) => r.agent_id).filter((a): a is number => a != null && a > 0))
+  ];
+  const agentRows =
+    isConsignment && agentIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: agentIds }, tenant_id: tenantId, is_active: true },
+          select: {
+            id: true,
+            consignment: true,
+            consignment_limit_amount: true,
+            consignment_ignore_previous_months_debt: true
+          }
+        })
+      : [];
+  const agentById = new Map(agentRows.map((a) => [a.id, a]));
+
   for (const id of ids) {
     try {
-      const existing = await prisma.order.findFirst({
-        where: { id, tenant_id: tenantId },
-        select: {
-          id: true,
-          status: true,
-          order_type: true,
-          is_consignment: true,
-          consignment_due_date: true,
-          comment: true,
-          agent_id: true,
-          total_sum: true
-        }
-      });
+      const existing = existingById.get(id);
       if (!existing) {
         failed.push({ id, error: "NOT_FOUND" });
         continue;
@@ -636,14 +661,7 @@ export async function bulkUpdateOrderConsignment(
           failed.push({ id, error: "CONSIGNMENT_REQUIRES_AGENT" });
           continue;
         }
-        const ag = await prisma.user.findFirst({
-          where: { id: existing.agent_id, tenant_id: tenantId, is_active: true },
-          select: {
-            consignment: true,
-            consignment_limit_amount: true,
-            consignment_ignore_previous_months_debt: true
-          }
-        });
+        const ag = agentById.get(existing.agent_id);
         if (!ag?.consignment) {
           failed.push({ id, error: "CONSIGNMENT_AGENT_DISABLED" });
           continue;
@@ -727,13 +745,13 @@ export async function bulkUpdateOrderConsignment(
         });
       });
       updated.push(id);
-      emitOrderUpdated(tenantId, id);
     } catch (e) {
       failed.push({ id, error: getErrorCode(e) ?? "UNKNOWN" });
     }
   }
   if (updated.length > 0) {
     await invalidateOrdersListCache(tenantId);
+    emitOrderUpdated(tenantId, updated[0]!);
   }
   return { updated, failed };
 }

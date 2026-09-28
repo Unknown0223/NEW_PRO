@@ -113,7 +113,7 @@ export function ReturnFilterSettingsWorkspace() {
   if (!hydrated) return null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 pb-8">
+    <div className="w-full space-y-8 pb-8">
       <header>
         <h1 className="text-lg font-semibold tracking-tight text-slate-900">Qaytarish filtri</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">

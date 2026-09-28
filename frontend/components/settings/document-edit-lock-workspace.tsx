@@ -311,7 +311,7 @@ export function DocumentEditLockWorkspace() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="w-full space-y-6 pb-10">
       {/* Header — tizim sozlamalari uslubi */}
       <header className="space-y-2">
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Davr cheklovi</h1>

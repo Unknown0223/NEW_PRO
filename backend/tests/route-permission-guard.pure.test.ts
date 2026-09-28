@@ -38,6 +38,24 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
   });
 
+  it("does not apply web clients.create to mobile supervisor/agent client create paths", () => {
+    expect(matchRule("POST", "/api/:slug/mobile/supervisor/clients")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/clients")).toBeNull();
+    expect(matchRule("POST", "/api/aksit/mobile/supervisor/clients")).toBeNull();
+    // Agar routeOptions faqat /clients bo'lsa — veb qoida (rawUrl guard alohida kesadi)
+    expect(matchRule("POST", "/clients")?.anyOf).toContain("clients.klient.create");
+  });
+
+  it("mobile orders/payments paths do not match web CRUD when full path has /mobile/", () => {
+    expect(matchRule("POST", "/api/:slug/mobile/orders/create")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/orders/enqueue")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/payments/order-cash-in")).toBeNull();
+    expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
+    // Stripped routeOptions collision risk (guard must use request.url)
+    expect(matchRule("POST", "/orders")?.anyOf).toContain("orders.zakaz.create");
+    expect(matchRule("POST", "/payments")?.anyOf).toContain("cash.oplaty_klientov.create");
+  });
+
   it("maps GET /client-balances to cash.balansy_klientov.view (not only otchety)", () => {
     const rule = matchRule("GET", "/api/:slug/client-balances");
     expect(rule?.anyOf).toContain("cash.balansy_klientov.view");

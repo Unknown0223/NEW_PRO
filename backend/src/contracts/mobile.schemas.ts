@@ -150,6 +150,11 @@ export const mobileCreateClientBodySchema = z.object({
   ...mobileClientOptionalFieldsSchema
 });
 
+/** POST `/api/:slug/mobile/supervisor/clients` — SVR yangi mijoz + agent biriktirish */
+export const mobileCreateSupervisorClientBodySchema = mobileCreateClientBodySchema.extend({
+  agent_id: z.number().int().positive()
+});
+
 /** PATCH `/api/:slug/mobile/clients/:id` — agent bog‘langan mijoz */
 export const mobilePatchClientBodySchema = z
   .object({

@@ -147,6 +147,7 @@ export async function registerPlansRoutes(app: FastifyInstance) {
     if (hasDay) {
       const q = dailyKpiDayMatrixQuerySchema.safeParse({
         day: dayRaw,
+        day_to: Array.isArray(query.day_to) ? query.day_to[0] : query.day_to,
         direction_id: Array.isArray(query.direction_id) ? query.direction_id[0] : query.direction_id
       });
       if (!q.success) {

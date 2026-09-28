@@ -5,6 +5,7 @@ import { prisma } from "../../config/database";
 import { tenantIdFrom } from "../../domain/tenant-id";
 import { toFio } from "../staff/staff.shared.helpers";
 import { isSessionLimitReached, isUnlimitedMaxSessions } from "../../lib/max-sessions";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { isSessionEnforcedRole, MOBILE_FIELD_ROLES } from "./app-access.service";
 
 type LoginInput = {
@@ -87,7 +88,7 @@ export function otherActiveSessionsWhere(args: {
 }
 
 export async function login(app: FastifyInstance, input: LoginInput) {
-  const tenant = await prisma.tenant.findUnique({ where: { slug: input.slug } });
+  const tenant = await prisma.tenant.findUnique({ where: { slug: resolveTenantSlugAlias(input.slug) } });
   if (!tenant || !tenant.is_active) {
     throw new Error("TENANT_NOT_FOUND");
   }

@@ -8,6 +8,11 @@ import {
   isAppAccessEnforcedRole
 } from "./app-access.constants";
 import {
+  getWorkdayAccessStatus,
+  isWorkdayGuardExemptPath,
+  USER_ROLE_TO_WD_ROLE
+} from "../tabel/workday-access";
+import {
   WEB_ACCESS_DENIED_MESSAGE,
   isBrowserWebRequest,
   isWebPanelDeniedRole
@@ -47,6 +52,12 @@ export async function jwtAccessVerify(request: FastifyRequest, reply: FastifyRep
     "user-agent": typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : undefined
   })) {
     return sendApiError(reply, request, 403, "WEB_ACCESS_DENIED", WEB_ACCESS_DENIED_MESSAGE);
+  }
+  if (USER_ROLE_TO_WD_ROLE[user.role] && !isWorkdayGuardExemptPath(request.url ?? "")) {
+    const workday = await getWorkdayAccessStatus(user.tenantId, user.role, user.sub).catch(() => null);
+    if (workday && !workday.allowed) {
+      return sendApiError(reply, request, 403, "WORKDAY_OFF", workday.message ?? undefined, { workday });
+    }
   }
   if (!isAppAccessEnforcedRole(user.role)) return;
 

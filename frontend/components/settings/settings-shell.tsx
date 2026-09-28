@@ -252,7 +252,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav
-          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-2 md:px-3 md:py-3"
+          className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2 py-2 md:px-3 md:py-3"
           aria-label="Внутреннее меню настроек"
         >
           {filteredSections.map((section, sectionIndex) => (
@@ -370,7 +370,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4 md:px-4 md:py-5">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-4 md:px-4 md:py-5">
         {gatedChildren}
       </main>
     </div>

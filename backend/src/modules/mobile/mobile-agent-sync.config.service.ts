@@ -79,7 +79,7 @@ export function agentScopedOrderWhere(tenantId: number, agentId: number): Prisma
 }
 
 /** Ish mintaqasi (UTC+5) — mobil `workRegionNow` bilan bir xil. */
-const WORK_REGION_UTC_OFFSET_HOURS = 5;
+export const WORK_REGION_UTC_OFFSET_HOURS = 5;
 
 export function workRegionTodayKey(d = new Date()): string {
   const wr = new Date(d.getTime() + WORK_REGION_UTC_OFFSET_HOURS * 3_600_000);

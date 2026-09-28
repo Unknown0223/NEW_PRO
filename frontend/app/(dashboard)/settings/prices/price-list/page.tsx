@@ -214,7 +214,7 @@ export default function PriceListPage() {
               <Link href="/settings/products/excel" className={cn(buttonVariants({ size: "sm" }))}>
                 Excel import
               </Link>
-              <Link href="/products" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              <Link href="/settings/products" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
                 Mahsulotlar
               </Link>
             </div>

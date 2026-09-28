@@ -178,7 +178,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       modViewOnly("orders"),
       modViewOnly("clients"),
-      secOnly("clients", "klient", ["activate"]),
+      /** Mobil SVR yangi TT: agentga biriktirib yaratish */
+      secOnly("clients", "klient", ["activate", "create"]),
       secOnly("clients", "foto", ["view"]),
       secOnly("staff", "agent", ["view", "activate", "assign"]),
       secOnly("staff", "supervayzer", ["view"]),

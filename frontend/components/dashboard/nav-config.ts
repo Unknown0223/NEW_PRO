@@ -401,6 +401,11 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
     { href: "/reports/visits-2", label: "По визитам 2.0", showIfAnyPermission: [...NAV_PERM.reports] },
     { href: "/reports/visit-totals", label: "Итоги визитов", showIfAnyPermission: [...NAV_PERM.reports] },
     {
+      href: "/plans/daily",
+      label: "Дневные KPI планы",
+      showIfAnyPermission: ["plans.ustanovka_planov.view"]
+    },
+    {
       href: "/reports/builder",
       label: pivotEngineNavEnabled
         ? "Конструктор сводной таблицы"
@@ -425,11 +430,6 @@ export const dashboardPlansNav: { sectionTitle: string; items: NavItem[] } = {
     {
       href: "/plans/setup",
       label: "Установка планов",
-      showIfAnyPermission: ["plans.ustanovka_planov.view"]
-    },
-    {
-      href: "/plans/daily",
-      label: "Дневные KPI планы",
       showIfAnyPermission: ["plans.ustanovka_planov.view"]
     },
     {

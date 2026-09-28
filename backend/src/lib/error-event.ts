@@ -73,6 +73,7 @@ export function shouldPersistBackendError(
   errorCode?: string | null
 ): boolean {
   if (isSessionJournalErrorCode(errorCode)) return true;
+  if (errorCode === "WORKDAY_OFF") return false;
   if (shouldSkipErrorEventPath(path)) return false;
   if (statusCode >= 500) return true;
   if (statusCode === 401) return false;

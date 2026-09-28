@@ -262,7 +262,7 @@ export function BonusStrategyForm({ initial }: Props) {
         }
       />
 
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 pb-8">
+      <div className="flex w-full flex-col gap-4 pb-8">
         <BonusRuleSection>
           <BonusRuleSectionTitle>Основные</BonusRuleSectionTitle>
           <div className="grid gap-4 sm:grid-cols-2">

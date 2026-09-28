@@ -1,14 +1,22 @@
 # SALEC — Hetzner ga ko‘chirish: qilingan ishlar va reja
 
-**Yangilangan:** 2026-09-24  
+**Yangilangan:** 2026-09-26  
 **Maqsad:** Railway → **Hetzner CX43 (Helsinki) + Coolify + Cloudflare R2**  
 **Yuk:** 100–150 xodim; agent boshiga ~40 fotootchyot/kun  
 **Ish usuli:** navbatma-navbat — agent qiladigan / foydalanuvchi qiladigan. Foydalanuvchi qadami bo‘lsa, natija kutiladi.
 
-**Prod VPS:** `salec-prod` — **157.180.116.50** (HEL1, CX43). Coolify: http://157.180.116.50:8000
+**Prod VPS:** `salec-prod` — **157.180.116.50** (HEL1, CX43).
 
-Texnik cutover (dump, DNS, rollback): [SERVER_MIGRATION_PLAN.md](./SERVER_MIGRATION_PLAN.md).  
-Hozirgi Railway URL: [PROD_DEPLOY_YAKUNLANDI.md](./PROD_DEPLOY_YAKUNLANDI.md).
+| Yangi silka | URL |
+|-------------|-----|
+| Veb | http://157.180.116.50:3000 |
+| API | http://157.180.116.50:4000 |
+| Coolify | http://157.180.116.50:8000 |
+
+**Eski Railway (o‘chirilmaydi):** https://sales-arena.up.railway.app · https://backend-production-3cf2.up.railway.app  
+
+Final cutover holati: [CUTOVER_FINAL.md](./CUTOVER_FINAL.md).  
+Texnik reja: [SERVER_MIGRATION_PLAN.md](./SERVER_MIGRATION_PLAN.md).
 
 ---
 
@@ -51,10 +59,11 @@ Kod xatosi / noto‘g‘ri qarz **server almashishi bilan tuzalmaydi**. Tezlik (
 | 8 | Cloudflare R2 bucket + kalitlar | Foydalanuvchi | ⏳ |
 | 9 | Domen (`app.` / `api.`) DNS | Foydalanuvchi | ⏳ |
 | 10 | Env: JWT (Railway bilan bir xil), CORS, R2 | Agent + foydalanuvchi | ✅ JWT sync (R2 hali ixtiyoriy) |
-| 11 | Test dump Railway → yangi Postgres | Ikkala | ✅ to‘liq restore: 124 table, 15168 client, 502 order |
+| 11 | Test dump Railway → yangi Postgres | Ikkala | ✅ eski test (502 order); endi eskirgan |
 | 12 | Smoke (login, zakaz, to‘lov, mobil) | Ikkala | 🔄 IP orqali ochiq: app `:3000`, api `:4000` |
-| 13 | Cutover (final dump, DNS, 15–30 daqiqa yozish yo‘q) | Ikkala | ⏳ domen/DNS |
-| 14 | Railway 7 kun zaxira, keyin o‘chirish | Foydalanuvchi | ⏳ |
+| 13 | **Final dump** (~11 GB, 2026-09-26) | Agent | ✅ VPS `/opt/salec/backups/salec_final_20260926T091508Z.dump` |
+| 13b | Final restore Hetzner + counts | Agent | ✅ 124 table / 15168 client / 536 order — Railway **saqlanadi** |
+| 14 | Railway **saqlash** (solishtirish) | — | ✅ **o‘chirmang** |
 | 15 | Mobil OTA (agar API `*.railway.app` da qolgan bo‘lsa) | Agent + foydalanuvchi | ✅ 3.1.33 force OTA → Hetzner API |
 
 **Hozirgi to‘siq:** Hetzner loyiha ochishdan oldin hisobni tasdiqlash shart. Verification sahifasida **Credit card → $25** tanlandi (kredit server to‘loviga ketadi). **Document** (passport) alternativi — sekinroq. Chap menyudagi `Invoices → Credit` verificationdan **oldin** ishlamaydi.

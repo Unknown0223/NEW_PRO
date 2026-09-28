@@ -171,11 +171,10 @@ class SupervisorMenuPage extends ConsumerWidget {
                       icon: Icons.add_business_outlined,
                       title: 'Добавить торговую точку',
                       subtitle: policy.canCreateClient
-                          ? null
+                          ? 'С выбором агента из вашей команды'
                           : 'Запрещено в конфигурации',
-                      soon: policy.canCreateClient,
                       onTap: policy.canCreateClient
-                          ? null
+                          ? () => context.push('/sv-clients/new')
                           : () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

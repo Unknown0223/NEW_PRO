@@ -64,6 +64,8 @@ export interface WorkdaysState {
   schedules: ScheduleMap;
   exceptions: WorkdayException[];
   overrides: EmployeeOverride[];
+  /** Nishonlanmagan kunlarda (admin’dan tashqari) web/ilovaga kirish bloklanadi. */
+  enforce_access: boolean;
 }
 
 const DEFAULT_SCHEDULE_5_6: Schedule = [true, true, true, true, true, true, false];
@@ -145,7 +147,7 @@ export function parseWorkdaysState(settings: Prisma.JsonValue): WorkdaysState {
     }
   }
 
-  return { schedules, exceptions, overrides };
+  return { schedules, exceptions, overrides, enforce_access: wd.enforce_access !== false };
 }
 
 function buildSettings(
@@ -159,7 +161,8 @@ function buildSettings(
     workdays: {
       schedules: state.schedules,
       exceptions: state.exceptions,
-      overrides: state.overrides
+      overrides: state.overrides,
+      enforce_access: state.enforce_access
     }
   };
   if (auditAdd.length > 0) {
@@ -174,8 +177,51 @@ async function loadTenantSettings(tenantId: number): Promise<Prisma.JsonValue> {
   return tenant.settings;
 }
 
+const STATE_CACHE_TTL_MS = 30_000;
+const stateCache = new Map<number, { at: number; state: WorkdaysState }>();
+
+async function persistSettings(tenantId: number, settings: Prisma.InputJsonValue): Promise<void> {
+  await prisma.tenant.update({ where: { id: tenantId }, data: { settings } });
+  stateCache.delete(tenantId);
+}
+
 export async function getWorkdaysState(tenantId: number): Promise<WorkdaysState> {
   return parseWorkdaysState(await loadTenantSettings(tenantId));
+}
+
+/** Har so‘rovdagi kirish tekshiruvi uchun — saqlashda darhol yangilanadi. */
+export async function getWorkdaysStateCached(tenantId: number): Promise<WorkdaysState> {
+  const hit = stateCache.get(tenantId);
+  if (hit && Date.now() - hit.at < STATE_CACHE_TTL_MS) return hit.state;
+  const state = await getWorkdaysState(tenantId);
+  stateCache.set(tenantId, { at: Date.now(), state });
+  return state;
+}
+
+export async function saveEnforceAccess(
+  tenantId: number,
+  changedBy: string,
+  enabled: boolean
+): Promise<WorkdaysState> {
+  const settings = await loadTenantSettings(tenantId);
+  const state = parseWorkdaysState(settings);
+  const audit: NewTabelAuditRecord[] =
+    state.enforce_access === enabled
+      ? []
+      : [
+          {
+            module: "workdays",
+            kind: "schedule",
+            title: "Доступ в нерабочие дни",
+            subtitle: "Ограничение входа по графику",
+            oldValue: state.enforce_access ? "Запрещён" : "Разрешён",
+            newValue: enabled ? "Запрещён" : "Разрешён",
+            changedBy
+          }
+        ];
+  state.enforce_access = enabled;
+  await persistSettings(tenantId, buildSettings(settings, state, audit));
+  return state;
 }
 
 export async function saveSchedules(
@@ -203,7 +249,7 @@ export async function saveSchedules(
     }
     state.schedules[r] = next;
   }
-  await prisma.tenant.update({ where: { id: tenantId }, data: { settings: buildSettings(settings, state, audit) } });
+  await persistSettings(tenantId, buildSettings(settings, state, audit));
   return state;
 }
 
@@ -235,7 +281,7 @@ export async function addException(
       changedBy
     }
   ];
-  await prisma.tenant.update({ where: { id: tenantId }, data: { settings: buildSettings(settings, state, audit) } });
+  await persistSettings(tenantId, buildSettings(settings, state, audit));
   return state;
 }
 
@@ -243,7 +289,7 @@ export async function removeException(tenantId: number, id: string): Promise<Wor
   const settings = await loadTenantSettings(tenantId);
   const state = parseWorkdaysState(settings);
   state.exceptions = state.exceptions.filter((e) => e.id !== id);
-  await prisma.tenant.update({ where: { id: tenantId }, data: { settings: buildSettings(settings, state, []) } });
+  await persistSettings(tenantId, buildSettings(settings, state, []));
   return state;
 }
 
@@ -279,7 +325,7 @@ export async function upsertOverride(
       changedBy
     }
   ];
-  await prisma.tenant.update({ where: { id: tenantId }, data: { settings: buildSettings(settings, state, audit) } });
+  await persistSettings(tenantId, buildSettings(settings, state, audit));
   return state;
 }
 
@@ -287,6 +333,6 @@ export async function removeOverride(tenantId: number, id: string): Promise<Work
   const settings = await loadTenantSettings(tenantId);
   const state = parseWorkdaysState(settings);
   state.overrides = state.overrides.filter((o) => o.id !== id);
-  await prisma.tenant.update({ where: { id: tenantId }, data: { settings: buildSettings(settings, state, []) } });
+  await persistSettings(tenantId, buildSettings(settings, state, []));
   return state;
 }

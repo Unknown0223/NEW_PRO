@@ -126,7 +126,7 @@ export function DashboardSales() {
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">Сессия не найдена. Войдите заново.</p>
       ) : (
-        <div className="mx-auto max-w-[1680px] space-y-4">
+        <div className="w-full space-y-4">
           <SalesFiltersBar
             draft={draft}
             setDraft={setDraft}

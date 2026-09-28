@@ -22,14 +22,28 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.min(Math.max(min, n), max);
 }
 
-/** `tenant.settings.consignment.month_close_day` — legacy fallback. */
+function parseCloseInt(raw: unknown, min: number, max: number): number | null {
+  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isInteger(n) && n >= min && n <= max) return n;
+  return null;
+}
+
+/** `tenant.settings.consignment.month_close_day` — global / legacy fallback. */
 export function parseConsignmentMonthCloseDay(settings: Prisma.JsonValue | null | undefined): number {
+  return parseConsignmentCloseSchedule(settings).day;
+}
+
+/** Tenant global jadval: kun + soat + daqiqa (default 25 · 00:00). */
+export function parseConsignmentCloseSchedule(
+  settings: Prisma.JsonValue | null | undefined
+): ConsignmentCloseSchedule {
   const root = asObj(settings);
   const cons = asObj(root.consignment);
-  const raw = cons.month_close_day;
-  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number.parseInt(raw, 10) : NaN;
-  if (Number.isInteger(n) && n >= 1 && n <= 31) return n;
-  return DEFAULT_CONSIGNMENT_MONTH_CLOSE_DAY;
+  return {
+    day: parseCloseInt(cons.month_close_day, 1, 31) ?? DEFAULT_CONSIGNMENT_CLOSE.day,
+    hour: parseCloseInt(cons.month_close_hour, 0, 23) ?? DEFAULT_CONSIGNMENT_CLOSE.hour,
+    minute: parseCloseInt(cons.month_close_minute, 0, 59) ?? DEFAULT_CONSIGNMENT_CLOSE.minute
+  };
 }
 
 export function validateConsignmentCloseSchedule(input: {
@@ -49,6 +63,10 @@ export function validateConsignmentCloseSchedule(input: {
   return { day: input.day, hour: input.hour, minute: input.minute };
 }
 
+/**
+ * Yopilish jadvali: avvalo tenant global, keyin agent maydonlari (legacy).
+ * Bitta «hamma uchun» sozlama tenant settings da saqlanadi.
+ */
 export function resolveAgentConsignmentCloseSchedule(
   user: {
     consignment_close_day?: number | null;
@@ -57,26 +75,32 @@ export function resolveAgentConsignmentCloseSchedule(
   },
   tenantSettings?: Prisma.JsonValue | null
 ): ConsignmentCloseSchedule {
+  const tenant = parseConsignmentCloseSchedule(tenantSettings);
+  const root = asObj(tenantSettings);
+  const cons = asObj(root.consignment);
+  const hasTenantDay = parseCloseInt(cons.month_close_day, 1, 31) != null;
+  if (hasTenantDay) return tenant;
+
   const day =
     user.consignment_close_day != null && user.consignment_close_day >= 1 && user.consignment_close_day <= 31
       ? user.consignment_close_day
-      : parseConsignmentMonthCloseDay(tenantSettings);
+      : tenant.day;
   const hour =
     user.consignment_close_hour != null && user.consignment_close_hour >= 0 && user.consignment_close_hour <= 23
       ? user.consignment_close_hour
-      : 0;
+      : tenant.hour;
   const minute =
     user.consignment_close_minute != null &&
     user.consignment_close_minute >= 0 &&
     user.consignment_close_minute <= 59
       ? user.consignment_close_minute
-      : 0;
+      : tenant.minute;
   return { day, hour, minute };
 }
 
 export function patchConsignmentSettings(
   settings: Prisma.JsonValue | null | undefined,
-  monthCloseDay: number
+  schedule: ConsignmentCloseSchedule
 ): Prisma.InputJsonValue {
   const root = asObj(settings);
   const cons = asObj(root.consignment);
@@ -84,7 +108,9 @@ export function patchConsignmentSettings(
     ...root,
     consignment: {
       ...cons,
-      month_close_day: monthCloseDay
+      month_close_day: schedule.day,
+      month_close_hour: schedule.hour,
+      month_close_minute: schedule.minute
     }
   };
 }

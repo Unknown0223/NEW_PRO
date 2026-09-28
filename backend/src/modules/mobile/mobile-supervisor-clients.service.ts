@@ -1,10 +1,15 @@
 import type { z } from "zod";
 import { prisma } from "../../config/database";
-import type { mobilePatchClientBodySchema } from "../../contracts/mobile.schemas";
+import type {
+  mobileCreateSupervisorClientBodySchema,
+  mobilePatchClientBodySchema
+} from "../../contracts/mobile.schemas";
 import { updateClientFields } from "../clients/clients.write.update";
+import { createClientMinimal } from "../clients/clients.service";
 import { createNotification } from "../notifications/notifications.service";
 import {
   assertMobileClientPolicy,
+  mobileClientInputToUpdateFields,
   mobileClientPatchToUpdateFields,
   type MobileClientInput
 } from "../staff/agent-mobile-config.client-mobile";
@@ -13,13 +18,20 @@ import {
   compactClient,
   clientSyncSelectBase,
   loadAgentMobileConfig,
+  resolveAgentWorkSlotId,
   type CompactClientRow
 } from "./mobile-agent-sync.service";
 import { mergeMobileConfigWithDefaults } from "../staff/agent-mobile-config.defaults";
 import { resolveUserPermissionKeys } from "../access/rbac.service";
-import { listSupervisorLinkedAgents } from "./mobile-supervisor-kpi.service";
+import {
+  assertAgentLinkedToSupervisor,
+  listSupervisorLinkedAgents
+} from "./mobile-supervisor-kpi.service";
+import { appendClientToExistingAgentRouteDays } from "../field/field.service";
+import { newClientActiveFromApprovalFlag } from "./mobile-agent-new-client";
 
 type PatchClientBody = z.infer<typeof mobilePatchClientBodySchema>;
+type CreateSupervisorClientBody = z.infer<typeof mobileCreateSupervisorClientBodySchema>;
 
 /** Savdo Konfig `can_edit: false` bo‘lsa ham Dostup `clients.klient.update` ochiq bo‘lsa ruxsat. */
 async function supervisorMayEditClient(
@@ -30,6 +42,16 @@ async function supervisorMayEditClient(
   if (cfgCanEdit !== false) return true;
   const keys = await resolveUserPermissionKeys(tenantId, supervisorUserId, "supervisor");
   return keys.has("clients.klient.update");
+}
+
+async function supervisorMayCreateClient(
+  tenantId: number,
+  supervisorUserId: number,
+  cfgCanCreate: boolean | undefined
+): Promise<boolean> {
+  if (cfgCanCreate !== false) return true;
+  const keys = await resolveUserPermissionKeys(tenantId, supervisorUserId, "supervisor");
+  return keys.has("clients.klient.create");
 }
 
 const supervisorClientSelect = {
@@ -233,6 +255,110 @@ export async function notifyOtherSupervisorsClientSharedChange(params: {
     });
   }
   return others.length;
+}
+
+/** SVR yangi TT: faqat o‘z jamoasidagi agentga biriktiriladi. */
+export async function createMobileSupervisorClient(
+  tenantId: number,
+  supervisorUserId: number,
+  input: CreateSupervisorClientBody
+) {
+  const rawCfg = await loadAgentMobileConfig(tenantId, supervisorUserId);
+  const cfg = mergeMobileConfigWithDefaults("supervisor", rawCfg ?? undefined);
+  if (!(await supervisorMayCreateClient(tenantId, supervisorUserId, cfg.client?.can_create))) {
+    throw new Error("CLIENT_CREATE_FORBIDDEN");
+  }
+
+  const agentId = input.agent_id;
+  const linked = await assertAgentLinkedToSupervisor(tenantId, supervisorUserId, agentId);
+  if (!linked) throw new Error("AGENT_OUT_OF_SCOPE");
+
+  const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+  await assertAgentCanTakeNewWork(tenantId, agentId);
+
+  const { agent_id: _omitAgentId, ...clientFields } = input;
+  assertMobileClientPolicy(cfg.client, clientFields as MobileClientInput, "create");
+
+  const workSlotId = await resolveAgentWorkSlotId(agentId);
+  const visitWeekdays = input.visit_weekdays?.length ? input.visit_weekdays : [];
+  const agentCfg = await loadAgentMobileConfig(tenantId, agentId);
+  const isActive = newClientActiveFromApprovalFlag(
+    agentCfg?.client?.require_new_client_approval ?? cfg.client?.require_new_client_approval
+  );
+
+  const { id } = await createClientMinimal(tenantId, supervisorUserId, {
+    name: input.name,
+    phone: input.phone,
+    category: input.category ?? null,
+    client_type_code: input.client_type_code ?? null,
+    region: input.region ?? null,
+    city: input.city ?? null,
+    zone: input.zone ?? null,
+    sales_channel: input.sales_channel ?? null,
+    inn: input.inn ?? null,
+    client_code: input.client_code ?? null,
+    client_pinfl: input.client_pinfl ?? null,
+    skipTerritoryAutoAssign: true,
+    is_active: isActive
+  });
+
+  const extra = mobileClientInputToUpdateFields(clientFields as MobileClientInput);
+  await updateClientFields(
+    tenantId,
+    id,
+    {
+      ...extra,
+      agent_id: agentId,
+      skip_territory_auto_assign: true
+    },
+    supervisorUserId
+  );
+
+  await prisma.client.update({
+    where: { id },
+    data: { agent_id: agentId }
+  });
+
+  await prisma.clientAgentAssignment.upsert({
+    where: { client_id_slot: { client_id: id, slot: 1 } },
+    create: {
+      tenant_id: tenantId,
+      client_id: id,
+      agent_id: agentId,
+      slot: 1,
+      work_slot_id: workSlotId,
+      visit_weekdays: visitWeekdays,
+      auto_assign_status: "assigned"
+    },
+    update: {
+      agent_id: agentId,
+      work_slot_id: workSlotId,
+      auto_assign_status: "assigned",
+      ...(input.visit_weekdays?.length ? { visit_weekdays: input.visit_weekdays } : {})
+    }
+  });
+
+  if (input.visit_weekdays?.length) {
+    const forRoute = await prisma.client.findFirst({
+      where: { id, tenant_id: tenantId },
+      select: { name: true, latitude: true, longitude: true }
+    });
+    if (forRoute) {
+      await appendClientToExistingAgentRouteDays(
+        tenantId,
+        agentId,
+        {
+          client_id: id,
+          client_name: forRoute.name,
+          latitude: forRoute.latitude != null ? Number(forRoute.latitude) : null,
+          longitude: forRoute.longitude != null ? Number(forRoute.longitude) : null
+        },
+        input.visit_weekdays
+      );
+    }
+  }
+
+  return getMobileSupervisorClient(tenantId, supervisorUserId, id);
 }
 
 export async function patchMobileSupervisorClient(

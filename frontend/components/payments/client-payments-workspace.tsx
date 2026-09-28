@@ -712,7 +712,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
 
         <div className="mt-3 shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <div
-            className="scrollbar-none overflow-auto overscroll-contain"
+            className="scrollbar-none overflow-auto overscroll-y-contain"
             style={{ maxHeight: rows.length > 0 ? PAYMENTS_TABLE_BODY_MAX_PX : undefined }}
           >
             <table className="min-w-full divide-y divide-border text-[12px]">

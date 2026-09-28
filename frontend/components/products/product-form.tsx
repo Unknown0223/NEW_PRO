@@ -356,7 +356,7 @@ export function ProductForm({
     <div
       className={cn(
         "flex flex-col",
-        isModal ? "w-full gap-4 px-6 py-4" : "mx-auto max-w-lg gap-6 pb-10"
+        isModal ? "w-full gap-4 px-6 py-4" : "w-full gap-6 pb-10"
       )}
     >
       {isModal ? (

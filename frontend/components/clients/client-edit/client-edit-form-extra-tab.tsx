@@ -37,7 +37,7 @@ export function ClientEditFormExtraTab({ vm }: { vm: ClientEditFormVm }) {
   if (tab !== "extra") return null;
 
   return (
-        <div className="mx-auto w-full max-w-4xl space-y-6">
+        <div className="w-full space-y-6">
           <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
             <Caption variant="pick">Выбор из справочника</Caption>
             <p className="mt-1 text-xs text-muted-foreground">

@@ -86,7 +86,9 @@ const bulkRowsBodySchema = z.object({
 });
 
 const settingsBodySchema = z.object({
-  month_close_day: z.number().int().min(1).max(31)
+  month_close_day: z.number().int().min(1).max(31),
+  month_close_hour: z.number().int().min(0).max(23).optional().default(0),
+  month_close_minute: z.number().int().min(0).max(59).optional().default(0)
 });
 
 const importQuerySchema = z.object({
@@ -115,15 +117,13 @@ export async function registerConsignmentRoutes(app: FastifyInstance) {
       }
       try {
         const actor = actorUserIdOrNull(request);
-        const out = await patchConsignmentSettingsForTenant(
-          request.tenant!.id,
-          parsed.data.month_close_day,
-          actor
-        );
+        const out = await patchConsignmentSettingsForTenant(request.tenant!.id, parsed.data, actor);
         return reply.send({ data: out });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "BAD_CLOSE_DAY") return sendApiError(reply, request, 400, "BadCloseDay");
+        if (msg === "BAD_CLOSE_HOUR") return sendApiError(reply, request, 400, "BadCloseHour");
+        if (msg === "BAD_CLOSE_MINUTE") return sendApiError(reply, request, 400, "BadCloseMinute");
         throw e;
       }
     }

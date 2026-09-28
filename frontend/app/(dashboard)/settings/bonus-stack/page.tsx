@@ -88,7 +88,7 @@ export default function BonusStackHubPage() {
   ];
 
   return (
-    <PageShell className="max-w-4xl">
+    <PageShell>
       <PageHeader
         title="Бонусы и скидки"
         description="Настройка bonus stack и разделы правил."

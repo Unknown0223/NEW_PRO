@@ -995,7 +995,7 @@ export function StockBalancesWorkspace({ tenantSlug }: Props) {
                       Движения товаров на складе
                     </Link>
                     <Link
-                      href="/products"
+                      href="/settings/products"
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
                         "h-9 whitespace-nowrap"

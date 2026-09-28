@@ -163,6 +163,15 @@ function redirectToLoginIfBrowser(reason?: "session_ended" | "app_access_denied"
   }
 }
 
+export const DAY_OFF_PATH = "/day-off";
+
+function redirectToDayOffIfBrowser() {
+  if (typeof window === "undefined") return;
+  const path = window.location.pathname;
+  if (path.startsWith(DAY_OFF_PATH) || path.startsWith("/login")) return;
+  window.location.assign(DAY_OFF_PATH);
+}
+
 /** Backend «boshqa qurilmada kirildi / admin tugatdi» signali. */
 function isSessionRevoked(status: number | undefined, body: ApiErrorResponseBody): boolean {
   return status === 401 && body?.error === "SESSION_REVOKED";
@@ -275,6 +284,12 @@ api.interceptors.response.use(
       const store = useAuthStore.getState();
       store.clearSession();
       redirectToLoginIfBrowser(accessDeny);
+      return Promise.reject(error);
+    }
+
+    // «Рабочие дни» bo‘yicha dam olish kuni — sessiya saqlanadi, faqat ma’lumot sahifasi ochiq.
+    if (status === 403 && body.error === "WORKDAY_OFF") {
+      redirectToDayOffIfBrowser();
       return Promise.reject(error);
     }
 

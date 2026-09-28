@@ -123,6 +123,18 @@ class SupervisorApi {
     }
   }
 
+  Future<Map<String, dynamic>> createClient(
+    String slug,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final r = await _dio.post('/api/$slug/mobile/supervisor/clients', data: body);
+      return Map<String, dynamic>.from(r.data as Map);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   Future<Map<String, dynamic>> patchClient(
     String slug,
     int clientId,

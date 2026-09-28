@@ -13,9 +13,9 @@ set "RELEASE_APK=%RELEASES%\SalesDoc-latest-release.apk"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\env\switch-production-mobile.ps1"
 if errorlevel 1 exit /b 1
 
-echo === SalesDoc APK (Railway production) ===
+echo === SalesDoc APK (Hetzner production) ===
 echo Loyiha: %REPO_ROOT%
-echo Server: https://backend-production-3cf2.up.railway.app
+echo Server: https://api.salesarena.sale
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ". '%REPO_ROOT%\scripts\env\resolve-flutter.ps1'; Set-MobileBuildEnv | Out-Null"

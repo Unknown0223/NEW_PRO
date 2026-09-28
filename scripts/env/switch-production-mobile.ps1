@@ -13,7 +13,8 @@ Write-Host "mobile\.env <= .env.production (Hetzner backend)"
 
 Write-Host ""
 Write-Host "Keyingi qadamlar:" -ForegroundColor Green
-Write-Host "  mobile\build-apk-railway.cmd   - release APK"
-Write-Host "  mobile\run-mobile-railway.cmd  - emulyatorda prod API"
+Write-Host "  mobile\build-apk-railway.cmd   - release APK (Hetzner API)"
+Write-Host "  deploy-mobile-prod.cmd         - APK + OTA Hetznerga"
 Write-Host ""
-Write-Host "Web panel lokal ishlatish uchun:  .\scripts\env\switch-local.ps1" -ForegroundColor Yellow
+Write-Host "Eski Railway faqat solishtirish uchun; release APK Hetznerga ulanadi." -ForegroundColor DarkYellow
+Write-Host "Web panel lokal:  .\scripts\env\switch-local.ps1" -ForegroundColor Yellow

@@ -34,7 +34,7 @@ export function AccessUserDetailPanel({
       ) : (
         <>
           <AccessUserDetailToolbar vm={vm} />
-          <div className="min-h-0 flex-1 p-3 flex flex-col overflow-hidden overscroll-contain">
+          <div className="min-h-0 flex-1 p-3 flex flex-col overflow-hidden overscroll-y-contain">
             <AccessUserDetailOperationsTab vm={vm} />
           </div>
         </>

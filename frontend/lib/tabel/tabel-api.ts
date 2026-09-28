@@ -42,6 +42,8 @@ export interface WorkdaysState {
   schedules: ScheduleMap;
   exceptions: WorkdayException[];
   overrides: EmployeeOverride[];
+  /** Nerabochiy kunda (admin’dan tashqari) web/ilovaga kirish bloklanadi. */
+  enforce_access: boolean;
 }
 
 function normalizeState(raw: Partial<WorkdaysState> | undefined): WorkdaysState {
@@ -55,7 +57,8 @@ function normalizeState(raw: Partial<WorkdaysState> | undefined): WorkdaysState 
   return {
     schedules,
     exceptions: Array.isArray(raw?.exceptions) ? raw!.exceptions : [],
-    overrides: Array.isArray(raw?.overrides) ? raw!.overrides : []
+    overrides: Array.isArray(raw?.overrides) ? raw!.overrides : [],
+    enforce_access: raw?.enforce_access !== false
   };
 }
 
@@ -135,5 +138,12 @@ export function useWorkdaysMutations() {
     onSuccess: invalidate
   });
 
-  return { saveSchedules, addException, removeException, upsertOverride, removeOverride };
+  const saveEnforceAccess = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await api.put(`/api/${tenantSlug}/workdays/enforce-access`, { enabled });
+    },
+    onSuccess: invalidate
+  });
+
+  return { saveSchedules, addException, removeException, upsertOverride, removeOverride, saveEnforceAccess };
 }

@@ -4,8 +4,10 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { buildScopedAgentDirectoryWhereForActor } from "../access/access-agent-scope";
 import { ORDER_STATUSES_CONSIGNMENT_LIMIT_EXPOSURE } from "../orders/order-status";
 import {
-  parseConsignmentMonthCloseDay,
-  patchConsignmentSettings
+  parseConsignmentCloseSchedule,
+  patchConsignmentSettings,
+  validateConsignmentCloseSchedule,
+  type ConsignmentCloseSchedule
 } from "./consignment-settings";
 import { reconcileTenantConsignmentMonthClosures } from "./consignment-month-closure.service";
 import { listAgentConsignmentMonthStatusForMonth } from "./consignment-month-status.repo";
@@ -155,10 +157,14 @@ export type ConsignmentAgentRow = {
 
 export type ConsignmentListMeta = {
   month_close_day: number;
+  month_close_hour: number;
+  month_close_minute: number;
 };
 
 export type ConsignmentSettings = {
   month_close_day: number;
+  month_close_hour: number;
+  month_close_minute: number;
 };
 
 export type ListConsignmentAgentsQuery = {
@@ -183,32 +189,63 @@ function toFio(u: {
   return parts.length > 0 ? parts.join(" ") : u.name;
 }
 
+function toConsignmentSettings(schedule: ConsignmentCloseSchedule): ConsignmentSettings {
+  return {
+    month_close_day: schedule.day,
+    month_close_hour: schedule.hour,
+    month_close_minute: schedule.minute
+  };
+}
+
 export async function getConsignmentSettings(tenantId: number): Promise<ConsignmentSettings> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
   });
-  return { month_close_day: parseConsignmentMonthCloseDay(tenant?.settings) };
+  return toConsignmentSettings(parseConsignmentCloseSchedule(tenant?.settings));
 }
 
+/** Global yopilish vaqti — tenant + barcha agentlar + barcha ish o‘rinlari. */
 export async function patchConsignmentSettingsForTenant(
   tenantId: number,
-  monthCloseDay: number,
+  input: { month_close_day: number; month_close_hour?: number; month_close_minute?: number },
   actorUserId: number | null
 ): Promise<ConsignmentSettings> {
-  if (!Number.isInteger(monthCloseDay) || monthCloseDay < 1 || monthCloseDay > 31) {
-    throw new Error("BAD_CLOSE_DAY");
-  }
+  const schedule = validateConsignmentCloseSchedule({
+    day: input.month_close_day,
+    hour: input.month_close_hour ?? 0,
+    minute: input.month_close_minute ?? 0
+  });
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { settings: true }
   });
   if (!tenant) throw new Error("TENANT_NOT_FOUND");
 
-  await prisma.tenant.update({
-    where: { id: tenantId },
-    data: { settings: patchConsignmentSettings(tenant.settings, monthCloseDay) }
-  });
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.tenant.update({
+      where: { id: tenantId },
+      data: { settings: patchConsignmentSettings(tenant.settings, schedule) }
+    }),
+    prisma.user.updateMany({
+      where: { tenant_id: tenantId, role: "agent" },
+      data: {
+        consignment_close_day: schedule.day,
+        consignment_close_hour: schedule.hour,
+        consignment_close_minute: schedule.minute,
+        consignment_updated_at: now
+      }
+    }),
+    prisma.workSlot.updateMany({
+      where: { tenant_id: tenantId },
+      data: {
+        consignment_close_day: schedule.day,
+        consignment_close_hour: schedule.hour,
+        consignment_close_minute: schedule.minute
+      }
+    })
+  ]);
 
   await appendTenantAuditEvent({
     tenantId,
@@ -216,10 +253,14 @@ export async function patchConsignmentSettingsForTenant(
     entityType: AuditEntityType.tenant_settings,
     entityId: tenantId,
     action: "consignment.settings.update",
-    payload: { month_close_day: monthCloseDay }
+    payload: {
+      month_close_day: schedule.day,
+      month_close_hour: schedule.hour,
+      month_close_minute: schedule.minute
+    }
   });
 
-  return { month_close_day: monthCloseDay };
+  return toConsignmentSettings(schedule);
 }
 
 export async function listConsignmentAgents(
@@ -236,7 +277,7 @@ export async function listConsignmentAgents(
     select: { settings: true }
   });
   const tenantSettings = tenant?.settings;
-  const settings = { month_close_day: parseConsignmentMonthCloseDay(tenantSettings) };
+  const settings = toConsignmentSettings(parseConsignmentCloseSchedule(tenantSettings));
   if (q.sync_closures) {
     try {
       await reconcileTenantConsignmentMonthClosures(tenantId, yearMonth);
@@ -342,7 +383,14 @@ export async function listConsignmentAgents(
     });
   }
 
-  return { data: rows, meta: { month_close_day: settings.month_close_day } };
+  return {
+    data: rows,
+    meta: {
+      month_close_day: settings.month_close_day,
+      month_close_hour: settings.month_close_hour,
+      month_close_minute: settings.month_close_minute
+    }
+  };
 }
 
 export type BulkPatchConsignmentInput = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PivotConfig } from "@salec/pivot-engine";
+import type { PivotConfig, PivotField } from "@salec/pivot-engine";
 import { canSavePivotConfig, hasFlatSlice } from "@/lib/pivot-layout-form";
 import { flattenConfigZones } from "@/lib/pivot-flat-layout";
 import {
@@ -57,6 +57,43 @@ describe("pivot save + flat layout parity", () => {
     expect(restored.values.map((v) => v.fieldId)).toEqual(["volume", "amount"]);
     expect(restored.rows).toEqual(["agent_branch", "brand_name"]);
     expect(restored.options.layoutForm).toBe("classic");
+  });
+
+  it("flat shablon (snapshot boshqa ustunlar) → classic: o‘lchamlar Ряды, raqamlar Значения", () => {
+    const fields: PivotField[] = [
+      { id: "client_name", label: "Клиент", dataType: "string" },
+      { id: "agent_name", label: "Агент", dataType: "string" },
+      { id: "order_id", label: "Заказ ID", dataType: "number" },
+      { id: "order_date_month", label: "Дата заказа.Месяц", dataType: "number" },
+      { id: "amount", label: "Сумма", dataType: "currency" },
+      { id: "volume", label: "Объём", dataType: "number" }
+    ];
+    const flat = flattenConfigZones({
+      ...classicConfig,
+      rows: ["client_name", "agent_name", "order_id", "order_date_month", "amount"],
+      values: []
+    });
+    const next = restoreFromPreFlatSnapshot(flat, "classic", fields);
+    expect(next.rows).toEqual(["client_name", "agent_name", "order_id", "order_date_month"]);
+    expect(next.values).toEqual([{ fieldId: "amount", aggregation: "SUM" }]);
+    expect(next.options.layoutForm).toBe("classic");
+  });
+
+  it("flat da raqamli ustun yo‘q → compact: fallback qiymat qo‘shiladi", () => {
+    const fields: PivotField[] = [
+      { id: "client_name", label: "Клиент", dataType: "string" },
+      { id: "amount", label: "Сумма", dataType: "currency" }
+    ];
+    const flat: PivotConfig = {
+      ...classicConfig,
+      rows: ["client_name"],
+      values: [],
+      options: { ...classicConfig.options, layoutForm: "flat" }
+    };
+    const next = restoreFromPreFlatSnapshot(flat, "compact", fields);
+    expect(next.rows).toEqual(["client_name"]);
+    expect(next.values).toEqual([{ fieldId: "amount", aggregation: "SUM" }]);
+    expect(next.options.compactMode).toBe(true);
   });
 
   it("flat ustun tartibi ekran/export uchun bir xil (rows tartibi)", () => {

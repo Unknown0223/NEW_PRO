@@ -145,7 +145,10 @@ const envSchema = z.object({
   STORAGE_BUCKET: z.string().optional(),
   STORAGE_ACCESS_KEY: z.string().optional(),
   STORAGE_SECRET_KEY: z.string().optional(),
-  STORAGE_PUBLIC_BASE_URL: z.string().url().optional()
+  STORAGE_PUBLIC_BASE_URL: z.string().url().optional(),
+
+  /** Eski slug → yangi slug (masalan `test1:aksit,old2:new2`) — eski ilova/JWT lar ishlashi uchun. */
+  TENANT_SLUG_ALIASES: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

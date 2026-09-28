@@ -40,6 +40,9 @@ export type DailyKpiAgentSummary = {
   agent_id: number;
   name: string;
   code: string | null;
+  branch: string | null;
+  supervisor_id: number | null;
+  supervisor_name: string | null;
   trade_direction_id: number | null;
   trade_direction_name: string | null;
   month_plan_sum: number;
@@ -187,7 +190,10 @@ export async function getDailyKpiOverview(
           id: true,
           name: true,
           code: true,
-          trade_direction_id: true
+          branch: true,
+          trade_direction_id: true,
+          supervisor_user_id: true,
+          supervisor: { select: { name: true } }
         }
       },
       plan: {
@@ -202,7 +208,15 @@ export async function getDailyKpiOverview(
   const planByAgent = new Map<number, number>();
   const agentMeta = new Map<
     number,
-    { id: number; name: string; code: string | null; trade_direction_id: number | null }
+    {
+      id: number;
+      name: string;
+      code: string | null;
+      branch: string | null;
+      supervisor_id: number | null;
+      supervisor_name: string | null;
+      trade_direction_id: number | null;
+    }
   >();
   for (const t of targetRows) {
     planByAgent.set(t.user_id, (planByAgent.get(t.user_id) ?? 0) + num(t.cost));
@@ -211,6 +225,9 @@ export async function getDailyKpiOverview(
         id: t.user.id,
         name: t.user.name,
         code: t.user.code,
+        branch: t.user.branch?.trim() || null,
+        supervisor_id: t.user.supervisor_user_id,
+        supervisor_name: t.user.supervisor?.name ?? null,
         trade_direction_id: t.user.trade_direction_id
       });
     }
@@ -240,7 +257,7 @@ export async function getDailyKpiOverview(
         FROM orders o
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${monthStart}
           AND o.created_at < ${monthEnd}
         GROUP BY o.agent_id
@@ -250,7 +267,7 @@ export async function getDailyKpiOverview(
         FROM orders o
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${todayStart}
           AND o.created_at <= ${todayEnd}
         GROUP BY o.agent_id
@@ -262,7 +279,7 @@ export async function getDailyKpiOverview(
         FROM orders o
         WHERE o.tenant_id = ${tenantId}
           AND o.agent_id IN (${Prisma.join(agentIds)})
-          AND o.order_type = 'order'
+          AND o.order_type = 'order' AND o.status <> 'cancelled'
           AND o.created_at >= ${monthStart}
           AND o.created_at < ${monthEnd}
         GROUP BY o.agent_id, 2
@@ -308,26 +325,31 @@ export async function getDailyKpiOverview(
     });
 
     const isWorkingToday = workingDays.includes(asOf);
+    // Dam olish kunida kunlik reja yo‘q (qolgan summa keyingi ish kunlariga taqsimlangan).
+    const todayPlan = isWorkingToday ? route.today_plan_sum : 0;
     agents.push({
       agent_id: agentId,
       name: meta.name,
       code: meta.code,
+      branch: meta.branch,
+      supervisor_id: meta.supervisor_id,
+      supervisor_name: meta.supervisor_name,
       trade_direction_id: meta.trade_direction_id,
       trade_direction_name: direction?.name ?? null,
       month_plan_sum: monthPlan,
       month_fact_sum: monthFact,
       month_execution_pct: executionPctFromPlanFact(monthPlan, monthFact),
-      today_plan_sum: route.today_plan_sum,
+      today_plan_sum: todayPlan,
       today_fact_sum: todayFact,
-      today_execution_pct: executionPctFromPlanFact(route.today_plan_sum, todayFact),
-      today_remaining_sum: Math.max(0, route.today_plan_sum - todayFact),
+      today_execution_pct: executionPctFromPlanFact(todayPlan, todayFact),
+      today_remaining_sum: Math.max(0, todayPlan - todayFact),
       working_days_total: route.working_days_total,
       remaining_working_days: route.remaining_working_days,
       carry_forward_sum: route.carry_forward_sum,
       surplus_sum: route.surplus_sum,
       status: statusFromDay({
         hasPlans: monthPlan > 0,
-        todayPlan: route.today_plan_sum,
+        todayPlan,
         todayFact,
         isWorkingToday
       }),

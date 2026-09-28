@@ -219,7 +219,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
 
   if (kind === "supervisor") {
     return (
-      <div className="mx-auto flex max-w-2xl flex-col gap-6 pb-10">
+      <div className="flex w-full flex-col gap-6 pb-10">
         <PageHeader
           title={title}
           description="Faqat kirish uchun kerakli maydonlar"
@@ -319,7 +319,7 @@ export function StaffCreateForm({ kind, tenantSlug, onSuccess, onCancel }: Props
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 pb-10">
+    <div className="flex w-full flex-col gap-6 pb-10">
       <PageHeader
         title={title}
         description="To‘liq sahifada qo‘shish"

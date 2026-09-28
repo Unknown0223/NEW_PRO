@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   buildPaymentPrefillFromSelection,
   formatConsignmentBulkFeedback,
+  formatExpeditorBulkFeedback,
   ordersMutationFeedback,
   rowStatusPatchError,
   type BulkConsignmentResponse,
@@ -206,25 +207,37 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
   });
 
   const bulkExpeditorMut = useMutation({
-    mutationFn: async (payload: { order_ids: number[]; expeditor_user_id: number | null }) => {
+    mutationFn: async (payload: {
+      order_ids: number[];
+      expeditor_user_id: number | null;
+      /** Faqat UI: jadvalda darhol ko‘rsatish uchun (serverga yuborilmaydi). */
+      expeditor_label?: string | null;
+    }) => {
       const { data } = await api.post<BulkExpeditorResponse>(
         `/api/${tenantSlug}/orders/bulk/expeditor`,
-        payload
+        { order_ids: payload.order_ids, expeditor_user_id: payload.expeditor_user_id }
       );
       return data;
     },
-    onSuccess: (res) => {
+    onSuccess: (res, vars) => {
+      const label = vars.expeditor_user_id == null ? null : (vars.expeditor_label ?? null);
+      for (const id of res.updated) {
+        patchOrderInOrdersListCaches(qc, tenantSlug, id, (r) => ({
+          ...r,
+          expeditor_id: vars.expeditor_user_id,
+          expeditors: label,
+          expeditor_display: label
+        }));
+      }
       void qc.invalidateQueries({ queryKey: ["orders", tenantSlug] });
-      const n = res.failed.length;
-      setBulkExpFeedback(
-        n === 0
-          ? `${res.updated.length} ta zakaz yangilandi.`
-          : `${res.updated.length} ta OK, ${n} ta xato.`
-      );
+      for (const id of res.updated) {
+        void qc.invalidateQueries({ queryKey: ["order", tenantSlug, id] });
+      }
+      setBulkExpFeedback(formatExpeditorBulkFeedback(res, vars.expeditor_user_id == null).message);
       setBulkExpeditorChoice("");
     },
     onError: (err: unknown) => {
-      setBulkExpFeedback(ordersMutationFeedback(err, "Ekspeditorni yangilab bo‘lmadi."));
+      setBulkExpFeedback(ordersMutationFeedback(err, "Не удалось привязать доставщика."));
     }
   });
 

@@ -1,5 +1,6 @@
 import type { WorkdaysState } from "../tabel/workdays.service";
 import { executionPctFromPlanFact } from "./plans.monitoring-aggregates";
+import { WORK_REGION_UTC_OFFSET_HOURS } from "../mobile/mobile-agent-sync.config.service";
 
 export type DailyKpiDayStatus =
   | "done"
@@ -9,13 +10,14 @@ export type DailyKpiDayStatus =
   | "off"
   | "no_plan";
 
+/** Oy chegarasi ish mintaqasi (Asia/Tashkent) bo‘yicha: [1-kun 00:00, keyingi oy 1-kun 00:00). */
 export function monthBounds(year: number, month: number): {
   start: Date;
   end: Date;
   daysInMonth: number;
 } {
-  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  const start = new Date(Date.UTC(year, month - 1, 1, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month, 1, -WORK_REGION_UTC_OFFSET_HOURS, 0, 0, 0));
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return { start, end, daysInMonth };
 }
@@ -66,6 +68,7 @@ export function fallbackWorkdaysState(): WorkdaysState {
       Супервайзер: [true, true, true, true, true, false, false],
       Экспедитор: [true, true, true, true, true, true, false]
     },
+    enforce_access: false,
     exceptions: [],
     overrides: []
   };

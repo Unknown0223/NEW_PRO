@@ -28,7 +28,7 @@ import type {
   PivotField,
   PivotValuesPosition
 } from "@salec/pivot-engine";
-import { resolveValuesPosition } from "@salec/pivot-engine";
+import { getAggregationLabel, resolveValuesPosition } from "@salec/pivot-engine";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   PALETTE_PREFIX,
   parsePaletteId,
   parseSortableZoneId,
+  parseDateHierarchyField,
   parseValueSortableId,
   pivotDragOverlayModifiers,
   pivotFieldsCollisionDetection,
@@ -119,6 +120,8 @@ function usedFieldIds(config: PivotConfig): Set<string> {
 
 function isNumeric(field?: PivotField) {
   if (!field) return false;
+  // Kun/oy/yil — o‘lchov emas: Σ ko‘rsatilmasin
+  if (parseDateHierarchyField(field)) return false;
   if (field.dataType === "number" || field.dataType === "currency") return true;
   /** Bonus miqdori — har doim qiymat (Σ). */
   return field.id === "bonus_qty" || field.id === "block_qty";
@@ -430,7 +433,7 @@ function ZoneChip({
             "DIFFERENCE"
           ] as AggregationType[]).map((agg) => (
             <option key={agg} value={agg}>
-              {agg}
+              {getAggregationLabel(agg)}
             </option>
           ))}
         </select>
@@ -550,38 +553,65 @@ function DateHierarchyHeader({
   expanded,
   onToggle,
   checkedCount,
-  childCount
+  childCount,
+  onCheckedChange
 }: {
   label: string;
   expanded: boolean;
   onToggle: () => void;
   checkedCount: number;
   childCount: number;
+  onCheckedChange: (next: boolean) => void;
 }) {
+  const allChecked = childCount > 0 && checkedCount === childCount;
+  const someChecked = checkedCount > 0 && checkedCount < childCount;
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[12px] hover:bg-[#f7f7f7]"
+    <div
+      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-[12px] hover:bg-[#f7f7f7]"
       style={{
         borderBottom: `1px solid ${LIGHT.borderSoft}`,
         color: LIGHT.text,
         background: LIGHT.bg
       }}
-      aria-expanded={expanded}
     >
-      {expanded ? (
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#888]" />
-      ) : (
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#888]" />
-      )}
-      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex shrink-0 items-center"
+        aria-expanded={expanded}
+        aria-label={expanded ? "Свернуть" : "Развернуть"}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#888]" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#888]" />
+        )}
+      </button>
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 shrink-0 accent-[#555]"
+        checked={allChecked}
+        ref={(el) => {
+          if (el) el.indeterminate = someChecked;
+        }}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        onClick={(e) => e.stopPropagation()}
+        title="Выбрать год / месяц / день"
+        aria-label={`${label}: выбрать периоды`}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        className="min-w-0 flex-1 truncate text-left font-medium hover:underline"
+      >
+        {label}
+      </button>
       {checkedCount > 0 ? (
         <span className="shrink-0 text-[10px] text-[#888]">
           {checkedCount}/{childCount}
         </span>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -1276,6 +1306,14 @@ export function VirtualPivotFieldsModal({
                             onToggle={() => toggleDateGroup(entry.key, entry.children)}
                             checkedCount={checkedCount}
                             childCount={entry.children.length}
+                            onCheckedChange={(next) => {
+                              for (const { field } of entry.children) {
+                                if (next !== used.has(field.id)) toggleField(field, next);
+                              }
+                              if (next) {
+                                setDateExpandOverrides((prev) => ({ ...prev, [entry.key]: true }));
+                              }
+                            }}
                           />
                           {expanded
                             ? entry.children.map(({ field, partLabel }) => (

@@ -129,7 +129,7 @@ export default function CompanySettingsPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold">Kompaniya va flaglar</h1>
         <p className="text-sm text-muted-foreground">Tenant: {tenantSlug ?? "—"}</p>

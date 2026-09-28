@@ -464,7 +464,7 @@ export function TransferAmaliyotWorkspace() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-4 pb-6">
+    <div className="w-full space-y-4 pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">О перемещение</h1>

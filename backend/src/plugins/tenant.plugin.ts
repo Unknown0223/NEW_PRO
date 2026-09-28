@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import { prisma } from "../config/database";
 import { sendApiError } from "../lib/api-error";
 import { getAppCache, setAppCache } from "../lib/redis-cache";
+import { resolveTenantSlugAlias } from "../lib/tenant-slug-alias";
 
 function requestPath(url: string): string {
   const q = url.indexOf("?");
@@ -37,14 +38,15 @@ export const tenantPlugin = fp(async (app) => {
 
     const slugFromParams = (request.params as { slug?: string } | undefined)?.slug;
     const slugFromHeader = request.headers["x-tenant-slug"];
-    const slug =
+    const rawSlug =
       slugFromParams?.trim() ||
       tenantSlugFromApiPath(path) ||
       (Array.isArray(slugFromHeader) ? slugFromHeader[0] : slugFromHeader)?.trim();
 
-    if (!slug) {
+    if (!rawSlug) {
       return;
     }
+    const slug = resolveTenantSlugAlias(rawSlug);
 
     const cacheKey = `tenant:slug:${slug}`;
     type TenantRow = { id: number; slug: string; name: string; is_active: boolean };

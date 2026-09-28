@@ -374,13 +374,17 @@ export function registerRoutePermissionGuard(app: FastifyInstance) {
     if (env.RBAC_ENFORCE_PERMISSIONS !== "1") return;
 
     const method = request.method.toUpperCase();
+    // Haqiqiy URL — `routeOptions.url` ba'zan faqat `/clients` bo'lishi mumkin
+    // (prefix/encapsulate); mobil API veb CRUD kalitlariga tushmasin.
+    const rawUrl = (request.url ?? "").split("?")[0] ?? "";
+    if (rawUrl.includes("/mobile/") || rawUrl.includes("/telegram-bot/")) return;
+
     const routePath =
       (request as { routeOptions?: { url?: string } }).routeOptions?.url ??
       (request as { routerPath?: string }).routerPath ??
       "";
-    if (!routePath) {
-      return sendApiError(reply, request, 403, "ForbiddenPermission");
-    }
+    // Noma'lum marshrut — route o'z 401/404 beradi; bu yerda 403 bermaymiz.
+    if (!routePath) return;
 
     const rule = matchRule(method, routePath);
     if (!rule) return;

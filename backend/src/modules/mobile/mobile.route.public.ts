@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { sendApiError, zodValidationExtras } from "../../lib/api-error";
+import { resolveTenantSlugAlias } from "../../lib/tenant-slug-alias";
 import { ensureMobileApkLocal, openMobileApkReadable } from "./mobile-apk.service";
 
 const slugQuery = z
@@ -12,7 +13,8 @@ const slugQuery = z
   .refine((s) => s.length > 0, { message: "slug required" });
 
 /** Public mobile: slug trim + case-insensitive (TenantNotFound kamaytirish). */
-async function findActiveTenantBySlug(slug: string) {
+async function findActiveTenantBySlug(rawSlug: string) {
+  const slug = resolveTenantSlugAlias(rawSlug);
   const exact = await prisma.tenant.findUnique({
     where: { slug },
     select: { id: true, is_active: true, slug: true, settings: true }

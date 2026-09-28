@@ -25,7 +25,7 @@ export default function SettingsCatalogItemPage({ params }: Props) {
   const isMappedToExisting = realHref !== item.href;
 
   return (
-    <PageShell className="max-w-3xl">
+    <PageShell>
       <PageHeader title={item.title} description={`${section.title} bo'limi elementi`} />
       <div className="rounded-lg border bg-card p-5">
         <div className="mb-4 flex items-center gap-2">

@@ -59,7 +59,7 @@ export default function SpravochnikPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+    <div className="flex w-full flex-col gap-8">
       <div>
         <h1 className="text-lg font-semibold">Spravochniklar</h1>
         <p className="text-sm text-muted-foreground">Foydalanuvchilar, kategoriyalar, narx turlari</p>

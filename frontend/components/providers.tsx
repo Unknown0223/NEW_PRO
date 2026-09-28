@@ -30,7 +30,8 @@ function shouldPersistQueryKey(key: unknown): boolean {
     root === "client-balances" ||
     root === "consignment" ||
     root === "reports" ||
-    root === "dashboard"
+    root === "dashboard" ||
+    root === "workday-status"
   ) {
     return false;
   }

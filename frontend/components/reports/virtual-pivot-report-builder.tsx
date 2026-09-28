@@ -577,7 +577,7 @@ export function VirtualPivotReportBuilder() {
     try {
       const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
         expandAllForExport: true,
-        useFormattedValues: true
+        useFormattedValues: false
       });
       writePivotAoAToExcel(aoa, {
         filename: `pivot-report-${new Date().toISOString().slice(0, 10)}.xlsx`,
@@ -652,7 +652,7 @@ export function VirtualPivotReportBuilder() {
     try {
       const aoa = buildScreenMatchingPivotAoA(dataForExport, config, pivotFields, {
         expandAllForExport: true,
-        useFormattedValues: true
+        useFormattedValues: false
       });
       downloadPivotAoAAsCsv(aoa, `pivot-report-${new Date().toISOString().slice(0, 10)}.csv`);
       setNotice({ message: "Экспорт CSV готов — файл скачан.", tone: "success" });
@@ -1110,7 +1110,7 @@ export function VirtualPivotReportBuilder() {
     if (nextLayout === "flat") {
       next = flattenConfigZones(next);
     } else if (leavingFlat && (nextLayout === "classic" || nextLayout === "compact")) {
-      next = restoreFromPreFlatSnapshot(config, nextLayout);
+      next = restoreFromPreFlatSnapshot(config, nextLayout, pivotFields);
       next = {
         ...next,
         options: {

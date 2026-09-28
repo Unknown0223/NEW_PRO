@@ -24,8 +24,26 @@ import {
   consignment217SheetName,
   consignment217TerritoryLine
 } from "./order-nakladnoy-xlsx.consignment-217";
+import {
+  nakladnoyPageCapacityPt,
+  nakladnoyPrintScalePercent,
+  packNakladnoyBlocksIntoPages
+} from "./order-nakladnoy-page-pack";
 
 const MONEY_FMT = "#,##0";
+const ROW_PT = 15;
+/** 6 kolonkali merge (≈337px) da 10pt bold matn — bir qatordagi belgi soni. */
+const FULL_LINE_CHARS = 52;
+/** «Цена»+«Сумма» merge (≈139px) da 11pt bold summa matni. */
+const TOTAL_MONEY_CHARS = 19;
+/** «Наименование» kolonkasi (≈103px) da 11pt matn — bir qatordagi belgi soni. */
+const PRODUCT_NAME_CHARS = 14;
+
+function wrappedLineCount(value: string, charsPerLine: number): number {
+  return value
+    .split("\n")
+    .reduce((n, part) => n + Math.max(1, Math.ceil(part.trim().length / charsPerLine)), 0);
+}
 
 function writeFullLine(
   sheet: ExcelJS.Worksheet,
@@ -45,9 +63,8 @@ function writeFullLine(
     wrapText: true
   };
   applyBorderRange(sheet, r, c0, r, cEnd);
-  const lineCount = Math.max(1, value.split("\n").length);
-  // Pechat: 1 qator ~14–15pt; max ~3 qator (uzun orient/komment)
-  sheet.getRow(r).height = Math.min(48, Math.max(15, 14 * lineCount + 2));
+  const lineCount = Math.min(4, wrappedLineCount(value, FULL_LINE_CHARS));
+  sheet.getRow(r).height = Math.max(ROW_PT, 14 * lineCount + 2);
 }
 
 /** Bo‘sh/null qatorlarni o‘tkazib yuboradi (nakladnoyda faqat bor maydonlar). */
@@ -70,10 +87,11 @@ function writeColHeaders(sheet: ExcelJS.Worksheet, r: number, c0: number, cEnd: 
   hdr.forEach((h, i) => {
     const cell = sheet.getCell(r, c0 + i);
     cell.value = h;
-    cell.font = { bold: true };
+    cell.font = { bold: true, size: 9 };
     cell.fill = FILL_HEADER_GREY;
     cell.alignment = { horizontal: i === 1 ? "left" : "right", vertical: "middle" };
   });
+  sheet.getRow(r).height = ROW_PT;
   applyBorderRange(sheet, r, c0, r, cEnd);
 }
 
@@ -100,6 +118,7 @@ function writeProductRow(
       wrapText: i === 1
     };
   }
+  sheet.getRow(r).height = ROW_PT * Math.min(4, wrappedLineCount(ln.name ?? "", PRODUCT_NAME_CHARS));
   applyBorderRange(sheet, r, c0, r, cEnd);
 }
 
@@ -117,12 +136,22 @@ function writeTotalRow(
   sheet.getCell(r, c0 + 1).font = { bold: true };
   sheet.getCell(r, c0 + 2).value = block;
   sheet.getCell(r, c0 + 3).value = qty;
-  sheet.getCell(r, c0 + 5).value = money;
+  sheet.mergeCells(r, c0 + 4, r, c0 + 5);
+  sheet.getCell(r, c0 + 4).value = money;
   for (let i = 0; i < 6; i++) {
     const cell = sheet.getCell(r, c0 + i);
     cell.font = { bold: true };
-    cell.alignment = { horizontal: i === 1 ? "left" : "right", vertical: "middle" };
+    cell.alignment = {
+      horizontal: i === 1 ? "left" : "right",
+      vertical: "middle",
+      wrapText: i === 1 || i === 4
+    };
   }
+  const lines = Math.max(
+    wrappedLineCount(label, PRODUCT_NAME_CHARS),
+    wrappedLineCount(money, TOTAL_MONEY_CHARS)
+  );
+  sheet.getRow(r).height = ROW_PT * Math.min(2, lines);
   applyBorderRange(sheet, r, c0, r, cEnd);
 }
 
@@ -231,7 +260,7 @@ function writeConsignmentBlock(
   );
 
   sheet.mergeCells(r, c0, r, c0 + 2);
-  sheet.getCell(r, c0).value = "Отпустил: _______________";
+  sheet.getCell(r, c0).value = "Отпустил: ___________";
   sheet.mergeCells(r, c0 + 3, r, cEnd);
   sheet.getCell(r, c0 + 3).value = "Принял: _________________";
   sheet.getCell(r, c0).font = { bold: true };
@@ -243,6 +272,15 @@ function writeConsignmentBlock(
 }
 
 const CONSIGNMENT_STACK_GAP = 2;
+const CONSIGNMENT_MARGIN_IN = 0.2362;
+
+function sumRowHeightsPt(sheet: ExcelJS.Worksheet, fromRow: number, toRowExclusive: number): number {
+  let sum = 0;
+  for (let r = fromRow; r < toRowExclusive; r++) {
+    sum += sheet.getRow(r).height ?? ROW_PT;
+  }
+  return sum;
+}
 
 /** «Накладные 2.1.7»: har zakaz — chap/o‘ng 2 nusxa; zakazlar tepadan pastga. */
 export async function buildConsignmentWorkbook(
@@ -269,6 +307,11 @@ export async function buildConsignmentWorkbook(
   };
 
   const formColW = [2.71, 14.71, 5.21, 5.71, 8.71, 11.21];
+  const allColW = [...formColW, 2.71, ...formColW, 2.71];
+  const scale = nakladnoyPrintScalePercent(allColW, CONSIGNMENT_MARGIN_IN);
+  const capacity = nakladnoyPageCapacityPt(scale, CONSIGNMENT_MARGIN_IN);
+  const measureSheet = new ExcelJS.Workbook().addWorksheet("measure");
+  let measureRow = 1;
 
   for (const group of groups) {
     if (group.length === 0) continue;
@@ -277,28 +320,47 @@ export async function buildConsignmentWorkbook(
       views: [{ showGridLines: true }]
     });
 
-    for (let i = 0; i < 6; i++) {
-      sheet.getColumn(i + 1).width = formColW[i]!;
-      sheet.getColumn(i + 8).width = formColW[i]!;
+    for (let i = 0; i < allColW.length; i++) {
+      sheet.getColumn(i + 1).width = allColW[i]!;
     }
-    sheet.getColumn(7).width = 2.71;
-    sheet.getColumn(14).width = 2.71;
-    sheet.properties.defaultRowHeight = 15;
+    sheet.properties.defaultRowHeight = ROW_PT;
+
+    const heights = group.map((order) => {
+      const from = measureRow;
+      measureRow = writeConsignmentBlock(measureSheet, from, 1, order, printAt);
+      return sumRowHeightsPt(measureSheet, from, measureRow);
+    });
+    const pages = packNakladnoyBlocksIntoPages({
+      heights,
+      capacity,
+      gap: CONSIGNMENT_STACK_GAP * ROW_PT
+    });
 
     let row = 1;
-    for (const order of group) {
-      const endL = writeConsignmentBlock(sheet, row, 1, order, printAt);
-      const endR = writeConsignmentBlock(sheet, row, 8, order, printAt);
-      row = Math.max(endL, endR) + CONSIGNMENT_STACK_GAP;
-    }
+    pages.forEach((page, pi) => {
+      page.forEach((idx, k) => {
+        const order = group[idx]!;
+        const endL = writeConsignmentBlock(sheet, row, 1, order, printAt);
+        const endR = writeConsignmentBlock(sheet, row, 8, order, printAt);
+        row = Math.max(endL, endR);
+        if (k < page.length - 1) row += CONSIGNMENT_STACK_GAP;
+      });
+      if (pi < pages.length - 1) sheet.getRow(row - 1).addPageBreak();
+    });
 
     sheet.pageSetup = {
       paperSize: 9,
       orientation: "portrait",
-      margins: { left: 0.2362, right: 0.2362, top: 0.2362, bottom: 0.2362, header: 0.5, footer: 0.75 },
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0
+      margins: {
+        left: CONSIGNMENT_MARGIN_IN,
+        right: CONSIGNMENT_MARGIN_IN,
+        top: CONSIGNMENT_MARGIN_IN,
+        bottom: CONSIGNMENT_MARGIN_IN,
+        header: 0,
+        footer: 0
+      },
+      scale,
+      fitToPage: false
     };
   }
 

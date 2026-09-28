@@ -64,7 +64,7 @@ export function defaultMobileConfigForRole(role: string): AgentMobileConfigV1 {
     return {
       ...base,
       client: {
-        can_create: false,
+        can_create: true,
         can_edit: true,
         can_change_client_location: true,
         show_balance: true,

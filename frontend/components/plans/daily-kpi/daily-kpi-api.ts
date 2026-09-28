@@ -10,6 +10,10 @@ export type DailyKpiCell = {
 
 export type DailyKpiDayMatrix = {
   day: string;
+  day_from?: string;
+  day_to?: string;
+  days_count?: number;
+  working_days_count?: number;
   period: { month: string; year: number; month_num: number; today: string };
   trade_directions: Array<{ id: number; name: string; code: string | null }>;
   direction_id: number | null;
@@ -41,6 +45,9 @@ export type DailyKpiAgentSummary = {
   agent_id: number;
   name: string;
   code: string | null;
+  branch: string | null;
+  supervisor_id: number | null;
+  supervisor_name: string | null;
   trade_direction_id: number | null;
   trade_direction_name: string | null;
   month_plan_sum: number;
@@ -91,8 +98,8 @@ export type DailyKpiOverview = {
 };
 
 export const dailyKpiDayKeys = {
-  matrix: (tenantSlug: string | null, day: string, directionId: number | null) =>
-    ["plans", "daily-kpi-day", tenantSlug, day, directionId] as const,
+  matrix: (tenantSlug: string | null, day: string, dayTo: string, directionId: number | null) =>
+    ["plans", "daily-kpi-day", tenantSlug, day, dayTo, directionId] as const,
   overview: (
     tenantSlug: string | null,
     month: number,
@@ -103,9 +110,10 @@ export const dailyKpiDayKeys = {
 
 export async function fetchDailyKpiDayMatrix(
   tenantSlug: string,
-  opts: { day: string; directionId?: number | null }
+  opts: { day: string; dayTo?: string | null; directionId?: number | null }
 ): Promise<DailyKpiDayMatrix> {
   const qs = new URLSearchParams({ day: opts.day });
+  if (opts.dayTo && opts.dayTo !== opts.day) qs.set("day_to", opts.dayTo);
   if (opts.directionId != null) qs.set("direction_id", String(opts.directionId));
   const res = await api.get<{ data: DailyKpiDayMatrix }>(
     `/api/${tenantSlug}/plans/daily-kpi?${qs.toString()}`

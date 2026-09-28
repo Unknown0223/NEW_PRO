@@ -29,7 +29,7 @@ export function ClientEditForm(props: Parameters<typeof useClientEditForm>[0]) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[min(100%,90rem)] flex-col gap-4 px-3 pb-10 pt-1 sm:px-4 lg:px-6">
+    <div className="flex w-full flex-col gap-4 px-3 pb-10 pt-3 sm:px-4 lg:px-6">
       <PageHeader
         title={isCreateMode ? "Создание клиента" : "Редактирование клиента"}
         description={

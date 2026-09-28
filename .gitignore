@@ -87,6 +87,9 @@ backend/tmp-import-*.err
 backend/tmp-import-*.out
 backend/scripts/_audit*.ts
 backend/scripts/_final-audit.ts
+
+# Production DB dump / backup (maxfiy ma’lumot, juda katta)
+backups/
 mobile/releases/ota-demo/
 
 # Excel import (scripts/data ildizidagi qo‘lda fayllar)

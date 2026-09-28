@@ -11,6 +11,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/api/api_base_url.dart';
 import 'core/api/dio_client.dart';
 import 'core/auth/mobile_session_guard.dart';
+import 'core/auth/workday_off.dart';
 import 'core/config/env_loader.dart';
 import 'core/database/app_database.dart';
 import 'core/errors/error_reporter.dart';
@@ -109,10 +110,12 @@ class _SalesDocAppState extends ConsumerState<SalesDocApp> {
         darkTheme: AppTheme.darkTheme,
         themeMode: themeMode,
         routerConfig: router,
-        builder: (context, child) => AppUpdateListener(
-          child: BiometricSetupListener(
-            child: FaceVerificationListener(
-              child: child ?? const SizedBox.shrink(),
+        builder: (context, child) => WorkdayOffGuard(
+          child: AppUpdateListener(
+            child: BiometricSetupListener(
+              child: FaceVerificationListener(
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

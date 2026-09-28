@@ -16,7 +16,7 @@ type ScrollEdgeHintsProps = {
 };
 
 export function ScrollEdgeHints({ children, contentClassName, className, watch }: ScrollEdgeHintsProps) {
-  const ref = useRef<HTMLNavElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const [up, setUp] = useState(false);
   const [down, setDown] = useState(false);
 
@@ -62,7 +62,7 @@ export function ScrollEdgeHints({ children, contentClassName, className, watch }
       ) : null}
       <nav
         ref={ref}
-        className={cn("h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain", contentClassName)}
+        className={cn("h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain", contentClassName)}
       >
         {children}
       </nav>

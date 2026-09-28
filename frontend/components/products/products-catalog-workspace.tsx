@@ -460,9 +460,7 @@ function EquipmentItemsTab({
 function ItemsTab({ tenantSlug, isAdmin, statusTab, search }: ItemsProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const productsBasePath = pathname.startsWith("/settings/products")
-    ? "/settings/products"
-    : "/products";
+  const productsBasePath = "/settings/products";
   const settingsAsidePx = pathname.startsWith("/settings/") ? 300 : 0;
   const qc = useQueryClient();
   const { confirm, dialog: confirmDialog } = useAppConfirm();

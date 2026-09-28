@@ -91,7 +91,7 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
               />
             </div>
           ) : ws.tab !== "users" && ws.selectedDimension ? (
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden overscroll-contain p-3 sm:p-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden overscroll-y-contain p-3 sm:p-4">
               {ws.dimensionUsersApiMissing ? (
                 <div className="shrink-0 rounded-md border border-border/60 bg-card p-3 shadow-sm sm:p-4">
                   <p className="text-xs text-amber-700 dark:text-amber-300">

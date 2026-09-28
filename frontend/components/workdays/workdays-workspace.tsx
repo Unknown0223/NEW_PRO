@@ -9,6 +9,8 @@ import {
   ClipboardCheck,
   Eye,
   History,
+  Lock,
+  LockOpen,
   Pencil,
   Plus,
   TrendingUp,
@@ -51,6 +53,7 @@ export function WorkdaysWorkspace() {
   const saved = stateQ.data?.schedules ?? EMPTY_SCHEDULES;
   const exceptions = useMemo(() => stateQ.data?.exceptions ?? [], [stateQ.data?.exceptions]);
   const overrides = useMemo(() => stateQ.data?.overrides ?? [], [stateQ.data?.overrides]);
+  const enforceAccess = stateQ.data?.enforce_access ?? true;
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -174,6 +177,41 @@ export function WorkdaysWorkspace() {
           </Card>
         ))}
       </div>
+
+      <Card className="flex flex-wrap items-center gap-3 p-3">
+        <div
+          className={cn(
+            "grid size-9 shrink-0 place-items-center rounded-lg",
+            enforceAccess ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+          )}
+        >
+          {enforceAccess ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">Доступ в нерабочие дни</div>
+          <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            {enforceAccess
+              ? "Запрещён: в неотмеченные дни сотрудники этих ролей (кроме Admin) не могут пользоваться веб-панелью и мобильным приложением — видят только страницу с временем начала работы. Исключения «Обязательный»/«Тренинг» открывают день, «Праздник»/«Мероприятие» — закрывают."
+              : "Разрешён: график используется только для Табеля, KPI и Зарплаты, вход в систему не ограничивается."}
+          </div>
+        </div>
+        {canEdit && (
+          <Button
+            size="sm"
+            variant={enforceAccess ? "outline" : "default"}
+            disabled={mut.saveEnforceAccess.isPending}
+            onClick={() =>
+              mut.saveEnforceAccess.mutate(!enforceAccess, {
+                onSuccess: () =>
+                  showToast(enforceAccess ? "Вход в нерабочие дни разрешён" : "Вход в нерабочие дни запрещён"),
+                onError: () => showToast("Ошибка сохранения")
+              })
+            }
+          >
+            {enforceAccess ? "Разрешить вход" : "Запретить вход"}
+          </Button>
+        )}
+      </Card>
 
       <Card className="flex flex-wrap items-center gap-2 p-2">
         <div className="flex rounded-lg bg-muted p-1">

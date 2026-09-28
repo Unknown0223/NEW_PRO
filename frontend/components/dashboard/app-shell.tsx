@@ -485,8 +485,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const mobileItems = flattenMobileNavItems().filter((item) => {
     if (!navItemVisible(item, effectiveRole, permissionKeySet)) return false;
-    const isReport = item.href === "/reports" || item.href.startsWith("/reports/");
-    if (!isReport) return true;
+    if (!reportItemHrefSet.has(item.href)) return true;
     if (item.href === "/reports/settings") return true;
     return !hiddenReportsCurrent.has(item.href);
   });
@@ -536,7 +535,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <OrderSseListener />
       <aside className="scrollbar-none hidden min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_12px_rgba(0,0,0,0.06)] md:flex">
         <div className="border-b border-sidebar-border/80 px-3 py-4">
-          <SalesArenaLogo variant="dark" height={48} className="mb-2.5 w-full max-w-[220px]" />
+          <Link
+            href="/dashboard"
+            title="Дашборд - Супервайзер"
+            aria-label="SalesArena — на главную"
+            className="mb-2.5 block w-full max-w-[220px] rounded-md transition-opacity hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
+            <SalesArenaLogo variant="dark" height={48} className="w-full" />
+          </Link>
           <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-sm font-semibold text-sidebar-foreground" title={tenantSlug ?? undefined}>
               {tenantSlug ?? "—"}
@@ -1299,7 +1305,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           "flex min-h-0 min-w-0 flex-1 flex-col",
           isFullHeightWorkspace
             ? "overflow-hidden"
-            : "overflow-y-auto overflow-x-hidden overscroll-contain bg-background"
+            : "overflow-y-auto overflow-x-hidden overscroll-y-contain bg-background"
         )}
       >
         <header className="sticky top-0 z-20 hidden shrink-0 items-center justify-between gap-3 border-b border-border/80 bg-card/95 px-4 py-2 shadow-sm backdrop-blur-md md:flex">
@@ -1348,7 +1354,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-border/80 bg-card/95 px-4 py-3 shadow-sm backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <SalesArenaLogo variant="light" height={36} className="mb-0.5 max-w-[200px]" />
+              <Link
+                href="/dashboard"
+                title="Дашборд - Супервайзер"
+                aria-label="SalesArena — на главную"
+                className="mb-0.5 block max-w-[200px] rounded-md transition-opacity hover:opacity-85"
+              >
+                <SalesArenaLogo variant="light" height={36} />
+              </Link>
               <div className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-sm font-semibold">{tenantSlug ?? "Панель"}</span>
                 <TenantSidebarClock tone="header" />
@@ -1427,7 +1440,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={cn(
               "flex flex-col",
               isFullHeightWorkspace
-                ? "min-h-0 flex-1 overflow-hidden"
+                ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
                 : "px-2 py-3 sm:px-3 sm:py-5 md:px-4 md:py-6"
             )}
           >

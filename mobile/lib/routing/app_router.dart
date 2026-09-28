@@ -76,6 +76,7 @@ import '../features/supervisor/kpi/supervisor_kpi_route_page.dart';
 import '../features/supervisor/settings/supervisor_settings_page.dart';
 import '../features/supervisor/clients/supervisor_clients_page.dart';
 import '../features/supervisor/clients/supervisor_client_edit_page.dart';
+import '../features/supervisor/clients/supervisor_new_client_page.dart';
 import '../features/supervisor/clients/supervisor_notifications_page.dart';
 import '../features/shared/profile/profile_page.dart';
 import '../features/cashier/cashier_home_page.dart';
@@ -284,6 +285,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/sv-kpi/route',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, __) => const SupervisorKpiRoutePage(),
+      ),
+      GoRoute(
+        path: '/sv-clients/new',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const SupervisorNewClientPage(),
       ),
       GoRoute(
         path: '/sv-clients/:id',

@@ -295,6 +295,7 @@ function parseFallbackState(): WorkdaysState {
       Экспедитор: [true, true, true, true, true, true, false]
     },
     exceptions: [],
-    overrides: []
+    overrides: [],
+    enforce_access: false
   };
 }
