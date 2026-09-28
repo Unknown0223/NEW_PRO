@@ -80,6 +80,7 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
       sales_sum: Prisma.Decimal;
       sold_qty: Prisma.Decimal;
       volume: Prisma.Decimal;
+      bonus_qty: Prisma.Decimal;
       akb: bigint;
     }>>`
       SELECT
@@ -87,6 +88,7 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum,
         COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS sold_qty,
         COALESCE(SUM(oi.qty), 0)::numeric(15,3) AS volume,
+        COALESCE(SUM(CASE WHEN oi.is_bonus THEN oi.qty ELSE 0 END), 0)::numeric(15,3) AS bonus_qty,
         COUNT(DISTINCT o.client_id)::bigint AS akb
       FROM orders o
       JOIN users u ON u.id = o.agent_id
@@ -121,6 +123,7 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
     sales_sum: r.sales_sum.toString(),
     sold_qty: r.sold_qty.toString(),
     volume: r.volume.toString(),
+    bonus_qty: r.bonus_qty.toString(),
     akb: Number(r.akb),
     share_pct: perfGrand.gt(0) ? clampPct(r.sales_sum.div(perfGrand).mul(100).toNumber()) : 0
   }));

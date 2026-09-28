@@ -45,6 +45,7 @@ export type SalesDashboardSnapshot = {
     sales_sum: string;
     sold_qty: string;
     volume: string;
+    bonus_qty: string;
     akb: number;
     share_pct: number;
   }>;

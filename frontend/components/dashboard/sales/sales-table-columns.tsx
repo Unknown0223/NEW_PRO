@@ -15,6 +15,7 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
       sales: data.reduce((s, i) => s + Number(i.sales_sum), 0),
       quantity: data.reduce((s, i) => s + Number(i.sold_qty), 0),
       volume: data.reduce((s, i) => s + Number(i.volume), 0),
+      bonus: data.reduce((s, i) => s + Number(i.bonus_qty ?? 0), 0),
       akb: data.reduce((s, i) => s + i.akb, 0)
     };
     const cols: SalesTableColumn<CategoryRow>[] = [
@@ -42,6 +43,12 @@ export function useSalesCategoryColumns(data: CategoryRow[]) {
         header: "Объем",
         footer: fmtCount(totals.volume),
         cell: (r) => fmtCount(r.volume)
+      },
+      {
+        id: "bonus_qty",
+        header: "Бонус",
+        footer: fmtCount(totals.bonus),
+        cell: (r) => fmtCount(r.bonus_qty ?? 0)
       },
       {
         id: "akb",
