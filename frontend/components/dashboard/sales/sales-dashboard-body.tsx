@@ -7,7 +7,6 @@ import {
   SalesRefusalReasonsBlock,
   SalesTrendAreaChart
 } from "@/components/dashboard/sales/sales-charts-sections";
-import { SalesControlSection } from "@/components/dashboard/sales/sales-control-section";
 import { SalesDataTable } from "@/components/dashboard/sales/sales-data-table";
 import { SalesMetricsRow } from "@/components/dashboard/sales/sales-metrics-row";
 import {
@@ -42,7 +41,6 @@ export function SalesDashboardBody({
   return (
     <div className="space-y-4">
       <SalesMetricsRow data={data} />
-      <SalesControlSection data={data} />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_480px]">
         <div ref={analyticsRef} className="space-y-4">
