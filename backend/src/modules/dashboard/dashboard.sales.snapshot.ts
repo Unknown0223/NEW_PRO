@@ -13,6 +13,7 @@ import {
 } from "./dashboard.sales.scope";
 import type { SalesSnapshotQueryCtx } from "./dashboard.sales.snapshot.types";
 import { fetchSalesSnapshotCoverageBlock } from "./dashboard.sales.snapshot.coverage";
+import { fetchSalesSnapshotDebtBlock } from "./dashboard.sales.snapshot.debt";
 import { fetchSalesSnapshotOrdersBlock } from "./dashboard.sales.snapshot.orders";
 import { fetchSalesSnapshotProductBlock } from "./dashboard.sales.snapshot.products";
 
@@ -20,7 +21,7 @@ export async function getSalesDashboardSnapshot(
   tenantId: number,
   filters: SalesDashboardFilters
 ): Promise<SalesDashboardSnapshot> {
-  const snapshotKey = `tenant:${tenantId}:dashboard:sales:v2:${stableJsonStringify(filters)}`;
+  const snapshotKey = `tenant:${tenantId}:dashboard:sales:v3:${stableJsonStringify(filters)}`;
   const cached = await getSnapshotCache<SalesDashboardSnapshot>(snapshotKey);
   if (cached) return cached;
 
@@ -40,12 +41,14 @@ export async function getSalesDashboardSnapshot(
   const productBlock = await fetchSalesSnapshotProductBlock(ctx);
   const ordersBlock = await fetchSalesSnapshotOrdersBlock(ctx);
   const coverageBlock = await fetchSalesSnapshotCoverageBlock(ctx, ordersBlock.akb);
+  const debt_aging = await fetchSalesSnapshotDebtBlock(ctx);
 
   const result: SalesDashboardSnapshot = {
     filters,
     total_sales_summary: productBlock.total_sales_summary,
     payment_method_analytics: productBlock.payment_method_analytics,
     price_type_analytics: productBlock.price_type_analytics,
+    debt_aging,
     product_category_analytics: productBlock.product_category_analytics,
     product_group_analytics: productBlock.product_group_analytics,
     category_performance_table: productBlock.category_performance_table,

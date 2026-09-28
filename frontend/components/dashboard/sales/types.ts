@@ -28,6 +28,15 @@ export type SalesDashboardSnapshot = {
   product_category_analytics: Array<{ category: string; sales_sum: string; share_pct: number }>;
   product_group_analytics: Array<{ product_group: string; sales_sum: string; share_pct: number }>;
   price_type_analytics?: Array<{ price_type: string; sales_sum: string; share_pct: number }>;
+  debt_aging?: {
+    total_debt: string;
+    debtors_count: number;
+    buckets: Array<{
+      key: "d0_7" | "d8_14" | "d15_21" | "d22_30" | "d30_plus";
+      sum: string;
+      share_pct: number;
+    }>;
+  };
   category_performance_table: Array<{
     category: string;
     sales_sum: string;
@@ -70,6 +79,7 @@ export type SalesSummaryPayload = Pick<
   | "total_sales_summary"
   | "payment_method_analytics"
   | "price_type_analytics"
+  | "debt_aging"
   | "akb_okb_block"
   | "orders_refusals"
 >;

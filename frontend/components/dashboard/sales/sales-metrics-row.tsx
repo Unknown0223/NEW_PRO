@@ -3,11 +3,22 @@
 import { fmtCount, fmtMoney } from "@/components/dashboard/sales/format";
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
 import { cn } from "@/lib/utils";
-import { Activity, CircleDollarSign, CreditCard, Gauge, RotateCcw } from "lucide-react";
+import { Activity, CircleDollarSign, CreditCard, RotateCcw, Wallet } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const VALUE_MAX_PX = 24;
 const VALUE_MIN_PX = 14;
+
+const DEBT_BUCKET_LABELS: Record<
+  NonNullable<SalesDashboardSnapshot["debt_aging"]>["buckets"][number]["key"],
+  string
+> = {
+  d0_7: "До 7 дней",
+  d8_14: "8–14 дней",
+  d15_21: "15–21 день",
+  d22_30: "22–30 дней",
+  d30_plus: "Больше месяца"
+};
 
 function FitValue({ value, unit }: { value: string; unit?: string }) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -48,7 +59,17 @@ function FitValue({ value, unit }: { value: string; unit?: string }) {
 
 type BreakdownRow = { label: string; sales_sum: string; share_pct: number };
 
-function BreakdownBack({ title, rows, barClass }: { title: string; rows: BreakdownRow[]; barClass: string }) {
+function BreakdownBack({
+  title,
+  rows,
+  barClass,
+  emptyText = "Нет данных за период"
+}: {
+  title: string;
+  rows: BreakdownRow[];
+  barClass: string;
+  emptyText?: string;
+}) {
   return (
     <>
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -56,7 +77,7 @@ function BreakdownBack({ title, rows, barClass }: { title: string; rows: Breakdo
         <RotateCcw className="h-4 w-4 text-slate-400" aria-hidden />
       </div>
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-400">Нет данных за период</p>
+        <p className="text-sm text-slate-400">{emptyText}</p>
       ) : (
         <ul className="-mr-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
           {rows.map((r) => (
@@ -102,7 +123,7 @@ function MetricCard({
   unit?: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-  tone: "teal" | "green" | "blue" | "red";
+  tone: "teal" | "green" | "blue" | "red" | "amber";
   trend?: string;
   back?: React.ReactNode;
 }) {
@@ -111,7 +132,8 @@ function MetricCard({
     teal: "bg-teal-100 text-teal-700 ring-teal-200",
     green: "bg-emerald-100 text-emerald-700 ring-emerald-200",
     blue: "bg-blue-100 text-blue-700 ring-blue-200",
-    red: "bg-red-100 text-red-700 ring-red-200"
+    red: "bg-red-100 text-red-700 ring-red-200",
+    amber: "bg-amber-100 text-amber-700 ring-amber-200"
   }[tone];
 
   const front = (
@@ -225,7 +247,16 @@ export function SalesMetricsRow({
         share_pct: totalPayment > 0 ? Math.min(100, Math.max(0, (sum / totalPayment) * 100)) : 0
       }));
   }, [data.payment_method_analytics, resolvePayment, totalPayment]);
-  const { akb, okb, coverage_pct } = data.akb_okb_block;
+  const debt = data.debt_aging;
+  const debtRows = useMemo<BreakdownRow[]>(() => {
+    if (!debt || Number(debt.total_debt) <= 0) return [];
+    return debt.buckets.map((b) => ({
+      label: DEBT_BUCKET_LABELS[b.key],
+      sales_sum: b.sum,
+      share_pct: b.share_pct
+    }));
+  }, [debt]);
+  const { coverage_pct } = data.akb_okb_block;
   const refusalRate = Math.max(0, 100 - coverage_pct);
 
   return (
@@ -250,11 +281,20 @@ export function SalesMetricsRow({
         back={<BreakdownBack title="По способам оплаты" rows={paymentRows} barClass="bg-blue-500" />}
       />
       <MetricCard
-        title="Coverage conversion"
-        value={`${coverage_pct.toFixed(1)}%`}
-        description={`${fmtCount(akb)} АКБ / ${fmtCount(okb)} ОКБ`}
-        icon={Gauge}
-        tone="green"
+        title="Долг (дебиторка)"
+        value={fmtMoney(debt?.total_debt ?? 0)}
+        unit="UZS"
+        description={`Должников: ${fmtCount(debt?.debtors_count ?? 0)} · на сегодня`}
+        icon={Wallet}
+        tone="amber"
+        back={
+          <BreakdownBack
+            title="По срокам долга"
+            rows={debtRows}
+            barClass="bg-amber-500"
+            emptyText="Долгов нет"
+          />
+        }
       />
       <MetricCard
         title="Risk zone"
