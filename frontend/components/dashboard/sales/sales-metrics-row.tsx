@@ -3,11 +3,52 @@
 import { fmtCount, fmtMoney } from "@/components/dashboard/sales/format";
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
 import { Activity, CircleDollarSign, CreditCard, Gauge } from "lucide-react";
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
+
+const VALUE_MAX_PX = 24;
+const VALUE_MIN_PX = 14;
+
+function FitValue({ value, unit }: { value: string; unit?: string }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const text = textRef.current;
+    if (!box || !text) return;
+    const fit = () => {
+      let size = VALUE_MAX_PX;
+      text.style.fontSize = `${size}px`;
+      while (size > VALUE_MIN_PX && text.scrollWidth > box.clientWidth) {
+        size -= 1;
+        text.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [value, unit]);
+
+  const full = unit ? `${value} ${unit}` : value;
+  return (
+    <div ref={boxRef} className="mt-2 min-w-0 overflow-hidden" title={full}>
+      <span
+        ref={textRef}
+        className="inline-block max-w-full truncate whitespace-nowrap align-bottom font-bold leading-tight tracking-tight tabular-nums text-slate-950"
+        style={{ fontSize: VALUE_MAX_PX }}
+      >
+        {value}
+        {unit ? <span className="ml-1 text-[0.6em] font-semibold text-slate-400">{unit}</span> : null}
+      </span>
+    </div>
+  );
+}
 
 function MetricCard({
   title,
   value,
+  unit,
   description,
   icon: Icon,
   tone,
@@ -15,6 +56,7 @@ function MetricCard({
 }: {
   title: string;
   value: string;
+  unit?: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: "teal" | "green" | "blue" | "red";
@@ -28,7 +70,7 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5">
+    <div className="group min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-900/5">
       <div className="mb-5 flex items-start justify-between gap-4">
         <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${toneRing}`}>
           <Icon className="h-5 w-5" />
@@ -40,8 +82,8 @@ function MetricCard({
         ) : null}
       </div>
       <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
+      <FitValue value={value} unit={unit} />
+      <p className="mt-2 truncate text-sm text-slate-500" title={description}>{description}</p>
     </div>
   );
 }
@@ -59,7 +101,8 @@ export function SalesMetricsRow({ data }: { data: SalesDashboardSnapshot }) {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <MetricCard
         title="Общая сумма"
-        value={`${fmtMoney(data.total_sales_summary.total_sales_sum)} UZS`}
+        value={fmtMoney(data.total_sales_summary.total_sales_sum)}
+        unit="UZS"
         description="Сумма продаж за выбранный период"
         icon={CircleDollarSign}
         tone="teal"
@@ -67,7 +110,8 @@ export function SalesMetricsRow({ data }: { data: SalesDashboardSnapshot }) {
       />
       <MetricCard
         title="Payment Breakdown"
-        value={`${fmtMoney(totalPayment)} UZS`}
+        value={fmtMoney(totalPayment)}
+        unit="UZS"
         description="Сумма по способам оплаты"
         icon={CreditCard}
         tone="blue"
