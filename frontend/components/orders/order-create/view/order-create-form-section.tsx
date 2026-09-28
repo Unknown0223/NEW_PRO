@@ -63,6 +63,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     warehouseId,
     agentId,
     applyBonus,
+    applyDiscount,
     orderComment,
     requestTypeRef,
     orderNotePreset,
@@ -110,6 +111,7 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
     resetFlowAfterClientChange,
     setAgentId,
     setApplyBonus,
+    setApplyDiscount,
     setClientId,
     setConsignmentDueDate,
     setConsignmentDueOpen,
@@ -539,17 +541,34 @@ export function OrderCreateFormSection({ vm }: { vm: OrderCreateVm }) {
                   </select>
                 </div>
               ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="oc-discount-mode">Skidka turi</Label>
-                <select id="oc-discount-mode" className={fieldClass} disabled title="API — keyinroq">
-                  <option value="auto">Avto</option>
-                </select>
-                <p className="text-[11px] text-muted-foreground">
-                  {isPolkiSheet
-                    ? "Skidka turi — namunadagi kabi joy; API keyin ulashadi."
-                    : "Chiziq / foiz skidkalari keyin ulashadi; hozir narx turi va bonus holati ishlatiladi."}
-                </p>
-              </div>
+              {isPolkiSheet ? (
+                <div className="space-y-2">
+                  <Label htmlFor="oc-discount-mode">Skidka turi</Label>
+                  <select id="oc-discount-mode" className={fieldClass} disabled title="API — keyinroq">
+                    <option value="auto">Avto</option>
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Skidka turi — namunadagi kabi joy; API keyin ulashadi.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="oc-discount-mode">Skidka turi</Label>
+                  <select
+                    id="oc-discount-mode"
+                    className={fieldClass}
+                    value={applyDiscount ? "auto" : "off"}
+                    onChange={(e) => setApplyDiscount(e.target.value === "auto")}
+                    disabled={
+                      mutation.isPending ||
+                      (!canPickPricingAndExpeditor && !headerClientAgentLocked)
+                    }
+                  >
+                    <option value="auto">Avto (skidka qoidalarini qo‘llash)</option>
+                    <option value="off">O‘chirilgan</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* O‘ng: mahsulot kategoriyasi filtri */}

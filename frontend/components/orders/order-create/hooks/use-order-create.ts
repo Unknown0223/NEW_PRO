@@ -111,6 +111,7 @@ export function useOrderCreate({
   const [warehouseId, setWarehouseId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [applyBonus, setApplyBonus] = useState(true);
+  const [applyDiscount, setApplyDiscount] = useState(true);
   const [bonusConfirmOpen, setBonusConfirmOpen] = useState(false);
   const [bonusPreviewLoading, setBonusPreviewLoading] = useState(false);
   const [bonusPreviewError, setBonusPreviewError] = useState<string | null>(null);
@@ -412,6 +413,7 @@ export function useOrderCreate({
       row.expeditor_id != null && row.expeditor_id > 0 ? String(row.expeditor_id) : "__none__"
     );
     setApplyBonus(hydrateApplyBonusForNewOrderEdit());
+    setApplyDiscount(true);
     setOrderIsConsignment(Boolean(row.is_consignment));
     setConsignmentDueDate((row.consignment_due_date ?? "").trim().slice(0, 10));
     setRequestTypeRef((row.request_type_ref ?? "").trim());
@@ -2630,6 +2632,7 @@ export function useOrderCreate({
         const linesBody: Record<string, unknown> = {
           price_type: priceType.trim() || "retail",
           apply_bonus: applyBonus,
+          apply_discount: applyDiscount,
           items
         };
         if (bonusConfirm?.bonus_gift_lines?.length) {
@@ -2680,6 +2683,7 @@ export function useOrderCreate({
         price_type: priceType.trim() || "retail",
         order_type: validatedOrderType,
         apply_bonus: applyBonus,
+        apply_discount: applyDiscount,
         comment: commentOut,
         request_type_ref: requestTypeRef.trim() || null,
         items
@@ -3414,6 +3418,7 @@ export function useOrderCreate({
     agentUserIdSet,
     agentUsers,
     applyBonus,
+    applyDiscount,
     blockByProductId,
     canPickPricingAndExpeditor,
     canPickProducts,
@@ -3586,6 +3591,7 @@ export function useOrderCreate({
     setActiveCatalogCategoryId,
     setAgentId,
     setApplyBonus,
+    setApplyDiscount,
     setBlockByProductId,
     setClientId,
     setConsignmentDueDate,

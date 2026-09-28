@@ -225,12 +225,12 @@ export async function createOrder(
 
   const validatedGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, [...orderedProductIds])
     : new Map<number, number>();
 
   const validatedGiftSplits =
     input.bonus_gift_lines?.length ?
-      await validateBonusGiftLines(tenantId, input.bonus_gift_lines)
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines, [...orderedProductIds])
     : new Map<number, Map<number, number>>();
 
   const creationChannel: OrderCreationChannel = resolveOrderCreationChannel({

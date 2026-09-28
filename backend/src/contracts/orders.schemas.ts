@@ -458,7 +458,7 @@ export const patchOrderLinesBodySchema = z.object({
   warehouse_id: z.number().int().positive().nullable().optional(),
   agent_id: z.number().int().positive().nullable().optional(),
   payment_method_ref: z.string().trim().max(64).optional().nullable(),
-  /** Narx turi — tahrirda qayta hisoblash (Order jadvalida saqlanmaydi). */
+  /** Narx turi — tahrirda qayta hisoblash va `orders.price_type` ga saqlanadi. */
   price_type: z.string().trim().min(1).max(128).optional(),
   apply_bonus: z.boolean().optional(),
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
