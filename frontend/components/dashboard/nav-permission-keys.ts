@@ -69,6 +69,7 @@ export const NAV_PERM = {
   suppliersReconciliation: ["suppliers.postavshchik.view", "suppliers.akt.view"],
 
   reports: ["reports.otchety.view", "reports.view"],
+  dailyKpi: ["reports.dnevnye_kpi_plany.view"],
   reportBuilder: [
     "reports.konstruktor.view",
     "reports.otchety.view",

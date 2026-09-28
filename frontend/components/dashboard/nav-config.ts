@@ -403,7 +403,7 @@ export const dashboardReportsNav: { sectionTitle: string; items: NavItem[] } = {
     {
       href: "/plans/daily",
       label: "Дневные KPI планы",
-      showIfAnyPermission: ["plans.ustanovka_planov.view"]
+      showIfAnyPermission: [...NAV_PERM.dailyKpi]
     },
     {
       href: "/reports/builder",

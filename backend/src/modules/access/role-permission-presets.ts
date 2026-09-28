@@ -62,7 +62,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("clients", "foto", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view"]),
       secOnly("staff", "konsignatsiya", ["view"]),
-      secOnly("plans", "ustanovka_planov", ["view"])
+      secOnly("plans", "ustanovka_planov", ["view"]),
+      secOnly("reports", "dnevnye_kpi_plany", ["view"])
     ),
 
   director: () =>
@@ -169,6 +170,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("clients", "profil"),
       secOnly("dashboard", "prodazhi", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view", "update"]),
+      secOnly("reports", "dnevnye_kpi_plany", ["view"]),
       secOnly("staff", "kpi", ["view"]),
       secOnly("staff", "tabel", ["view"])
     ),
@@ -185,6 +187,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("staff", "supervayzer", ["view"]),
       secOnly("staff", "kpi", ["view"]),
       secOnly("plans", "ustanovka_planov", ["view", "approve"]),
+      secOnly("reports", "dnevnye_kpi_plany", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view", "create", "update", "assign", "history"]),
       /** Kassa: mijoz balanslari (qarz/to‘lov) — Access orqali ham beriladi. */
       secOnly("cash", "balansy_klientov", ["view", "copy"]),

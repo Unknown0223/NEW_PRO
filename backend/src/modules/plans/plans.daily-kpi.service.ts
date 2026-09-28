@@ -144,7 +144,8 @@ function emptyOverview(
 /** Admin: ilovadagi kunlik KPI planlarining web ko‘rinishi. */
 export async function getDailyKpiOverview(
   tenantId: number,
-  query: DailyKpiOverviewQuery
+  query: DailyKpiOverviewQuery,
+  allowedAgentIds: number[] | null = null
 ): Promise<DailyKpiOverviewResult> {
   const { month, year } = query;
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
@@ -167,7 +168,13 @@ export async function getDailyKpiOverview(
   const direction = directions.find((d) => d.id === directionId) ?? null;
   const scope = parseDailyKpiAgentScope(query);
   const territoryAgentIds = await resolveAgentIdsByClientTerritory(tenantId, scope);
-  const userWhere = buildDailyKpiUserWhere(tenantId, scope, query.search, territoryAgentIds);
+  const userWhere = buildDailyKpiUserWhere(
+    tenantId,
+    scope,
+    query.search,
+    territoryAgentIds,
+    allowedAgentIds
+  );
 
   const targetRows = await prisma.salesKpiPlanTarget.findMany({
     where: {

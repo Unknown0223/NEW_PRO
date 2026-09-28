@@ -206,6 +206,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
     labelRu: "Конструктор отчётов",
     actions: ["view", "create", "update", "copy"]
   },
+  { module: "reports", section: "dnevnye_kpi_plany", labelRu: "Дневные KPI планы", actions: ["view"] },
 
   // ── Staff (Пользователи) ───────────────────────────────────
   { module: "staff", section: "agent", labelRu: "Агент", actions: ["view", "create", "update", "delete", "copy", "assign", "activate", "deactivate", "history"] },
