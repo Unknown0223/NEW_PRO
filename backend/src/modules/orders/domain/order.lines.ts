@@ -155,8 +155,10 @@ export async function updateOrderLines(
   }
 
   const agentId = existing.agent_id;
-  const priceType = (input.price_type ?? "").trim() || "retail";
+  const existingPriceType = existing.price_type?.trim() || null;
   const patchPriceType = (input.price_type ?? "").trim();
+  const priceType = patchPriceType || existingPriceType || "retail";
+  const priceTypeChanged = patchPriceType !== "" && patchPriceType !== existingPriceType;
 
   if (isNewStatus && patchPriceType) {
     const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
@@ -489,6 +491,7 @@ export async function updateOrderLines(
       data: {
         ...(warehouseChanged ? { warehouse_id: warehouseId, warehouse_block_id: null } : {}),
         ...(paymentChanged ? { payment_method_ref: nextPaymentMethodRef } : {}),
+        ...(priceTypeChanged ? { price_type: patchPriceType.slice(0, 128) } : {}),
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,

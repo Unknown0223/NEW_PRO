@@ -57,7 +57,10 @@ import {
 } from "../../client-balances/client-balances.service";
 import {
   expandPaymentMethodFilterValues,
-  orderListPriceTypeLabel
+  findPriceTypeEntry,
+  orderListPriceTypeLabel,
+  priceTypeKey,
+  resolvePriceTypeKeyToLabel
 } from "../../tenant-settings/finance-refs";
 import {
   loadPaymentMethodEntriesForResolve,
@@ -319,7 +322,17 @@ export async function listOrdersPaged(
       pmEntriesForLabel,
       ptEntriesForLabel
     );
-    andClauses.push({ payment_method_ref: { in: aliases } });
+    const pt = findPriceTypeEntry(listPriceType, ptEntriesForLabel);
+    const ptKeys = [
+      ...new Set(
+        [listPriceType, ...(pt ? [priceTypeKey(pt), pt.id, pt.code ?? "", pt.name] : [])]
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    ];
+    andClauses.push({
+      OR: [{ price_type: { in: ptKeys } }, { price_type: null, payment_method_ref: { in: aliases } }]
+    });
   }
 
   const parsedPeriods = (() => {
@@ -512,8 +525,10 @@ export async function listOrdersPaged(
   const slotTradeDir = await loadAgentTradeDirectionFromSlots(tenantId, agentsMissingTradeDir);
 
   // «Тип цены» ustuni: xom ref (UUID/kod) o‘rniga spravochnikdagi nom.
-  const priceTypeDisplayLabel = (refRaw: string | null): string | null =>
-    orderListPriceTypeLabel(refRaw, pmEntriesForLabel, ptEntriesForLabel);
+  const priceTypeDisplayLabel = (storedKey: string | null, refRaw: string | null): string | null =>
+    storedKey
+      ? resolvePriceTypeKeyToLabel(storedKey, ptEntriesForLabel)
+      : orderListPriceTypeLabel(refRaw, pmEntriesForLabel, ptEntriesForLabel);
 
   const finance = await loadOrdersFinanceEnrichment(
     tenantId,
@@ -636,7 +651,7 @@ export async function listOrdersPaged(
       bonus_sum: o.bonus_sum.toString(),
       balance: finRow?.balance ?? null,
       debt: finRow?.debt ?? null,
-      price_type: priceTypeDisplayLabel(o.payment_method_ref?.trim() || null),
+      price_type: priceTypeDisplayLabel(o.price_type?.trim() || null, o.payment_method_ref?.trim() || null),
       comment: (o as { comment?: string | null }).comment ?? null,
       request_type_ref: (o as { request_type_ref?: string | null }).request_type_ref ?? null,
       payment_method_ref: o.payment_method_ref?.trim() || null,

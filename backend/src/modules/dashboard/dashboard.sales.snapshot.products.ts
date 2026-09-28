@@ -14,7 +14,7 @@ import {
   loadPriceTypeEntriesForResolve
 } from "../tenant-settings/tenant-settings.service";
 
-/** Zakazda narx turi alohida saqlanmaydi — `payment_method_ref` (narx turi yoki unga bog‘langan to‘lov usuli). */
+/** `orders.price_type` (yangi zakazlar) yoki eski zakazlarda `payment_method_ref` (narx turi / bog‘langan to‘lov usuli). */
 function priceTypeLabelForOrderRef(
   ref: string,
   pmEntries: PaymentMethodEntryDto[],
@@ -33,7 +33,7 @@ function priceTypeLabelForOrderRef(
 
 export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx) {
   const { tenantId, salesScope, productFilter } = ctx;
-  const [totalRow, paymentRows, pmEntries, ptEntries] = await Promise.all([
+  const [totalRow, paymentRows, priceTypeRows, pmEntries, ptEntries] = await Promise.all([
     prisma.$queryRaw<Array<{ sales_sum: Prisma.Decimal; orders_count: bigint }>>`
       SELECT
         COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum,
@@ -60,6 +60,19 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
       GROUP BY 1
       ORDER BY sales_sum DESC
     `,
+    prisma.$queryRaw<Array<{ ref: string; sales_sum: Prisma.Decimal }>>`
+      SELECT
+        COALESCE(NULLIF(TRIM(o.price_type), ''), NULLIF(TRIM(o.payment_method_ref), ''), '—') AS ref,
+        COALESCE(SUM(oi.total), 0)::numeric(15,2) AS sales_sum
+      FROM orders o
+      JOIN users u ON u.id = o.agent_id
+      JOIN clients c ON c.id = o.client_id
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
+      WHERE ${salesScope}
+        ${productFilter}
+      GROUP BY 1
+    `,
     loadPaymentMethodEntriesForResolve(tenantId),
     loadPriceTypeEntriesForResolve(tenantId)
   ]);
@@ -74,8 +87,8 @@ export async function fetchSalesSnapshotProductBlock(ctx: SalesSnapshotQueryCtx)
   }));
 
   const byPriceType = new Map<string, Prisma.Decimal>();
-  for (const r of paymentRows) {
-    const label = priceTypeLabelForOrderRef(r.payment_type, pmEntries, ptEntries);
+  for (const r of priceTypeRows) {
+    const label = priceTypeLabelForOrderRef(r.ref, pmEntries, ptEntries);
     byPriceType.set(label, (byPriceType.get(label) ?? new Prisma.Decimal(0)).add(r.sales_sum));
   }
   const price_type_analytics = [...byPriceType.entries()]

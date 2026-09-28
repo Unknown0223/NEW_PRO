@@ -348,6 +348,7 @@ export type OrderDetailLoaded = {
   is_consignment: boolean;
   consignment_due_date: Date | null;
   payment_method_ref: string | null;
+  price_type?: string | null;
   warehouse_block_id: number | null;
   discount_alert: string | null;
   bonus_alert: string | null;

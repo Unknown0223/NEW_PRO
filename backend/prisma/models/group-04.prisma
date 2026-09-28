@@ -140,6 +140,8 @@ model Order {
   exchange_meta             Json?
   /// Savdo zakazida majburiy: reja / tanlangan to‘lov usuli (spravochnik, masalan naqd)
   payment_method_ref        String?          @db.VarChar(64)
+  /// Tanlangan narx turi kaliti (`product_prices.price_type`); eski zakazlarda null — `payment_method_ref` dan aniqlanadi
+  price_type                String?          @db.VarChar(128)
   /// Skladchi yig‘gan zakazni qaysi «доставщик bloki»ga qo‘ygani (bitta blok = bitta ekspektor).
   warehouse_block_id        Int?
   /// Snapshot: qaysi ishchi o‘rnida yaratilgan (agent_id — kim)
