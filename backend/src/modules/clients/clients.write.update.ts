@@ -44,7 +44,13 @@ export async function updateClientFields(
     region: input.region !== undefined ? input.region : existing.region,
     zone: input.zone !== undefined ? input.zone : existing.zone
   });
-  if (hinted.region && !(input.region !== undefined ? input.region?.trim() : existing.region?.trim())) {
+  const effectiveRegion =
+    (input.region !== undefined ? input.region?.trim() : existing.region?.trim()) || null;
+  const touchesTerritory =
+    input.city !== undefined || input.region !== undefined || input.zone !== undefined;
+  if (touchesTerritory && (hinted.region ?? null) !== effectiveRegion) {
+    input = { ...input, region: hinted.region ?? null };
+  } else if (hinted.region && !effectiveRegion) {
     input = { ...input, region: hinted.region };
   }
   if (hinted.zone && !(input.zone !== undefined ? input.zone?.trim() : existing.zone?.trim())) {
