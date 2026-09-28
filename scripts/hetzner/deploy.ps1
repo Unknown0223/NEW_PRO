@@ -1,4 +1,4 @@
-# SALEC — Hetzner (salesarena.sale) production deploy
+﻿# SALEC — Hetzner (salesarena.sale) production deploy
 # Ishlatish: repo ildizidan  .\deploy-prod.cmd
 # Yoki: powershell -File .\scripts\hetzner\deploy.ps1
 param(
