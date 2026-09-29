@@ -350,8 +350,8 @@ SELECT
   'manual',
   NULLIF(LEFT(COALESCE(e->>'color', ''), 16), ''),
   NULLIF(LEFT(COALESCE(e->>'comment', ''), 500), ''),
-  COALESCE((e->>'active')::boolean, true),
-  COALESCE(NULLIF(e->>'sort_order', '')::int, 100),
+  CASE WHEN LOWER(COALESCE(e->>'active', 'true')) IN ('false', '0', 'no') THEN false ELSE true END,
+  CASE WHEN COALESCE(e->>'sort_order', '') ~ '^-?[0-9]{1,9}$' THEN (e->>'sort_order')::int ELSE 100 END,
   CURRENT_TIMESTAMP
 FROM "tenants" t
 CROSS JOIN LATERAL jsonb_array_elements(
