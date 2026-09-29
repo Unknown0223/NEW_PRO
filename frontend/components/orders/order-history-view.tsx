@@ -51,7 +51,7 @@ export function OrderHistoryView({ tenantSlug, orderId }: Props) {
   }, [q.data]);
 
   if (!tenantSlug) {
-    return <p className="text-sm text-destructive">Tenant aniqlanmadi.</p>;
+    return <p className="text-sm text-destructive">Организация не определена.</p>;
   }
 
   if (q.isLoading) {

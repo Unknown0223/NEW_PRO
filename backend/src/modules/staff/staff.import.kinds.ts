@@ -454,19 +454,19 @@ export function parseStaffImportKindOrAllQuery(query: unknown): {
   let kind: StaffImportKind | "all" | undefined;
   if (kindRaw !== undefined) {
     if (kindRaw === "all" || isStaffImportKind(kindRaw)) kind = kindRaw;
-    else issues.push(`kind: Invalid enum value`);
+    else issues.push(`kind: недопустимое значение`);
   }
 
   let mode: "all" | "single" | undefined;
   if (modeRaw !== undefined) {
     if (modeRaw === "all" || modeRaw === "single") mode = modeRaw;
-    else issues.push(`mode: Invalid enum value`);
+    else issues.push(`mode: недопустимое значение`);
   }
 
   let sheet: string | undefined;
   if (sheetRaw !== undefined) {
     const s = sheetRaw.trim();
-    if (!s || s.length > 64) issues.push(`sheet: Invalid string`);
+    if (!s || s.length > 64) issues.push(`sheet: некорректное значение`);
     else sheet = s;
   }
 

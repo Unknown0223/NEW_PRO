@@ -14,9 +14,9 @@ final refusalReasonsProvider = Provider<List<RefEntry>>((ref) {
   final fromSession = ref.watch(sessionProvider).tenantReferences?.refusalReasonEntries ?? [];
   if (fromSession.isNotEmpty) return fromSession;
   return const [
-    RefEntry(id: 'seed-ref-client', name: 'Mijoz rad etdi'),
-    RefEntry(id: 'seed-ref-quality', name: 'Sifat / muddati'),
-    RefEntry(id: 'seed-ref-price', name: 'Narx kelishmovchiligi'),
+    RefEntry(id: 'seed-ref-client', name: 'Клиент отказался'),
+    RefEntry(id: 'seed-ref-quality', name: 'Качество / срок годности'),
+    RefEntry(id: 'seed-ref-price', name: 'Несогласие с ценой'),
   ];
 });
 

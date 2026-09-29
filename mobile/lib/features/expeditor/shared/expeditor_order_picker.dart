@@ -79,7 +79,7 @@ class ExpeditorOrderPicker extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Xato: $e')),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
       ),
     );
   }

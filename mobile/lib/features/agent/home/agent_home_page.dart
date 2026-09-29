@@ -29,7 +29,7 @@ import 'sync_count_provider.dart';
 
 String planDashboardLine(AgentDashboardResult dash, String? planVersion) {
   final base =
-      'Reja: ${dash.planSum.toStringAsFixed(0)} · Buyurtma: ${dash.ordersSumToday.toStringAsFixed(0)}';
+      'План: ${dash.planSum.toStringAsFixed(0)} · Заказы: ${dash.ordersSumToday.toStringAsFixed(0)}';
   final v = planVersion?.trim();
   if (v == null || v.isEmpty) return base;
   return '$base · v$v';
@@ -300,8 +300,8 @@ class _AgentHomePageState extends ConsumerState<AgentHomePage> {
                       syncWindowMessage(syncCfg),
                       if (session.user?.workSlotCode != null &&
                           session.user!.workSlotCode!.trim().isNotEmpty)
-                        'Slot: ${session.user!.workSlotCode}',
-                      'Web → Рабочее место → Синхронизация oynasini tekshiring va Сохранить bosing, keyin shu yerda qayta urinib ko‘ring.',
+                        'Рабочее место: ${session.user!.workSlotCode}',
+                      'В веб-версии откройте «Рабочее место» → «Синхронизация», проверьте окно и нажмите «Сохранить», затем повторите попытку здесь.',
                     ].join('\n'),
                     style: AppTypography.caption.copyWith(color: AppColors.warning),
                   ),

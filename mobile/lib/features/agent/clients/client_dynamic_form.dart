@@ -122,7 +122,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
             decoration: InputDecoration(
               labelText: clientFieldLabel('visit_day'),
               suffixText: required ? '*' : null,
-              helperText: 'Bir yoki bir nechta kunni tanlang',
+              helperText: 'Выберите один или несколько дней',
               border: const OutlineInputBorder(),
             ),
             child: Wrap(
@@ -199,7 +199,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Koordinatalar saqlashda joriy GPS ishlatiladi',
+            'При сохранении будут использованы текущие координаты GPS',
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
         );
@@ -208,7 +208,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Koordinatalar: konfiguratsiyada o‘zgartirish ruxsati yo‘q',
+            'Координаты: изменение запрещено конфигурацией',
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
         );
@@ -246,7 +246,7 @@ class ClientDynamicFormFields extends ConsumerWidget {
       children.addAll([
         TextField(
           controller: _ctrl('name'),
-          decoration: const InputDecoration(labelText: 'Nomi *'),
+          decoration: const InputDecoration(labelText: 'Название *'),
           inputFormatters: [LengthLimitingTextInputFormatter(255)],
         ),
         Padding(
@@ -254,9 +254,9 @@ class ClientDynamicFormFields extends ConsumerWidget {
           child: TextField(
             controller: _ctrl('phone'),
             decoration: InputDecoration(
-              labelText: 'Telefon *',
+              labelText: 'Телефон *',
               prefixText: config.phonePrefix.isNotEmpty ? '${config.phonePrefix} ' : null,
-              helperText: '9 raqam',
+              helperText: '9 цифр',
             ),
             keyboardType: TextInputType.number,
             inputFormatters: [

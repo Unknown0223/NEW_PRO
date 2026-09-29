@@ -113,7 +113,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
       ),
       _SettingRow(
         id: 'consignment_new',
-        label: 'Yangi mijozga buyurtma berish (konsignatsiya emas)',
+        label: 'Заказ для нового клиента (не консигнация)',
         toggle: pl?.allowSubmitForNewClient ?? false,
         readOnly: true,
       ),
@@ -249,7 +249,7 @@ class _AgentSettingsPageState extends ConsumerState<AgentSettingsPage> {
                     child: TextButton.icon(
                       onPressed: () => _runFullSyncWithPrefs(prefs),
                       icon: const Icon(Icons.sync, size: 20),
-                      label: const Text('Sinxronizatsiya (to\'liq)'),
+                      label: const Text('Синхронизация (полная)'),
                     ),
                   ),
                 ),

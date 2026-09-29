@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 
 /** Быстрые ссылки по приоритету (см. SETTINGS_STRUCTURE_PLAN.md). */
 const PRIORITY_QUICK_LINKS: { label: string; href: string }[] = [
-  { label: "Davr cheklovi", href: "/settings/document-edit-lock" },
+  { label: "Ограничение периода", href: "/settings/document-edit-lock" },
   { label: "Заказы → консигнация", href: "/settings/period/orders-consignment" },
-  { label: "Boshlang‘ich sozlash", href: "/settings/initial-setup" },
-  { label: "Tizim migratsiyasi", href: "/settings/system-migration" },
+  { label: "Начальная настройка", href: "/settings/initial-setup" },
+  { label: "Миграция системы", href: "/settings/system-migration" },
   { label: "Должности", href: "/settings/web-staff-position-presets" },
   { label: "Валюты", href: "/settings/currencies" },
   { label: "Цена", href: "/settings/prices" },
@@ -56,7 +56,7 @@ export default function SettingsHubPage() {
             href="/settings/initial-setup"
             className={cn(buttonVariants({ variant: "default", size: "sm" }))}
           >
-            Boshlang‘ich sozlash
+            Начальная настройка
           </Link>
         ) : null}
         <Link href="/settings/appearance" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -72,7 +72,7 @@ export default function SettingsHubPage() {
           Филиалы
         </Link>
         <Link href="/settings/geo-boundaries" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          Xarita chegaralari
+          Границы на карте
         </Link>
         <Link href="/settings/units" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
           Единицы измерения

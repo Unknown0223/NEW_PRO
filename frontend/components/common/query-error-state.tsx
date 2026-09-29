@@ -13,7 +13,7 @@ export function QueryErrorState({ message, onRetry }: Props) {
       <span>{message}</span>
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-          Qayta urinish
+          Повторить
         </Button>
       ) : null}
     </div>

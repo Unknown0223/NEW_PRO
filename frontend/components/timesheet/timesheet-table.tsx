@@ -115,7 +115,7 @@ export function TimesheetTable({
               className="sticky z-40 min-w-[100px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"
               style={{ left: STICKY_CODE }}
             >
-              Smart KOD
+              Smart-код
             </th>
             <th
               className="sticky z-40 min-w-[120px] border-b border-r bg-muted px-2 py-2 text-left font-semibold"

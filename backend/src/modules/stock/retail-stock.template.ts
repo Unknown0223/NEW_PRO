@@ -5,7 +5,7 @@ import { prisma } from "../../config/database";
 
 export async function buildRetailStockTemplateBuffer(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("RetailStock", { views: [{ state: "frozen", ySplit: 1 }] });
+  const sheet = workbook.addWorksheet("Остатки в рознице", { views: [{ state: "frozen", ySplit: 1 }] });
   const headers = [
     "Дата",
     "Клиент",
@@ -18,7 +18,7 @@ export async function buildRetailStockTemplateBuffer(): Promise<Buffer> {
     "Объем",
     "Комментарий"
   ];
-  const sample = ["2026-04-25", "DO'KON №1", "SKU-001", "12", "3", "15000", "180000", "retail", "12 packs", ""];
+  const sample = ["2026-04-25", "Магазин №1", "SKU-001", "12", "3", "15000", "180000", "retail", "12 упаковок", ""];
   headers.forEach((h, i) => {
     sheet.getRow(1).getCell(i + 1).value = h;
     sheet.getRow(1).getCell(i + 1).font = { bold: true };

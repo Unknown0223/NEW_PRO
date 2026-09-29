@@ -35,7 +35,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
   app.post(`${base}/login`, loginRouteOpts, async (request, reply) => {
     const parsed = authLoginBodySchema.safeParse(request.body);
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
 
     try {
@@ -65,7 +65,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
         );
       }
       if (msg === "APP_ACCESS_DENIED") {
-        return sendApiError(reply, request, 403, msg, "Ilova kirish o‘chirilgan");
+        return sendApiError(reply, request, 403, msg, "Доступ к приложению отключён");
       }
       if (msg === "WEB_ACCESS_DENIED") {
         const { WEB_ACCESS_DENIED_MESSAGE } = await import("./web-panel-access");
@@ -96,7 +96,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
   app.post(`${base}/refresh`, async (request, reply) => {
     const parsed = authRefreshBodySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
     const refreshToken = resolveRefreshTokenInput(request, parsed.data.refreshToken);
     if (!refreshToken) {
@@ -113,7 +113,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
         return sendApiError(reply, request, 401, msg);
       }
       if (msg === "APP_ACCESS_DENIED") {
-        return sendApiError(reply, request, 403, msg, "Ilova kirish o‘chirilgan");
+        return sendApiError(reply, request, 403, msg, "Доступ к приложению отключён");
       }
       if (msg === "USER_NOT_ON_SLOT") {
         return sendApiError(
@@ -131,7 +131,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
   app.post(`${base}/logout`, async (request, reply) => {
     const parsed = authRefreshBodySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(parsed.error));
     }
     const refreshToken = resolveRefreshTokenInput(request, parsed.data.refreshToken);
     if (refreshToken) {
@@ -169,7 +169,7 @@ function registerAuthAtBase(app: FastifyInstance, base: string) {
         return sendApiError(reply, request, 401, "Unauthorized");
       }
       if (MOBILE_FIELD_ROLES.has(u.role) && userRow.app_access === false) {
-        return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", "Ilova kirish o‘chirilgan");
+        return sendApiError(reply, request, 403, "APP_ACCESS_DENIED", "Доступ к приложению отключён");
       }
       // Chiqish faqat: o‘zi chiqdi yoki admin webdan barcha sessiyani yopdi.
       if (isSessionEnforcedRole(u.role)) {

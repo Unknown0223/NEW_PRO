@@ -5,15 +5,15 @@ void main() {
   test('GPS attach messages are specific (not a single permission line)', () {
     expect(
       GpsAttachOutcome.fail(GpsAttachIssue.serviceOff).message,
-      contains('Joylashuv o‘chirilgan'),
+      contains('Геолокация выключена'),
     );
     expect(
       GpsAttachOutcome.fail(GpsAttachIssue.deniedForever).message,
-      contains('Ilova sozlamalaridan'),
+      contains('настройках приложения'),
     );
     expect(
       GpsAttachOutcome.fail(GpsAttachIssue.noFix).message,
-      contains('signali'),
+      contains('Сигнал GPS'),
     );
   });
 }

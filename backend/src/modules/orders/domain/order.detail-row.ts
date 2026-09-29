@@ -289,7 +289,7 @@ export async function enrichOrderDetailRow(
     discount_sum: effectiveDiscountSum.toString(),
     discount_debt_note: discountDebtNote,
     payment_method_label,
-    price_type: payment_method_label,
+    price_type: o.price_type?.trim() || payment_method_label,
     bonus_gift_selections,
     bonus_gift_swap_options: swap,
     shipped_at: x?.shipped_at ?? base.shipped_at,

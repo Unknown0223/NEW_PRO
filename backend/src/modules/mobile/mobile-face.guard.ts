@@ -105,7 +105,7 @@ export async function assertFaceGateForAction(
   const ref = await getFaceReferenceMeta(tenantId, userId);
   if (!ref.has_reference) {
     throw new FaceGateError(
-      "Etalon yuz rasmi yo‘q — avval selfie yuklang",
+      "Нет эталонного фото лица — сначала загрузите селфи",
       "FACE_REFERENCE_REQUIRED"
     );
   }
@@ -119,7 +119,7 @@ export async function assertFaceGateForAction(
     );
     if (!daily.daily_login_verified) {
       throw new FaceGateError(
-        "Kunlik yuz tasdiqlash talab qilinadi",
+        "Требуется ежедневное подтверждение лица",
         "FACE_DAILY_REQUIRED"
       );
     }
@@ -131,7 +131,7 @@ export async function assertFaceGateForAction(
     const log = await findRecentApprovedLog(tenantId, userId, ["order_submit"]);
     if (!log) {
       throw new FaceGateError(
-        "Buyurtma uchun server orqali yuz tasdiqlash talab qilinadi",
+        "Для заказа требуется подтверждение лица через сервер",
         "FACE_REQUIRED"
       );
     }
@@ -144,7 +144,7 @@ export async function assertFaceGateForAction(
   const log = await findRecentApprovedLog(tenantId, userId, [context]);
   if (!log) {
     throw new FaceGateError(
-      "Server orqali yuz tasdiqlash talab qilinadi",
+      "Требуется подтверждение лица через сервер",
       "FACE_REQUIRED"
     );
   }

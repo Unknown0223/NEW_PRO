@@ -59,12 +59,12 @@ class BootstrapStep {
   final int idx;
   final String label;
   const BootstrapStep(this.idx, this.label);
-  static const auth = BootstrapStep(0, 'Autentifikatsiya');
-  static const permissions = BootstrapStep(1, 'Ruxsatlar yuklanmoqda');
-  static const config = BootstrapStep(2, 'Konfiguratsiya');
-  static const sync = BootstrapStep(3, 'Ma\'lumotlar sinxronlanmoqda');
-  static const push = BootstrapStep(4, 'Push sozlanmoqda');
-  static const done = BootstrapStep(5, 'Tayyor!');
+  static const auth = BootstrapStep(0, 'Аутентификация');
+  static const permissions = BootstrapStep(1, 'Загрузка прав доступа');
+  static const config = BootstrapStep(2, 'Конфигурация');
+  static const sync = BootstrapStep(3, 'Синхронизация данных');
+  static const push = BootstrapStep(4, 'Настройка уведомлений');
+  static const done = BootstrapStep(5, 'Готово!');
   static const values = [auth, permissions, config, sync, push, done];
 }
 
@@ -331,7 +331,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final me = await _tryFetchMe();
       if (me?.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
         return;
       }
       if (me != null) {
@@ -405,7 +405,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           await _wipeLocalAuth();
           state = const AuthState(
             status: AuthStatus.error,
-            error: 'Sessiya tugadi. Qayta kiring.',
+            error: 'Сессия истекла. Войдите заново.',
           );
           return;
         }
@@ -413,7 +413,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (me.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
         return;
       }
 
@@ -453,7 +453,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     } on AppAccessDeniedException {
       await _wipeLocalAuth();
-      state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+      state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
     } on UserNotOnSlotException {
       await _wipeLocalAuth();
       state = const AuthState(
@@ -468,7 +468,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = const AuthState(status: AuthStatus.locked, error: 'Нет интернета');
       }
     } catch (_) {
-      state = const AuthState(status: AuthStatus.locked, error: 'Qayta urinib ko\'ring');
+      state = const AuthState(status: AuthStatus.locked, error: 'Попробуйте ещё раз');
     }
   }
 
@@ -542,7 +542,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           final me = await _authApi.me();
           if (me.appAccess == false) {
             await _wipeLocalAuth();
-            state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+            state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
             return;
           }
         } on UnauthorizedException catch (e) {
@@ -583,7 +583,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (preBlocked) {
           state = const AuthState(
             status: AuthStatus.error,
-            error: 'Ilovani yangilang va qayta kiring',
+            error: 'Обновите приложение и войдите заново',
           );
           return;
         }
@@ -607,12 +607,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _session.setUser(r.user, slug: slug, tenantName: r.user.tenantName);
       if (!r.user.isMobileRole) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Mobil ilovaga ruxsat yo\'q');
+        state = const AuthState(status: AuthStatus.error, error: 'Нет доступа к мобильному приложению');
         return;
       }
       if (r.user.appAccess == false) {
         await _wipeLocalAuth();
-        state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+        state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
         return;
       }
       state = const AuthState(status: AuthStatus.authenticated);
@@ -621,7 +621,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (blocked) {
         state = const AuthState(
           status: AuthStatus.error,
-          error: 'Ilovani yangilang va qayta kiring',
+          error: 'Обновите приложение и войдите заново',
         );
         return;
       }
@@ -941,7 +941,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user == null) throw const UnauthorizedException();
 
       final slug = _session.state.tenantSlug ?? '';
-      if (slug.isEmpty) throw const ApiException(message: 'Tenant slug topilmadi');
+      if (slug.isEmpty) throw const ApiException(message: 'Компания не выбрана');
 
       // Step 3: GET /auth/me
       state = state.copyWith(bootstrapStep: BootstrapStep.auth);
@@ -996,7 +996,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
       final configBlocked = await _gateAppUpdate(config.appUpdate);
       if (configBlocked) {
-        throw const ApiException(message: 'Ilovani yangilash majburiy');
+        throw const ApiException(message: 'Требуется обновление приложения');
       }
       await _session.setMobileConfig(
         MobileConfig.fromJson(config.mobileConfig),
@@ -1346,7 +1346,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (gateUpdate) {
         final blocked = await _gateAppUpdate(config.appUpdate);
         if (blocked) {
-          throw const ApiException(message: 'Ilovani yangilash majburiy');
+          throw const ApiException(message: 'Требуется обновление приложения');
         }
       }
       await _session.setMobileConfig(
@@ -1413,7 +1413,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     final slug = _session.state.tenantSlug ?? '';
     if (slug.isEmpty) {
-      return const AgentSyncResult(ok: false, error: 'Tenant topilmadi');
+      return const AgentSyncResult(ok: false, error: 'Компания не выбрана');
     }
 
     await ensureAuthTokens(_ref);
@@ -1705,10 +1705,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Web panel «Доступ к приложению» o‘chirilganda — login ekraniga.
   Future<void> appAccessRevoked() async {
-    state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+    state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
     _session.state = const SessionState();
     await _wipeLocalAuth();
-    state = const AuthState(status: AuthStatus.error, error: 'Ilova kirish o\'chirilgan');
+    state = const AuthState(status: AuthStatus.error, error: 'Доступ к приложению отключён');
   }
 
   /// Ishchi o‘rnidan yechilganda — login ekraniga.

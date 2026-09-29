@@ -196,8 +196,8 @@ export function OrdersListTable(props: OrdersListTableProps) {
       <TableColumnSettingsDialog
         open={columnDialogOpen}
         onOpenChange={setColumnDialogOpen}
-        title="Ustunlarni boshqarish"
-        description="Ko‘rinadigan ustunlar va tartib. Sizning akkauntingiz uchun saqlanadi (server)."
+        title="Настройка столбцов"
+        description="Видимые столбцы и их порядок. Сохраняются для вашей учётной записи (на сервере)."
         columns={ORDER_LIST_COLUMNS}
         columnOrder={tablePrefs.columnOrder}
         hiddenColumnIds={tablePrefs.hiddenColumnIds}
@@ -335,7 +335,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
             ) : isError ? (
               <div className="p-4 sm:p-5">
                 <PageError
-                  message={getUserFacingError(error, "Zakazlarni yuklab bo'lmadi.")}
+                  message={getUserFacingError(error, "Не удалось загрузить заказы.")}
                   onRetry={() => void refetch()}
                 />
               </div>
@@ -365,7 +365,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                             className="size-4 rounded border-input"
                             checked={allOnPageSelected}
                             onChange={toggleSelectAllOnPage}
-                            aria-label="Joriy sahifadagi barcha zakazlarni tanlash"
+                            aria-label="Выбрать все заказы на текущей странице"
                           />
                         </th>
                         {tablePrefs.visibleColumnOrder.map((colId) => {
@@ -402,7 +402,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
                             "orders-list-table-th-sticky-right"
                           )}
                         >
-                          <span className="sr-only">Tafsilot</span>
+                          <span className="sr-only">Подробнее</span>
                         </th>
                       </tr>
                     </thead>

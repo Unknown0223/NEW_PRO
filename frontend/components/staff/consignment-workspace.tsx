@@ -99,7 +99,7 @@ function formatYearMonthRu(ym: string): string {
   return `${RU_MONTHS_SHORT[mo - 1]} ${y}`;
 }
 
-const CURRENCY_LABEL = "So'm";
+const CURRENCY_LABEL = "сум";
 
 /** Лимит задан и > 0 — тогда доступна опция «без долгов прошлых месяцев» */
 function hasPositiveLimit(s: string | null | undefined): boolean {

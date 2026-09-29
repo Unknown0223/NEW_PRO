@@ -8,6 +8,7 @@ import { prisma } from "../../config/database";
 import { appendClientAuditLog } from "../clients/clients.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { invalidateDashboard } from "../../lib/redis-cache";
+import { isPgInt4Id } from "../../lib/pg-int4";
 import {
   allocatePayment,
   getPaymentAllocations,
@@ -358,7 +359,7 @@ export function buildPaymentListWhere(
       { client: { legal_name: { contains: s, mode: "insensitive" } } },
       { client: { client_code: { contains: s, mode: "insensitive" } } }
     ];
-    if (Number.isFinite(idNum) && idNum > 0) {
+    if (isPgInt4Id(idNum)) {
       orSearch.push({ id: idNum });
     }
     andParts.push({ OR: orSearch });

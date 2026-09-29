@@ -24,31 +24,31 @@ function mapStrategyError(msg: string): { status: number; code: string; text?: s
     return {
       status: 400,
       code: "StrategyMinMembers",
-      text: "Стратегияда kamida 2 ta bonus/skidka qoidasi bo‘lishi kerak."
+      text: "В стратегии должно быть не менее 2 правил бонуса/скидки."
     };
   }
   if (msg === "STRATEGY_MAX_SELECT_MIN") {
-    return { status: 400, code: "StrategyMaxSelectMin", text: "Tanlash sharti kamida 1 bo‘lishi kerak." };
+    return { status: 400, code: "StrategyMaxSelectMin", text: "Условие выбора должно быть не меньше 1." };
   }
   if (msg === "STRATEGY_MAX_SELECT_TOO_HIGH") {
     return {
       status: 400,
       code: "StrategyMaxSelectTooHigh",
-      text: "Tanlash soni a'zolar sonidan kamida 1 ta kam bo‘lishi kerak (hammasini birga olish mumkin emas)."
+      text: "Число выбираемых правил должно быть хотя бы на 1 меньше числа участников (выбрать все сразу нельзя)."
     };
   }
   if (msg === "STRATEGY_BAD_RULE") {
     return {
       status: 400,
       code: "StrategyBadRule",
-      text: "Faqat aktiv bonus/skidka qoidalarini bog‘lash mumkin."
+      text: "Привязывать можно только активные правила бонуса/скидки."
     };
   }
   if (msg === "STRATEGY_RULE_ALREADY_LINKED") {
     return {
       status: 400,
       code: "StrategyRuleAlreadyLinked",
-      text: "Qoida boshqa aktiv strategiyaga bog‘langan."
+      text: "Правило уже привязано к другой активной стратегии."
     };
   }
   return null;

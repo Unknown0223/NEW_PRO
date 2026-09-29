@@ -233,13 +233,13 @@ export function ClientMapWorkspace() {
   const agentSelectOptions = useMemo(() => {
     const fromApi = (agentsQ.data ?? []).map((a) => ({
       value: String(a.id),
-      label: a.name || a.login || `Agent #${a.id}`
+      label: a.name || a.login || `Агент #${a.id}`
     }));
     if (fromApi.length > 0) return fromApi;
     const m = new Map<number, string>();
     for (const c of allClients) {
       if (c.agent_id != null && c.agent_id > 0) {
-        m.set(c.agent_id, c.agent_name?.trim() || `Agent #${c.agent_id}`);
+        m.set(c.agent_id, c.agent_name?.trim() || `Агент #${c.agent_id}`);
       }
     }
     return [...m.entries()]
@@ -355,7 +355,7 @@ export function ClientMapWorkspace() {
   if (!tenantSlug) {
     return (
       <PageShell className="flex flex-1 items-center justify-center bg-transparent">
-        <p className="text-sm text-destructive">Tenant не найден.</p>
+        <p className="text-sm text-destructive">Организация не найдена.</p>
       </PageShell>
     );
   }

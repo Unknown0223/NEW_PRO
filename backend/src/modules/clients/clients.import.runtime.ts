@@ -23,11 +23,11 @@ export function chunkNumericIds(ids: readonly number[], chunkSize = IMPORT_ID_LO
 /** Prisma/PostgreSQL texnik xabarlarini import UI uchun qisqartirish. */
 export function humanizeImportDbError(err: unknown): string {
   const raw =
-    err instanceof Error ? err.message : typeof err === "string" ? err : "Import xatosi";
+    err instanceof Error ? err.message : typeof err === "string" ? err : "Ошибка импорта";
   if (/too many bind variables/i.test(raw) || /expected maximum of 32767/i.test(raw)) {
     return (
-      "Ma’lumotlar bazasi so‘rovi juda katta (PostgreSQL bind limiti). " +
-      "Backend worker qayta ishga tushirilganini tekshiring va importni qayta urinib ko‘ring."
+      "Слишком большой запрос к базе данных (лимит параметров PostgreSQL). " +
+      "Проверьте, что backend worker перезапущен, и повторите импорт."
     );
   }
   if (/Invalid `prisma\./i.test(raw)) {
@@ -36,7 +36,7 @@ export function humanizeImportDbError(err: unknown): string {
       .map((l) => l.trim())
       .find((l) => /Assertion violation|too many bind variables/i.test(l));
     if (assertion) return humanizeImportDbError(assertion);
-    return "Ma’lumotlar bazasida import vaqtida xato. Faylni kichikroq qilib qayta urinib ko‘ring.";
+    return "Ошибка базы данных во время импорта. Уменьшите файл и повторите попытку.";
   }
   return raw.length > 500 ? `${raw.slice(0, 500)}…` : raw;
 }

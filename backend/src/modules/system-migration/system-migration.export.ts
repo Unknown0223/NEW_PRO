@@ -76,7 +76,7 @@ async function loadReferenceTables(
   tenantId: number,
   onProgress?: (message: string) => void
 ) {
-  onProgress?.("Spravochniklar: ombor / user…");
+  onProgress?.("Справочники: склады / пользователи…");
   const [tradeDirections, salesChannels, warehouses, users] = await Promise.all([
     safeFindMany("trade_directions", () => prisma.tradeDirection.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("sales_channel_refs", () =>
@@ -87,12 +87,12 @@ async function loadReferenceTables(
   ]);
 
   // 10k+ mijoz — boshqa jadvallar bilan parallel emas (RAM cho‘qqisi).
-  onProgress?.("Spravochniklar: mijozlar…");
+  onProgress?.("Справочники: клиенты…");
   const clients = await safeFindMany("clients", () =>
     prisma.client.findMany({ where: { tenant_id: tenantId } })
   );
 
-  onProgress?.("Spravochniklar: mahsulot / kassa / stock…");
+  onProgress?.("Справочники: товары / кассы / остатки…");
   const [products, cashDesks, stock] = await Promise.all([
     safeFindMany("products", () => prisma.product.findMany({ where: { tenant_id: tenantId } })),
     safeFindMany("cash_desks", () => prisma.cashDesk.findMany({ where: { tenant_id: tenantId } })),
@@ -361,7 +361,7 @@ async function buildMigrationSetupXlsx(tenantId: number): Promise<{ buf: Buffer;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("README");
       ws.getCell("A1").value =
-        "Initial setup sheets empty — katalog ma’lumotlari data/*.json da.";
+        "Листы начальной настройки пусты — данные каталога находятся в data/*.json.";
       const buf = Buffer.from(await wb.xlsx.writeBuffer());
       return { buf, note: "initial_setup_xlsx_empty_stub" };
     }
@@ -372,9 +372,9 @@ async function buildMigrationSetupXlsx(tenantId: number): Promise<{ buf: Buffer;
     const ExcelJS = await import("exceljs");
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("README");
-    ws.getCell("A1").value = `Initial setup export skipped: ${
-      e instanceof Error ? e.message : "error"
-    }. Full data is in data/*.json.`;
+    ws.getCell("A1").value = `Экспорт начальной настройки пропущен: ${
+      e instanceof Error ? e.message : "ошибка"
+    }. Полные данные находятся в data/*.json.`;
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     return { buf, note: "initial_setup_xlsx_error_stub" };
   }
@@ -397,7 +397,7 @@ export async function buildTenantBackupZip(
   };
 
   // Avval yengil meta, keyin og‘ir jadvallar — pool/RAM cho‘qqisini pasaytiradi.
-  report("meta", 5, "Profil va inventar…");
+  report("meta", 5, "Профиль и инвентаризация данных…");
   const [inventory, profile, settingsExtra, xlsxResult] = await Promise.all([
     getMigrationInventory(ctx.tenantId),
     getTenantProfile(ctx.tenantId),
@@ -405,22 +405,22 @@ export async function buildTenantBackupZip(
     buildMigrationSetupXlsx(ctx.tenantId)
   ]);
 
-  report("references", 15, "Spravochniklar…");
+  report("references", 15, "Справочники…");
   const references = await loadReferenceTables(ctx.tenantId, (m) => report("references", 20, m));
 
-  report("transactional", 35, "Buyurtmalar / to‘lovlar…");
+  report("transactional", 35, "Заказы / оплаты…");
   const tables = await loadTransactionalTables(ctx.tenantId);
 
-  report("bonus", 50, "Bonus / KPI…");
+  report("bonus", 50, "Бонусы / KPI…");
   const bonusAndFiles = await loadBonusAndFilesTables(ctx.tenantId);
 
-  report("extended", 60, "Kengaytirilgan jadvallar…");
+  report("extended", 60, "Расширенные таблицы…");
   const extended = await loadExtendedTables(ctx.tenantId);
 
   const zip = new JSZip();
 
   // Fotolar alohida (chunked) — base64 OOM oldini olish.
-  report("photos", 70, "Fotootchyotlar…");
+  report("photos", 70, "Фотоотчёты…");
   const photoStats = await appendClientPhotoReportsToZip(zip, ctx.tenantId);
 
   const retentionDays = PHOTO_REPORT_EXPORT_DAYS > 0 ? PHOTO_REPORT_EXPORT_DAYS : null;
@@ -538,19 +538,19 @@ export async function buildTenantBackupZip(
   zip.file(
     "README.txt",
     [
-      "SALEC tenant backup",
-      `Exported: ${manifest.exported_at}`,
-      `Source tenant: ${tenant.slug}`,
+      "Резервная копия компании SALEC",
+      `Экспортировано: ${manifest.exported_at}`,
+      `Исходная компания: ${tenant.slug}`,
       "",
-      "Import: bo'sh tenantga to'liq import yoki to'ldirilgan tenantga «almashtirish» (replace).",
-      "Format v6: to'liq zaxira — multi-slot, bonus strategiya, bank inbox, katalog/RBAC.",
-      "Fotolar: barcha client_photo_reports → files/client_photos/* (siqilgan JPEG).",
-      "GPS: barcha agent_location_pings (data/agent_location_pings.json).",
+      "Импорт: полный импорт в пустую компанию или «замена» (replace) в заполненной компании.",
+      "Формат v6: полная резервная копия — несколько слотов, бонусные стратегии, входящие банковские переводы, каталог/RBAC.",
+      "Фото: все client_photo_reports → files/client_photos/* (сжатый JPEG).",
+      "GPS: все agent_location_pings (data/agent_location_pings.json).",
       ""
     ].join("\n")
   );
 
-  report("zip", 90, "ZIP yig‘ilmoqda…");
+  report("zip", 90, "Сборка ZIP…");
   // level 1: JSON tez; fotolar allaqachon STORE.
   return zip.generateAsync({
     type: "nodebuffer",
@@ -569,7 +569,7 @@ export async function buildTenantBackupZipToFile(
   const { writeFile } = await import("fs/promises");
   const buf = await buildTenantBackupZip(ctx, onProgress);
   await writeFile(outPath, buf);
-  onProgress?.({ stage: "done", percent: 100, message: "Zaxira tayyor" });
+  onProgress?.({ stage: "done", percent: 100, message: "Резервная копия готова" });
   return { byteLength: buf.length, filename: backupDownloadFilename(ctx.tenantSlug) };
 }
 

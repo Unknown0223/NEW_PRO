@@ -656,7 +656,7 @@ export function CurrencyRatesWorkspace() {
             </div>
             <div className="space-y-1">
               <Label>Источник</Label>
-              <Input value={formSource} onChange={(e) => setFormSource(e.target.value)} placeholder="manual, CBU…" />
+              <Input value={formSource} onChange={(e) => setFormSource(e.target.value)} placeholder="вручную, ЦБ…" />
               {pickZodLeaf(formFieldErrs, "source") ? (
                 <p className="text-xs text-destructive">{pickZodLeaf(formFieldErrs, "source")}</p>
               ) : null}

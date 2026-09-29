@@ -61,7 +61,7 @@ export function FinanceFiltersBar(props: {
     <section className="rounded-2xl bg-card p-4 shadow-sm ring-1 ring-slate-200/70">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Finance module</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-600">Финансы</p>
           <h2 className="text-xl font-bold text-slate-950">Финансы</h2>
         </div>
         <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">

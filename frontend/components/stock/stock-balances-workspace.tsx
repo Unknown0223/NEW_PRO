@@ -254,11 +254,11 @@ function thClassNumeric(numericIds: Set<string>, colId: string): string {
 }
 
 const SUMMARY_HEADER_TITLE: Partial<Record<string, string>> = {
-  reserved: "Данные из Stock.reserved_qty. Авто по заказам пока не заполняется."
+  reserved: "Резерв из остатков склада. Автоматически по заказам пока не заполняется."
 };
 
 const BY_WH_HEADER_TITLE: Partial<Record<string, string>> = {
-  reserved: "Stock.reserved_qty по строке склад+товар."
+  reserved: "Резерв по строке «склад + товар»."
 };
 
 function renderSummaryDataCell(row: BalanceRow, colId: string): ReactNode {

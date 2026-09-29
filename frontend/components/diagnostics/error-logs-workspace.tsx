@@ -161,7 +161,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
           >
             <option value="">Все</option>
             <option value="mobile">Мобильное приложение</option>
-            <option value="backend">Backend</option>
+            <option value="backend">Сервер</option>
           </select>
         </label>
         <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
@@ -268,7 +268,7 @@ export function ErrorLogsWorkspace({ tenantSlug }: { tenantSlug: string }) {
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{fmt(r.occurred_at)}</td>
                     <td className="px-3 py-2">
                       <Badge variant={sourceBadge(r.source)}>
-                        {r.source === "mobile" ? "Мобильное" : r.source === "backend" ? "Backend" : r.source}
+                        {r.source === "mobile" ? "Мобильное" : r.source === "backend" ? "Сервер" : r.source}
                       </Badge>
                     </td>
                     <td className="max-w-[140px] truncate px-3 py-2 text-xs">
@@ -364,7 +364,7 @@ function ErrorCard({ row, compact }: { row: ErrorRow; compact?: boolean }) {
     <div className={`rounded-lg border p-3 ${compact ? "bg-muted/20" : "bg-card"}`}>
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <Badge variant={sourceBadge(row.source)}>
-          {row.source === "mobile" ? "Мобильное" : row.source === "backend" ? "Backend" : row.source}
+          {row.source === "mobile" ? "Мобильное" : row.source === "backend" ? "Сервер" : row.source}
         </Badge>
         {row.severity === "fatal" ? <Badge variant="destructive">критично</Badge> : null}
         <span className="font-mono text-[11px] text-muted-foreground">{fmt(row.occurred_at)}</span>

@@ -166,7 +166,7 @@ class _ExpeditorReturnByOrderPageState
                                       fontWeight: FontWeight.w700,),),
                               subtitle: Text(
                                 '${o['client_name'] ?? ''}\n'
-                                "${formatMoneySpaced((o['total_sum'] as num?)?.toDouble() ?? 0)} So'm",
+                                "${formatMoneySpaced((o['total_sum'] as num?)?.toDouble() ?? 0)} сум",
                                 maxLines: 2,
                               ),
                               isThreeLine: true,
@@ -943,7 +943,7 @@ class _ExpeditorReturnByOrderPageState
               Expanded(
                 child: Text(
                   'макс: ${_fmtQty(maxTotal)}'
-                  "${price > 0 ? '   ·   ${formatMoneySpaced(price)} So\'m' : ''}",
+                  "${price > 0 ? '   ·   ${formatMoneySpaced(price)} сум' : ''}",
                   style: AppTypography.caption.copyWith(
                       color: qty > 0
                           ? AppColors.expeditorAccent
@@ -1249,7 +1249,7 @@ class _ExpeditorReturnByOrderPageState
           const SizedBox(height: 2),
           Text(
             '${p['sku'] ?? ''}'
-            "${price > 0 ? ' · таннарх ${formatMoneySpaced(price)} So\'m' : ''}",
+            "${price > 0 ? ' · таннарх ${formatMoneySpaced(price)} сум' : ''}",
             style: AppTypography.caption.copyWith(color: AppColors.textMuted),
           ),
           if (maxPaid > 0)
@@ -1260,7 +1260,7 @@ class _ExpeditorReturnByOrderPageState
               maxQty: maxPaid,
               value: paid,
               hint: paid > 0
-                  ? "= ${formatMoneySpaced(paid * price)} So'm"
+                  ? '= ${formatMoneySpaced(paid * price)} сум'
                   : null,
               onChanged: (v) => setState(() {
                 if (v <= 0) {
@@ -1305,7 +1305,7 @@ class _ExpeditorReturnByOrderPageState
                 maxQty: cashMax,
                 value: cashQty.clamp(0.0, cashMax),
                 hint: cashQty > 0
-                    ? "= ${formatMoneySpaced(cashSum)} So'm"
+                    ? '= ${formatMoneySpaced(cashSum)} сум'
                     : 'сумма = дона × таннарх',
                 onChanged: (v) => setState(() {
                   final next = v.clamp(0.0, cashMax);
@@ -1470,7 +1470,7 @@ class _ExpeditorReturnByOrderPageState
                 children: [
                   Expanded(
                     child: _totalChip(
-                        'Сумма (продажа)', "${formatMoneySpaced(saleSum)} So'm",
+                        'Сумма (продажа)', '${formatMoneySpaced(saleSum)} сум',
                         color: AppColors.expeditorAccent,),
                   ),
                   const SizedBox(width: 8),
@@ -1487,7 +1487,7 @@ class _ExpeditorReturnByOrderPageState
                 const SizedBox(height: 8),
                 _totalChip(
                   'Бонус оплатой',
-                  "${formatMoneySpaced(bonusCashSum)} So'm",
+                  '${formatMoneySpaced(bonusCashSum)} сум',
                   color: AppColors.warning,
                 ),
               ],
@@ -1731,7 +1731,7 @@ class _ExpeditorReturnByOrderPageState
                     children: [
                       Expanded(
                         child: _totalChip('К возврату (продажа)',
-                            "${formatMoneySpaced(refund)} So'm",
+                            '${formatMoneySpaced(refund)} сум',
                             color: AppColors.expeditorAccent,),
                       ),
                       const SizedBox(width: 8),
@@ -1746,7 +1746,7 @@ class _ExpeditorReturnByOrderPageState
                     const SizedBox(height: 8),
                     _totalChip(
                       'Бонус оплатой',
-                      "${formatMoneySpaced(bonusCashSum)} So'm",
+                      '${formatMoneySpaced(bonusCashSum)} сум',
                       color: AppColors.warning,
                     ),
                   ],
@@ -1785,7 +1785,7 @@ class _ExpeditorReturnByOrderPageState
                       title: 'Не хватает бонусной части',
                       body:
                           'По правилам возврата с полки бонусной части не хватает на '
-                          "${formatMoneySpaced(bonusDebt)} So'm. "
+                          '${formatMoneySpaced(bonusDebt)} сум. '
                           'Эта сумма будет отнесена на баланс (долг) клиента '
                           'после приёмки на складе.',
                       extra: warnings
@@ -1799,11 +1799,11 @@ class _ExpeditorReturnByOrderPageState
                       title: 'Долг скидка',
                       body: discountDebtNote?.trim().isNotEmpty == true
                           ? '${discountDebtNote!.trim()}\n\n'
-                              "${formatMoneySpaced(discountDebt)} So'm будет отнесено "
+                              '${formatMoneySpaced(discountDebt)} сум будет отнесено '
                               'на баланс клиента после приёмки на складе '
                               '(скидка по оставшемуся товару отозвана).'
                           : 'Условие скидки по заказу больше не выполняется. '
-                              "${formatMoneySpaced(discountDebt)} So'm — долг скидка "
+                              '${formatMoneySpaced(discountDebt)} сум — долг скидка '
                               'на баланс клиента после приёмки на складе.',
                     ),
                   ] else if (hasDiscountRecalc) ...[

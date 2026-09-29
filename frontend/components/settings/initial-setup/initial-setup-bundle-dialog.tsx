@@ -20,6 +20,13 @@ import { InitialSetupStepTable } from "@/components/settings/initial-setup/initi
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Circle, Loader2, SkipForward } from "lucide-react";
 
+const BUNDLE_STATUS_LABELS: Record<BundleApplyProgress["status"], string> = {
+  running: "выполняется",
+  done: "готово",
+  skipped: "пропущено",
+  failed: "ошибка"
+};
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -131,7 +138,7 @@ export function InitialSetupBundleDialog({
           <div className="max-h-28 overflow-auto border-t px-6 py-2 text-[11px] text-muted-foreground">
             {applyLog.map((l) => (
               <p key={l.stepId}>
-                {l.title}: {l.status}
+                {l.title}: {BUNDLE_STATUS_LABELS[l.status] ?? l.status}
                 {l.message ? ` — ${l.message}` : ""}
               </p>
             ))}

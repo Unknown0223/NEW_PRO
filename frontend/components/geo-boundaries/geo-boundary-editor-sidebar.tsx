@@ -60,13 +60,13 @@ export function GeoBoundaryEditorSidebar({
   const items = itemsByKind[kind] ?? [];
   const selectedItem = items.find((i) => i.ref_id === refId);
   const hasPolygon = Boolean(selectedBoundary && selectedBoundary.polygon.length >= 3);
-  const summary = selectedItem?.name ?? "Tanlanmagan";
+  const summary = selectedItem?.name ?? "Не выбрано";
   const panelOpen = layout === "settings" ? true : expanded;
 
   const panel = (
     <div className="vp-geo-panel">
       <p className="vp-geo-hint">
-        Filial, zona yoki territoriya tanlang. Chizish usuli — vizitlar xaritasi kabi kursor yoki nuqta bilan.
+        Выберите филиал, зону или территорию. Способ рисования — курсором или по точкам, как на карте визитов.
       </p>
 
       <div className="vp-geo-row">
@@ -77,7 +77,7 @@ export function GeoBoundaryEditorSidebar({
             disabled={drawActive}
             onClick={() => onDrawStyleChange("lasso")}
           >
-            Kursor bilan
+            Курсором
           </button>
           <button
             type="button"
@@ -85,7 +85,7 @@ export function GeoBoundaryEditorSidebar({
             disabled={drawActive}
             onClick={() => onDrawStyleChange("click")}
           >
-            Nuqta bilan
+            По точкам
           </button>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function GeoBoundaryEditorSidebar({
         <label className="vp-geo-label vp-geo-label-inline">
           <span>{GEO_BOUNDARY_KIND_LABELS[kind]}</span>
           <select className="vp-native" value={refId} onChange={(e) => onRefIdChange(e.target.value)}>
-            <option value="">— Tanlang —</option>
+            <option value="">— Выберите —</option>
             {items.map((it) => (
               <option key={it.ref_id} value={it.ref_id}>
                 {it.name}
@@ -118,17 +118,17 @@ export function GeoBoundaryEditorSidebar({
         </label>
 
         <label className="vp-geo-label vp-geo-label-inline vp-geo-color-field">
-          <span>Rang</span>
+          <span>Цвет</span>
           <div className="vp-geo-color-row">
             <input
               type="color"
               value={customColor || effectiveColor}
               onChange={(e) => onCustomColorChange(e.target.value)}
               className="vp-geo-color-input"
-              title="Chegara rangi"
+              title="Цвет границы"
             />
             <button type="button" className="vp-btn vp-geo-color-reset" onClick={() => onCustomColorChange("")}>
-              Avto
+              Авто
             </button>
           </div>
         </label>
@@ -136,8 +136,8 @@ export function GeoBoundaryEditorSidebar({
 
       {items.length === 0 ? (
         <p className="vp-geo-warn">
-          Tizimda {GEO_BOUNDARY_KIND_LABELS[kind].toLowerCase()} topilmadi. Territoriya yoki Filial sozlamalarida
-          yarating.
+          В системе не найдено: {GEO_BOUNDARY_KIND_LABELS[kind].toLowerCase()}. Создайте в настройках территорий или
+          филиалов.
         </p>
       ) : null}
 
@@ -147,8 +147,8 @@ export function GeoBoundaryEditorSidebar({
             <b>{selectedItem.name}</b>
             <span>
               {hasPolygon
-                ? `Chegara chizilgan · ${selectedBoundary!.polygon.length} nuqta`
-                : "Chegara hali chizilmagan"}
+                ? `Граница нарисована · точек: ${selectedBoundary!.polygon.length}`
+                : "Граница ещё не нарисована"}
             </span>
           </div>
         </div>
@@ -162,7 +162,7 @@ export function GeoBoundaryEditorSidebar({
             disabled={!refId || saving}
             onClick={onStartDraw}
           >
-            {hasPolygon ? "Qayta chizish" : "Hudud chizish"}
+            {hasPolygon ? "Перерисовать" : "Нарисовать область"}
           </button>
         ) : (
           <>
@@ -172,14 +172,14 @@ export function GeoBoundaryEditorSidebar({
               disabled={drawPointCount < 3 || saving}
               onClick={onFinishDraw}
             >
-              {saving ? "Saqlanmoqda…" : `Saqlash (${drawPointCount} nuqta)`}
+              {saving ? "Сохранение…" : `Сохранить (точек: ${drawPointCount})`}
             </button>
             <button type="button" className="vp-btn" onClick={onCancelDraw}>
-              Bekor
+              Отмена
             </button>
             {drawStyle === "click" && drawPointCount > 0 ? (
               <button type="button" className="vp-btn" onClick={onUndoLastPoint}>
-                Oxirgi nuqta
+                Убрать последнюю точку
               </button>
             ) : null}
           </>
@@ -187,10 +187,10 @@ export function GeoBoundaryEditorSidebar({
         {hasPolygon ? (
           <>
             <button type="button" className="vp-btn" disabled={saving} onClick={onAssignClients}>
-              Klientlarni bog‘lash
+              Привязать клиентов
             </button>
             <button type="button" className="vp-btn vp-danger" disabled={saving} onClick={onDeleteBoundary}>
-              O‘chirish
+              Удалить
             </button>
           </>
         ) : null}
@@ -199,12 +199,12 @@ export function GeoBoundaryEditorSidebar({
       {drawActive ? (
         <p className="vp-geo-draw-hint">
           {drawStyle === "lasso"
-            ? "Xaritada kursor bilan hudud atrofini chizing — qo‘yib yuborsangiz chegara qo‘llanadi (vizitlar xaritasi kabi)."
-            : "Xaritada nuqtalarni bosing (kamida 3). Xarita sudrab harakatlanmaydi."}
+            ? "Обведите область на карте курсором — после отпускания кнопки граница будет применена (как на карте визитов)."
+            : "Кликайте по карте, чтобы ставить точки (минимум 3). Перетаскивание карты отключено."}
         </p>
       ) : refId ? (
         <p className="vp-geo-draw-hint vp-geo-draw-hint-muted">
-          «Hudud chizish» tugmasini bosing, so‘ng {drawStyle === "lasso" ? "kursor bilan chizing" : "nuqta qo‘ying"}.
+          Нажмите «Нарисовать область», затем {drawStyle === "lasso" ? "обведите курсором" : "поставьте точки"}.
         </p>
       ) : null}
     </div>
@@ -216,7 +216,7 @@ export function GeoBoundaryEditorSidebar({
         <div className="vp-geo-settings-head">
           <MapPinned className="size-4 shrink-0 text-violet-600" aria-hidden />
           <div>
-            <b>Chegara boshqaruvi</b>
+            <b>Управление границами</b>
             <span>{summary}</span>
           </div>
         </div>
@@ -229,10 +229,10 @@ export function GeoBoundaryEditorSidebar({
     <div className={`vp-geo-bar${panelOpen ? " vp-geo-bar-open" : ""}`}>
       <button type="button" className="vp-geo-toggle" onClick={onToggleExpanded} aria-expanded={panelOpen}>
         <MapPinned className="size-4 shrink-0 text-violet-600" aria-hidden />
-        <span className="vp-geo-toggle-label">Chegara</span>
+        <span className="vp-geo-toggle-label">Граница</span>
         <span className="vp-geo-toggle-value">{summary}</span>
         {hasPolygon ? (
-          <span className="vp-geo-color-swatch" style={{ background: effectiveColor }} title="Chegara rangi" />
+          <span className="vp-geo-color-swatch" style={{ background: effectiveColor }} title="Цвет границы" />
         ) : null}
         <ChevronDown className={`vp-geo-chevron size-4 shrink-0${panelOpen ? " vp-open" : ""}`} aria-hidden />
       </button>

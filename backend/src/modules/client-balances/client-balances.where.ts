@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ORDER_STATUSES_OUTSTANDING_RECEIVABLE } from "../orders/order-status";
+import { isPgInt4Id } from "../../lib/pg-int4";
 import {
   paymentTypesFromMethodEntries,
   resolveCurrencyEntries,
@@ -32,7 +33,7 @@ export function buildClientBalanceSearchOrClause(searchRaw: string): Prisma.Clie
     const parts: Prisma.ClientWhereInput[] = [
       { client_code: { equals: search, mode: ins } }
     ];
-    if (suffixId != null) parts.push({ id: suffixId });
+    if (isPgInt4Id(suffixId)) parts.push({ id: suffixId });
     return parts;
   }
 

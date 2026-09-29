@@ -23,7 +23,7 @@ export default function CashDesksSettingsPage() {
     return (
       <p className="text-sm text-destructive">
         <Link href="/login" className="underline">
-          Kirish
+          Войти
         </Link>
       </p>
     );
@@ -34,7 +34,7 @@ export default function CashDesksSettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Кассы</h1>
         <Link href="/settings" className="text-sm text-primary underline">
-          ← Sozlamalar
+          ← Настройки
         </Link>
       </div>
       <CashDesksWorkspace

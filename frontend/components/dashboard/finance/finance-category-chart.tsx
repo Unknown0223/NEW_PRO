@@ -63,7 +63,7 @@ export function FinanceCategoryChart({ data }: { data: FinanceDashboardSnapshot 
           style={{ background: gradient }}
         >
           <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-card text-center ring-1 ring-slate-100">
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Total</span>
+            <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Итого</span>
             <strong className="mt-1 text-2xl font-black text-slate-950">{fmtFinanceCompact(total)}</strong>
             <span className="text-sm font-medium text-slate-500">UZS</span>
           </div>

@@ -821,12 +821,12 @@ function CashDeskFormDialog({
           setSaveBanner(
             hint
               ? withApiSupportLine(hint, e)
-              : withApiSupportLine(getUserFacingError(e, "Saqlab bo‘lmadi."), e)
+              : withApiSupportLine(getUserFacingError(e, "Не удалось сохранить."), e)
           );
           return;
         }
       }
-      setSaveBanner(getUserFacingError(e, "Saqlab bo‘lmadi."));
+      setSaveBanner(getUserFacingError(e, "Не удалось сохранить."));
     }
   });
 

@@ -59,7 +59,7 @@ export async function assertBackupProfileNotThin(
   const nextLen = countTerritoryRoots(profile.references);
   if (prevLen > 0 && nextLen === 0) {
     throw new Error(
-      "THIN_PROFILE_BACKUP:Backup dagi territory_nodes bo‘sh — mavjud territoriya o‘chib ketmasin. force yoki to‘liq backup kerak."
+      "THIN_PROFILE_BACKUP:В резервной копии territory_nodes пусты — существующие территории не будут удалены. Нужен force или полная резервная копия."
     );
   }
 
@@ -82,7 +82,7 @@ export async function assertBackupProfileNotThin(
     const nextN = Array.isArray(next) ? next.length : 0;
     if (prevN > 0 && nextN === 0) {
       throw new Error(
-        `THIN_PROFILE_BACKUP:Backup dagi ${key} bo‘sh — mavjud spravochnik o‘chib ketmasin. force yoki to‘liq backup kerak.`
+        `THIN_PROFILE_BACKUP:В резервной копии ${key} пуст — существующий справочник не будет удалён. Нужен force или полная резервная копия.`
       );
     }
   }

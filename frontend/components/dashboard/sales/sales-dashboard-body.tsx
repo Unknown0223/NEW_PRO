@@ -7,17 +7,17 @@ import {
   SalesRefusalReasonsBlock,
   SalesTrendAreaChart
 } from "@/components/dashboard/sales/sales-charts-sections";
-import { SalesControlSection } from "@/components/dashboard/sales/sales-control-section";
 import { SalesDataTable } from "@/components/dashboard/sales/sales-data-table";
 import { SalesMetricsRow } from "@/components/dashboard/sales/sales-metrics-row";
 import {
   useSalesAgentColumns,
   useSalesCategoryColumns,
-  useSalesCoverageColumns,
   useSalesTerritoryColumns
 } from "@/components/dashboard/sales/sales-table-columns";
 import type { SalesDashboardSnapshot } from "@/components/dashboard/sales/types";
 import type { createSalesExportHandlers } from "@/components/dashboard/sales/sales-export";
+import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 export function SalesDashboardBody({
   data,
@@ -35,27 +35,43 @@ export function SalesDashboardBody({
   breakdownRef: React.Ref<HTMLDivElement>;
 }) {
   const categoryColumns = useSalesCategoryColumns(data.category_performance_table);
-  const coverageColumns = useSalesCoverageColumns(data.category_performance_table);
   const territoryColumns = useSalesTerritoryColumns(resolveTerritory);
   const agentColumns = useSalesAgentColumns();
+  const [breakdownView, setBreakdownView] = useState<"territory" | "category">("territory");
+  const viewToggle = (
+    <div className="inline-flex rounded-xl border border-border bg-muted p-1" role="tablist">
+      {(
+        [
+          { id: "territory", label: "Территории" },
+          { id: "category", label: "Категории товаров" }
+        ] as const
+      ).map((v) => (
+        <button
+          key={v.id}
+          type="button"
+          role="tab"
+          aria-selected={breakdownView === v.id}
+          onClick={() => setBreakdownView(v.id)}
+          className={cn(
+            "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            breakdownView === v.id
+              ? "bg-card text-teal-700 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
-      <SalesMetricsRow data={data} />
-      <SalesControlSection data={data} />
+      <SalesMetricsRow data={data} resolvePayment={resolvePayment} />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_480px]">
         <div ref={analyticsRef} className="space-y-4">
           <SalesProductAnalytics data={data} />
-          <SalesDataTable
-            title="По категориям"
-            data={data.category_performance_table}
-            columns={categoryColumns}
-            rowKey={(r) => r.category}
-            initialPageSize={10}
-            className="sales-motion-delay-200"
-            onExportXlsx={() => exporters && void exporters.categoryPerformance()}
-          />
           <SalesOrdersRefusalsChart data={data} />
           <SalesRefusalReasonsBlock data={data} />
           <SalesTrendAreaChart data={data} />
@@ -63,26 +79,33 @@ export function SalesDashboardBody({
 
         <div ref={breakdownRef} className="space-y-4">
           <SalesPaymentRail data={data} resolvePayment={resolvePayment} />
-          <SalesDataTable
-            title="ОКБ / АКБ"
-            data={data.category_performance_table}
-            columns={coverageColumns}
-            rowKey={(r) => r.category}
-            initialPageSize={5}
-            compact
-            className="sales-motion-delay-150"
-            onExportXlsx={() => exporters && void exporters.categoryPerformance()}
-          />
-          <SalesDataTable
-            title="По территориям"
-            data={data.territory_analytics}
-            columns={territoryColumns}
-            rowKey={(r) => r.territory}
-            initialPageSize={10}
-            compact
-            className="sales-motion-delay-200"
-            onExportXlsx={() => exporters && void exporters.territory()}
-          />
+          {breakdownView === "territory" ? (
+            <SalesDataTable
+              key="territory"
+              title="По территориям"
+              action={viewToggle}
+              data={data.territory_analytics}
+              columns={territoryColumns}
+              rowKey={(r) => r.territory}
+              initialPageSize={10}
+              compact
+              className="sales-motion-delay-200"
+              onExportXlsx={() => exporters && void exporters.territory()}
+            />
+          ) : (
+            <SalesDataTable
+              key="category"
+              title="По категориям товаров"
+              action={viewToggle}
+              data={data.category_performance_table}
+              columns={categoryColumns}
+              rowKey={(r) => r.category}
+              initialPageSize={10}
+              compact
+              className="sales-motion-delay-200"
+              onExportXlsx={() => exporters && void exporters.categoryPerformance()}
+            />
+          )}
           <SalesDataTable
             title="По агентам"
             data={data.agent_analytics}

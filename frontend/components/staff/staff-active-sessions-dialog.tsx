@@ -61,7 +61,7 @@ function sessionActionErrorText(err: unknown, fallback: string): string {
   const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
   if (flat) {
     const hint = firstValidationUserHint(flat);
-    return withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", err);
+    return withApiSupportLine(hint ?? "Проверьте данные.", err);
   }
   return getUserFacingError(err, fallback);
 }

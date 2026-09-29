@@ -57,6 +57,6 @@ describe("filterImportAgentPatchesByWorkSlot", () => {
       { excelRow: 2, warn: (m) => warnings.push(m) }
     );
     expect(out).toEqual([{ slot: 1, agent_id: 5, expeditor_user_id: null, visit_weekdays: [1] }]);
-    expect(warnings.some((w) => w.includes("dastavchik"))).toBe(true);
+    expect(warnings.some((w) => w.includes("экспедитор"))).toBe(true);
   });
 });

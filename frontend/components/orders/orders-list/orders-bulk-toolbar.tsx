@@ -211,7 +211,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
     const dataRows = selectedRows.map((o) => order.map((colId) => orderListExportCell(o, colId)));
     void downloadStyledXlsxSheet(
       `zakazlar_tanlangan_${new Date().toISOString().slice(0, 10)}.xlsx`,
-      "Zakazlar",
+      "Заказы",
       headers,
       dataRows
     );
@@ -315,7 +315,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
 
     const needsApi = items.some((i) => i.template.downloadKind === "nakladnoy");
     if (needsApi && !tenantSlug) {
-      setBulkFeedback("Yuklab bo‘lmadi: tenant yo‘q.");
+      setBulkFeedback("Не удалось скачать: организация не определена.");
       return;
     }
     if (needsApi && !canBulkCatalog) {
@@ -341,7 +341,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       setBulkDownloadOpen(false);
       setBulkFeedback(`Скачано: ${items.length} отчёт(ов).`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Yuklab bo‘lmadi.";
+      const msg = e instanceof Error ? e.message : "Не удалось скачать.";
       setBulkDownloadError(msg);
       setNakladnoyFeedback(msg);
       setBulkFeedback(msg);
@@ -377,7 +377,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       if (previewTemplate.downloadKind === "register") {
         exportSelectedExcel();
       } else if (!tenantSlug || !previewTemplate.apiTemplate) {
-        throw new Error("Yuklab bo‘lmadi.");
+        throw new Error("Не удалось скачать.");
       } else if (previewTemplate.expeditorLoadingLayout) {
         await downloadExpeditorLoadingLayoutXlsx({
           tenantSlug,
@@ -399,10 +399,10 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           fallbackFilename
         });
       }
-      setNakladnoyFeedback("Excel fayl yuklab olindi.");
+      setNakladnoyFeedback("Файл Excel скачан.");
       setBulkFeedback(`Скачано: ${previewTemplate.label}`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Excelni yuklab bo‘lmadi.";
+      const msg = e instanceof Error ? e.message : "Не удалось скачать Excel.";
       setNakladnoyFeedback(msg);
       setBulkFeedback(msg);
     } finally {
@@ -508,7 +508,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           type="button"
           className={toolbarBtn}
           disabled={bulkExpeditorMut.isPending}
-          title="Faqat «Новый» / «Подтверждён» statusidagi zakazlarga biriktiriladi"
+          title="Назначается только заказам в статусе «Новый» / «Подтверждён»"
           onClick={() => setExpeditorDialogOpen(true)}
         >
           <Truck className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
@@ -538,8 +538,8 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         disabled={bulkBonusRefreshMut.isPending || bonusPicker.busy}
         title={
           newStatusOrderIds.length === 1
-            ? "Bonusni qayta hisoblash va sovg‘ani tanlash"
-            : "Tanlangan «Новый» zakazlarda bonusni yangi mexanizm bilan qayta hisoblash"
+            ? "Пересчитать бонус и выбрать подарок"
+            : "Пересчитать бонус по новому механизму в выбранных заказах «Новый»"
         }
         onClick={async () => {
           setBulkFeedback(null);
@@ -551,7 +551,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           }
           const ok = await confirm({
             title: "Обновление бонуса",
-            message: `${newStatusOrderIds.length} ta «Новый» zakazda bonus avtomatik qayta hisoblanadi. Bitta zakaz tanlasangiz — sovg‘ani modalda tanlash mumkin.`,
+            message: `В ${newStatusOrderIds.length} заказ(ах) «Новый» бонус будет пересчитан автоматически. Если выбрать один заказ — подарок можно выбрать в окне.`,
             confirmLabel: "Обновить бонус",
             cancelLabel: "Отмена",
             destructive: false

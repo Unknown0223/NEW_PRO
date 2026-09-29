@@ -154,7 +154,7 @@ export async function createFieldStaff(
         slotId,
         created.id,
         actorUserId,
-        "Yangi xodim yaratishda biriktirish"
+        "Назначение при создании сотрудника"
       );
       const rowsAfter = await listStaff(tenantId, kind);
       const rowAfter = rowsAfter.find((x) => x.id === created.id);

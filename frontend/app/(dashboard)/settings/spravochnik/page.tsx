@@ -61,23 +61,23 @@ export default function SpravochnikPage() {
   return (
     <div className="flex w-full flex-col gap-8">
       <div>
-        <h1 className="text-lg font-semibold">Spravochniklar</h1>
-        <p className="text-sm text-muted-foreground">Foydalanuvchilar, kategoriyalar, narx turlari</p>
+        <h1 className="text-lg font-semibold">Справочники</h1>
+        <p className="text-sm text-muted-foreground">Пользователи, категории, типы цен</p>
         <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/dashboard">
-          ← Dashboard
+          ← Дашборд
         </Link>
       </div>
 
       <section className="rounded-lg border border-primary/25 bg-primary/5 p-4">
-        <h2 className="text-sm font-semibold">Yagona sozlamalar katalogi</h2>
+        <h2 className="text-sm font-semibold">Единый каталог настроек</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Barcha bo‘limlar chap paneldagi katalog orqali: territoriya, filiallar, narxlar, uskunalar va boshqalar.
+          Все разделы доступны через каталог на левой панели: территория, филиалы, цены, оборудование и другое.
         </p>
         <Link
           className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-3 inline-flex")}
           href="/settings"
         >
-          Sozlamalar katalogiga o‘tish
+          Перейти в каталог настроек
         </Link>
       </section>
 
@@ -86,49 +86,50 @@ export default function SpravochnikPage() {
       ) : (
         <>
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Ombor boshqaruvi</h2>
+            <h2 className="text-sm font-semibold">Управление складом</h2>
             <p className="text-xs text-muted-foreground">
-              Omborga oid sozlamalar alohida bo‘limga ko‘chirildi.
+              Настройки склада перенесены в отдельный раздел.
             </p>
             <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock/warehouses">
-              Omborlar sahifasini ochish
+              Открыть страницу складов
             </Link>
           </section>
 
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Mijoz kartochkasi tanlovlari</h2>
+            <h2 className="text-sm font-semibold">Списки выбора для карточки клиента</h2>
             <p className="text-xs text-muted-foreground">
-              Toifa, tur, format, savdo kanali, tuman, mahalla, zona, logistika — mijoz tahririda dropdown uchun.
+              Категория, тип, формат, канал продаж, район, махалля, зона, логистика — для выпадающих списков при
+              редактировании клиента.
             </p>
             <Link
               className={cn(buttonVariants({ variant: "default", size: "sm" }))}
               href="/settings/spravochnik/client-lists"
             >
-              Mijoz spravochniklarini boshqarish
+              Управление справочниками клиентов
             </Link>
           </section>
 
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Foydalanuvchilar</h2>
+            <h2 className="text-sm font-semibold">Пользователи</h2>
             <div className="flex flex-wrap gap-2">
               <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/settings/spravochnik/agents">
-                Agentlar bo‘limi
+                Раздел агентов
               </Link>
               <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/settings/spravochnik/expeditors">
-                Ekspeditorlar bo‘limi
+                Раздел экспедиторов
               </Link>
               <Link
                 className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                 href="/settings/spravochnik/supervisors"
               >
-                Supervizorlar
+                Супервайзеры
               </Link>
               {effectiveRole === "admin" ? (
                 <Link
                   className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
                   href="/settings/spravochnik/operators"
                 >
-                  Veb xodimlar
+                  Веб-сотрудники
                 </Link>
               ) : null}
             </div>
@@ -146,22 +147,22 @@ export default function SpravochnikPage() {
           </section>
 
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Mahsulot kategoriyalari</h2>
+            <h2 className="text-sm font-semibold">Категории товаров</h2>
             <p className="text-xs text-muted-foreground">
-              Kategoriya, guruh va pastki kategoriyalar — jadval va modal orqali boshqariladi.
+              Категории, группы и подкатегории управляются через таблицу и модальное окно.
             </p>
             <Link className={cn(buttonVariants({ variant: "default", size: "sm" }))} href="/settings/product-categories">
-              Sozlamalar: Категория продукта
+              Настройки: Категория продукта
             </Link>
             <p className="text-xs text-muted-foreground">
-              Jami: {(categories.data ?? []).length} yozuv (barcha darajalar)
+              Всего записей: {(categories.data ?? []).length} (все уровни)
             </p>
           </section>
 
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Narx turlari (DB + katalog)</h2>
+            <h2 className="text-sm font-semibold">Типы цен (БД + каталог)</h2>
             <Link className={cn(buttonVariants({ variant: "default", size: "sm" }))} href="/settings/price-types">
-              Sozlamalar: Тип цены
+              Настройки: Тип цены
             </Link>
             {priceTypes.isLoading ? (
               <p className="text-xs text-muted-foreground">Загрузка</p>
@@ -173,27 +174,27 @@ export default function SpravochnikPage() {
           </section>
 
           <section className="space-y-2 rounded-lg border p-4">
-            <h2 className="text-sm font-semibold">Kompaniya spravochniklari (o‘qish)</h2>
+            <h2 className="text-sm font-semibold">Справочники компании (только чтение)</h2>
             <p className="text-xs text-muted-foreground">
-              Tahrirlash:{" "}
+              Редактирование:{" "}
               <Link className="text-primary underline" href="/settings/company">
-                Kompaniya sozlamalari
+                Настройки компании
               </Link>
             </p>
             {profile.data ? (
               <div className="grid gap-2 text-xs sm:grid-cols-3">
                 <div>
-                  <p className="font-medium">To‘lov turlari</p>
+                  <p className="font-medium">Способы оплаты</p>
                   <p className="text-muted-foreground">{(profile.data.references.payment_types ?? []).join(", ") || "—"}</p>
                 </div>
                 <div>
-                  <p className="font-medium">Qaytarish</p>
+                  <p className="font-medium">Возврат</p>
                   <p className="text-muted-foreground">
                     {(profile.data.references.return_reasons ?? []).join(", ") || "—"}
                   </p>
                 </div>
                 <div>
-                  <p className="font-medium">Hududlar</p>
+                  <p className="font-medium">Территории</p>
                   <p className="text-muted-foreground">{(profile.data.references.regions ?? []).join(", ") || "—"}</p>
                 </div>
               </div>

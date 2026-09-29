@@ -72,10 +72,10 @@ export function StaffPasswordChangeDialog({
           return;
         }
         const hint = firstValidationUserHint(flat);
-        setPassErr(hint ? withApiSupportLine(hint, e) : withApiSupportLine("Parolni tekshiring.", e));
+        setPassErr(hint ? withApiSupportLine(hint, e) : withApiSupportLine("Проверьте пароль.", e));
         return;
       }
-      setPassErr(getUserFacingError(e, "Parolni saqlab bo‘lmadi."));
+      setPassErr(getUserFacingError(e, "Не удалось сохранить пароль."));
     }
   });
 
@@ -83,7 +83,7 @@ export function StaffPasswordChangeDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm border border-teal-800/20 shadow-lg" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Parolni o‘zgartirish — {login || "—"}</DialogTitle>
+          <DialogTitle>Смена пароля — {login || "—"}</DialogTitle>
         </DialogHeader>
         {passErr ? (
           <p className="text-sm text-destructive" role="alert">
@@ -91,7 +91,7 @@ export function StaffPasswordChangeDialog({
           </p>
         ) : null}
         <label className="grid gap-1 text-sm">
-          <span className="text-xs text-muted-foreground">Yangi parol (min 6)</span>
+          <span className="text-xs text-muted-foreground">Новый пароль (мин. 6)</span>
           <Input
             type="password"
             value={password}
@@ -101,7 +101,7 @@ export function StaffPasswordChangeDialog({
         </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -109,7 +109,7 @@ export function StaffPasswordChangeDialog({
             disabled={mut.isPending || password.trim().length < 6}
             onClick={() => mut.mutate()}
           >
-            {mut.isPending ? "…" : "Saqlash"}
+            {mut.isPending ? "…" : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

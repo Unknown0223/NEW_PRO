@@ -3,6 +3,7 @@ import { getMobileAgentKpi } from "../mobile/mobile-agent-kpi.service";
 import type { KpiDailyRoutePlan } from "../mobile/mobile-agent-kpi-daily-route";
 import type { DailyKpiDetailQuery } from "./plans.daily-kpi.schema";
 import { sectionLinks, statusFromDay } from "./plans.daily-kpi.helpers";
+import { isDailyKpiAgentAllowed } from "./plans.daily-kpi.scope";
 import type { DailyKpiAgentSummary, DailyKpiOverviewResult } from "./plans.daily-kpi.service";
 
 export type DailyKpiDetailResult = {
@@ -18,8 +19,10 @@ export type DailyKpiDetailResult = {
 export async function getDailyKpiAgentDetail(
   tenantId: number,
   agentId: number,
-  query: DailyKpiDetailQuery
+  query: DailyKpiDetailQuery,
+  allowedAgentIds: number[] | null = null
 ): Promise<DailyKpiDetailResult> {
+  if (!isDailyKpiAgentAllowed(agentId, allowedAgentIds)) throw new Error("NOT_FOUND");
   const user = await prisma.user.findFirst({
     where: { id: agentId, tenant_id: tenantId, role: "agent" },
     select: {

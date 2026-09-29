@@ -94,14 +94,14 @@ describe("sozlamalar hub — Dostup kalitlari", () => {
     const titles = sections.flatMap((s) => s.items.map((i) => i.title));
     expect(titles).toContain("Продукт");
     expect(titles).not.toContain("Валюты");
-    expect(titles).not.toContain("Mobil ilova");
+    expect(titles).not.toContain("Мобильное приложение");
   });
 
   it("mobile_app view faqat mobil ilovani ochadi", () => {
     const keys = new Set(["settings.mobile_app.view"]);
     const sections = filterSettingsSectionsForAccess(settingsSections, "operator", keys);
     const titles = sections.flatMap((s) => s.items.map((i) => i.title));
-    expect(titles).toContain("Mobil ilova");
+    expect(titles).toContain("Мобильное приложение");
     expect(titles).not.toContain("Продукт");
   });
 

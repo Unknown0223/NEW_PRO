@@ -32,13 +32,13 @@ class GpsAttachOutcome {
   String get message {
     switch (issue) {
       case GpsAttachIssue.serviceOff:
-        return 'Joylashuv o‘chirilgan. Telefon sozlamalarida GPS ni yoqing.';
+        return 'Геолокация выключена. Включите GPS в настройках телефона.';
       case GpsAttachIssue.denied:
-        return 'GPS ruxsatini bering — keyin qayta bosing.';
+        return 'Разрешите доступ к GPS и нажмите ещё раз.';
       case GpsAttachIssue.deniedForever:
-        return 'GPS ruxsati yopilgan. Ilova sozlamalaridan ruxsatni yoqing.';
+        return 'Доступ к GPS запрещён. Включите разрешение в настройках приложения.';
       case GpsAttachIssue.noFix:
-        return 'GPS signali topilmadi. Ochiq joyda qayta bosing.';
+        return 'Сигнал GPS не найден. Выйдите на открытое место и нажмите ещё раз.';
       case null:
         return '';
     }

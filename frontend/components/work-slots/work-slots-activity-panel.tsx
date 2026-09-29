@@ -59,7 +59,7 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
       );
       setReport(res.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Yuklash xatosi");
+      setError(e instanceof Error ? e.message : "Ошибка загрузки");
       setReport(null);
     } finally {
       setLoading(false);
@@ -73,15 +73,15 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Slot bo‘yicha faollik (KPI)</CardTitle>
+        <CardTitle className="text-base">Активность по рабочим местам (KPI)</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Kim qachon qaysi ish joyida ishlagan — tarixdagi biriktirishlar kesimi.
+          Кто, когда и на каком рабочем месте работал — срез истории закреплений.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <Label htmlFor="ws-act-from">Dan</Label>
+            <Label htmlFor="ws-act-from">С</Label>
             <Input
               id="ws-act-from"
               type="date"
@@ -91,7 +91,7 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ws-act-to">Gacha</Label>
+            <Label htmlFor="ws-act-to">По</Label>
             <Input
               id="ws-act-to"
               type="date"
@@ -101,13 +101,13 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
             />
           </div>
           <Button type="button" variant="secondary" disabled={loading} onClick={() => void load()}>
-            {loading ? "Yuklanmoqda…" : "Ko‘rsatish"}
+            {loading ? "Загрузка…" : "Показать"}
           </Button>
         </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {report ? (
           <p className="text-xs text-muted-foreground">
-            Jami yozuv: {report.total} (ko‘rsatilmoqda: {report.rows.length})
+            Всего записей: {report.total} (показано: {report.rows.length})
           </p>
         ) : null}
         {report && report.rows.length > 0 ? (
@@ -115,11 +115,11 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Kod</TableHead>
-                  <TableHead>Xodim</TableHead>
-                  <TableHead>Boshlangan</TableHead>
-                  <TableHead>Tugagan</TableHead>
-                  <TableHead className="text-right">Kun</TableHead>
+                  <TableHead>Код</TableHead>
+                  <TableHead>Сотрудник</TableHead>
+                  <TableHead>Начало</TableHead>
+                  <TableHead>Окончание</TableHead>
+                  <TableHead className="text-right">Дней</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -133,7 +133,7 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
                       {formatSlotDate(r.started_at)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
-                      {r.ended_at ? formatSlotDate(r.ended_at) : "Hozir"}
+                      {r.ended_at ? formatSlotDate(r.ended_at) : "Сейчас"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{r.days_on_slot}</TableCell>
                   </TableRow>
@@ -142,7 +142,7 @@ export function WorkSlotsActivityPanel({ tenant, slotType, branchCode }: Props) 
             </Table>
           </div>
         ) : report && !loading ? (
-          <p className="text-sm text-muted-foreground">Tanlangan davrda yozuv yo‘q.</p>
+          <p className="text-sm text-muted-foreground">За выбранный период записей нет.</p>
         ) : null}
       </CardContent>
     </Card>

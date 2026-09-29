@@ -67,7 +67,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
 
   Future<void> _submitReturn(int orderId, String slug, List<Map<String, dynamic>> items) async {
     if (_returnReason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sababni tanlang')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Выберите причину')));
       return;
     }
     setState(() => _submitting = true);
@@ -94,7 +94,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Qaytarish qayd etildi'), backgroundColor: AppColors.warning),
+          const SnackBar(content: Text('Возврат зарегистрирован'), backgroundColor: AppColors.warning),
         );
         if (context.canPop()) context.pop();
       }
@@ -131,7 +131,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
       ref.invalidate(deliveriesProvider(null));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dogruzka qayd etildi')),
+          const SnackBar(content: Text('Догруз зарегистрирован')),
         );
         if (context.canPop()) context.pop();
       }
@@ -156,15 +156,15 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
     if (!policy.returnsEnabled) {
       return Scaffold(
         drawer: const ExpeditorDrawer(),
-        appBar: AppBar(title: const Text('Qaytarishlar')),
-        body: const Center(child: Text('Qaytarish admin panelda o\'chirilgan')),
+        appBar: AppBar(title: const Text('Возвраты')),
+        body: const Center(child: Text('Возвраты отключены в админ-панели')),
       );
     }
 
     if (orderId == null) {
       return ExpeditorOrderPicker(
-        title: 'Qaytarish uchun buyurtma',
-        emptyMessage: 'Qaytarish uchun yetkazilgan buyurtma yo\'q',
+        title: 'Заказ для возврата',
+        emptyMessage: 'Нет доставленных заказов для возврата',
         onlyDelivered: true,
         onSelect: (id) => context.replace('/returns?order_id=$id'),
       );
@@ -174,7 +174,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
 
     return Scaffold(
       drawer: const ExpeditorDrawer(),
-      appBar: AppBar(title: Text('Qaytarish #$orderId')),
+      appBar: AppBar(title: Text('Возврат #$orderId')),
       body: detail.when(
         data: (order) {
           final rawItems = (order['items'] as List?)?.cast<Map>() ?? [];
@@ -195,13 +195,13 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _CapabilityRow('Qisman qaytarish', policy.allowPartialReturn),
-                      _CapabilityRow('Avtomobildan yuklash', policy.allowReloadFromVehicle),
+                      _CapabilityRow('Частичный возврат', policy.allowPartialReturn),
+                      _CapabilityRow('Догруз из машины', policy.allowReloadFromVehicle),
                       if (policy.allowReturnFromShelf)
                         const Padding(
                           padding: EdgeInsets.only(top: 6),
                           child: Text(
-                            'Polkadan qaytarish — veb-panel orqali «Vozvrat s polki»',
+                            'Возврат с полки — через веб-панель, раздел «Возврат с полки»',
                             style: TextStyle(fontSize: 11),
                           ),
                         ),
@@ -210,7 +210,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                 ),
                 if (policy.allowPartialReturn && items.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  const Text('Qaytariladigan mahsulotlar', style: AppTypography.titleMedium),
+                  const Text('Товары к возврату', style: AppTypography.titleMedium),
                   const SizedBox(height: 8),
                   ...items.map((it) {
                     final id = it['id'] as int;
@@ -221,7 +221,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${it['sku'] ?? ''} ${it['product_name'] ?? ''}\nmax: ${maxQty.toStringAsFixed(0)}',
+                              '${it['sku'] ?? ''} ${it['product_name'] ?? ''}\nмакс.: ${maxQty.toStringAsFixed(0)}',
                               style: AppTypography.bodySmall,
                             ),
                           ),
@@ -231,7 +231,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                               controller: _qtyCtrls[id],
                               keyboardType: TextInputType.number,
                               decoration: const InputDecoration(
-                                labelText: 'Qty',
+                                labelText: 'Кол-во',
                                 isDense: true,
                                 border: OutlineInputBorder(),
                               ),
@@ -246,23 +246,23 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                 TextField(
                   controller: _noteCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Izoh (ixtiyoriy)',
+                    labelText: 'Комментарий (необязательно)',
                     border: OutlineInputBorder(),
                   ),
                   maxLines: 2,
                 ),
                 if (policy.allowPartialReturn) ...[
                   const SizedBox(height: 20),
-                  const Text('Qaytarish sababi', style: AppTypography.titleMedium),
+                  const Text('Причина возврата', style: AppTypography.titleMedium),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: _returnReason.isEmpty ? null : _returnReason,
-                    decoration: const InputDecoration(hintText: 'Sababni tanlang', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(hintText: 'Выберите причину', border: OutlineInputBorder()),
                     items: const [
-                      DropdownMenuItem(value: 'defective', child: Text('Nuqsonli mahsulot')),
-                      DropdownMenuItem(value: 'wrong', child: Text('Noto\'g\'ri mahsulot')),
-                      DropdownMenuItem(value: 'excess', child: Text('Ortiqcha')),
-                      DropdownMenuItem(value: 'other', child: Text('Boshqa')),
+                      DropdownMenuItem(value: 'defective', child: Text('Бракованный товар')),
+                      DropdownMenuItem(value: 'wrong', child: Text('Неверный товар')),
+                      DropdownMenuItem(value: 'excess', child: Text('Излишек')),
+                      DropdownMenuItem(value: 'other', child: Text('Другое')),
                     ],
                     onChanged: _submitting ? null : (v) => setState(() => _returnReason = v ?? ''),
                   ),
@@ -270,7 +270,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                   ElevatedButton.icon(
                     onPressed: _submitting ? null : () => _submitReturn(orderId, slug, items),
                     icon: const Icon(Icons.replay),
-                    label: const Text('QAYTARISHNI YUBORISH'),
+                    label: const Text('ОТПРАВИТЬ ВОЗВРАТ'),
                     style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
                   ),
                 ],
@@ -279,7 +279,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
                   OutlinedButton.icon(
                     onPressed: _submitting ? null : () => _submitReload(orderId, slug),
                     icon: const Icon(Icons.local_shipping),
-                    label: const Text('Avtomobildan qayta yuklash'),
+                    label: const Text('Догрузить из машины'),
                   ),
                 ],
               ],
@@ -287,7 +287,7 @@ class _ExpeditorReturnsPageState extends ConsumerState<ExpeditorReturnsPage> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Xato: $e')),
+        error: (e, _) => Center(child: Text('Ошибка: $e')),
       ),
     );
   }

@@ -68,7 +68,7 @@ export async function importTransactionalTables(
 
   if (!orders.length) {
     warnings.push(
-      "data/orders.json bo‘sh — buyurtmalar yo‘q; to‘lov/ombor/tashrif/foto baribir qabul qilinadi."
+      "data/orders.json пуст — заказов нет; оплаты/склад/визиты/фото всё равно будут импортированы."
     );
   }
 

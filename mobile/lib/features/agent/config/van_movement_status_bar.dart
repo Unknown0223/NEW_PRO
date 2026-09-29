@@ -22,13 +22,13 @@ class VanMovementStatusBar extends ConsumerWidget {
           children: [
             Icon(moving ? Icons.directions_car : Icons.local_parking, size: 18),
             const SizedBox(width: 8),
-            Expanded(child: Text(moving ? 'Yo\'lda' : 'To\'xtagan', style: const TextStyle(fontSize: 13))),
+            Expanded(child: Text(moving ? 'В пути' : 'Остановка', style: const TextStyle(fontSize: 13))),
             TextButton(
               onPressed: () async {
                 final next = moving ? 'stopped' : 'moving';
                 await ref.read(agentLocalPrefsProvider.notifier).setPrefs((p) => p.copyWith(vanMovementStatus: next));
               },
-              child: Text(moving ? 'To\'xtadim' : 'Yo\'lga chiqdim'),
+              child: Text(moving ? 'Остановился' : 'Выехал'),
             ),
           ],
         ),

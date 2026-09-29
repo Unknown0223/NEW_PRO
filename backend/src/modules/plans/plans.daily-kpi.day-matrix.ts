@@ -76,7 +76,8 @@ function daysBetween(from: string, to: string): number {
  */
 export async function getDailyKpiDayMatrix(
   tenantId: number,
-  query: DailyKpiDayMatrixQuery
+  query: DailyKpiDayMatrixQuery,
+  allowedAgentIds: number[] | null = null
 ): Promise<DailyKpiDayMatrixResult> {
   const dayKey = query.day;
   const { year, month } = parseDay(dayKey);
@@ -134,7 +135,14 @@ export async function getDailyKpiDayMatrix(
         status: { in: [...WORKING_KPI_PLAN_STATUSES] },
         kpi_group: { is_active: true }
       },
-      user: { tenant_id: tenantId, role: "agent", is_active: true }
+      user: {
+        tenant_id: tenantId,
+        role: "agent",
+        is_active: true,
+        ...(allowedAgentIds != null
+          ? { id: { in: allowedAgentIds.length > 0 ? allowedAgentIds : [-1] } }
+          : {})
+      }
     },
     select: {
       user_id: true,

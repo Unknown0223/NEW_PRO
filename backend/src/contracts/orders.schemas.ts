@@ -76,21 +76,21 @@ export const createOrderBodySchema = z
       if (!data.source_order_ids?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Manba zakazlar (source_order_ids) majburiy",
+          message: "Исходные заказы (source_order_ids) обязательны",
           path: ["source_order_ids"]
         });
       }
       if (!data.minus_lines?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Kamayuvchi qatorlar (minus_lines) majburiy",
+          message: "Строки списания (minus_lines) обязательны",
           path: ["minus_lines"]
         });
       }
       if (!data.plus_lines?.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Qo‘shiluvchi qatorlar (plus_lines) majburiy",
+          message: "Строки добавления (plus_lines) обязательны",
           path: ["plus_lines"]
         });
       }
@@ -99,7 +99,7 @@ export const createOrderBodySchema = z
     if (!data.items.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Kamida bitta qator kerak",
+        message: "Нужна хотя бы одна строка",
         path: ["items"]
       });
     }
@@ -107,7 +107,7 @@ export const createOrderBodySchema = z
     if (data.agent_id == null || data.agent_id < 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Agent majburiy",
+        message: "Агент обязателен",
         path: ["agent_id"]
       });
     }
@@ -458,7 +458,7 @@ export const patchOrderLinesBodySchema = z.object({
   warehouse_id: z.number().int().positive().nullable().optional(),
   agent_id: z.number().int().positive().nullable().optional(),
   payment_method_ref: z.string().trim().max(64).optional().nullable(),
-  /** Narx turi — tahrirda qayta hisoblash (Order jadvalida saqlanmaydi). */
+  /** Narx turi — tahrirda qayta hisoblash va `orders.price_type` ga saqlanadi. */
   price_type: z.string().trim().min(1).max(128).optional(),
   apply_bonus: z.boolean().optional(),
   /** `false` — chegirma qo‘llanmaydi (bonus yoqilgan bo‘lsa ham). */
@@ -524,6 +524,6 @@ export const patchOrderMetaBodySchema = z
       b.warehouse_block_id !== undefined,
     {
       message:
-        "At least one of warehouse_id, agent_id, expeditor_user_id, comment, payment_method_ref, warehouse_block_id"
+        "Укажите хотя бы одно поле: warehouse_id, agent_id, expeditor_user_id, comment, payment_method_ref, warehouse_block_id"
     }
   );

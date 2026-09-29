@@ -115,7 +115,7 @@ export default function ClientListsSpravochnikPage() {
       void qc.setQueryData(["settings", "profile", tenantSlug], p);
       void qc.invalidateQueries({ queryKey: ["clients-references", tenantSlug] });
       setServerFieldErrs({});
-      setMsg("Saqlandi. Mijoz tahriri sahifasida tanlov ro‘yxati yangilanadi.");
+      setMsg("Сохранено. Списки выбора на странице редактирования клиента обновятся.");
     },
     onError: (e: unknown) => {
       if (isAxiosError(e)) {
@@ -126,37 +126,38 @@ export default function ClientListsSpravochnikPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Xato yoki faqat admin saqlashi mumkin."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка, или сохранять может только администратор."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Xato yoki faqat admin saqlashi mumkin."));
+      setMsg(getUserFacingError(e, "Ошибка, или сохранять может только администратор."));
     }
   });
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold">Mijoz kartochkasi — spravochniklar</h1>
+        <h1 className="text-lg font-semibold">Карточка клиента — справочники</h1>
         <p className="text-sm text-muted-foreground">
-          Bu yerda qiymatlar <strong>yaratiladi</strong>. Mijozni tahrirlashda ular <strong>tanlanadi</strong> (dropdown).
+          Здесь значения <strong>создаются</strong>. При редактировании клиента они <strong>выбираются</strong> из
+          выпадающего списка.
         </p>
         <div className="mt-2 flex flex-wrap gap-2 text-sm">
           <Link className="text-primary underline-offset-4 hover:underline" href="/settings/spravochnik">
-            ← Barcha spravochniklar
+            ← Все справочники
           </Link>
           <span className="text-muted-foreground">|</span>
           <Link className="text-primary underline-offset-4 hover:underline" href="/settings/spravochnik/agents">
-            Agentlar
+            Агенты
           </Link>
           <Link className="text-primary underline-offset-4 hover:underline" href="/settings/spravochnik/expeditors">
-            Ekspeditorlar
+            Экспедиторы
           </Link>
           <Link className="text-primary underline-offset-4 hover:underline" href="/settings/spravochnik/supervisors">
-            Supervizorlar
+            Супервайзеры
           </Link>
           <span className="text-muted-foreground">|</span>
           <Link className="text-primary underline-offset-4 hover:underline" href="/settings/client-formats">
@@ -176,32 +177,32 @@ export default function ClientListsSpravochnikPage() {
       ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Загрузка…</p>
       ) : !isAdmin ? (
-        <p className="text-sm text-destructive">Faqat admin tahrirlashi mumkin.</p>
+        <p className="text-sm text-destructive">Редактировать может только администратор.</p>
       ) : (
         <div className="space-y-6">
           <section className="rounded-lg border border-dashed border-primary/30 bg-muted/20 p-4 text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">Qanday ishlatiladi</p>
+            <p className="font-medium text-foreground">Как пользоваться</p>
             <ul className="mt-2 list-disc space-y-1 pl-4">
-              <li>Har qatorga bitta qiymat yoki vergul/nuqtali vergul bilan bir nechta.</li>
-              <li>Mavjud mijozlarda allaqachon bor qiymatlar ham tanlovda ko‘rinadi (avtomatik).</li>
-              <li>«Teritoriya» (viloyat): Kompaniya sozlamalaridagi hududlar + mijozlardagi qiymatlar.</li>
-              <li>Shahar (gorod), tuman, mahalla, zona, logistika: shu sahifada — mijoz kartasida tanlanadi.</li>
+              <li>По одному значению в строке или несколько через запятую / точку с запятой.</li>
+              <li>Значения, уже указанные у существующих клиентов, тоже появляются в списке выбора (автоматически).</li>
+              <li>«Территория» (область): территории из настроек компании + значения у клиентов.</li>
+              <li>Город, район, махалля, зона, логистика: задаются на этой странице и выбираются в карточке клиента.</li>
               <li>
-                Mijoz <strong>formati</strong>, <strong>turi</strong> va <strong>kategoriyasi</strong> endi sozlamalar
-                katalogidagi alohida bo‘limlarda (jadval + modal).
+                <strong>Формат</strong>, <strong>тип</strong> и <strong>категория</strong> клиента теперь находятся в
+                отдельных разделах каталога настроек (таблица + модальное окно).
               </li>
             </ul>
           </section>
 
           {(
             [
-              ["ref-sales", "Savdo kanali", sales, setSales, "Masalan: TRAD TRADE", "sales_channels"],
-              ["ref-prod-cat", "Mahsulot toifasi (mijozga)", prodCat, setProdCat, "Qo‘shimcha varaqdagi dropdown", "client_product_category_refs"],
-              ["ref-city", "Shahar (gorod)", cities, setCities, "Mijoz manzili — shahar", "client_cities"],
-              ["ref-district", "Tuman", districts, setDistricts, "Mijoz manzili — tuman", "client_districts"],
-              ["ref-neighborhood", "Mahalla", neighborhoods, setNeighborhoods, "Mijoz manzili — mahalla", "client_neighborhoods"],
-              ["ref-zone", "Zona", zones, setZones, "Mijoz manzili — zona (masalan savdo zonasi)", "client_zones"],
-              ["ref-logistics", "Logistika xizmati", logisticsSvcs, setLogisticsSvcs, "Mijoz kartasidagi logistika tanlovi", "client_logistics_services"]
+              ["ref-sales", "Канал продаж", sales, setSales, "Например: TRAD TRADE", "sales_channels"],
+              ["ref-prod-cat", "Категория товара (для клиента)", prodCat, setProdCat, "Выпадающий список на дополнительной вкладке", "client_product_category_refs"],
+              ["ref-city", "Город", cities, setCities, "Адрес клиента — город", "client_cities"],
+              ["ref-district", "Район", districts, setDistricts, "Адрес клиента — район", "client_districts"],
+              ["ref-neighborhood", "Махалля", neighborhoods, setNeighborhoods, "Адрес клиента — махалля", "client_neighborhoods"],
+              ["ref-zone", "Зона", zones, setZones, "Адрес клиента — зона (например, торговая зона)", "client_zones"],
+              ["ref-logistics", "Логистическая служба", logisticsSvcs, setLogisticsSvcs, "Выбор логистики в карточке клиента", "client_logistics_services"]
             ] as const
           ).map(([anchor, title, val, setVal, ph, zodLeaf]) => (
             <section key={anchor} id={anchor} className="scroll-mt-20 grid gap-2">
@@ -223,7 +224,7 @@ export default function ClientListsSpravochnikPage() {
           ))}
 
           <Button type="button" onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? "Saqlanmoqda…" : "Saqlash"}
+            {save.isPending ? "Сохранение…" : "Сохранить"}
           </Button>
           {msg ? <p className="text-sm text-muted-foreground">{msg}</p> : null}
         </div>

@@ -72,13 +72,13 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     });
     const parsed = schema.safeParse(request.query ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const { type, key } = parsed.data;
 
     if (type === "cash_desks") {
       const cashDeskId = Number(key);
       if (!Number.isInteger(cashDeskId) || cashDeskId < 1)
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid cash desk key");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ кассы");
       const rows = await prisma.cashDeskUserLink.findMany({
         where: { cash_desk_id: cashDeskId, user: accessWebAssignableUserWhere(tenantId) },
         select: {
@@ -110,7 +110,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     if (type === "warehouses") {
       const warehouseId = Number(key);
       if (!Number.isInteger(warehouseId) || warehouseId < 1)
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid warehouse key");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ склада");
       const rows = await prisma.warehouseUserLink.findMany({
         where: { warehouse_id: warehouseId, user: accessWebAssignableUserWhere(tenantId) },
         select: {
@@ -203,7 +203,7 @@ export async function registerAccessDimensionsUsersRoutes(app: FastifyInstance) 
     if (type === "trade_directions") {
       const directionId = Number(key);
       if (!Number.isInteger(directionId) || directionId < 1) {
-        return sendApiError(reply, request, 400, "ValidationError", "Invalid trade direction key");
+        return sendApiError(reply, request, 400, "ValidationError", "Некорректный ключ направления торговли");
       }
       const rows = await prisma.userTradeDirectionLink.findMany({
         where: { tenant_id: tenantId, trade_direction_id: directionId, user: accessWebAssignableUserWhere(tenantId) },

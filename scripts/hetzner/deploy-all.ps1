@@ -1,4 +1,4 @@
-# SALEC — Hetzner to'liq deploy: veb (+ ixtiyoriy mobil APK)
+﻿# SALEC — Hetzner to'liq deploy: veb (+ ixtiyoriy mobil APK)
 # Ishlatish: .\deploy-prod.cmd   |   .\deploy-all.cmd
 param(
   [string]$ApiUrl = "https://api.salesarena.sale",

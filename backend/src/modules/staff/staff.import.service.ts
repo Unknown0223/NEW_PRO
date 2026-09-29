@@ -302,7 +302,7 @@ export async function importStaffFromMatrix(
 
         if (work_slot_id != null && STAFF_KINDS_WITH_WORK_SLOT.has(kind as StaffKind)) {
           const { assignUserToSlot } = await import("../work-slots/work-slots.assign");
-          await assignUserToSlot(tenantId, work_slot_id, existing.id, actorUserId, "Excel import");
+          await assignUserToSlot(tenantId, work_slot_id, existing.id, actorUserId, "Импорт из Excel");
         }
 
         updated++;

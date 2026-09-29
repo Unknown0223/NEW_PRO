@@ -461,7 +461,7 @@ export function DateTimePickerField({
                 />
                 {!dateOnly && quickPresets && quickPresets.length > 0 ? (
                   <div className="flex w-[5.5rem] shrink-0 flex-col gap-1 border-l border-border/60 pl-2">
-                    <span className="text-[10px] font-medium text-muted-foreground">Tez</span>
+                    <span className="text-[10px] font-medium text-muted-foreground">Быстро</span>
                     {quickPresets.map((p) => (
                       <Button
                         key={p.label}

@@ -132,12 +132,12 @@ export async function updatePayment(
           where: { id: bal.id },
           data: { balance: { increment: movementDelta } }
         });
-        const kindLabel = isExpense ? "Rasxod" : "To‘lov";
+        const kindLabel = isExpense ? "Расход" : "Оплата";
         await tx.clientBalanceMovement.create({
           data: {
             client_balance_id: bal.id,
             delta: movementDelta,
-            note: `${kindLabel} #${paymentId} tahrir (summa)`,
+            note: `${kindLabel} #${paymentId}: изменение суммы`,
             user_id: uid
           }
         });

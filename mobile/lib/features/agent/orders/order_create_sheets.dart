@@ -1771,7 +1771,7 @@ class _OrderBonusDiscountSheetState extends State<OrderBonusDiscountSheet> {
       bonuses = [
         OrderBonusPreviewRule(
           ruleId: ruleId,
-          name: 'Bonus',
+          name: 'Бонус',
           type: 'qty',
           bonusQty: giftQty.toDouble(),
           maxBonusQty: giftQty.toDouble(),

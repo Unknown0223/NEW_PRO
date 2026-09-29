@@ -114,7 +114,7 @@ export async function buildTimesheetXlsx(
   });
 
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const headers = ["ФИО", "Роль", "Smart KOD", "Направление", "Филиал", "Итого", ...dayCols];
+  const headers = ["ФИО", "Роль", "Smart-код", "Направление", "Филиал", "Итого", ...dayCols];
 
   const headerRow = ws.getRow(1);
   headerRow.height = 22;

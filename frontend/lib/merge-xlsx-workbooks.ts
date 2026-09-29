@@ -103,14 +103,14 @@ async function loadWorkbook(source: XlsxSheetSource): Promise<LoadedWorkbook> {
     await wb.xlsx.load(buf);
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Excel o‘qish (${source.label}): ${detail}`);
+    throw new Error(`Ошибка чтения Excel (${source.label}): ${detail}`);
   }
   const sheets = wb.worksheets.map((worksheet) => ({
     name: worksheet.name,
     worksheet
   }));
   if (sheets.length === 0) {
-    throw new Error(`Bo‘sh hujjat: ${source.label}`);
+    throw new Error(`Пустой документ: ${source.label}`);
   }
   return { source, sheets };
 }
@@ -207,13 +207,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 export async function mergeXlsxSourcesToBuffer(sources: XlsxSheetSource[]): Promise<ArrayBuffer> {
   if (sources.length === 0) {
-    throw new Error("Birlashtirish uchun fayl yo‘q.");
+    throw new Error("Нет файлов для объединения.");
   }
 
   return withTimeout(
     mergeXlsxSourcesToBufferInner(sources),
     90_000,
-    "Birlashtirish juda uzoq davom etdi (90s). Qayta urinib ko‘ring."
+    "Объединение заняло слишком много времени (90 с). Попробуйте ещё раз."
   );
 }
 
@@ -235,13 +235,13 @@ async function mergeXlsxSourcesToBufferInner(sources: XlsxSheetSource[]): Promis
   }
 
   if (outWb.worksheets.length === 0) {
-    throw new Error("Birlashtirilgan fayl bo‘sh.");
+    throw new Error("Объединённый файл пуст.");
   }
 
   try {
     return (await outWb.xlsx.writeBuffer()) as ArrayBuffer;
   } catch (e: unknown) {
     const detail = e instanceof Error ? e.message : String(e);
-    throw new Error(`Excel yozish: ${detail}`);
+    throw new Error(`Ошибка записи Excel: ${detail}`);
   }
 }

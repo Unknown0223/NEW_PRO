@@ -151,6 +151,7 @@ export async function persistCreateOrderInTransaction(
         input.payment_method_ref,
         priceType
       ),
+      price_type: priceType.trim().slice(0, 128) || null,
       ...(orderType === "exchange" && exchangeMetaJson != null ? { exchange_meta: exchangeMetaJson } : {}),
       items: {
         create: [

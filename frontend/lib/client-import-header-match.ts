@@ -210,8 +210,8 @@ export function rowToHeaderLabels(row: unknown[] | undefined, maxCols = 80): str
   const n = Math.min(row.length, maxCols);
   for (let i = 0; i < n; i++) {
     const c = row[i];
-    if (c == null || c === "") labels.push(`Ustun ${i + 1}`);
-    else labels.push(String(c).trim() || `Ustun ${i + 1}`);
+    if (c == null || c === "") labels.push(`Столбец ${i + 1}`);
+    else labels.push(String(c).trim() || `Столбец ${i + 1}`);
   }
   return labels;
 }

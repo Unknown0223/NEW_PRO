@@ -356,12 +356,12 @@ export function buildAgentAssignmentPatchesFromImportRow(
               if (strictNewClient) {
                 pushHard(
                   agentKey,
-                  `«Агент ${slot}» («${agentRaw.trim()}») faol emas — qator qabul qilinmaydi.`
+                  `«Агент ${slot}» («${agentRaw.trim()}») неактивен — строка не принята.`
                 );
                 next.agent_id = null;
               } else {
                 warn(
-                  `Qator ${rowNumExcel}: «Агент ${slot}» («${agentRaw.trim()}») faol emas — tayinlandi.`
+                  `Строка ${rowNumExcel}: «Агент ${slot}» («${agentRaw.trim()}») неактивен — всё равно назначен.`
                 );
               }
             }
@@ -371,11 +371,11 @@ export function buildAgentAssignmentPatchesFromImportRow(
           if (strictNewClient) {
             pushHard(
               agentKey,
-              `«Агент ${slot}» qiymati topilmadi («${agentRaw.trim()}») — qator qabul qilinmaydi (faqat agent smart kodi).`
+              `Значение «Агент ${slot}» не найдено («${agentRaw.trim()}») — строка не принята (допускается только смарт-код агента).`
             );
           } else {
             warn(
-              `Qator ${rowNumExcel}: «Агент ${slot}» qiymati topilmadi («${agentRaw.trim()}») — agent olib tashlandi.`
+              `Строка ${rowNumExcel}: значение «Агент ${slot}» не найдено («${agentRaw.trim()}») — агент снят.`
             );
           }
         }
@@ -407,12 +407,12 @@ export function buildAgentAssignmentPatchesFromImportRow(
               if (strictNewClient) {
                 pushHard(
                   expKey,
-                  `«Экспедитор ${slot}» («${expLabel}») faol emas — qator qabul qilinmaydi.`
+                  `«Экспедитор ${slot}» («${expLabel}») неактивен — строка не принята.`
                 );
                 next.expeditor_user_id = null;
               } else {
                 warn(
-                  `Qator ${rowNumExcel}: «Экспедитор ${slot}» («${expLabel}») faol emas — tayinlandi.`
+                  `Строка ${rowNumExcel}: «Экспедитор ${slot}» («${expLabel}») неактивен — всё равно назначен.`
                 );
               }
             }
@@ -426,11 +426,11 @@ export function buildAgentAssignmentPatchesFromImportRow(
           if (strictNewClient) {
             pushHard(
               expKey,
-              `«Экспедитор ${slot}» qiymati topilmadi («${expLabel}») — qator qabul qilinmaydi.`
+              `Значение «Экспедитор ${slot}» не найдено («${expLabel}») — строка не принята.`
             );
           } else {
             warn(
-              `Qator ${rowNumExcel}: «Экспедитор ${slot}» qiymati topilmadi («${expLabel}») — ekspeditor olib tashlandi.`
+              `Строка ${rowNumExcel}: значение «Экспедитор ${slot}» не найдено («${expLabel}») — экспедитор снят.`
             );
           }
         }
@@ -451,7 +451,7 @@ export function buildAgentAssignmentPatchesFromImportRow(
         next.visit_weekdays = parsedDays.days;
         if (parsedDays.unknownTokens.length > 0) {
           warn(
-            `Qator ${rowNumExcel}: «Агент ${slot} день»da noma’lum kunlar (${parsedDays.unknownTokens.join(", ")}).`
+            `Строка ${rowNumExcel}: в «Агент ${slot} день» неизвестные дни (${parsedDays.unknownTokens.join(", ")}).`
           );
         }
       }

@@ -105,7 +105,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             400,
             "TerritoryNodesEmptyRejected",
-            "Bo‘sh territoriya daraxti saqlanmaydi — mavjud ma’lumot o‘chib ketmasin."
+            "Пустое дерево территорий не сохраняется, чтобы не удалить существующие данные."
           );
         }
         if (e instanceof Error && e.message.startsWith("REF_EMPTY_WIPE_REJECTED:")) {
@@ -115,7 +115,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             400,
             "RefEmptyWipeRejected",
-            `Bo‘sh «${field}» saqlanmaydi — mavjud spravochnik o‘chib ketmasin.`
+            `Пустой справочник «${field}» не сохраняется, чтобы не удалить существующие данные.`
           );
         }
         if (e instanceof Error && e.message === "INVALID_BRANCH_CASH_DESK") {
@@ -224,7 +224,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
       if (!file) return sendApiError(reply, request, 400, "NoFile");
       const filename = (file.filename ?? "").toLowerCase();
       if (!filename.endsWith(".apk")) {
-        return sendApiError(reply, request, 400, "InvalidFile", "Faqat .apk fayl yuklang");
+        return sendApiError(reply, request, 400, "InvalidFile", "Загрузите файл .apk");
       }
       try {
         const bytes = await saveMobileApkStream(request.tenant!.slug, file.file);
@@ -263,7 +263,7 @@ export async function registerTenantSettingsGeneralRoutes(app: FastifyInstance) 
             request,
             413,
             "PayloadTooLarge",
-            `APK hajmi ${Math.round(MOBILE_APK_MAX_BYTES / (1024 * 1024))} MB dan oshmasligi kerak`
+            `Размер APK не должен превышать ${Math.round(MOBILE_APK_MAX_BYTES / (1024 * 1024))} МБ`
           );
         }
         throw e;

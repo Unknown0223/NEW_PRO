@@ -170,7 +170,7 @@ class _UnfinishedCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Text("${formatMoneySpaced(orderSum)} So'm",
+                  Text('${formatMoneySpaced(orderSum)} сум',
                       style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

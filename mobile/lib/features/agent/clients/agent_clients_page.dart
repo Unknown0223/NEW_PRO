@@ -112,7 +112,7 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(policy.denialMessage ?? 'Sinxronizatsiya mumkin emas'),
+            content: Text(policy.denialMessage ?? 'Синхронизация недоступна'),
             backgroundColor: AppColors.warning,
           ),
         );
@@ -133,8 +133,8 @@ class _AgentClientsPageState extends ConsumerState<AgentClientsPage> {
       }
       final err = result.error ?? '';
       final msg = ok
-          ? 'Mijozlar yangilandi (${result.clients} ta)'
-          : (err.isNotEmpty ? err : 'Sinxronizatsiya xato');
+          ? 'Клиенты обновлены (${result.clients})'
+          : (err.isNotEmpty ? err : 'Ошибка синхронизации');
       if (!silent || !ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

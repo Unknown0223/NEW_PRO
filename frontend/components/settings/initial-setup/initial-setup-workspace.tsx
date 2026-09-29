@@ -177,7 +177,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
       setBundleData(parsed);
       setBundleOpen(true);
     } catch {
-      setToast("Excel o‘qib bo‘lmadi");
+      setToast("Не удалось прочитать Excel");
     } finally {
       setParsing(null);
     }
@@ -196,7 +196,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
       setDraftByStep((prev) => ({ ...prev, [step.id]: preview }));
       setExpandedStepId(step.id);
     } catch {
-      setToast("Excel o‘qib bo‘lmadi — shablon formatini tekshiring");
+      setToast("Не удалось прочитать Excel — проверьте формат шаблона");
     } finally {
       setParsing(null);
     }
@@ -208,7 +208,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
     try {
       await downloadBundleTemplate(tenantSlug);
     } catch {
-      setToast("Shablon yuklab bo‘lmadi");
+      setToast("Не удалось скачать шаблон");
     } finally {
       setTemplateBusy(null);
     }
@@ -244,7 +244,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
     try {
       await downloadStepTemplate(tenantSlug, step);
     } catch {
-      setToast("Shablon yuklab bo‘lmadi");
+      setToast("Не удалось скачать шаблон");
     } finally {
       setTemplateBusy(null);
     }
@@ -309,7 +309,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                   className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900"
                   title={`Сначала: ${missing.join(" → ")}`}
                 >
-                  Kutish: {missing[0]}
+                  Ожидание: {missing[0]}
                   {missing.length > 1 ? ` +${missing.length - 1}` : ""}
                 </span>
               ) : null}
@@ -317,7 +317,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
             {!expanded ? (
               <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
                 {!ok && !done && !systemDone && missing.length > 0
-                  ? `Avval: ${missing.join(" → ")}`
+                  ? `Сначала: ${missing.join(" → ")}`
                   : step.description}
               </p>
             ) : null}
@@ -437,17 +437,17 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
   }
 
   if (!tenantSlug) {
-    return <p className="text-sm text-muted-foreground">Kirish talab qilinadi.</p>;
+    return <p className="text-sm text-muted-foreground">Требуется вход в систему.</p>;
   }
 
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-slate-200/90 shadow-sm">
         <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white pb-4">
-          <CardTitle className="text-base">Excel: shablon · eksport · yuklash</CardTitle>
+          <CardTitle className="text-base">Excel: шаблон · экспорт · загрузка</CardTitle>
           <CardDescription className="text-sm leading-relaxed">
-            Umumiy shablon va eksport bir xil formatda. Yangi serverga: eski tizimdan eksport → shu yerga
-            yuklash. Har bir qadamni alohida ham to‘ldirish mumkin.
+            Общий шаблон и экспорт имеют одинаковый формат. Для нового сервера: экспорт из старой системы →
+            загрузка сюда. Каждый шаг можно заполнить и по отдельности.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
@@ -461,7 +461,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
               onClick={() => void onDownloadBundleTemplate()}
             >
               <FileSpreadsheet className="size-3.5 text-emerald-600" />
-              {templateBusy === "bundle" ? "Tayyorlanmoqda…" : "Umumiy shablon"}
+              {templateBusy === "bundle" ? "Подготовка…" : "Общий шаблон"}
             </Button>
             <Button
               type="button"
@@ -472,7 +472,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
               onClick={() => void onExportBundleData()}
             >
               <Download className="size-3.5 text-primary" />
-              {templateBusy === "export" ? "Eksport…" : "Ma’lumotlarni eksport"}
+              {templateBusy === "export" ? "Экспорт…" : "Экспорт данных"}
             </Button>
             <ExcelDropTarget
               disabled={parsing === "bundle"}
@@ -486,7 +486,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                 )}
               >
                 <Upload className="size-3.5" />
-                {parsing === "bundle" ? "O‘qilmoqda…" : "Excel yuklash"}
+                {parsing === "bundle" ? "Чтение…" : "Загрузить Excel"}
                 <input
                   type="file"
                   accept=".xlsx,.xls"
@@ -567,7 +567,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
             {INITIAL_SETUP_GROUPS.find((g) => g.id === "later-settings")?.title}
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Bonus, skidka, xodimlar — alohida sozlamalarda.
+            Бонусы, скидки, сотрудники — в отдельных настройках.
           </p>
         </div>
         <AdaptiveCardGrid minCardWidth={240} maxHeight="none" className="overflow-visible">
@@ -580,7 +580,7 @@ export function InitialSetupWorkspace({ tenantSlug }: Props) {
                   href={step.settingsHref}
                   className={cn(buttonVariants({ variant: "link" }), "mt-2 h-auto px-0")}
                 >
-                  Ochish →
+                  Открыть →
                 </Link>
               ) : null}
             </div>

@@ -218,7 +218,7 @@ export async function previewPolkiAutoBonusReverse(
     const requestedQty = ln.return_qty;
     const p = pmap.get(ln.product_id);
     if (!p) {
-      warnings.push(`Mahsulot #${ln.product_id} topilmadi`);
+      warnings.push(`Товар #${ln.product_id} не найден`);
       continue;
     }
     if (categorySet && (p.category_id == null || !categorySet.has(p.category_id))) {
@@ -227,7 +227,7 @@ export async function previewPolkiAutoBonusReverse(
 
     const pool = poolByProduct.get(ln.product_id);
     if (!pool || pool.max_paid + pool.max_bonus <= 0) {
-      warnings.push(`${p.name}: qaytarish uchun pozitsiya yo‘q`);
+      warnings.push(`${p.name}: нет позиций для возврата`);
       continue;
     }
 
@@ -301,7 +301,7 @@ export async function previewPolkiAutoBonusReverse(
         ruleBonusFromQty: ruleBonus
       });
       if (returnQty > 0 && !d.rule) {
-        warnings.push(`${p.name}: mos qty-bonus qoidasi yo‘q — snapshot bo‘yicha taqsimlash`);
+        warnings.push(`${p.name}: нет подходящего правила qty-бонуса — распределение по снимку`);
       }
     }
 

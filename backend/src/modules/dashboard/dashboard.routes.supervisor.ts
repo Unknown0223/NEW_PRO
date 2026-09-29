@@ -102,7 +102,7 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
       await applyAccessAgentIdsScope(request.tenant!.id, accessUser, parsed);
       const agentId = Number.parseInt(q.agent_id ?? "", 10);
       if (!Number.isFinite(agentId) || agentId <= 0) {
-        return sendApiError(reply, request, 400, "ValidationError", "agent_id is required");
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется agent_id");
       }
       const page = Number.parseInt(q.page ?? "1", 10);
       const limit = Number.parseInt(q.limit ?? "10", 10);
@@ -134,10 +134,10 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         .map((s) => Number.parseInt(s.trim(), 10))
         .filter((n) => Number.isFinite(n) && n > 0);
       if (ids.length === 0) {
-        return sendApiError(reply, request, 400, "ValidationError", "ids is required");
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется ids");
       }
       if (ids.length > 100) {
-        return sendApiError(reply, request, 400, "ValidationError", "Too many ids (max 100)");
+        return sendApiError(reply, request, 400, "ValidationError", "Слишком много ids (максимум 100)");
       }
       const accessUser = getAccessUser(request);
       const t0 = Date.now();
@@ -166,11 +166,11 @@ export function registerDashboardSupervisorRoutes(app: FastifyInstance) {
         10
       );
       if (!Number.isFinite(photoId) || photoId <= 0) {
-        return sendApiError(reply, request, 400, "ValidationError", "photoId is required");
+        return sendApiError(reply, request, 400, "ValidationError", "Требуется photoId");
       }
       const content = await loadSupervisorPhotoContent(request.tenant!.id, photoId);
       if (!content) {
-        return sendApiError(reply, request, 404, "NotFound", "Photo not found");
+        return sendApiError(reply, request, 404, "NotFound", "Фото не найдено");
       }
       if (content.kind === "redirect") {
         return reply.redirect(content.url);

@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Employee, SupervisorOption, VisitModule, VisitPoint } from "./types";
 import {
-  STATUS_META, ROLE_META, regionOf,
+  STATUS_META, ROLE_META, regionOf, payMethodLabel,
   fmtHour, fmtKm, fmtDateLabel, fmtDateShort, fmtOrderValue, fmtSomAmount, MONTHS_RU, WEEKDAYS_RU,
 } from "./types";
 
@@ -266,7 +266,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
           {seg === "supervisor" ? (
             <div className="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11.5px] font-semibold text-ink-soft">
               <Users className="h-4 w-4 text-teal-deep" />
-              Назорат территории · без заказов
+              Контроль территории · без заказов
             </div>
           ) : (
           <div className="relative flex-1">
@@ -323,7 +323,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
               className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-ink-soft transition-colors hover:border-teal-brand/50">
               <MapPin className="h-3.5 w-3.5 text-teal-deep" />
               <span className="flex-1 truncate text-left">
-                {region === "all" ? "Барча худудлар" : region}
+                {region === "all" ? "Все территории" : region}
               </span>
               <span className="rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-teal-deep">
                 {list.length}
@@ -337,7 +337,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                   <button onClick={() => { setRegion("all"); setRegionOpen(false); }}
                     className={cn("block w-full px-3 py-1.5 text-left text-[11.5px] font-medium transition-colors hover:bg-teal-50",
                       region === "all" ? "text-teal-deep" : "text-ink")}>
-                    Барча худудлар
+                    Все территории
                   </button>
                   {regions.map((r) => (
                     <button key={r} onClick={() => { setRegion(r); setRegionOpen(false); }}
@@ -382,7 +382,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                   role="button"
                   tabIndex={idle ? -1 : 0}
                   aria-disabled={idle}
-                  title={idle ? "Bu kunda ishlamagan — tanlash mumkin emas" : undefined}
+                  title={idle ? "В этот день не работал — выбрать нельзя" : undefined}
                   onClick={() => { if (!idle) onSelectEmployee(e); }}
                   onKeyDown={(ev) => { if (!idle && ev.key === "Enter") onSelectEmployee(e); }}
                   className={cn(
@@ -412,7 +412,7 @@ function ListMode({ selected, onSelectEmployee, date, onDate, onLocate, employee
                       </span>
                       {idle && (
                         <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[8.5px] font-bold uppercase text-slate-500">
-                          ishlamagan
+                          не работал
                         </span>
                       )}
                     </span>
@@ -475,11 +475,11 @@ function ModuleMenu({ modules, onChange }: {
   onChange: (modules: Record<VisitModule, boolean>) => void;
 }) {
   const items: { key: VisitModule; label: string; color: string }[] = [
-    { key: "client", label: "Мижоз", color: "#22c55e" },
-    { key: "warehouse", label: "Омбор", color: "#d69e27" },
+    { key: "client", label: "Клиент", color: "#22c55e" },
+    { key: "warehouse", label: "Склад", color: "#d69e27" },
     { key: "cash", label: "Касса", color: "#38a8aa" },
-    { key: "fuel", label: "Ёқилғи қуйиш шохобчаси", color: "#3b9fe9" },
-    { key: "start", label: "Бошланғич нуқта", color: "#a3b2ae" },
+    { key: "fuel", label: "АЗС", color: "#3b9fe9" },
+    { key: "start", label: "Начальная точка", color: "#a3b2ae" },
   ];
   const allOn = items.every((i) => modules[i.key]);
   const setAll = (next: boolean) => onChange(Object.fromEntries(items.map((i) => [i.key, next])) as Record<VisitModule, boolean>);
@@ -488,7 +488,7 @@ function ModuleMenu({ modules, onChange }: {
     <div className="modal-in absolute right-0 top-full z-40 mt-2 w-[272px] rounded-xl border border-slate-200 bg-gps-card p-2.5 shadow-xl">
       <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border-b border-slate-100 px-1.5 pb-2.5 text-[12px] font-bold text-ink">
         <input type="checkbox" checked={allOn} onChange={(e) => setAll(e.target.checked)} className="h-4 w-4 accent-teal-deep" />
-        Ҳаммасини танланг
+        Выбрать все
       </label>
       <div className="mt-1.5 space-y-0.5">
         {items.map((item) => (
@@ -738,7 +738,7 @@ function DetailTab({ employee, points, visited, todo, hour, selectedPointId, onS
                       )}
                     </div>
                     <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-slate-100 pt-1.5 text-[10px] font-semibold text-ink-soft">
-                      <span>{role === "inkasator" ? "Масофа:" : "Расстояние до клиента:"}</span>
+                      <span>{role === "inkasator" ? "Расстояние:" : "Расстояние до клиента:"}</span>
                       <span className="text-right tabular-nums text-ink">{clientDist}</span>
                       <span>Был в точке:</span>
                       <span className={cn("text-right", wasAt ? "text-emerald-600" : "text-ink-soft")}>{wasAt ? "Да" : "Нет"}</span>
@@ -780,36 +780,36 @@ function DetailTab({ employee, points, visited, todo, hour, selectedPointId, onS
                       )}
                       {role === "inkasator" && done && (
                         <>
-                          <span>Йиғилди:</span>
+                          <span>Собрано:</span>
                           <span className={cn("text-right tabular-nums",
                             p.cashCollected >= p.cashExpected - 0.01 ? "text-emerald-600" : "text-amber-600")}>
                             {cashFull ?? `${p.cashCollected.toFixed(1).replace(".", ",")} млн`}
                             {" / "}
                             {fmtSomAmount(Math.round(p.cashExpected * 1_000_000))}
                           </span>
-                          <span>Усул:</span>
-                          <span className="text-right text-ink">{p.payMethod}</span>
+                          <span>Способ:</span>
+                          <span className="text-right text-ink">{payMethodLabel(p.payMethod)}</span>
                         </>
                       )}
                       {role === "inkasator" && !done && p.cashExpected > 0 && (
                         <>
-                          <span>Режадаги сумма:</span>
+                          <span>Плановая сумма:</span>
                           <span className="text-right tabular-nums text-ink">{fmtSomAmount(Math.round(p.cashExpected * 1_000_000))}</span>
                         </>
                       )}
                       {role === "vansell" && (
                         <>
-                          <span>Етказилди:</span>
+                          <span>Доставлено:</span>
                           <span className={cn("text-right", p.delivered ? "text-emerald-600" : "text-ink-soft")}>{p.delivered ? "Да" : "Нет"}</span>
-                          <span>Тўлов:</span>
+                          <span>Оплата:</span>
                           <span className={cn("text-right", p.paid ? "text-emerald-600" : "text-ink-soft")}>
-                            {p.paid ? "олди" : p.delivered ? "кутилмоқда" : "—"}
+                            {p.paid ? "получена" : p.delivered ? "ожидается" : "—"}
                           </span>
                         </>
                       )}
                       {role === "delivery" && (
                         <>
-                          <span>Етказилди:</span>
+                          <span>Доставлено:</span>
                           <span className={cn("text-right", p.delivered ? "text-emerald-600" : "text-ink-soft")}>{p.delivered ? "Да" : "Нет"}</span>
                         </>
                       )}
@@ -842,15 +842,15 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
 
   const exportCsv = () => {
     const head = ["№", "Время активности", "Тип места", "Интервал (мин)", "Длительность (мин)", "Ожидаемая (мин)", "Расстояние (м)", "Точность (м)", "Батарея (%)", "Интернет", "Заказ (млн)"];
-    if (role === "inkasator") head.push("Кут. сумма (млн)", "Йиғилди (млн)", "Усул");
-    if (role === "vansell") head.push("Етказилди", "Тўлов");
+    if (role === "inkasator") head.push("Ожид. сумма (млн)", "Собрано (млн)", "Способ");
+    if (role === "vansell") head.push("Доставлено", "Оплата");
     let prev: number | null = null;
     const lines = rows.map((p) => {
       const interval = prev !== null && p.arrived !== null ? Math.round((p.arrived - prev) * 60) : "";
       if (p.arrived !== null) prev = p.arrived;
       const base = [p.index, p.arrived !== null ? fmtHour(p.arrived) : "", p.placeType, interval, p.duration, p.expectedDuration,
         Math.round(p.distance * 1000), p.accuracy, p.batteryAt, p.internet, p.orderSum || ""];
-      if (role === "inkasator") base.push(p.cashExpected || "", p.cashCollected || "", p.payMethod);
+      if (role === "inkasator") base.push(p.cashExpected || "", p.cashCollected || "", payMethodLabel(p.payMethod));
       if (role === "vansell") base.push(p.delivered ? "Да" : "Нет", p.paid ? "Да" : "Нет");
       return base.join(";");
     });
@@ -864,9 +864,9 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
     toast("Excel-файл сформирован и скачан");
   };
 
-  const cols = ["№", "Время активность", "Тип места", "Интервал между визитами", "Длительность визита", "Ожидаемая длительность", "Расстояние до клиента по маршруту (м)", "Ожидаемая длина маршрута", "Точность", "Батарея", "Интернет"];
-  if (role === "inkasator") cols.push("Кут. сумма", "Йиғилди", "Усул");
-  if (role === "vansell") cols.push("Етказилди", "Тўлов");
+  const cols = ["№", "Время активности", "Тип места", "Интервал между визитами", "Длительность визита", "Ожидаемая длительность", "Расстояние до клиента по маршруту (м)", "Ожидаемая длина маршрута", "Точность", "Батарея", "Интернет"];
+  if (role === "inkasator") cols.push("Ожид. сумма", "Собрано", "Способ");
+  if (role === "vansell") cols.push("Доставлено", "Оплата");
 
   let prevArr: number | null = null;
 
@@ -932,7 +932,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
                           p.cashCollected >= p.cashExpected - 0.01 ? "text-emerald-600" : "text-amber-600")}>
                           {p.cashCollected.toFixed(1).replace(".", ",")}
                         </td>
-                        <td className="px-2.5 py-2"><span className="rounded bg-slate-100 px-1.5 py-0.5 font-bold text-ink-soft">{p.payMethod}</span></td>
+                        <td className="px-2.5 py-2"><span className="rounded bg-slate-100 px-1.5 py-0.5 font-bold text-ink-soft">{payMethodLabel(p.payMethod)}</span></td>
                       </>
                     )}
                     {role === "vansell" && (
@@ -946,7 +946,7 @@ function MiniTab({ employee, visited, total, date, toast, role }: {
                         <td className="px-2.5 py-2">
                           <span className={cn("rounded-full px-2 py-0.5 text-[9.5px] font-extrabold",
                             p.paid ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-                            {p.paid ? "Олинди" : "Кутилмоқда"}
+                            {p.paid ? "Получена" : "Ожидается"}
                           </span>
                         </td>
                       </>
@@ -1037,7 +1037,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
     a.download = `nazorat_${supervisor.code}_${dateKeySafe(date)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-    toast("Назорат хисоботи Excel форматида юклаб олинди");
+    toast("Отчёт по контролю скачан в формате Excel");
   };
 
   return (
@@ -1054,7 +1054,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
         <div className="min-w-0 leading-tight">
           <div className="truncate text-[13px] font-extrabold text-ink">{supervisor.name}</div>
           <div className="mt-0.5 text-[11px] font-medium text-teal-deep">
-            Назорат территории · {stats.length} агентов · {agg.online} на маршруте
+            Контроль территории · {stats.length} агентов · {agg.online} на маршруте
           </div>
         </div>
       </div>
@@ -1087,7 +1087,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
 
       {/* tabs */}
       <div className="flex gap-6 border-b border-slate-200 bg-gps-card px-4">
-        {([["report", "Назорат хисоботи"], ["mini", "Мини хисобот"]] as const).map(([k, l]) => (
+        {([["report", "Отчёт по контролю"], ["mini", "Мини-отчёт"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
             className={cn("relative py-2.5 text-[12.5px] font-bold transition-colors",
               tab === k ? "text-teal-deep" : "text-ink-soft hover:text-ink")}>
@@ -1104,7 +1104,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
             {/* aggregate chips */}
             <div className="grid grid-cols-3 gap-2">
               {[
-                ["Ташриф", `${agg.visited}/${agg.total}`, "text-teal-deep"],
+                ["Визиты", `${agg.visited}/${agg.total}`, "text-teal-deep"],
                 ["Пробег", fmtKm(agg.km), "text-ink"],
                 ["Заказы", `${agg.sum.toFixed(1).replace(".", ",")} млн`, "text-emerald-600"],
               ].map(([l, v, c]) => (
@@ -1121,7 +1121,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
                 <button onClick={() => setPill("all")}
                   className={cn("flex-1 rounded-lg py-1.5 text-[11.5px] font-bold transition-all",
                     pill === "all" ? "bg-teal-deep text-white shadow" : "text-ink-soft hover:text-ink")}>
-                  Барчаси ({stats.length})
+                  Все ({stats.length})
                 </button>
                 <button onClick={() => setPill("offline")}
                   className={cn("flex-1 rounded-lg py-1.5 text-[11.5px] font-bold transition-all",
@@ -1137,13 +1137,13 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
             </div>
             <label className="relative mt-2.5 block">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-soft" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Агент бўйича қидирув"
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по агенту"
                 className="w-full rounded-lg border border-slate-200 bg-slate-50/60 py-2 pl-8.5 pr-3 text-[12px] font-medium outline-none transition-all placeholder:text-ink-soft/70 focus:border-teal-brand focus:bg-white focus:ring-2 focus:ring-teal-brand/20" />
             </label>
 
             {/* agent cards */}
             {list.length === 0 ? (
-              <Empty text="Агентлар топилмади" />
+              <Empty text="Агенты не найдены" />
             ) : (
               <ol key={pill + supervisor.id} className="mt-3 space-y-2">
                 {list.map((s, i) => (
@@ -1165,14 +1165,14 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
                         <span className={cn("flex items-center gap-1 text-[10.5px] font-bold",
                           s.employee.online ? "text-emerald-600" : "text-slate-400")}>
                           {s.employee.online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-                          {s.employee.online ? "маршрутда" : "офлайн"}
+                          {s.employee.online ? "на маршруте" : "офлайн"}
                         </span>
                         <ArrowRight className="h-4 w-4 text-ink-soft opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100" />
                       </div>
 
                       <div className="mt-2.5">
                         <div className="mb-1 flex justify-between text-[10px] font-bold text-ink-soft">
-                          <span>Ташриф: {s.visited}/{s.total}</span>
+                          <span>Визиты: {s.visited}/{s.total}</span>
                           <span className="tabular-nums" style={{ color: s.coverage >= 60 ? "#16a34a" : s.coverage >= 30 ? "#d69e27" : "#e11d48" }}>
                             {s.coverage}%
                           </span>
@@ -1204,7 +1204,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
               <div className="flex gap-2">
                 <label className="relative flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Қидирув"
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50/60 py-2 pl-9 pr-3 text-[12.5px] font-medium outline-none transition-all placeholder:text-ink-soft/70 focus:border-teal-brand focus:bg-white focus:ring-2 focus:ring-teal-brand/20" />
                 </label>
                 <button onClick={() => { setSpinning(true); setTimeout(() => setSpinning(false), 700); }}
@@ -1222,7 +1222,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
                 <table className="w-full min-w-[680px] text-left text-[11px]">
                   <thead>
                     <tr className="bg-slate-50 text-[10px] font-bold text-ink-soft">
-                      {["№", "Агент", "Нуқта", "Ташриф", "Қамров", "Масофа", "Буюртма", "Ох. фаоллик", "Батарея", "Ҳолат"].map((c) => (
+                      {["№", "Агент", "Точек", "Визиты", "Покрытие", "Расстояние", "Заказы", "Посл. активность", "Батарея", "Статус"].map((c) => (
                         <th key={c} className="whitespace-nowrap px-2.5 py-2.5 align-top">{c}</th>
                       ))}
                     </tr>
@@ -1264,7 +1264,7 @@ function SupervisorMode({ supervisor, subRoutes, hour, date, onDate, onBack, onO
 
               <div className="mt-3">
                 <div className="mb-1 flex justify-between text-[10px] font-bold text-ink-soft">
-                  <span>Территория қамрови</span>
+                  <span>Покрытие территории</span>
                   <span className="tabular-nums text-teal-deep">
                     {agg.total ? Math.round((agg.visited / agg.total) * 100) : 0}%
                   </span>

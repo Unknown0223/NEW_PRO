@@ -69,7 +69,7 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
           ) : null}
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
             <Button type="button" variant="outline" onClick={onCancel} disabled={mutation.isPending}>
-              {isPolkiSheet ? "Отмена" : "Bekor"}
+              Отмена
             </Button>
             <Button
               type="button"
@@ -80,14 +80,14 @@ export function OrderCreateViewFooter({ vm }: { vm: OrderCreateVm }) {
               {mutation.isPending
                 ? isPolkiSheet
                   ? "Оформление…"
-                  : "Saqlanmoqda…"
+                  : "Сохранение…"
                 : isPolkiSheet
                   ? "Возврат"
                   : isExchangeFlow
                     ? "Обмен"
                     : isEditMode
-                      ? "Saqlash"
-                      : "Yaratish"}
+                      ? "Сохранить"
+                      : "Создать"}
             </Button>
           </div>
         </div>

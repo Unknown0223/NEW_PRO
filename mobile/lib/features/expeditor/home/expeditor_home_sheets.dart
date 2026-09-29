@@ -10,7 +10,7 @@ import '../../agent/orders/order_create_models.dart' show formatMoneySpaced;
 import '../expeditor_providers.dart';
 import '../expeditor_status_labels.dart';
 
-String _money(num v) => "${formatMoneySpaced(v.toDouble())} so'm";
+String _money(num v) => '${formatMoneySpaced(v.toDouble())} сум';
 
 /// Bosh ekran bottom-sheet qobig'i (tutqich + sarlavha + yopish).
 Future<void> _showExpeditorSheet(

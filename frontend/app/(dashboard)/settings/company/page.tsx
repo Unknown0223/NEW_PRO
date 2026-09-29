@@ -106,7 +106,7 @@ export default function CompanySettingsPage() {
     onSuccess: (p) => {
       void qc.setQueryData(["settings", "profile", tenantSlug], p);
       setServerFieldErrs({});
-      setMsg("Saqlandi.");
+      setMsg("Сохранено.");
     },
     onError: (e: unknown) => {
       if (isAxiosError(e)) {
@@ -117,43 +117,43 @@ export default function CompanySettingsPage() {
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint ?? Object.values(per).find((m) => m.trim() !== "");
-          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."));
+          setMsg(line ? withApiSupportLine(line, e) : getUserFacingError(e, "Ошибка сохранения или нет доступа."));
           return;
         }
         setServerFieldErrs({});
       } else {
         setServerFieldErrs({});
       }
-      setMsg(getUserFacingError(e, "Saqlashda xato yoki ruxsat yo‘q."));
+      setMsg(getUserFacingError(e, "Ошибка сохранения или нет доступа."));
     }
   });
 
   return (
     <div className="flex w-full flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold">Kompaniya va flaglar</h1>
-        <p className="text-sm text-muted-foreground">Tenant: {tenantSlug ?? "—"}</p>
+        <h1 className="text-lg font-semibold">Компания и флаги</h1>
+        <p className="text-sm text-muted-foreground">Компания: {tenantSlug ?? "—"}</p>
         <Link className="text-sm text-primary underline-offset-4 hover:underline" href="/dashboard">
-          ← Dashboard
+          ← Дашборд
         </Link>
       </div>
 
       {!hydrated ? (
-        <p className="text-sm text-muted-foreground">Sessiya…</p>
+        <p className="text-sm text-muted-foreground">Сессия…</p>
       ) : !tenantSlug ? (
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       ) : isLoading ? (
         <p className="text-sm text-muted-foreground">Загрузка…</p>
       ) : isError ? (
-        <p className="text-sm text-destructive">Profilni olishda xato.</p>
+        <p className="text-sm text-destructive">Ошибка загрузки профиля.</p>
       ) : (
         <div className="grid gap-4 rounded-lg border p-4">
           <div className="grid gap-1.5">
-            <Label htmlFor="co-name">Kompaniya nomi</Label>
+            <Label htmlFor="co-name">Название компании</Label>
             <Input
               id="co-name"
               value={name}
@@ -165,7 +165,7 @@ export default function CompanySettingsPage() {
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="co-phone">Telefon</Label>
+            <Label htmlFor="co-phone">Телефон</Label>
             <Input
               id="co-phone"
               value={phone}
@@ -177,7 +177,7 @@ export default function CompanySettingsPage() {
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="co-addr">Manzil</Label>
+            <Label htmlFor="co-addr">Адрес</Label>
             <Input
               id="co-addr"
               value={address}
@@ -189,7 +189,7 @@ export default function CompanySettingsPage() {
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="co-logo">Logo URL</Label>
+            <Label htmlFor="co-logo">URL логотипа</Label>
             <Input
               id="co-logo"
               value={logoUrl}
@@ -207,23 +207,23 @@ export default function CompanySettingsPage() {
               onChange={(e) => setOrdersSse(e.target.checked)}
               disabled={!isAdmin || saveMut.isPending}
             />
-            Zakazlar SSE (real-time yangilanish)
+            Заказы SSE (обновление в реальном времени)
           </label>
           {pickZodLeaf(serverFieldErrs, "orders_sse") || pickZodLeaf(serverFieldErrs, "feature_flags") ? (
             <p className="text-xs text-destructive">
               {pickZodLeaf(serverFieldErrs, "orders_sse") ?? pickZodLeaf(serverFieldErrs, "feature_flags")}
             </p>
           ) : null}
-          <p className="text-xs font-medium text-muted-foreground">Qoʻshimcha spravochniklar (har bir qator yoki vergul bilan)</p>
+          <p className="text-xs font-medium text-muted-foreground">Дополнительные справочники (каждое значение с новой строки или через запятую)</p>
           <p className="text-xs text-muted-foreground">
-            To‘lov usullarini jadval orqali boshqarish:{" "}
+            Управление способами оплаты через таблицу:{" "}
             <Link href="/settings/payment-methods" className="text-primary underline">
               /settings/payment-methods
             </Link>
-            . Bu yerda saqlash — eski matn ro‘yxati (orqaga moslik).
+            . Здесь сохраняется старый текстовый список (для обратной совместимости).
           </p>
           <div className="grid gap-1.5">
-            <Label htmlFor="co-pay">Toʻlov turlari</Label>
+            <Label htmlFor="co-pay">Способы оплаты</Label>
             <textarea
               id="co-pay"
               className="min-h-[72px] rounded-md border bg-background px-3 py-2 text-sm"
@@ -236,9 +236,9 @@ export default function CompanySettingsPage() {
             ) : null}
           </div>
           <div className="grid gap-1.5">
-            <Label>Qaytarish / rad etish sabablari</Label>
+            <Label>Причины возврата / отказа</Label>
             <p className="text-xs text-muted-foreground">
-              Jadval orqali boshqariladi (katalogdagi «Причины отказа» bilan bir xil):{" "}
+              Управляются через таблицу (то же, что «Причины отказа» в каталоге):{" "}
               <Link href="/settings/reasons/refusal-reasons" className="text-primary underline">
                 /settings/reasons/refusal-reasons
               </Link>
@@ -246,9 +246,9 @@ export default function CompanySettingsPage() {
             </p>
           </div>
           <div id="ref-regions" className="scroll-mt-20 grid gap-1.5">
-            <Label htmlFor="co-reg">Hududlar (viloyat / territoriya)</Label>
+            <Label htmlFor="co-reg">Территории (область / территория)</Label>
             <p className="text-xs text-muted-foreground">
-              Mijoz kartochkasidagi «Teritoriya» tanlovi shu ro‘yxatdan to‘ldiriladi.
+              Выбор «Территория» в карточке клиента заполняется из этого списка.
             </p>
             <textarea
               id="co-reg"
@@ -263,10 +263,10 @@ export default function CompanySettingsPage() {
           </div>
           {isAdmin ? (
             <Button type="button" disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-              {saveMut.isPending ? "Saqlanmoqda…" : "Saqlash"}
+              {saveMut.isPending ? "Сохранение…" : "Сохранить"}
             </Button>
           ) : (
-            <p className="text-xs text-muted-foreground">Tahrirlash faqat admin uchun.</p>
+            <p className="text-xs text-muted-foreground">Редактирование только для администратора.</p>
           )}
           {msg ? <p className="text-sm text-muted-foreground">{msg}</p> : null}
         </div>

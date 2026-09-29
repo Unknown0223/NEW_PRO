@@ -796,7 +796,7 @@ class AgentMenuTile extends StatelessWidget {
 /// Agent roli badge (shablon teal).
 class AgentRoleBadge extends StatelessWidget {
   final String label;
-  const AgentRoleBadge({super.key, this.label = 'Agent'});
+  const AgentRoleBadge({super.key, this.label = 'Агент'});
 
   @override
   Widget build(BuildContext context) {

@@ -156,6 +156,28 @@ export function salesOrderScopeSql(
   } else if (opts?.forSales !== false) {
     parts.push(Prisma.sql`o.status NOT IN ('cancelled', 'returned')`);
   }
+  return salesScopeWithCommonFilters(parts, f, territoryTerms);
+}
+
+/** Debitor qarz (joriy holat): sana oralig‘i va status filtrisiz, faqat `delivered` savdo zakazlari. */
+export function salesReceivableScopeSql(
+  tenantId: number,
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
+  const parts: Prisma.Sql[] = [
+    Prisma.sql`o.tenant_id = ${tenantId}`,
+    Prisma.sql`o.order_type = 'order'`,
+    Prisma.sql`o.status IN (${Prisma.join([...ORDER_STATUSES_OUTSTANDING_RECEIVABLE])})`
+  ];
+  return salesScopeWithCommonFilters(parts, f, territoryTerms);
+}
+
+function salesScopeWithCommonFilters(
+  parts: Prisma.Sql[],
+  f: SalesDashboardFilters,
+  territoryTerms: string[]
+): Prisma.Sql {
   if (f.payment_types.length > 0) {
     parts.push(Prisma.sql`COALESCE(o.payment_method_ref, '') IN (${Prisma.join(f.payment_types)})`);
   }

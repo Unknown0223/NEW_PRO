@@ -33,10 +33,10 @@ type Props = {
 };
 
 const CHECK_ITEMS: { id: string; label: string; testOrderLink?: boolean }[] = [
-  { id: "overlap", label: "Kassa/sklad boshqa joy bilan ustma-ust emas" },
-  { id: "clients", label: "Mijozlar soni ko‘rib chiqildi" },
-  { id: "handoff", label: "Eski xodim chiqariladi, yangisi tasdiqlandi" },
-  { id: "verify", label: "Tarix va test zakaz tekshirildi", testOrderLink: true }
+  { id: "overlap", label: "Касса/склад не пересекаются с другим рабочим местом" },
+  { id: "clients", label: "Количество клиентов проверено" },
+  { id: "handoff", label: "Прежний сотрудник снимается, новый подтверждён" },
+  { id: "verify", label: "История и тестовый заказ проверены", testOrderLink: true }
 ];
 
 export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigned }: Props) {
@@ -78,7 +78,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
       const cl = await apiFetch<{ data: AssignChecklist }>(`/api/${tenant}/work-slots/${slotId}/checklist`);
       setChecklist(cl.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Yuklash xatosi");
+      setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
     }
@@ -118,11 +118,11 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
 
   const submit = async () => {
     if (!slotId || !selectedId) {
-      setError("Xodim tanlang");
+      setError("Выберите сотрудника");
       return;
     }
     if (!allChecked) {
-      setError("Tekshiruv ro‘yxatini belgilang");
+      setError("Отметьте все пункты чек-листа");
       return;
     }
     setSaving(true);
@@ -136,7 +136,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
       onOpenChange(false);
       onAssigned();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Almashtirib bo‘lmadi");
+      setError(e instanceof Error ? e.message : "Не удалось заменить");
     } finally {
       setSaving(false);
     }
@@ -150,22 +150,22 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-50 text-teal-700 ring-1 ring-teal-100">
               <ArrowRightLeft className="h-4 w-4" />
             </span>
-            Xodim almashtirish
+            Замена сотрудника
             {slot ? <SlotBadge code={slot.slot_code} /> : null}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Joy sozlamalari o‘zgarishsiz qoladi — faqat xodim almashtiriladi.
+            Настройки рабочего места не меняются — заменяется только сотрудник.
           </p>
         </DialogHeader>
 
         {loading ? (
-          <p className="px-6 py-8 text-sm text-muted-foreground">Yuklanmoqda...</p>
+          <p className="px-6 py-8 text-sm text-muted-foreground">Загрузка...</p>
         ) : (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
             <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">
               <div className="rounded-xl border border-border bg-muted/40 p-3">
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Hozirgi
+                  Текущий
                 </p>
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-card text-slate-500 ring-1 ring-slate-200">
@@ -173,11 +173,11 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-slate-800">
-                      {slot?.active_user_name ?? "Bo‘sh"}
+                      {slot?.active_user_name ?? "Свободно"}
                     </p>
                     {slot?.active_since ? (
                       <p className="text-[11px] text-muted-foreground">
-                        {formatSlotDate(slot.active_since)} dan
+                        с {formatSlotDate(slot.active_since)}
                       </p>
                     ) : null}
                   </div>
@@ -195,10 +195,10 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                 )}
               >
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  Yangi
+                  Новый
                 </p>
                 <p className="truncate text-sm font-medium text-slate-800">
-                  {selectedStaff?.fio ?? "Tanlanmagan"}
+                  {selectedStaff?.fio ?? "Не выбран"}
                 </p>
                 {selectedStaff?.code ? (
                   <p className="font-mono text-[11px] text-muted-foreground">{selectedStaff.code}</p>
@@ -206,14 +206,14 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
               </div>
             </div>
 
-            <AgentFormSection title="Yangi xodim" icon={<Search className="h-4 w-4" />}>
-              <AgentFormField label="Qidiruv">
+            <AgentFormSection title="Новый сотрудник" icon={<Search className="h-4 w-4" />}>
+              <AgentFormField label="Поиск">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="F.I.O yoki kod..."
+                    placeholder="ФИО или код..."
                     className={cn(agentModalInputClass, "pl-9")}
                     autoComplete="off"
                   />
@@ -221,7 +221,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
               </AgentFormField>
               <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border bg-card">
                 {filteredStaff.length === 0 ? (
-                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">Natija yo‘q</p>
+                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">Ничего не найдено</p>
                 ) : (
                   filteredStaff.map((u) => {
                     const active = selectedId === u.id;
@@ -260,22 +260,22 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
             </AgentFormSection>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Sabab (ixtiyoriy)</Label>
+              <Label className="text-xs text-muted-foreground">Причина (необязательно)</Label>
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Transfer, ta’til, almashtirish…"
+                placeholder="Перевод, отпуск, замена…"
                 className={agentModalInputClass}
               />
             </div>
 
             {checklist ? (
-              <AgentFormSection title="Tekshiruv" icon={<ClipboardCheck className="h-4 w-4" />}>
+              <AgentFormSection title="Проверка" icon={<ClipboardCheck className="h-4 w-4" />}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-card px-3 py-2 text-xs">
                   <span className="text-slate-600">
-                    ~{checklist.clients_affected_estimate} mijoz
+                    Клиентов: ~{checklist.clients_affected_estimate}
                     {checklist.locked_clients_skipped > 0
-                      ? ` (${checklist.locked_clients_skipped} qulflangan tashqari)`
+                      ? ` (кроме заблокированных: ${checklist.locked_clients_skipped})`
                       : ""}
                   </span>
                   <span className="font-medium text-teal-700">
@@ -284,7 +284,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                 </div>
                 {checklist.cash_desk_conflicts.length > 0 ? (
                   <p className="mb-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
-                    Kassa: {checklist.cash_desk_conflicts.map((c) => c.cash_desk_name).join(", ")}
+                    Касса: {checklist.cash_desk_conflicts.map((c) => c.cash_desk_name).join(", ")}
                   </p>
                 ) : null}
                 <ul className="space-y-1.5">
@@ -317,7 +317,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                Test zakaz
+                                Тестовый заказ
                               </Link>
                             ) : null}
                           </span>
@@ -339,7 +339,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
 
         <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/30 px-6 py-3 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -347,7 +347,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
             disabled={saving || loading || !selectedId || !allChecked}
             onClick={() => void submit()}
           >
-            {saving ? "..." : "Almashtirish"}
+            {saving ? "..." : "Заменить"}
           </Button>
         </DialogFooter>
       </DialogContent>

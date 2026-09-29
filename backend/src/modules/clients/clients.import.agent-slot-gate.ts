@@ -21,7 +21,7 @@ export async function filterImportAgentPatchesByWorkSlot(
       } catch (e) {
         if (e instanceof Error && e.message === "AGENT_NOT_ON_SLOT") {
           opts.warn(
-            `Qator ${opts.excelRow}: agent #${p.agent_id} (slot ${p.slot}) рабочее местоga biriktirilmagan — mijoz saqlandi, agent bog‘lanmadi.`
+            `Строка ${opts.excelRow}: агент #${p.agent_id} (слот ${p.slot}) не назначен на рабочее место — клиент сохранён, агент не привязан.`
           );
           next = { ...next, agent_id: null };
         } else {
@@ -35,7 +35,7 @@ export async function filterImportAgentPatchesByWorkSlot(
       } catch (e) {
         if (e instanceof Error && e.message === "EXPEDITOR_NOT_ON_SLOT") {
           opts.warn(
-            `Qator ${opts.excelRow}: dastavchik #${next.expeditor_user_id} (slot ${next.slot}) рабочее местоga biriktirilmagan — mijoz saqlandi, dastavchik bog‘lanmadi.`
+            `Строка ${opts.excelRow}: экспедитор #${next.expeditor_user_id} (слот ${next.slot}) не назначен на рабочее место — клиент сохранён, экспедитор не привязан.`
           );
           next = { ...next, expeditor_user_id: null };
         } else {

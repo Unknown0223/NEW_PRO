@@ -48,7 +48,7 @@ export const OrderStatusCell = memo(function OrderStatusCell({
           if (v === order.status) return;
           onStatusChange(order.id, v);
         }}
-        aria-label="Zakaz holati"
+        aria-label="Статус заказа"
       >
         <option value={order.status} disabled hidden>
           {ORDER_STATUS_LABELS[order.status] ?? order.status}

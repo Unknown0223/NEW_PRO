@@ -1,22 +1,22 @@
 import { findImportUpdateUniqueConflicts, type ImportUpdateUniqueConflict } from "./clients.import.update-uniques";
 
 export const CLIENT_UNIQUE_ERROR_HTTP: Record<string, { error: string; message: string }> = {
-  DUPLICATE_PHONE: { error: "DuplicatePhone", message: "Bu telefon mavjud." },
-  DUPLICATE_NAME: { error: "DuplicateName", message: "Shu nomga mijoz mavjud." },
-  DUPLICATE_CLIENT_CODE: { error: "DuplicateClientCode", message: "Bu klient kodi band." },
-  DUPLICATE_INN: { error: "DuplicateInn", message: "Bu STIR (INN) band." },
-  DUPLICATE_PINFL: { error: "DuplicatePinfl", message: "Bu JSHSHIR (PINFL) band." },
+  DUPLICATE_PHONE: { error: "DuplicatePhone", message: "Этот телефон уже используется." },
+  DUPLICATE_NAME: { error: "DuplicateName", message: "Клиент с таким названием уже существует." },
+  DUPLICATE_CLIENT_CODE: { error: "DuplicateClientCode", message: "Этот код клиента уже занят." },
+  DUPLICATE_INN: { error: "DuplicateInn", message: "Этот ИНН уже занят." },
+  DUPLICATE_PINFL: { error: "DuplicatePinfl", message: "Этот ПИНФЛ уже занят." },
   DUPLICATE_CLIENT: {
     error: "DuplicateClient",
-    message: "Bu mijoz allaqachon mavjud (hudud, nom, INN/PINFL)."
+    message: "Такой клиент уже существует (территория, название, ИНН/ПИНФЛ)."
   },
   DUPLICATE_GEO_NAME: {
     error: "DuplicateGeoName",
-    message: "100 m radiusda o‘xshash nomli mijoz mavjud."
+    message: "В радиусе 100 м уже есть клиент с похожим названием."
   },
   DUPLICATE_INACTIVE: {
     error: "DuplicateInactive",
-    message: "Bu klient allaqachon mavjud, statusi nofaol."
+    message: "Такой клиент уже существует, но он неактивен."
   }
 };
 

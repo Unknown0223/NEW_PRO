@@ -13,7 +13,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 /** Staff «Конфигурация» — joy yo‘q bo‘lsa. */
-export const STAFF_NO_WORK_SLOT_MSG = "Avval rabochee mesto biriktiring";
+export const STAFF_NO_WORK_SLOT_MSG = "Сначала закрепите рабочее место";
 
 type Props = {
   className?: string;
@@ -116,12 +116,12 @@ export function NeedWorkSlotDialog({
         </DialogHeader>
         <p className="text-sm text-slate-700">{message}</p>
         <p className="text-xs text-muted-foreground">
-          Avval xodimni «Рабочее место» sahifasida joyga biriktiring — so‘ng Settings orqali
-          konfiguratsiyani oching.
+          Сначала закрепите сотрудника за местом на странице «Рабочее место», затем откройте конфигурацию через
+          настройки.
         </p>
         <DialogFooter className="gap-2 sm:justify-between">
           <Button type="button" variant="outline" onClick={onClose}>
-            Yopish
+            Закрыть
           </Button>
           <Link
             href="/work-slots"

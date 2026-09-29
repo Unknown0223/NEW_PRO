@@ -1,11 +1,64 @@
 import { prisma } from "../../config/database";
-import { normKeyTerritoryMatch } from "../../../shared/territory-lalaku-seed";
+import {
+  lalakuExpandRegionFilterTokens,
+  normKeyTerritoryMatch
+} from "../../../shared/territory-lalaku-seed";
 import {
   buildCityTerritoryHints,
+  territoryRegionPickerNames,
+  territoryRegionStoredPairs,
   type CityTerritoryHintDto
 } from "../tenant-settings/tenant-settings.territory";
+import { stringArrayFromUnknown } from "../tenant-settings/tenant-settings.refs";
 import { asRecord } from "../tenant-settings/tenant-settings.shared";
 import { referencesWithResolvedTerritoryNodes } from "../tenant-settings/tenant-settings.service";
+
+/** «SAMARQAND» ↔ «SAMARQAND VILOYATI», «QOQON» ↔ «QOQON SHAXAR»: tarixiy qisqa nomlar ham to‘g‘ri. */
+function leadToken(v: string): string {
+  const first = v.trim().split(/[\s_\-]+/)[0] ?? "";
+  const k = normKeyTerritoryMatch(first);
+  return k.length >= 4 ? k : "";
+}
+
+function knownRegionKeys(
+  refs: Record<string, unknown> | undefined,
+  hints: Record<string, CityTerritoryHintDto>
+): { full: Set<string>; lead: Set<string> } {
+  const full = new Set<string>();
+  const lead = new Set<string>();
+  const add = (v: string | null | undefined) => {
+    const k = normKeyTerritoryMatch(v ?? "");
+    if (!k) return;
+    full.add(k);
+    const l = leadToken(v ?? "");
+    if (l) lead.add(l);
+  };
+  for (const { stored, name } of territoryRegionStoredPairs(refs)) {
+    add(stored);
+    add(name);
+  }
+  for (const s of territoryRegionPickerNames(refs)) add(s);
+  for (const s of stringArrayFromUnknown(refs?.regions)) add(s);
+  for (const h of Object.values(hints)) {
+    add(h.region_stored);
+    add(h.region_label);
+  }
+  return { full, lead };
+}
+
+/** Hudud daraxti bo‘sh bo‘lsa tekshirib bo‘lmaydi — har qanday qiymat qabul. */
+export function isKnownTerritoryRegion(
+  refs: Record<string, unknown> | undefined,
+  region: string,
+  hints: Record<string, CityTerritoryHintDto> = buildCityTerritoryHints(refs)
+): boolean {
+  const { full, lead } = knownRegionKeys(refs, hints);
+  if (full.size === 0) return true;
+  const candidates = [region, ...lalakuExpandRegionFilterTokens(region)];
+  if (candidates.some((t) => full.has(normKeyTerritoryMatch(t)))) return true;
+  const l = leadToken(region);
+  return l !== "" && lead.has(l);
+}
 
 function pickHint(
   hints: Record<string, CityTerritoryHintDto>,
@@ -104,18 +157,27 @@ export async function backfillEmptyClientTerritoryFromCity(
   return { updated };
 }
 
-/** Create/update payload uchun: shahar bor, область/zona bo‘sh → hint. */
+/**
+ * Create/update payload uchun: shahar bor, область/zona bo‘sh → hint.
+ * Hudud daraxtida yo‘q область (qo‘lda yozilgan matn) saqlanmaydi — shahar hintidan yoki bo‘sh.
+ */
 export async function applyTerritoryHintsToClientInput(
   tenantId: number,
   input: { city?: string | null; region?: string | null; zone?: string | null }
 ): Promise<{ city?: string | null; region?: string | null; zone?: string | null }> {
   const city = input.city?.trim() || null;
-  const region = input.region?.trim() || null;
+  let region = input.region?.trim() || null;
   const zone = input.zone?.trim() || null;
-  if (!city || (region && zone)) {
+  if (!city && !region) {
     return { ...input, city, region, zone };
   }
   const refs = await loadTenantTerritoryRefs(tenantId);
+  if (region && !isKnownTerritoryRegion(refs, region)) {
+    region = null;
+  }
+  if (!city || (region && zone)) {
+    return { ...input, city, region, zone };
+  }
   const resolved = resolveTerritoryFromCityHints(refs, city, { region, zone });
   return {
     ...input,

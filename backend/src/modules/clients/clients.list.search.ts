@@ -3,6 +3,7 @@ import {
   isExternalClientCode,
   parseExternalClientCodeSuffix
 } from "../../../shared/client-display-id";
+import { isPgInt4Id } from "../../lib/pg-int4";
 
 /** Klientlar ro‘yxati: `search` query — jadvaldagi matn ustunlari + agent / ekspeditor */
 export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientWhereInput[] {
@@ -16,7 +17,7 @@ export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientW
     const parts: Prisma.ClientWhereInput[] = [
       { client_code: { equals: search, mode: ins } }
     ];
-    if (suffixId != null) parts.push({ id: suffixId });
+    if (isPgInt4Id(suffixId)) parts.push({ id: suffixId });
     return parts;
   }
 
@@ -77,7 +78,7 @@ export function buildClientListSearchOrClause(searchRaw: string): Prisma.ClientW
   const idDigits = search.replace(/\s+/g, "");
   if (/^\d+$/.test(idDigits)) {
     const idNum = Number.parseInt(idDigits, 10);
-    if (Number.isFinite(idNum) && idNum > 0) {
+    if (isPgInt4Id(idNum)) {
       orClause.push({ id: idNum });
     }
   }

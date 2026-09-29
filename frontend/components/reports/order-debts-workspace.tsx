@@ -876,7 +876,7 @@ export function OrderDebtsWorkspace() {
 
   return (
     <PageShell>
-      <PageHeader title="Долги по заказам" description="Yetkazilgan zakazlar bo‘yicha to‘lanmagan qoldiq." />
+      <PageHeader title="Долги по заказам" description="Неоплаченный остаток по доставленным заказам." />
       <Card className="border border-border bg-card shadow-sm">
         <CardContent className="space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-end gap-2 border-b border-border/60 pb-3">

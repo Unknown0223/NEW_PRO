@@ -113,7 +113,7 @@ class HeldOrderScheduler {
 
     final slug = _ref.read(sessionProvider).tenantSlug ?? '';
     if (slug.isEmpty) {
-      if (reportFailure) throw StateError('Нет tenant');
+      if (reportFailure) throw StateError('Компания не выбрана');
       return false;
     }
 

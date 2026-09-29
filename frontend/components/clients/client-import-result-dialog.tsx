@@ -69,21 +69,20 @@ export function ClientImportResultDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{needsDecision ? "Import — tanlov kerak" : "Import natijasi"}</DialogTitle>
+          <DialogTitle>{needsDecision ? "Импорт — требуется решение" : "Результат импорта"}</DialogTitle>
           <DialogDescription className="text-left text-foreground/90">{summary}</DialogDescription>
         </DialogHeader>
 
         {needsDecision ? (
           <div className="space-y-3 text-sm">
             <p className="rounded-md border border-amber-200 bg-amber-50/90 px-3 py-2 text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-              Faylda xato bor. Hech narsa yozilmagan.{" "}
-              <b>{validCount}</b> ta to‘g‘ri qatorni qabul qilish yoki hammasini bekor qilish
-              mumkin. Dublikatlar hech qachon qabul qilinmaydi.
+              В файле есть ошибки. Ничего не записано. Можно принять корректные строки (
+              <b>{validCount}</b>) или отменить всё. Дубликаты никогда не принимаются.
             </p>
             {samples.length > 0 ? (
               <div className="rounded-md border border-red-200 bg-red-50/80 p-3 text-xs dark:border-red-900 dark:bg-red-950/40">
                 <p className="font-medium text-red-950 dark:text-red-100">
-                  Xatolar ({totalErr})
+                  Ошибки ({totalErr})
                 </p>
                 <ul className="mt-2 list-inside list-disc space-y-1 text-red-950/90 dark:text-red-100/90">
                   {samples.map((line, i) => (
@@ -104,7 +103,7 @@ export function ClientImportResultDialog({
                     className="mt-2 text-[11px] font-medium text-red-700 underline underline-offset-2 dark:text-red-300"
                     onClick={() => onOpenReview()}
                   >
-                    Batafsil jadval
+                    Подробная таблица
                   </button>
                 ) : null}
               </div>
@@ -113,13 +112,13 @@ export function ClientImportResultDialog({
         ) : useful.length > 0 ? (
           <div className="max-h-[min(42vh,16rem)] overflow-y-auto rounded-md border border-amber-200 bg-amber-50/80 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/40">
             <p className="font-medium text-amber-950 dark:text-amber-100">
-              Xabarlar ({useful.length})
+              Сообщения ({useful.length})
             </p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-amber-950/90 dark:text-amber-100/90">
               {useful.slice(0, 24).map((line, i) => (
                 <li key={`${i}-${line.slice(0, 28)}`}>{line}</li>
               ))}
-              {useful.length > 24 ? <li>… yana {useful.length - 24} ta</li> : null}
+              {useful.length > 24 ? <li>… и ещё {useful.length - 24}</li> : null}
             </ul>
             {decisionPreview && onOpenReview ? (
               <button
@@ -127,12 +126,12 @@ export function ClientImportResultDialog({
                 className="mt-2 text-[11px] font-medium text-amber-900 underline dark:text-amber-200"
                 onClick={() => onOpenReview()}
               >
-                Batafsil jadval
+                Подробная таблица
               </button>
             ) : null}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Qator bo‘yicha qo‘shimcha xato yo‘q.</p>
+          <p className="text-xs text-muted-foreground">Дополнительных ошибок по строкам нет.</p>
         )}
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
@@ -145,7 +144,7 @@ export function ClientImportResultDialog({
                 disabled={busy}
                 onClick={() => onRejectAll?.()}
               >
-                Hammasini bekor
+                Отменить всё
               </Button>
               <Button
                 type="button"
@@ -153,12 +152,12 @@ export function ClientImportResultDialog({
                 disabled={busy || validCount <= 0}
                 onClick={() => onAcceptValid?.()}
               >
-                Faqat to‘g‘rilarni qabul ({validCount})
+                Принять только корректные ({validCount})
               </Button>
             </>
           ) : (
             <Button type="button" size="sm" onClick={() => onOpenChange(false)}>
-              Yopish
+              Закрыть
             </Button>
           )}
         </DialogFooter>

@@ -111,16 +111,17 @@ export async function updateOrderLines(
   const priorSelections = parseBonusGiftSelectionsJson(
     (existing as { bonus_gift_selections?: Prisma.JsonValue | null }).bonus_gift_selections ?? null
   );
+  const orderedIdsForGifts = input.items.map((i) => i.product_id);
   const bodyGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, orderedIdsForGifts)
     : new Map<number, number>();
   const giftSelectionMap = new Map(priorSelections);
   for (const [k, v] of bodyGiftOverrides) giftSelectionMap.set(k, v);
 
   const validatedGiftSplits =
     input.bonus_gift_lines?.length ?
-      await validateBonusGiftLines(tenantId, input.bonus_gift_lines)
+      await validateBonusGiftLines(tenantId, input.bonus_gift_lines, orderedIdsForGifts)
     : new Map<number, Map<number, number>>();
 
   // Gift lines bo‘lsa — birinchi mahsulotni selection sifatida ham saqlaymiz (swap UI).
@@ -155,8 +156,10 @@ export async function updateOrderLines(
   }
 
   const agentId = existing.agent_id;
-  const priceType = (input.price_type ?? "").trim() || "retail";
+  const existingPriceType = existing.price_type?.trim() || null;
   const patchPriceType = (input.price_type ?? "").trim();
+  const priceType = patchPriceType || existingPriceType || "retail";
+  const priceTypeChanged = patchPriceType !== "" && patchPriceType !== existingPriceType;
 
   if (isNewStatus && patchPriceType) {
     const [priceTypeEntries, paymentMethodEntries] = await Promise.all([
@@ -489,6 +492,7 @@ export async function updateOrderLines(
       data: {
         ...(warehouseChanged ? { warehouse_id: warehouseId, warehouse_block_id: null } : {}),
         ...(paymentChanged ? { payment_method_ref: nextPaymentMethodRef } : {}),
+        ...(priceTypeChanged ? { price_type: patchPriceType.slice(0, 128) } : {}),
         total_sum: paidTotal,
         bonus_sum: bonusSum,
         discount_sum: discountSum,

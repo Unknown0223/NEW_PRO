@@ -165,7 +165,7 @@ export function AccessRoleDefaultsWorkspace({
       const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
       if (flat) {
         const hint = firstValidationUserHint(flat);
-        setSaveError(withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", err));
+        setSaveError(withApiSupportLine(hint ?? "Проверьте введённые данные.", err));
         return;
       }
       setSaveError(getUserFacingError(err, "Не удалось сохранить настройки роли."));

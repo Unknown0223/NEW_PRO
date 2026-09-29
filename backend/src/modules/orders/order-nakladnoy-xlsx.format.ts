@@ -74,7 +74,7 @@ export function blockCount(line: NakladnoyLine): number | string {
 
 export function sanitizeSheetName(raw: string): string {
   const s = raw.replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31);
-  return s || "Zakaz";
+  return s || "Заказ";
 }
 
 export function applyBorderRange(

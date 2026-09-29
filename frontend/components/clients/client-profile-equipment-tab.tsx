@@ -135,7 +135,7 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
               >
-                <option value="">Товарni tanlang</option>
+                <option value="">Выберите товар</option>
                 {(productsQ.data ?? []).map((p) => (
                   <option key={p.id} value={String(p.id)}>
                     {p.name} {p.sku ? `(${p.sku})` : ""} {!p.is_active ? "• неактив" : ""}

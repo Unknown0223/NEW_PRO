@@ -297,7 +297,7 @@ export function timesheetRoleLabel(role: string): string {
 /** Экспорт матрицы табеля в CSV (разделитель «;», BOM для Excel). mode: коды 0–5 или текст. */
 export function exportTimesheetCsv(month: string, days: number[], rows: TimesheetRow[], mode: "codes" | "labels" = "codes") {
   const dayCols = days.map((d) => String(d).padStart(2, "0"));
-  const head = ["ФИО", "Роль", "Smart KOD", "Направление", "Филиал", "Итого", ...dayCols];
+  const head = ["ФИО", "Роль", "Smart-код", "Направление", "Филиал", "Итого", ...dayCols];
   const lines = rows.map((r) => {
     const total = r.cells.reduce((acc, c) => acc + statusWorkValue(c.status), 0);
     return [

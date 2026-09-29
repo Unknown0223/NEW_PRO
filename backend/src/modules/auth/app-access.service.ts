@@ -140,7 +140,7 @@ export async function requireActiveMobileSession(request: FastifyRequest, reply:
 
   const active = await hasActiveSessionForDevice(user.tenantId, userId, user.did);
   if (!active) {
-    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Sessiya tugatildi");
+    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Сессия завершена");
   }
 }
 
@@ -160,7 +160,7 @@ export async function requireActiveSessionForNonAdmin(request: FastifyRequest, r
 
   const active = await hasActiveSessionForDevice(user.tenantId, userId, user.did);
   if (!active) {
-    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Sessiya tugatildi");
+    return sendApiError(reply, request, 401, "SESSION_REVOKED", "Сессия завершена");
   }
 }
 

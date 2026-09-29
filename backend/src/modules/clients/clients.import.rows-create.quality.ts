@@ -50,7 +50,7 @@ export function skipReasonForNewImportRow(
   if (dupKey != null && seenDuplicateKeys.has(dupKey)) {
     return {
       kind: "dup",
-      message: `dublikat (kalit: ${duplicateKeyFields.join(", ") || "kod"}) — o‘tkazib yuborildi.`
+      message: `дубликат (ключ: ${duplicateKeyFields.join(", ") || "код"}) — пропущено.`
     };
   }
   const qErr = importRowQualityError(candidate, peers);

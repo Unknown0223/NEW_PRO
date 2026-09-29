@@ -354,7 +354,7 @@ export function parseReconciliationDateRange(
           ok: false,
           status: 400,
           error: "DateRangeIncomplete",
-          message: "date_from va date_to ikkalasi ham YYYY-MM-DD ko‘rinishida yuborilishi kerak."
+          message: "date_from и date_to должны быть переданы в формате YYYY-MM-DD."
         };
       }
       const a = parseLocalYmd(q.date_from);

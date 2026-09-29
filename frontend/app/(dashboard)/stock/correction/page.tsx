@@ -356,18 +356,18 @@ export default function StockCorrectionPage() {
     const st = ax?.response?.status;
     const body = ax?.response?.data;
     const code = body?.error;
-    if (st === 403) return "Ruxsat yo‘q (faqat administrator).";
-    if (code === "BadWarehouse") return "Ombor topilmadi yoki boshqa tashkilotga tegishli.";
+    if (st === 403) return "Нет доступа (только для администратора).";
+    if (code === "BadWarehouse") return "Склад не найден или принадлежит другой организации.";
     if (code === "ValidationError") {
       const flat = getZodFlattenFromApiErrorBody(body);
       const hint = flat != null ? firstValidationUserHint(flat) : undefined;
       return hint
-        ? `So‘rov tekshiruvi: ${hint}`
-        : "Filtrlarni tekshiring (ombor, kategoriya).";
+        ? `Проверка запроса: ${hint}`
+        : "Проверьте фильтры (склад, категория).";
     }
-    if (st === 400) return "So‘rov noto‘g‘ri yoki filtr tanlanmagan.";
-    if (st === 404) return "API topilmadi — backend yangilanganligini tekshiring.";
-    return getUserFacingError(workspaceError, "Ma’lumot yuklanmadi (tarmoq yoki server).");
+    if (st === 400) return "Некорректный запрос или не выбран фильтр.";
+    if (st === 404) return "API не найден — проверьте, обновлён ли сервер.";
+    return getUserFacingError(workspaceError, "Не удалось загрузить данные (сеть или сервер).");
   }
 
   useEffect(() => {
@@ -509,7 +509,7 @@ export default function StockCorrectionPage() {
       const code = ax.response?.data?.error;
       const st = ax.response?.status;
       if (st === 403) {
-        setWError("Saqlashga ruxsat yo‘q.");
+        setWError("Нет прав на сохранение.");
         return;
       }
       if (code === "ValidationError") {
@@ -518,23 +518,23 @@ export default function StockCorrectionPage() {
         setWError(
           withApiSupportLine(
             hint != null && hint.trim() !== ""
-              ? `So‘rov tekshiruvi: ${hint}`
-              : "Ma’lumotlarni tekshiring (delta, ombor).",
+              ? `Проверка запроса: ${hint}`
+              : "Проверьте данные (дельта, склад).",
             err
           )
         );
         return;
       }
       const map: Record<string, string> = {
-        NegativeQty: "Qoldiq manfiy bo‘lib qoladi.",
-        BelowReserved: "Qoldiq rezervdan past.",
-        BadDelta: "Noto‘g‘ri delta.",
-        BadWarehouse: "Ombor noto‘g‘ri.",
-        BadProduct: "Mahsulot topilmadi.",
-        TooManyLines: "Juda ko‘p qator (max 500).",
-        EmptyItems: "Bo‘sh ro‘yxat."
+        NegativeQty: "Остаток станет отрицательным.",
+        BelowReserved: "Остаток ниже резерва.",
+        BadDelta: "Некорректная дельта.",
+        BadWarehouse: "Некорректный склад.",
+        BadProduct: "Товар не найден.",
+        TooManyLines: "Слишком много строк (макс. 500).",
+        EmptyItems: "Пустой список."
       };
-      setWError(map[code ?? ""] ?? `Saqlashda xato${st ? ` (${st})` : ""}. DB migratsiyasi qo‘llanganmi?`);
+      setWError(map[code ?? ""] ?? `Ошибка сохранения${st ? ` (${st})` : ""}. Применена ли миграция БД?`);
     }
   });
 
@@ -715,9 +715,9 @@ export default function StockCorrectionPage() {
   if (!tenantSlug || role !== "admin") {
     return (
       <PageShell>
-        <PageHeader title="Корректировка склада" description="Faqat administrator." />
+        <PageHeader title="Корректировка склада" description="Только для администратора." />
         <Link className={cn(buttonVariants({ variant: "outline", size: "sm" }))} href="/stock">
-          ← Ombor
+          ← Склад
         </Link>
       </PageShell>
     );
@@ -985,10 +985,10 @@ export default function StockCorrectionPage() {
                       <FileSpreadsheet className="size-5" />
                     </div>
                     <div className="min-w-0 space-y-1 pr-6">
-                      <DialogTitle className="text-base font-semibold leading-tight">Excel eksport</DialogTitle>
+                      <DialogTitle className="text-base font-semibold leading-tight">Экспорт в Excel</DialogTitle>
                       <DialogDescription className="text-xs leading-relaxed text-muted-foreground">
-                        Joriy filtrlangan jurnal qatorlari eksport qilinadi. Fayl{" "}
-                        <span className="font-medium text-foreground/80">.xlsx</span> formatida.
+                        Экспортируются строки журнала с учётом текущих фильтров. Файл в формате{" "}
+                        <span className="font-medium text-foreground/80">.xlsx</span>.
                       </DialogDescription>
                     </div>
                   </div>
@@ -1005,9 +1005,9 @@ export default function StockCorrectionPage() {
                       "disabled:pointer-events-none disabled:opacity-45"
                     )}
                   >
-                    <span className="text-sm font-medium">Umumiy ro‘yxat</span>
+                    <span className="text-sm font-medium">Общий список</span>
                     <span className="text-xs text-muted-foreground">
-                      Ko‘rinib turgan ustunlar bo‘yicha jurnal ro‘yxati
+                      Список журнала по видимым столбцам
                     </span>
                   </button>
                   <button
@@ -1022,15 +1022,15 @@ export default function StockCorrectionPage() {
                     )}
                   >
                     <span className="text-sm font-medium">
-                      {exportBusy ? "Загрузка…" : "Batafsil (audit ustunlari)"}
+                      {exportBusy ? "Загрузка…" : "Подробно (столбцы аудита)"}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Lokal/UTC vaqt, valuta, yaratuvchi va hujjat ID bilan
+                      С локальным/UTC временем, валютой, автором и ID документа
                     </span>
                   </button>
                   {journalRows.length === 0 ? (
                     <p className="rounded-lg bg-muted/50 px-3 py-2 text-center text-xs text-muted-foreground">
-                      Eksport uchun jadvalda kamida bitta qator bo‘lishi kerak.
+                      Для экспорта в таблице должна быть хотя бы одна строка.
                     </p>
                   ) : null}
                 </div>
@@ -1157,7 +1157,7 @@ export default function StockCorrectionPage() {
                 <div className="border-destructive/50 bg-destructive/5 space-y-2 rounded-lg border p-4 text-sm">
                   <p className="text-destructive font-medium">{workspaceErrorText()}</p>
                   <Button type="button" variant="outline" size="sm" onClick={() => void refetchWorkspace()}>
-                    Qayta urinish
+                    Повторить
                   </Button>
                 </div>
               ) : workspaceLoading || (workspaceFetching && workspaceRows.length === 0) ? (

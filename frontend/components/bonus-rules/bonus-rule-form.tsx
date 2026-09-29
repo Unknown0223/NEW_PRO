@@ -640,7 +640,7 @@ export function BonusRuleForm({
         ax.response?.data?.error === "ClauseRewardRequired" ||
         (e instanceof Error && e.message === "CLAUSE_REWARD_REQUIRED")
       ) {
-        setLocalError("Камида битта шартда бонус бериш белгилансин (галочка + товар).");
+        setLocalError("Хотя бы в одном условии отметьте выдачу бонуса (галочка + товар).");
         setErrorTarget("products");
         pulseErrorOn("products");
         return;
@@ -649,7 +649,7 @@ export function BonusRuleForm({
         ax.response?.data?.error === "ClauseBonusProductsRequired" ||
         (e instanceof Error && e.message === "CLAUSE_BONUS_PRODUCTS_REQUIRED")
       ) {
-        setLocalError("Бонус бериладиган шартда камида битта бонус-товар танланг.");
+        setLocalError("В условии с бонусом выберите хотя бы один бонусный товар.");
         setErrorTarget("products");
         pulseErrorOn("products");
         return;

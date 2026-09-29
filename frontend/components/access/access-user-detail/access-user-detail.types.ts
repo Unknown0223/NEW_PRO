@@ -24,7 +24,7 @@ export function userMessageAfterAccessPatchFailure(err: unknown, fallback: strin
   const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
   if (flat) {
     const hint = firstValidationUserHint(flat);
-    return withApiSupportLine(hint ?? "Ma’lumotlarni tekshiring.", err);
+    return withApiSupportLine(hint ?? "Проверьте введённые данные.", err);
   }
   return getUserFacingError(err, fallback);
 }

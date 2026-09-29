@@ -62,30 +62,30 @@ export function OrderCreateViewAlerts({ vm }: { vm: OrderCreateVm }) {
             role="alert"
             className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm"
           >
-            <p className="font-semibold text-destructive">API bilan aloqa yo‘q</p>
+            <p className="font-semibold text-destructive">Нет связи с API</p>
             <p className="mt-1 text-muted-foreground">
               {isApiUnreachable(createCtxQ.error) ? (
                 <>
-                  So‘rov manzili:{" "}
+                  Адрес запроса:{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">
                     {apiBaseURL || resolveApiOrigin()}
                   </code>{" "}
-                  (devda ko‘pincha Next proxy orqali <code className="text-xs">/api</code>).
-                  Klientlar va boshqa ro‘yxatlar backend ishlamaguncha bo‘sh ko‘rinadi. Loyiha ildizidan{" "}
+                  (в dev обычно через прокси Next <code className="text-xs">/api</code>).
+                  Клиенты и другие списки будут пустыми, пока не запущен backend. Из корня проекта запустите{" "}
                   <code className="rounded bg-muted px-1 text-xs text-foreground">npm run dev</code> (api+web)
-                  yoki{" "}
+                  или{" "}
                   <code className="rounded bg-muted px-1 text-xs text-foreground">
                     npm run dev --prefix backend
                   </code>{" "}
-                  ni ishga tushiring (odatda port 18080). Boshqa portda bo‘lsa,{" "}
+                  (обычно порт 18080). Если порт другой, укажите{" "}
                   <code className="rounded bg-muted px-1 text-xs text-foreground">
                     NEXT_PUBLIC_API_URL
                   </code>{" "}
-                  ni frontend <code className="rounded bg-muted px-1 text-xs text-foreground">.env.local</code>{" "}
-                  da moslang.
+                  в <code className="rounded bg-muted px-1 text-xs text-foreground">.env.local</code>{" "}
+                  frontend.
                 </>
               ) : (
-                getUserFacingError(createCtxQ.error, "Zakaz formasi ma’lumotlari yuklanmadi.")
+                getUserFacingError(createCtxQ.error, "Не удалось загрузить данные формы заказа.")
               )}
             </p>
             <Button
@@ -95,7 +95,7 @@ export function OrderCreateViewAlerts({ vm }: { vm: OrderCreateVm }) {
               className="mt-3"
               onClick={() => void createCtxQ.refetch()}
             >
-              Qayta urinish
+              Повторить
             </Button>
           </div>
         ) : null}
@@ -115,10 +115,10 @@ export function OrderCreateViewAlerts({ vm }: { vm: OrderCreateVm }) {
             className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-4 py-2.5 text-[11px] leading-relaxed text-muted-foreground"
             role="note"
           >
-            <span className="font-medium text-foreground">Rejalashtirilmoqda: </span>
-            buyurtma cheklovlari, taklif asosidagi zakaz, qator bo‘yicha skidka — alohida modul va API bilan
-            ulanadi. Hozir «Skidka turi» faqat ko‘rinish; bonuslar serverdagi{" "}
-            <span className="font-medium text-foreground">apply_bonus</span> bilan bog‘langan.
+            <span className="font-medium text-foreground">Запланировано: </span>
+            ограничения заказов, заказ на основе предложения, скидка по строкам — подключатся отдельным модулем и
+            API. Сейчас «Тип скидки» только для отображения; бонусы связаны с серверным параметром{" "}
+            <span className="font-medium text-foreground">apply_bonus</span>.
           </div>
           )
         ) : (

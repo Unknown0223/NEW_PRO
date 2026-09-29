@@ -147,10 +147,10 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       });
     },
     onSuccess: (_data, vars) => {
-      setNakladnoyFeedback(vars.format === "pdf" ? "PDF fayl yuklab olindi." : "Excel fayl yuklab olindi.");
+      setNakladnoyFeedback(vars.format === "pdf" ? "Файл PDF скачан." : "Файл Excel скачан.");
     },
     onError: (err: unknown) => {
-      setNakladnoyFeedback(ordersMutationFeedback(err, "Nakladnoyni yuklab bo‘lmadi."));
+      setNakladnoyFeedback(ordersMutationFeedback(err, "Не удалось скачать накладную."));
     }
   });
 
@@ -194,15 +194,15 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       const fail = res.failed.length;
       const skip = res.skipped.length;
       const parts: string[] = [];
-      if (ok > 0) parts.push(`${ok} ta zakazda bonus yangilandi`);
-      if (skip > 0) parts.push(`${skip} ta o‘tkazib yuborildi (faqat «Новый»)`);
-      if (fail > 0) parts.push(`${fail} ta xato`);
+      if (ok > 0) parts.push(`Бонус обновлён в заказах: ${ok}`);
+      if (skip > 0) parts.push(`Пропущено: ${skip} (только «Новый»)`);
+      if (fail > 0) parts.push(`Ошибок: ${fail}`);
       setBulkBonusRefreshFeedback(
-        parts.length > 0 ? `${parts.join(". ")}.` : "Yangilanadigan zakaz topilmadi."
+        parts.length > 0 ? `${parts.join(". ")}.` : "Нет заказов для обновления."
       );
     },
     onError: (err: unknown) => {
-      setBulkBonusRefreshFeedback(ordersMutationFeedback(err, "Bonusni yangilab bo‘lmadi."));
+      setBulkBonusRefreshFeedback(ordersMutationFeedback(err, "Не удалось обновить бонус."));
     }
   });
 
@@ -296,7 +296,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       setBulkTargetStatus("");
       if (res.failed.length > 0) {
         setBulkFeedback(
-          `Yangilandi: ${res.updated.length}. O‘tmadi: ${res.failed.length} (ID: ${res.failed
+          `Обновлено: ${res.updated.length}. Не прошло: ${res.failed.length} (ID: ${res.failed
             .slice(0, 8)
             .map((f) => f.id)
             .join(", ")}${res.failed.length > 8 ? "…" : ""})`
@@ -306,7 +306,7 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
       }
     },
     onError: (err: unknown) => {
-      setBulkFeedback(ordersMutationFeedback(err, "Guruh holatini o‘zgartirib bo‘lmadi."));
+      setBulkFeedback(ordersMutationFeedback(err, "Не удалось изменить статус группы заказов."));
     }
   });
 

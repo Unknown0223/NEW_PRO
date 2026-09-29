@@ -198,33 +198,33 @@ export function ProductForm({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!tenantSlug) throw new Error("Tenant yo‘q");
+      if (!tenantSlug) throw new Error("Организация не выбрана");
       const unitResolved = resolveUnitFromForm(unitSelect, unitCustom);
       if (unitSelect === PRODUCT_UNIT_CUSTOM && !unitCustom.trim()) {
-        throw new Error("Boshqa birlik tanlangan — nomini yozing");
+        throw new Error("Выбрана другая единица — укажите её название");
       }
       let resolvedCategory: number | null = null;
       if (categoryId.trim() !== "") {
         const cid = Number.parseInt(categoryId.trim(), 10);
-        if (!Number.isFinite(cid) || cid < 1) throw new Error("Kategoriya noto‘g‘ri");
+        if (!Number.isFinite(cid) || cid < 1) throw new Error("Некорректная категория");
         resolvedCategory = cid;
       }
       if (!isEdit && resolvedCategory === null) {
-        throw new Error("Kategoriya tanlash majburiy (*)");
+        throw new Error("Выбор категории обязателен (*)");
       }
 
       const fkIdOrNull = (v: string) => {
         const t = v.trim();
         if (t === "") return null;
         const n = Number.parseInt(t, 10);
-        if (!Number.isFinite(n) || n < 1) throw new Error("Tanlov noto‘g‘ri");
+        if (!Number.isFinite(n) || n < 1) throw new Error("Некорректный выбор");
         return n;
       };
       const intOrNull = (v: string) => {
         const t = v.trim();
         if (t === "") return null;
         const n = Number.parseInt(t, 10);
-        if (!Number.isFinite(n)) throw new Error("Butun son noto‘g‘ri");
+        if (!Number.isFinite(n)) throw new Error("Некорректное целое число");
         return n;
       };
 
@@ -254,7 +254,7 @@ export function ProductForm({
         is_blocked: isBlocked
       };
       if (!payload.sku || !payload.name) {
-        throw new Error("SKU va nom majburiy");
+        throw new Error("SKU и наименование обязательны");
       }
 
       let resolvedProductId: number;
@@ -269,12 +269,12 @@ export function ProductForm({
       const items: { price_type: string; price: number }[] = [];
       if (retailPrice.trim() !== "") {
         const r = Number.parseFloat(retailPrice.replace(",", ".").replace(/\s/g, ""));
-        if (!Number.isFinite(r) || r < 0) throw new Error("Chakana narx noto‘g‘ri");
+        if (!Number.isFinite(r) || r < 0) throw new Error("Некорректная розничная цена");
         items.push({ price_type: "retail", price: r });
       }
       if (wholesalePrice.trim() !== "") {
         const w = Number.parseFloat(wholesalePrice.replace(",", ".").replace(/\s/g, ""));
-        if (!Number.isFinite(w) || w < 0) throw new Error("Ulgurji narx noto‘g‘ri");
+        if (!Number.isFinite(w) || w < 0) throw new Error("Некорректная оптовая цена");
         items.push({ price_type: "wholesale", price: w });
       }
 
@@ -301,7 +301,7 @@ export function ProductForm({
           const top = flat.formErrors.map((s) => s.trim()).find(Boolean);
           const hint = firstValidationUserHint(flat);
           const line = top ?? hint;
-          setLocalError(line ? withApiSupportLine(line, e) : withApiSupportLine(getUserFacingError(e, "Saqlashda xato"), e));
+          setLocalError(line ? withApiSupportLine(line, e) : withApiSupportLine(getUserFacingError(e, "Ошибка сохранения"), e));
           return;
         }
         setFieldErrors({});
@@ -310,26 +310,26 @@ export function ProductForm({
       }
       const ax = e as { response?: { data?: { error?: string }; status?: number } };
       if (ax.response?.status === 403) {
-        setLocalError("Ruxsat yo‘q (faqat admin yoki operator).");
+        setLocalError("Нет доступа (только администратор или оператор).");
         return;
       }
       if (ax.response?.data?.error === "SkuExists") {
-        setLocalError("Bu SKU allaqachon mavjud.");
+        setLocalError("Такой SKU уже существует.");
         return;
       }
       if (ax.response?.data?.error === "NameExists") {
-        setLocalError("Bu nomdagi mahsulot allaqachon mavjud.");
+        setLocalError("Товар с таким наименованием уже существует.");
         return;
       }
       if (ax.response?.data?.error === "BarcodeExists") {
-        setLocalError("Bu shtrixkod allaqachon band.");
+        setLocalError("Этот штрихкод уже занят.");
         return;
       }
       if (ax.response?.status === 401) {
-        setLocalError("Sessiya yo‘q yoki muddati tugagan — /login sahifasidan qayta kiring.");
+        setLocalError("Сессия отсутствует или истекла — войдите заново на странице /login.");
         return;
       }
-      setLocalError(getUserFacingError(e, "Saqlashda xato"));
+      setLocalError(getUserFacingError(e, "Ошибка сохранения"));
     }
   });
 
@@ -342,11 +342,11 @@ export function ProductForm({
   if (isEdit && productQ.isError) {
     return (
       <div className={cn("space-y-3", isModal && "px-6 py-4")}>
-        {!isModal ? <PageHeader title="Mahsulot" description="Topilmadi yoki xato" /> : (
-          <p className="text-sm font-medium">Topilmadi yoki xato</p>
+        {!isModal ? <PageHeader title="Товар" description="Не найдено или произошла ошибка" /> : (
+          <p className="text-sm font-medium">Не найдено или произошла ошибка</p>
         )}
         <Button type="button" variant="outline" onClick={onCancel}>
-          Orqaga
+          Назад
         </Button>
       </div>
     );
@@ -391,11 +391,11 @@ export function ProductForm({
         </div>
       ) : (
         <PageHeader
-          title={isEdit ? "Mahsulotni tahrirlash" : "Yangi mahsulot"}
-          description="To‘liq sahifada saqlash"
+          title={isEdit ? "Редактирование товара" : "Новый товар"}
+          description="Сохранение в полностраничной форме"
           actions={
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              Orqaga
+              Назад
             </Button>
           }
         />
@@ -406,13 +406,13 @@ export function ProductForm({
           <>
         <div className="grid gap-1.5">
           <Label htmlFor="pf-category">
-            Kategoriya <span className="text-destructive">*</span>
+            Категория <span className="text-destructive">*</span>
           </Label>
           <FilterSelect
             id="pf-category"
             className="flex h-9 w-full min-w-0 max-w-none rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            emptyLabel="Kategoriya"
-            aria-label="Kategoriya"
+            emptyLabel="Категория"
+            aria-label="Категория"
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
             disabled={mutation.isPending}
@@ -427,7 +427,7 @@ export function ProductForm({
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="pf-name">
-            Nomi <span className="text-destructive">*</span>
+            Наименование <span className="text-destructive">*</span>
           </Label>
           <Input id="pf-name" value={name} onChange={(e) => setName(e.target.value)} disabled={mutation.isPending} />
           <FieldHint name="name" errors={fieldErrors} />
@@ -445,7 +445,7 @@ export function ProductForm({
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="pf-unit">
-            Birlik <span className="text-destructive">*</span>
+            Единица измерения <span className="text-destructive">*</span>
           </Label>
           <select
             id="pf-unit"
@@ -463,7 +463,7 @@ export function ProductForm({
           {unitSelect === PRODUCT_UNIT_CUSTOM ? (
             <Input
               id="pf-unit-custom"
-              placeholder="Masalan: blok-paket"
+              placeholder="Например: блок-пакет"
               value={unitCustom}
               onChange={(e) => setUnitCustom(e.target.value)}
               disabled={mutation.isPending}
@@ -484,12 +484,12 @@ export function ProductForm({
           />
           <FieldHint name="qty_per_block" errors={fieldErrors} />
           <p className="text-xs text-muted-foreground">
-            Одна упаковка (блок): сколько единиц товара (дона и т.д.) внутри. Используется при поступлении: кол-во = число
+            Одна упаковка (блок): сколько единиц товара (шт. и т.д.) внутри. Используется при поступлении: кол-во = число
             блоков × это значение.
           </p>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="pf-barcode">Shtrix-kod (ixtiyoriy)</Label>
+          <Label htmlFor="pf-barcode">Штрихкод (необязательно)</Label>
           <Input
             id="pf-barcode"
             value={barcode}
@@ -504,7 +504,7 @@ export function ProductForm({
           className="text-left text-sm font-medium text-primary underline-offset-4 hover:underline"
           onClick={() => setExtraOpen((v) => !v)}
         >
-          {extraOpen ? "▼" : "▶"} Qo‘shimcha (группа, бренд, ИКПУ, габариты…)
+          {extraOpen ? "▼" : "▶"} Дополнительно (группа, бренд, ИКПУ, габариты…)
         </button>
 
         {extraOpen ? (
@@ -581,11 +581,11 @@ export function ProductForm({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-1.5">
-                <Label>Вес (kg)</Label>
+                <Label>Вес (кг)</Label>
                 <Input value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
-                <Label>Объём (m³)</Label>
+                <Label>Объём (м³)</Label>
                 <Input value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={mutation.isPending} />
               </div>
             </div>
@@ -627,7 +627,7 @@ export function ProductForm({
                 <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
-                <Label>Sell code</Label>
+                <Label>Код продажи</Label>
                 <Input value={sellCode} onChange={(e) => setSellCode(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
@@ -661,25 +661,25 @@ export function ProductForm({
         ) : null}
 
         <div className="grid gap-2 rounded-md border border-border bg-muted/30 p-3">
-          <p className="text-xs font-medium text-muted-foreground">Narxlar (UZS, `retail` / `wholesale`)</p>
+          <p className="text-xs font-medium text-muted-foreground">Цены (UZS, `retail` / `wholesale`)</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-1.5">
-              <Label htmlFor="pf-retail">Chakana (retail)</Label>
+              <Label htmlFor="pf-retail">Розничная (retail)</Label>
               <GroupedNumberInput
                 id="pf-retail"
                 maxFractionDigits={2}
-                placeholder="masalan 25 000"
+                placeholder="например, 25 000"
                 value={retailPrice}
                 onValueChange={setRetailPrice}
                 disabled={mutation.isPending}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="pf-wholesale">Ulgurji (wholesale)</Label>
+              <Label htmlFor="pf-wholesale">Оптовая (wholesale)</Label>
               <GroupedNumberInput
                 id="pf-wholesale"
                 maxFractionDigits={2}
-                placeholder="ixtiyoriy"
+                placeholder="необязательно"
                 value={wholesalePrice}
                 onValueChange={setWholesalePrice}
                 disabled={mutation.isPending}
@@ -692,7 +692,7 @@ export function ProductForm({
             </p>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Bo‘sh qoldirsangiz tegishli turdagi narx o‘chiriladi (sinxronlash).
+            Если оставить поле пустым, цена соответствующего типа будет удалена (синхронизация).
           </p>
         </div>
         {isEdit ? (
@@ -703,7 +703,7 @@ export function ProductForm({
               onChange={(e) => setIsActive(e.target.checked)}
               disabled={mutation.isPending}
             />
-            Faol
+            Активен
           </label>
         ) : null}
         {localError ? <p className="text-sm text-destructive">{localError}</p> : null}
@@ -938,7 +938,7 @@ export function ProductForm({
                   </div>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="pf-x-vol">Объём (m³)</Label>
+                  <Label htmlFor="pf-x-vol">Объём (м³)</Label>
                   <Input
                     id="pf-x-vol"
                     value={volumeM3}
@@ -957,7 +957,7 @@ export function ProductForm({
                     <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} disabled={mutation.isPending} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>Sell code</Label>
+                    <Label>Код продажи</Label>
                     <Input value={sellCode} onChange={(e) => setSellCode(e.target.value)} disabled={mutation.isPending} />
                   </div>
                   <div className="grid gap-1.5">
@@ -991,7 +991,7 @@ export function ProductForm({
                   <p className="text-xs font-medium text-muted-foreground">Цены (UZS, retail / wholesale)</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="grid gap-1.5">
-                      <Label htmlFor="pf-x-retail">Chakana (retail)</Label>
+                      <Label htmlFor="pf-x-retail">Розничная (retail)</Label>
                       <GroupedNumberInput
                         id="pf-x-retail"
                         maxFractionDigits={2}
@@ -1002,7 +1002,7 @@ export function ProductForm({
                       />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label htmlFor="pf-x-wholesale">Ulgurji (wholesale)</Label>
+                      <Label htmlFor="pf-x-wholesale">Оптовая (wholesale)</Label>
                       <GroupedNumberInput
                         id="pf-x-wholesale"
                         maxFractionDigits={2}
@@ -1028,10 +1028,10 @@ export function ProductForm({
       {!isModal ? (
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={mutation.isPending}>
-            Bekor
+            Отмена
           </Button>
           <Button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            {mutation.isPending ? "Saqlanmoqda…" : "Saqlash"}
+            {mutation.isPending ? "Сохранение…" : "Сохранить"}
           </Button>
         </div>
       ) : (

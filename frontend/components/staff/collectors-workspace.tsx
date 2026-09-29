@@ -240,7 +240,7 @@ export function CollectorsWorkspace({ tenantSlug }: Props) {
       const flat = getZodFlattenFromApiErrorBody(ax.response?.data);
       if (flat) {
         const hint = firstValidationUserHint(flat);
-        setCreateError(withApiSupportLine(hint ?? "Ma'lumotlarni tekshiring.", e));
+        setCreateError(withApiSupportLine(hint ?? "Проверьте данные.", e));
         return;
       }
       setCreateError(messageFromStaffCreateError(e));
@@ -770,7 +770,7 @@ function CollectorAddDialog({
           <Input placeholder="Телефон" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input placeholder="ПИНФЛ" value={pinfl} onChange={(e) => setPinfl(e.target.value)} />
           <Input className="sm:col-span-2 font-mono" placeholder="Логин *" value={login} onChange={(e) => setLogin(e.target.value)} />
-          <Input className="sm:col-span-2" type="password" placeholder="Пароль * (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Input className="sm:col-span-2" type="password" placeholder="Пароль * (мин. 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
           <label className="inline-flex items-center gap-2 text-xs">
             <input type="checkbox" checked={can_authorize} onChange={(e) => setCanAuthorize(e.target.checked)} />
             Авторизация включена

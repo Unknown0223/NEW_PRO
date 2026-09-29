@@ -10,10 +10,10 @@ export function FinanceBalanceSection({ data }: { data: FinanceDashboardSnapshot
   const uzs = Number(data.general_balance.total_balance);
   const items = [
     { label: "UZS", value: uzs, accent: true },
-    { label: "Pereches", value: channels.transfer, accent: false },
-    { label: "Tenge", value: channels.tenge, accent: false },
-    { label: "Terminal", value: channels.terminal, accent: false },
-    { label: "Naqd", value: channels.cash, accent: false }
+    { label: "Перечисление", value: channels.transfer, accent: false },
+    { label: "Тенге", value: channels.tenge, accent: false },
+    { label: "Терминал", value: channels.terminal, accent: false },
+    { label: "Наличные", value: channels.cash, accent: false }
   ];
 
   return (

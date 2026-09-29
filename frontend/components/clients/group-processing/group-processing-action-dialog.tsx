@@ -14,13 +14,13 @@ import type { GroupProcessingActionId } from "@/components/clients/group-process
 import { useMemo, useState } from "react";
 
 const WEEKDAYS = [
-  { v: 1, l: "Du" },
-  { v: 2, l: "Se" },
-  { v: 3, l: "Ch" },
-  { v: 4, l: "Pa" },
-  { v: 5, l: "Ju" },
-  { v: 6, l: "Sh" },
-  { v: 7, l: "Ya" }
+  { v: 1, l: "Пн" },
+  { v: 2, l: "Вт" },
+  { v: 3, l: "Ср" },
+  { v: 4, l: "Чт" },
+  { v: 5, l: "Пт" },
+  { v: 6, l: "Сб" },
+  { v: 7, l: "Вс" }
 ];
 
 export type StaffOpt = { id: number; name: string };
@@ -90,33 +90,33 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
   const title = useMemo(() => {
     switch (actionId) {
       case "team":
-        return "Jamoa / marshrut";
+        return "Команда / маршрут";
       case "active":
-        return "Faollik";
+        return "Активность";
       case "territory":
-        return "Hudud";
+        return "Территория";
       case "category":
-        return "Kategoriya";
+        return "Категория";
       case "type_format":
-        return "Tip + format";
+        return "Тип + формат";
       case "sales_channel":
-        return "Savdo kanali";
+        return "Канал продаж";
       case "product_category":
-        return "Mahsulot kategoriyasi";
+        return "Категория товаров";
       case "client_code":
-        return "Kod";
+        return "Код";
       case "warehouse_cash":
-        return "Ombor + kassa";
+        return "Склад + касса";
       case "credit_limit":
-        return "Kredit limiti";
+        return "Кредитный лимит";
       case "price_type":
-        return "Tip narxi";
+        return "Тип цены";
       case "allow_order_with_debt":
-        return "Qarzdorlikda zakaz";
+        return "Заказ при наличии долга";
       case "tags":
-        return "Teglar";
+        return "Теги";
       default:
-        return "Amal";
+        return "Действие";
     }
   }, [actionId]);
 
@@ -256,7 +256,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {title} — {selectedCount} ta mijoz
+            {title} — клиентов: {selectedCount}
           </DialogTitle>
         </DialogHeader>
 
@@ -270,7 +270,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                   variant={mode === "attach" ? "default" : "outline"}
                   onClick={() => setMode("attach")}
                 >
-                  Biriktirish
+                  Привязать
                 </Button>
                 <Button
                   type="button"
@@ -278,29 +278,29 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                   variant={mode === "detach" ? "default" : "outline"}
                   onClick={() => setMode("detach")}
                 >
-                  Yechish
+                  Отвязать
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Slot (1–10)</Label>
+                <Label className="text-xs">Слот (1–10)</Label>
                 <Input value={slot} onChange={(e) => setSlot(e.target.value)} />
               </div>
               {mode === "attach" ? (
                 <>
                   <SelectField
-                    label="Agent"
+                    label="Агент"
                     value={agentId}
                     onChange={setAgentId}
                     options={props.agents.map((a) => ({ value: String(a.id), label: a.name }))}
                   />
                   <SelectField
-                    label="Ekspeditor"
+                    label="Экспедитор"
                     value={expeditorId}
                     onChange={setExpeditorId}
                     options={props.expeditors.map((a) => ({ value: String(a.id), label: a.name }))}
                   />
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Tashrif kunlari</Label>
+                    <Label className="text-xs">Дни визитов</Label>
                     <div className="flex flex-wrap gap-1">
                       {WEEKDAYS.map((d) => (
                         <Button
@@ -318,7 +318,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Tanlangan slot dagi agent, ekspeditor va kunlar tozalanadi.
+                  Агент, экспедитор и дни визитов в выбранном слоте будут очищены.
                 </p>
               )}
             </>
@@ -332,7 +332,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 variant={isActive ? "default" : "outline"}
                 onClick={() => setIsActive(true)}
               >
-                Aktiv
+                Активен
               </Button>
               <Button
                 type="button"
@@ -340,35 +340,35 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 variant={!isActive ? "default" : "outline"}
                 onClick={() => setIsActive(false)}
               >
-                Nofaol
+                Неактивен
               </Button>
             </div>
           ) : null}
 
           {actionId === "territory" ? (
             <>
-              <SelectField label="Region" value={region} onChange={setRegion} options={props.regions} />
-              <SelectField label="Tuman" value={district} onChange={setDistrict} options={props.districts} />
-              <SelectField label="Shahar" value={city} onChange={setCity} options={props.cities} />
+              <SelectField label="Область" value={region} onChange={setRegion} options={props.regions} />
+              <SelectField label="Район" value={district} onChange={setDistrict} options={props.districts} />
+              <SelectField label="Город" value={city} onChange={setCity} options={props.cities} />
               <SelectField
-                label="MFY"
+                label="Махалля"
                 value={neighborhood}
                 onChange={setNeighborhood}
                 options={props.neighborhoods}
               />
-              <SelectField label="Zona" value={zone} onChange={setZone} options={props.zones} />
+              <SelectField label="Зона" value={zone} onChange={setZone} options={props.zones} />
             </>
           ) : null}
 
           {actionId === "category" ? (
-            <SelectField label="Kategoriya" value={category} onChange={setCategory} options={props.categories} />
+            <SelectField label="Категория" value={category} onChange={setCategory} options={props.categories} />
           ) : null}
 
           {actionId === "type_format" ? (
             <>
-              <SelectField label="Tip" value={clientType} onChange={setClientType} options={props.clientTypes} />
+              <SelectField label="Тип" value={clientType} onChange={setClientType} options={props.clientTypes} />
               <SelectField
-                label="Format"
+                label="Формат"
                 value={clientFormat}
                 onChange={setClientFormat}
                 options={props.clientFormats}
@@ -378,7 +378,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
 
           {actionId === "sales_channel" ? (
             <SelectField
-              label="Kanal"
+              label="Канал"
               value={salesChannel}
               onChange={setSalesChannel}
               options={props.salesChannels}
@@ -387,7 +387,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
 
           {actionId === "product_category" ? (
             <SelectField
-              label="Mahsulot kategoriyasi"
+              label="Категория товаров"
               value={productCategory}
               onChange={setProductCategory}
               options={props.productCategories}
@@ -396,7 +396,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
 
           {actionId === "client_code" ? (
             <div className="space-y-1.5">
-              <Label className="text-xs">Kod</Label>
+              <Label className="text-xs">Код</Label>
               <Input value={clientCode} onChange={(e) => setClientCode(e.target.value)} maxLength={32} />
             </div>
           ) : null}
@@ -404,13 +404,13 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
           {actionId === "warehouse_cash" ? (
             <>
               <SelectField
-                label="Ombor"
+                label="Склад"
                 value={warehouseId}
                 onChange={setWarehouseId}
                 options={props.warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
               />
               <SelectField
-                label="Kassa"
+                label="Касса"
                 value={cashDeskId}
                 onChange={setCashDeskId}
                 options={props.cashDesks.map((w) => ({ value: String(w.id), label: w.name }))}
@@ -420,13 +420,13 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
 
           {actionId === "credit_limit" ? (
             <div className="space-y-1.5">
-              <Label className="text-xs">Limit (so‘m)</Label>
+              <Label className="text-xs">Лимит (сум)</Label>
               <Input value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} />
             </div>
           ) : null}
 
           {actionId === "price_type" ? (
-            <SelectField label="Narx turi" value={priceType} onChange={setPriceType} options={props.priceTypes} />
+            <SelectField label="Тип цены" value={priceType} onChange={setPriceType} options={props.priceTypes} />
           ) : null}
 
           {actionId === "allow_order_with_debt" ? (
@@ -437,7 +437,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 variant={allowDebt ? "default" : "outline"}
                 onClick={() => setAllowDebt(true)}
               >
-                Ruxsat
+                Разрешить
               </Button>
               <Button
                 type="button"
@@ -445,7 +445,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 variant={!allowDebt ? "default" : "outline"}
                 onClick={() => setAllowDebt(false)}
               >
-                Taqiq
+                Запретить
               </Button>
             </div>
           ) : null}
@@ -453,7 +453,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
           {actionId === "tags" ? (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs">Qo‘shish</Label>
+                <Label className="text-xs">Добавить</Label>
                 <div className="flex flex-wrap gap-1">
                   {props.tags.map((t) => (
                     <Button
@@ -469,7 +469,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Yechish</Label>
+                <Label className="text-xs">Снять</Label>
                 <div className="flex flex-wrap gap-1">
                   {props.tags.map((t) => (
                     <Button
@@ -485,7 +485,7 @@ export function GroupProcessingActionDialog(props: GroupActionDialogProps) {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Yangi teg nomi (ixtiyoriy)</Label>
+                <Label className="text-xs">Название нового тега (необязательно)</Label>
                 <Input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} maxLength={128} />
               </div>
             </>

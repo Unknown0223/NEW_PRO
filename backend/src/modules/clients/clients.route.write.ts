@@ -113,7 +113,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             409,
             "DuplicateAgentDirection",
-            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+            "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент."
           );
         }
         if (e instanceof Error && e.message === "AGENT_NOT_FOUND") {
@@ -122,7 +122,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+            "Выбранный агент не найден или неактивен. Выберите активного агента."
           );
         }
         if (e instanceof Error && e.message === "AGENT_NOT_ON_SLOT") {
@@ -131,7 +131,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+            "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга)."
           );
         }
         if (e instanceof Error && e.message === "EXPEDITOR_NOT_ON_SLOT") {
@@ -140,7 +140,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "ExpeditorNotOnSlot",
-            "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan."
+            "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена."
           );
         }
         if (e instanceof Error && e.message === "ASSIGNMENT_PERSON_HAS_DEBT") {
@@ -161,7 +161,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+            "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора."
           );
         }
         throw e;
@@ -209,7 +209,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
         const msg = e instanceof Error ? e.message : "";
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
         if (msg === "CLIENT_OUT_OF_SCOPE") {
-          return sendApiError(reply, request, 403, "Forbidden", "Client outside agent scope");
+          return sendApiError(reply, request, 403, "Forbidden", "Клиент вне зоны доступа агента");
         }
         const uniq = clientUniqueHttp(msg);
         if (uniq) return sendApiError(reply, request, 409, uniq.error, uniq.message);
@@ -219,7 +219,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             409,
             "DuplicateAgentDirection",
-            "Bir klientga bir xil agentni bir necha yo‘nalishga bog‘lab bo‘lmaydi. Har bir yo‘nalishda faqat bitta agent."
+            "Нельзя привязать одного и того же агента к клиенту по нескольким направлениям. В каждом направлении — только один агент."
           );
         }
         if (msg === "AGENT_NOT_FOUND") {
@@ -228,7 +228,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan agent topilmadi yoki nofaol. Faol agentni qayta tanlang."
+            "Выбранный агент не найден или неактивен. Выберите активного агента."
           );
         }
         if (msg === "AGENT_NOT_ON_SLOT") {
@@ -237,7 +237,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "AgentNotOnSlot",
-            "Agent ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan (faqat qarz yig‘ish)."
+            "Агент не назначен на рабочее место — привязка новых клиентов запрещена (только сбор долга)."
           );
         }
         if (msg === "EXPEDITOR_NOT_ON_SLOT") {
@@ -246,7 +246,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             403,
             "ExpeditorNotOnSlot",
-            "Dostavchik ish joyiga biriktirilmagan — yangi mijoz bog‘lash taqiqlangan."
+            "Экспедитор не назначен на рабочее место — привязка новых клиентов запрещена."
           );
         }
         if (msg === "ASSIGNMENT_PERSON_HAS_DEBT") {
@@ -267,7 +267,7 @@ export async function registerClientWriteRoutes(app: FastifyInstance) {
             request,
             400,
             "ValidationError",
-            "Tanlangan dastavchik topilmadi yoki nofaol. Faol dastavchikni qayta tanlang."
+            "Выбранный экспедитор не найден или неактивен. Выберите активного экспедитора."
           );
         }
         if (msg === "VALIDATION" || msg === "EMPTY") {

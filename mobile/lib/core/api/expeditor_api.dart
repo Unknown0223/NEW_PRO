@@ -407,7 +407,7 @@ class ExpeditorApi {
       return const NetworkException();
     }
     final code = e.response?.statusCode ?? 0;
-    final msg = e.response?.data?['message']?.toString() ?? e.message ?? 'Xato';
+    final msg = e.response?.data?['message']?.toString() ?? e.message ?? 'Ошибка';
     return ApiException.fromStatusCode(code, msg);
   }
 }

@@ -13,6 +13,7 @@ const AUTO_PICKING_HOURS = parseInt(process.env.AUTO_PICKING_HOURS ?? "24", 10);
 const AUTO_DELIVER_HOURS = parseInt(process.env.AUTO_DELIVER_HOURS ?? "48", 10);
 const CHECK_INTERVAL_MS = parseInt(process.env.CHECK_INTERVAL_MS ?? "3600000", 10);
 const LOW_STOCK_THRESHOLD = parseInt(process.env.LOW_STOCK_THRESHOLD ?? "5", 10);
+const LOW_STOCK_TITLE = "Низкий остаток товаров";
 
 const SYSTEM_USER_ID = 0;
 const SYSTEM_ROLE = "system";
@@ -236,7 +237,7 @@ export async function runLowStockNotifications(): Promise<number> {
   const recentlyNotified = await prisma.inAppNotification.findMany({
     where: {
       tenant_id: { in: tenantIds },
-      title: { contains: "Low Stock" },
+      OR: [{ title: { contains: LOW_STOCK_TITLE } }, { title: { contains: "Low Stock" } }],
       created_at: { gte: twentyFourHoursAgo },
     },
     select: { tenant_id: true, user_id: true },
@@ -271,15 +272,15 @@ export async function runLowStockNotifications(): Promise<number> {
         .slice(0, 10)
         .map((x) => {
           const prod = productMap.get(x.product_id);
-          return prod ? `${prod.name} (${prod.sku})` : `Product #${x.product_id}`;
+          return prod ? `${prod.name} (${prod.sku})` : `Товар #${x.product_id}`;
         });
 
       await prisma.inAppNotification.create({
         data: {
           tenant_id: tenantId,
           user_id: user.id,
-          title: "Low Stock Alert",
-          body: `The following products are running low (< ${threshold} available):\n${tenantLowProducts.join("\n")}`,
+          title: LOW_STOCK_TITLE,
+          body: `Заканчиваются товары (доступно меньше ${threshold}):\n${tenantLowProducts.join("\n")}`,
         },
       });
       created++;

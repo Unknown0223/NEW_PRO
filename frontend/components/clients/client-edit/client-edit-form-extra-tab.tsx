@@ -95,7 +95,7 @@ export function ClientEditFormExtraTab({ vm }: { vm: ClientEditFormVm }) {
             <Caption variant="write">Ввод с клавиатуры</Caption>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5 sm:col-span-2">
-                <Label htmlFor="ce-bank">Bank</Label>
+                <Label htmlFor="ce-bank">Банк</Label>
                 <Input id="ce-bank" value={bankName} onChange={(e) => setBankName(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
@@ -108,15 +108,15 @@ export function ClientEditFormExtraTab({ vm }: { vm: ClientEditFormVm }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="ce-mfo">MFO</Label>
+                <Label htmlFor="ce-mfo">МФО</Label>
                 <Input id="ce-mfo" value={bankMfo} onChange={(e) => setBankMfo(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="ce-inn">INN</Label>
+                <Label htmlFor="ce-inn">ИНН</Label>
                 <Input id="ce-inn" value={inn} onChange={(e) => setInn(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="ce-pinfl">JSHSHIR / PINFL</Label>
+                <Label htmlFor="ce-pinfl">ПИНФЛ</Label>
                 <Input
                   id="ce-pinfl"
                   inputMode="numeric"
@@ -126,7 +126,7 @@ export function ClientEditFormExtraTab({ vm }: { vm: ClientEditFormVm }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="ce-oked">OKED / OKONH</Label>
+                <Label htmlFor="ce-oked">ОКЭД / ОКОНХ</Label>
                 <Input id="ce-oked" value={oked} onChange={(e) => setOked(e.target.value)} disabled={mutation.isPending} />
               </div>
               <div className="grid gap-1.5">

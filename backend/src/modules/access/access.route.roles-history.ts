@@ -89,10 +89,10 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
     const roleId = Number((request.params as { id: string }).id);
     const permissions = z.array(z.string().trim().min(1)).safeParse((request.body as { permissions?: string[] })?.permissions ?? []);
     if (!Number.isInteger(roleId) || roleId < 1) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid role id");
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректный ID роли");
     }
     if (!permissions.success) {
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid request body", zodValidationExtras(permissions.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(permissions.error));
     }
     const role = await prisma.role.findFirst({ where: { id: roleId, tenant_id: tenantId } });
     if (!role) return sendApiError(reply, request, 404, "RoleNotFound");
@@ -127,7 +127,7 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
     });
     const parsed = querySchema.safeParse(request.query ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const exportKind = parsed.data.export;
     if (exportKind === "csv" || exportKind === "xlsx") {
       const { export: _ignored, ...listParams } = parsed.data;

@@ -116,30 +116,30 @@ export function OrderEditBonusConfirmModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gift className="size-5 text-teal-700" aria-hidden />
-            Bonusni tasdiqlash
+            Подтверждение бонуса
           </DialogTitle>
           <DialogDescription>
-            Saqlashdan oldin bonus miqdorini tekshiring. Yuqorida qoida nomi va maksimal
-            berilish — pastda faqat qiymat kiriting (± yo‘q).
+            Перед сохранением проверьте количество бонуса. Вверху — название правила и максимум
+            выдачи, ниже введите только значение (без ±).
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Bonus hisoblanmoqda…</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">Расчёт бонуса…</p>
         ) : error ? (
           <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}
           </p>
         ) : bonuses.length === 0 && strategies.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            Bu zakaz uchun qo‘llanadigan bonus topilmadi. Saqlashni davom ettirish mumkin.
+            Для этого заказа применимых бонусов не найдено. Можно продолжить сохранение.
           </p>
         ) : (
           <div className="space-y-4 py-1">
             {strategies.some((s) => s.requires_choice || s.eligible_rule_ids.length > 1) ? (
               <div className="space-y-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Strategiya
+                  Стратегия
                 </p>
                 {strategies.map((s) => {
                   const selected =
@@ -152,7 +152,7 @@ export function OrderEditBonusConfirmModal({
                       <div className="mb-2 text-sm font-medium text-foreground">
                         {s.name}{" "}
                         <span className="font-normal text-muted-foreground">
-                          (max {s.max_select})
+                          (макс. {s.max_select})
                         </span>
                       </div>
                       <div className="flex flex-col gap-1.5">
@@ -172,7 +172,7 @@ export function OrderEditBonusConfirmModal({
                                   setStrategySel((prev) => toggleStrategyRule(prev, s, rid))
                                 }
                               />
-                              <span>{ruleNameById.get(rid) ?? `Qoida #${rid}`}</span>
+                              <span>{ruleNameById.get(rid) ?? `Правило #${rid}`}</span>
                             </label>
                           );
                         })}
@@ -194,7 +194,7 @@ export function OrderEditBonusConfirmModal({
                   <div className="mb-2">
                     <div className="text-sm font-semibold text-foreground">{rule.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      Maksimal berilish:{" "}
+                      Максимум к выдаче:{" "}
                       <span className="font-medium tabular-nums text-teal-800 dark:text-teal-300">
                         {max}
                       </span>
@@ -202,7 +202,7 @@ export function OrderEditBonusConfirmModal({
                   </div>
                   {gifts.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Avtomatik hisoblanadi (assortiment / server).
+                      Рассчитывается автоматически (ассортимент / сервер).
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -236,7 +236,7 @@ export function OrderEditBonusConfirmModal({
             })}
 
             <p className={cn("text-xs text-muted-foreground")}>
-              Jami tanlangan bonus:{" "}
+              Всего выбрано бонусов:{" "}
               <span className="font-medium tabular-nums text-foreground">{totalSelected}</span>
             </p>
           </div>
@@ -249,7 +249,7 @@ export function OrderEditBonusConfirmModal({
             disabled={saving}
             onClick={() => onOpenChange(false)}
           >
-            Bekor
+            Отмена
           </Button>
           <Button
             type="button"
@@ -257,7 +257,7 @@ export function OrderEditBonusConfirmModal({
             className="bg-teal-600 text-white hover:bg-teal-700"
             onClick={handleConfirm}
           >
-            {saving ? "Saqlanmoqda…" : "Tasdiqlash va saqlash"}
+            {saving ? "Сохранение…" : "Подтвердить и сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

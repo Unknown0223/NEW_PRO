@@ -19,8 +19,8 @@ export const RETURN_FILTER_MODE_PRESETS: Array<{
 }> = [
   {
     id: "period_only",
-    label: "HOLAT 1 — faqat davr",
-    short: "Tavsiya etiladi",
+    label: "Режим 1 — только период",
+    short: "Рекомендуется",
     settings: {
       period_enabled: true,
       period_unit: "day",
@@ -30,8 +30,8 @@ export const RETURN_FILTER_MODE_PRESETS: Array<{
   },
   {
     id: "balance_zero_only",
-    label: "HOLAT 2 — faqat balans 0",
-    short: "Yopilgan nuqtadan keyin",
+    label: "Режим 2 — только баланс 0",
+    short: "После точки закрытия",
     settings: {
       period_enabled: false,
       period_unit: "day",
@@ -41,8 +41,8 @@ export const RETURN_FILTER_MODE_PRESETS: Array<{
   },
   {
     id: "both",
-    label: "HOLAT 3 — davr + balans 0",
-    short: "Eng qattiq",
+    label: "Режим 3 — период + баланс 0",
+    short: "Самый строгий",
     settings: {
       period_enabled: true,
       period_unit: "day",
@@ -52,8 +52,8 @@ export const RETURN_FILTER_MODE_PRESETS: Array<{
   },
   {
     id: "none",
-    label: "HOLAT 4 — filtr yo‘q",
-    short: "Ehtiyot",
+    label: "Режим 4 — без фильтра",
+    short: "Осторожно",
     settings: {
       period_enabled: false,
       period_unit: "day",

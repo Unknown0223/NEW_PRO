@@ -57,7 +57,7 @@ function isSyncAllowedNowForMinutes(sync: AgentMobileSyncConfig, minutes: number
 export function syncWindowMessage(sync: AgentMobileSyncConfig): string {
   const from = sync.allowed_window_from ?? "—";
   const to = sync.allowed_window_to ?? "—";
-  return `Sinxron faqat ${from} – ${to} oralig'ida mumkin`;
+  return `Синхронизация доступна только с ${from} до ${to}`;
 }
 
 /**
@@ -72,7 +72,7 @@ export function evaluateMobileSyncPolicy(
 ): SyncPolicyResult {
   if (!sync) return { allowed: true };
   if (sync.block_sync) {
-    return { allowed: false, message: "Sinxronizatsiya bloklangan" };
+    return { allowed: false, message: "Синхронизация заблокирована" };
   }
   const minutes = minutesOfDayInTimeZone(now, timeZone);
   if (!isSyncAllowedNowForMinutes(sync, minutes)) {

@@ -265,13 +265,13 @@ function CategoryProductsPanel({
   }
   if (q.isError) {
     return (
-      <div className={cn("py-2 text-sm text-destructive", depth > 0 && "pl-6")}>Mahsulotlarni yuklab bo‘lmadi.</div>
+      <div className={cn("py-2 text-sm text-destructive", depth > 0 && "pl-6")}>Не удалось загрузить товары.</div>
     );
   }
   if (!rows.length) {
     return (
       <div className={cn("py-2 text-sm text-muted-foreground", depth > 0 && "pl-6")}>
-        {searchTrim ? "Qidiruv bo‘yicha mahsulot yo‘q." : "Bu kategoriyada mahsulot yo‘q."}
+        {searchTrim ? "По запросу товаров нет." : "В этой категории нет товаров."}
       </div>
     );
   }
@@ -739,24 +739,24 @@ export function BonusRuleProductCategoryTree({
   if (!tenantSlug) return null;
 
   if (catsQ.isLoading) {
-    return <p className="px-1 py-4 text-sm text-muted-foreground">Kategoriyalar yuklanmoqda…</p>;
+    return <p className="px-1 py-4 text-sm text-muted-foreground">Загрузка категорий…</p>;
   }
   if (catsQ.isError) {
-    return <p className="px-1 py-4 text-sm text-destructive">Kategoriyalarni yuklab bo‘lmadi.</p>;
+    return <p className="px-1 py-4 text-sm text-destructive">Не удалось загрузить категории.</p>;
   }
 
   if (restrictToSelection && filterProductsQ.isLoading && value.length > 0) {
-    return <p className="px-1 py-4 text-sm text-muted-foreground">Tanlangan mahsulotlar yuklanmoqda…</p>;
+    return <p className="px-1 py-4 text-sm text-muted-foreground">Загрузка выбранных товаров…</p>;
   }
 
   if (searchTrim && searchHitsQ.isLoading && !searchHitsQ.data) {
-    return <p className="px-1 py-4 text-sm text-muted-foreground">Qidiruv…</p>;
+    return <p className="px-1 py-4 text-sm text-muted-foreground">Поиск…</p>;
   }
 
   if (searchTrim && !searchHitsQ.isLoading && displayTree.length === 0 && !showUncategorizedSection) {
     return (
       <p className="px-1 py-4 text-sm text-muted-foreground">
-        Qidiruv bo‘yicha kategoriya yoki mahsulot topilmadi.
+        По запросу категории и товары не найдены.
       </p>
     );
   }
@@ -764,7 +764,7 @@ export function BonusRuleProductCategoryTree({
   return (
     <div className={cn("pr-1", className)}>
       {displayTree.length === 0 && restrictToSelection ? (
-        <p className="px-1 py-4 text-sm text-muted-foreground">Tanlangan kategoriya yoki mahsulot yo‘q.</p>
+        <p className="px-1 py-4 text-sm text-muted-foreground">Нет выбранных категорий или товаров.</p>
       ) : null}
       {displayTree.map((n, index) => (
         <div key={n.id} className={cn(index > 0 && "border-t border-border/70")}>
@@ -812,7 +812,7 @@ export function BonusRuleProductCategoryTree({
             onClick={() => setUncOpen((v) => !v)}
             disabled={disabled && !allowExpandWhenDisabled}
           >
-            Kategoriyasiz mahsulotlar
+            Товары без категории
           </button>
         </div>
         {uncOpen ? (

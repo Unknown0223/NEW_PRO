@@ -102,7 +102,7 @@ const CONSIGNMENT_OPTIONS: { value: string; label: string }[] = [
 
 const PAYMENT_TYPE_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Все способы оплаты" },
-  { value: "naqd", label: "Наличные (naqd)" },
+  { value: "naqd", label: "Наличные" },
   { value: "plastik", label: "Пластик" },
   { value: "terminal", label: "Терминал" },
   { value: "perechis", label: "Перечисление" },
@@ -994,7 +994,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
                       : analyticsQ.data
                         ? `${formatNumberGrouped(parseSum(analyticsQ.data.kpi.delivered_sales_sum), {
                             maxFractionDigits: 2
-                          })} So'm`
+                          })} сум`
                         : "—"}
                   </span>
                 </span>

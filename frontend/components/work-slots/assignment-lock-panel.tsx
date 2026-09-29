@@ -28,37 +28,37 @@ export function AssignmentLockPanel({
   return (
     <div className="rounded-md border p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium">Avtomatik o‘zgartirish:</span>
+        <span className="text-sm font-medium">Автоматическая смена:</span>
         <LockStatusBadge lockType={lockType} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label>Holat</Label>
+          <Label>Статус</Label>
           <Select value={lockType} onValueChange={onLockTypeChange} disabled={disabled}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Erkin</SelectItem>
-              <SelectItem value="manual">Qo‘lda</SelectItem>
-              <SelectItem value="contract">Qulflangan (shartnoma)</SelectItem>
+              <SelectItem value="none">Свободно</SelectItem>
+              <SelectItem value="manual">Вручную</SelectItem>
+              <SelectItem value="contract">Заблокировано (договор)</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {lockType !== "none" && (
           <div className="space-y-1">
-            <Label>Sabab</Label>
+            <Label>Причина</Label>
             <Input
               value={lockReason}
               onChange={(e) => onLockReasonChange(e.target.value)}
               disabled={disabled}
-              placeholder="Masalan: shartnoma №, maxsus kelishuv"
+              placeholder="Например: договор №, особое соглашение"
             />
           </div>
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Holat pastdagi «Сохранить» tugmasi bilan saqlanadi.
+        Статус сохраняется кнопкой «Сохранить» внизу.
       </p>
     </div>
   );

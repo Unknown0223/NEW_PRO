@@ -35,11 +35,11 @@ export function classifyFlexibleImportId(
     if (!Number.isFinite(n) || n < 1) {
       return {
         kind: "invalid",
-        detail: `«${s.slice(0, 40)}» — ${label} 1 dan katta yoki teng musbat butun son bo‘lishi kerak`
+        detail: `«${s.slice(0, 40)}» — ${label} должен быть целым положительным числом не меньше 1`
       };
     }
     if (n > 2_147_483_647) {
-      return { kind: "invalid", detail: `${label} ${n} juda katta (maks. 2147483647)` };
+      return { kind: "invalid", detail: `${label} ${n} слишком большой (макс. 2147483647)` };
     }
     return { kind: "ok_db", id: n };
   }
@@ -48,12 +48,12 @@ export function classifyFlexibleImportId(
   if (s.length > maxCodeLen) {
     return {
       kind: "invalid",
-      detail: `«${s.slice(0, 40)}» — ${label} uzunligi maks. ${maxCodeLen} belgi`
+      detail: `«${s.slice(0, 40)}» — длина ${label} не более ${maxCodeLen} символов`
     };
   }
   /** Nazorat belgilari / faq taqiqlangan */
   if (/[\u0000-\u001f]/.test(s)) {
-    return { kind: "invalid", detail: `${label} da ruxsat etilmagan belgilar bor` };
+    return { kind: "invalid", detail: `${label} содержит недопустимые символы` };
   }
   return { kind: "ok_code", code: s };
 }
@@ -86,7 +86,7 @@ export function classifyImportClientDbId(raw: string | null): ImportClientDbIdPa
   /** Matnli kod — bu yerda «ok» emas; chaqiruvchi flexible parser ishlatsin */
   return {
     kind: "invalid",
-    detail: `«${r.code.slice(0, 40)}» — eski API faqat raqamli id; classifyFlexibleImportId ishlating`
+    detail: `«${r.code.slice(0, 40)}» — старый API принимает только числовой id; используйте classifyFlexibleImportId`
   };
 }
 

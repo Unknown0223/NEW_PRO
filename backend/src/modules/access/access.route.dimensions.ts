@@ -76,7 +76,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     });
     const parsed = schema.safeParse(request.query ?? {});
     if (!parsed.success)
-      return sendApiError(reply, request, 400, "ValidationError", "Invalid query", zodValidationExtras(parsed.error));
+      return sendApiError(reply, request, 400, "ValidationError", "Некорректные параметры запроса", zodValidationExtras(parsed.error));
     const { type } = parsed.data;
 
     if (type === "cash_desks") {

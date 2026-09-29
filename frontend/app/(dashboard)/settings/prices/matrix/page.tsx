@@ -12,7 +12,7 @@ export default function PriceMatrixPage() {
   if (!hydrated) {
     return (
       <PageShell>
-        <p className="text-sm text-muted-foreground">Sessiya...</p>
+        <p className="text-sm text-muted-foreground">Сессия...</p>
       </PageShell>
     );
   }
@@ -21,7 +21,7 @@ export default function PriceMatrixPage() {
       <PageShell>
         <p className="text-sm text-destructive">
           <Link href="/login" className="underline">
-            Kirish
+            Войти
           </Link>
         </p>
       </PageShell>

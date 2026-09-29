@@ -155,7 +155,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
     if (!tenant) return;
     const ok = await confirm({
       title: "Открепить",
-      message: "Hozirgi xodimni ajratishni tasdiqlaysizmi?",
+      message: "Открепить текущего сотрудника?",
       confirmLabel: "Да",
       cancelLabel: "Нет",
       destructive: true
@@ -169,18 +169,18 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
       });
       await load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Ajratib bo‘lmadi");
+      alert(e instanceof Error ? e.message : "Не удалось открепить");
     }
   };
 
   if (!hydrated || (loading && !slot)) {
-    return <p className="text-muted-foreground">Yuklanmoqda...</p>;
+    return <p className="text-muted-foreground">Загрузка...</p>;
   }
   if (!tenant) {
-    return <p className="text-destructive">Tenant aniqlanmadi. Qayta kiring.</p>;
+    return <p className="text-destructive">Организация не определена. Войдите заново.</p>;
   }
   if (!slot) {
-    return <p className="text-destructive">Slot topilmadi</p>;
+    return <p className="text-destructive">Рабочее место не найдено</p>;
   }
 
   return (
@@ -192,11 +192,11 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
           </Link>
           <SlotBadge code={slot.slot_code} />
           <h1 className="text-2xl font-bold">{slot.label ?? slot.slot_code}</h1>
-          {!slot.is_active ? <Badge variant="secondary">Deaktiv</Badge> : null}
+          {!slot.is_active ? <Badge variant="secondary">Деактивирован</Badge> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            Tahrirlash
+            Редактировать
           </Button>
           <Button
             type="button"
@@ -210,11 +210,11 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             Конфигурация места
           </Button>
           <Button type="button" size="sm" onClick={() => setAssignOpen(true)}>
-            Almashtirish
+            Заменить
           </Button>
           {slot.active_user_id ? (
             <Button type="button" variant="destructive" size="sm" onClick={() => void unassign()}>
-              Olib tashlash
+              Открепить
             </Button>
           ) : null}
         </div>
@@ -222,17 +222,17 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Slot ma’lumotlari</CardTitle>
+          <CardTitle className="text-base">Данные рабочего места</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
           <p>
-            <span className="text-muted-foreground">Kodi:</span> {slot.slot_code}
+            <span className="text-muted-foreground">Код:</span> {slot.slot_code}
           </p>
           <p>
-            <span className="text-muted-foreground">Nomi:</span> {slot.label ?? "—"}
+            <span className="text-muted-foreground">Название:</span> {slot.label ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">Filial:</span> {formatSlotBranches(slot)}
+            <span className="text-muted-foreground">Филиал:</span> {formatSlotBranches(slot)}
           </p>
           <p>
             <span className="text-muted-foreground">Направление:</span> {slot.direction_name ?? "—"}
@@ -261,23 +261,23 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
             </a>
           </p>
           <p>
-            <span className="text-muted-foreground">Tur:</span> {slotTypeLabel(slot.slot_type)}
+            <span className="text-muted-foreground">Тип:</span> {slotTypeLabel(slot.slot_type)}
           </p>
           <p>
-            <span className="text-muted-foreground">Holat:</span> {slot.is_active ? "✅ Aktiv" : "Deaktiv"}
+            <span className="text-muted-foreground">Статус:</span> {slot.is_active ? "✅ Активен" : "Деактивирован"}
           </p>
           <p>
-            <span className="text-muted-foreground">Yaratilgan:</span> {formatSlotDate(slot.created_at)}
+            <span className="text-muted-foreground">Создано:</span> {formatSlotDate(slot.created_at)}
           </p>
           <p>
-            <span className="text-muted-foreground">O‘zgartirilgan:</span> {formatSlotDate(slot.updated_at)}
+            <span className="text-muted-foreground">Изменено:</span> {formatSlotDate(slot.updated_at)}
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Hozirgi mas’ul</CardTitle>
+          <CardTitle className="text-base">Текущий ответственный</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           {slot.active_user_id && slot.active_user_name && tenant ? (
@@ -300,34 +300,34 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
                 <p className="text-base font-semibold text-slate-900">{slot.active_user_name}</p>
                 {slot.active_since ? (
                   <p className="text-xs text-muted-foreground">
-                    Biriktirish: {formatSlotDate(slot.active_since)}
+                    Закреплён: {formatSlotDate(slot.active_since)}
                   </p>
                 ) : null}
                 {!slot.active_user_has_face_reference ? (
-                  <p className="mt-1 text-xs text-amber-700">Etalon foto yuklanmagan</p>
+                  <p className="mt-1 text-xs text-amber-700">Эталонное фото не загружено</p>
                 ) : null}
               </div>
             </div>
           ) : (
             <p>
-              <span className="text-muted-foreground">Xodim:</span>{" "}
-              <span className="italic text-muted-foreground">Bo‘sh</span>
+              <span className="text-muted-foreground">Сотрудник:</span>{" "}
+              <span className="italic text-muted-foreground">Свободно</span>
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Mijoz qulflashi — mijoz kartasida (slot 1). Zakazlar shartnoma qulfiga bo‘ysunadi.
+            Блокировка клиента задаётся в карточке клиента (слот 1). Заказы подчиняются блокировке по договору.
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Qarz yig‘ishdagi agentlar (shu slot)</CardTitle>
+          <CardTitle className="text-base">Агенты со сбором долгов (это рабочее место)</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-xs text-muted-foreground">
-            Slotda ishlagan agentlar: hali to‘lanmagan yetkazilgan buyurtma qarzi. Nom bilan ko‘rsatiladi (mijoz
-            boshqa agentga o‘tgan bo‘lsa ham).
+            Агенты, работавшие на этом месте: неоплаченный долг по доставленным заказам. Отображаются по имени (даже
+            если клиент перешёл к другому агенту).
           </p>
           <Table>
             <TableHeader>
@@ -342,7 +342,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
               {debtCollectors.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-muted-foreground">
-                    Qarzli sobiq/hozirgi agent yo‘q
+                    Нет прежних/текущих агентов с долгом
                   </TableCell>
                 </TableRow>
               ) : (
@@ -357,7 +357,7 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {d.on_active_slot ? "Faol slotda" : "Slotsiz"}
+                      {d.on_active_slot ? "На активном месте" : "Без рабочего места"}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {Number(d.unpaid).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}
@@ -372,25 +372,25 @@ export function WorkSlotDetail({ slotId }: { slotId: number }) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Almashtirish tarixi</CardTitle>
+          <CardTitle className="text-base">История замен</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sana</TableHead>
-                <TableHead>Harakat</TableHead>
-                <TableHead>Eski</TableHead>
-                <TableHead>Yangi</TableHead>
-                <TableHead>Kim</TableHead>
-                <TableHead>Sabab</TableHead>
+                <TableHead>Дата</TableHead>
+                <TableHead>Действие</TableHead>
+                <TableHead>Прежний</TableHead>
+                <TableHead>Новый</TableHead>
+                <TableHead>Кто</TableHead>
+                <TableHead>Причина</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {history.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    Tarix yo‘q
+                    Истории нет
                   </TableCell>
                 </TableRow>
               ) : (

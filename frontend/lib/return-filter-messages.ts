@@ -26,25 +26,25 @@ export function polkiReturnEmptyListMessage(input: {
   const { filterMeta, deliveredOrdersCount, returnableCount, isByOrder } = input;
 
   if (filterMeta?.empty_reason === "balance_zero_not_in_period") {
-    return "Qaytarish filtri: davr ichida balans 0 topilmadi.";
+    return "Фильтр возврата: в периоде не найден нулевой баланс.";
   }
 
   if (filterMeta?.empty_reason) {
-    return "Qaytarish filtri bo‘yicha mos zakazlar yo‘q.";
+    return "По фильтру возврата подходящих заказов нет.";
   }
 
   if (deliveredOrdersCount > 0 && returnableCount === 0) {
     if (filterMeta?.period_enabled || filterMeta?.balance_zero_enabled) {
       return isByOrder
-        ? "Yetkazilgan zakazlar bor, lekin filtr yoki to‘liq qaytarish tufayli tanlash ro‘yxati bo‘sh."
-        : "Filtr bo‘yicha mos zakazlar topilmadi yoki qoldiq 0.";
+        ? "Доставленные заказы есть, но из-за фильтра или полного возврата список выбора пуст."
+        : "По фильтру подходящих заказов не найдено или остаток равен 0.";
     }
-    return "Barcha yetkazilgan zakazlar to‘liq qaytarilgan — qoldiq yo‘q.";
+    return "Все доставленные заказы полностью возвращены — остатка нет.";
   }
 
   return isByOrder
-    ? "Yetkazilgan zakazlar yo‘q. Avval zakazni yetkazilgan holatga o‘tkazing."
-    : "Qaytarish uchun ochiq qoldiq yo‘q.";
+    ? "Доставленных заказов нет. Сначала переведите заказ в статус «Доставлен»."
+    : "Нет открытого остатка для возврата.";
 }
 
 export function returnFilterModeLabel(
@@ -52,13 +52,13 @@ export function returnFilterModeLabel(
 ): string {
   switch (mode) {
     case "period_only":
-      return "Faqat davr";
+      return "Только период";
     case "balance_zero_only":
-      return "Faqat balans 0";
+      return "Только баланс 0";
     case "period_and_balance_zero":
-      return "Davr + balans 0";
+      return "Период + баланс 0";
     case "none":
-      return "Filtr yo‘q";
+      return "Без фильтра";
     default:
       return "—";
   }

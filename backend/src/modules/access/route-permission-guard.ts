@@ -254,13 +254,13 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.update"),
   r(READ, /\/plans\/approvers/, "plans.nastroyka_utverzhdayushchih.view"),
 
-  // ─────────── Планы → Установка планов / Kunlik KPI ───────────
+  // ─────────── Планы → Установка планов; Отчёт → Дневные KPI планы ───────────
   r(["POST"], /\/plans\/setup\/confirm$/, "plans.ustanovka_planov.update"),
   r(["POST"], /\/plans\/setup\/approve$/, "plans.ustanovka_planov.approve"),
   r(["POST"], /\/plans\/setup\/return$/, "plans.ustanovka_planov.approve"),
   r(WRITE, /\/plans\/setup/, "plans.ustanovka_planov.update", "plans.ustanovka_planov.create"),
   r(READ, /\/plans\/setup/, "plans.ustanovka_planov.view"),
-  r(READ, /\/plans\/daily-kpi/, "plans.ustanovka_planov.view"),
+  r(READ, /\/plans\/daily-kpi/, "reports.dnevnye_kpi_plany.view"),
 
   // ─────────── Dashboard ───────────
   r(READ, /\/dashboard\/sales-monitoring/, "dashboard.prodazhi.view"),

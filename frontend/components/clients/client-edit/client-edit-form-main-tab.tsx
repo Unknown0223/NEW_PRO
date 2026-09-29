@@ -350,13 +350,13 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
             <section className="rounded-lg border bg-card p-4 shadow-sm sm:p-5">
               <Caption variant="write">Карта</Caption>
               <p className="mt-1 text-xs text-muted-foreground">
-                Kartada nuqtani bevosita bosib tanlashingiz mumkin. Qidiruv maydoni Telegram/Google/Yandex linki, lat/lon juftligi
-                yoki oddiy manzil matnini qabul qiladi.
+                Точку можно выбрать, просто нажав на карту. Поле поиска принимает ссылку Telegram/Google/Yandex, пару
+                координат lat/lon или обычный адрес.
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-stretch">
                 <Input
                   className={cn(inputCls, "sm:flex-1")}
-                  placeholder="Manzil yoki lokatsiya (41.31, 69.27 | Google/Telegram link)"
+                  placeholder="Адрес или локация (41.31, 69.27 | ссылка Google/Telegram)"
                   value={mapSearchText}
                   onChange={(e) => setMapSearchText(e.target.value)}
                   disabled={mutation.isPending || mapSearchPending}
@@ -373,7 +373,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                   disabled={mutation.isPending || mapSearchPending || !mapSearchText.trim()}
                   onClick={() => void handleMapSearch()}
                 >
-                  {mapSearchPending ? "Qidirilmoqda..." : "Topish / Qo‘llash"}
+                  {mapSearchPending ? "Поиск…" : "Найти / Применить"}
                 </Button>
               </div>
               {mapSearchNotice ? <p className="mt-2 text-xs text-amber-600">{mapSearchNotice}</p> : null}
@@ -386,7 +386,7 @@ export function ClientEditFormMainTab({ vm }: { vm: ClientEditFormVm }) {
                 />
                 {!mapOk ? (
                   <div className="pointer-events-none absolute bottom-2 left-2 right-2 rounded-md bg-background/95 px-2 py-1.5 text-center text-[11px] text-muted-foreground shadow-sm ring-1 ring-border/60">
-                    Nuqtani xaritadan bosing yoki yuqoridagi maydonga koordinata/link/manzil qo‘ying
+                    Нажмите точку на карте или вставьте координаты/ссылку/адрес в поле выше
                   </div>
                 ) : null}
               </div>

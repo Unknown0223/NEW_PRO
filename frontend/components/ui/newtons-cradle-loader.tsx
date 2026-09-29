@@ -15,7 +15,7 @@ type Props = {
  * Newton’s cradle — CSS `globals.css` (.newtons-cradle*).
  * Manba: Uiverse.io (dovatgabriel), loyiha temasiga moslashtirilgan.
  */
-export function NewtonsCradleLoader({ size = 50, className, label = "Yuklanmoqda" }: Props) {
+export function NewtonsCradleLoader({ size = 50, className, label = "Загрузка" }: Props) {
   const style = {
     "--uib-size": `${size}px`
   } as CSSProperties;

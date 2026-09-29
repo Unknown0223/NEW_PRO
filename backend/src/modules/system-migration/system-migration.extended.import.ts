@@ -268,7 +268,7 @@ async function importTableSpec(
         prismaKnownCode(e) === "P2022" ||
         pgErrorCode(e) === "42P01"
       ) {
-        warnings.push(`${spec.file}: jadval/ustun yo‘q — o‘tkazib yuborildi.`);
+        warnings.push(`${spec.file}: нет таблицы/столбца — пропущено.`);
         return imported;
       }
       if (isPrismaMissingArgError(e)) {
@@ -282,7 +282,7 @@ async function importTableSpec(
 
   if (skippedDup > 0) {
     warnings.push(
-      `${spec.file}: ${skippedDup} qator dublikat kalit bilan o‘tkazib yuborildi.`
+      `${spec.file}: пропущено строк с дублирующимся ключом: ${skippedDup}.`
     );
   }
 
@@ -381,7 +381,7 @@ export async function importExtendedPhases(
   if (phaseIndexes.some((i) => i >= 3) && maps.order.size > 0 && maps.warehouseBlock.size > 0) {
     const patched = await secondPassOrderWarehouseBlocks(tx, zip, maps);
     if (patched > 0) {
-      warnings.push(`Buyurtmalar: ${patched} ta warehouse_block_id remap qilindi.`);
+      warnings.push(`Заказы: переназначено warehouse_block_id: ${patched}.`);
     }
   }
 

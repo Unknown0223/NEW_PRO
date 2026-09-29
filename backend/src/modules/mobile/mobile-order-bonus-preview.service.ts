@@ -121,7 +121,7 @@ export async function previewMobileOrderBonus(
 
   const validatedGiftOverrides =
     input.bonus_gift_overrides?.length ?
-      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides)
+      await validateBonusGiftOverrides(tenantId, input.bonus_gift_overrides, [...orderedProductIds])
     : new Map<number, number>();
 
   return prisma.$transaction(async (tx) => {

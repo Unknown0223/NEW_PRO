@@ -14,8 +14,8 @@ void main() {
       final msg = syncWindowMessage(sync);
       expect(msg, contains('01:00'));
       expect(msg, contains('17:30'));
-      expect(msg, contains('hozir'));
-      expect(msg, contains('ish mintaqasi'));
+      expect(msg, contains('сейчас'));
+      expect(msg, contains('рабочий часовой пояс'));
     });
 
     test('outside 01:00–17:30 at 20:33 is denied', () {

@@ -453,7 +453,7 @@ class _ExpeditorClientDetailPageState
               Text('Общая сумма',
                   style: AppTypography.bodyMedium
                       .copyWith(color: AppColors.textSecondary),),
-              Text("${formatMoneySpaced(_orderSum)} So'm",
+              Text('${formatMoneySpaced(_orderSum)} сум',
                   style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -493,7 +493,7 @@ class _ExpeditorClientDetailPageState
               _orderRow('Тип заказа:', 'Заказ'),
               const SizedBox(height: 6),
               _orderRow(
-                  'Сумма:', "${formatMoneySpaced(_orderSum)} So'm",
+                  'Сумма:', '${formatMoneySpaced(_orderSum)} сум',
                   valueColor: AppColors.expeditorAccent,),
             ],
           ),

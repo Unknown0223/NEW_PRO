@@ -327,7 +327,7 @@ class ExpeditorConfig {
     this.fingerprintRequiredForShipmentConfirm = false,
     this.deliveryPaymentMethodStrict = false,
     this.requirePhotoReportBeforeVisit = false,
-    this.currencySymbol = "so'm",
+    this.currencySymbol = 'сум',
     this.allowedPaymentMethodIds = const [],
     this.allowedTradeDirectionIds = const [],
   });
@@ -339,7 +339,7 @@ class ExpeditorConfig {
         fingerprintRequiredForShipmentConfirm: j['fingerprint_required_for_shipment_confirm'] ?? false,
         deliveryPaymentMethodStrict: j['delivery_payment_method_strict'] ?? false,
         requirePhotoReportBeforeVisit: j['require_photo_report_before_visit'] ?? false,
-        currencySymbol: j['currency_symbol']?.toString() ?? "so'm",
+        currencySymbol: j['currency_symbol']?.toString() ?? 'сум',
         allowedPaymentMethodIds: (j['allowed_payment_method_ids'] as List?)
                 ?.map((e) => e.toString())
                 .toList() ??

@@ -70,7 +70,7 @@ export function WorkSlotCard({
                 <SlotBadge code={slot.slot_code} />
                 {!slot.is_active ? (
                   <Badge variant="secondary" className="text-[10px]">
-                    Deaktiv
+                    Деактивирован
                   </Badge>
                 ) : null}
                 {slot.is_active ? (
@@ -105,12 +105,12 @@ export function WorkSlotCard({
               <span>
                 <span className="text-foreground">{slot.active_user_name}</span>
                 {slot.active_since ? (
-                  <span> ({formatSlotDate(slot.active_since)} dan)</span>
+                  <span> (с {formatSlotDate(slot.active_since)})</span>
                 ) : null}
               </span>
             </>
           ) : (
-            <span className="italic">Bo‘sh</span>
+            <span className="italic">Свободно</span>
           )}
         </p>
         {(slot.active_territory_zone ||
@@ -151,9 +151,9 @@ export function WorkSlotCard({
       </CardHeader>
       {expanded ? (
         <CardContent className="border-t bg-muted/20 pt-3 text-xs text-muted-foreground">
-          <p>Yaratilgan: {formatSlotDate(slot.created_at)}</p>
-          <p>O‘zgartirilgan: {formatSlotDate(slot.updated_at)}</p>
-          {slot.direction_name ? <p>Yo‘nalish: {slot.direction_name}</p> : null}
+          <p>Создано: {formatSlotDate(slot.created_at)}</p>
+          <p>Изменено: {formatSlotDate(slot.updated_at)}</p>
+          {slot.direction_name ? <p>Направление: {slot.direction_name}</p> : null}
           {slot.active_territory_zone ? (
             <p>Зона: {terrLabel(slot.active_territory_zone, resolveTerritoryLabel)}</p>
           ) : null}
@@ -163,8 +163,8 @@ export function WorkSlotCard({
           {slot.active_territory_city ? (
             <p>Город: {terrLabel(slot.active_territory_city, resolveTerritoryLabel)}</p>
           ) : null}
-          {slot.active_warehouse_name ? <p>Ombor: {slot.active_warehouse_name}</p> : null}
-          {slot.active_cash_desk_names ? <p>Kassa: {slot.active_cash_desk_names}</p> : null}
+          {slot.active_warehouse_name ? <p>Склад: {slot.active_warehouse_name}</p> : null}
+          {slot.active_cash_desk_names ? <p>Касса: {slot.active_cash_desk_names}</p> : null}
         </CardContent>
       ) : null}
       <div className="flex flex-wrap gap-2 border-t bg-card/50 px-4 py-2">
@@ -175,7 +175,7 @@ export function WorkSlotCard({
           Подробнее
         </Link>
         <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-          Tahrirlash
+          Редактировать
         </Button>
         {onConfig ? (
           <Button type="button" variant="outline" size="sm" onClick={onConfig}>
@@ -188,7 +188,7 @@ export function WorkSlotCard({
           </Button>
         ) : null}
         <Button type="button" size="sm" onClick={onAssign}>
-          Almashtirish
+          Заменить
         </Button>
       </div>
     </Card>

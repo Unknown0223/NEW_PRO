@@ -40,10 +40,10 @@ async function parseBlobError(blob: Blob): Promise<string> {
   const text = await blob.text();
   try {
     const j = JSON.parse(text) as { error?: string; message?: string };
-    if (j.error === "OrdersNotFound") return "Ba’zi zakazlar topilmadi.";
-    return j.message ?? j.error ?? "Xato";
+    if (j.error === "OrdersNotFound") return "Некоторые заказы не найдены.";
+    return j.message ?? j.error ?? "Ошибка";
   } catch {
-    return text.slice(0, 200) || "Xato";
+    return text.slice(0, 200) || "Ошибка";
   }
 }
 
@@ -56,7 +56,7 @@ export async function fetchExpeditorLoadingLayoutXlsxBlob(args: {
 }): Promise<{ blob: Blob; filename: string }> {
   const { tenantSlug, orderIds, layout, prefs, fallbackFilename } = args;
   if (orderIds.length === 0) {
-    throw new Error("Zakaz tanlanmagan.");
+    throw new Error("Заказ не выбран.");
   }
   try {
     const res = await api.post<Blob>(
@@ -82,7 +82,7 @@ export async function fetchExpeditorLoadingLayoutXlsxBlob(args: {
     if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
       throw new Error(await parseBlobError(e.response.data));
     }
-    throw new Error(getUserFacingError(e, "Excelni yuklab bo‘lmadi."));
+    throw new Error(getUserFacingError(e, "Не удалось скачать Excel."));
   }
 }
 

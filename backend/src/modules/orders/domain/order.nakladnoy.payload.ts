@@ -220,7 +220,7 @@ export function mapOrderToNakladnoyPayload(o: OrderNakladnoyDb): NakladnoyOrderP
     clientLandmark,
     orderComment,
     discountSum: Number.isFinite(discountSum) && discountSum > 0 ? discountSum : 0,
-    currencyLabel: "So'm (UZS)",
+    currencyLabel: "сум (UZS)",
     agentLine,
     invoiceAgentLine,
     agentName,

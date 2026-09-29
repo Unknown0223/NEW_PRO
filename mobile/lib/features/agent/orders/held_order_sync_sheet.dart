@@ -215,8 +215,8 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
             : 'Отложить ещё $delayMin мин');
 
     final homeLabel = _homeSecondsLeft > 0
-        ? 'Asosiy sahifaga ($_homeSecondsLeft)'
-        : 'Asosiy sahifaga';
+        ? 'На главную ($_homeSecondsLeft)'
+        : 'На главную';
 
     final bottom = MediaQuery.paddingOf(context).bottom;
 
@@ -279,7 +279,7 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Редактировка ойнаси очиқ',
+                      'Окно редактирования открыто',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -288,9 +288,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Агар товар, бонус ёки скидкада хато бўлса, '
-                      '${delayMin <= 0 ? 1 : delayMin} дақиқа ичида тузатинг. '
-                      'Дарҳол юбориш — «Отправить сейчас».',
+                      'Если в товарах, бонусе или скидке есть ошибка, '
+                      'исправьте её в течение ${delayMin <= 0 ? 1 : delayMin} мин. '
+                      'Отправить сразу — «Отправить сейчас».',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textMuted,
                         height: 1.35,
@@ -326,9 +326,9 @@ class _HeldOrderSyncSheetState extends ConsumerState<HeldOrderSyncSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Агар $countdown ичида ўзгартиш киритилмаса, заказ автоматик '
-                    'синхрон қилиниб серверга юборилади. '
-                    'Бу kutish zakazlar ro‘yxati va bildirishnomalarda ham ko‘rinadi.',
+                    'Если в течение $countdown не внести изменения, заказ будет '
+                    'автоматически синхронизирован и отправлен на сервер. '
+                    'Он также отображается в списке ожидающих заказов и в уведомлениях.',
                     style: AppTypography.caption.copyWith(
                       color: const Color(0xFF92400E),
                       height: 1.35,
@@ -440,7 +440,7 @@ class _CountdownRing extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'қолди',
+                'осталось',
                 style: AppTypography.caption.copyWith(
                   color: AppColors.textMuted,
                   fontWeight: FontWeight.w600,

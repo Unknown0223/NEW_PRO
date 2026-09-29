@@ -21,10 +21,10 @@ class AgentMiscOrdersPage extends ConsumerWidget {
         ? cfg?.misc.allowExchangeRequest == true
         : cfg?.orders.allowReturnFromShelf == true;
 
-    final title = _isExchange ? 'Almashinuv so\'rovi' : 'Polkadan qaytarish';
+    final title = _isExchange ? 'Запрос на обмен' : 'Возврат с полки';
     final body = _isExchange
-        ? 'Almashinuv buyurtmasini yangi zakaz yaratish orqali yuboring. Kommentda «Обмен» deb belgilang.'
-        : 'Polkadan qaytarish buyurtmasini yangi zakaz yaratish orqali yuboring. Kommentda «Vozvrat s polki» deb belgilang.';
+        ? 'Отправьте обмен, создав новый заказ. В комментарии укажите «Обмен».'
+        : 'Отправьте возврат с полки, создав новый заказ. В комментарии укажите «Возврат с полки».';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -36,7 +36,7 @@ class AgentMiscOrdersPage extends ConsumerWidget {
           children: [
             if (!enabled)
               const Text(
-                'Bu funksiya konfiguratsiyada o\'chirilgan.',
+                'Эта функция отключена в конфигурации.',
                 style: TextStyle(color: AppColors.textMuted),
               )
             else ...[
@@ -44,7 +44,7 @@ class AgentMiscOrdersPage extends ConsumerWidget {
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: () => context.push('/orders/create'),
-                child: const Text('Yangi buyurtma'),
+                child: const Text('Новый заказ'),
               ),
             ],
           ],

@@ -41,7 +41,7 @@ export function buildImportDecisionPreview(input: {
   const sampleLimit = input.sampleLimit ?? 5;
   const rowIssuesLimit = input.rowIssuesLimit ?? 2500;
   const errorIssues = input.issues.filter((i) => i.kind === "error" || i.kind === "duplicate");
-  const msgs = errorIssues.map((i) => `Qator ${i.excelRow}: ${i.message}`);
+  const msgs = errorIssues.map((i) => `Строка ${i.excelRow}: ${i.message}`);
   return {
     validCount: input.validCount,
     errorCount: errorIssues.filter((i) => i.kind === "error").length,
