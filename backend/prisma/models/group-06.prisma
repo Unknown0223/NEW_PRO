@@ -57,6 +57,14 @@ model Expense {
   deleted_at          DateTime?
   deleted_by_user_id  Int?
   delete_reason_ref   String?  @db.VarChar(128)
+  /// Qaysi kassadan chiqqan (kassa qoldig'iga ta'sir qiladi)
+  cash_desk_id        Int?
+  /// Payroll: kimga berilgan (avans/oylik)
+  employee_user_id    Int?
+  /// manual | payroll_advance | payroll_salary
+  source_type         String   @default("manual") @db.VarChar(32)
+  /// source_type != manual bo'lsa — payroll_payouts.id
+  source_id           Int?
   tenant              Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
   created_by          User?    @relation("ExpenseCreator", fields: [created_by_user_id], references: [id])
   approved_by         User?    @relation("ExpenseApprover", fields: [approved_by_user_id], references: [id])
@@ -68,6 +76,8 @@ model Expense {
   @@index([tenant_id, agent_id])
   @@index([tenant_id, warehouse_id])
   @@index([tenant_id, deleted_at])
+  @@index([tenant_id, cash_desk_id])
+  @@index([tenant_id, source_type, source_id])
   @@map("expenses")
 }
 

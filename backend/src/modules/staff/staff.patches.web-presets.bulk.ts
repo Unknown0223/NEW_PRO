@@ -3,6 +3,7 @@ import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { WEB_PANEL_STAFF_ROLES } from "../../lib/tenant-user-roles";
 import { onBulkAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 
 const KOMANDA_BULK_MAX = 500;
 
@@ -60,6 +61,7 @@ export async function bulkPatchKomandaStaff(
         where: { tenant_id: tenantId, role, id: { in: ids } },
         data: { is_active: input.is_active }
       });
+      await syncEmploymentAfterActiveChange(tenantId, ids, actorUserId);
       await audit({ is_active: input.is_active });
       return { updated: ids.length };
     }

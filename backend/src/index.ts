@@ -19,6 +19,8 @@ import {
   enableConsignmentClosureCron
 } from "./lib/consignment-closure-cron";
 import { disableAuditRetentionCron, enableAuditRetentionCron } from "./lib/audit-retention-cron";
+import { disablePayrollCron, enablePayrollCron } from "./lib/payroll-cron";
+import { startPayrollOrderHook } from "./modules/payroll/payroll.auto-hooks";
 
 async function main() {
   await prisma.$connect();
@@ -41,8 +43,13 @@ async function main() {
   app.log.info("Audit retention cron enabled (audit + activity).");
   enableConsignmentClosureCron();
   app.log.info("Consignment month closure cron enabled.");
+  const stopPayrollOrderHook = startPayrollOrderHook();
+  enablePayrollCron();
+  app.log.info("Payroll auto-recalc cron enabled.");
 
   const shutdown = async () => {
+    stopPayrollOrderHook();
+    disablePayrollCron();
     disableAutoClose();
     disableProductPriceScheduleCron();
     disablePaymentReturnFinalizeCron();

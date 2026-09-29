@@ -329,6 +329,13 @@ export async function bulkPatchWorkSlots(
     for (const s of slots) {
       assertNotVoided(s);
     }
+    const openLinks = await prisma.slotUserLink.findMany({
+      where: { tenant_id: tenantId, slot_id: { in: slots.map((s) => s.id) }, ended_at: null },
+      select: { slot_id: true }
+    });
+    for (const link of openLinks) {
+      await unassignUserFromSlot(tenantId, link.slot_id, actorUserId ?? null, "Рабочее место удалено");
+    }
     await prisma.$transaction(
       slots.map((s) =>
         prisma.workSlot.update({

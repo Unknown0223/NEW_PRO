@@ -8,6 +8,7 @@ import { createCashDeskUserLink } from "../cash-desks/cash-desks.service";
 import { listActiveTradeDirectionLabels } from "../sales-directions/sales-directions.service";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { territoryRegionPickerNames } from "../tenant-settings/tenant-settings.service";
 import { listTenantAuditEvents } from "../audit-events/audit-events.service";
 import {
@@ -243,6 +244,9 @@ export async function applyAgentPatchInDb(
 
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, agentId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [agentId], actorUserId);
     }
 
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");

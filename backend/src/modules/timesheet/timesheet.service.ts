@@ -8,6 +8,10 @@ import {
 } from "../work-slots/work-slots.occupancy";
 import { toFio } from "../staff/staff.shared.helpers";
 import { orderTimesheetRows, parseTimesheetRoleFilter } from "./timesheet.order";
+import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "./timesheet.day-status";
+import { parseWorkdaysState } from "../tabel/workdays.service";
+import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
+import { parseYearMonth, tenantMonthRangeUtc } from "../../lib/workday-calendar";
 
 /** Табельda ko‘rsatilmaydigan rollar (masalan tizim admini). */
 const TIMESHEET_EXCLUDED_ROLES = ["admin"] as const;
@@ -82,6 +86,8 @@ export type TimesheetCellDto = {
   date: string;
   status: AttendanceStatus;
   source: AttendanceSource;
+  /** Ishga olishdan oldin yoki bo'shatilgandan keyingi kun. */
+  off_employment?: boolean;
 };
 
 export type TimesheetRowDto = {
@@ -125,7 +131,7 @@ function isSource(v: string): v is AttendanceSource {
   return v === "manual" || v === "gps" || v === "mobile_login" || v === "auto";
 }
 
-function parseTimesheetState(settings: Prisma.JsonValue): TimesheetState {
+export function parseTimesheetState(settings: Prisma.JsonValue): TimesheetState {
   const root = asObj(settings);
   const ts = asObj(root.timesheet);
   const rawOverrides = asObj(ts.overrides);
@@ -255,10 +261,14 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
   rows: TimesheetRowDto[];
   locked: boolean;
 }> {
-  const { from, to, daysInMonth } = monthDateRange(input.month);
+  const { daysInMonth } = monthDateRange(input.month);
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } });
   if (!tenant) throw new Error("NOT_FOUND");
   const state = parseTimesheetState(tenant.settings);
+  const timeZone = loadTimezoneFromSettingsJson(tenant.settings);
+  const workdays = parseWorkdaysState(tenant.settings);
+  const ym = parseYearMonth(input.month);
+  const { from, to } = tenantMonthRangeUtc(ym.year, ym.month, timeZone);
   const locked = state.locked_months.includes(input.month);
 
   const roleSanitize = sanitizeTimesheetRoles(parseTimesheetRoleFilter(input.role, input.roles?.join(",")));
@@ -342,6 +352,8 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
       branch: true,
       trade_direction: true,
       supervisor_user_id: true,
+      hired_at: true,
+      dismissed_at: true,
       branch_links: { select: { branch_code: true }, take: 4 },
       trade_direction_row: { select: { name: true } },
       trade_direction_links: {
@@ -368,38 +380,36 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
         select: { agent_id: true, checked_in_at: true }
       })
     : [];
-  const visitByUserDay = new Set<string>();
-  for (const v of visits) {
-    const d = v.checked_in_at.toISOString().slice(0, 10);
-    visitByUserDay.add(`${v.agent_id}:${d}`);
-  }
+  const visitByUserDay = visitDayKeys(visits, timeZone);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const rows: TimesheetRowDto[] = users.map((u) => {
     const leftAt = leaveByUser.get(u.id) ?? null;
     const isDeparted = departedSet.has(u.id);
+    const hiredYmd = employmentYmd(u.hired_at, timeZone);
+    const dismissedYmd = employmentYmd(u.dismissed_at, timeZone);
     let worked = 0;
     let absent = 0;
-    const cells = days.map((day) => {
+    const cells = days.map((day): TimesheetCellDto => {
       const date = isoDateForDay(input.month, day);
       const key = `${u.id}:${date}`;
       const override = state.overrides[key];
-      let status: AttendanceStatus;
-      let source: AttendanceSource;
-      if (override) {
-        status = override.status;
-        source = override.source;
-      } else if (visitByUserDay.has(key)) {
-        status = "worked";
-        source = "gps";
-      } else {
-        const dow = new Date(`${date}T00:00:00.000Z`).getUTCDay();
-        status = dow === 0 ? "holiday" : "absent";
-        source = "auto";
-      }
+      const def = defaultTimesheetDay({
+        state: workdays,
+        role: u.role,
+        userId: u.id,
+        ymd: date,
+        hasGpsVisit: visitByUserDay.has(key),
+        hiredYmd,
+        dismissedYmd
+      });
+      const status: AttendanceStatus = override ? override.status : def.status;
+      const source: AttendanceSource = override ? override.source : def.source;
       worked += statusWorkValue(status);
       if (status === "absent") absent += 1;
-      return { day, date, status, source };
+      return def.off_employment && !override
+        ? { day, date, status, source, off_employment: true }
+        : { day, date, status, source };
     });
     const branch =
       u.branch?.trim() ||

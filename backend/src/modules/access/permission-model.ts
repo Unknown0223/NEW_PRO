@@ -176,6 +176,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "cash", section: "prihody", labelRu: "Приходы", actions: ["view", "create", "delete", "void", "restore"] },
   { module: "cash", section: "zayavki_na_oplatu", labelRu: "Заявки на оплату", actions: ["view", "approve", "copy"] },
   { module: "cash", section: "dolgi_ekspeditora", labelRu: "Долги экспедитора", actions: VIEW_COPY },
+  { module: "cash", section: "vydacha_zarplaty", labelRu: "Выдача аванса и зарплаты (очередь)", actions: ["view", "create", "void", "history"] },
 
   // ── Warehouse (Склад) — to'liq (yangi) ─────────────────────
   { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "delete", "void", "restore", "history"] },
@@ -219,7 +220,9 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate"] },
   { module: "staff", section: "partnery", labelRu: "Партнёры", actions: VIEW_ONLY },
   { module: "staff", section: "kpi", labelRu: "KPI", actions: ["view", "create", "import", "copy"] },
-  { module: "staff", section: "zarplaty", labelRu: "Зарплаты", actions: ["view", "create", "copy"] },
+  { module: "staff", section: "zarplaty", labelRu: "Зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"] },
+  { module: "staff", section: "avans", labelRu: "Аванс (руководитель)", actions: ["view", "create", "update", "delete", "import", "status", "copy"] },
+  { module: "staff", section: "avans_limity", labelRu: "Лимиты аванса", actions: ["view", "update"] },
   { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни", actions: ["view", "create", "update"] },
   { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update"] },
   { module: "staff", section: "zadachi", labelRu: "Задачи", actions: ["view", "create", "update"] },
@@ -281,6 +284,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Finance — yangi ────────────────────────────────────────
   { module: "finance", section: "obzor", labelRu: "Финансы", actions: ["view", "approve", "copy"] },
+  { module: "finance", section: "avans", labelRu: "Утверждение авансов", actions: ["view", "approve"] },
 
   // ── Pivot — konstruktor oilasi (nav: Конструктор сводной таблицы) ─
   { module: "pivot", section: "otchety", labelRu: "Конструктор отчётов", actions: VIEW_COPY },

@@ -28,6 +28,7 @@ import {
   getExpenseSummary,
   getPnlReport
 } from "./expenses.service";
+import { sendExpensePayrollError } from "./expenses.payroll-guard";
 
 function parseExpenseDate(raw: unknown): Date | null {
   if (raw == null) return null;
@@ -109,6 +110,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.status(201).send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
       throw e;
@@ -138,6 +140,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "AGENT_OUT_OF_SCOPE") return sendApiError(reply, request, 403, "AgentOutOfScope");
       throw e;
@@ -164,6 +167,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
       if (msg === "ALREADY_VOIDED") return sendApiError(reply, request, 409, "AlreadyVoided");
@@ -184,6 +188,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       const msg = e instanceof Error ? e.message : "";
       if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
       if (msg === "NOT_VOIDED") return sendApiError(reply, request, 409, "NotVoided");
@@ -202,6 +207,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       throw e;
     }
   });
@@ -222,6 +228,7 @@ export async function registerExpenseRoutes(app: FastifyInstance) {
       return reply.send(data);
     } catch (e) {
       if (isDocumentEditPeriodLockedError(e)) return sendDocumentEditPeriodLocked(reply, request);
+      if (sendExpensePayrollError(reply, request, e)) return;
       throw e;
     }
   });

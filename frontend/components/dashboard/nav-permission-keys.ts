@@ -102,6 +102,10 @@ export const NAV_PERM = {
   /** Faqat konsignatsiya — clients.klient.view ochmasin. */
   staffConsignment: ["staff.konsignatsiya.view"],
   staffPayroll: ["staff.zarplaty.view"],
+  staffAdvances: ["staff.avans.view"],
+  staffAdvanceLimits: ["staff.avans_limity.view", "staff.avans_limity.update"],
+  financeAdvances: ["finance.avans.view", "finance.avans.approve"],
+  cashPayrollQueue: ["cash.vydacha_zarplaty.view", "cash.vydacha_zarplaty.history"],
   staffWorkdays: ["staff.rabochie_dni.view", "staff.tabel.view"],
   staffTimesheet: ["staff.tabel.view"],
   staffTasks: ["staff.zadachi.view"],

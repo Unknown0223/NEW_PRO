@@ -1,62 +1,19 @@
 import type { WorkdaysState, Schedule } from "../tabel/workdays.service";
 import { getWorkdaysState } from "../tabel/workdays.service";
-
-const AGENT_ROLE = "Агент";
+import { isCalendarWorkingDay } from "../../lib/workday-calendar";
 
 /** Frontend `weekdayIndex` bilan bir xil: 0=Пн … 6=Вс. */
 function weekdayIndex(year: number, month: number, day: number): number {
   return (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
 }
 
-function scheduleHasWorkday(sch: Schedule | null | undefined): boolean {
-  return Array.isArray(sch) && sch.length === 7 && sch.some(Boolean);
-}
-
-function roleSchedule(state: WorkdaysState): Schedule {
-  const s = state.schedules[AGENT_ROLE];
-  if (scheduleHasWorkday(s)) return s;
-  return [true, true, true, true, true, true, false];
-}
-
-/**
- * Override faqat haqiqiy ish kunlari bo‘lsa qo‘llanadi.
- * Bo‘sh/noto‘g‘ri individual grafik → rol grafigiga qaytish
- * (aks holda 0 ish kuni chiqib, kunlik plan 0 bo‘ladi).
- */
-function resolveAgentSchedule(state: WorkdaysState, employeeId?: string | number | null): Schedule {
-  const id = employeeId != null ? String(employeeId).trim() : "";
-  if (id) {
-    const ov = state.overrides.find((o) => String(o.employeeId) === id);
-    if (ov && scheduleHasWorkday(ov.schedule)) return ov.schedule;
-  }
-  return roleSchedule(state);
-}
-
-/** Exception meta — frontend `EXCEPTION_META.makesWorkday` bilan bir xil. */
-function exceptionMakesWorkday(type: string): boolean | null {
-  if (type === "holiday" || type === "event") return false;
-  if (type === "forced" || type === "training") return true;
-  return null;
-}
-
-/**
- * Sana agent uchun ish kuni mi? (web «Рабочие дни» bilan bir xil ustuvorlik).
- */
+/** Sana agent uchun ish kuni mi? (yagona `workday-calendar` qoidasi). */
 export function isAgentWorkingDay(
   state: WorkdaysState,
   ymd: string,
   employeeId?: string | number | null
 ): boolean {
-  const [y, m, d] = ymd.split("-").map((x) => Number.parseInt(x, 10));
-  const roleExceptions = state.exceptions.filter(
-    (e) => e.date === ymd && (e.role === "ALL" || e.role === AGENT_ROLE)
-  );
-  if (roleExceptions.length > 0) {
-    const makes = exceptionMakesWorkday(roleExceptions[0]!.type);
-    if (makes != null) return makes;
-  }
-  const schedule = resolveAgentSchedule(state, employeeId);
-  return Boolean(schedule[weekdayIndex(y, m, d)]);
+  return isCalendarWorkingDay(state, "agent", employeeId ?? null, ymd);
 }
 
 /** Oy ichidagi agent ish kunlari (YYYY-MM-DD). */

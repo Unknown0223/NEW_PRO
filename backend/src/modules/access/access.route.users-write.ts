@@ -16,6 +16,7 @@ import {
 } from "./access-user-patch.apply";
 import { replaceUserScopes } from "./scope.service";
 import { adminOrAccessManager, patchAccessBodySchema } from "./access.route.shared";
+import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
 
 export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
   app.get("/api/:slug/access/users/:id/detail", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -120,6 +121,9 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
     const extraRoleTouched = body.extra_role_keys !== undefined;
     try {
       await applyAccessUserPatchBody(tenantId, id, body, existing);
+      if (body.is_active != null && body.is_active !== existing.is_active) {
+        await syncEmploymentAfterActiveChange(tenantId, [id], actorId);
+      }
     } catch (e) {
       if (e instanceof AccessManageRequiredError) {
         return sendApiError(

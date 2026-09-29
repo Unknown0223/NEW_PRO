@@ -15,6 +15,7 @@ import { env } from "../../config/env";
 import { sendApiError } from "../../lib/api-error";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { resolveUserPermissionKeys } from "./rbac.service";
+import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -38,6 +39,7 @@ function r(methods: Method[], test: RegExp, ...anyOf: string[]): RoutePermission
  * Maxsus (bulk/status) yo'llar umumiy yo'llardan OLDIN turishi kerak.
  */
 const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
+  ...PAYROLL_ROUTE_PERMISSION_RULES,
   // ─────────── Заказы (orders) ───────────
   r(WRITE, /\/orders\/[^/]+\/approval(\/|$)/, "plans.ustanovka_planov.approve"),
   r(READ, /\/orders\/[^/]+\/approval(\/|$)/, "orders.zakaz.view"),

@@ -81,7 +81,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("plans", "ustanovka_planov"),
       secOnly("work_slots", "raboche_mesto", ["view", "history", "update"]),
       secOnly("staff", "agent", ["activate", "deactivate"]),
-      secOnly("staff", "sotrudniki", ["activate", "deactivate"])
+      secOnly("staff", "sotrudniki", ["activate", "deactivate"]),
+      secOnly("staff", "zarplaty", ["view", "copy", "approve", "status"]),
+      sec("staff", "avans")
     ),
 
   sales_director: () =>
@@ -91,7 +93,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("orders"),
       modViewOnly("clients"),
       mod("plans"),
-      secOnly("work_slots", "raboche_mesto", ["view", "update", "history"])
+      secOnly("work_slots", "raboche_mesto", ["view", "update", "history"]),
+      sec("staff", "avans")
     ),
 
   regional_manager: () =>
@@ -101,7 +104,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("orders"),
       modViewOnly("clients"),
       sec("plans", "nastroyka_utverzhdayushchih"),
-      secOnly("plans", "ustanovka_planov", ["view", "update", "approve"])
+      secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
+      sec("staff", "avans")
     ),
 
   commercial_director: () =>
@@ -121,7 +125,11 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       mod("reports"),
       modViewOnly("orders"),
       sec("settings", "valyuty"),
-      sec("settings", "zakrytie_perioda")
+      sec("settings", "zakrytie_perioda"),
+      sec("staff", "zarplaty"),
+      sec("staff", "avans_limity"),
+      secOnly("staff", "avans", ["view", "copy"]),
+      secOnly("staff", "tabel", ["view"])
     ),
 
   cashier: () => uniq(mod("cash"), modViewOnly("orders"), modViewOnly("clients")),
@@ -189,7 +197,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       /** Kassa: mijoz balanslari (qarz/to‘lov) — Access orqali ham beriladi. */
       secOnly("cash", "balansy_klientov", ["view", "copy"]),
       mod("dashboard"),
-      sec("gps", "gps")
+      sec("gps", "gps"),
+      sec("staff", "avans")
     ),
 
   expeditor: () =>
@@ -226,7 +235,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       secOnly("plans", "ustanovka_planov", ["view", "update", "approve"]),
       secOnly("plans", "nastroyka_utverzhdayushchih", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view", "history"]),
-      secOnly("staff", "konsignatsiya", ["view"])
+      secOnly("staff", "konsignatsiya", ["view"]),
+      sec("staff", "avans")
     ),
   partner: () => uniq(modViewOnly("orders"), modViewOnly("clients")),
   storekeeper_view: () => modViewOnly("warehouse")

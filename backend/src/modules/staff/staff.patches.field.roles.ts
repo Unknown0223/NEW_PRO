@@ -18,6 +18,7 @@ import {
   toPrismaJsonEntitlements
 } from "./skladchik-entitlements";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import type { DistributionWebStaffRole } from "../../lib/tenant-user-roles";
 import {
   ADMIN_AND_OPERATOR_LIKE_ROLES,
@@ -139,6 +140,9 @@ export async function patchOperator(
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, operatorId, input.app_access);
     }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [operatorId], actorUserId);
+    }
 
     await appendTenantAuditEvent({
       tenantId,
@@ -250,6 +254,9 @@ export async function patchSkladchik(
     });
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, skladchikId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [skladchikId], actorUserId);
     }
   }
 

@@ -181,6 +181,21 @@ export const dashboardKassaNav: {
       ]
     },
     {
+      title: "ЗАРПЛАТА",
+      items: [
+        {
+          href: "/finance/advances/approval",
+          label: "Утверждение авансов",
+          showIfAnyPermission: [...NAV_PERM.financeAdvances]
+        },
+        {
+          href: "/finance/cashier-queue",
+          label: "Выдача аванса и зарплаты",
+          showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
+        }
+      ]
+    },
+    {
       title: "ОТЧЁТЫ",
       items: [
         { href: "/reports", label: "Отчёт по приходам", showIfAnyPermission: [...NAV_PERM.cashReports] },
@@ -298,8 +313,21 @@ export const dashboardUsersNav: {
           label: "Консигнация",
           showIfAnyPermission: [...NAV_PERM.staffConsignment]
         },
-        { href: "#", label: "Настройки бонусов и зарплат", placeholder: true },
-        { href: "/settings/payroll", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "Конструктор формул", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/users/bonus-and-salary-settings",
+          label: "Настройки бонусов и зарплат",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/users/advances", label: "Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
+        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/settings/payroll/advance-limits",
+          label: "Лимиты авансов",
+          showIfAnyPermission: [...NAV_PERM.staffAdvanceLimits]
+        },
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
         {

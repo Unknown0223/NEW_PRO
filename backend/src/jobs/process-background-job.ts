@@ -52,6 +52,16 @@ export async function processBackgroundJob(job: Job): Promise<unknown> {
     return { ok: true };
   }
 
+  if (job.name === "payroll_recalc") {
+    const { processPayrollRecalcJob } = await import("../modules/payroll/payroll.jobs");
+    return processPayrollRecalcJob(job.data as import("../modules/payroll/payroll.jobs").PayrollRecalcJobData);
+  }
+
+  if (job.name === "payroll_sweep") {
+    const { processPayrollSweepJob } = await import("../modules/payroll/payroll.jobs");
+    return processPayrollSweepJob(job.data as import("../modules/payroll/payroll.jobs").PayrollSweepJobData);
+  }
+
   if (job.name === "order_auto_confirm") {
     const d = job.data as import("../modules/order-automation/order-automation.jobs").OrderAutoConfirmJobData;
     const { executeAutoConfirmSchedule } = await import(

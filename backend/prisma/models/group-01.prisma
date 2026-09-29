@@ -157,6 +157,10 @@ model User {
   ui_preferences             Json                    @default("{}")
   /// Savdo yo‘nalishi (spravochnik) — `trade_direction` matni avtomatik sinxronlanadi
   trade_direction_id         Int?
+  /// Ishga olingan sana (payroll: shu kundan oldin «ishlamagan»)
+  hired_at                   DateTime?
+  /// Bo'shatilgan sana (nofaol qilinganda avtomatik; qayta ishga olinganda tozalanadi)
+  dismissed_at               DateTime?
   agent_route_days           AgentRouteDay[]
   agent_visits               AgentVisit[]
   client_refusals_as_agent   ClientRefusal[]         @relation("ClientRefusalAgent")

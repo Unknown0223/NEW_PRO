@@ -4,6 +4,7 @@ import { prisma } from "../../config/database";
 import { assertValidMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { parseMobileConfigV1, type AgentMobileConfigV1 } from "./agent-mobile-config";
 import type { AgentEntitlements, ExpeditorAssignmentRules, StaffRow } from "./staff.shared";
 import {
@@ -144,6 +145,9 @@ export async function patchExpeditor(
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, expeditorId, input.app_access);
     }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [expeditorId], actorUserId);
+    }
 
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };
@@ -269,6 +273,9 @@ export async function patchCollector(
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, collectorId, input.app_access);
     }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [collectorId], actorUserId);
+    }
     const auditKeys = Object.keys(data).filter((k) => k !== "password_hash");
     const auditPayload: Record<string, unknown> = { keys: auditKeys };
     await appendTenantAuditEvent({
@@ -352,6 +359,9 @@ export async function patchAuditor(
     await prisma.user.update({ where: { id: auditorId }, data });
     if (input.app_access !== undefined) {
       await onAppAccessChanged(tenantId, auditorId, input.app_access);
+    }
+    if (input.is_active !== undefined) {
+      await syncEmploymentAfterActiveChange(tenantId, [auditorId], actorUserId);
     }
     await appendTenantAuditEvent({
       tenantId,

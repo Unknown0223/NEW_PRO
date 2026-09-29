@@ -61,6 +61,7 @@ import {
 import { listStaff, type PatchAgentInput, type SessionRowDto } from "./staff.crud";
 import { applyAgentPatchInDb } from "./staff.patches.field.agent";
 import { onAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { assertWorkplaceStaffPatchAllowed } from "../work-slots/work-slots.staff-guard";
 
 export type PatchSupervisorInput = Omit<PatchAgentInput, "supervisor_user_id"> & {
@@ -216,6 +217,9 @@ export async function patchSupervisor(
 
   if (input.app_access !== undefined) {
     await onAppAccessChanged(tenantId, supervisorId, input.app_access);
+  }
+  if (input.is_active !== undefined) {
+    await syncEmploymentAfterActiveChange(tenantId, [supervisorId], actorUserId);
   }
 
   if (Object.keys(data).length > 0) {

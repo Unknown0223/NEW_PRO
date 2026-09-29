@@ -28,7 +28,8 @@ export const AuditEntityType = {
   warehouse_block: "warehouse_block",
   currency_rate: "currency_rate",
   automation_rule: "automation_rule",
-  client_dedupe: "client_dedupe"
+  client_dedupe: "client_dedupe",
+  payroll: "payroll"
 } as const;
 
 export type AuditEntityTypeValue = (typeof AuditEntityType)[keyof typeof AuditEntityType];

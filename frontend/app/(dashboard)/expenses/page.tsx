@@ -20,6 +20,7 @@ import {
   splitMultiFilterValues
 } from "@/lib/client-filter-select-value";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
+import { isPayrollExpense, PayrollExpenseSource } from "@/components/payroll/payroll-expense-source";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch, useTenant } from "@/lib/api-client";
@@ -43,6 +44,8 @@ interface Expense {
   created_by_name: string | null;
   deleted_at?: string | null;
   deleted_by_name?: string | null;
+  source_type?: string | null;
+  source_id?: number | null;
 }
 
 interface PnlReport {
@@ -54,7 +57,7 @@ interface PnlReport {
 
 const typeMap: Record<string, string> = {
   transport: "Transport", marketing: "Marketing", rent: "Ijara", salary: "Ish haqi",
-  office: "Ofis", other: "Boshqa", draft: "Qoralama", approved: "Tasdiqlangan", rejected: "Rad etilgan"
+  office: "Ofis", other: "Boshqa", payroll_advance: "Avans", payroll_salary: "Ish haqi (kassa)", draft: "Qoralama", approved: "Tasdiqlangan", rejected: "Rad etilgan"
 };
 
 type SettingsProfile = {
@@ -345,7 +348,7 @@ export default function ExpensesPage() {
                   <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Ma’lumot yo‘q</TableCell></TableRow>
                 ) : expenses.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell>{expenseTypeLabel(e.expense_type)}</TableCell>
+                    <TableCell>{expenseTypeLabel(e.expense_type)}<PayrollExpenseSource sourceType={e.source_type} sourceId={e.source_id} /></TableCell>
                     <TableCell className="font-medium tabular-nums">{formatNumberGrouped(e.amount, { maxFractionDigits: 2 })} {e.currency}</TableCell>
                     <TableCell>{e.agent_name || "—"}</TableCell>
                     <TableCell>
@@ -358,7 +361,7 @@ export default function ExpensesPage() {
                     <TableCell>{new Date(e.expense_date).toLocaleDateString()}</TableCell>
                     <TableCell>{e.warehouse_name || "—"}</TableCell>
                     <TableCell className="text-right">
-                      {showArchive ? (
+                      {isPayrollExpense(e.source_type) ? null : showArchive ? (
                         <Button size="sm" variant="outline" onClick={() => void handleRestoreExpense(e.id)}>
                           Восстановить
                         </Button>

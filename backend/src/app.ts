@@ -23,6 +23,7 @@ import { GLOBAL_HTTP_BODY_LIMIT_BYTES } from "./lib/constants";
 import { helmetOptions } from "./lib/helmet-options";
 import { sendApiError, zodValidationExtras } from "./lib/api-error";
 import { registerAllRoutes } from "./route-registry";
+import { registerPayrollMutationHook } from "./modules/payroll/payroll.auto-hooks";
 
 export function buildApp() {
   const app = Fastify({
@@ -57,6 +58,7 @@ export function buildApp() {
   void registerWebVitalsRoutes(app);
   /** Strukturali ruxsat tekshiruvi (RBAC_ENFORCE_PERMISSIONS=1 bo‘lganda faol). */
   registerRoutePermissionGuard(app);
+  registerPayrollMutationHook(app);
   registerAllRoutes(app);
 
   /** Mobil ServerClock uchun ishonchli UTC (HTTP Date ba'zan proxy’da chalkashadi). */

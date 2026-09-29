@@ -14,6 +14,7 @@ import {
   listAccessHistoryActionTypes
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
+import { syncEmploymentAfterActiveChange } from "../staff/staff.employment-sync";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
@@ -240,6 +241,10 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
         return sendApiError(reply, request, 400, "SUPERVISEE_PATCH", e.message);
       }
       throw e;
+    }
+    const activeChangedIds = items.filter((it) => it.is_active != null).map((it) => it.user_id);
+    if (activeChangedIds.length > 0) {
+      await syncEmploymentAfterActiveChange(tenantId, activeChangedIds, actorId);
     }
     void prisma.accessLog
       .create({

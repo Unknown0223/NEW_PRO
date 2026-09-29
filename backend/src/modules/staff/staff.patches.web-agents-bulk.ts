@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { assertValidMaxSessions, clampAdjustedMaxSessions } from "../../lib/max-sessions";
 import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit";
 import { onBulkAppAccessChanged } from "../auth/app-access.service";
+import { syncEmploymentAfterActiveChange } from "./staff.employment-sync";
 import { validateConsignmentCloseSchedule } from "../consignment/consignment-settings";
 import {
   extractMobileConfigFromEntitlementsUnknown,
@@ -202,6 +203,7 @@ export async function bulkPatchAgents(
         where: { tenant_id: tenantId, role: "agent", id: { in: ids } },
         data: { is_active: input.is_active }
       });
+      await syncEmploymentAfterActiveChange(tenantId, ids, actorUserId);
       await auditBulk(ids.length, { is_active: input.is_active });
       return { updated: ids.length };
     }

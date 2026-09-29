@@ -93,6 +93,7 @@ export function decideWorkday(
   }
   const override = state.overrides.find((o) => String(o.employeeId) === String(userId));
   const schedule = hasWorkday(override?.schedule) ? override!.schedule : state.schedules[wdRole];
+  // Kirish cheklovi: grafik bo'sh bo'lsa bloklamaymiz (payroll esa `workday-calendar` default grafigini oladi).
   if (!hasWorkday(schedule)) return { working: true, reason: "schedule" };
   return { working: Boolean(schedule[weekdayIndex(ymd)]), reason: "schedule" };
 }
