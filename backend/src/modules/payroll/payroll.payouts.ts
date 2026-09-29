@@ -10,7 +10,17 @@ import { assertAdvanceWithinLimit } from "./payroll.advance-limits";
 import { cashDesksForBranch, cashierDeskIds, loadAdvanceUsers, loadTenantBranches, type AdvanceActor } from "./payroll.advances.shared";
 import { markPayrollDirty } from "./payroll.dirty";
 import { notifyPermissionHolders } from "./payroll.notify";
+import { recalcPayrollRecord } from "./payroll.recalc";
 import { PayrollError } from "./payroll.route-helpers";
+
+/** Qoldiq kassirga darhol to'g'ri ko'rinishi uchun — bitta yozuv sinxron qayta hisoblanadi. */
+async function refreshAfterPayout(tenantId: number, userId: number, year: number, month: number, reason: string) {
+  try {
+    await recalcPayrollRecord(tenantId, userId, year, month, { trigger: reason, force: true });
+  } catch {
+    await markPayrollDirty(tenantId, { userIds: [userId], year, month }, reason);
+  }
+}
 
 export type PayInput = {
   kind: "advance" | "salary";
@@ -169,7 +179,7 @@ export async function payPayroll(tenantId: number, actor: AdvanceActor, input: P
     action: `payroll.payout.${input.kind}`,
     payload: { user_id: userId, amount: conv.amount, currency, amount_uzs: amountUzs, cash_desk_id: input.cash_desk_id }
   });
-  await markPayrollDirty(tenantId, { userIds: [userId], year, month }, `payout_${input.kind}`);
+  await refreshAfterPayout(tenantId, userId, year, month, `payout_${input.kind}`);
   return payout;
 }
 
@@ -205,5 +215,5 @@ export async function reversePayout(tenantId: number, actor: AdvanceActor, id: n
     action: "payroll.payout.reverse",
     payload: { reason: why, kind: p.kind, amount: Number(p.amount), currency: p.currency }
   });
-  await markPayrollDirty(tenantId, { userIds: [p.user_id], year: p.year, month: p.month }, "payout_reverse");
+  await refreshAfterPayout(tenantId, p.user_id, p.year, p.month, "payout_reverse");
 }

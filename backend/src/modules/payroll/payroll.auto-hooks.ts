@@ -8,7 +8,7 @@ const ORDER_DEBOUNCE_MS = 3000;
 const pendingOrders = new Map<string, ReturnType<typeof setTimeout>>();
 
 /**
- * Zakaz/qaytarish o'zgarishi (order event bus): agent, ekspeditor va agentning supervayzeri oyligi eskiradi.
+ * Zakaz o'zgarishi (order event bus): agent, ekspeditor va agentning supervayzeri oyligi eskiradi.
  * Yetkazish oyi ochiq oylardan tashqarida bo'lsa, shu oy ham belgilanadi (muzlatilgan bo'lsa → Корректировка).
  */
 async function onOrderChanged(tenantId: number, orderId: number): Promise<void> {
@@ -60,8 +60,13 @@ const userFromMatch = (m: RegExpMatchArray): DirtyTarget => {
   return Number.isInteger(id) && id > 0 ? { userIds: [id] } : {};
 };
 
-/** Birinchi mos qoida ishlaydi. Zakaz va qaytarishlar order event bus orqali alohida. */
+/** Birinchi mos qoida ishlaydi. Zakazlar order event bus orqali alohida. */
 const RULES: Rule[] = [
+  {
+    re: /^\/api\/[^/]+\/returns(\/(period|period-batch|full-order|\d+\/(accept|reject)|daily-waybills\/[^/]+\/[^/]+\/accept))?$/,
+    reason: "returns",
+    target: tenantWide
+  },
   {
     re: /^\/api\/[^/]+\/timesheet\/(\d+)\/(\d{4})-(\d{2})-\d{2}$/,
     reason: "timesheet",

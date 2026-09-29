@@ -1,6 +1,7 @@
 /**
- * KPI fakt — sof (pure) hisob: yetkazilgan zakaz qatorlari − qabul qilingan qaytarishlar.
- * Oy yetkazish sanasi bo'yicha; qaytarish asl zakazning oyi va agentiga yoziladi.
+ * KPI fakt — sof (pure) hisob: yetkazilgan zakaz qatorlari − barcha qaytarishlar (bekor qilinganidan tashqari).
+ * Oy yetkazish sanasi bo'yicha; qaytarish asl zakazning oyi va agentiga yoziladi,
+ * zakazga taqsimlanmagani — mijozning oxirgi agentiga, qaytarish oyida.
  */
 
 export type KpiMetrics = { cost: number; count: number; volume: number; acb: number; order_count: number };
@@ -191,6 +192,45 @@ export function allocatePeriodReturns(
     }
   }
   return { allocs, unallocated };
+}
+
+/** Zakazga taqsimlanmagan qaytarish qismi — mijozga oxirgi sotgan agentdan qaytarish oyida ayiriladi. */
+export type OrphanReturn = {
+  agent_id: number;
+  work_slot_id: number | null;
+  product_id: number;
+  qty: number;
+  unit_price: number;
+  volume_unit: number;
+};
+
+/** Fakt 0 dan pastga tushmaydi; АКБ va zakazlar soni o'zgarmaydi (yangi mijoz/zakaz yo'q). */
+export function applyOrphanReturns(
+  fact: UserFact,
+  orphans: OrphanReturn[],
+  productGroups: Map<number, number[]>
+): UserFact {
+  if (!orphans.length) return fact;
+  const sub = (m: KpiMetrics, cost: number, count: number, volume: number): KpiMetrics => ({
+    ...m,
+    cost: r2(Math.max(0, m.cost - cost)),
+    count: r2(Math.max(0, m.count - count)),
+    volume: r2(Math.max(0, m.volume - volume))
+  });
+  let total = fact.total;
+  const byGroup = new Map(fact.byGroup);
+  let returned = fact.returned_sum;
+  for (const o of orphans) {
+    if (o.qty <= 0) continue;
+    const cost = o.qty * o.unit_price;
+    const vol = o.qty * o.volume_unit;
+    total = sub(total, cost, o.qty, vol);
+    for (const g of productGroups.get(o.product_id) ?? []) {
+      byGroup.set(g, sub(byGroup.get(g) ?? { ...ZERO_METRICS }, cost, o.qty, vol));
+    }
+    returned += cost;
+  }
+  return { ...fact, total, byGroup, returned_sum: r2(returned) };
 }
 
 export function sumMetrics(list: KpiMetrics[]): KpiMetrics {

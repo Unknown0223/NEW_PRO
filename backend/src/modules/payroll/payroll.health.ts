@@ -31,14 +31,12 @@ export async function getPayrollHealth(tenantId: number, year: number, month: nu
     prisma.product.count({ where: { tenant_id: tenantId, is_active: true, OR: [{ volume_m3: null }, { volume_m3: 0 }] } }),
     prisma.$queryRaw<Array<{ n: bigint }>>(Prisma.sql`
       SELECT COUNT(*)::bigint AS n FROM sales_returns sr
-      WHERE sr.tenant_id = ${tenantId} AND sr.status = 'posted' AND sr.order_id IS NULL
-        AND sr.date_from IS NOT NULL AND sr.date_to IS NOT NULL
-        AND sr.date_from < ${range.to} AND sr.date_to >= ${range.from}
+      WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id IS NULL
+        AND sr.created_at >= ${range.from} AND sr.created_at < ${range.to}
         AND NOT EXISTS (
           SELECT 1 FROM orders o
-          JOIN order_status_logs l ON l.order_id = o.id AND l.to_status = 'delivered' AND l.superseded_at IS NULL
           WHERE o.tenant_id = sr.tenant_id AND o.client_id = sr.client_id AND o.order_type = 'order'
-            AND l.created_at >= sr.date_from AND l.created_at < sr.date_to + interval '1 day'
+            AND o.status <> 'cancelled' AND o.agent_id IS NOT NULL AND o.created_at <= sr.created_at
         )`),
     prisma.payrollAdvance.findMany({
       where: { tenant_id: tenantId, status: "approved" },
@@ -78,8 +76,8 @@ export async function getPayrollHealth(tenantId: number, year: number, month: nu
       key: "unallocated_returns",
       level: "warning",
       count: Number(unallocated[0]?.n ?? 0),
-      title: "Возвраты без заказа",
-      hint: "Периодный возврат не удалось привязать к доставленному заказу — он не уменьшил KPI агента."
+      title: "Возвраты без агента",
+      hint: "У клиента нет заказов с агентом — возврат не удалось отнести ни к одному агенту и он не уменьшил KPI."
     },
     {
       key: "pending_plans",

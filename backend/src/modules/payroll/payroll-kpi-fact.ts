@@ -3,16 +3,18 @@ import { prisma } from "../../config/database";
 import {
   aggregateKpiFact,
   allocatePeriodReturns,
+  applyOrphanReturns,
   mergeUserFacts,
   ZERO_METRICS,
   type FactLine,
   type KpiMetrics,
+  type OrphanReturn,
   type PeriodCandidate,
   type ReturnAlloc,
   type UserFact
 } from "./payroll-kpi-fact.pure";
 
-export type DatedFactLine = FactLine & { delivered_at: Date; created_at: Date };
+export type DatedFactLine = FactLine & { delivered_at: Date; created_at: Date; fully_returned: boolean };
 type Range = { from: Date; to: Date };
 
 type LineFilter = { agentIds?: number[]; expeditorIds?: number[]; slotIds?: number[]; clientIds?: number[] };
@@ -42,6 +44,7 @@ export async function loadDeliveredLines(tenantId: number, range: Range, f: Line
       qty: Prisma.Decimal;
       total: Prisma.Decimal;
       volume_unit: Prisma.Decimal;
+      fully_returned: boolean;
     }>
   >`
     WITH dl AS (
@@ -60,7 +63,8 @@ export async function loadDeliveredLines(tenantId: number, range: Range, f: Line
       GROUP BY l.order_id
     )
     SELECT o.id AS order_id, o.agent_id, o.expeditor_user_id, o.work_slot_id, o.client_id, o.created_at,
-           dl.delivered_at, oi.product_id, oi.qty, oi.total, COALESCE(p.volume_m3, 0) AS volume_unit
+           dl.delivered_at, oi.product_id, oi.qty, oi.total, COALESCE(p.volume_m3, 0) AS volume_unit,
+           (o.status = 'returned') AS fully_returned
     FROM dl
     JOIN orders o ON o.id = dl.order_id
     JOIN order_items oi ON oi.order_id = o.id AND oi.is_bonus = false
@@ -76,7 +80,8 @@ export async function loadDeliveredLines(tenantId: number, range: Range, f: Line
     product_id: r.product_id,
     qty: Number(r.qty),
     total: Number(r.total),
-    volume_unit: Number(r.volume_unit)
+    volume_unit: Number(r.volume_unit),
+    fully_returned: r.fully_returned
   }));
 }
 
@@ -90,50 +95,23 @@ export async function loadProductGroups(tenantId: number): Promise<Map<number, n
   return m;
 }
 
-/** Zakazga bog'langan va davr qaytarishlari (posted) → zakaz × mahsulot qty. */
-export async function loadReturnAllocs(
-  tenantId: number,
-  range: Range,
-  lines: DatedFactLine[]
-): Promise<{ allocs: ReturnAlloc[]; unallocated_qty: number; unallocated_count: number }> {
-  const orderIds = [...new Set(lines.map((l) => l.order_id))];
-  const allocs: ReturnAlloc[] = [];
-  if (orderIds.length) {
-    const rows = await prisma.$queryRaw<Array<{ order_id: number; product_id: number; qty: Prisma.Decimal }>>`
-      SELECT sr.order_id, srl.product_id,
-             SUM(COALESCE(srl.paid_qty, srl.qty - COALESCE(srl.bonus_qty, 0))) AS qty
-      FROM sales_returns sr
-      JOIN sales_return_lines srl ON srl.return_id = sr.id
-      WHERE sr.tenant_id = ${tenantId} AND sr.status = 'posted' AND sr.order_id = ANY(${orderIds}::int[])
-      GROUP BY sr.order_id, srl.product_id`;
-    for (const r of rows) allocs.push({ order_id: r.order_id, product_id: r.product_id, qty: Number(r.qty) });
-  }
+const DAY_MS = 86_400_000;
+const PAID_QTY = Prisma.sql`SUM(COALESCE(srl.paid_qty, srl.qty - COALESCE(srl.bonus_qty, 0)))`;
 
-  const clientIds = [...new Set(lines.map((l) => l.client_id))];
-  if (!clientIds.length) return { allocs, unallocated_qty: 0, unallocated_count: 0 };
-  const periodRows = await prisma.$queryRaw<
-    Array<{ return_id: number; client_id: number; date_from: Date; date_to: Date; product_id: number; qty: Prisma.Decimal }>
-  >`
-    SELECT sr.id AS return_id, sr.client_id, sr.date_from, sr.date_to, srl.product_id,
-           SUM(COALESCE(srl.paid_qty, srl.qty - COALESCE(srl.bonus_qty, 0))) AS qty
-    FROM sales_returns sr
-    JOIN sales_return_lines srl ON srl.return_id = sr.id
-    WHERE sr.tenant_id = ${tenantId} AND sr.status = 'posted' AND sr.order_id IS NULL
-      AND sr.client_id = ANY(${clientIds}::int[])
-      AND sr.date_from IS NOT NULL AND sr.date_to IS NOT NULL
-      AND sr.date_from < ${range.to} AND sr.date_to >= ${range.from}
-    GROUP BY sr.id, sr.client_id, sr.date_from, sr.date_to, srl.product_id`;
-  if (!periodRows.length) return { allocs, unallocated_qty: 0, unallocated_count: 0 };
+type PeriodRow = { return_id: number; client_id: number; date_from: Date; date_to: Date; product_id: number; qty: number };
 
-  const minFrom = new Date(Math.min(...periodRows.map((r) => r.date_from.getTime())));
-  const maxTo = new Date(Math.max(...periodRows.map((r) => r.date_to.getTime())) + 86_400_000);
-  const candLines = await loadDeliveredLines(tenantId, { from: minFrom, to: maxTo }, {
-    clientIds: [...new Set(periodRows.map((r) => r.client_id))]
-  });
+/** Davr qaytarishlarini mijozning shu oraliqda yetkazilgan (to'liq qaytarilmagan) zakazlariga taqsimlash. */
+async function allocatePeriodRows(tenantId: number, rows: PeriodRow[]) {
+  if (!rows.length) return { allocs: [] as ReturnAlloc[], unallocated: [] as Array<{ return_id: number; product_id: number; qty: number }> };
+  const minFrom = new Date(Math.min(...rows.map((r) => r.date_from.getTime())));
+  const maxTo = new Date(Math.max(...rows.map((r) => r.date_to.getTime())) + DAY_MS);
+  const candLines = (
+    await loadDeliveredLines(tenantId, { from: minFrom, to: maxTo }, { clientIds: [...new Set(rows.map((r) => r.client_id))] })
+  ).filter((c) => !c.fully_returned);
   const candidatesByReturn = new Map<number, PeriodCandidate[]>();
-  for (const pr of periodRows) {
+  for (const pr of rows) {
     if (candidatesByReturn.has(pr.return_id)) continue;
-    const endExcl = pr.date_to.getTime() + 86_400_000;
+    const endExcl = pr.date_to.getTime() + DAY_MS;
     candidatesByReturn.set(
       pr.return_id,
       candLines
@@ -146,17 +124,134 @@ export async function loadReturnAllocs(
         .map((c) => ({ order_id: c.order_id, client_id: c.client_id, product_id: c.product_id, qty: c.qty }))
     );
   }
-  const res = allocatePeriodReturns(
-    periodRows.map((r) => ({ return_id: r.return_id, client_id: r.client_id, product_id: r.product_id, qty: Number(r.qty) })),
-    candidatesByReturn
-  );
+  return allocatePeriodReturns(rows, candidatesByReturn);
+}
+
+/**
+ * Zakaz qatorlariga tushadigan qaytarishlar (bekor qilinganidan tashqari hammasi):
+ * to'liq qaytarilgan zakaz (status `returned`), zakazga bog'langan va davr qaytarishlari.
+ */
+export async function loadReturnAllocs(
+  tenantId: number,
+  range: Range,
+  lines: DatedFactLine[]
+): Promise<{ allocs: ReturnAlloc[] }> {
+  const orderIds = [...new Set(lines.map((l) => l.order_id))];
+  const allocs: ReturnAlloc[] = lines
+    .filter((l) => l.fully_returned)
+    .map((l) => ({ order_id: l.order_id, product_id: l.product_id, qty: l.qty }));
+  if (orderIds.length) {
+    const rows = await prisma.$queryRaw<Array<{ order_id: number; product_id: number; qty: Prisma.Decimal }>>`
+      SELECT sr.order_id, srl.product_id, ${PAID_QTY} AS qty
+      FROM sales_returns sr
+      JOIN sales_return_lines srl ON srl.return_id = sr.id
+      WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id = ANY(${orderIds}::int[])
+      GROUP BY sr.order_id, srl.product_id`;
+    for (const r of rows) allocs.push({ order_id: r.order_id, product_id: r.product_id, qty: Number(r.qty) });
+  }
+
+  const clientIds = [...new Set(lines.map((l) => l.client_id))];
+  if (!clientIds.length) return { allocs };
+  const periodRows = await prisma.$queryRaw<
+    Array<{ return_id: number; client_id: number; date_from: Date; date_to: Date; product_id: number; qty: Prisma.Decimal }>
+  >`
+    SELECT sr.id AS return_id, sr.client_id, sr.date_from, sr.date_to, srl.product_id, ${PAID_QTY} AS qty
+    FROM sales_returns sr
+    JOIN sales_return_lines srl ON srl.return_id = sr.id
+    WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id IS NULL
+      AND sr.client_id = ANY(${clientIds}::int[])
+      AND sr.date_from IS NOT NULL AND sr.date_to IS NOT NULL
+      AND sr.date_from < ${range.to} AND sr.date_to >= ${range.from}
+    GROUP BY sr.id, sr.client_id, sr.date_from, sr.date_to, srl.product_id`;
+  const res = await allocatePeriodRows(tenantId, periodRows.map((r) => ({ ...r, qty: Number(r.qty) })));
   const inMonth = new Set(orderIds);
   allocs.push(...res.allocs.filter((a) => inMonth.has(a.order_id)));
-  return {
-    allocs,
-    unallocated_qty: res.unallocated.reduce((s, u) => s + u.qty, 0),
-    unallocated_count: res.unallocated.length
-  };
+  return { allocs };
+}
+
+/**
+ * Zakazga taqsimlanmagan qaytarishlar (davrsiz yoki davrida yetkazish yo'q): shu oyda yaratilgan,
+ * mijozga oxirgi sotgan agentga yoziladi. Narx: ko'zgu zakaz → agent zakazi → mahsulotning oxirgi narxi.
+ */
+export async function loadOrphanReturns(tenantId: number, range: Range, agentIds: number[]): Promise<OrphanReturn[]> {
+  if (!agentIds.length) return [];
+  const rows = await prisma.$queryRaw<
+    Array<{
+      return_id: number;
+      client_id: number;
+      date_from: Date | null;
+      date_to: Date | null;
+      product_id: number;
+      qty: Prisma.Decimal;
+      agent_id: number;
+      work_slot_id: number | null;
+      unit_price: Prisma.Decimal | null;
+      volume_unit: Prisma.Decimal;
+    }>
+  >`
+    WITH x AS (
+      SELECT sr.id AS return_id, sr.client_id, sr.date_from, sr.date_to, sr.created_at, sr.mirror_order_id,
+             srl.product_id, ${PAID_QTY} AS qty
+      FROM sales_returns sr
+      JOIN sales_return_lines srl ON srl.return_id = sr.id
+      WHERE sr.tenant_id = ${tenantId} AND sr.status <> 'cancelled' AND sr.order_id IS NULL
+        AND sr.created_at >= ${range.from} AND sr.created_at < ${range.to}
+      GROUP BY sr.id, sr.client_id, sr.date_from, sr.date_to, sr.created_at, sr.mirror_order_id, srl.product_id
+    )
+    SELECT x.return_id, x.client_id, x.date_from, x.date_to, x.product_id, x.qty,
+           a.agent_id, a.work_slot_id, COALESCE(p.volume_m3, 0) AS volume_unit,
+           COALESCE(
+             (SELECT ABS(mi.total) / mi.qty FROM order_items mi
+              WHERE mi.order_id = x.mirror_order_id AND mi.product_id = x.product_id AND mi.qty > 0 AND mi.total <> 0 LIMIT 1),
+             a.unit_price,
+             (SELECT oi.total / oi.qty FROM order_items oi JOIN orders o2 ON o2.id = oi.order_id
+              WHERE o2.tenant_id = ${tenantId} AND o2.order_type = 'order' AND oi.product_id = x.product_id
+                AND oi.is_bonus = false AND oi.qty > 0
+              ORDER BY o2.created_at DESC LIMIT 1)
+           ) AS unit_price
+    FROM x
+    JOIN products p ON p.id = x.product_id
+    JOIN LATERAL (
+      SELECT o.agent_id, o.work_slot_id,
+             (SELECT oi.total / oi.qty FROM order_items oi
+              WHERE oi.order_id = o.id AND oi.product_id = x.product_id AND oi.is_bonus = false AND oi.qty > 0 LIMIT 1) AS unit_price
+      FROM orders o
+      WHERE o.tenant_id = ${tenantId} AND o.client_id = x.client_id AND o.order_type = 'order'
+        AND o.status <> 'cancelled' AND o.agent_id IS NOT NULL AND o.created_at <= x.created_at
+      ORDER BY EXISTS (
+        SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product_id = x.product_id AND oi.is_bonus = false
+      ) DESC, o.created_at DESC
+      LIMIT 1
+    ) a ON true
+    WHERE a.agent_id = ANY(${agentIds}::int[])`;
+  if (!rows.length) return [];
+
+  const periodRows: PeriodRow[] = rows
+    .filter((r) => r.date_from && r.date_to)
+    .map((r) => ({
+      return_id: r.return_id,
+      client_id: r.client_id,
+      date_from: r.date_from!,
+      date_to: r.date_to!,
+      product_id: r.product_id,
+      qty: Number(r.qty)
+    }));
+  const { unallocated } = await allocatePeriodRows(tenantId, periodRows);
+  const left = new Map(unallocated.map((u) => [`${u.return_id}:${u.product_id}`, u.qty]));
+  return rows.flatMap((r) => {
+    const qty = r.date_from && r.date_to ? (left.get(`${r.return_id}:${r.product_id}`) ?? 0) : Number(r.qty);
+    if (qty <= 0) return [];
+    return [
+      {
+        agent_id: r.agent_id,
+        work_slot_id: r.work_slot_id,
+        product_id: r.product_id,
+        qty,
+        unit_price: Number(r.unit_price ?? 0),
+        volume_unit: Number(r.volume_unit)
+      }
+    ];
+  });
 }
 
 /** Oflayn zakazlarda `work_slot_id` yo'q bo'lsa — zakaz paytidagi o'rin oralig'i. */
@@ -245,15 +340,22 @@ export async function computeUserMonthFact(
   const agentLines = await loadDeliveredLines(tenantId, range, { agentIds: [userId] });
   await fillMissingSlots(tenantId, agentLines);
   const ret = await loadReturnAllocs(tenantId, range, agentLines);
-  const agent = agentLines.length ? mergeUserFacts(agentLines, ret.allocs, groups, userId) : emptyFact(userId);
+  const orphans = await loadOrphanReturns(tenantId, range, [userId]);
+  const agent = applyOrphanReturns(
+    agentLines.length ? mergeUserFacts(agentLines, ret.allocs, groups, userId) : emptyFact(userId),
+    orphans,
+    groups
+  );
   const bySlot = new Map<number, UserFact>();
   for (const f of aggregateKpiFact(agentLines, ret.allocs, groups).values()) {
-    if (f.user_id === userId && f.work_slot_id != null) bySlot.set(f.work_slot_id, f);
+    if (f.user_id !== userId || f.work_slot_id == null) continue;
+    const slotId = f.work_slot_id;
+    bySlot.set(slotId, applyOrphanReturns(f, orphans.filter((o) => o.work_slot_id === slotId), groups));
   }
 
   const expeditor: ExpeditorFact = { delivered_count: 0, delivered_sum: 0, delivered_volume: 0, clients: 0 };
   if (role === "expeditor") {
-    const ex = await loadDeliveredLines(tenantId, range, { expeditorIds: [userId] });
+    const ex = (await loadDeliveredLines(tenantId, range, { expeditorIds: [userId] })).filter((l) => !l.fully_returned);
     const orders = new Set<number>();
     const clients = new Set<number>();
     for (const l of ex) {
@@ -269,12 +371,18 @@ export async function computeUserMonthFact(
   }
 
   let team: UserFact | null = null;
-  let teamUnalloc = 0;
+  let teamOrphans = 0;
   if (role === "supervisor") {
     const tl = await teamLines(tenantId, userId, range);
     const tr = await loadReturnAllocs(tenantId, range, tl);
-    teamUnalloc = tr.unallocated_count;
-    team = mergeUserFacts(tl.map((l) => ({ ...l, agent_id: userId })), tr.allocs, groups, userId);
+    const teamAgents = [...new Set(tl.map((l) => l.agent_id).filter((x): x is number => x != null))];
+    const to = await loadOrphanReturns(tenantId, range, teamAgents);
+    teamOrphans = to.length;
+    team = applyOrphanReturns(
+      mergeUserFacts(tl.map((l) => ({ ...l, agent_id: userId })), tr.allocs, groups, userId),
+      to,
+      groups
+    );
   }
 
   return {
@@ -282,7 +390,7 @@ export async function computeUserMonthFact(
     bySlot,
     expeditor,
     team,
-    diagnostics: { unallocated_returns: ret.unallocated_count + teamUnalloc, multi_group_products: multiGroup }
+    diagnostics: { unallocated_returns: orphans.length + teamOrphans, multi_group_products: multiGroup }
   };
 }
 

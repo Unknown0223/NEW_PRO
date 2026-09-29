@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateKpiFact,
   allocatePeriodReturns,
+  applyOrphanReturns,
   mergeUserFacts,
   type FactLine
 } from "../src/modules/payroll/payroll-kpi-fact.pure";
@@ -58,6 +59,30 @@ describe("aggregateKpiFact", () => {
     const merged = mergeUserFacts(lines, [], groups, 10);
     expect(merged.total.cost).toBe(2000);
     expect(merged.total.acb).toBe(1);
+  });
+});
+
+describe("applyOrphanReturns", () => {
+  const groups = new Map<number, number[]>([[1, [7]]]);
+  const orphan = { agent_id: 10, work_slot_id: 100, product_id: 1, qty: 3, unit_price: 100, volume_unit: 0.5 };
+
+  it("unallocated return is subtracted from total and group, АКБ kept", () => {
+    const base = mergeUserFacts([line({})], [], groups, 10);
+    const f = applyOrphanReturns(base, [orphan], groups);
+    expect(f.total.cost).toBe(700);
+    expect(f.total.count).toBe(7);
+    expect(f.total.volume).toBe(3.5);
+    expect(f.byGroup.get(7)!.cost).toBe(700);
+    expect(f.returned_sum).toBe(300);
+    expect(f.total.acb).toBe(1);
+  });
+
+  it("never goes below zero", () => {
+    const base = mergeUserFacts([line({ qty: 1, total: 100 })], [], groups, 10);
+    const f = applyOrphanReturns(base, [orphan], groups);
+    expect(f.total.cost).toBe(0);
+    expect(f.total.count).toBe(0);
+    expect(f.returned_sum).toBe(300);
   });
 });
 
