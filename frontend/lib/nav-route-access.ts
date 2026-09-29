@@ -5,6 +5,7 @@ import {
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPayrollNav,
   dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
@@ -31,6 +32,7 @@ function collectNavItems(): NavItem[] {
   out.push(...dashboardPlansNav.items);
   out.push(...dashboardReportsNav.items);
   for (const g of dashboardUsersNav.groups) out.push(...g.items);
+  for (const g of dashboardPayrollNav.groups) out.push(...g.items);
   for (const entry of dashboardSidebarLayout) {
     if (entry.kind === "link") out.push(entry.item);
   }

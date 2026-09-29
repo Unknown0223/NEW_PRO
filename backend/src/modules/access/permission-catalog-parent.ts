@@ -1,3 +1,5 @@
+import { permissionDisplayGroup } from "./permission-model";
+
 /**
  * RU labels for the Access UI «Родитель» column (sidebar-aligned), without changing DB `module` keys.
  */
@@ -82,8 +84,10 @@ function reportsSectionParentLabel(section: string): string | null {
 }
 
 /** Value shown as `parent_path` in GET .../permissions/catalog (RU, matches main nav). */
-export function catalogParentPathLabel(module: string, section: string | null | undefined): string {
+export function catalogParentPathLabel(module: string, section: string | null | undefined, key?: string): string {
   const sec = section?.trim();
+  const group = key ? permissionDisplayGroup(key) : null;
+  if (group) return sec && !sec.includes("/") ? `${group} · ${sec}` : group;
   if (module === "staff" && sec) {
     const staff = staffSectionParentLabel(sec);
     if (staff) return staff;

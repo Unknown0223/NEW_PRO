@@ -181,21 +181,6 @@ export const dashboardKassaNav: {
       ]
     },
     {
-      title: "ЗАРПЛАТА",
-      items: [
-        {
-          href: "/finance/advances/approval",
-          label: "Утверждение авансов",
-          showIfAnyPermission: [...NAV_PERM.financeAdvances]
-        },
-        {
-          href: "/finance/cashier-queue",
-          label: "Выдача аванса и зарплаты",
-          showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
-        }
-      ]
-    },
-    {
       title: "ОТЧЁТЫ",
       items: [
         { href: "/reports", label: "Отчёт по приходам", showIfAnyPermission: [...NAV_PERM.cashReports] },
@@ -313,21 +298,6 @@ export const dashboardUsersNav: {
           label: "Консигнация",
           showIfAnyPermission: [...NAV_PERM.staffConsignment]
         },
-        { href: "/users/salary", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/formulas", label: "Конструктор формул", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        {
-          href: "/users/bonus-and-salary-settings",
-          label: "Настройки бонусов и зарплат",
-          showIfAnyPermission: [...NAV_PERM.staffPayroll]
-        },
-        { href: "/users/advances", label: "Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
-        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        {
-          href: "/settings/payroll/advance-limits",
-          label: "Лимиты авансов",
-          showIfAnyPermission: [...NAV_PERM.staffAdvanceLimits]
-        },
         { href: "/users/workdays", label: "Рабочие дни", showIfAnyPermission: [...NAV_PERM.staffWorkdays] },
         { href: "/users/timesheet", label: "Табель", showIfAnyPermission: [...NAV_PERM.staffTimesheet] },
         {
@@ -342,6 +312,66 @@ export const dashboardUsersNav: {
 
 export function dashboardUsersNavFlatItems(): NavItem[] {
   return dashboardUsersNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
+}
+
+/** Зарплата — hisob, avans, kassada berish va sozlamalar bitta bo‘limda. */
+export const dashboardPayrollNav: {
+  sectionTitle: string;
+  groups: { title: string; items: NavItem[] }[];
+} = {
+  sectionTitle: "Зарплата",
+  groups: [
+    {
+      title: "РАСЧЁТ",
+      items: [
+        { href: "/users/salary", label: "Расчёт зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/compare", label: "Сверка с Excel", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
+      ]
+    },
+    {
+      title: "АВАНС",
+      items: [
+        { href: "/users/advances", label: "Аванс", showIfAnyPermission: [...NAV_PERM.staffAdvances] },
+        {
+          href: "/finance/advances/approval",
+          label: "Утверждение авансов",
+          showIfAnyPermission: [...NAV_PERM.financeAdvances]
+        },
+        {
+          href: "/settings/payroll/advance-limits",
+          label: "Лимиты авансов",
+          showIfAnyPermission: [...NAV_PERM.staffAdvanceLimits]
+        }
+      ]
+    },
+    {
+      title: "ВЫДАЧА",
+      items: [
+        {
+          href: "/finance/cashier-queue",
+          label: "Выдача аванса и зарплаты",
+          showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
+        }
+      ]
+    },
+    {
+      title: "НАСТРОЙКИ",
+      items: [
+        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "Конструктор формул", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/users/bonus-and-salary-settings",
+          label: "Настройки бонусов и зарплат",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
+      ]
+    }
+  ]
+};
+
+export function dashboardPayrollNavFlatItems(): NavItem[] {
+  return dashboardPayrollNav.groups.flatMap((g) => g.items).filter((i) => !i.disabled && i.href !== "#");
 }
 
 /** Клиенты — отдельный модуль в боковой панели */
@@ -486,6 +516,7 @@ export type SidebarLayoutEntry =
   | { kind: "reports" }
   | { kind: "kassa" }
   | { kind: "users" }
+  | { kind: "payroll" }
   | { kind: "plans" }
   /** Loyihada hali yo‘q bo‘lim — sariq, bosib bo‘lmaydigan sarlavha (keyin qo‘shamiz). */
   | { kind: "placeholder"; label: string; icon: PlaceholderIconKey };
@@ -493,7 +524,7 @@ export type SidebarLayoutEntry =
 /**
  * Referens UI tartibi:
  * Дашборды → Заявки → Клиенты → Накладные → Касса → Склад → Поставщики →
- * Планы → Отчёт → Пользователи → Аудит → Доступ → Настройки.
+ * Планы → Отчёт → Пользователи → Зарплата → Аудит → Доступ → Настройки.
  * «placeholder» bo‘limlar loyihada hali yo‘q — sariq label sifatida ko‘rinadi.
  */
 export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
@@ -507,6 +538,7 @@ export const dashboardSidebarLayout: SidebarLayoutEntry[] = [
   { kind: "plans" },
   { kind: "reports" },
   { kind: "users" },
+  { kind: "payroll" },
   {
     kind: "link",
     item: {
@@ -574,6 +606,8 @@ export function flattenMobileNavItems(): NavItem[] {
       for (const item of dashboardKassaNavFlatItems()) pushUnique(item);
     } else if (e.kind === "users") {
       for (const item of dashboardUsersNavFlatItems()) pushUnique(item);
+    } else if (e.kind === "payroll") {
+      for (const item of dashboardPayrollNavFlatItems()) pushUnique(item);
     }
   }
   return out;
@@ -603,6 +637,7 @@ const BREADCRUMB_ENTRIES: Array<{ path: string; section: string | null; label: s
   push(dashboardReportsNav.sectionTitle, dashboardReportsNav.items);
   push(dashboardPlansNav.sectionTitle, dashboardPlansNav.items);
   push(dashboardUsersNav.sectionTitle, dashboardUsersNavFlatItems());
+  push(dashboardPayrollNav.sectionTitle, dashboardPayrollNavFlatItems());
   push(null, [
     { href: "/reports/gps/map", label: "GPS мониторинг" },
     { href: "/audit", label: "Аудит" },

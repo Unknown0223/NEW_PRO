@@ -5,6 +5,7 @@ import {
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPayrollNav,
   dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
@@ -73,6 +74,19 @@ describe("web staff nav — Dostup cheklovlari", () => {
     expect(isNavItemAllowed(item("/stock/receipts"), "cashier", keys)).toBe(true);
   });
 
+  it("Зарплата bo‘limi: kassir faqat navbatni, hisobchi hisobni ko‘radi", () => {
+    const payroll = dashboardPayrollNav.groups.flatMap((g) => g.items);
+    const byHref = (href: string) => payroll.find((i) => i.href === href)!;
+    const cashier = new Set(["cash.vydacha_zarplaty.view"]);
+    expect(isNavItemAllowed(byHref("/finance/cashier-queue"), "cashier", cashier)).toBe(true);
+    expect(isNavItemAllowed(byHref("/users/salary"), "cashier", cashier)).toBe(false);
+    const accountant = new Set(["staff.zarplaty.view", "staff.avans.view"]);
+    expect(isNavItemAllowed(byHref("/users/salary"), "operator", accountant)).toBe(true);
+    expect(isNavItemAllowed(byHref("/users/advances"), "operator", accountant)).toBe(true);
+    expect(isNavItemAllowed(byHref("/finance/advances/approval"), "operator", accountant)).toBe(false);
+    expect(item("/users/salary/formulas")).toBeTruthy();
+  });
+
   it("Users → Складчик warehouse.sklady.view bilan ochilmasin", () => {
     const skladchikNav = dashboardUsersNav.groups
       .flatMap((g) => g.items)
@@ -137,6 +151,7 @@ function collectGatedNavItems(): NavItem[] {
   out.push(...dashboardPlansNav.items);
   out.push(...dashboardReportsNav.items);
   for (const g of dashboardUsersNav.groups) out.push(...g.items);
+  for (const g of dashboardPayrollNav.groups) out.push(...g.items);
   for (const entry of dashboardSidebarLayout) {
     if (entry.kind === "link") out.push(entry.item);
   }

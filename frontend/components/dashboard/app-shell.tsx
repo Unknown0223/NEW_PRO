@@ -9,6 +9,7 @@ import {
   dashboardInvoicesNav,
   dashboardKassaNav,
   dashboardOrdersNav,
+  dashboardPayrollNav,
   dashboardPlansNav,
   dashboardReportsNav,
   dashboardSidebarLayout,
@@ -42,10 +43,12 @@ import { NotificationBell } from "@/components/notifications/notification-bell";
 import { WorkSlotsPendingBell } from "@/components/work-slots/work-slots-pending-bell";
 import { WorkSlotProfileBadge } from "@/components/work-slots/work-slot-profile-badge";
 import { UserMenu } from "@/components/dashboard/user-menu";
+import { SidebarGroupedSection } from "@/components/dashboard/sidebar-grouped-section";
 import { TenantSidebarClock } from "@/components/dashboard/tenant-sidebar-clock";
 import { ScrollEdgeHints } from "@/components/ui/scroll-edge-hints";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Banknote,
   BarChart3,
   CalendarRange,
   ChevronDown,
@@ -245,6 +248,25 @@ function plansNavChildActive(pathname: string): boolean {
   return dashboardPlansNav.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href));
 }
 
+function payrollNavChildActive(pathname: string): boolean {
+  return dashboardPayrollNav.groups.some((g) =>
+    g.items.some((item) => !item.disabled && item.href !== "#" && isNavActive(pathname, item.href))
+  );
+}
+
+type SidebarSection =
+  | "dashboard"
+  | "clients"
+  | "orders"
+  | "invoices"
+  | "stock"
+  | "suppliers"
+  | "reports"
+  | "plans"
+  | "kassa"
+  | "users"
+  | "payroll";
+
 function placeholderIcon(icon: "plans" | "pivot" | "audit") {
   if (icon === "plans") return CalendarRange;
   if (icon === "pivot") return Table2;
@@ -345,9 +367,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     placeholderData: (prev) => prev
   });
   const permissionKeySet = permissionKeysFromQueryData(mePermsQ.data);
-  const [openSection, setOpenSection] = useState<
-    "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users" | null
-  >(null);
+  const [openSection, setOpenSection] = useState<SidebarSection | null>(null);
   const [reportsSettingsOpen, setReportsSettingsOpen] = useState(false);
   const [reportsSearch, setReportsSearch] = useState("");
   const [localHiddenOverride, setLocalHiddenOverride] = useState<Set<string> | null>(null);
@@ -399,6 +419,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setOpenSection("kassa");
       return;
     }
+    if (payrollNavChildActive(pathname)) {
+      setOpenSection("payroll");
+      return;
+    }
     if (usersNavChildActive(pathname)) {
       setOpenSection("users");
       return;
@@ -406,9 +430,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setOpenSection(null);
   }, [pathname]);
 
-  function toggleSection(
-    section: "dashboard" | "clients" | "orders" | "invoices" | "stock" | "suppliers" | "reports" | "plans" | "kassa" | "users"
-  ) {
+  function toggleSection(section: SidebarSection) {
     setOpenSection((prev) => (prev === section ? null : section));
   }
 
@@ -1204,6 +1226,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </ul>
                   )}
                 </div>
+              );
+            }
+
+            if (entry.kind === "payroll") {
+              return (
+                <SidebarGroupedSection
+                  key="payroll"
+                  title={dashboardPayrollNav.sectionTitle}
+                  icon={Banknote}
+                  groups={dashboardPayrollNav.groups}
+                  open={openSection === "payroll"}
+                  active={payrollNavChildActive(pathname)}
+                  onToggle={() => toggleSection("payroll")}
+                  isItemVisible={(item) => navItemVisible(item, effectiveRole, permissionKeySet)}
+                  isItemActive={(href) => isNavActive(pathname, href)}
+                />
               );
             }
 

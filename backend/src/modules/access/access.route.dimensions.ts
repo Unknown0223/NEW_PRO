@@ -15,6 +15,7 @@ import {
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
+import { permissionDisplayDescription } from "./permission-model";
 import {
   AccessManageRequiredError,
   bulkMergeUserPermissionKeysForUsers,
@@ -289,7 +290,7 @@ export async function registerAccessDimensionsRoutes(app: FastifyInstance) {
     return reply.send({
       data: ops.map((r) => ({
         key: r.key,
-        label: (r.description && String(r.description).trim()) || r.key,
+        label: permissionDisplayDescription(r.key, (r.description && String(r.description).trim()) || r.key),
         attached_users_count: r._count.users + r._count.roles,
         is_active: true
       }))

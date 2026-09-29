@@ -118,7 +118,11 @@ export type PermissionSectionDef = {
   labelRu: string;
   /** Shu bo'lim qo'llaydigan amal tiplari (faqat shular UI gridda ustun bo'ladi). */
   actions: PermissionAction[];
+  /** Access UI'dagi guruh (RU) — kalit moduli o'zgarmagan holda boshqa bo'limda ko'rsatish uchun. */
+  groupRu?: string;
 };
+
+export const PAYROLL_GROUP_RU = "Зарплата";
 
 /** Ko'p qo'llaniladigan amal to'plamlari (qisqartma uchun). */
 const CRUD: PermissionAction[] = ["view", "create", "update", "delete"];
@@ -176,7 +180,6 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "cash", section: "prihody", labelRu: "Приходы", actions: ["view", "create", "delete", "void", "restore"] },
   { module: "cash", section: "zayavki_na_oplatu", labelRu: "Заявки на оплату", actions: ["view", "approve", "copy"] },
   { module: "cash", section: "dolgi_ekspeditora", labelRu: "Долги экспедитора", actions: VIEW_COPY },
-  { module: "cash", section: "vydacha_zarplaty", labelRu: "Выдача аванса и зарплаты (очередь)", actions: ["view", "create", "void", "history"] },
 
   // ── Warehouse (Склад) — to'liq (yangi) ─────────────────────
   { module: "warehouse", section: "sklady", labelRu: "Склады", actions: ["view", "create", "update", "delete", "void", "restore", "history"] },
@@ -221,9 +224,6 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "sotrudniki", labelRu: "Сотрудники", actions: ["view", "create", "update", "activate", "deactivate"] },
   { module: "staff", section: "partnery", labelRu: "Партнёры", actions: VIEW_ONLY },
   { module: "staff", section: "kpi", labelRu: "KPI", actions: ["view", "create", "import", "copy"] },
-  { module: "staff", section: "zarplaty", labelRu: "Зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"] },
-  { module: "staff", section: "avans", labelRu: "Аванс (руководитель)", actions: ["view", "create", "update", "delete", "import", "status", "copy"] },
-  { module: "staff", section: "avans_limity", labelRu: "Лимиты аванса", actions: ["view", "update"] },
   { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни", actions: ["view", "create", "update"] },
   { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update"] },
   { module: "staff", section: "zadachi", labelRu: "Задачи", actions: ["view", "create", "update"] },
@@ -285,7 +285,13 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
 
   // ── Finance — yangi ────────────────────────────────────────
   { module: "finance", section: "obzor", labelRu: "Финансы", actions: ["view", "approve", "copy"] },
-  { module: "finance", section: "avans", labelRu: "Утверждение авансов", actions: ["view", "approve"] },
+
+  // ── Зарплата — kalitlar eski modullarda (grantlar saqlanadi), Access UI'da alohida guruh ─
+  { module: "staff", section: "zarplaty", labelRu: "Расчёт зарплаты", actions: ["view", "create", "update", "delete", "copy", "import", "assign", "status", "approve"], groupRu: PAYROLL_GROUP_RU },
+  { module: "staff", section: "avans", labelRu: "Аванс (руководитель)", actions: ["view", "create", "update", "delete", "import", "status", "copy"], groupRu: PAYROLL_GROUP_RU },
+  { module: "staff", section: "avans_limity", labelRu: "Лимиты аванса", actions: ["view", "update"], groupRu: PAYROLL_GROUP_RU },
+  { module: "finance", section: "avans", labelRu: "Утверждение авансов", actions: ["view", "approve"], groupRu: PAYROLL_GROUP_RU },
+  { module: "cash", section: "vydacha_zarplaty", labelRu: "Выдача аванса и зарплаты (очередь)", actions: ["view", "create", "void", "history"], groupRu: PAYROLL_GROUP_RU },
 
   // ── Pivot — konstruktor oilasi (nav: Конструктор сводной таблицы) ─
   { module: "pivot", section: "otchety", labelRu: "Конструктор отчётов", actions: VIEW_COPY },
@@ -320,7 +326,7 @@ export type StructuredPermissionEntry = {
 export function buildStructuredPermissionCatalog(): StructuredPermissionEntry[] {
   const out: StructuredPermissionEntry[] = [];
   for (const def of PERMISSION_SECTIONS) {
-    const moduleLabel = PERMISSION_MODULE_LABEL_RU[def.module] ?? def.module;
+    const moduleLabel = def.groupRu ?? PERMISSION_MODULE_LABEL_RU[def.module] ?? def.module;
     const actions = [...def.actions].sort(
       (a, b) => PERMISSION_ACTION_ORDER[a] - PERMISSION_ACTION_ORDER[b]
     );
@@ -336,6 +342,28 @@ export function buildStructuredPermissionCatalog(): StructuredPermissionEntry[] 
     }
   }
   return out;
+}
+
+const GROUPED_SECTION_PREFIXES: Array<[string, string]> = PERMISSION_SECTIONS.filter((d) => d.groupRu).map((d) => [
+  `${d.module}.${d.section}.`,
+  d.groupRu!
+]);
+
+/** Kalit Access UI'da alohida guruhga (masalan «Зарплата») tegishli bo'lsa — guruh nomi. Legacy kalitlar ham prefiks bo'yicha. */
+export function permissionDisplayGroup(key: string): string | null {
+  for (const [prefix, group] of GROUPED_SECTION_PREFIXES) {
+    if (key.startsWith(prefix)) return group;
+  }
+  return null;
+}
+
+/** «Модуль / Раздел / Действие» tavsifining birinchi segmentini guruh nomiga almashtiradi (Операции daraxti shu bo'yicha guruhlaydi). */
+export function permissionDisplayDescription(key: string, description: string): string {
+  const group = permissionDisplayGroup(key);
+  if (!group) return description;
+  const parts = description.split(" / ");
+  if (parts[0]?.trim() === group) return description;
+  return parts.length >= 2 ? [group, ...parts.slice(1)].join(" / ") : `${group} / ${description}`;
 }
 
 /** Kalitdan amal tipini aniqlaydi (oxirgi segment). */
