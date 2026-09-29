@@ -358,12 +358,13 @@ export const dashboardPayrollNav: {
       title: "НАСТРОЙКИ",
       items: [
         { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/formulas", label: "Конструктор формул", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         {
           href: "/users/bonus-and-salary-settings",
           label: "Настройки бонусов и зарплат",
           showIfAnyPermission: [...NAV_PERM.staffPayroll]
         },
+        { href: "/settings/payroll/adjustments", label: "Надбавки и вычеты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
       ]
     }

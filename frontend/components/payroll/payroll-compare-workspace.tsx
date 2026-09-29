@@ -1,18 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { ExcelFileDropZone } from "@/components/ui/excel-file-drop-zone";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
 import { currentYm, fmtDateTime, money, payrollApi, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
 import { cellNumber, cellText, readXlsxRows } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
-import { MonthField, Toolbar, useNotice } from "@/components/payroll/payroll-ui";
+import { useNotice } from "@/components/payroll/payroll-ui";
+import { PayrollMonthNav } from "@/components/payroll/kit/payroll-kit-layout";
+import { PayrollEmptyRow, PayrollFiltersSection, PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
 
 type Cell = { column: string; excel: number; system: number | null; diff: number; reasons: string[] };
 type Row = { code: string; fio: string | null; user_id: number | null; record_id: number | null; cells: Cell[]; diff_total: number };
@@ -27,6 +30,8 @@ const CODE_COLS = ["код", "код сотрудника", "kod", "code", "ло
 const NAME_COLS = ["фио", "сотрудник", "ф.и.о.", "fio", "имя"];
 const SKIP_COLS = ["№", "n", "#", "роль", "филиал", "должность", "branch", "role"];
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+const TH = "px-3 py-2.5 text-left font-medium";
+const TD = "px-3 py-2.5";
 
 function toInput(xs: Array<Record<string, unknown>>): InputRow[] | string {
   const out: InputRow[] = [];
@@ -54,9 +59,13 @@ export function PayrollCompareWorkspace() {
   const qc = useQueryClient();
   const perms = usePermissions();
   const canImport = perms.isAdmin || perms.has("staff.zarplaty.import");
+  const canSign = perms.isAdmin || perms.hasAny("staff.zarplaty.import", "staff.zarplaty.approve");
   const notice = useNotice();
   const [ym, setYm] = useState<Ym>(currentYm());
   const [onlyDiff, setOnlyDiff] = useState(true);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.compare", defaultColumnOrder: ["code"], defaultPageSize: 20 });
 
   const key = ["payroll-compare", tenant, ym.year, ym.month];
   const reportQ = useQuery({ queryKey: key, enabled: Boolean(tenant), queryFn: () => api.get<Report>(`/compare?${ymQuery(ym)}`) });
@@ -74,96 +83,164 @@ export function PayrollCompareWorkspace() {
   });
   const signOff = useMutation({
     mutationFn: (p: { id: number; note: string | null }) => api.send("POST", `/compare/${p.id}/sign-off`, { note: p.note }),
-    onSuccess: () => { notice.ok("Сверка подписана"); void qc.invalidateQueries({ queryKey: key }); },
+    onSuccess: () => {
+      notice.ok("Сверка подписана");
+      void qc.invalidateQueries({ queryKey: key });
+    },
     onError: notice.fail
   });
 
   const r = reportQ.data;
-  const rows = (r?.rows ?? []).filter((x) => !onlyDiff || x.diff_total >= 0.01).sort((a, b) => b.diff_total - a.diff_total);
+  const rows = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return (r?.rows ?? [])
+      .filter((x) => (!onlyDiff || x.diff_total >= 0.01) && (!s || `${x.code} ${x.fio ?? ""}`.toLowerCase().includes(s)))
+      .sort((a, b) => b.diff_total - a.diff_total);
+  }, [r, onlyDiff, q]);
+  const paged = usePagedRows(rows, prefs.pageSize, `${ym.year}-${ym.month}|${onlyDiff}|${q}`);
+  const toggle = (code: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+
+  const signAction = r?.batch ? (
+    r.batch.signed_off_at ? (
+      <span className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <CheckCircle2 className="size-4" /> Подписано {fmtDateTime(r.batch.signed_off_at)}
+        {r.batch.sign_off_note ? ` — ${r.batch.sign_off_note}` : ""}
+      </span>
+    ) : canSign ? (
+      <Button
+        onClick={() => {
+          const note = window.prompt(`Подписать сверку за ${ymLabel(ym)}? Комментарий (необязательно):`, "");
+          if (note !== null) signOff.mutate({ id: r.batch!.id, note: note.trim() || null });
+        }}
+      >
+        Подписать сверку
+      </Button>
+    ) : null
+  ) : null;
 
   return (
     <PageShell>
       <PageHeader
         title="Сверка с Excel (пробный месяц)"
         description="Загрузите ведомость, посчитанную по-старому. Система покажет расхождения по каждой колонке и причину: табель, формула, факт/возвраты, план, корректировки, ручные суммы."
+        actions={signAction}
       />
-      {notice.element}
-      <Toolbar>
-        <MonthField value={ym} onChange={setYm} />
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} /> Только расхождения
+      <PayrollFiltersSection>
+        <PayrollMonthNav variant="filter" value={ym} onChange={setYm} />
+        <label className="flex h-10 items-center gap-2 text-sm">
+          <input type="checkbox" className="accent-primary" checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} />
+          Только расхождения
         </label>
-        <div className="flex-1" />
-        {r?.batch ? (
-          r.batch.signed_off_at ? (
-            <span className="flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Подписано {fmtDateTime(r.batch.signed_off_at)}{r.batch.sign_off_note ? ` — ${r.batch.sign_off_note}` : ""}</span>
-          ) : perms.isAdmin || perms.hasAny("staff.zarplaty.import", "staff.zarplaty.approve") ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                const note = window.prompt(`Подписать сверку за ${ymLabel(ym)}? Комментарий (необязательно):`, "");
-                if (note !== null) signOff.mutate({ id: r.batch!.id, note: note.trim() || null });
-              }}
-            >
-              Подписать сверку
-            </Button>
-          ) : null
-        ) : null}
-      </Toolbar>
+      </PayrollFiltersSection>
+      {notice.element}
       {canImport ? <ExcelFileDropZone onFile={(f) => upload.mutate(f)} disabled={upload.isPending} /> : null}
 
       {r?.batch ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Сотрудников", value: r.summary.employees, cls: "" },
+            { label: "Сотрудников", value: r.summary.employees, cls: "text-foreground" },
             { label: "Совпало", value: r.summary.matched, cls: "text-emerald-700" },
             { label: "С расхождением", value: r.summary.with_diff, cls: "text-amber-700" },
             { label: "Не найдено", value: r.summary.not_found, cls: "text-red-700" }
           ].map((x) => (
-            <div key={x.label} className="rounded-lg border bg-card p-3">
-              <div className="text-xs text-muted-foreground">{x.label}</div>
-              <div className={cn("text-2xl font-semibold", x.cls)}>{x.value}</div>
+            <div key={x.label} className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="text-xs font-medium text-muted-foreground">{x.label}</div>
+              <div className={cn("mt-1 text-2xl font-semibold tabular-nums", x.cls)}>{x.value}</div>
             </div>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">{reportQ.isLoading ? "Загрузка…" : `За ${ymLabel(ym)} сверка ещё не загружалась.`}</p>
-      )}
+      ) : null}
 
-      {rows.map((row) => (
-        <div key={row.code} className="rounded-lg border bg-card">
-          <div className="flex items-center justify-between border-b px-3 py-2">
-            <div>
-              <span className="font-medium">{row.fio ?? "—"}</span> <span className="text-xs text-muted-foreground">код {row.code}</span>
-            </div>
-            <span className={cn("text-sm tabular-nums", row.diff_total >= 0.01 ? "text-amber-700" : "text-emerald-700")}>
-              {row.diff_total >= 0.01 ? `Расхождение ${money(row.diff_total, 2)}` : "Совпадает"}
-            </span>
-          </div>
+      <PayrollTableCard>
+        <PayrollTableToolbar
+          pageSize={prefs.pageSize}
+          onPageSize={prefs.setPageSize}
+          search={q}
+          onSearch={setQ}
+          searchPlaceholder="Поиск: код или ФИО"
+          onRefresh={() => void reportQ.refetch()}
+          refreshing={reportQ.isFetching}
+        />
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs text-muted-foreground">
+            <thead className="app-table-thead">
               <tr>
-                <th className="px-3 py-1">Колонка</th>
-                <th className="px-3 text-right">Excel</th>
-                <th className="px-3 text-right">Система</th>
-                <th className="px-3 text-right">Разница</th>
-                <th className="px-3">Причина</th>
+                <th className={cn(TH, "w-10")} />
+                <th className={TH}>Код</th>
+                <th className={TH}>ФИО</th>
+                <th className={cn(TH, "text-right")}>Колонок с расхождением</th>
+                <th className={cn(TH, "text-right")}>Расхождение</th>
+                <th className={TH}>Статус</th>
               </tr>
             </thead>
             <tbody>
-              {row.cells.map((c) => (
-                <tr key={c.column} className={cn("border-t", Math.abs(c.diff) >= 0.01 && "bg-amber-50/60")}>
-                  <td className="px-3 py-1">{c.column}</td>
-                  <td className="px-3 text-right tabular-nums">{money(c.excel, 2)}</td>
-                  <td className="px-3 text-right tabular-nums">{money(c.system, 2)}</td>
-                  <td className={cn("px-3 text-right tabular-nums", Math.abs(c.diff) >= 0.01 ? "font-medium text-amber-800" : "text-muted-foreground")}>{money(c.diff, 2)}</td>
-                  <td className="px-3 text-xs text-muted-foreground">{c.reasons.join(" · ")}</td>
-                </tr>
-              ))}
+              {reportQ.isLoading || rows.length === 0 ? (
+                <PayrollEmptyRow colSpan={6} loading={reportQ.isLoading} text={r?.batch ? "Расхождений нет" : `За ${ymLabel(ym)} сверка ещё не загружалась`} />
+              ) : null}
+              {paged.pageRows.map((row) => {
+                const expanded = open.has(row.code);
+                const diffCells = row.cells.filter((c) => Math.abs(c.diff) >= 0.01).length;
+                const hasDiff = row.diff_total >= 0.01;
+                return (
+                  <Fragment key={row.code}>
+                    <tr className={cn("cursor-pointer border-b border-border/60 hover:bg-muted/40", expanded && "bg-primary/5")} onClick={() => toggle(row.code)}>
+                      <td className={TD}>{expanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}</td>
+                      <td className={cn(TD, "text-muted-foreground")}>{row.code}</td>
+                      <td className={cn(TD, "font-medium text-foreground")}>{row.fio ?? "—"}</td>
+                      <td className={cn(TD, "text-right tabular-nums")}>{diffCells}</td>
+                      <td className={cn(TD, "text-right font-semibold tabular-nums", hasDiff ? "text-amber-700" : "text-emerald-700")}>{money(row.diff_total, 2)}</td>
+                      <td className={TD}>
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", hasDiff ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800")}>
+                          {row.user_id == null ? "Не найден" : hasDiff ? "Расхождение" : "Совпадает"}
+                        </span>
+                      </td>
+                    </tr>
+                    {expanded ? (
+                      <tr className="border-b border-border/60 bg-muted/20">
+                        <td />
+                        <td colSpan={5} className="px-3 py-2">
+                          <table className="w-full text-xs">
+                            <thead className="text-left text-muted-foreground">
+                              <tr>
+                                <th className="py-1 pr-3 font-medium">Колонка</th>
+                                <th className="px-3 py-1 text-right font-medium">Excel</th>
+                                <th className="px-3 py-1 text-right font-medium">Система</th>
+                                <th className="px-3 py-1 text-right font-medium">Разница</th>
+                                <th className="px-3 py-1 font-medium">Причина</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {row.cells.map((c) => {
+                                const bad = Math.abs(c.diff) >= 0.01;
+                                return (
+                                  <tr key={c.column} className={cn("border-t border-border/50", bad && "bg-amber-50/70 dark:bg-amber-950/20")}>
+                                    <td className="py-1 pr-3">{c.column}</td>
+                                    <td className="px-3 py-1 text-right tabular-nums">{money(c.excel, 2)}</td>
+                                    <td className="px-3 py-1 text-right tabular-nums">{money(c.system, 2)}</td>
+                                    <td className={cn("px-3 py-1 text-right tabular-nums", bad ? "font-semibold text-amber-800" : "text-muted-foreground")}>{money(c.diff, 2)}</td>
+                                    <td className="px-3 py-1 text-muted-foreground">{c.reasons.join(" · ")}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      ))}
+        <PayrollPagination page={paged.page} pageSize={prefs.pageSize} total={paged.total} onPage={paged.setPage} />
+      </PayrollTableCard>
     </PageShell>
   );
 }

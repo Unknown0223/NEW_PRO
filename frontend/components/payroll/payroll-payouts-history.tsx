@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useTenant } from "@/lib/api-client";
 import { usePermissions } from "@/lib/use-permissions";
-import { currentYm, fmtDateTime, money, payrollApi, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
-import { EmptyRow, MonthField, selectCls, Toolbar, useNotice } from "@/components/payroll/payroll-ui";
+import { fmtDateTime, money, payrollApi, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
+import { cn } from "@/lib/utils";
+import { PayrollEmptyRow, PayrollPagination, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
 
 type Payout = {
   id: number;
@@ -28,84 +30,99 @@ type Payout = {
   expense_id: number | null;
 };
 
-export function PayrollPayoutsHistory() {
+const TH = "px-3 py-2.5 text-left font-medium";
+const TD = "px-3 py-2.5 align-top";
+
+/** Payout history table body (toolbar + table + footer) for use inside a table card. */
+export function PayrollPayoutsHistory({ ym, kind, onNotice }: { ym: Ym; kind: string; onNotice: { ok: (t: string) => void; fail: (e: unknown) => void } }) {
   const tenant = useTenant();
   const api = payrollApi(tenant);
   const qc = useQueryClient();
   const perms = usePermissions();
   const canReverse = perms.isAdmin;
-  const notice = useNotice();
-  const [ym, setYm] = useState<Ym>(currentYm());
-  const [kind, setKind] = useState("");
+  const [search, setSearch] = useState("");
+  const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.payouts", defaultColumnOrder: ["date"], defaultPageSize: 20 });
 
   const q = useQuery({
     queryKey: ["payroll-payouts", tenant, ym.year, ym.month, kind],
     enabled: Boolean(tenant),
     queryFn: () => api.get<Payout[]>(`/payouts?${ymQuery(ym)}${kind ? `&kind=${kind}` : ""}&limit=1000`)
   });
-  const rows = q.data ?? [];
+  const rows = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return (q.data ?? []).filter((r) => !s || `${r.fio} ${r.cash_desk_name ?? ""} ${r.paid_by ?? ""}`.toLowerCase().includes(s));
+  }, [q.data, search]);
+  const paged = usePagedRows(rows, prefs.pageSize, `${ym.year}-${ym.month}|${kind}|${search}`);
   const total = rows.filter((r) => r.status !== "reversed").reduce((s, r) => s + r.amount_uzs, 0);
 
   const reverse = useMutation({
     mutationFn: (p: { id: number; reason: string }) => api.send("POST", `/payouts/${p.id}/reverse`, { reason: p.reason }),
     onSuccess: () => {
-      notice.ok("Выплата сторнирована: касса восстановлена, расход аннулирован, аванс вернулся в очередь");
+      onNotice.ok("Выплата сторнирована: касса восстановлена, расход аннулирован, аванс вернулся в очередь");
       void qc.invalidateQueries({ queryKey: ["payroll-payouts", tenant] });
       void qc.invalidateQueries({ queryKey: ["payroll-cashier-queue", tenant] });
     },
-    onError: notice.fail
+    onError: onNotice.fail
   });
 
   return (
-    <div className="grid gap-3">
-      {notice.element}
-      <Toolbar>
-        <MonthField value={ym} onChange={setYm} />
-        <select className={selectCls("w-40")} value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="">Все выплаты</option>
-          <option value="advance">Авансы</option>
-          <option value="salary">Зарплата</option>
-        </select>
-        <div className="flex-1" />
-        <span className="text-sm text-muted-foreground">{ymLabel(ym)}: <b className="text-foreground">{money(total)}</b></span>
-      </Toolbar>
-      <div className="overflow-auto rounded-lg border">
+    <>
+      <PayrollTableToolbar
+        pageSize={prefs.pageSize}
+        onPageSize={prefs.setPageSize}
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder="Поиск: сотрудник, касса, кассир"
+        onRefresh={() => void q.refetch()}
+        refreshing={q.isFetching}
+      >
+        <span className="text-sm text-muted-foreground">
+          {ymLabel(ym)}: <b className="text-foreground">{money(total)}</b>
+        </span>
+      </PayrollTableToolbar>
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-muted/70 text-left text-xs">
+          <thead className="app-table-thead">
             <tr>
-              <th className="px-2 py-2">Дата</th>
-              <th className="px-2">Сотрудник</th>
-              <th className="px-2">Тип</th>
-              <th className="px-2 text-right">Сумма</th>
-              <th className="px-2">Касса / способ</th>
-              <th className="px-2">Кассир</th>
-              <th className="px-2">Расход</th>
-              <th className="w-12" />
+              <th className={TH}>Дата</th>
+              <th className={TH}>Сотрудник</th>
+              <th className={TH}>Тип</th>
+              <th className={cn(TH, "text-right")}>Сумма</th>
+              <th className={TH}>Касса / способ</th>
+              <th className={TH}>Кассир</th>
+              <th className={TH}>Расход</th>
+              <th className={cn(TH, "w-20 text-center")}>Действие</th>
             </tr>
           </thead>
           <tbody>
-            {q.isLoading ? <EmptyRow colSpan={8} text="Загрузка…" /> : null}
-            {!q.isLoading && rows.length === 0 ? <EmptyRow colSpan={8} /> : null}
-            {rows.map((r) => (
-              <tr key={r.id} className={`border-t ${r.status === "reversed" ? "opacity-60" : ""}`}>
-                <td className="px-2 py-2 text-xs">{fmtDateTime(r.paid_at)}</td>
-                <td className="px-2">{r.fio}<div className="text-[11px] text-muted-foreground">{ymLabel(r)}</div></td>
-                <td className="px-2">{r.kind === "advance" ? "Аванс" : "Зарплата"}</td>
-                <td className={`px-2 text-right tabular-nums ${r.status === "reversed" ? "line-through" : ""}`}>
-                  {money(r.amount, 2)} {r.currency}
-                  {r.rate !== 1 ? <div className="text-[11px] text-muted-foreground">= {money(r.amount_uzs)} · курс {r.rate}</div> : null}
+            {q.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={8} loading={q.isLoading} /> : null}
+            {paged.pageRows.map((r) => (
+              <tr key={r.id} className={cn("border-b border-border/60 hover:bg-muted/40", r.status === "reversed" && "opacity-60")}>
+                <td className={cn(TD, "text-xs")}>{fmtDateTime(r.paid_at)}</td>
+                <td className={TD}>
+                  <div className="font-medium text-foreground">{r.fio}</div>
+                  <div className="text-[11px] text-muted-foreground">{ymLabel(r)}</div>
                 </td>
-                <td className="px-2 text-xs">{r.cash_desk_name ?? "—"}<div className="text-muted-foreground">{r.payment_method_ref ?? "наличные"}</div></td>
-                <td className="px-2 text-xs">{r.paid_by ?? "—"}</td>
-                <td className="px-2 text-xs">
+                <td className={TD}>{r.kind === "advance" ? "Аванс" : "Зарплата"}</td>
+                <td className={cn(TD, "text-right font-semibold tabular-nums", r.status === "reversed" && "line-through")}>
+                  {money(r.amount, 2)} {r.currency}
+                  {r.rate !== 1 ? <div className="text-[11px] font-normal text-muted-foreground">= {money(r.amount_uzs)} · курс {r.rate}</div> : null}
+                </td>
+                <td className={cn(TD, "text-xs")}>
+                  {r.cash_desk_name ?? "—"}
+                  <div className="text-muted-foreground">{r.payment_method_ref ?? "наличные"}</div>
+                </td>
+                <td className={cn(TD, "text-xs")}>{r.paid_by ?? "—"}</td>
+                <td className={cn(TD, "text-xs")}>
                   {r.expense_id ? `#${r.expense_id}` : "—"}
                   {r.status === "reversed" ? <div className="text-red-700">Сторно: {r.reverse_reason}</div> : null}
                 </td>
-                <td className="px-2 text-right">
+                <td className={cn(TD, "text-center")}>
                   {canReverse && r.status !== "reversed" ? (
                     <Button
                       size="icon"
                       variant="ghost"
+                      className="h-8 w-8"
                       aria-label="Сторно"
                       title="Сторно выплаты"
                       onClick={() => {
@@ -122,6 +139,7 @@ export function PayrollPayoutsHistory() {
           </tbody>
         </table>
       </div>
-    </div>
+      <PayrollPagination page={paged.page} pageSize={prefs.pageSize} total={paged.total} onPage={paged.setPage} />
+    </>
   );
 }

@@ -58,6 +58,9 @@ const ROLE_RU: Record<string, string> = {
   warehouse: "Складчик",
   skladchik: "Складчик",
   director: "Директор",
+  sales_director: "Коммерческий директор",
+  regional_manager: "Региональный менеджер",
+  warehouse_manager: "Заведующий складом",
   admin: "Администратор"
 };
 

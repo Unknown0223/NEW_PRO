@@ -88,6 +88,8 @@ export function shouldShowSettingsSecondaryAside(pathname: string): boolean {
   if (path === "/settings/cash-desks" || path.startsWith("/settings/cash-desks/")) return false;
   /** Xarita chegaralari — to‘liq ekran xarita; ichki sozlamalar paneli kerak emas */
   if (path === "/settings/geo-boundaries") return false;
+  /** Zarplata sahifalari — «Зарплата» bo‘limi yon panelida */
+  if (path === "/settings/payroll" || path.startsWith("/settings/payroll/")) return false;
   return path === "/settings" || path.startsWith("/settings/");
 }
 

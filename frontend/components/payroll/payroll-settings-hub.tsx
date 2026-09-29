@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
 import { payrollApi } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { useNotice } from "@/components/payroll/payroll-ui";
+import { PayrollTableCard } from "@/components/payroll/kit/payroll-kit-table";
 
 type Settings = { enabled: boolean; parallel_run: boolean; salary_queue_enabled: boolean };
 
@@ -31,18 +32,54 @@ const TOGGLES: Array<{ key: keyof Settings; title: string; hint: string }> = [
   }
 ];
 
-const LINKS = [
-  { href: "/users/salary", title: "Зарплатная ведомость", hint: "Расчёт, статусы, закрытие месяца" },
-  { href: "/users/salary/role-salaries", title: "Базовые оклады", hint: "Оклад по роли и индивидуально" },
-  { href: "/users/salary/formulas", title: "Конструктор формул", hint: "KPI-бонусы и надбавки" },
-  { href: "/users/bonus-and-salary-settings", title: "Настройки бонусов", hint: "Назначение формул сотрудникам" },
-  { href: "/settings/payroll/adjustments", title: "Надбавки и вычеты", hint: "Статьи ведомости" },
-  { href: "/settings/payroll/advance-limits", title: "Лимиты авансов", hint: "Общий, по роли, исключения" },
-  { href: "/users/advances", title: "Аванс", hint: "Заявки руководителя" },
-  { href: "/finance/advances/approval", title: "Утверждение авансов", hint: "Финансы" },
-  { href: "/finance/cashier-queue", title: "Выдача (очередь)", hint: "Кассир филиала" },
-  { href: "/users/salary/compare", title: "Сверка с Excel", hint: "Пробный месяц" }
+const GROUPS: Array<{ title: string; links: Array<{ href: string; title: string; hint: string }> }> = [
+  {
+    title: "Расчёт",
+    links: [
+      { href: "/users/salary", title: "Зарплата", hint: "Расчёт, статусы, закрытие месяца" },
+      { href: "/users/salary/compare", title: "Сверка с Excel", hint: "Пробный месяц" }
+    ]
+  },
+  {
+    title: "Аванс",
+    links: [
+      { href: "/users/advances", title: "Аванс", hint: "Заявки руководителя" },
+      { href: "/finance/advances/approval", title: "Утверждение авансов", hint: "Финансы" },
+      { href: "/settings/payroll/advance-limits", title: "Лимиты авансов", hint: "Общий, по роли, исключения" }
+    ]
+  },
+  {
+    title: "Выдача",
+    links: [{ href: "/finance/cashier-queue", title: "Выдача аванса и зарплаты", hint: "Очередь кассира филиала" }]
+  },
+  {
+    title: "Настройки",
+    links: [
+      { href: "/users/salary/role-salaries", title: "Базовые оклады", hint: "Оклад по роли и индивидуально" },
+      { href: "/users/salary/formulas", title: "Формулы", hint: "KPI-бонусы, надбавки, оклад" },
+      { href: "/users/bonus-and-salary-settings", title: "Настройки бонусов и зарплат", hint: "Назначение формул сотрудникам" },
+      { href: "/settings/payroll/adjustments", title: "Надбавки и вычеты", hint: "Статьи ведомости" }
+    ]
+  }
 ];
+
+function Toggle({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        checked ? "bg-primary" : "bg-slate-300 dark:bg-slate-600"
+      )}
+    >
+      <span className={cn("inline-block size-5 rounded-full bg-white shadow transition-transform", checked ? "translate-x-5" : "translate-x-0.5")} />
+    </button>
+  );
+}
 
 export function PayrollSettingsHub() {
   const tenant = useTenant();
@@ -66,29 +103,39 @@ export function PayrollSettingsHub() {
     <PageShell>
       <PageHeader title="Настройки зарплаты" description="Включение модуля и переходы ко всем разделам зарплаты и аванса." />
       {notice.element}
-      <div className="grid max-w-3xl gap-3">
-        {TOGGLES.map((t) => (
-          <label key={t.key} className="flex items-start gap-3 rounded-lg border bg-card p-4">
-            <input
-              type="checkbox"
-              className="mt-1 size-4"
-              disabled={!canEdit || q.isLoading || save.isPending}
-              checked={Boolean(q.data?.[t.key])}
-              onChange={(e) => save.mutate({ [t.key]: e.target.checked })}
-            />
-            <span>
-              <span className="block font-medium">{t.title}</span>
-              <span className="mt-0.5 block text-sm text-muted-foreground">{t.hint}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {LINKS.map((l) => (
-          <Link key={l.href} href={l.href} className={cn(buttonVariants({ variant: "outline" }), "h-auto flex-col items-start gap-0.5 p-4 text-left")}>
-            <span className="font-medium">{l.title}</span>
-            <span className="text-xs font-normal text-muted-foreground">{l.hint}</span>
-          </Link>
+      <PayrollTableCard title="Параметры модуля">
+        <div className="divide-y divide-border/70">
+          {TOGGLES.map((t) => (
+            <div key={t.key} className="flex items-start justify-between gap-4 px-4 py-3.5">
+              <div className="min-w-0">
+                <div className="font-medium text-foreground">{t.title}</div>
+                <div className="mt-0.5 text-sm text-muted-foreground">{t.hint}</div>
+              </div>
+              <Toggle
+                checked={Boolean(q.data?.[t.key])}
+                disabled={!canEdit || q.isLoading || save.isPending}
+                onChange={(v) => save.mutate({ [t.key]: v })}
+              />
+            </div>
+          ))}
+        </div>
+      </PayrollTableCard>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {GROUPS.map((g) => (
+          <PayrollTableCard key={g.title} title={g.title}>
+            <div className="divide-y divide-border/70">
+              {g.links.map((l) => (
+                <Link key={l.href} href={l.href} className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground group-hover:text-primary">{l.title}</span>
+                    <span className="block text-xs text-muted-foreground">{l.hint}</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-primary" />
+                </Link>
+              ))}
+            </div>
+          </PayrollTableCard>
         ))}
       </div>
     </PageShell>
