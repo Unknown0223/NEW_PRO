@@ -6,6 +6,7 @@ import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/t
 import { parseTimesheetState } from "../timesheet/timesheet.service";
 import { computeUserMonthFact } from "./payroll-kpi-fact";
 import { computeUserMonthPlan } from "./payroll-slot-plan";
+import { parseItemAmounts } from "./payroll.item-amounts.pure";
 import type { PayrollCalcInputs } from "./payroll.formula-vars";
 
 export type TenantPayrollEnv = {
@@ -101,7 +102,12 @@ export async function computeUserAttendance(
   return s;
 }
 
-export type BaseSalaryInfo = { base_full: number; currency: string; cash_desk_id: number | null };
+export type BaseSalaryInfo = {
+  base_full: number;
+  currency: string;
+  cash_desk_id: number | null;
+  item_parts: Map<number, number>;
+};
 
 export async function resolveBaseSalary(tenantId: number, userId: number, role: string): Promise<BaseSalaryInfo> {
   const [emp, rc] = await Promise.all([
@@ -109,10 +115,12 @@ export async function resolveBaseSalary(tenantId: number, userId: number, role: 
     prisma.payrollRoleConfig.findUnique({ where: { tenant_id_role: { tenant_id: tenantId, role } } })
   ]);
   const base = emp?.base_amount != null ? Number(emp.base_amount) : rc ? Number(rc.base_amount) : 0;
+  const parts = parseItemAmounts(emp?.item_amounts);
   return {
     base_full: base,
     currency: emp?.currency || rc?.currency || "UZS",
-    cash_desk_id: emp?.cash_desk_id ?? null
+    cash_desk_id: emp?.cash_desk_id ?? null,
+    item_parts: new Map(Object.entries(parts).map(([k, v]) => [Number(k), v]))
   };
 }
 
@@ -169,7 +177,8 @@ export async function loadPayrollInputs(
     expeditor: fact.expeditor,
     team_total: fact.team?.total ?? null,
     team_by_group: fact.team?.byGroup ?? null,
-    advances_paid: advances
+    advances_paid: advances,
+    item_parts: base.item_parts
   };
   return {
     inputs,

@@ -91,7 +91,7 @@ export function PayrollFormulasWorkspace() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PayrollRelatedBar current="formulas" />
       <PayrollPageTitle
         title="Формулы"

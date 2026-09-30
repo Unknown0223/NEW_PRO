@@ -42,7 +42,8 @@ const roleCfgBody = z.object({
 const empCfgBody = z.object({
   base_amount: z.number().min(0).max(1e13).nullable().optional(),
   cash_desk_id: z.number().int().positive().nullable().optional(),
-  comment: z.string().max(500).nullable().optional()
+  comment: z.string().max(500).nullable().optional(),
+  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional()
 });
 
 const empImportBody = z.object({
@@ -52,7 +53,8 @@ const empImportBody = z.object({
       z.object({
         code: z.string().min(1).max(64),
         base_amount: z.number().nullable().optional(),
-        cash_desk: z.string().max(160).nullable().optional()
+        cash_desk: z.string().max(160).nullable().optional(),
+        item_amounts: z.record(z.string().regex(/^\d+$/), z.number()).optional()
       })
     )
     .min(1)

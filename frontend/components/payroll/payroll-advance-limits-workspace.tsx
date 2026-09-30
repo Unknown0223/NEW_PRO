@@ -104,7 +104,7 @@ export function PayrollAdvanceLimitsWorkspace() {
     (draft.scope !== "user" || draft.user_id);
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader
         title="Лимиты авансов"
         description="Максимальная сумма авансов на сотрудника за месяц. Приоритет: исключение для сотрудника → лимит роли → общий лимит."

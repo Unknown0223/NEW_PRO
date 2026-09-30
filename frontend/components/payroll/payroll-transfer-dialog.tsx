@@ -49,7 +49,7 @@ export function PayrollTransferDialog({ open, onOpenChange, to, items, userIds, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="payroll-template sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Перенос данных из прошлого месяца</DialogTitle>
         </DialogHeader>

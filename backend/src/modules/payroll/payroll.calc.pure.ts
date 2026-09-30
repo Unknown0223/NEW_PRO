@@ -99,10 +99,29 @@ export function computePayroll(input: {
     bumpItem(k.item_id, k.amount);
   }
 
+  const formulaTargets = new Set(input.formulas.map((f) => f.target_item_id));
+  for (const [itemId, amount] of inputs.item_parts ?? []) {
+    const it = items.get(itemId);
+    if (!it || it.system_key || it.type !== "allowance" || formulaTargets.has(itemId)) continue;
+    if (lines.has(keyOf(itemId, "")) || !amount) continue;
+    lines.set(keyOf(itemId, ""), {
+      item_id: itemId,
+      amount: r2(amount),
+      source: "config",
+      corr_key: "",
+      formula_snapshot: null,
+      is_manual_override: false,
+      correction_for_year: null,
+      correction_for_month: null,
+      note: null
+    });
+    bumpItem(itemId, amount);
+  }
+
   let baseSalary = inputs.base_salary;
   if (input.salaryFormula) {
     try {
-      const vars = buildFormulaVars(inputs, null, itemValues, { allowances: 0, deductions: 0 });
+      const vars = buildFormulaVars(inputs, null, itemValues, { allowances: 0, deductions: 0 }, items);
       const res = evaluateFormula(parseFormula(input.salaryFormula), vars);
       res.warnings.forEach((w) => warnings.add(`salary:${w}`));
       baseSalary = res.value;
@@ -119,7 +138,7 @@ export function computePayroll(input: {
     if (!item || item.system_key) continue;
     try {
       const totals = runningTotals(lines, items, systemIds.advance);
-      const vars = buildFormulaVars(baseInputs, f.kpi_group_id, itemValues, totals);
+      const vars = buildFormulaVars(baseInputs, f.kpi_group_id, itemValues, totals, items);
       const res = evaluateFormula(parseFormula(f.text), vars);
       res.warnings.forEach((w) => warnings.add(`${f.ref}:${w}`));
       formulaValues[f.ref] = res.value;

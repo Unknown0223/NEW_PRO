@@ -62,6 +62,8 @@ model PayrollEmployeeConfig {
   cash_desk_id Int?
   currency     String?  @db.VarChar(8)
   comment      String?  @db.VarChar(500)
+  /// Надбавка qismlari: { "<item_id>": amount } — formulada «Оклад - <nom>», formulasiz bo'lsa to'g'ridan-to'g'ri qator.
+  item_amounts Json     @default("{}")
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 

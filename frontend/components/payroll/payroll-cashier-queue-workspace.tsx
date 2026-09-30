@@ -77,7 +77,7 @@ export function PayrollCashierQueueWorkspace() {
   });
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader
         title="Выдача зарплаты и авансов"
         description="Очередь по времени утверждения. Выдача уменьшает остаток кассы и автоматически создаёт утверждённый расход."

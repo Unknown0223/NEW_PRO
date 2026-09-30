@@ -4,6 +4,7 @@ import { appendTenantAuditEvent, AuditEntityType } from "../../lib/tenant-audit"
 import { toFio } from "../staff/staff.shared.helpers";
 import { PayrollError } from "./payroll.route-helpers";
 import { markPayrollDirty, markPayrollDirtyForTenant } from "./payroll.dirty";
+import { mergeItemAmounts, parseItemAmounts } from "./payroll.item-amounts.pure";
 
 export type RoleConfigDto = {
   role: string;
@@ -28,6 +29,7 @@ export type EmployeeConfigDto = {
   cash_desk_id: number | null;
   cash_desk_name: string | null;
   comment: string | null;
+  item_amounts: Record<string, number>;
 };
 
 const EXCLUDED_ROLES = ["admin"];
@@ -163,7 +165,8 @@ export async function listEmployeeConfigs(
       effective_base_amount: own ?? rb,
       cash_desk_id: c?.cash_desk_id ?? null,
       cash_desk_name: c?.cash_desk_id ? deskName.get(c.cash_desk_id) ?? null : null,
-      comment: c?.comment ?? null
+      comment: c?.comment ?? null,
+      item_amounts: parseItemAmounts(c?.item_amounts)
     };
   });
 }
@@ -172,7 +175,17 @@ export type EmployeeConfigInput = {
   base_amount?: number | null;
   cash_desk_id?: number | null;
   comment?: string | null;
+  item_amounts?: Record<string, number | null>;
 };
+
+async function assertAllowanceItems(tenantId: number, ids: string[]) {
+  const nums = [...new Set(ids.map(Number))].filter((n) => Number.isInteger(n) && n > 0);
+  if (!nums.length) return;
+  const found = await prisma.payrollItem.count({
+    where: { tenant_id: tenantId, id: { in: nums }, type: "allowance", system_key: null }
+  });
+  if (found !== nums.length) throw new PayrollError("BAD_ITEM");
+}
 
 async function assertDesk(tenantId: number, id: number | null | undefined) {
   if (id == null) return;
@@ -192,12 +205,25 @@ export async function upsertEmployeeConfig(
     throw new PayrollError("BAD_AMOUNT");
   }
   await assertDesk(tenantId, input.cash_desk_id);
+  let itemAmounts: Record<string, number> | undefined;
+  if (input.item_amounts !== undefined) {
+    const setIds = Object.entries(input.item_amounts)
+      .filter(([, v]) => v != null)
+      .map(([k]) => k);
+    await assertAllowanceItems(tenantId, setIds);
+    const prev = await prisma.payrollEmployeeConfig.findUnique({
+      where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
+      select: { item_amounts: true }
+    });
+    itemAmounts = mergeItemAmounts(prev?.item_amounts, input.item_amounts);
+  }
   const data = {
     ...(input.base_amount !== undefined
       ? { base_amount: input.base_amount == null ? null : new Prisma.Decimal(input.base_amount) }
       : {}),
     ...(input.cash_desk_id !== undefined ? { cash_desk_id: input.cash_desk_id } : {}),
-    ...(input.comment !== undefined ? { comment: input.comment?.trim().slice(0, 500) || null } : {})
+    ...(input.comment !== undefined ? { comment: input.comment?.trim().slice(0, 500) || null } : {}),
+    ...(itemAmounts !== undefined ? { item_amounts: itemAmounts } : {})
   };
   await prisma.payrollEmployeeConfig.upsert({
     where: { tenant_id_user_id: { tenant_id: tenantId, user_id: userId } },
@@ -215,7 +241,12 @@ export async function upsertEmployeeConfig(
   await markPayrollDirty(tenantId, { userIds: [userId] }, "employee_config");
 }
 
-export type EmployeeConfigImportRow = { code: string; base_amount?: number | null; cash_desk?: string | null };
+export type EmployeeConfigImportRow = {
+  code: string;
+  base_amount?: number | null;
+  cash_desk?: string | null;
+  item_amounts?: Record<string, number>;
+};
 export type EmployeeConfigImportPreview = {
   row: number;
   code: string;
@@ -244,6 +275,14 @@ export async function importEmployeeConfigs(
     where: { tenant_id: tenantId, OR: codes.map((c) => ({ code: { equals: c, mode: "insensitive" as const } })) },
     select: { id: true, code: true, name: true, first_name: true, last_name: true, middle_name: true, is_active: true }
   });
+  const allowanceIds = new Set(
+    (
+      await prisma.payrollItem.findMany({
+        where: { tenant_id: tenantId, type: "allowance", system_key: null },
+        select: { id: true }
+      })
+    ).map((i) => i.id)
+  );
   const userByCode = new Map<string, (typeof users)[number]>();
   for (const u of users.sort((a, b) => Number(a.is_active) - Number(b.is_active))) {
     if (u.code) userByCode.set(u.code.trim().toLowerCase(), u);
@@ -253,10 +292,12 @@ export async function importEmployeeConfigs(
     const deskKey = r.cash_desk?.trim().toLowerCase();
     const deskId = deskKey ? deskByKey.get(deskKey) ?? null : null;
     const amount = r.base_amount ?? null;
+    const parts = Object.entries(r.item_amounts ?? {});
     let status: EmployeeConfigImportPreview["status"] = "ok";
     if (!u) status = "not_found";
     else if (deskKey && deskId == null) status = "bad_cash_desk";
     else if (amount != null && (!Number.isFinite(amount) || amount < 0)) status = "bad_amount";
+    else if (parts.some(([k, v]) => !allowanceIds.has(Number(k)) || !Number.isFinite(v) || v < 0)) status = "bad_amount";
     return {
       row: i + 1,
       code: r.code,
@@ -269,11 +310,21 @@ export async function importEmployeeConfigs(
   });
   let applied = 0;
   if (apply) {
-    for (const p of preview) {
+    for (const [i, p] of preview.entries()) {
       if (p.status !== "ok" || p.user_id == null) continue;
+      const patch = rows[i]?.item_amounts;
+      let itemAmounts: Record<string, number> | undefined;
+      if (patch && Object.keys(patch).length) {
+        const prev = await prisma.payrollEmployeeConfig.findUnique({
+          where: { tenant_id_user_id: { tenant_id: tenantId, user_id: p.user_id } },
+          select: { item_amounts: true }
+        });
+        itemAmounts = mergeItemAmounts(prev?.item_amounts, patch);
+      }
       const data = {
         ...(p.base_amount != null ? { base_amount: new Prisma.Decimal(p.base_amount) } : {}),
-        ...(p.cash_desk_id != null ? { cash_desk_id: p.cash_desk_id } : {})
+        ...(p.cash_desk_id != null ? { cash_desk_id: p.cash_desk_id } : {}),
+        ...(itemAmounts ? { item_amounts: itemAmounts } : {})
       };
       await prisma.payrollEmployeeConfig.upsert({
         where: { tenant_id_user_id: { tenant_id: tenantId, user_id: p.user_id } },

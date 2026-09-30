@@ -37,7 +37,7 @@ type Detail = {
   advances: Array<{ id: number; amount: number; status: string; created_at: string }>;
 };
 
-const SOURCE: Record<string, string> = { formula: "Формула", kpi: "KPI", manual: "Вручную", advance: "Аванс", correction: "Корректировка", carry: "Долг прошлого месяца" };
+const SOURCE: Record<string, string> = { formula: "Формула", kpi: "KPI", manual: "Вручную", config: "Базовый оклад", advance: "Аванс", correction: "Корректировка", carry: "Долг прошлого месяца" };
 
 export function PayrollRecordDialog({ recordId, items, onClose }: { recordId: number | null; items: PayrollItem[]; onClose: () => void }) {
   const tenant = useTenant();
@@ -74,7 +74,7 @@ export function PayrollRecordDialog({ recordId, items, onClose }: { recordId: nu
 
   return (
     <Dialog open={recordId != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="payroll-template sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{d ? `${d.user.fio} — ${String(d.month).padStart(2, "0")}.${d.year}` : "Загрузка…"}</DialogTitle>
         </DialogHeader>

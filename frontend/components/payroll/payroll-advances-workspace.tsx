@@ -142,7 +142,7 @@ export function PayrollAdvancesWorkspace() {
   const pageAllOn = paged.pageRows.length > 0 && paged.pageRows.every((r) => sel.ids.has(r.id));
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader
         title="Аванс"
         description="Добавьте аванс вручную или из Excel и отправьте на утверждение. После утверждения его выдаёт кассир филиала по очереди."

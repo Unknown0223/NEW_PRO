@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCheck, ChevronsLeftRight, CopyPlus, FileDiff, Lock, RefreshCw, Unlock } from "lucide-react";
+import { ArrowRightLeft, FileDiff, Lock, Maximize2, Minimize2, Pencil, RefreshCw, Unlock } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -19,15 +19,27 @@ import { cn } from "@/lib/utils";
 import { useNotice, useSelection } from "@/components/payroll/payroll-ui";
 import { PayrollHealthBanner } from "@/components/payroll/payroll-health-banner";
 import { PAYROLL_FILTER_TRIGGER, PayrollFilterCard, PayrollFloatSelect, PayrollRelatedBar } from "@/components/payroll/kit/payroll-kit-layout";
-import { PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
-import { PayrollSheetTable, SHEET_COLUMNS, type SheetColumn, type SheetGroup, type SheetRow, type SheetTotals } from "@/components/payroll/payroll-sheet-table";
+import { PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows, useSortedRows } from "@/components/payroll/kit/payroll-kit-table";
+import { PayrollMoreMenu } from "@/components/payroll/kit/payroll-kit-menu";
+import {
+  PayrollSheetTable,
+  SHEET_COLUMNS,
+  sheetSortValue,
+  type SheetColumn,
+  type SheetGroup,
+  type SheetRow,
+  type SheetSortKey,
+  type SheetTotals
+} from "@/components/payroll/payroll-sheet-table";
 import { PayrollRecordDialog } from "@/components/payroll/payroll-record-dialog";
 import { PayrollTransferDialog } from "@/components/payroll/payroll-transfer-dialog";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 
 type Records = { period: { status: string; closed_at: string | null }; columns: SheetColumn[]; rows: SheetRow[]; totals: SheetTotals };
 type StatusAction = "submit" | "confirm" | "reject" | "reopen";
-type Filters = { role: string; branches: string[]; status: string };
+type Filters = { role: string; branches: string[]; status: string; direction: string; position: string };
+type FilterOptions = { roles: string[]; branches: string[]; positions: string[]; directions: Array<{ id: number; name: string }> };
+const EMPTY_FILTERS: Filters = { role: "", branches: [], status: "", direction: "", position: "" };
 
 const ACTION_LABEL: Record<StatusAction, string> = { submit: "На проверку", confirm: "Подтвердить", reject: "Отклонить", reopen: "Вернуть в черновик" };
 const COLUMN_IDS = SHEET_COLUMNS.map((c) => c.id);
@@ -43,10 +55,9 @@ export function PayrollSheetWorkspace() {
   const { confirm, dialog } = useAppConfirm();
   const sel = useSelection<number>();
   const [ym, setYm] = useState<Ym>(currentYm());
-  const [draftRole, setDraftRole] = useState("");
+  const [draft, setDraft] = useState<Omit<Filters, "branches">>(EMPTY_FILTERS);
   const [draftBranches, setDraftBranches] = useState<Set<string>>(new Set());
-  const [draftStatus, setDraftStatus] = useState("");
-  const [filters, setFilters] = useState<Filters>({ role: "", branches: [], status: "" });
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<Set<SheetGroup>>(new Set(["allowances", "deductions"]));
   const [colsOpen, setColsOpen] = useState(false);
@@ -60,6 +71,8 @@ export function PayrollSheetWorkspace() {
     if (filters.role) p.set("roles", filters.role);
     if (filters.branches.length) p.set("branches", filters.branches.join(","));
     if (filters.status) p.set("statuses", filters.status);
+    if (filters.direction) p.set("directions", filters.direction);
+    if (filters.position) p.set("positions", filters.position);
     return p.toString();
   }, [ym, filters]);
 
@@ -72,17 +85,19 @@ export function PayrollSheetWorkspace() {
   const filtersQ = useQuery({
     queryKey: ["payroll-record-filters", tenant, ym.year, ym.month],
     enabled: Boolean(tenant),
-    queryFn: () => api.get<{ roles: string[]; branches: string[] }>(`/records/filters?${ymQuery(ym)}`)
+    queryFn: () => api.get<FilterOptions>(`/records/filters?${ymQuery(ym)}`)
   });
   const itemsQ = useQuery({ queryKey: ["payroll-items", tenant], enabled: Boolean(tenant), queryFn: () => api.get<PayrollItem[]>("/items") });
 
   const data = recordsQ.data;
   const closed = data?.period.status === "closed";
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return (data?.rows ?? []).filter((r) => !s || `${r.fio} ${r.code ?? ""} ${r.branch ?? ""}`.toLowerCase().includes(s));
   }, [data, q]);
-  const paged = usePagedRows(rows, prefs.pageSize, `${params}|${q}`);
+  const { sorted: rows, sort, toggle: toggleSort } = useSortedRows<SheetRow, SheetSortKey>(filtered, sheetSortValue);
+  const paged = usePagedRows(rows, prefs.pageSize, `${params}|${q}|${sort?.key ?? ""}|${sort?.dir ?? ""}`);
+  const selectedRows = rows.filter((r) => sel.ids.has(r.id));
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["payroll-records", tenant] });
@@ -90,13 +105,13 @@ export function PayrollSheetWorkspace() {
   };
 
   const applyFilters = () => {
-    setFilters({ role: draftRole, branches: [...draftBranches], status: draftStatus });
+    setFilters({ ...draft, branches: [...draftBranches] });
     sel.clear();
   };
 
   const recalc = useMutation({
     mutationFn: () => {
-      const userIds = sel.list.length ? rows.filter((r) => sel.ids.has(r.id)).map((r) => r.user_id) : undefined;
+      const userIds = sel.list.length ? selectedRows.map((r) => r.user_id) : undefined;
       return api.send<{ mode: string }>("POST", "/records/recalc", { ...ym, user_ids: userIds });
     },
     onSuccess: (r) => {
@@ -177,11 +192,18 @@ export function PayrollSheetWorkspace() {
     });
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PayrollRelatedBar current="salary" />
       <PayrollFilterCard
         title="Зарплата"
-        description="Считается автоматически: табель, KPI (доставлено − возвраты), формулы, авансы и выплаты кассы."
+        actions={
+          <span
+            className={cn("rounded-full px-2.5 py-1 text-xs font-medium", closed ? "bg-zinc-800 text-white" : "bg-primary/10 text-primary")}
+            title="Считается автоматически: табель, KPI (доставлено − возвраты), формулы, авансы и выплаты кассы."
+          >
+            {closed ? "Месяц закрыт" : "Месяц открыт"}
+          </span>
+        }
         month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); } }}
         fxHref="/users/salary/formulas"
         onApply={applyFilters}
@@ -198,14 +220,26 @@ export function PayrollSheetWorkspace() {
         />
         <PayrollFloatSelect
           label="Роль"
-          value={draftRole}
-          onChange={setDraftRole}
+          value={draft.role}
+          onChange={(v) => setDraft((d) => ({ ...d, role: v }))}
           options={(filtersQ.data?.roles ?? []).map((r) => ({ value: r, label: roleLabel(r) }))}
         />
         <PayrollFloatSelect
+          label="Направление торговли"
+          value={draft.direction}
+          onChange={(v) => setDraft((d) => ({ ...d, direction: v }))}
+          options={(filtersQ.data?.directions ?? []).map((d) => ({ value: String(d.id), label: d.name }))}
+        />
+        <PayrollFloatSelect
+          label="Должность"
+          value={draft.position}
+          onChange={(v) => setDraft((d) => ({ ...d, position: v }))}
+          options={(filtersQ.data?.positions ?? []).map((p) => ({ value: p, label: p }))}
+        />
+        <PayrollFloatSelect
           label="Статус"
-          value={draftStatus}
-          onChange={setDraftStatus}
+          value={draft.status}
+          onChange={(v) => setDraft((d) => ({ ...d, status: v }))}
           options={Object.entries(RECORD_STATUS).map(([k, v]) => ({ value: k, label: v.label }))}
         />
       </PayrollFilterCard>
@@ -220,51 +254,56 @@ export function PayrollSheetWorkspace() {
           onColumns={() => setColsOpen(true)}
           search={q}
           onSearch={setQ}
-          searchPlaceholder="Поиск по ФИО, коду, филиалу"
+          searchPlaceholder="Поиск"
           onRefresh={refresh}
           refreshing={recordsQ.isFetching}
           onExport={() => void exportXlsx()}
         >
-          <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", closed ? "bg-zinc-800 text-white" : "bg-emerald-100 text-emerald-800")}>
-            {closed ? "Месяц закрыт" : "Месяц открыт"}
-          </span>
           {can("staff.zarplaty.approve") ? (
-            <Button size="sm" variant="outline" className="h-9" disabled={!sel.list.length || changeStatus.isPending} onClick={() => void runStatus("confirm")}>
-              <CheckCheck className="mr-1 size-4" /> Подтвердить все{sel.list.length ? ` (${sel.list.length})` : ""}
+            <Button className="h-9" disabled={!sel.list.length || changeStatus.isPending} onClick={() => void runStatus("confirm")}>
+              Подтвердить все{sel.list.length ? ` (${sel.list.length})` : ""}
             </Button>
           ) : null}
-          {can("staff.zarplaty.update") && !closed ? (
-            <Button size="sm" variant="outline" className="h-9" disabled={recalc.isPending} onClick={() => recalc.mutate()}>
-              <RefreshCw className={cn("mr-1 size-4", recalc.isPending && "animate-spin")} /> Пересчитать
-            </Button>
-          ) : null}
-          {can("staff.zarplaty.copy") && !closed ? (
-            <Button size="sm" variant="outline" className="h-9" onClick={() => setTransferOpen(true)}>
-              <CopyPlus className="mr-1 size-4" /> Перенос данных
-            </Button>
-          ) : null}
-          <Link href="/users/salary/compare" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")}>
-            <FileDiff className="mr-1 size-4" /> Сверка с Excel
+          <Link href="/users/salary/formulas" className={cn(buttonVariants(), "h-9")}>
+            Установка формулу
           </Link>
-          {can("staff.zarplaty.approve") ? (
-            closed ? (
-              <Button size="sm" variant="outline" className="h-9" onClick={() => period.mutate({ action: "reopen" })}>
-                <Unlock className="mr-1 size-4" /> Открыть месяц
-              </Button>
-            ) : (
-              <Button size="sm" className="h-9" onClick={() => void closeMonth()} disabled={!data?.rows.length}>
-                <Lock className="mr-1 size-4" /> Закрыть месяц
-              </Button>
-            )
+          {can("staff.zarplaty.copy") && !closed ? (
+            <Button variant="outline" className="h-9" onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft className="mr-1.5 size-4" /> Перенос данных
+            </Button>
           ) : null}
+          <Button
+            variant="outline"
+            className="h-9"
+            disabled={selectedRows.length !== 1}
+            title={selectedRows.length === 1 ? undefined : "Выберите одного сотрудника (или нажмите на строку)"}
+            onClick={() => setOpenId(selectedRows[0]?.id ?? null)}
+          >
+            <Pencil className="mr-1.5 size-4" /> Изменить зарплату
+          </Button>
+          <PayrollMoreMenu
+            items={[
+              ...(can("staff.zarplaty.update") && !closed
+                ? [{ id: "recalc", label: "Пересчитать", icon: <RefreshCw className="size-4" />, disabled: recalc.isPending, onClick: () => recalc.mutate() }]
+                : []),
+              { id: "compare", label: "Сверка с Excel", icon: <FileDiff className="size-4" />, href: "/users/salary/compare" },
+              ...(can("staff.zarplaty.approve")
+                ? [
+                    closed
+                      ? { id: "reopen", label: "Открыть месяц", icon: <Unlock className="size-4" />, onClick: () => period.mutate({ action: "reopen" }) }
+                      : { id: "close", label: "Закрыть месяц", icon: <Lock className="size-4" />, disabled: !data?.rows.length, destructive: true, onClick: () => void closeMonth() }
+                  ]
+                : [])
+            ]}
+          />
           <Button
             size="icon"
             variant="outline"
-            className="h-9 w-9"
-            title={allExpanded ? "Свернуть все группы" : "Развернуть все группы"}
+            className={cn("h-9 w-9", allExpanded && "border-primary/30 bg-primary/10 text-primary")}
+            title={allExpanded ? "Свернуть все" : "Раскрыть все"}
             onClick={() => setExpanded(allExpanded ? new Set() : new Set(ALL_GROUPS))}
           >
-            <ChevronsLeftRight className="size-4" />
+            {allExpanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
         </PayrollTableToolbar>
 
@@ -293,6 +332,8 @@ export function PayrollSheetWorkspace() {
           hidden={prefs.hiddenColumnIds}
           expanded={expanded}
           onToggleGroup={toggleGroup}
+          sort={sort}
+          onSort={toggleSort}
           selected={sel.ids}
           onToggle={sel.toggle}
           onToggleAll={(on) => sel.setAll(paged.pageRows.map((r) => r.id), on)}
@@ -319,7 +360,7 @@ export function PayrollSheetWorkspace() {
         onOpenChange={setTransferOpen}
         to={ym}
         items={itemsQ.data ?? []}
-        userIds={rows.filter((r) => sel.ids.has(r.id)).map((r) => r.user_id)}
+        userIds={selectedRows.map((r) => r.user_id)}
         onDone={(t) => { notice.ok(t); refresh(); }}
       />
       {dialog}

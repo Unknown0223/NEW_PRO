@@ -8,6 +8,7 @@ import {
   type FormulaValidation
 } from "./payroll.formula-engine";
 import { buildFormulaVars, knownVariableSet, staticVariableGroups } from "./payroll.formula-vars";
+import { partVarName } from "./payroll.item-amounts.pure";
 import { loadPayrollCalcContext, loadPayrollUser } from "./payroll.calc-context";
 import { loadPayrollInputs } from "./payroll.inputs";
 import { markPayrollDirtyForTenant } from "./payroll.dirty";
@@ -182,7 +183,7 @@ export async function listFormulaVariables(tenantId: number) {
   const [items, groups] = await Promise.all([
     prisma.payrollItem.findMany({
       where: { tenant_id: tenantId, is_active: true },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, system_key: true },
       orderBy: [{ type: "asc" }, { sort_order: "asc" }]
     }),
     prisma.kpiGroup.findMany({
@@ -195,6 +196,10 @@ export async function listFormulaVariables(tenantId: number) {
     groups: [
       ...staticVariableGroups(),
       { group: "Надбавки", items: items.filter((i) => i.type === "allowance").map((i) => i.name) },
+      {
+        group: "Базовые оклады (части)",
+        items: items.filter((i) => i.type === "allowance" && !i.system_key).map((i) => partVarName(i.name))
+      },
       { group: "Удержания", items: items.filter((i) => i.type === "deduction").map((i) => i.name) }
     ],
     functions: ["ЕСЛИ", "И", "ИЛИ", "НЕ", "ОКРУГЛ", "ОКРУГЛВВЕРХ", "ОКРУГЛВНИЗ", "MIN", "MAX", "ABS", "СУММ"],
@@ -222,10 +227,13 @@ export async function previewPayrollFormula(
     const name = ctx.items.get(l.item_id)?.name;
     if (name) itemValues.set(name, (itemValues.get(name) ?? 0) + Number(l.amount));
   }
-  const vars = buildFormulaVars(loaded.inputs, input.kpi_group_id ?? null, itemValues, {
-    allowances: Number(rec?.allowances_total ?? 0),
-    deductions: Number(rec?.deductions_total ?? 0)
-  });
+  const vars = buildFormulaVars(
+    loaded.inputs,
+    input.kpi_group_id ?? null,
+    itemValues,
+    { allowances: Number(rec?.allowances_total ?? 0), deductions: Number(rec?.deductions_total ?? 0) },
+    ctx.items
+  );
   const res = evaluateFormula(parseFormula(input.text), vars);
   const used = Object.fromEntries(v.variables.map((name) => [name, vars.get(normalizeVarName(name)) ?? 0]));
   return { ok: true as const, value: res.value, warnings: res.warnings, variables: used };

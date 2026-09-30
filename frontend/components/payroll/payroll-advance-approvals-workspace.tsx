@@ -143,7 +143,7 @@ export function PayrollAdvanceApprovalsWorkspace() {
   const pageAllOn = paged.pageRows.length > 0 && paged.pageRows.every((r) => sel.ids.has(r.id));
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader title="Утверждение авансов" description="Авансы, отправленные руководителями. Утверждённые попадают в очередь кассира филиала по времени утверждения." />
       <PayrollFiltersSection>
         <PayrollFilterField label="Месяц">

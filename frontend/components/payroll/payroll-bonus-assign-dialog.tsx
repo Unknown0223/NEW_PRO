@@ -56,7 +56,7 @@ export function PayrollBonusAssignDialog(props: {
 
   return (
     <Dialog open={t != null} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="payroll-template sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Установка формулы</DialogTitle>
         </DialogHeader>

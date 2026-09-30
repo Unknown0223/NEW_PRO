@@ -1,5 +1,6 @@
 import { normalizeVarName } from "./payroll.formula-engine";
 import { ZERO_METRICS, type KpiMetrics } from "./payroll-kpi-fact.pure";
+import { partVarName } from "./payroll.item-amounts.pure";
 
 export type PayrollCalcInputs = {
   base_full: number;
@@ -20,6 +21,8 @@ export type PayrollCalcInputs = {
   team_total: KpiMetrics | null;
   team_by_group: Map<number, KpiMetrics> | null;
   advances_paid: number;
+  /** Базовые оклады: xodimning надбавка qismlari (item_id → summa). */
+  item_parts?: Map<number, number>;
 };
 
 const METRIC_LABELS: Array<[keyof KpiMetrics, string]> = [
@@ -75,7 +78,10 @@ export function staticVariableGroups(): Array<{ group: string; items: string[] }
 export function knownVariableSet(itemNames: string[]): Set<string> {
   const s = new Set<string>();
   for (const g of staticVariableGroups()) g.items.forEach((i) => s.add(normalizeVarName(i)));
-  itemNames.forEach((n) => s.add(normalizeVarName(n)));
+  itemNames.forEach((n) => {
+    s.add(normalizeVarName(n));
+    s.add(normalizeVarName(partVarName(n)));
+  });
   return s;
 }
 
@@ -89,7 +95,8 @@ export function buildFormulaVars(
   inp: PayrollCalcInputs,
   kpiGroupId: number | null,
   itemValues: Map<string, number>,
-  totals: { allowances: number; deductions: number }
+  totals: { allowances: number; deductions: number },
+  items?: Map<number, { name: string }>
 ): Map<string, number> {
   const m = new Map<string, number>();
   const set = (k: string, v: number) => m.set(normalizeVarName(k), Number.isFinite(v) ? v : 0);
@@ -130,5 +137,8 @@ export function buildFormulaVars(
   set("Удержания (итого)", totals.deductions);
   set("Аванс", inp.advances_paid);
   for (const [name, v] of itemValues) set(name, v);
+  if (items) {
+    for (const [id, it] of items) set(partVarName(it.name), inp.item_parts?.get(id) ?? 0);
+  }
   return m;
 }

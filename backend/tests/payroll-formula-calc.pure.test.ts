@@ -154,4 +154,22 @@ describe("computePayroll", () => {
     expect(r.errors.length).toBe(1);
     expect(r.gross).toBe(3_000_000);
   });
+
+  it("Базовые оклады qismi: formulasiz — qator, formulali — «Оклад - …» o'zgaruvchisi", () => {
+    const withItem3 = new Map(items).set(3, { id: 3, name: "Fiksa", type: "allowance", system_key: null });
+    const r = computePayroll({
+      inputs: baseInputs({ item_parts: new Map([[1, 400_000], [3, 250_000]]) }),
+      items: withItem3,
+      salaryFormula: null,
+      formulas: [{ ref: "p", text: "ЕСЛИ([KPI - Выполнение (%)] >= 100, [Оклад - Бонус KPI], 0)", target_item_id: 1, kpi_group_id: null, priority: 1 }],
+      kept: [],
+      systemIds,
+      carryAmount: 0,
+      salaryPaid: 0
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.lines.find((l) => l.item_id === 1)?.amount).toBe(400_000);
+    expect(r.lines.find((l) => l.item_id === 3)).toMatchObject({ amount: 250_000, source: "config" });
+    expect(r.gross).toBe(3_650_000);
+  });
 });

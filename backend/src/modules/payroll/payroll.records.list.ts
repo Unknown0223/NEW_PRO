@@ -9,6 +9,8 @@ export type RecordsFilter = {
   roles?: string[];
   branches?: string[];
   statuses?: string[];
+  positions?: string[];
+  directionIds?: number[];
   q?: string;
   userIds?: number[];
 };
@@ -24,6 +26,8 @@ export type PayrollRowDto = {
   role: string | null;
   branch: string | null;
   position: string | null;
+  trade_direction_id: number | null;
+  trade_direction: string | null;
   is_active: boolean;
   status: string;
   currency: string;
@@ -63,6 +67,8 @@ export async function listPayrollRecords(tenantId: number, f: RecordsFilter) {
   if (f.roles?.length) where.role = { in: f.roles };
   if (f.branches?.length) where.branch = { in: f.branches };
   if (f.statuses?.length) where.status = { in: f.statuses };
+  if (f.positions?.length) where.position = { in: f.positions };
+  if (f.directionIds?.length) where.trade_direction_id = { in: f.directionIds };
   if (f.userIds?.length) where.user_id = { in: f.userIds };
   const [records, period, columns] = await Promise.all([
     prisma.payrollRecord.findMany({ where, include: { lines: true }, orderBy: [{ role: "asc" }, { user_id: "asc" }] }),
@@ -72,11 +78,18 @@ export async function listPayrollRecords(tenantId: number, f: RecordsFilter) {
     }),
     listPayrollColumns(tenantId)
   ]);
-  const users = await prisma.user.findMany({
-    where: { tenant_id: tenantId, id: { in: records.map((r) => r.user_id) } },
-    select: { id: true, name: true, first_name: true, last_name: true, middle_name: true, code: true, login: true, is_active: true }
-  });
+  const directionIds = [...new Set(records.map((r) => r.trade_direction_id).filter((x): x is number => x != null))];
+  const [users, directions] = await Promise.all([
+    prisma.user.findMany({
+      where: { tenant_id: tenantId, id: { in: records.map((r) => r.user_id) } },
+      select: { id: true, name: true, first_name: true, last_name: true, middle_name: true, code: true, login: true, is_active: true }
+    }),
+    directionIds.length
+      ? prisma.tradeDirection.findMany({ where: { tenant_id: tenantId, id: { in: directionIds } }, select: { id: true, name: true } })
+      : Promise.resolve([])
+  ]);
   const byId = new Map(users.map((u) => [u.id, u]));
+  const directionName = new Map(directions.map((d) => [d.id, d.name]));
   const q = f.q?.trim().toLocaleLowerCase("ru");
   const rows: PayrollRowDto[] = [];
   for (const r of records) {
@@ -100,6 +113,8 @@ export async function listPayrollRecords(tenantId: number, f: RecordsFilter) {
       role: r.role,
       branch: r.branch,
       position: r.position,
+      trade_direction_id: r.trade_direction_id,
+      trade_direction: r.trade_direction_id != null ? directionName.get(r.trade_direction_id) ?? null : null,
       is_active: u?.is_active ?? false,
       status: r.status,
       currency: r.currency,
@@ -220,9 +235,12 @@ export async function exportPayrollRecords(tenantId: number, f: RecordsFilter) {
     "ФИО",
     "Роль",
     "Филиал",
+    "Направление торговли",
+    "Должность",
     "Статус",
     "Раб. дни (план)",
     "Отработано",
+    "Валюта",
     "Оклад",
     ...data.columns.map((c) => c.name),
     "Начислено",
@@ -236,9 +254,12 @@ export async function exportPayrollRecords(tenantId: number, f: RecordsFilter) {
     r.fio,
     r.role ?? "",
     r.branch ?? "",
+    r.trade_direction ?? "",
+    r.position ?? "",
     r.status,
     r.plan_days,
     r.worked_days,
+    r.currency,
     r.base_salary,
     ...data.columns.map((c) => r.lines[String(c.id)] ?? 0),
     r.gross,

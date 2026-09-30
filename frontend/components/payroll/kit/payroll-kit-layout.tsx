@@ -50,7 +50,7 @@ export function PayrollRelatedBar({ current }: { current: PayrollSection }) {
           className={cn(
             "rounded-md px-2 py-1 font-medium transition-colors",
             l.id === current
-              ? "bg-primary/10 font-semibold text-primary ring-1 ring-inset ring-primary/25"
+              ? "bg-primary/10 font-semibold text-primary"
               : "text-foreground/80 hover:bg-muted hover:text-primary"
           )}
         >

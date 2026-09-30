@@ -72,7 +72,7 @@ export function PayrollAdvanceFormDialog({ target, ym, onClose, onSaved }: Props
 
   return (
     <Dialog open={target != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="payroll-template sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isNew ? `Новый аванс — ${ymLabel(ym)}` : `Аванс: ${target && typeof target === "object" ? target.fio : ""}`}</DialogTitle>
         </DialogHeader>

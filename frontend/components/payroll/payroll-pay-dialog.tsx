@@ -89,7 +89,7 @@ export function PayrollPayDialog({ row, desks, methods, defaultCurrency, onClose
 
   return (
     <Dialog open={row != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="payroll-template sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{row?.kind === "salary" ? "Выдача зарплаты" : "Выдача аванса"}</DialogTitle>
         </DialogHeader>

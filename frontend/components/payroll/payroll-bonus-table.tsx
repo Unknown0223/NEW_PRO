@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import { money, RECORD_STATUS, roleLabel } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/payroll/payroll-ui";
@@ -19,18 +19,39 @@ const METRICS: Array<{ key: keyof Metrics; label: string }> = [
   { key: "order_count", label: "Кол-во заказов" }
 ];
 
-const TH = "whitespace-nowrap px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5 align-top";
+const TH = "whitespace-nowrap border-b border-border px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground";
+const TD = "px-3 py-2 align-middle";
 
-function MetricCell({ fact, plan }: { fact: number; plan: number }) {
+function FxButton({ active, onClick }: { active: boolean; onClick?: () => void }) {
   return (
-    <td className={cn(TD, "text-right tabular-nums")}>
-      <div className="font-medium">{money(fact)}</div>
-      {plan > 0 ? (
-        <div className="text-[11px] text-muted-foreground">
-          план {money(plan)} · <span className={fact >= plan ? "text-emerald-700" : ""}>{Math.round((fact / plan) * 100)}%</span>
-        </div>
-      ) : null}
+    <button
+      type="button"
+      disabled={!onClick}
+      onClick={onClick}
+      title={active ? "Формула назначена — изменить" : "Назначить формулу"}
+      aria-label="Назначить формулу"
+      className={cn(
+        "flex size-6 shrink-0 items-center justify-center rounded-md font-serif text-[12px] font-bold italic transition-colors disabled:cursor-default",
+        active ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted-foreground/25 text-background hover:bg-primary/60"
+      )}
+    >
+      f
+    </button>
+  );
+}
+
+function MetricBox({ fact, plan, fx }: { fact: number; plan: number; fx?: { active: boolean; onClick?: () => void } }) {
+  const pct = plan > 0 ? Math.round((fact / plan) * 100) : null;
+  return (
+    <td className={TD}>
+      <div
+        className="flex min-w-[130px] items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5"
+        title={plan > 0 ? `План ${money(plan)} · ${pct}%` : undefined}
+      >
+        {fx ? <FxButton active={fx.active} onClick={fx.onClick} /> : null}
+        <span className={cn("flex-1 text-right text-[12.5px] tabular-nums", fact ? "font-medium text-foreground/80" : "text-muted-foreground")}>{money(fact)}</span>
+      </div>
+      {pct != null ? <div className={cn("mt-0.5 text-right text-[10.5px] text-muted-foreground", pct >= 100 && "text-emerald-700")}>план {pct}%</div> : null}
     </td>
   );
 }
@@ -50,7 +71,7 @@ type Props = {
 };
 
 export function PayrollBonusTable({ rows, groupFilter, loading, editable, expanded, onExpand, selected, onToggle, onToggleAll, onAssign, onRemove }: Props) {
-  const colCount = 3 + METRICS.length + 1;
+  const colCount = 2 + METRICS.length + 1;
   const allOn = rows.length > 0 && rows.every((r) => selected.has(r.user_id));
 
   const formulas = (list: Assign[], userId: number, groupId: number) => (
@@ -75,7 +96,7 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
         {editable ? (
           <button
             type="button"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+            className="inline-flex size-6 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
             onClick={() => onAssign([userId], groupId)}
             aria-label="Назначить формулу"
             title="Назначить формулу"
@@ -89,16 +110,15 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="app-table-thead">
+      <table className="w-full border-collapse text-sm">
+        <thead className="bg-muted/40">
           <tr>
             <th className={cn(TH, "w-10")}>
-              <input type="checkbox" className="accent-primary" checked={allOn} onChange={(e) => onToggleAll(e.target.checked)} aria-label="Выбрать все" />
+              <input type="checkbox" className="size-4 accent-primary" checked={allOn} onChange={(e) => onToggleAll(e.target.checked)} aria-label="Выбрать все" />
             </th>
-            <th className={cn(TH, "w-8")} />
-            <th className={cn(TH, "min-w-[240px]")}>Пользователь</th>
+            <th className={cn(TH, "min-w-[260px]")}>Пользователь</th>
             {METRICS.map((m) => <th key={m.key} className={cn(TH, "text-right")}>{m.label}</th>)}
-            <th className={cn(TH, "min-w-[260px]")}>Формулы</th>
+            <th className={cn(TH, "min-w-[220px]")}>Формулы</th>
           </tr>
         </thead>
         <tbody>
@@ -107,45 +127,50 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
             const open = expanded.has(r.user_id);
             const groups = r.groups.filter((g) => groupFilter == null || g.kpi_group_id === groupFilter);
             return [
-              <tr key={r.user_id} className={cn("border-b border-border/60 hover:bg-muted/40", open && "bg-primary/5", selected.has(r.user_id) && "bg-primary/5")}>
+              <tr
+                key={r.user_id}
+                className={cn("border-b border-border/60 transition-colors hover:bg-primary/5", (open || selected.has(r.user_id)) && "bg-primary/5")}
+              >
                 <td className={TD}>
-                  <input type="checkbox" className="accent-primary" checked={selected.has(r.user_id)} onChange={() => onToggle(r.user_id)} aria-label={r.fio} />
+                  <input type="checkbox" className="size-4 accent-primary" checked={selected.has(r.user_id)} onChange={() => onToggle(r.user_id)} aria-label={r.fio} />
                 </td>
                 <td className={TD}>
-                  {groups.length ? (
-                    <button
-                      type="button"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                      onClick={() => onExpand(r.user_id)}
-                      aria-label={open ? "Свернуть" : "Развернуть"}
-                    >
-                      {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    disabled={!groups.length}
+                    onClick={() => onExpand(r.user_id)}
+                    aria-expanded={open}
+                    className="flex w-full items-start gap-2 text-left disabled:cursor-default"
+                  >
+                    <ChevronDown
+                      className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180", !groups.length && "opacity-0")}
+                    />
+                    <span className="min-w-0">
+                      <span className={cn("block text-[13px] font-medium text-foreground", !r.is_active && "text-muted-foreground line-through")}>{r.fio}</span>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                        {roleLabel(r.role)}
+                        {r.code ? ` · ${r.code}` : ""}
+                        {r.record_status ? <StatusBadge map={RECORD_STATUS} status={r.record_status} /> : null}
+                      </span>
+                    </span>
+                  </button>
                 </td>
-                <td className={TD}>
-                  <div className={cn("font-medium text-foreground", !r.is_active && "text-muted-foreground line-through")}>{r.fio}</div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                    {roleLabel(r.role)}
-                    {r.code ? ` · ${r.code}` : ""}
-                    {r.record_status ? <StatusBadge map={RECORD_STATUS} status={r.record_status} /> : null}
-                  </div>
-                </td>
-                {METRICS.map((m) => <MetricCell key={m.key} fact={r.fact[m.key]} plan={r.plan[m.key]} />)}
+                {METRICS.map((m) => <MetricBox key={m.key} fact={r.fact[m.key]} plan={r.plan[m.key]} />)}
                 {formulas(r.assignments_all, r.user_id, 0)}
               </tr>,
               ...(open
                 ? groups.map((g) => (
-                    <tr key={`${r.user_id}-${g.kpi_group_id}`} className="border-b border-border/40 bg-muted/20">
+                    <tr key={`${r.user_id}-${g.kpi_group_id}`} className="border-b border-border/40">
                       <td className={TD} />
-                      <td className={TD} />
-                      <td className={cn(TD, "pl-6")}>
-                        <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
-                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          {g.name}
-                        </span>
-                      </td>
-                      {METRICS.map((m) => <MetricCell key={m.key} fact={g.fact[m.key]} plan={g.plan[m.key]} />)}
+                      <td className={cn(TD, "pl-9 text-[12.5px] text-muted-foreground")}>{g.name}</td>
+                      {METRICS.map((m, i) => (
+                        <MetricBox
+                          key={m.key}
+                          fact={g.fact[m.key]}
+                          plan={g.plan[m.key]}
+                          fx={{ active: i === 0 && g.assignments.length > 0, onClick: editable ? () => onAssign([r.user_id], g.kpi_group_id) : undefined }}
+                        />
+                      ))}
                       {formulas(g.assignments, r.user_id, g.kpi_group_id)}
                     </tr>
                   ))

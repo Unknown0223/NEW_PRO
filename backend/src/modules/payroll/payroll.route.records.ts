@@ -44,6 +44,8 @@ function parseFilter(req: FastifyRequest): RecordsFilter | null {
     roles: csvList(q.roles),
     branches: csvList(q.branches),
     statuses: csvList(q.statuses),
+    positions: csvList(q.positions),
+    directionIds: csvList(q.directions).map(Number).filter((x) => Number.isInteger(x) && x > 0),
     q: typeof q.q === "string" ? q.q : undefined,
     userIds: csvList(q.user_ids).map(Number).filter((x) => Number.isInteger(x) && x > 0)
   };
@@ -70,12 +72,26 @@ export async function registerPayrollRecordRoutes(app: FastifyInstance) {
     if (!p) return reply.status(400).send({ error: "BadMonth" });
     const rows = await prisma.payrollRecord.findMany({
       where: { tenant_id: c.tenantId, year: p.year, month: p.month },
-      select: { role: true, branch: true },
-      distinct: ["role", "branch"]
+      select: { role: true, branch: true, position: true, trade_direction_id: true },
+      distinct: ["role", "branch", "position", "trade_direction_id"]
     });
-    const roles = [...new Set(rows.map((r) => r.role).filter((x): x is string => Boolean(x)))].sort();
-    const branches = [...new Set(rows.map((r) => r.branch).filter((x): x is string => Boolean(x)))].sort();
-    return reply.send({ data: { roles, branches } });
+    const uniq = (xs: Array<string | null>) => [...new Set(xs.filter((x): x is string => Boolean(x)))].sort();
+    const dirIds = [...new Set(rows.map((r) => r.trade_direction_id).filter((x): x is number => x != null))];
+    const dirs = dirIds.length
+      ? await prisma.tradeDirection.findMany({
+          where: { tenant_id: c.tenantId, id: { in: dirIds } },
+          select: { id: true, name: true },
+          orderBy: [{ sort_order: "asc" }, { name: "asc" }]
+        })
+      : [];
+    return reply.send({
+      data: {
+        roles: uniq(rows.map((r) => r.role)),
+        branches: uniq(rows.map((r) => r.branch)),
+        positions: uniq(rows.map((r) => r.position)),
+        directions: dirs
+      }
+    });
   });
 
   app.get("/api/:slug/payroll/records/:id", perm(...VIEW), async (req, reply) => {

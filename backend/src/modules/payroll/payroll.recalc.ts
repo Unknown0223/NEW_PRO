@@ -44,7 +44,7 @@ function buildSnapshot(loaded: LoadedPayrollInputs, res: CalcResult, trigger: st
   const i = loaded.inputs;
   return {
     trigger,
-    base: loaded.base,
+    base: { ...loaded.base, item_parts: mapToObj(loaded.base.item_parts) },
     attendance: loaded.attendance,
     kpi: {
       fact_total: i.fact_total,

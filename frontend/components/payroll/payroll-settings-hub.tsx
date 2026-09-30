@@ -100,7 +100,7 @@ export function PayrollSettingsHub() {
   });
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader title="Настройки зарплаты" description="Включение модуля и переходы ко всем разделам зарплаты и аванса." />
       {notice.element}
       <PayrollTableCard title="Параметры модуля">

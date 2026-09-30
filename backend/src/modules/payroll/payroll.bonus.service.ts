@@ -105,7 +105,15 @@ export async function listBonusKpi(tenantId: number, f: BonusKpiFilter) {
       }))
     };
   });
-  return { year: f.year, month: f.month, closed: await periodClosed(tenantId, f.year, f.month), groups, rows };
+  const [closed, directions] = await Promise.all([
+    periodClosed(tenantId, f.year, f.month),
+    prisma.tradeDirection.findMany({
+      where: { tenant_id: tenantId, is_active: true },
+      select: { id: true, name: true },
+      orderBy: [{ sort_order: "asc" }, { name: "asc" }]
+    })
+  ]);
+  return { year: f.year, month: f.month, closed, groups, directions, rows };
 }
 
 export type AssignInput = {

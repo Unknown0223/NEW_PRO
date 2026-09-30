@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronsUpDown, Pencil } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -22,9 +22,9 @@ import { FORMULA_SCOPES } from "@/components/payroll/payroll-formula-editor";
 import { PAYROLL_FILTER_TRIGGER, PayrollFilterCard, PayrollFloatSelect, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import { PayrollEmptyRow, PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
 
-type BonusData = { closed: boolean; groups: Array<{ id: number; name: string }>; rows: BonusRow[] };
+type BonusData = { closed: boolean; groups: Array<{ id: number; name: string }>; directions: Array<{ id: number; name: string }>; rows: BonusRow[] };
 type Tab = "kpi" | "formulas";
-type Filters = { role: string; users: number[]; group: string };
+type Filters = { role: string; users: number[]; group: string; direction: string };
 
 const SCOPE_LABEL = Object.fromEntries(FORMULA_SCOPES.map((s) => [s.v, s.label])) as Record<string, string>;
 const TH = "px-3 py-2.5 text-left font-medium";
@@ -44,7 +44,8 @@ export function PayrollBonusWorkspace() {
   const [draftRole, setDraftRole] = useState("");
   const [draftUsers, setDraftUsers] = useState<Set<number>>(new Set());
   const [draftGroup, setDraftGroup] = useState("");
-  const [filters, setFilters] = useState<Filters>({ role: "", users: [], group: "" });
+  const [draftDirection, setDraftDirection] = useState("");
+  const [filters, setFilters] = useState<Filters>({ role: "", users: [], group: "", direction: "" });
   const [q, setQ] = useState("");
   const [fq, setFq] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -54,8 +55,9 @@ export function PayrollBonusWorkspace() {
   const params = useMemo(() => {
     const p = new URLSearchParams(ymQuery(ym));
     if (filters.role) p.set("role", filters.role);
+    if (filters.direction) p.set("trade_direction_id", filters.direction);
     return p.toString();
-  }, [ym, filters.role]);
+  }, [ym, filters.role, filters.direction]);
 
   const dataQ = useQuery({ queryKey: ["payroll-bonus-kpi", tenant, params], enabled: Boolean(tenant), queryFn: () => api.get<BonusData>(`/bonus-kpi?${params}`) });
   const allQ = useQuery({ queryKey: ["payroll-bonus-kpi", tenant, ymQuery(ym)], enabled: Boolean(tenant), queryFn: () => api.get<BonusData>(`/bonus-kpi?${ymQuery(ym)}`) });
@@ -98,7 +100,7 @@ export function PayrollBonusWorkspace() {
   };
 
   const apply = () => {
-    setFilters({ role: draftRole, users: [...draftUsers], group: draftGroup });
+    setFilters({ role: draftRole, users: [...draftUsers], group: draftGroup, direction: draftDirection });
     sel.clear();
   };
   const toggleExpand = (id: number) =>
@@ -111,7 +113,7 @@ export function PayrollBonusWorkspace() {
   const allExpanded = paged.pageRows.length > 0 && paged.pageRows.every((r) => expanded.has(r.user_id));
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PayrollRelatedBar current="bonus" />
       <PayrollSegmentedTabs<Tab>
         tabs={[
@@ -123,7 +125,6 @@ export function PayrollBonusWorkspace() {
       />
       <PayrollFilterCard
         title="Настройки бонусов и зарплат"
-        description="План и факт KPI (доставлено − возвраты) по группам товаров; назначенные бонусные формулы и их результат за месяц."
         month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); } }}
         fxHref="/users/salary/formulas"
         onApply={tab === "kpi" ? apply : undefined}
@@ -142,6 +143,12 @@ export function PayrollBonusWorkspace() {
               filterItemsBySearch
               className="w-[240px]"
             />
+            <PayrollFloatSelect
+              label="Направление торговли"
+              value={draftDirection}
+              onChange={setDraftDirection}
+              options={(allQ.data?.directions ?? []).map((d) => ({ value: String(d.id), label: d.name }))}
+            />
             <PayrollFloatSelect label="Группа KPI" value={draftGroup} onChange={setDraftGroup} options={groups.map((g) => ({ value: String(g.id), label: g.name }))} />
           </>
         ) : null}
@@ -154,7 +161,7 @@ export function PayrollBonusWorkspace() {
           titleAction={
             editable ? (
               <Button disabled={!sel.list.length} onClick={() => setTarget({ userIds: sel.list, groupId: filters.group ? Number(filters.group) : 0 })}>
-                <Pencil className="mr-1.5 size-4" /> Установка формулу{sel.list.length ? ` (${sel.list.length})` : ""}
+                Установка формулу{sel.list.length ? ` (${sel.list.length})` : ""}
               </Button>
             ) : null
           }

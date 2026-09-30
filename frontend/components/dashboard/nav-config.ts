@@ -322,10 +322,24 @@ export const dashboardPayrollNav: {
   sectionTitle: "Зарплата",
   groups: [
     {
-      title: "РАСЧЁТ",
+      title: "ОСНОВНОЕ",
       items: [
-        { href: "/users/salary", label: "Расчёт зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary", label: "Зарплата", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
         { href: "/users/salary/compare", label: "Сверка с Excel", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
+      ]
+    },
+    {
+      title: "НАСТРОЙКИ",
+      items: [
+        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        {
+          href: "/users/bonus-and-salary-settings",
+          label: "Настройки бонусов и зарплат",
+          showIfAnyPermission: [...NAV_PERM.staffPayroll]
+        },
+        { href: "/settings/payroll/adjustments", label: "Надбавки и вычеты к зарплате", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
+        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
       ]
     },
     {
@@ -352,20 +366,6 @@ export const dashboardPayrollNav: {
           label: "Выдача аванса и зарплаты",
           showIfAnyPermission: [...NAV_PERM.cashPayrollQueue]
         }
-      ]
-    },
-    {
-      title: "НАСТРОЙКИ",
-      items: [
-        { href: "/users/salary/role-salaries", label: "Базовые оклады", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/users/salary/formulas", label: "Формулы", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        {
-          href: "/users/bonus-and-salary-settings",
-          label: "Настройки бонусов и зарплат",
-          showIfAnyPermission: [...NAV_PERM.staffPayroll]
-        },
-        { href: "/settings/payroll/adjustments", label: "Надбавки и вычеты", showIfAnyPermission: [...NAV_PERM.staffPayroll] },
-        { href: "/settings/payroll", label: "Настройки зарплаты", showIfAnyPermission: [...NAV_PERM.staffPayroll] }
       ]
     }
   ]

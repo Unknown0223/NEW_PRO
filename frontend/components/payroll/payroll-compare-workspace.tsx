@@ -125,7 +125,7 @@ export function PayrollCompareWorkspace() {
   ) : null;
 
   return (
-    <PageShell>
+    <PageShell className="payroll-template">
       <PageHeader
         title="Сверка с Excel (пробный месяц)"
         description="Загрузите ведомость, посчитанную по-старому. Система покажет расхождения по каждой колонке и причину: табель, формула, факт/возвраты, план, корректировки, ручные суммы."

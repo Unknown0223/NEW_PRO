@@ -1506,3 +1506,9 @@
     height: auto !important;
   }
 }
+/* Зарплата: shablon (Lalaku) rangi — foydalanuvchi palitrasidan qat'i nazar. */
+.payroll-template {
+  --primary: #23a08a;
+  --primary-foreground: #ffffff;
+  --ring: #23a08a;
+}

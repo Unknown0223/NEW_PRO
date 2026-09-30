@@ -81,7 +81,7 @@ export function PayrollExcelImportDialog<T>(p: Props<T>) {
         p.onOpenChange(o);
       }}
     >
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="payroll-template sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{p.title}</DialogTitle>
         </DialogHeader>
