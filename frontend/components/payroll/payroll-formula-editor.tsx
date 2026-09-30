@@ -100,7 +100,8 @@ export function PayrollFormulaEditor({ draft: d, onChange, onSave, onClear, savi
           text: d.text,
           user_id: Number(previewUser),
           ...previewYm,
-          kpi_group_id: previewGroup ? Number(previewGroup) : null
+          kpi_group_id: previewGroup ? Number(previewGroup) : null,
+          target_item_id: d.target_item_id
         })
       );
     } catch (e) {

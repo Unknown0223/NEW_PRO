@@ -47,6 +47,8 @@ model PayrollRoleConfig {
   allowance_item_ids Int[]    @default([])
   deduction_item_ids Int[]    @default([])
   comment            String?  @db.VarChar(500)
+  /// Rol bo'yicha standart надбавка qismlari { "<item_id>": amount }; xodim sozlamasi ustun.
+  item_amounts       Json     @default("{}")
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 

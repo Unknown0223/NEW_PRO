@@ -13,6 +13,7 @@ export type RoleConfigDto = {
   allowance_item_ids: number[];
   deduction_item_ids: number[];
   comment: string | null;
+  item_amounts: Record<string, number>;
   employees: number;
 };
 
@@ -30,6 +31,7 @@ export type EmployeeConfigDto = {
   cash_desk_name: string | null;
   comment: string | null;
   item_amounts: Record<string, number>;
+  role_item_amounts: Record<string, number>;
 };
 
 const EXCLUDED_ROLES = ["admin"];
@@ -58,6 +60,7 @@ export async function listRoleConfigs(tenantId: number): Promise<RoleConfigDto[]
         allowance_item_ids: c?.allowance_item_ids ?? [],
         deduction_item_ids: c?.deduction_item_ids ?? [],
         comment: c?.comment ?? null,
+        item_amounts: parseItemAmounts(c?.item_amounts),
         employees: counts.get(role) ?? 0
       };
     });
@@ -72,6 +75,7 @@ export async function upsertRoleConfig(
     allowance_item_ids?: number[];
     deduction_item_ids?: number[];
     comment?: string | null;
+    item_amounts?: Record<string, number | null>;
   },
   actorUserId: number | null
 ): Promise<void> {
@@ -80,7 +84,17 @@ export async function upsertRoleConfig(
   if (input.base_amount !== undefined && (!Number.isFinite(input.base_amount) || input.base_amount < 0)) {
     throw new PayrollError("BAD_AMOUNT");
   }
+  let itemAmounts: Record<string, number> | undefined;
+  if (input.item_amounts !== undefined) {
+    await assertAllowanceItems(tenantId, Object.entries(input.item_amounts).filter(([, v]) => v != null).map(([k]) => k));
+    const prev = await prisma.payrollRoleConfig.findUnique({
+      where: { tenant_id_role: { tenant_id: tenantId, role: r } },
+      select: { item_amounts: true }
+    });
+    itemAmounts = mergeItemAmounts(prev?.item_amounts, input.item_amounts);
+  }
   const data = {
+    ...(itemAmounts !== undefined ? { item_amounts: itemAmounts } : {}),
     ...(input.base_amount !== undefined ? { base_amount: new Prisma.Decimal(input.base_amount) } : {}),
     ...(input.currency !== undefined ? { currency: input.currency.trim().toUpperCase().slice(0, 8) || "UZS" } : {}),
     ...(input.allowance_item_ids !== undefined ? { allowance_item_ids: [...new Set(input.allowance_item_ids)] } : {}),
@@ -147,6 +161,7 @@ export async function listEmployeeConfigs(
     prisma.cashDesk.findMany({ where: { tenant_id: tenantId }, select: { id: true, name: true } })
   ]);
   const roleBase = new Map(roleCfgs.map((c) => [c.role, Number(c.base_amount)]));
+  const roleParts = new Map(roleCfgs.map((c) => [c.role, parseItemAmounts(c.item_amounts)]));
   const emp = new Map(empCfgs.map((c) => [c.user_id, c]));
   const deskName = new Map(desks.map((d) => [d.id, d.name]));
   return users.map((u) => {
@@ -166,7 +181,8 @@ export async function listEmployeeConfigs(
       cash_desk_id: c?.cash_desk_id ?? null,
       cash_desk_name: c?.cash_desk_id ? deskName.get(c.cash_desk_id) ?? null : null,
       comment: c?.comment ?? null,
-      item_amounts: parseItemAmounts(c?.item_amounts)
+      item_amounts: parseItemAmounts(c?.item_amounts),
+      role_item_amounts: roleParts.get(u.role) ?? {}
     };
   });
 }

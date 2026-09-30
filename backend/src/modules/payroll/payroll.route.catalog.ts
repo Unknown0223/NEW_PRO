@@ -36,7 +36,8 @@ const roleCfgBody = z.object({
   currency: z.string().max(8).optional(),
   allowance_item_ids: z.array(z.number().int().positive()).max(200).optional(),
   deduction_item_ids: z.array(z.number().int().positive()).max(200).optional(),
-  comment: z.string().max(500).nullable().optional()
+  comment: z.string().max(500).nullable().optional(),
+  item_amounts: z.record(z.string().regex(/^\d+$/), z.number().min(0).max(1e13).nullable()).optional()
 });
 
 const empCfgBody = z.object({

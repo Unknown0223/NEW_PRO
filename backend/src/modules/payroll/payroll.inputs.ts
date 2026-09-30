@@ -6,6 +6,7 @@ import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/t
 import { parseTimesheetState } from "../timesheet/timesheet.service";
 import { computeUserMonthFact } from "./payroll-kpi-fact";
 import { computeUserMonthPlan } from "./payroll-slot-plan";
+import { computeTeamMonthPlan } from "./payroll-team-plan";
 import { parseItemAmounts } from "./payroll.item-amounts.pure";
 import type { PayrollCalcInputs } from "./payroll.formula-vars";
 
@@ -115,7 +116,7 @@ export async function resolveBaseSalary(tenantId: number, userId: number, role: 
     prisma.payrollRoleConfig.findUnique({ where: { tenant_id_role: { tenant_id: tenantId, role } } })
   ]);
   const base = emp?.base_amount != null ? Number(emp.base_amount) : rc ? Number(rc.base_amount) : 0;
-  const parts = parseItemAmounts(emp?.item_amounts);
+  const parts = { ...parseItemAmounts(rc?.item_amounts), ...parseItemAmounts(emp?.item_amounts) };
   return {
     base_full: base,
     currency: emp?.currency || rc?.currency || "UZS",
@@ -149,12 +150,15 @@ export async function loadPayrollInputs(
   productGroups?: Map<number, number[]>
 ): Promise<LoadedPayrollInputs> {
   const range = tenantMonthRangeUtc(year, month, env.timeZone);
-  const [attendance, base, fact, plan, advances] = await Promise.all([
+  const [attendance, base, fact, plan, advances, teamPlan] = await Promise.all([
     computeUserAttendance(tenantId, user, year, month, env),
     resolveBaseSalary(tenantId, user.id, user.role),
     computeUserMonthFact(tenantId, user.id, user.role, range, productGroups),
     computeUserMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays),
-    sumPaidAdvances(tenantId, user.id, year, month)
+    sumPaidAdvances(tenantId, user.id, year, month),
+    user.role === "supervisor"
+      ? computeTeamMonthPlan(tenantId, user.id, year, month, range, env.timeZone, env.workdays)
+      : Promise.resolve(null)
   ]);
   const worked = Math.min(attendance.worked, attendance.plan_days);
   const baseSalary =
@@ -177,6 +181,8 @@ export async function loadPayrollInputs(
     expeditor: fact.expeditor,
     team_total: fact.team?.total ?? null,
     team_by_group: fact.team?.byGroup ?? null,
+    team_plan_total: teamPlan?.total ?? null,
+    team_plan_by_group: teamPlan?.byGroup ?? null,
     advances_paid: advances,
     item_parts: base.item_parts
   };

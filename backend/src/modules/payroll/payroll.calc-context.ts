@@ -28,7 +28,7 @@ export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollC
     loadTenantPayrollEnv(tenantId),
     prisma.payrollItem.findMany({
       where: { tenant_id: tenantId },
-      select: { id: true, name: true, type: true, system_key: true, is_active: true }
+      select: { id: true, name: true, type: true, system_key: true, calc_type: true, is_active: true }
     }),
     getSystemItemIds(tenantId),
     prisma.payrollFormula.findMany({
@@ -43,7 +43,8 @@ export async function loadPayrollCalcContext(tenantId: number): Promise<PayrollC
       id: r.id,
       name: r.name,
       type: r.type === "deduction" ? "deduction" : "allowance",
-      system_key: r.system_key
+      system_key: r.system_key,
+      calc_type: r.calc_type
     });
   }
   return {

@@ -9,6 +9,7 @@ import {
   updatePayrollFormula,
   validatePayrollFormulaText
 } from "./payroll.formulas.service";
+import { applyResPreset } from "./payroll.preset.service";
 import { payrollCtx, perm, runPayroll, sendZod } from "./payroll.route-helpers";
 
 const VIEW = ["staff.zarplaty.view"];
@@ -29,7 +30,13 @@ const previewBody = z.object({
   user_id: z.number().int().positive(),
   year: z.number().int().min(2000).max(2100),
   month: z.number().int().min(1).max(12),
-  kpi_group_id: z.number().int().positive().nullable().optional()
+  kpi_group_id: z.number().int().positive().nullable().optional(),
+  target_item_id: z.number().int().positive().nullable().optional()
+});
+
+const presetBody = z.object({
+  year: z.number().int().min(2000).max(2100).optional(),
+  month: z.number().int().min(1).max(12).optional()
 });
 
 export async function registerPayrollFormulaRoutes(app: FastifyInstance) {
@@ -58,6 +65,15 @@ export async function registerPayrollFormulaRoutes(app: FastifyInstance) {
     const p = previewBody.safeParse(req.body);
     if (!p.success) return sendZod(reply, req, p.error);
     return runPayroll(reply, req, async () => reply.send({ data: await previewPayrollFormula(c.tenantId, p.data) }));
+  });
+
+  app.post("/api/:slug/payroll/presets/res", perm("staff.zarplaty.create", ...UPDATE), async (req, reply) => {
+    const c = payrollCtx(req, reply);
+    if (!c) return;
+    const p = presetBody.safeParse(req.body ?? {});
+    if (!p.success) return sendZod(reply, req, p.error);
+    const ym = p.data.year && p.data.month ? { year: p.data.year, month: p.data.month } : undefined;
+    return runPayroll(reply, req, async () => reply.send({ data: await applyResPreset(c.tenantId, c.actorId, ym) }));
   });
 
   app.post("/api/:slug/payroll/formulas", perm("staff.zarplaty.create", ...UPDATE), async (req, reply) => {

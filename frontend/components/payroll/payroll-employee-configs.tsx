@@ -30,6 +30,7 @@ export type EmployeeConfig = {
   cash_desk_name: string | null;
   comment: string | null;
   item_amounts: Record<string, number>;
+  role_item_amounts: Record<string, number>;
 };
 
 /** Rolga biriktirilgan надбавкалар; biriktirilmagan bo'lsa — barcha faol надбавкалар. */
@@ -202,18 +203,25 @@ export function PayrollEmployeeConfigs({
                       )}
                     </td>
                     {columns.map((c) => {
-                      const v = r.item_amounts[String(c.id)];
+                      const own = r.item_amounts[String(c.id)];
+                      const byRole = r.role_item_amounts?.[String(c.id)];
+                      const v = own ?? byRole;
                       return (
                         <td key={c.id} className={cn(TD, "border-l border-border/60 text-right tabular-nums")}>
                           {editing ? (
                             <GroupedNumberInput
                               value={draft.parts[String(c.id)] ?? ""}
-                              placeholder="—"
+                              placeholder={byRole ? money(byRole) : "—"}
                               onValueChange={(val) => setDraft((d) => ({ ...d, parts: { ...d.parts, [String(c.id)]: val } }))}
                               className="ml-auto h-8 max-w-[110px] text-right"
                             />
                           ) : (
-                            <span className={v ? "text-foreground/80" : "text-muted-foreground/60"}>{v ? money(v) : "—"}</span>
+                            <span
+                              className={cn(!v ? "text-muted-foreground/60" : own != null ? "text-primary" : "text-foreground/80")}
+                              title={own != null ? "Индивидуально" : byRole ? "По роли" : undefined}
+                            >
+                              {v ? money(v) : "—"}
+                            </span>
                           )}
                         </td>
                       );

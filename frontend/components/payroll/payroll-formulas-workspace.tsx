@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Pencil, Trash2 } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
@@ -85,6 +85,43 @@ export function PayrollFormulasWorkspace() {
     onError: notice.fail
   });
 
+  const preset = useMutation({
+    mutationFn: () =>
+      api.send<{
+        items_created: string[];
+        formulas_created: string[];
+        roles_updated: string[];
+        kpi: { year: number; month: number; assigned: number; users: number; no_groups: number; extra_groups: number } | null;
+      }>("POST", "/presets/res", {}),
+    onSuccess: (r) => {
+      const k = r.kpi;
+      const parts = [
+        `статьи — ${r.items_created.length}`,
+        `формулы — ${r.formulas_created.length}`,
+        k ? `KPI назначено: ${k.assigned} (сотрудников — ${k.users}) за ${String(k.month).padStart(2, "0")}.${k.year}` : null,
+        k?.no_groups ? `без KPI-групп: ${k.no_groups}` : null,
+        k?.extra_groups ? `больше 4 групп: ${k.extra_groups} — проверьте в «Настройках бонусов»` : null
+      ].filter(Boolean);
+      notice.ok(`Шаблон РЕС применён: ${parts.join("; ")}.`);
+      setTab("saved");
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ["payroll-items", tenant] });
+      void qc.invalidateQueries({ queryKey: ["payroll-role-configs", tenant] });
+    },
+    onError: notice.fail
+  });
+
+  const applyPreset = async () => {
+    const ok = await confirm({
+      title: "Шаблон РЕС (из Excel)",
+      message:
+        "Будут созданы статьи «Дорожные», «Ноллаш», «KPI 1–4», «Общий KPI», «Доп бонус», «Учр бонус» и формулы: оклад и дорожные — по отработанным дням; KPI — 0 при выполнении ниже 60,9%, иначе выполнение (не более 120%) × сумма KPI сотрудника; для СВР — факт команды / план команды. Оклады ролей: ТП 2 000 000 / дорожные 1 000 000 / ноллаш 600 000, СВР 3 000 000 / 2 000 000 / 1 000 000 (если не заданы). Сотрудникам текущего месяца назначаются их KPI-группы → «KPI 1–4» (по порядку групп). Суммы KPI задайте в «Базовых окладах». Существующие статьи, формулы и назначения не изменяются.",
+      confirmLabel: "Применить",
+      cancelLabel: "Отмена"
+    });
+    if (ok) preset.mutate();
+  };
+
   const edit = (f: Formula) => {
     setDraft({ id: f.id, name: f.name, scope: f.scope, text: f.text, role: f.role, target_item_id: f.target_item_id, priority: f.priority, is_active: f.is_active });
     setTab("write");
@@ -95,7 +132,14 @@ export function PayrollFormulasWorkspace() {
       <PayrollRelatedBar current="formulas" />
       <PayrollPageTitle
         title="Формулы"
-        description="Формулы бонусов, надбавок и оклада. Значения — в квадратных скобках, разделитель аргументов — «;», десятичная — «,» или «.»."
+        description="Формулы бонусов, надбавок и оклада. Значения — в квадратных скобках, разделитель аргументов — «;», десятичная — «.»."
+        actions={
+          canEdit ? (
+            <Button variant="outline" disabled={preset.isPending} onClick={() => void applyPreset()}>
+              <FileSpreadsheet className="mr-1.5 size-4 text-emerald-600" /> Шаблон РЕС
+            </Button>
+          ) : null
+        }
       />
       <PayrollSegmentedTabs<Tab>
         tabs={[

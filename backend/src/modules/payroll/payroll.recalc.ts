@@ -53,6 +53,8 @@ function buildSnapshot(loaded: LoadedPayrollInputs, res: CalcResult, trigger: st
       plan_by_group: mapToObj(i.plan_by_group),
       returned_sum: i.returned_sum,
       team_total: i.team_total,
+      team_plan_total: i.team_plan_total ?? null,
+      team_plan_by_group: mapToObj(i.team_plan_by_group),
       expeditor: i.expeditor
     },
     plan_meta: loaded.plan_meta,

@@ -24,17 +24,27 @@ type RoleConfig = {
   allowance_item_ids: number[];
   deduction_item_ids: number[];
   comment: string | null;
+  item_amounts: Record<string, number>;
   employees: number;
 };
 
-type RoleDraft = { base: string; allowance: number[]; deduction: number[]; comment: string };
+type RoleDraft = { base: string; allowance: number[]; deduction: number[]; comment: string; parts: Record<string, string> };
 
 const draftOf = (r: RoleConfig): RoleDraft => ({
   base: String(r.base_amount || ""),
   allowance: r.allowance_item_ids,
   deduction: r.deduction_item_ids,
-  comment: r.comment ?? ""
+  comment: r.comment ?? "",
+  parts: Object.fromEntries(Object.entries(r.item_amounts ?? {}).map(([k, v]) => [k, String(v)]))
 });
+
+const partsPatch = (parts: Record<string, string>, columns: PayrollItem[]) =>
+  Object.fromEntries(
+    columns.map((c) => {
+      const raw = parts[String(c.id)]?.trim() ?? "";
+      return [String(c.id), raw === "" ? null : parseAmount(raw)];
+    })
+  );
 
 function ItemChips({ items, value, onChange, disabled }: { items: PayrollItem[]; value: number[]; onChange: (v: number[]) => void; disabled: boolean }) {
   if (!items.length) return <span className="text-xs text-muted-foreground">Нет статей</span>;
@@ -61,7 +71,17 @@ function ItemChips({ items, value, onChange, disabled }: { items: PayrollItem[];
   );
 }
 
-function RoleConfigCard({ config, items, onNotice }: { config: RoleConfig; items: PayrollItem[]; onNotice: ReturnType<typeof useNotice> }) {
+function RoleConfigCard({
+  config,
+  items,
+  columns,
+  onNotice
+}: {
+  config: RoleConfig;
+  items: PayrollItem[];
+  columns: PayrollItem[];
+  onNotice: ReturnType<typeof useNotice>;
+}) {
   const tenant = useTenant();
   const api = payrollApi(tenant);
   const qc = useQueryClient();
@@ -75,7 +95,8 @@ function RoleConfigCard({ config, items, onNotice }: { config: RoleConfig; items
     parseAmount(d.base || "0") !== config.base_amount ||
     d.comment !== (config.comment ?? "") ||
     d.allowance.join() !== config.allowance_item_ids.join() ||
-    d.deduction.join() !== config.deduction_item_ids.join();
+    d.deduction.join() !== config.deduction_item_ids.join() ||
+    columns.some((c) => (d.parts[String(c.id)]?.trim() ? parseAmount(d.parts[String(c.id)]!) : undefined) !== config.item_amounts?.[String(c.id)]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -83,7 +104,8 @@ function RoleConfigCard({ config, items, onNotice }: { config: RoleConfig; items
         base_amount: parseAmount(d.base || "0") || 0,
         allowance_item_ids: d.allowance,
         deduction_item_ids: d.deduction,
-        comment: d.comment.trim() || null
+        comment: d.comment.trim() || null,
+        item_amounts: partsPatch(d.parts, columns)
       }),
     onSuccess: () => {
       onNotice.ok(`Оклад роли «${roleLabel(config.role)}» сохранён. Зарплаты пересчитаются автоматически.`);
@@ -141,6 +163,27 @@ function RoleConfigCard({ config, items, onNotice }: { config: RoleConfig; items
               <Input value={d.comment} disabled={!canEdit} onChange={(e) => setD((s) => ({ ...s, comment: e.target.value }))} />
             </label>
           </div>
+          {columns.length ? (
+            <div className="mt-4 grid gap-1.5">
+              <span className={FIELD_LABEL}>Суммы надбавок по умолчанию (если у сотрудника не задано своё)</span>
+              <div className="flex flex-wrap gap-3">
+                {columns.map((c) => (
+                  <label key={c.id} className="grid w-[150px] gap-1">
+                    <span className="truncate text-xs text-muted-foreground" title={c.name}>
+                      {c.name}
+                    </span>
+                    <GroupedNumberInput
+                      value={d.parts[String(c.id)] ?? ""}
+                      disabled={!canEdit}
+                      placeholder="—"
+                      onValueChange={(v) => setD((s) => ({ ...s, parts: { ...s.parts, [String(c.id)]: v } }))}
+                      className="h-8 text-right"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -187,7 +230,7 @@ export function PayrollRoleSalariesWorkspace() {
       <PayrollRelatedBar current="role-salaries" />
       <PayrollPageTitle
         title="Базовые оклады"
-        description="Здесь задаются части оклада для каждого сотрудника. В формулах значение доступно как «Оклад - <надбавка>» и рассчитывается по условиям (проценты/уровни выполнения); без формулы сумма начисляется как есть."
+        description="Здесь задаются части оклада: по умолчанию для роли и индивидуально для сотрудника. В формулах значение доступно как «Оклад - <надбавка>» или «Оклад статьи» (сумма той статьи, для которой считается формула); статья с расчётом «Формула» без формулы не начисляется, «Вручную» — начисляется как есть."
         actions={
           <>
             <Button variant="outline" onClick={() => void downloadTemplate()}>
@@ -205,7 +248,7 @@ export function PayrollRoleSalariesWorkspace() {
         <PayrollSegmentedTabs tabs={roles.map((r) => ({ id: r.role, label: roleLabel(r.role), count: r.employees }))} value={role} onChange={setRole} />
       ) : null}
       {notice.element}
-      {config ? <RoleConfigCard config={config} items={itemsQ.data ?? []} onNotice={notice} /> : null}
+      {config ? <RoleConfigCard config={config} items={itemsQ.data ?? []} columns={columns} onNotice={notice} /> : null}
       <PayrollEmployeeConfigs role={role} columns={columns} importOpen={importOpen} onImportOpenChange={setImportOpen} onNotice={notice} />
     </PageShell>
   );

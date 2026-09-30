@@ -210,7 +210,7 @@ export async function listFormulaVariables(tenantId: number) {
 /** Real xodim ma'lumotlari bilan formulani sinab ko'rish. */
 export async function previewPayrollFormula(
   tenantId: number,
-  input: { text: string; user_id: number; year: number; month: number; kpi_group_id?: number | null }
+  input: { text: string; user_id: number; year: number; month: number; kpi_group_id?: number | null; target_item_id?: number | null }
 ) {
   const v = await validatePayrollFormulaText(tenantId, input.text);
   if (!v.ok) return { ok: false as const, validation: v };
@@ -232,7 +232,8 @@ export async function previewPayrollFormula(
     input.kpi_group_id ?? null,
     itemValues,
     { allowances: Number(rec?.allowances_total ?? 0), deductions: Number(rec?.deductions_total ?? 0) },
-    ctx.items
+    ctx.items,
+    input.target_item_id ?? null
   );
   const res = evaluateFormula(parseFormula(input.text), vars);
   const used = Object.fromEntries(v.variables.map((name) => [name, vars.get(normalizeVarName(name)) ?? 0]));

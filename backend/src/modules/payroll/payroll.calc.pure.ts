@@ -1,7 +1,14 @@
 import { evaluateFormula, parseFormula } from "./payroll.formula-engine";
 import { buildFormulaVars, type PayrollCalcInputs } from "./payroll.formula-vars";
 
-export type CalcItem = { id: number; name: string; type: "allowance" | "deduction"; system_key: string | null };
+export type CalcItem = {
+  id: number;
+  name: string;
+  type: "allowance" | "deduction";
+  system_key: string | null;
+  /** «formula» — summa faqat formula uchun manba, to'g'ridan-to'g'ri to'lanmaydi. */
+  calc_type?: string;
+};
 
 export type CalcFormula = {
   /** formula_id yoki biriktirma id — diagnostika uchun. */
@@ -102,7 +109,7 @@ export function computePayroll(input: {
   const formulaTargets = new Set(input.formulas.map((f) => f.target_item_id));
   for (const [itemId, amount] of inputs.item_parts ?? []) {
     const it = items.get(itemId);
-    if (!it || it.system_key || it.type !== "allowance" || formulaTargets.has(itemId)) continue;
+    if (!it || it.system_key || it.type !== "allowance" || it.calc_type === "formula" || formulaTargets.has(itemId)) continue;
     if (lines.has(keyOf(itemId, "")) || !amount) continue;
     lines.set(keyOf(itemId, ""), {
       item_id: itemId,
@@ -138,7 +145,7 @@ export function computePayroll(input: {
     if (!item || item.system_key) continue;
     try {
       const totals = runningTotals(lines, items, systemIds.advance);
-      const vars = buildFormulaVars(baseInputs, f.kpi_group_id, itemValues, totals, items);
+      const vars = buildFormulaVars(baseInputs, f.kpi_group_id, itemValues, totals, items, f.target_item_id);
       const res = evaluateFormula(parseFormula(f.text), vars);
       res.warnings.forEach((w) => warnings.add(`${f.ref}:${w}`));
       formulaValues[f.ref] = res.value;
