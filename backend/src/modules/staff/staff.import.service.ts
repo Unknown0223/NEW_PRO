@@ -36,7 +36,8 @@ import {
   resolveAgentIdsFromCell,
   resolveWarehouseIdByName,
   resolveWarehouseIdsByNames,
-  resolveWorkSlotIdByCode
+  resolveWorkSlotIdByCode,
+  isWorkSlotInactive
 } from "./staff.import.resolve";
 import * as XLSX from "xlsx";
 
@@ -71,6 +72,12 @@ function mapCreateError(msg: string): string {
       return "требуется рабочее место (колонка «Рабочее место»)";
     case "BAD_RETURN_WAREHOUSE":
       return "склад возврата не найден";
+    case "BAD_USER":
+      return "сотрудник неактивен — нельзя привязать к рабочему месту";
+    case "SLOT_INACTIVE":
+      return "рабочее место неактивно — активируйте его в «Рабочие места»";
+    case "BAD_SLOT_TYPE":
+      return "роль сотрудника не совпадает с типом рабочего места";
     default:
       return msg || "ошибка создания";
   }
@@ -202,9 +209,12 @@ export async function importStaffFromMatrix(
         slotType: createKind
       });
       if (work_slot_id == null) {
+        const inactive = await isWorkSlotInactive(tenantId, workSlotCode, createKind);
         pushErr(
           excelRow,
-          `рабочее место не найдено «${workSlotCode.trim()}» (роль ${createKind})`
+          inactive
+            ? `рабочее место «${workSlotCode.trim()}» неактивно — активируйте его в «Рабочие места»`
+            : `рабочее место не найдено «${workSlotCode.trim()}» (роль ${createKind})`
         );
         continue;
       }
@@ -297,6 +307,9 @@ export async function importStaffFromMatrix(
         if (warehouse_ids !== undefined) patch.warehouse_ids = warehouse_ids;
         if (supervisee_agent_ids !== undefined) patch.supervisee_agent_ids = supervisee_agent_ids;
         if (passwordRaw.trim().length >= 6) patch.password = passwordRaw.trim();
+        if (!existing.is_active && work_slot_id != null && STAFF_KINDS_WITH_WORK_SLOT.has(kind as StaffKind)) {
+          patch.is_active = true;
+        }
 
         await applyPatch(tenantId, kind, existing.id, patch, actorUserId);
 

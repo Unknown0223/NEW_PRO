@@ -74,6 +74,26 @@ export async function resolveWorkSlotIdByCode(
   return slot?.id ?? null;
 }
 
+export async function isWorkSlotInactive(
+  tenantId: number,
+  slotCode: string,
+  slotType?: string | null
+): Promise<boolean> {
+  const code = slotCode.trim().toUpperCase();
+  if (!code) return false;
+  const slot = await prisma.workSlot.findFirst({
+    where: {
+      tenant_id: tenantId,
+      slot_code: { equals: code, mode: "insensitive" },
+      is_active: false,
+      deleted_at: null,
+      ...(slotType ? { slot_type: slotType } : {})
+    },
+    select: { id: true }
+  });
+  return slot != null;
+}
+
 export function splitListCell(raw: string): string[] {
   return raw
     .split(/[,;\n]/)
@@ -151,7 +171,7 @@ export async function findExistingStaffUser(
   kind: StaffImportKind,
   login: string,
   code: string | null
-): Promise<{ id: number; login: string } | null> {
+): Promise<{ id: number; login: string; is_active: boolean } | null> {
   const role = kind === "operator" ? undefined : kindRole(kind as StaffKind);
   const byLogin = await prisma.user.findFirst({
     where: {
@@ -161,7 +181,7 @@ export async function findExistingStaffUser(
         ? { role }
         : { role: { in: [...OPERATOR_LIKE_WEB_ROLES] } })
     },
-    select: { id: true, login: true }
+    select: { id: true, login: true, is_active: true }
   });
   if (byLogin) return byLogin;
   if (!code) return null;
@@ -173,6 +193,6 @@ export async function findExistingStaffUser(
         ? { role }
         : { role: { in: [...OPERATOR_LIKE_WEB_ROLES] } })
     },
-    select: { id: true, login: true }
+    select: { id: true, login: true, is_active: true }
   });
 }
