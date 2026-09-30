@@ -61,7 +61,7 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
       setSlot(s);
       const path = staffApiPath(s.slot_type);
       const staffRes = await apiFetch<{
-        data: Array<{ id: number; fio: string; code: string | null; kind?: string }>;
+        data: Array<{ id: number; fio: string; code: string | null; kind?: string; is_active?: boolean }>;
       }>(`/api/${tenant}/${path}?limit=500`);
       const rows = staffRes.data ?? [];
       const forSlot = isOperatorLikeSlotType(s.slot_type)
@@ -72,7 +72,8 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
           id: u.id,
           fio: u.fio,
           code: u.code,
-          kind: u.kind ?? null
+          kind: u.kind ?? null,
+          is_active: u.is_active
         }))
       );
       const cl = await apiFetch<{ data: AssignChecklist }>(`/api/${tenant}/work-slots/${slotId}/checklist`);
@@ -247,6 +248,14 @@ export function AssignUserDialog({ open, onOpenChange, tenant, slotId, onAssigne
                         <span className="min-w-0 flex-1 truncate font-medium text-slate-800">
                           {u.fio}
                         </span>
+                        {u.is_active === false ? (
+                          <span
+                            className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+                            title="Будет активирован при назначении"
+                          >
+                            неактивен
+                          </span>
+                        ) : null}
                         {u.code ? (
                           <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                             {u.code}

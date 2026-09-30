@@ -73,7 +73,7 @@ function mapCreateError(msg: string): string {
     case "BAD_RETURN_WAREHOUSE":
       return "склад возврата не найден";
     case "BAD_USER":
-      return "сотрудник неактивен — нельзя привязать к рабочему месту";
+      return "сотрудник не найден";
     case "SLOT_INACTIVE":
       return "рабочее место неактивно — активируйте его в «Рабочие места»";
     case "BAD_SLOT_TYPE":
@@ -307,10 +307,6 @@ export async function importStaffFromMatrix(
         if (warehouse_ids !== undefined) patch.warehouse_ids = warehouse_ids;
         if (supervisee_agent_ids !== undefined) patch.supervisee_agent_ids = supervisee_agent_ids;
         if (passwordRaw.trim().length >= 6) patch.password = passwordRaw.trim();
-        if (!existing.is_active && work_slot_id != null && STAFF_KINDS_WITH_WORK_SLOT.has(kind as StaffKind)) {
-          patch.is_active = true;
-        }
-
         await applyPatch(tenantId, kind, existing.id, patch, actorUserId);
 
         if (work_slot_id != null && STAFF_KINDS_WITH_WORK_SLOT.has(kind as StaffKind)) {

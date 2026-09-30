@@ -52,11 +52,18 @@ export async function assignUserToSlot(
     if (!slot.is_active) throw new Error("SLOT_INACTIVE");
 
     const user = await tx.user.findFirst({
-      where: { id: newUserId, tenant_id: tenantId, is_active: true },
-      select: { id: true, role: true, branch: true }
+      where: { id: newUserId, tenant_id: tenantId },
+      select: { id: true, role: true, branch: true, is_active: true, hired_at: true }
     });
     if (!user) throw new Error("BAD_USER");
     assertUserMatchesSlotType(user.role, slot.slot_type);
+    const reactivated = !user.is_active;
+    if (reactivated) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { is_active: true, dismissed_at: null, ...(user.hired_at ? {} : { hired_at: new Date() }) }
+      });
+    }
 
     const current = await tx.slotUserLink.findFirst({
       where: { slot_id: slotId, ended_at: null },
@@ -98,7 +105,8 @@ export async function assignUserToSlot(
       note?.trim() || null,
       current
         ? "Права сотрудников сброшены к стандарту роли (предшественник не копируется)"
-        : "Права нового сотрудника сброшены к стандарту роли"
+        : "Права нового сотрудника сброшены к стандарту роли",
+      reactivated ? "Сотрудник активирован" : null
     ].filter(Boolean);
 
     await tx.slotAuditEntry.create({

@@ -153,6 +153,7 @@ export type StaffPick = {
   code: string | null;
   /** operators list: actual User.role in `kind` */
   kind?: string | null;
+  is_active?: boolean;
 };
 
 export type WorkSlotsFilters = {
