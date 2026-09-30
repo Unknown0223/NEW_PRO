@@ -17,6 +17,22 @@ function addRoleOperationKey(into: Set<string>, key: string): void {
   into.add(k);
 }
 
+/**
+ * Deny: o‘zi har doim o‘chadi; alias (umumiy legacy kalit, masalan `staff.agent.view`) esa faqat
+ * boshqa ruxsat etilgan kalit uni talab qilmasa o‘chadi — mayda operatsiya deny butun ro‘yxatni yopmasin.
+ */
+export function applyDeniedPermissionKeys(effective: Set<string>, denied: Set<string>): void {
+  if (denied.size === 0) return;
+  for (const k of denied) effective.delete(k);
+  const aliasCandidates = new Set(expandPermissionKeyAliases([...denied]).filter((k) => !denied.has(k)));
+  if (aliasCandidates.size === 0) return;
+  const supporters = [...effective].filter((k) => !aliasCandidates.has(k));
+  const supported = new Set(expandPermissionKeyAliases(supporters));
+  for (const k of aliasCandidates) {
+    if (!supported.has(k)) effective.delete(k);
+  }
+}
+
 function stripGrantDelegationKeys(keys: Set<string>): void {
   for (const k of [...keys]) {
     if (isGrantDelegationKey(k) || !isMatrixOperationKey(k)) keys.delete(k);
@@ -96,8 +112,7 @@ export async function resolveUserPermissionKeysSplit(
     if (up.effect === "allow") allowed.add(up.key);
   }
   for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(effective, k);
-  // Structured deny (Access UI) must also drop legacy dashboard.* keys from effective.
-  for (const k of expandPermissionKeyAliases([...denied])) effective.delete(k);
+  applyDeniedPermissionKeys(effective, denied);
   stripGrantDelegationKeys(effective);
   return { fromRole, effective, userPerms };
 }
@@ -191,7 +206,7 @@ export async function getOperationsCountsForUsers(
       if (up.effect === "allow") allowed.add(up.key);
     }
     for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(rolePerms, k);
-    for (const k of expandPermissionKeyAliases([...denied])) rolePerms.delete(k);
+    applyDeniedPermissionKeys(rolePerms, denied);
     stripGrantDelegationKeys(rolePerms);
     out.set(userId, rolePerms.size);
   }

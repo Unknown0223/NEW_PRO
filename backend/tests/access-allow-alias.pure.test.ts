@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { expandPermissionKeyAliases, mapLegacyKeyToStructured } from "../src/modules/access/legacy-key-map";
 import { buildScopedAgentWhere } from "../src/modules/access/access-agent-scope";
+import { applyDeniedPermissionKeys } from "../src/modules/access/rbac.resolve";
+
+describe("applyDeniedPermissionKeys — mayda deny umumiy view ni yopmasin", () => {
+  it("spisok_agentov allow + konfiguratsii deny → staff.agent.view qoladi", () => {
+    const eff = new Set(expandPermissionKeyAliases(["staff.agent.spisok_agentov", "staff.agent.konfiguratsii"]));
+    applyDeniedPermissionKeys(eff, new Set(["staff.agent.konfiguratsii"]));
+    expect(eff.has("staff.agent.view")).toBe(true);
+    expect(eff.has("staff.agent.spisok_agentov")).toBe(true);
+    expect(eff.has("staff.agent.konfiguratsii")).toBe(false);
+  });
+
+  it("view ni qo‘llovchi boshqa kalit bo‘lmasa — alias ham o‘chadi", () => {
+    const eff = new Set(expandPermissionKeyAliases(["staff.agent.konfiguratsii"]));
+    applyDeniedPermissionKeys(eff, new Set(["staff.agent.konfiguratsii"]));
+    expect(eff.has("staff.agent.view")).toBe(false);
+  });
+
+  it("to‘g‘ridan-to‘g‘ri view deny — har doim o‘chadi", () => {
+    const eff = new Set(expandPermissionKeyAliases(["staff.agent.spisok_agentov"]));
+    applyDeniedPermissionKeys(eff, new Set(["staff.agent.view"]));
+    expect(eff.has("staff.agent.view")).toBe(false);
+  });
+});
 
 describe("expandPermissionKeyAliases — allow/deny juftliklar", () => {
   it("legacy staff.agent.spisok_agentov → staff.agent.view (nav kaliti)", () => {
