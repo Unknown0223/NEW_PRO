@@ -7,18 +7,19 @@ import {
   buildScopedAgentWhere,
   buildScopedStaffDirectoryWhere,
   isOrderAgentAllowedForActor,
-  resolveStaffVisibilityByExplicitAndGeo,
-  resolveVisibleStaffIds,
+  resolveStaffVisibilityByDimensions,
   uniquePositiveIds,
   type AccessAgentScope,
   type ScopedReportActor
 } from "./access-staff-scope";
 import {
+  branchFieldMatchesKeys,
   mergeBranchCodesForScope,
   mergeCashDeskIdsForScope,
   mergeGeoStaffIds,
   mergeTerritoryTermsForScope,
-  mergeWarehouseIdsForScope
+  mergeWarehouseIdsForScope,
+  normalizeBranchKey
 } from "./access-scope-from-slot";
 
 export type { AccessAgentScope, ScopedReportActor } from "./access-staff-scope";
@@ -33,6 +34,7 @@ export {
   intersectRequestedAgentIds,
   isOrderAgentAllowedForActor,
   resolveAllowedAgentIdsForActor,
+  resolveStaffVisibilityByDimensions,
   resolveStaffVisibilityByExplicitAndGeo,
   resolveVisibleStaffIds
 } from "./access-staff-scope";
@@ -147,37 +149,27 @@ async function listStaffIdsLinkedToBranches(
   branchCodes: string[],
   opts: { includeInactive: boolean }
 ): Promise<number[]> {
-  const codes = [...new Set(branchCodes.map((c) => c.trim()).filter(Boolean))];
-  if (codes.length === 0) return [];
+  const keys = new Set(branchCodes.map((c) => normalizeBranchKey(c)).filter(Boolean));
+  if (keys.size === 0) return [];
+  // Apostrof / registr farqi («Farg'ona» vs «Fargona») — JS da solishtiriladi.
   const [byField, byLink, bySlot] = await Promise.all([
     prisma.user.findMany({
       where: {
         tenant_id: tenantId,
         ...(opts.includeInactive ? {} : { is_active: true }),
-        OR: codes.flatMap((code) => [
-          { branch: { equals: code, mode: "insensitive" as const } },
-          { branch: { contains: code, mode: "insensitive" as const } }
-        ])
+        branch: { not: null }
       },
-      select: { id: true }
+      select: { id: true, branch: true }
     }),
     prisma.userBranchLink.findMany({
-      where: {
-        tenant_id: tenantId,
-        branch_code: { in: codes }
-      },
-      select: { user_id: true }
+      where: { tenant_id: tenantId },
+      select: { user_id: true, branch_code: true }
     }),
     prisma.workSlot.findMany({
-      where: {
-        tenant_id: tenantId,
-        deleted_at: null,
-        OR: codes.flatMap((code) => [
-          { branch_code: { equals: code, mode: "insensitive" as const } },
-          { branch_codes: { has: code } }
-        ])
-      },
+      where: { tenant_id: tenantId, deleted_at: null },
       select: {
+        branch_code: true,
+        branch_codes: true,
         user_links: {
           where: { ended_at: null },
           select: { user_id: true }
@@ -185,11 +177,16 @@ async function listStaffIdsLinkedToBranches(
       }
     })
   ]);
-  const ids = new Set<number>([
-    ...byField.map((u) => u.id),
-    ...byLink.map((l) => l.user_id)
-  ]);
+  const ids = new Set<number>();
+  for (const u of byField) {
+    if (branchFieldMatchesKeys(u.branch, keys)) ids.add(u.id);
+  }
+  for (const l of byLink) {
+    if (keys.has(normalizeBranchKey(l.branch_code))) ids.add(l.user_id);
+  }
   for (const slot of bySlot) {
+    const slotKeys = [slot.branch_code, ...(slot.branch_codes ?? [])].map((c) => normalizeBranchKey(c));
+    if (!slotKeys.some((k) => k && keys.has(k))) continue;
     for (const link of slot.user_links) ids.add(link.user_id);
   }
   if (ids.size === 0) return [];
@@ -217,7 +214,7 @@ export async function loadAccessDataScope(
   const includeInactive = opts?.includeInactive === true;
   const activeClause = includeInactive ? {} : { is_active: true };
 
-  const [u, supervisees, territoryLinks, warehouseLinks, cashLinks, branchLinks, activeSlotLink] =
+  const [u, supervisees, staffLinks, territoryLinks, warehouseLinks, cashLinks, branchLinks, activeSlotLink] =
     await Promise.all([
       prisma.user.findFirst({
         where: { id: userId, tenant_id: tenantId },
@@ -227,8 +224,12 @@ export async function loadAccessDataScope(
         }
       }),
       prisma.user.findMany({
-        where: { tenant_id: tenantId, supervisor_user_id: userId, ...activeClause },
+        where: { tenant_id: tenantId, supervisor_user_id: userId },
         select: { id: true }
+      }),
+      prisma.userStaffLink.findMany({
+        where: { tenant_id: tenantId, user_id: userId },
+        select: { staff_user_id: true }
       }),
       prisma.territoryUserLink.findMany({
         where: { user_id: userId, territory: { tenant_id: tenantId, deleted_at: null } },
@@ -293,22 +294,31 @@ export async function loadAccessDataScope(
           .then((rows) => uniquePositiveIds(rows.map((r) => r.user_id)))
   ]);
 
-  // Dostup + ish o‘rni: geo (hudud∪filial) birlashadi; hodim/jamoa belgilansa — kesishma.
+  // Dostup + ish o‘rni: hudud, filial va hodimlar — alohida filtrlar, hammasi kesishadi.
   // SVR slotda jamoa bo‘sh ([]) — faqat geo; eski supervisor_user_id qoldiqlari «hamma» qilib yubormasin.
   const isSupervisorSlot = slot?.slot_type === "supervisor";
-  const superviseeIds = uniquePositiveIds(
+  const explicitIds = uniquePositiveIds(
     isSupervisorSlot && teamSlotIds.length === 0
       ? []
-      : [...supervisees.map((s) => s.id), ...teamUserIds]
+      : [...supervisees.map((s) => s.id), ...staffLinks.map((l) => l.staff_user_id), ...teamUserIds]
   );
-  const geoStaffIds = mergeGeoStaffIds(territoryStaffIds, branchStaffIds, termStaffIds);
-  const hasGeoBinding =
-    territory_ids.length > 0 || branchCodes.length > 0 || territoryTerms.length > 0;
-  const bound_staff_ids = resolveStaffVisibilityByExplicitAndGeo({
-    explicitStaffIds: superviseeIds,
-    geoStaffIds,
-    hasGeoBinding
-  });
+  const intersected = resolveStaffVisibilityByDimensions([
+    {
+      bound: territory_ids.length > 0 || territoryTerms.length > 0,
+      staffIds: mergeGeoStaffIds(territoryStaffIds, termStaffIds)
+    },
+    { bound: branchCodes.length > 0, staffIds: branchStaffIds },
+    { bound: explicitIds.length > 0, staffIds: explicitIds }
+  ]);
+  const bound_staff_ids =
+    includeInactive || intersected.length === 0
+      ? intersected
+      : (
+          await prisma.user.findMany({
+            where: { tenant_id: tenantId, id: { in: intersected }, is_active: true },
+            select: { id: true }
+          })
+        ).map((r) => r.id);
 
   const bound_agent_ids =
     bound_staff_ids.length === 0

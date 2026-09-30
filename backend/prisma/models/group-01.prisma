@@ -76,6 +76,7 @@ model Tenant {
   roles                         Role[]
   permissions                   Permission[]
   user_branch_links             UserBranchLink[]
+  user_staff_links              UserStaffLink[]
   user_payment_method_links     UserPaymentMethodLink[]
   user_trade_direction_links    UserTradeDirectionLink[]
   work_slots                    WorkSlot[]
@@ -236,6 +237,8 @@ model User {
   user_roles                    UserRole[]
   user_permissions              UserPermission[]
   branch_links                  UserBranchLink[]
+  staff_links                   UserStaffLink[]           @relation("UserStaffLinkViewer")
+  staff_links_as_staff          UserStaffLink[]           @relation("UserStaffLinkStaff")
   payment_method_links          UserPaymentMethodLink[]
   trade_direction_links         UserTradeDirectionLink[]
   slot_user_links               SlotUserLink[]          @relation("SlotUserLinks")

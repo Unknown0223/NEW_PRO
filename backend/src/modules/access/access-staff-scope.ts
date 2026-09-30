@@ -83,6 +83,30 @@ export function resolveStaffVisibilityByExplicitAndGeo(input: {
   return explicit.filter((id) => allowed.has(id));
 }
 
+export type StaffVisibilityDimension = {
+  /** Foydalanuvchiga shu o‘lcham bo‘yicha biror narsa biriktirilganmi (hudud / filial / hodimlar). */
+  bound: boolean;
+  staffIds: number[];
+};
+
+/**
+ * Dostup: har bir biriktirilgan o‘lcham — filtr, hammasi kesishadi.
+ * — hech narsa biriktirilmagan → []
+ * — faqat hudud (yoki faqat filial) → shu joydagi barcha hodimlar
+ * — filial + 1 hodim → faqat shu hodim (agar u filialda bo‘lsa)
+ * Biriktirilgan, lekin birorta hodim topilmagan geo o‘lcham (nom mos kelmasligi) natijani nollamaydi.
+ */
+export function resolveStaffVisibilityByDimensions(dims: StaffVisibilityDimension[]): number[] {
+  const effective = dims.filter((d) => d.bound && uniquePositiveIds(d.staffIds).length > 0);
+  if (effective.length === 0) return [];
+  let result = uniquePositiveIds(effective[0]!.staffIds);
+  for (const d of effective.slice(1)) {
+    const allowed = new Set(d.staffIds);
+    result = result.filter((id) => allowed.has(id));
+  }
+  return result;
+}
+
 /**
  * `null` — cheklov yo‘q (admin).
  * `[]` — hech narsa ko‘rinmasin.

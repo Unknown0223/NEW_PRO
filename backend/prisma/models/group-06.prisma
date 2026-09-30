@@ -196,6 +196,22 @@ model UserBranchLink {
   @@map("user_branches")
 }
 
+/// Dostup «Сотрудники»: foydalanuvchi (`user_id`) ko‘radigan xodimlar; bitta xodim bir nechta foydalanuvchiga.
+model UserStaffLink {
+  id            Int      @id @default(autoincrement())
+  tenant_id     Int
+  user_id       Int
+  staff_user_id Int
+  created_at    DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user          User     @relation("UserStaffLinkViewer", fields: [user_id], references: [id], onDelete: Cascade)
+  staff         User     @relation("UserStaffLinkStaff", fields: [staff_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, staff_user_id])
+  @@index([tenant_id, staff_user_id])
+  @@map("user_staff_links")
+}
+
 
 model UserPaymentMethodLink {
   id             Int      @id @default(autoincrement())

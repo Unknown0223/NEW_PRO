@@ -48,7 +48,10 @@ export async function registerAccessUsersWriteRoutes(app: FastifyInstance) {
         select: { role: { select: { key: true } } }
       }),
       prisma.user.findMany({
-        where: { tenant_id: tenantId, supervisor_user_id: id },
+        where: {
+          tenant_id: tenantId,
+          OR: [{ supervisor_user_id: id }, { staff_links_as_staff: { some: { user_id: id } } }]
+        },
         select: { id: true, login: true, name: true, code: true, role: true, is_active: true },
         orderBy: { name: "asc" },
         take: 500

@@ -275,6 +275,18 @@ export async function applyAccessUserPatchBodyTx(
         throw new SuperviseePatchError("Один или несколько пользователей не найдены в организации.");
       }
     }
+    await tx.userStaffLink.deleteMany({
+      where: {
+        user_id: userId,
+        ...(desired.length > 0 ? { staff_user_id: { notIn: desired } } : {})
+      }
+    });
+    if (desired.length > 0) {
+      await tx.userStaffLink.createMany({
+        data: desired.map((staff_user_id) => ({ tenant_id: tenantId, user_id: userId, staff_user_id })),
+        skipDuplicates: true
+      });
+    }
     await tx.user.updateMany({
       where: {
         tenant_id: tenantId,
@@ -283,7 +295,8 @@ export async function applyAccessUserPatchBodyTx(
       },
       data: { supervisor_user_id: null }
     });
-    if (desired.length > 0) {
+    // Supervayzer ierarxiyasi (bitta rahbar) faqat supervisor roli uchun; boshqalar xodimni boshqalardan tortib olmasin.
+    if (desired.length > 0 && rbacRole === "supervisor") {
       await tx.user.updateMany({
         where: { tenant_id: tenantId, id: { in: desired } },
         data: { supervisor_user_id: userId }

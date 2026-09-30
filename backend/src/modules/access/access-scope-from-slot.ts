@@ -21,6 +21,24 @@ export function mergeBranchCodesForScope(
   return [...out];
 }
 
+/** Filial nomini solishtirish kaliti: «Farg'ona» = «Fargona» = «FARG`ONA». */
+export function normalizeBranchKey(raw: string | null | undefined): string {
+  return (raw ?? "")
+    .toLowerCase()
+    .replace(/['`ʻʼ‘’´"]/g, "")
+    .replace(/[\s_-]+/g, "")
+    .trim();
+}
+
+/** `branch` maydonida bir nechta filial bo‘lishi mumkin («A, B»). */
+export function branchFieldMatchesKeys(raw: string | null | undefined, keys: ReadonlySet<string>): boolean {
+  if (!raw || keys.size === 0) return false;
+  return raw.split(/[,;|]/).some((part) => {
+    const k = normalizeBranchKey(part);
+    return k.length > 0 && keys.has(k);
+  });
+}
+
 /** Slot territories + user.territory — string match uchun terminlar. */
 const GENERIC_TERRITORY_TOKENS = new Set(
   [
