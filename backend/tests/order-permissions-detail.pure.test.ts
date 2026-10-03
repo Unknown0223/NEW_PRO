@@ -11,21 +11,23 @@ const anyOf = (method: string, path: string) => matchRule(method, path)?.anyOf ?
 describe("Заявки — Доступ katalogi", () => {
   const keys = new Set(buildStructuredPermissionCatalog().map((e) => e.key));
 
-  it("yon menyudagi har bir sahifa alohida bo'lim", () => {
+  it("yaratish, qaytarish va obmen — «Заявки» bo'limi ichida alohida operatsiyalar", () => {
     const orders = buildAccessOperationsTree().find((m) => m.sections.some((s) => s.id.startsWith("orders.")));
     const labels = orders?.sections.map((s) => s.label) ?? [];
-    for (const l of [
-      "Создать заказ",
-      "Создать возврат с полки",
-      "Создать возврат с полки по заказу",
-      "Создать обмен",
-      "Заявки",
-      "Отказы",
-      "Автоматизация заявок",
-      "Статус"
-    ]) {
-      expect(labels, l).toContain(l);
+    for (const l of ["Заявки", "Отказы", "Автоматизация заявок", "Статус"]) expect(labels, l).toContain(l);
+    for (const l of ["Создать заказ", "Создать возврат с полки", "Создать возврат с полки по заказу", "Создать обмен"]) {
+      expect(labels, l).not.toContain(l);
     }
+    const zakaz = orders!.sections.find((s) => s.label === "Заявки")!;
+    expect(zakaz.operations.map((o) => o.key)).toEqual([
+      "orders.zakaz.view",
+      "orders.zakaz.update",
+      "orders.zakaz.history",
+      "orders.sozdanie.create",
+      "orders.vozvrat_polki.create",
+      "orders.vozvrat_po_zakazu.create",
+      "orders.obmen.create"
+    ]);
   });
 
   it("eski umumiy kalitlar va ishlamaydigan «Удаление заказа» yo'q", () => {

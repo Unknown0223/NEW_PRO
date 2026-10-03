@@ -78,17 +78,7 @@ describe("Доступ daraxti — Заявки", () => {
   });
 
   it("«Другие операции» — накладные, экспедитор, консигнация; bo'lim tartibi saqlanadi", () => {
-    expect(orders.sections.map((s) => s.label)).toEqual([
-      "Создать заказ",
-      "Создать возврат с полки",
-      "Создать возврат с полки по заказу",
-      "Создать обмен",
-      "Заявки",
-      "Отказы",
-      "Автоматизация заявок",
-      "Статус",
-      "Другие операции"
-    ]);
+    expect(orders.sections.map((s) => s.label)).toEqual(["Заявки", "Отказы", "Автоматизация заявок", "Статус", "Другие операции"]);
     const other = orders.sections.find((s) => s.label === "Другие операции")!;
     expect(other.operations.map((o) => o.key)).toEqual([
       "orders.zakaz.copy",
