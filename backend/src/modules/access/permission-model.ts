@@ -130,6 +130,13 @@ const ORDER_STATUS_TREE_RU = "Статус";
 const REPORTS_TREE_RU = "Отчеты";
 const DICTIONARIES_TREE_RU = "Справочники";
 const SYSTEM_SETTINGS_TREE_RU = "Системные настройки";
+const CLIENT_GROUP_TREE_RU = "Групповая обработка";
+const CLIENT_GROUP_SECTIONS: [section: string, labelRu: string][] = [
+  ["gr_komanda", "Агент, дни визита и экспедитор"], ["gr_territoriya", "Территория (зона, область, город, район)"],
+  ["gr_kategoriya", "Категория клиента"], ["gr_tip_format", "Тип и формат клиента"], ["gr_kanal", "Канал продаж"],
+  ["gr_sklad_kassa", "Склад и касса"], ["gr_dolg", "Заказ при наличии долга и консигнация"],
+  ["gr_kategoriya_tovara", "Категория товара"], ["gr_kredit_limit", "Кредитный лимит"], ["gr_tip_tseny", "Тип цены"], ["gr_tegi", "Теги"]
+];
 
 /** Ko'p qo'llaniladigan amal to'plamlari (qisqartma uchun). */
 const CRUD: PermissionAction[] = ["view", "create", "update", "delete"];
@@ -166,10 +173,17 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "orders", section: "drugie_operacii", labelRu: "Другие операции", actions: ["update"] },
 
   // ── Clients (Клиенты) ──────────────────────────────────────
-  { module: "clients", section: "klient", labelRu: "Клиенты", actions: ["view", "create", "update", "delete", "import", "copy", "assign", "activate", "deactivate", "history"] },
-  { module: "clients", section: "oborudovanie", labelRu: "Оборудование", actions: CRUD },
+  // Mijoz o'chirilmaydi — faqat deaktivatsiya. Ommaviy tahrir maydonlari: `clients/client-bulk-permissions.ts`.
+  { module: "clients", section: "klient", labelRu: "Клиенты", actions: ["view", "create", "update", "import", "copy", "activate", "deactivate", "history"] },
+  ...CLIENT_GROUP_SECTIONS.map(
+    ([section, labelRu]): PermissionSectionDef => ({ module: "clients", section, labelRu, actions: ["update"], treeSectionRu: CLIENT_GROUP_TREE_RU })
+  ),
+  { module: "clients", section: "karta", labelRu: "Клиенты на карте", actions: VIEW_ONLY },
+  { module: "clients", section: "vizity", labelRu: "Назначение визитов на карте", actions: ["view", "update"] },
+  { module: "clients", section: "obedinenie", labelRu: "Объединение клиентов", actions: ["view", "update", "create", "delete", "restore", "history"] },
+  { module: "clients", section: "oborudovanie", labelRu: "Оборудование", actions: ["view", "create", "delete"] },
   { module: "clients", section: "foto", labelRu: "Фотоотчёты", actions: ["view", "create", "void", "restore"] },
-  { module: "clients", section: "obedinenie", labelRu: "Объединенные", actions: ["view", "update"] },
+  { module: "clients", section: "ostatki_tt", labelRu: "Остатки в торговых точках", actions: ["view", "import", "copy"] },
 
   // ── Invoices (Накладные) ───────────────────────────────────
   { module: "invoices", section: "sborochnye", labelRu: "Сборочные накладные", actions: VIEW_ONLY },

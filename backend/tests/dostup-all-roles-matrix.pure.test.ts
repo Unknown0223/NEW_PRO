@@ -113,6 +113,7 @@ describe("Dostup — barcha rollar: katalog va dostup yopiq", () => {
     for (const sec of PERMISSION_SECTIONS) {
       if (actionOnlySections.has(`${sec.module}.${sec.section}`)) continue;
       if (sec.module === "orders" && sec.section.startsWith("status_")) continue;
+      if (sec.module === "clients" && sec.section.startsWith("gr_")) continue;
       expect(sec.actions.includes("view"), `${sec.module}.${sec.section}`).toBe(true);
     }
   });

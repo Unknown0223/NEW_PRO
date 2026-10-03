@@ -17,14 +17,14 @@ describe("access grant guard — collectPatchOperationKeys", () => {
       {
         merge_permissions: true,
         permissions: ["orders.zakaz.view", "access.grant.orders.zakaz.view"],
-        denied_permissions: ["clients.klient.delete"],
+        denied_permissions: ["clients.klient.deactivate"],
         remove_permission_keys: ["cash.kassa.view"],
         grant_delegation_allow: ["warehouse.sklady.view"]
       },
       new Map()
     );
     expect(keys.sort()).toEqual(
-      ["cash.kassa.view", "clients.klient.delete", "orders.zakaz.view", "warehouse.sklady.view"].sort()
+      ["cash.kassa.view", "clients.klient.deactivate", "orders.zakaz.view", "warehouse.sklady.view"].sort()
     );
   });
 

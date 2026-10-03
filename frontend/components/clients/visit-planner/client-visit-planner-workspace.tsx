@@ -31,6 +31,7 @@ import { clientVisitWeekdays } from "@/lib/client-map-filters";
 import type { ClientRow } from "@/lib/client-types";
 import { getUserFacingError } from "@/lib/error-utils";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 
@@ -168,6 +169,7 @@ export function ClientVisitPlannerWorkspace() {
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const bulkPatchMut = useClientBulkPatch(tenantSlug);
+  const canAssign = usePermissions().has("clients.vizity.update");
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -955,9 +957,11 @@ export function ClientVisitPlannerWorkspace() {
             <button className="vp-btn" onClick={resetPending}>
               Отмена
             </button>
-            <button className="vp-btn vp-green" onClick={() => void applyPending()} disabled={bulkPatchMut.isPending}>
-              {bulkPatchMut.isPending ? "Сохранение…" : "Применить к отмеченным"}
-            </button>
+            {canAssign ? (
+              <button className="vp-btn vp-green" onClick={() => void applyPending()} disabled={bulkPatchMut.isPending}>
+                {bulkPatchMut.isPending ? "Сохранение…" : "Применить к отмеченным"}
+              </button>
+            ) : null}
           </div>
         </div>
       </section>

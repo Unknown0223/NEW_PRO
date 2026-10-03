@@ -6,8 +6,10 @@ import { GroupProcessingActionDialog } from "@/components/clients/group-processi
 import {
   GROUP_PROCESSING_ACTIONS,
   GROUP_PROCESSING_IDS_STORAGE_KEY,
+  canUseGroupProcessingAction,
   type GroupProcessingActionId
 } from "@/components/clients/group-processing/group-processing-actions";
+import { usePermissions } from "@/lib/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useClientBulkActive, useClientBulkPatch } from "@/hooks/use-client-bulk-patch";
@@ -76,6 +78,7 @@ export function ClientGroupProcessingWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
+  const perms = usePermissions();
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
@@ -514,7 +517,7 @@ export function ClientGroupProcessingWorkspace() {
         <aside className="h-fit rounded-xl border border-border bg-card p-3">
           <p className="mb-2 text-sm font-medium">Действия</p>
           <div className="flex flex-col gap-1.5">
-            {GROUP_PROCESSING_ACTIONS.map((a) => (
+            {GROUP_PROCESSING_ACTIONS.filter((a) => canUseGroupProcessingAction(a.id, perms.has)).map((a) => (
               <Button
                 key={a.id}
                 type="button"

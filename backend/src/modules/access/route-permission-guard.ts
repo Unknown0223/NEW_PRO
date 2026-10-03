@@ -17,6 +17,7 @@ import { getAccessUser } from "../auth/auth.prehandlers";
 import { resolveUserPermissionKeys } from "./rbac.service";
 import { ORDER_STATUS_CHANGE_PERMISSIONS, ORDER_STATUS_DATE_PERMISSION } from "../orders/order-status-permissions";
 import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
+import { CLIENT_BULK_PATCH_PERMISSIONS, CLIENT_GROUP_TAGS_PERMISSION } from "../clients/client-bulk-permissions";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -159,26 +160,37 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/suppliers(\/|$)/, "suppliers.postavshchik.view"),
 
   // ─────────── Клиенты (clients) ───────────
+  // Ommaviy tahrir: handler har bir maydon guruhini alohida tekshiradi (`clients/client-bulk-rbac.ts`).
   r(WRITE, /\/clients\/bulk-active$/, "clients.klient.activate", "clients.klient.deactivate"),
-  r(WRITE, /\/clients\/(bulk|bulk-items)$/, "clients.klient.update", "clients.klient.assign"),
+  r(WRITE, /\/clients\/(bulk|bulk-items)$/, ...CLIENT_BULK_PATCH_PERMISSIONS),
+  r(WRITE, /\/clients\/bulk-tags$/, CLIENT_GROUP_TAGS_PERMISSION),
+  r(WRITE, /\/clients\/tags$/, CLIENT_GROUP_TAGS_PERMISSION, "clients.klient.update"),
   r(["POST"], /\/clients\/merge-preview$/, "clients.obedinenie.view"),
   r(["POST"], /\/clients\/merge$/, "clients.obedinenie.update"),
-  r(WRITE, /\/clients\/saved-duplicate-groups/, "clients.obedinenie.update"),
-  r(DEL, /\/clients\/saved-duplicate-groups/, "clients.obedinenie.update"),
-  r(WRITE, /\/clients\/bulk-tags$/, "clients.klient.update", "clients.klient.assign"),
-  r(WRITE, /\/clients\/tags$/, "clients.klient.update", "clients.klient.assign"),
+  r(["POST"], /\/clients\/saved-duplicate-groups\/:id\/restore$/, "clients.obedinenie.restore"),
+  r(["POST"], /\/clients\/saved-duplicate-groups$/, "clients.obedinenie.create"),
+  r(DEL, /\/clients\/saved-duplicate-groups\/:id$/, "clients.obedinenie.delete"),
+  r(READ, /\/clients\/saved-duplicate-groups$/, "clients.obedinenie.view"),
+  r(READ, /\/clients\/(merge-history|merge-sessions)$/, "clients.obedinenie.history"),
   r(WRITE, /\/clients\/import/, "clients.klient.import"),
   r(READ, /\/clients\/export$/, "clients.klient.copy"),
-  r(WRITE, /\/clients\/:id\/equipment/, "clients.oborudovanie.create", "clients.oborudovanie.update", "clients.oborudovanie.delete"),
+  r(["POST"], /\/clients\/:id\/equipment\/:id\/remove$/, "clients.oborudovanie.delete"),
+  r(["POST"], /\/clients\/:id\/equipment$/, "clients.oborudovanie.create"),
   r(READ, /\/clients\/:id\/equipment/, "clients.oborudovanie.view"),
+  r(READ, /\/:slug\/equipment$/, "clients.oborudovanie.view"),
   r(["POST"], /\/clients$/, "clients.klient.create"),
   r(["PUT", "PATCH"], /\/clients\/:id$/, "clients.klient.update"),
-  r(["DELETE"], /\/clients\/:id$/, "clients.klient.delete"),
   r(WRITE, /\/clients\/:id\/photo-reports\/[^/]+\/restore/, "clients.foto.restore"),
   r(["DELETE"], /\/clients\/:id\/photo-reports/, "clients.foto.void"),
   r(["POST"], /\/clients\/:id\/photo-reports/, "clients.foto.create"),
   r(READ, /\/clients\/:id\/photo-reports/, "clients.foto.view"),
+  r(READ, /\/clients\/:id\/audit$/, "clients.klient.history"),
+  r(READ, /\/clients(\/references)?$/, "clients.klient.view", "clients.karta.view", "clients.vizity.view"),
   r(READ, /\/clients(\/|$)/, "clients.klient.view"),
+  r(["POST"], /\/retail-stock\/upload$/, "clients.ostatki_tt.import"),
+  r(READ, /\/retail-stock\/template$/, "clients.ostatki_tt.import"),
+  r(READ, /\/retail-stock\/export$/, "clients.ostatki_tt.copy"),
+  r(READ, /\/retail-stock$/, "clients.ostatki_tt.view"),
 
   // ─────────── Накладные / списания (assembly via returns write-offs) ───────────
   r(WRITE, /\/order-automation/, "automation.zaiavki.create", "automation.zaiavki.update"),
@@ -379,7 +391,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/reference(\/|$)/, "settings.tovar.view"),
 
   // ─────────── Связи (linkage) ───────────
-  r(WRITE, /\/linkage(\/|$)/, "clients.klient.assign", "clients.klient.update"),
+  r(WRITE, /\/linkage(\/|$)/, "clients.gr_komanda.update", "clients.klient.update"),
   r(READ, /\/linkage(\/|$)/, "clients.klient.view"),
 
   // ─────────── Полевые / GPS / маршруты ───────────

@@ -16,13 +16,11 @@ export const NAV_PERM = {
   automation: ["automation.zaiavki.view"],
 
   clients: ["clients.klient.view", "clients.view"],
-  clientsMap: ["clients.klient.view", "clients.klienty_na_karte"],
+  clientsMap: ["clients.karta.view", "clients.klienty_na_karte"],
   clientsMerge: ["clients.obedinenie.view", "clients.obedinenye.view"],
   clientsEquipment: ["clients.oborudovanie.view"],
-  /** Faqat ombor qoldiq — clients.view retail stock ni ochmasin. */
-  clientsRetailStock: ["warehouse.ostatki.view"],
-  /** GPS kalitlari — clients.klient.view visit planner ni ochmasin. */
-  visitPlanner: ["gps.gps.view", "gps.dostup_k_gps"],
+  clientsRetailStock: ["clients.ostatki_tt.view"],
+  visitPlanner: ["clients.vizity.view"],
 
   invoicesAssembly: ["invoices.sborochnye.view", "invoices.sborochnye_nakladnye.view"],
   invoicesShipment: ["invoices.otgruzochnye.view", "invoices.otgruzochnye_nakladnye.view"],

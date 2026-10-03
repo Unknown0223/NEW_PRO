@@ -181,7 +181,7 @@ export function useAccessWorkspacePart2(ctx: ReturnType<typeof useAccessWorkspac
     const groupMap = new Map<string, Map<string, SideRow[]>>();
     for (const row of filteredSideRows) {
       const first = row.group || "Прочее";
-      const second = row.subgroup || "Прочее";
+      const second = row.subgroup || row.group || "Прочее";
       const nested = groupMap.get(first) ?? new Map<string, SideRow[]>();
       const rowsBySubgroup = nested.get(second) ?? [];
       rowsBySubgroup.push(row);

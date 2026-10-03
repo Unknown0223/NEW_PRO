@@ -29,6 +29,7 @@ import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { formatDigitsGroupedLoose, formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
 import { optionsToValueLabelMap } from "@/lib/ref-select-options";
+import { usePermissions } from "@/lib/use-permissions";
 import { ORDER_STATUS_FILTER_OPTIONS, ORDER_STATUS_LABELS } from "@/lib/order-status";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -434,6 +435,11 @@ const ANALYTICS_TABS: HubTab[] = ["orders", "products", "sales"];
 
 function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
   const queryClient = useQueryClient();
+  const { has } = usePermissions();
+  const canEdit = has("clients.klient.update");
+  const canHistory = has("clients.klient.history");
+  const canEquipment = has("clients.oborudovanie.view");
+  const canPhotos = has("clients.foto.view");
   const { agentFilter } = useClientProfileLedgerFilters();
   const [hubTab, setHubTab] = useState<HubTab>("orders");
   const [filterDraft, setFilterDraft] = useState<HubAnalyticsFilters>(() => initialHubAnalyticsFilters());
@@ -533,7 +539,7 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
   const clientAuditMetaQ = useQuery({
     queryKey: ["client-audit-meta", tenantSlug, clientId],
     staleTime: STALE.list,
-    enabled: Boolean(tenantSlug && clientId > 0),
+    enabled: Boolean(tenantSlug && clientId > 0) && canHistory,
     queryFn: async () => {
       const params = new URLSearchParams({ page: "1", limit: "50" });
       const { data } = await api.get<ClientAuditMetaResponse>(`/api/${tenantSlug}/clients/${clientId}/audit?${params}`);
@@ -701,13 +707,15 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
         description={sub}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/clients/${clientId}/edit`}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-            >
-              <Pencil className="h-4 w-4" />
-              Изменить
-            </Link>
+            {canEdit ? (
+              <Link
+                href={`/clients/${clientId}/edit`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+              >
+                <Pencil className="h-4 w-4" />
+                Изменить
+              </Link>
+            ) : null}
             <Link
               href={`/orders/new?client_id=${clientId}`}
               className={cn(buttonVariants({ size: "sm" }), "gap-1.5 bg-teal-600 text-white hover:bg-teal-700")}
@@ -729,12 +737,14 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               <Wallet className="h-4 w-4" />
               Баланс
             </Link>
-            <Link
-              href={`/clients/${clientId}/history`}
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
-            >
-              Журнал изменений
-            </Link>
+            {canHistory ? (
+              <Link
+                href={`/clients/${clientId}/history`}
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+              >
+                Журнал изменений
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -770,18 +780,24 @@ function ClientProfileHubInner({ tenantSlug, clientId }: Props) {
               <TabsTrigger value="debts" className={hubTabTriggerClass}>
                 Долги
               </TabsTrigger>
-              <TabsTrigger value="equipment" className={hubTabTriggerClass}>
-                Оборудование
-              </TabsTrigger>
-              <TabsTrigger value="photos" className={hubTabTriggerClass}>
-                Фотоотчёт
-              </TabsTrigger>
+              {canEquipment ? (
+                <TabsTrigger value="equipment" className={hubTabTriggerClass}>
+                  Оборудование
+                </TabsTrigger>
+              ) : null}
+              {canPhotos ? (
+                <TabsTrigger value="photos" className={hubTabTriggerClass}>
+                  Фотоотчёт
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="map" className={hubTabTriggerClass}>
                 Координаты
               </TabsTrigger>
-              <TabsTrigger value="service" className={hubTabTriggerClass}>
-                Служебное
-              </TabsTrigger>
+              {canHistory ? (
+                <TabsTrigger value="service" className={hubTabTriggerClass}>
+                  Служебное
+                </TabsTrigger>
+              ) : null}
             </TabsList>
 
             {showAnalyticsChrome ? (

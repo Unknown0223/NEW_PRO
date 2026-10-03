@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +38,9 @@ function fmtShort(iso: string) {
 export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug: string; clientId: number }) {
   const qc = useQueryClient();
   const { confirm, dialog: confirmDialog } = useAppConfirm();
+  const { has } = usePermissions();
+  const canCreate = has("clients.oborudovanie.create");
+  const canRemove = has("clients.oborudovanie.delete");
   const [addOpen, setAddOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [inventoryType, setInventoryType] = useState("");
@@ -57,6 +61,7 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
   const productsQ = useQuery({
     queryKey: ["products", tenantSlug, "equipment-for-client-profile"],
     staleTime: STALE.list,
+    enabled: canCreate,
     queryFn: async () => {
       const params = new URLSearchParams({
         page: "1",
@@ -115,17 +120,19 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">Инвентарь у клиента</p>
-        <button
-          type="button"
-          className={cn(buttonVariants({ size: "sm" }), "gap-1.5 bg-teal-600 text-white hover:bg-teal-700")}
-          onClick={() => setAddOpen((v) => !v)}
-        >
-          <PlusCircle className="h-4 w-4" />
-          Добавить
-        </button>
+        {canCreate ? (
+          <button
+            type="button"
+            className={cn(buttonVariants({ size: "sm" }), "gap-1.5 bg-teal-600 text-white hover:bg-teal-700")}
+            onClick={() => setAddOpen((v) => !v)}
+          >
+            <PlusCircle className="h-4 w-4" />
+            Добавить
+          </button>
+        ) : null}
       </div>
 
-      {addOpen ? (
+      {addOpen && canCreate ? (
         <Card className="border border-border/90 shadow-panel">
           <CardContent className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4">
             <div className="space-y-1 sm:col-span-2">
@@ -231,6 +238,7 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
                       <td className="px-3 py-2 font-mono text-xs">{r.serial_number ?? "—"}</td>
                       <td className="px-3 py-2 font-mono text-xs">{r.inventory_number ?? "—"}</td>
                       <td className="px-2 py-2">
+                        {canRemove ? (
                         <button
                           type="button"
                           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}
@@ -250,6 +258,7 @@ export function ClientProfileEquipmentTab({ tenantSlug, clientId }: { tenantSlug
                         >
                           Изъять
                         </button>
+                        ) : null}
                       </td>
                     </tr>
                   ))

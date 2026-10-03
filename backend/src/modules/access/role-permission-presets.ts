@@ -46,6 +46,11 @@ function orderStatus(...slugs: string[]): string[] {
   return slugs.flatMap((slug) => sec("orders", `status_${slug}`));
 }
 
+/** «Клиенты → Групповая обработка» (`clients.gr_*.update`). */
+function clientGroupOps(): string[] {
+  return CATALOG.filter((e) => e.module === "clients" && e.section.startsWith("gr_")).map((e) => e.key);
+}
+
 const ALL_ORDER_STATUS_SLUGS = ["confirmed", "picking", "delivering", "delivered", "returned", "cancelled", "revert", "reopen", "date"];
 
 /** Admin — hamma narsa + boshqaruv kalitlari. */
@@ -66,7 +71,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       orderStatus(...ALL_ORDER_STATUS_SLUGS),
       secOnly("orders", "vozvrat", ["view", "create"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
-      sec("clients", "profil"),
+      clientGroupOps(),
+      secOnly("clients", "karta", ["view"]),
       secOnly("clients", "foto", ["view"]),
       secOnly("work_slots", "raboche_mesto", ["view"]),
       secOnly("staff", "konsignatsiya", ["view"]),

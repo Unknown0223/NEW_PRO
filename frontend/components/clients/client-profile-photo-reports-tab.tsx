@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { isSoftVoidUiEnabled } from "@/lib/feature-flags";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, RotateCcw, Trash2 } from "lucide-react";
@@ -58,6 +59,10 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
   const [orderId, setOrderId] = useState("");
   const [voidPhotoId, setVoidPhotoId] = useState<number | null>(null);
   const [archiveView, setArchiveView] = useState(false);
+  const { has } = usePermissions();
+  const canCreate = has("clients.foto.create");
+  const canArchive = has("clients.foto.void");
+  const canRestore = has("clients.foto.restore");
 
   const listQ = useQuery({
     queryKey: ["client-photo-reports", tenantSlug, clientId, archiveView],
@@ -159,7 +164,7 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
         удаляется.
       </p>
 
-      {!archiveView ? (
+      {!archiveView && canCreate ? (
         <Card className="border border-border/90 shadow-panel">
           <CardContent className="space-y-3 p-3 sm:p-4">
             <p className="text-xs text-muted-foreground">
@@ -225,16 +230,18 @@ export function ClientProfilePhotoReportsTab({ tenantSlug, clientId }: { tenantS
                   {r.order_id != null ? ` · заказ #${r.order_id}` : ""}
                 </p>
                 {archiveView ? (
-                  <button
-                    type="button"
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 w-full text-xs")}
-                    disabled={restoreM.isPending}
-                    onClick={() => void restoreM.mutateAsync(r.id)}
-                  >
-                    <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
-                    Восстановить
-                  </button>
-                ) : (
+                  canRestore ? (
+                    <button
+                      type="button"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 w-full text-xs")}
+                      disabled={restoreM.isPending}
+                      onClick={() => void restoreM.mutateAsync(r.id)}
+                    >
+                      <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
+                      Вернуть из архива
+                    </button>
+                  ) : null
+                ) : !canArchive ? null : (
                   <button
                     type="button"
                     className={cn(

@@ -9,6 +9,8 @@ import { ClientsTemplateFiltersPanel } from "@/components/clients/clients-templa
 import { GroupProcessingPickDialog } from "@/components/clients/group-processing/group-processing-pick-dialog";
 import {
   GROUP_PROCESSING_IDS_STORAGE_KEY,
+  GROUP_PROCESSING_MENU_ACTIONS,
+  canUseGroupProcessingAction,
   clientsListSelectedStorageKey,
   readStoredClientIds,
   writeStoredClientIds,
@@ -31,6 +33,7 @@ import {
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
+import { usePermissions } from "@/lib/use-permissions";
 import {
   appendClientListFilterParams,
   INITIAL_CLIENT_TOOLBAR_FILTERS,
@@ -181,6 +184,9 @@ export default function ClientsPage() {
   const actorUserId = decodeAccessTokenUserId(accessToken);
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
+  const perms = usePermissions();
+  const canImport = perms.has("clients.klient.import");
+  const canGroupProcessing = GROUP_PROCESSING_MENU_ACTIONS.some((a) => canUseGroupProcessingAction(a.id, perms.has));
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importResultOpen, setImportResultOpen] = useState(false);
   const [importResultErrors, setImportResultErrors] = useState<string[]>([]);
@@ -1340,10 +1346,10 @@ export default function ClientsPage() {
               setSearch("");
               setPage(1);
             }}
-            onImportUpdate={() => openImportLaunch("update")}
-            onImportCreate={() => openImportLaunch("create")}
+            onImportUpdate={canImport ? () => openImportLaunch("update") : undefined}
+            onImportCreate={canImport ? () => openImportLaunch("create") : undefined}
             importDisabled={importMut.isPending || !tenantSlug}
-            onGroupProcessing={() => setGroupPickOpen(true)}
+            onGroupProcessing={canGroupProcessing ? () => setGroupPickOpen(true) : undefined}
             groupProcessingDisabled={selectedIds.size === 0}
           />
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">

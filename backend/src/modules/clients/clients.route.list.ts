@@ -18,6 +18,7 @@ import {
   listClientsForTenantPaged
 } from "./clients.service";
 import { listDuplicateCandidates } from "./client-dedupe.service";
+import { ensureClientBulkPermissions } from "./client-bulk-rbac";
 import {
   bulkActiveBodySchema,
   bulkItemsPatchBodySchema,
@@ -194,6 +195,7 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureClientBulkPermissions(request, reply, [{ is_active: parsed.data.is_active }]))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -223,6 +225,7 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureClientBulkPermissions(request, reply, [parsed.data.patch]))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;
@@ -252,6 +255,8 @@ export async function registerClientListRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      const patches = parsed.data.items.map((i) => i.patch);
+      if (!(await ensureClientBulkPermissions(request, reply, patches))) return;
       const actor = getAccessUser(request);
       const sub = Number.parseInt(actor.sub, 10);
       const actorUserId = Number.isFinite(sub) && sub > 0 ? sub : null;

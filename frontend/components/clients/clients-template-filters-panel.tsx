@@ -12,6 +12,7 @@ import {
 } from "@/lib/client-filter-select-value";
 import type { ClientToolbarFiltersState } from "@/lib/client-list-toolbar-filters";
 import type { RefSelectOption } from "@/lib/ref-select-options";
+import { usePermissions } from "@/lib/use-permissions";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -100,6 +101,7 @@ export function ClientsTemplateFiltersPanel({
 }: Props) {
   const dateAnchorRef = useRef<HTMLButtonElement>(null);
   const [dateOpen, setDateOpen] = useState(false);
+  const canCreate = usePermissions().has("clients.klient.create");
 
   const patch = useCallback(
     (p: Partial<ClientToolbarFiltersState>) => onDraftChange(p),
@@ -392,12 +394,14 @@ export function ClientsTemplateFiltersPanel({
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
-          <Link
-            href="/clients/new"
-            className="whitespace-nowrap rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600"
-          >
-            Добавить клиента
-          </Link>
+          {canCreate ? (
+            <Link
+              href="/clients/new"
+              className="whitespace-nowrap rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600"
+            >
+              Добавить клиента
+            </Link>
+          ) : null}
         </div>
       </div>
 

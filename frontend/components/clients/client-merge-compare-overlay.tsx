@@ -22,8 +22,8 @@ export function CompareMergeOverlay(props: {
   masterId: number | null;
   setMasterId: (id: number | null) => void;
   onClose: () => void;
-  onMerge: () => void;
-  onSave: () => void;
+  onMerge?: () => void;
+  onSave?: () => void;
   merging: boolean;
   saving: boolean;
   mergePreview: MergePreviewStats | null;
@@ -84,18 +84,22 @@ export function CompareMergeOverlay(props: {
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" onClick={onSave} disabled={saving || masterId == null}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Сохранить группу"}
-          </Button>
-          <Button
-            type="button"
-            className="h-10 bg-emerald-600 px-6 text-[14px] font-medium text-white shadow-sm hover:bg-emerald-700"
-            disabled={merging || masterId == null || visiblePreviews.length < 2}
-            onClick={onMerge}
-          >
-            {merging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Объединить
-          </Button>
+          {onSave ? (
+            <Button type="button" variant="outline" onClick={onSave} disabled={saving || masterId == null}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Сохранить группу"}
+            </Button>
+          ) : null}
+          {onMerge ? (
+            <Button
+              type="button"
+              className="h-10 bg-emerald-600 px-6 text-[14px] font-medium text-white shadow-sm hover:bg-emerald-700"
+              disabled={merging || masterId == null || visiblePreviews.length < 2}
+              onClick={onMerge}
+            >
+              {merging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Объединить
+            </Button>
+          ) : null}
         </div>
       </header>
 
