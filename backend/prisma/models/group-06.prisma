@@ -212,6 +212,20 @@ model UserStaffLink {
   @@map("user_staff_links")
 }
 
+/// `users.consignment` o‘zgarishlar tarixi — DB trigger yozadi (Табель kunlik normasi uchun).
+model UserConsignmentLog {
+  id         Int      @id @default(autoincrement())
+  tenant_id  Int
+  user_id    Int
+  enabled    Boolean
+  changed_at DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id, user_id, changed_at])
+  @@map("user_consignment_logs")
+}
+
 
 model UserPaymentMethodLink {
   id             Int      @id @default(autoincrement())

@@ -1,9 +1,12 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { listCalendarWorkingDays, listMonthDays, tenantMonthRangeUtc, ymdInTimeZone } from "../../lib/workday-calendar";
 import { parseWorkdaysState, type WorkdaysState } from "../tabel/workdays.service";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "../timesheet/timesheet.day-status";
 import { parseTimesheetState } from "../timesheet/timesheet.service";
+import { applyAgentNormForUser, loadAgentNormContext } from "../timesheet/timesheet.agent-norm";
+import type { NormDay } from "../timesheet/timesheet.agent-norm.pure";
 import { computeUserMonthFact } from "./payroll-kpi-fact";
 import { computeUserMonthPlan } from "./payroll-slot-plan";
 import { computeTeamMonthPlan } from "./payroll-team-plan";
@@ -14,6 +17,7 @@ export type TenantPayrollEnv = {
   timeZone: string;
   workdays: WorkdaysState;
   timesheet: ReturnType<typeof parseTimesheetState>;
+  settings: Prisma.JsonValue;
 };
 
 export async function loadTenantPayrollEnv(tenantId: number): Promise<TenantPayrollEnv> {
@@ -22,7 +26,8 @@ export async function loadTenantPayrollEnv(tenantId: number): Promise<TenantPayr
   return {
     timeZone: loadTimezoneFromSettingsJson(settings),
     workdays: parseWorkdaysState(settings),
-    timesheet: parseTimesheetState(settings)
+    timesheet: parseTimesheetState(settings),
+    settings
   };
 }
 
@@ -76,21 +81,40 @@ export async function computeUserAttendance(
     absent: 0,
     half: 0
   };
-  for (const ymd of listMonthDays(year, month)) {
-    if (ymd > today) break;
+  const days: NormDay[] = listMonthDays(year, month).map((ymd) => {
     const key = `${user.id}:${ymd}`;
     const override = env.timesheet.overrides[key];
-    const status =
-      override?.status ??
-      defaultTimesheetDay({
-        state: env.workdays,
-        role: user.role,
-        userId: user.id,
-        ymd,
-        hasGpsVisit: visitKeys.has(key),
-        hiredYmd,
-        dismissedYmd
-      }).status;
+    const def = defaultTimesheetDay({
+      state: env.workdays,
+      role: user.role,
+      userId: user.id,
+      ymd,
+      hasGpsVisit: visitKeys.has(key),
+      hiredYmd,
+      dismissedYmd
+    });
+    return {
+      date: ymd,
+      status: override?.status ?? def.status,
+      source: override?.source ?? def.source,
+      manual: Boolean(override),
+      off_employment: def.off_employment && !override
+    };
+  });
+  if (user.role === "agent") {
+    const flag = await prisma.user.findUnique({ where: { id: user.id }, select: { consignment: true } });
+    const ctx = await loadAgentNormContext(
+      tenantId,
+      env.settings,
+      [{ id: user.id, role: user.role, consignment: flag?.consignment ?? false }],
+      year,
+      month,
+      env.timeZone
+    );
+    applyAgentNormForUser(ctx, user, days, env.workdays, year, month);
+  }
+  for (const { date: ymd, status } of days) {
+    if (ymd > today) break;
     if (status === "worked") s.worked += 1;
     else if (status === "half_day") {
       s.worked += 0.5;

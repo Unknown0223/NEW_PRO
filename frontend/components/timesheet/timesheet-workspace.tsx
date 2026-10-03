@@ -497,7 +497,8 @@ export function TimesheetWorkspace() {
       day: c.day,
       date: c.date,
       status: effectiveStatus(r.user_id, c),
-      source: c.source
+      source: c.source,
+      autoComment: c.comment
     });
   }
 

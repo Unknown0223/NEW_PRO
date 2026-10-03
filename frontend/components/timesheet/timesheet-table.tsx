@@ -353,7 +353,9 @@ export function TimesheetTable({
                       <button
                         type="button"
                         onClick={() => onCellClick(r, c)}
-                        title={`${r.fio} · ${fmtRuDate(c.date)} — ${meta.label}${changed ? " (не сохранено)" : ""}`}
+                        title={`${r.fio} · ${fmtRuDate(c.date)} — ${meta.label}${changed ? " (не сохранено)" : ""}${
+                          c.comment && !changed ? `\n${c.comment}` : ""
+                        }`}
                         className={cn(
                           "grid h-8 w-full place-items-center rounded-md font-mono text-[11px] font-bold transition hover:opacity-80",
                           meta.cell

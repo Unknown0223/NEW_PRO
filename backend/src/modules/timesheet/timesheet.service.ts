@@ -9,6 +9,8 @@ import {
 import { toFio } from "../staff/staff.shared.helpers";
 import { orderTimesheetRows, parseTimesheetRoleFilter } from "./timesheet.order";
 import { defaultTimesheetDay, employmentYmd, visitDayKeys } from "./timesheet.day-status";
+import { applyAgentNormForUser, loadAgentNormContext } from "./timesheet.agent-norm";
+import type { NormDay } from "./timesheet.agent-norm.pure";
 import { parseWorkdaysState } from "../tabel/workdays.service";
 import { loadTimezoneFromSettingsJson } from "../tenant-settings/tenant-timezone";
 import { parseYearMonth, tenantMonthRangeUtc } from "../../lib/workday-calendar";
@@ -88,6 +90,12 @@ export type TimesheetCellDto = {
   source: AttendanceSource;
   /** Ishga olishdan oldin yoki bo'shatilgandan keyingi kun. */
   off_employment?: boolean;
+  /** Avtomatik holat sababi (agent kunlik normasi). */
+  comment?: string;
+  /** Kunlik sof zakaz summasi (otkaz/vozvratdan keyin). */
+  net_sales?: number;
+  /** Shu kun uchun kunlik norma. */
+  norm?: number;
 };
 
 export type TimesheetRowDto = {
@@ -354,6 +362,7 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
       supervisor_user_id: true,
       hired_at: true,
       dismissed_at: true,
+      consignment: true,
       branch_links: { select: { branch_code: true }, take: 4 },
       trade_direction_row: { select: { name: true } },
       trade_direction_links: {
@@ -381,6 +390,7 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
       })
     : [];
   const visitByUserDay = visitDayKeys(visits, timeZone);
+  const normCtx = await loadAgentNormContext(tenantId, tenant.settings, users, ym.year, ym.month, timeZone);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const rows: TimesheetRowDto[] = users.map((u) => {
@@ -388,9 +398,7 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
     const isDeparted = departedSet.has(u.id);
     const hiredYmd = employmentYmd(u.hired_at, timeZone);
     const dismissedYmd = employmentYmd(u.dismissed_at, timeZone);
-    let worked = 0;
-    let absent = 0;
-    const cells = days.map((day): TimesheetCellDto => {
+    const normDays = days.map((day): NormDay & { day: number } => {
       const date = isoDateForDay(input.month, day);
       const key = `${u.id}:${date}`;
       const override = state.overrides[key];
@@ -403,13 +411,27 @@ export async function listTimesheetMatrix(tenantId: number, input: TimesheetFilt
         hiredYmd,
         dismissedYmd
       });
-      const status: AttendanceStatus = override ? override.status : def.status;
-      const source: AttendanceSource = override ? override.source : def.source;
-      worked += statusWorkValue(status);
-      if (status === "absent") absent += 1;
-      return def.off_employment && !override
-        ? { day, date, status, source, off_employment: true }
-        : { day, date, status, source };
+      return {
+        day,
+        date,
+        status: override ? override.status : def.status,
+        source: override ? override.source : def.source,
+        manual: Boolean(override),
+        off_employment: def.off_employment && !override
+      };
+    });
+    applyAgentNormForUser(normCtx, u, normDays, workdays, ym.year, ym.month);
+    let worked = 0;
+    let absent = 0;
+    const cells = normDays.map((d): TimesheetCellDto => {
+      worked += statusWorkValue(d.status);
+      if (d.status === "absent") absent += 1;
+      const cell: TimesheetCellDto = { day: d.day, date: d.date, status: d.status, source: d.source };
+      if (d.off_employment) cell.off_employment = true;
+      if (d.comment) cell.comment = d.comment;
+      if (d.net_sales != null) cell.net_sales = d.net_sales;
+      if (d.norm != null) cell.norm = d.norm;
+      return cell;
     });
     const branch =
       u.branch?.trim() ||

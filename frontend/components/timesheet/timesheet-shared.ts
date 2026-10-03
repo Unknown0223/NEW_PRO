@@ -65,7 +65,16 @@ export function canEditTimesheet(role: string | null | undefined): boolean {
   return Boolean(role && TIMESHEET_EDIT_ROLES.has(role));
 }
 
-export type TimesheetCell = { day: number; date: string; status: AttendanceStatus; source: Source };
+export type TimesheetCell = {
+  day: number;
+  date: string;
+  status: AttendanceStatus;
+  source: Source;
+  /** Avtomatik holat sababi (agent kunlik normasi). */
+  comment?: string;
+  net_sales?: number;
+  norm?: number;
+};
 
 export type TimesheetRow = {
   user_id: number;
