@@ -23,6 +23,13 @@ const MIGRATE_UNKNOWN_TO: Record<string, string[]> = {
   "orders.status.update": ["orders.zakaz.status"],
   "reports.otchety.create": ["reports.konstruktor.create"],
   "reports.otchety.update": ["reports.konstruktor.update"],
+  "clients.vizity.update": [
+    "clients.vizity_agent.update",
+    "clients.vizity_dni.update",
+    "clients.vizity_ekspeditor.update",
+    "clients.vizity_sklad.update",
+    "clients.vizity_kassa.update"
+  ],
   "clients.oborudovanie.status": ["clients.oborudovanie.create", "clients.oborudovanie.delete"],
   "clients.oborudovanie.transfer": ["clients.oborudovanie.create", "clients.oborudovanie.delete"],
   "staff.agent.status": ["staff.agent.activate", "staff.agent.deactivate"],

@@ -43,6 +43,7 @@ export type UpdateClientInput = {
   cash_desk_id?: number | null;
   agent_id?: number | null;
   agent_assignments?: AgentAssignmentPatch[];
+  agent_assignments_merge?: boolean;
   contact_persons?: ContactPersonSlot[];
   is_active?: boolean;
   price_type?: string | null;

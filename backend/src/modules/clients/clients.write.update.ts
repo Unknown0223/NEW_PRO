@@ -328,7 +328,9 @@ export async function updateClientFields(
       await tx.client.update({ where: { id }, data });
     }
     if (hasAssignments) {
-      await replaceClientAgentAssignments(tx, tenantId, id, input.agent_assignments!);
+      await replaceClientAgentAssignments(tx, tenantId, id, input.agent_assignments!, {
+        merge: input.agent_assignments_merge === true
+      });
     } else if (!skipLegacyAgentFields && (input.agent_id !== undefined || input.visit_date !== undefined)) {
       await syncAssignmentSlotOneWithClientRow(tx, tenantId, id);
     }

@@ -23,7 +23,11 @@ describe("Клиенты — Доступ katalogi", () => {
     for (const k of [
       "clients.karta.view",
       "clients.vizity.view",
-      "clients.vizity.update",
+      "clients.vizity_agent.update",
+      "clients.vizity_dni.update",
+      "clients.vizity_ekspeditor.update",
+      "clients.vizity_sklad.update",
+      "clients.vizity_kassa.update",
       "clients.obedinenie.history",
       "clients.oborudovanie.create",
       "clients.oborudovanie.delete",
@@ -39,6 +43,21 @@ describe("Клиенты — Доступ katalogi", () => {
       expect(keys.has(k), k).toBe(true);
     }
     expect(keys.has("clients.oborudovanie.update")).toBe(false);
+    expect(keys.has("clients.vizity.update")).toBe(false);
+  });
+
+  it("«Назначение визитов на карте» — ko'rish + 5 ta alohida tugma", () => {
+    const clients = buildAccessOperationsTree().find((m) => m.sections.some((s) => s.id.startsWith("clients.")));
+    const vp = clients?.sections.filter((s) => s.label === "Назначение визитов на карте") ?? [];
+    expect(vp).toHaveLength(1);
+    expect(vp[0]!.operations.map((o) => o.label)).toEqual([
+      "Просмотр карты назначения визитов",
+      "Привязать агента к клиентам на карте",
+      "Назначить дни визитов на карте",
+      "Назначить экспедитора на карте",
+      "Назначить склад на карте",
+      "Назначить кассу на карте"
+    ]);
   });
 
   it("daraxtda «Групповая обработка» bo'limi 11 ta operatsiya bilan", () => {
@@ -69,10 +88,30 @@ describe("missingClientBulkPermissions", () => {
     ]);
   });
 
-  it("vizity.update agent/zona/ombor/kassani o'zgartira oladi, viloyatni emas", () => {
-    const has = hasOf("clients.vizity.update");
-    expect(missingClientBulkPermissions([{ agent_id: 1, zone: "Z", warehouse_id: 2, cash_desk_id: 3 }], has)).toEqual([]);
-    expect(missingClientBulkPermissions([{ region: "R" }], has)).toEqual(["clients.gr_territoriya.update"]);
+  it("xarita: har bir tugma faqat o'z maydonini ochadi, viloyatni emas", () => {
+    const sklad = hasOf("clients.vizity_sklad.update");
+    expect(missingClientBulkPermissions([{ warehouse_id: 2, zone: "Z" }], sklad)).toEqual([]);
+    expect(missingClientBulkPermissions([{ cash_desk_id: 3 }], sklad)).toEqual(["clients.gr_sklad_kassa.update"]);
+    expect(missingClientBulkPermissions([{ region: "R" }], sklad)).toEqual(["clients.gr_territoriya.update"]);
+    expect(missingClientBulkPermissions([{ cash_desk_id: 3 }], hasOf("clients.vizity_kassa.update"))).toEqual([]);
+  });
+
+  it("xarita merge: slot maydonlari agent / kunlar / ekspeditor kalitlariga bo'linadi", () => {
+    const merge = (slot: Record<string, unknown>) => [{ agent_assignments: [{ slot: 1, ...slot }], agent_assignments_merge: true }];
+    const agent = hasOf("clients.vizity_agent.update");
+    expect(missingClientBulkPermissions(merge({ agent_id: 5 }), agent)).toEqual([]);
+    expect(missingClientBulkPermissions(merge({ visit_weekdays: [1] }), agent)).toEqual(["clients.vizity_dni.update"]);
+    expect(missingClientBulkPermissions(merge({ expeditor_user_id: 7 }), agent)).toEqual(["clients.vizity_ekspeditor.update"]);
+    expect(missingClientBulkPermissions(merge({ visit_weekdays: [2] }), hasOf("clients.vizity_dni.update"))).toEqual([]);
+  });
+
+  it("merge'siz agent_assignments (to'liq almashtirish) — komanda yoki uchala kalit", () => {
+    const full = [{ agent_assignments: [{ slot: 1, agent_id: 5 }] }];
+    expect(missingClientBulkPermissions(full, hasOf("clients.vizity_agent.update"))).toEqual([
+      "clients.vizity_dni.update",
+      "clients.vizity_ekspeditor.update"
+    ]);
+    expect(missingClientBulkPermissions(full, hasOf("clients.gr_komanda.update"))).toEqual([]);
   });
 
   it("is_active: true → activate, false → deactivate", () => {

@@ -123,6 +123,14 @@ type PendingState = {
 };
 type AssignKind = "agent" | "days" | "expeditor" | "warehouse" | "cashDesk";
 
+const ASSIGN_PERMISSION: Record<AssignKind, string> = {
+  agent: "clients.vizity_agent.update",
+  days: "clients.vizity_dni.update",
+  expeditor: "clients.vizity_ekspeditor.update",
+  warehouse: "clients.vizity_sklad.update",
+  cashDesk: "clients.vizity_kassa.update"
+};
+
 function zoneBoundaryForClient(c: ClientRow, boundaries: GeoBoundary[]): GeoBoundary | null {
   const lat = c.latitude != null ? parseFloat(c.latitude) : NaN;
   const lng = c.longitude != null ? parseFloat(c.longitude) : NaN;
@@ -169,7 +177,15 @@ export function ClientVisitPlannerWorkspace() {
   const authHydrated = useAuthStoreHydrated();
   const qc = useQueryClient();
   const bulkPatchMut = useClientBulkPatch(tenantSlug);
-  const canAssign = usePermissions().has("clients.vizity.update");
+  const perms = usePermissions();
+  const allowed = useMemo(
+    () =>
+      Object.fromEntries(
+        (Object.keys(ASSIGN_PERMISSION) as AssignKind[]).map((k) => [k, perms.has(ASSIGN_PERMISSION[k])])
+      ) as Record<AssignKind, boolean>,
+    [perms]
+  );
+  const canAssign = Object.values(allowed).some(Boolean);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -432,6 +448,7 @@ export function ClientVisitPlannerWorkspace() {
 
   const openAssign = useCallback(
     (kind: AssignKind) => {
+      if (!allowed[kind]) return;
       if (selectedIds.size === 0) {
         setFeedback("Сначала отметьте клиентов.");
         return;
@@ -445,7 +462,7 @@ export function ClientVisitPlannerWorkspace() {
       }
       setAssignKind(kind);
     },
-    [selectedIds, clientById, zoneBoundaries, pending.warehouseId, pending.cashDeskId]
+    [allowed, selectedIds, clientById, zoneBoundaries, pending.warehouseId, pending.cashDeskId]
   );
 
   const applyPending = useCallback(async () => {
@@ -462,14 +479,13 @@ export function ClientVisitPlannerWorkspace() {
     }
     const slot1: Record<string, unknown> = { slot: 1 };
     const patch: Record<string, unknown> = {};
-    if (pending.agentId) {
-      const id = parseInt(pending.agentId, 10);
-      patch.agent_id = id;
-      slot1.agent_id = id;
-    }
+    if (pending.agentId) slot1.agent_id = parseInt(pending.agentId, 10);
     if (pending.expeditorId) slot1.expeditor_user_id = parseInt(pending.expeditorId, 10);
     if (pending.weekdays) slot1.visit_weekdays = pending.weekdays;
-    if (Object.keys(slot1).length > 1) patch.agent_assignments = [slot1];
+    if (Object.keys(slot1).length > 1) {
+      patch.agent_assignments = [slot1];
+      patch.agent_assignments_merge = true;
+    }
     if (pending.warehouseId) patch.warehouse_id = parseInt(pending.warehouseId, 10);
     if (pending.cashDeskId) patch.cash_desk_id = parseInt(pending.cashDeskId, 10);
 
@@ -919,38 +935,49 @@ export function ClientVisitPlannerWorkspace() {
           </div>
 
           <div className="vp-assign-grid">
-            <button className="vp-assign" onClick={() => openAssign("agent")}>
-              <small>Привязать агента</small>
-              <b>{pending.agentId ? agentLabel(parseInt(pending.agentId, 10)) : "Не выбрано"}</b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("days")}>
-              <small>Дни визитов</small>
-              <b>{pending.weekdays?.length ? pending.weekdays.map(weekdayName).join(", ") : "Не выбрано"}</b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("expeditor")}>
-              <small>Экспедитор</small>
-              <b>
-                {pending.expeditorId
-                  ? (expeditorOptions.find((o) => o.value === pending.expeditorId)?.label ?? "—")
-                  : "Не выбрано"}
-              </b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("warehouse")}>
-              <small>Склад</small>
-              <b>
-                {pending.warehouseId
-                  ? (warehouseOptions.find((o) => o.value === pending.warehouseId)?.label ?? "—")
-                  : "Не выбрано"}
-              </b>
-            </button>
-            <button className="vp-assign" onClick={() => openAssign("cashDesk")}>
-              <small>Касса</small>
-              <b>
-                {pending.cashDeskId
-                  ? (cashDeskOptions.find((o) => o.value === pending.cashDeskId)?.label ?? "—")
-                  : "Не выбрано"}
-              </b>
-            </button>
+            {allowed.agent ? (
+              <button className="vp-assign" onClick={() => openAssign("agent")}>
+                <small>Привязать агента</small>
+                <b>{pending.agentId ? agentLabel(parseInt(pending.agentId, 10)) : "Не выбрано"}</b>
+              </button>
+            ) : null}
+            {allowed.days ? (
+              <button className="vp-assign" onClick={() => openAssign("days")}>
+                <small>Дни визитов</small>
+                <b>{pending.weekdays?.length ? pending.weekdays.map(weekdayName).join(", ") : "Не выбрано"}</b>
+              </button>
+            ) : null}
+            {allowed.expeditor ? (
+              <button className="vp-assign" onClick={() => openAssign("expeditor")}>
+                <small>Экспедитор</small>
+                <b>
+                  {pending.expeditorId
+                    ? (expeditorOptions.find((o) => o.value === pending.expeditorId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {allowed.warehouse ? (
+              <button className="vp-assign" onClick={() => openAssign("warehouse")}>
+                <small>Склад</small>
+                <b>
+                  {pending.warehouseId
+                    ? (warehouseOptions.find((o) => o.value === pending.warehouseId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {allowed.cashDesk ? (
+              <button className="vp-assign" onClick={() => openAssign("cashDesk")}>
+                <small>Касса</small>
+                <b>
+                  {pending.cashDeskId
+                    ? (cashDeskOptions.find((o) => o.value === pending.cashDeskId)?.label ?? "—")
+                    : "Не выбрано"}
+                </b>
+              </button>
+            ) : null}
+            {!canAssign ? <small>Нет доступа к назначению — только просмотр.</small> : null}
           </div>
 
           <div className="vp-sheet-actions">

@@ -5,7 +5,7 @@ import {
   parseVisitWeekdaysJson
 } from "./clients.types";
 import { MAX_AGENT_ASSIGNMENT_SLOTS } from "./clients.helpers";
-
+import { mergeAgentAssignmentPatches } from "./clients.agent-assignments.merge";
 
 function visitWeekdaysToPrismaJson(days: number[]): Prisma.InputJsonValue {
   const clean = parseVisitWeekdaysJson(days);
@@ -95,6 +95,8 @@ type ReplaceClientAgentAssignmentsOptions = {
    * false/undefined (UI): qarz bo‘lsa `ASSIGNMENT_PERSON_HAS_DEBT` throw.
    */
   softPreserveDebtLockedStaff?: boolean;
+  /** Faqat yuborilgan slot maydonlari o'zgaradi (`mergeAgentAssignmentPatches`). */
+  merge?: boolean;
 };
 
 export type ReplaceAssignmentsResult = {
@@ -110,15 +112,6 @@ export async function replaceClientAgentAssignments(
 ): Promise<ReplaceAssignmentsResult> {
   const skipStaffDbValidation = options?.skipStaffDbValidation === true;
   const softDebt = options?.softPreserveDebtLockedStaff === true;
-  const bySlot = new Map<number, AgentAssignmentPatch>();
-  for (const s of raw) {
-    const slot = Math.floor(Number(s.slot));
-    if (slot < 1 || slot > MAX_AGENT_ASSIGNMENT_SLOTS) {
-      throw new Error("VALIDATION");
-    }
-    bySlot.set(slot, s);
-  }
-
   const existingRows = await tx.clientAgentAssignment.findMany({
     where: { client_id: clientId },
     select: {
@@ -136,6 +129,15 @@ export async function replaceClientAgentAssignments(
     }
   });
   const existingBySlot = new Map(existingRows.map((row) => [row.slot, row]));
+  const merge = options?.merge === true;
+  const bySlot = new Map<number, AgentAssignmentPatch>();
+  for (const s of merge ? mergeAgentAssignmentPatches(existingRows, raw) : raw) {
+    const slot = Math.floor(Number(s.slot));
+    if (slot < 1 || slot > MAX_AGENT_ASSIGNMENT_SLOTS) {
+      throw new Error("VALIDATION");
+    }
+    bySlot.set(slot, s);
+  }
   const prevPersonBySlot = new Map(
     existingRows.map((r) => [
       r.slot,
@@ -165,7 +167,8 @@ export async function replaceClientAgentAssignments(
       if (!Number.isFinite(uid) || uid < 1) {
         throw new Error("VALIDATION");
       }
-      if (skipStaffDbValidation) {
+      const keptAgent = merge && existingBySlot.get(slot)?.agent_id === uid;
+      if (skipStaffDbValidation || keptAgent) {
         agent_id = uid;
       } else {
         const u = await tx.user.findFirst({
@@ -177,8 +180,10 @@ export async function replaceClientAgentAssignments(
         agent_id = uid;
       }
       /** Import ham UI: agent faol рабочее местоda bo‘lishi shart */
-      const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
-      await assertAgentCanTakeNewWork(tenantId, agent_id);
+      if (!keptAgent) {
+        const { assertAgentCanTakeNewWork } = await import("../work-slots/work-slots.agent-gate");
+        await assertAgentCanTakeNewWork(tenantId, agent_id);
+      }
     }
 
     let visit_date: Date | null = null;
@@ -198,7 +203,8 @@ export async function replaceClientAgentAssignments(
       if (!Number.isFinite(eid) || eid < 1) {
         throw new Error("VALIDATION");
       }
-      if (skipStaffDbValidation) {
+      const keptExpeditor = merge && existingBySlot.get(slot)?.expeditor_user_id === eid;
+      if (skipStaffDbValidation || keptExpeditor) {
         expeditor_user_id = eid;
       } else {
         const eu = await tx.user.findFirst({
@@ -209,8 +215,10 @@ export async function replaceClientAgentAssignments(
         }
         expeditor_user_id = eid;
       }
-      const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
-      await assertExpeditorCanTakeNewWork(tenantId, expeditor_user_id);
+      if (!keptExpeditor) {
+        const { assertExpeditorCanTakeNewWork } = await import("../work-slots/work-slots.expeditor-gate");
+        await assertExpeditorCanTakeNewWork(tenantId, expeditor_user_id);
+      }
     }
 
     const weekdaysJson = visitWeekdaysToPrismaJson(s.visit_weekdays ?? []);
