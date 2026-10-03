@@ -4,18 +4,28 @@ import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { ExcelFileDropZone } from "@/components/ui/excel-file-drop-zone";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { currentYm, fmtDateTime, money, payrollApi, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
-import { cellNumber, cellText, readXlsxRows } from "@/lib/payroll/payroll-xlsx";
+import { currentYm, fmtDateTime, money, payrollApi, STATUS_TONE, ymLabel, ymQuery, ymToInput, type Ym } from "@/lib/payroll/payroll-api";
+import { cellNumber, cellText, downloadXlsx, readXlsxRows } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
-import { useNotice } from "@/components/payroll/payroll-ui";
-import { PayrollMonthNav } from "@/components/payroll/kit/payroll-kit-layout";
-import { PayrollEmptyRow, PayrollFiltersSection, PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
+import { TonePill, useNotice } from "@/components/payroll/payroll-ui";
+import { PayrollFilterCard, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
+import {
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
+  PayrollEmptyRow,
+  PayrollPagination,
+  PayrollTableCard,
+  PayrollTableToolbar,
+  usePagedRows
+} from "@/components/payroll/kit/payroll-kit-table";
 
 type Cell = { column: string; excel: number; system: number | null; diff: number; reasons: string[] };
 type Row = { code: string; fio: string | null; user_id: number | null; record_id: number | null; cells: Cell[]; diff_total: number };
@@ -25,13 +35,18 @@ type Report = {
   summary: { employees: number; matched: number; with_diff: number; not_found: number };
 };
 type InputRow = { code: string; name: string | null; columns: Record<string, number> };
+type Tab = "all" | "diff" | "match" | "missing";
 
 const CODE_COLS = ["код", "код сотрудника", "kod", "code", "логин", "login"];
 const NAME_COLS = ["фио", "сотрудник", "ф.и.о.", "fio", "имя"];
 const SKIP_COLS = ["№", "n", "#", "роль", "филиал", "должность", "branch", "role"];
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5";
+const ROW_STATE: Record<Exclude<Tab, "all">, { label: string; cls: string; dot: string }> = {
+  diff: { label: "Расхождение", ...STATUS_TONE.amber },
+  match: { label: "Совпадает", ...STATUS_TONE.emerald },
+  missing: { label: "Не найден", ...STATUS_TONE.rose }
+};
+const stateOf = (r: Row): Exclude<Tab, "all"> => (r.user_id == null ? "missing" : r.diff_total >= 0.01 ? "diff" : "match");
 
 function toInput(xs: Array<Record<string, unknown>>): InputRow[] | string {
   const out: InputRow[] = [];
@@ -62,7 +77,7 @@ export function PayrollCompareWorkspace() {
   const canSign = perms.isAdmin || perms.hasAny("staff.zarplaty.import", "staff.zarplaty.approve");
   const notice = useNotice();
   const [ym, setYm] = useState<Ym>(currentYm());
-  const [onlyDiff, setOnlyDiff] = useState(true);
+  const [tab, setTab] = useState<Tab>("diff");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Set<string>>(new Set());
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.compare", defaultColumnOrder: ["code"], defaultPageSize: 20 });
@@ -91,13 +106,13 @@ export function PayrollCompareWorkspace() {
   });
 
   const r = reportQ.data;
+  const all = useMemo(() => [...(r?.rows ?? [])].sort((a, b) => b.diff_total - a.diff_total), [r]);
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (r?.rows ?? [])
-      .filter((x) => (!onlyDiff || x.diff_total >= 0.01) && (!s || `${x.code} ${x.fio ?? ""}`.toLowerCase().includes(s)))
-      .sort((a, b) => b.diff_total - a.diff_total);
-  }, [r, onlyDiff, q]);
-  const paged = usePagedRows(rows, prefs.pageSize, `${ym.year}-${ym.month}|${onlyDiff}|${q}`);
+    return all.filter((x) => (tab === "all" || stateOf(x) === tab) && (!s || `${x.code} ${x.fio ?? ""}`.toLowerCase().includes(s)));
+  }, [all, tab, q]);
+  const paged = usePagedRows(rows, prefs.pageSize, `${ym.year}-${ym.month}|${tab}|${q}`);
+  const countOf = (t: Exclude<Tab, "all">) => all.filter((x) => stateOf(x) === t).length;
   const toggle = (code: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -105,6 +120,19 @@ export function PayrollCompareWorkspace() {
       else next.add(code);
       return next;
     });
+
+  const exportXlsx = async () => {
+    try {
+      await downloadXlsx(
+        `sverka-${ymToInput(ym)}.xlsx`,
+        ["Код", "ФИО", "Колонка", "Excel", "Система", "Разница", "Причина"],
+        rows.flatMap((x) => x.cells.map((c) => [x.code, x.fio ?? "", c.column, c.excel, c.system ?? "", c.diff, c.reasons.join(" · ")])),
+        ymLabel(ym)
+      );
+    } catch (e) {
+      notice.fail(e);
+    }
+  };
 
   const signAction = r?.batch ? (
     r.batch.signed_off_at ? (
@@ -126,36 +154,25 @@ export function PayrollCompareWorkspace() {
 
   return (
     <PageShell className="payroll-template">
-      <PageHeader
-        title="Сверка с Excel (пробный месяц)"
-        description="Загрузите ведомость, посчитанную по-старому. Система покажет расхождения по каждой колонке и причину: табель, формула, факт/возвраты, план, корректировки, ручные суммы."
+      <PayrollRelatedBar current="compare" />
+      <PayrollFilterCard
+        title="Сверка с Excel"
+        description="Пробный месяц: загрузите ведомость, посчитанную по-старому. Система покажет расхождения по каждой колонке и причину: табель, формула, факт/возвраты, план, корректировки, ручные суммы."
         actions={signAction}
+        month={{ value: ym, onChange: (v) => { setYm(v); setOpen(new Set()); } }}
       />
-      <PayrollFiltersSection>
-        <PayrollMonthNav variant="filter" value={ym} onChange={setYm} />
-        <label className="flex h-10 items-center gap-2 text-sm">
-          <input type="checkbox" className="accent-primary" checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} />
-          Только расхождения
-        </label>
-      </PayrollFiltersSection>
       {notice.element}
       {canImport ? <ExcelFileDropZone onFile={(f) => upload.mutate(f)} disabled={upload.isPending} /> : null}
-
-      {r?.batch ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "Сотрудников", value: r.summary.employees, cls: "text-foreground" },
-            { label: "Совпало", value: r.summary.matched, cls: "text-emerald-700" },
-            { label: "С расхождением", value: r.summary.with_diff, cls: "text-amber-700" },
-            { label: "Не найдено", value: r.summary.not_found, cls: "text-red-700" }
-          ].map((x) => (
-            <div key={x.label} className="rounded-lg border border-border bg-card p-4 shadow-sm">
-              <div className="text-xs font-medium text-muted-foreground">{x.label}</div>
-              <div className={cn("mt-1 text-2xl font-semibold tabular-nums", x.cls)}>{x.value}</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <PayrollSegmentedTabs<Tab>
+        tabs={[
+          { id: "all", label: "Все", count: all.length },
+          { id: "diff", label: "С расхождением", count: countOf("diff") },
+          { id: "match", label: "Совпадает", count: countOf("match") },
+          { id: "missing", label: "Не найден", count: countOf("missing") }
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       <PayrollTableCard>
         <PayrollTableToolbar
@@ -166,10 +183,13 @@ export function PayrollCompareWorkspace() {
           searchPlaceholder="Поиск: код или ФИО"
           onRefresh={() => void reportQ.refetch()}
           refreshing={reportQ.isFetching}
-        />
+          onExport={r?.batch ? () => void exportXlsx() : undefined}
+        >
+          {r?.batch ? <span className="text-sm text-muted-foreground">Загружено {fmtDateTime(r.batch.created_at)}</span> : null}
+        </PayrollTableToolbar>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="app-table-thead">
+          <table className={PAYROLL_TABLE}>
+            <thead className={PAYROLL_THEAD}>
               <tr>
                 <th className={cn(TH, "w-10")} />
                 <th className={TH}>Код</th>
@@ -181,24 +201,22 @@ export function PayrollCompareWorkspace() {
             </thead>
             <tbody>
               {reportQ.isLoading || rows.length === 0 ? (
-                <PayrollEmptyRow colSpan={6} loading={reportQ.isLoading} text={r?.batch ? "Расхождений нет" : `За ${ymLabel(ym)} сверка ещё не загружалась`} />
+                <PayrollEmptyRow colSpan={6} loading={reportQ.isLoading} text={r?.batch ? "Нет строк" : `За ${ymLabel(ym)} сверка ещё не загружалась`} />
               ) : null}
               {paged.pageRows.map((row) => {
                 const expanded = open.has(row.code);
                 const diffCells = row.cells.filter((c) => Math.abs(c.diff) >= 0.01).length;
-                const hasDiff = row.diff_total >= 0.01;
+                const state = ROW_STATE[stateOf(row)];
                 return (
                   <Fragment key={row.code}>
-                    <tr className={cn("cursor-pointer border-b border-border/60 hover:bg-muted/40", expanded && "bg-primary/5")} onClick={() => toggle(row.code)}>
-                      <td className={TD}>{expanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}</td>
+                    <tr className={cn(PAYROLL_TR, "cursor-pointer", expanded && "bg-primary/5")} onClick={() => toggle(row.code)}>
+                      <td className={TD}>{expanded ? <ChevronDown className="size-4 text-primary" /> : <ChevronRight className="size-4 text-muted-foreground" />}</td>
                       <td className={cn(TD, "text-muted-foreground")}>{row.code}</td>
                       <td className={cn(TD, "font-medium text-foreground")}>{row.fio ?? "—"}</td>
                       <td className={cn(TD, "text-right tabular-nums")}>{diffCells}</td>
-                      <td className={cn(TD, "text-right font-semibold tabular-nums", hasDiff ? "text-amber-700" : "text-emerald-700")}>{money(row.diff_total, 2)}</td>
+                      <td className={cn(TD, "text-right font-semibold tabular-nums", row.diff_total >= 0.01 ? "text-amber-700" : "text-emerald-700")}>{money(row.diff_total, 2)}</td>
                       <td className={TD}>
-                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", hasDiff ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800")}>
-                          {row.user_id == null ? "Не найден" : hasDiff ? "Расхождение" : "Совпадает"}
-                        </span>
+                        <TonePill cls={state.cls} dot={state.dot}>{state.label}</TonePill>
                       </td>
                     </tr>
                     {expanded ? (
@@ -208,11 +226,11 @@ export function PayrollCompareWorkspace() {
                           <table className="w-full text-xs">
                             <thead className="text-left text-muted-foreground">
                               <tr>
-                                <th className="py-1 pr-3 font-medium">Колонка</th>
-                                <th className="px-3 py-1 text-right font-medium">Excel</th>
-                                <th className="px-3 py-1 text-right font-medium">Система</th>
-                                <th className="px-3 py-1 text-right font-medium">Разница</th>
-                                <th className="px-3 py-1 font-medium">Причина</th>
+                                <th className="py-1.5 pr-3 font-semibold">Колонка</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">Excel</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">Система</th>
+                                <th className="px-3 py-1.5 text-right font-semibold">Разница</th>
+                                <th className="px-3 py-1.5 font-semibold">Причина</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -220,11 +238,11 @@ export function PayrollCompareWorkspace() {
                                 const bad = Math.abs(c.diff) >= 0.01;
                                 return (
                                   <tr key={c.column} className={cn("border-t border-border/50", bad && "bg-amber-50/70 dark:bg-amber-950/20")}>
-                                    <td className="py-1 pr-3">{c.column}</td>
-                                    <td className="px-3 py-1 text-right tabular-nums">{money(c.excel, 2)}</td>
-                                    <td className="px-3 py-1 text-right tabular-nums">{money(c.system, 2)}</td>
-                                    <td className={cn("px-3 py-1 text-right tabular-nums", bad ? "font-semibold text-amber-800" : "text-muted-foreground")}>{money(c.diff, 2)}</td>
-                                    <td className="px-3 py-1 text-muted-foreground">{c.reasons.join(" · ")}</td>
+                                    <td className="py-1.5 pr-3">{c.column}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{money(c.excel, 2)}</td>
+                                    <td className="px-3 py-1.5 text-right tabular-nums">{money(c.system, 2)}</td>
+                                    <td className={cn("px-3 py-1.5 text-right tabular-nums", bad ? "font-semibold text-amber-800" : "text-muted-foreground")}>{money(c.diff, 2)}</td>
+                                    <td className="px-3 py-1.5 text-muted-foreground">{c.reasons.join(" · ")}</td>
                                   </tr>
                                 );
                               })}

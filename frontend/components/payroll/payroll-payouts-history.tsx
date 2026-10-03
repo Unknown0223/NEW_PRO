@@ -3,13 +3,25 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { useTenant } from "@/lib/api-client";
 import { usePermissions } from "@/lib/use-permissions";
-import { fmtDateTime, money, payrollApi, ymLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
+import { fmtDateTime, money, PAYOUT_KIND, payrollApi, STATUS_TONE, ymLabel, ymQuery, ymToInput, type Ym } from "@/lib/payroll/payroll-api";
+import { downloadXlsx } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
-import { PayrollEmptyRow, PayrollPagination, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
+import { StatusBadge, TonePill } from "@/components/payroll/payroll-ui";
+import {
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
+  PayrollEmptyRow,
+  PayrollIconAction,
+  PayrollPagination,
+  PayrollTableToolbar,
+  usePagedRows
+} from "@/components/payroll/kit/payroll-kit-table";
 
 type Payout = {
   id: number;
@@ -30,8 +42,7 @@ type Payout = {
   expense_id: number | null;
 };
 
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5 align-top";
+const REVERSED = { label: "Сторно", ...STATUS_TONE.rose };
 
 /** Payout history table body (toolbar + table + footer) for use inside a table card. */
 export function PayrollPayoutsHistory({ ym, kind, onNotice }: { ym: Ym; kind: string; onNotice: { ok: (t: string) => void; fail: (e: unknown) => void } }) {
@@ -65,6 +76,32 @@ export function PayrollPayoutsHistory({ ym, kind, onNotice }: { ym: Ym; kind: st
     onError: onNotice.fail
   });
 
+  const exportXlsx = async () => {
+    try {
+      await downloadXlsx(
+        `vyplaty-${ymToInput(ym)}.xlsx`,
+        ["Дата", "Сотрудник", "Месяц", "Тип", "Сумма", "Валюта", "Сумма (UZS)", "Касса", "Способ", "Кассир", "Расход", "Статус"],
+        rows.map((r) => [
+          fmtDateTime(r.paid_at),
+          r.fio,
+          ymLabel(r),
+          PAYOUT_KIND[r.kind]?.label ?? r.kind,
+          r.amount,
+          r.currency,
+          r.amount_uzs,
+          r.cash_desk_name ?? "",
+          r.payment_method_ref ?? "наличные",
+          r.paid_by ?? "",
+          r.expense_id ?? "",
+          r.status === "reversed" ? `Сторно: ${r.reverse_reason ?? ""}` : "Выплачено"
+        ]),
+        ymLabel(ym)
+      );
+    } catch (e) {
+      onNotice.fail(e);
+    }
+  };
+
   return (
     <>
       <PayrollTableToolbar
@@ -75,14 +112,15 @@ export function PayrollPayoutsHistory({ ym, kind, onNotice }: { ym: Ym; kind: st
         searchPlaceholder="Поиск: сотрудник, касса, кассир"
         onRefresh={() => void q.refetch()}
         refreshing={q.isFetching}
+        onExport={() => void exportXlsx()}
       >
         <span className="text-sm text-muted-foreground">
           {ymLabel(ym)}: <b className="text-foreground">{money(total)}</b>
         </span>
       </PayrollTableToolbar>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="app-table-thead">
+        <table className={PAYROLL_TABLE}>
+          <thead className={PAYROLL_THEAD}>
             <tr>
               <th className={TH}>Дата</th>
               <th className={TH}>Сотрудник</th>
@@ -96,46 +134,53 @@ export function PayrollPayoutsHistory({ ym, kind, onNotice }: { ym: Ym; kind: st
           </thead>
           <tbody>
             {q.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={8} loading={q.isLoading} /> : null}
-            {paged.pageRows.map((r) => (
-              <tr key={r.id} className={cn("border-b border-border/60 hover:bg-muted/40", r.status === "reversed" && "opacity-60")}>
-                <td className={cn(TD, "text-xs")}>{fmtDateTime(r.paid_at)}</td>
-                <td className={TD}>
-                  <div className="font-medium text-foreground">{r.fio}</div>
-                  <div className="text-[11px] text-muted-foreground">{ymLabel(r)}</div>
-                </td>
-                <td className={TD}>{r.kind === "advance" ? "Аванс" : "Зарплата"}</td>
-                <td className={cn(TD, "text-right font-semibold tabular-nums", r.status === "reversed" && "line-through")}>
-                  {money(r.amount, 2)} {r.currency}
-                  {r.rate !== 1 ? <div className="text-[11px] font-normal text-muted-foreground">= {money(r.amount_uzs)} · курс {r.rate}</div> : null}
-                </td>
-                <td className={cn(TD, "text-xs")}>
-                  {r.cash_desk_name ?? "—"}
-                  <div className="text-muted-foreground">{r.payment_method_ref ?? "наличные"}</div>
-                </td>
-                <td className={cn(TD, "text-xs")}>{r.paid_by ?? "—"}</td>
-                <td className={cn(TD, "text-xs")}>
-                  {r.expense_id ? `#${r.expense_id}` : "—"}
-                  {r.status === "reversed" ? <div className="text-red-700">Сторно: {r.reverse_reason}</div> : null}
-                </td>
-                <td className={cn(TD, "text-center")}>
-                  {canReverse && r.status !== "reversed" ? (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      aria-label="Сторно"
-                      title="Сторно выплаты"
-                      onClick={() => {
-                        const reason = window.prompt(`Сторно выплаты ${r.fio} на ${money(r.amount)}. Причина:`);
-                        if (reason?.trim()) reverse.mutate({ id: r.id, reason: reason.trim() });
-                      }}
-                    >
-                      <Undo2 className="size-4" />
-                    </Button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
+            {paged.pageRows.map((r) => {
+              const reversed = r.status === "reversed";
+              return (
+                <tr key={r.id} className={cn(PAYROLL_TR, reversed && "opacity-60")}>
+                  <td className={cn(TD, "text-xs")}>{fmtDateTime(r.paid_at)}</td>
+                  <td className={TD}>
+                    <div className="font-medium text-foreground">{r.fio}</div>
+                    <div className="text-[11px] text-muted-foreground">{ymLabel(r)}</div>
+                  </td>
+                  <td className={TD}>
+                    <StatusBadge map={PAYOUT_KIND} status={r.kind} />
+                  </td>
+                  <td className={cn(TD, "text-right font-semibold tabular-nums", reversed && "line-through")}>
+                    {money(r.amount, 2)} {r.currency}
+                    {r.rate !== 1 ? <div className="text-[11px] font-normal text-muted-foreground">= {money(r.amount_uzs)} · курс {r.rate}</div> : null}
+                  </td>
+                  <td className={cn(TD, "text-xs")}>
+                    {r.cash_desk_name ?? "—"}
+                    <div className="text-muted-foreground">{r.payment_method_ref ?? "наличные"}</div>
+                  </td>
+                  <td className={cn(TD, "text-xs")}>{r.paid_by ?? "—"}</td>
+                  <td className={cn(TD, "text-xs")}>
+                    {r.expense_id ? `#${r.expense_id}` : "—"}
+                    {reversed ? (
+                      <div className="mt-1">
+                        <TonePill cls={REVERSED.cls} dot={REVERSED.dot}>{REVERSED.label}</TonePill>
+                        {r.reverse_reason ? <div className="mt-0.5 text-red-700">{r.reverse_reason}</div> : null}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className={cn(TD, "text-center")}>
+                    {canReverse && !reversed ? (
+                      <PayrollIconAction
+                        label="Сторно выплаты"
+                        tone="danger"
+                        onClick={() => {
+                          const reason = window.prompt(`Сторно выплаты ${r.fio} на ${money(r.amount)}. Причина:`);
+                          if (reason?.trim()) reverse.mutate({ id: r.id, reason: reason.trim() });
+                        }}
+                      >
+                        <Undo2 className="size-3.5" />
+                      </PayrollIconAction>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

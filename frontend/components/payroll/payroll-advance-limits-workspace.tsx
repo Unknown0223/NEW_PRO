@@ -1,41 +1,44 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
-import { filterPanelSelectClassName } from "@/components/ui/filter-select";
-import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { currentYm, fmtDateTime, money, payrollApi, roleLabel, ymQuery } from "@/lib/payroll/payroll-api";
+import { fmtDateTime, money, payrollApi, STATUS_TONE } from "@/lib/payroll/payroll-api";
+import { downloadXlsx } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
-import { parseAmount, useNotice } from "@/components/payroll/payroll-ui";
+import { TonePill, useNotice } from "@/components/payroll/payroll-ui";
+import { PayrollAdvanceLimitDialog, LIMIT_SCOPE_LABEL, limitWhom, type AdvanceLimit, type LimitScope } from "@/components/payroll/payroll-advance-limit-dialog";
+import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
-  PAYROLL_FILTER_CONTROL,
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
   PayrollEmptyRow,
-  PayrollFilterField,
-  PayrollFiltersSection,
+  PayrollIconAction,
   PayrollPagination,
   PayrollTableCard,
   PayrollTableToolbar,
-  usePagedRows
+  SortTh,
+  usePagedRows,
+  useSortedRows
 } from "@/components/payroll/kit/payroll-kit-table";
 
-type Limit = { id: number; scope: "global" | "role" | "user"; role: string | null; user_id: number | null; user_fio: string | null; max_amount: number; is_exception: boolean; comment: string | null; updated_at: string };
-type Employee = { id: number; fio: string; code: string | null; role: string; branch: string | null };
-type Draft = { scope: "global" | "role" | "user"; role: string; user_id: string; amount: string; comment: string };
+type Tab = "all" | LimitScope;
+type SortKey = "whom" | "amount" | "updated";
 
-const SCOPE_LABEL = { global: "Для всех", role: "По роли", user: "Исключение для сотрудника" };
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5";
-
-const whom = (l: Limit) => (l.scope === "global" ? "Все сотрудники" : l.scope === "role" ? roleLabel(l.role) : l.user_fio ?? `#${l.user_id}`);
+const SCOPE_TONE: Record<LimitScope, (typeof STATUS_TONE)[keyof typeof STATUS_TONE]> = {
+  global: STATUS_TONE.emerald,
+  role: STATUS_TONE.sky,
+  user: STATUS_TONE.amber
+};
+const sortValue = (l: AdvanceLimit, k: SortKey) => (k === "amount" ? l.max_amount : k === "updated" ? l.updated_at : limitWhom(l));
 
 export function PayrollAdvanceLimitsWorkspace() {
   const tenant = useTenant();
@@ -44,132 +47,88 @@ export function PayrollAdvanceLimitsWorkspace() {
   const perms = usePermissions();
   const canEdit = perms.isAdmin || perms.has("staff.avans_limity.update");
   const notice = useNotice();
-  const { confirm, dialog } = useAppConfirm();
-  const [draft, setDraft] = useState<Draft>({ scope: "role", role: "", user_id: "", amount: "", comment: "" });
-  const [empQ, setEmpQ] = useState("");
+  const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
+  const [target, setTarget] = useState<AdvanceLimit | "new" | null>(null);
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.advance-limits", defaultColumnOrder: ["scope"], defaultPageSize: 20 });
 
-  const limitsQ = useQuery({ queryKey: ["payroll-advance-limits", tenant], enabled: Boolean(tenant), queryFn: () => api.get<Limit[]>("/advance-limits") });
-  const employeesQ = useQuery({
-    queryKey: ["payroll-advance-employees", tenant, "limits"],
-    enabled: Boolean(tenant),
-    queryFn: () => api.get<Employee[]>(`/advances/employees?${ymQuery(currentYm())}`)
-  });
-  const employees = useMemo(() => employeesQ.data ?? [], [employeesQ.data]);
-  const roles = useMemo(() => [...new Set(employees.map((e) => e.role))].sort(), [employees]);
-  const filteredEmp = useMemo(() => {
-    const s = empQ.trim().toLowerCase();
-    return employees.filter((e) => !s || `${e.fio} ${e.code ?? ""}`.toLowerCase().includes(s)).slice(0, 200);
-  }, [employees, empQ]);
+  const limitsQ = useQuery({ queryKey: ["payroll-advance-limits", tenant], enabled: Boolean(tenant), queryFn: () => api.get<AdvanceLimit[]>("/advance-limits") });
   const limits = useMemo(() => limitsQ.data ?? [], [limitsQ.data]);
   const global = limits.find((l) => l.scope === "global");
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return limits.filter((l) => !s || `${whom(l)} ${l.comment ?? ""}`.toLowerCase().includes(s));
-  }, [limits, q]);
-  const paged = usePagedRows(rows, prefs.pageSize, q);
+    return limits.filter((l) => (tab === "all" || l.scope === tab) && (!s || `${limitWhom(l)} ${l.comment ?? ""}`.toLowerCase().includes(s)));
+  }, [limits, tab, q]);
+  const { sorted, sort, toggle } = useSortedRows<AdvanceLimit, SortKey>(rows, sortValue);
+  const paged = usePagedRows(sorted, prefs.pageSize, `${tab}|${q}|${sort?.key ?? ""}|${sort?.dir ?? ""}`);
 
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["payroll-advance-limits", tenant] });
-  const save = useMutation({
-    mutationFn: (d: Draft) =>
-      api.send("PUT", "/advance-limits", {
-        scope: d.scope,
-        role: d.scope === "role" ? d.role : null,
-        user_id: d.scope === "user" ? Number(d.user_id) : null,
-        max_amount: parseAmount(d.amount),
-        is_exception: d.scope === "user",
-        comment: d.comment.trim() || null
-      }),
-    onSuccess: () => {
-      notice.ok("Лимит сохранён");
-      setDraft((s) => ({ ...s, amount: "", comment: "", user_id: "" }));
-      refresh();
-    },
-    onError: notice.fail
-  });
-  const remove = useMutation({
-    mutationFn: (id: number) => api.send("DELETE", `/advance-limits/${id}`),
-    onSuccess: () => {
-      notice.ok("Лимит удалён");
-      refresh();
-    },
-    onError: notice.fail
-  });
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["payroll-advance-limits", tenant] });
+    void qc.invalidateQueries({ queryKey: ["payroll-advance-employees", tenant] });
+  };
 
-  const validDraft =
-    draft.amount.trim() !== "" &&
-    Number.isFinite(parseAmount(draft.amount)) &&
-    (draft.scope !== "role" || draft.role) &&
-    (draft.scope !== "user" || draft.user_id);
+  const exportXlsx = async () => {
+    try {
+      await downloadXlsx(
+        "limity-avansov.xlsx",
+        ["Тип", "Кому", "Лимит", "Комментарий", "Изменён"],
+        sorted.map((l) => [LIMIT_SCOPE_LABEL[l.scope], limitWhom(l), l.max_amount, l.comment ?? "", fmtDateTime(l.updated_at)]),
+        "Лимиты авансов"
+      );
+    } catch (e) {
+      notice.fail(e);
+    }
+  };
 
   return (
     <PageShell className="payroll-template">
-      <PageHeader
+      <PayrollRelatedBar current="limits" />
+      <PayrollPageTitle
         title="Лимиты авансов"
         description="Максимальная сумма авансов на сотрудника за месяц. Приоритет: исключение для сотрудника → лимит роли → общий лимит."
         actions={
-          <span className="rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm">
-            Общий лимит: <b>{global ? money(global.max_amount) : "не задан"}</b>
-          </span>
+          <>
+            <span className="inline-flex h-9 items-center gap-1 rounded-lg border border-[var(--pr-border)] bg-card px-3 text-[13px] shadow-[var(--pr-shadow)]">
+              Общий лимит: <b className="text-primary">{global ? money(global.max_amount) : "не задан"}</b>
+            </span>
+            {canEdit ? (
+              <Button onClick={() => setTarget("new")}>
+                <Plus className="mr-1.5 size-4" /> Добавить
+              </Button>
+            ) : null}
+          </>
         }
       />
-      {canEdit ? (
-        <PayrollFiltersSection>
-          <PayrollFilterField label="Тип">
-            <select className={filterPanelSelectClassName} value={draft.scope} onChange={(e) => setDraft({ ...draft, scope: e.target.value as Draft["scope"] })}>
-              {Object.entries(SCOPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </PayrollFilterField>
-          {draft.scope === "role" ? (
-            <PayrollFilterField label="Роль">
-              <select className={filterPanelSelectClassName} value={draft.role} onChange={(e) => setDraft({ ...draft, role: e.target.value })}>
-                <option value="">— выберите —</option>
-                {roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
-              </select>
-            </PayrollFilterField>
-          ) : null}
-          {draft.scope === "user" ? (
-            <PayrollFilterField label="Сотрудник">
-              <div className="flex gap-1.5">
-                <Input placeholder="Поиск" value={empQ} onChange={(e) => setEmpQ(e.target.value)} className={cn(PAYROLL_FILTER_CONTROL, "w-32")} />
-                <select className={filterPanelSelectClassName} value={draft.user_id} onChange={(e) => setDraft({ ...draft, user_id: e.target.value })}>
-                  <option value="">— выберите —</option>
-                  {filteredEmp.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.fio}
-                      {e.code ? ` (${e.code})` : ""} · {roleLabel(e.role)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </PayrollFilterField>
-          ) : null}
-          <PayrollFilterField label="Лимит в месяц">
-            <GroupedNumberInput value={draft.amount} placeholder="0" onValueChange={(v) => setDraft({ ...draft, amount: v })} className={cn(PAYROLL_FILTER_CONTROL, "w-44")} />
-          </PayrollFilterField>
-          <PayrollFilterField label="Комментарий">
-            <Input value={draft.comment} onChange={(e) => setDraft({ ...draft, comment: e.target.value })} className={cn(PAYROLL_FILTER_CONTROL, "w-56")} />
-          </PayrollFilterField>
-          <Button className="h-10 min-w-[132px] sm:ml-auto" disabled={!validDraft || save.isPending} onClick={() => save.mutate(draft)}>
-            Сохранить
-          </Button>
-        </PayrollFiltersSection>
-      ) : null}
+      <PayrollSegmentedTabs<Tab>
+        tabs={[
+          { id: "all", label: "Все", count: limits.length },
+          ...(Object.keys(LIMIT_SCOPE_LABEL) as LimitScope[]).map((s) => ({ id: s, label: LIMIT_SCOPE_LABEL[s], count: limits.filter((l) => l.scope === s).length }))
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
       {notice.element}
 
       <PayrollTableCard>
-        <PayrollTableToolbar pageSize={prefs.pageSize} onPageSize={prefs.setPageSize} search={q} onSearch={setQ} onRefresh={refresh} refreshing={limitsQ.isFetching} />
+        <PayrollTableToolbar
+          pageSize={prefs.pageSize}
+          onPageSize={prefs.setPageSize}
+          search={q}
+          onSearch={setQ}
+          onRefresh={refresh}
+          refreshing={limitsQ.isFetching}
+          onExport={() => void exportXlsx()}
+        />
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="app-table-thead">
+          <table className={PAYROLL_TABLE}>
+            <thead className={PAYROLL_THEAD}>
               <tr>
                 <th className={TH}>Тип</th>
-                <th className={TH}>Кому</th>
-                <th className={cn(TH, "text-right")}>Лимит</th>
+                <SortTh label="Кому" sortKey="whom" sort={sort} onSort={toggle} className={TH} />
+                <SortTh label="Лимит" sortKey="amount" sort={sort} onSort={toggle} className={cn(TH, "text-right")} />
                 <th className={TH}>Комментарий</th>
-                <th className={TH}>Изменён</th>
-                <th className={cn(TH, "w-20 text-center")}>Действие</th>
+                <SortTh label="Изменён" sortKey="updated" sort={sort} onSort={toggle} className={TH} />
+                <th className={cn(TH, "w-14")} aria-label="Действие" />
               </tr>
             </thead>
             <tbody>
@@ -177,25 +136,19 @@ export function PayrollAdvanceLimitsWorkspace() {
                 <PayrollEmptyRow colSpan={6} loading={limitsQ.isLoading} text="Лимиты не заданы — авансы без ограничения" />
               ) : null}
               {paged.pageRows.map((l) => (
-                <tr key={l.id} className="border-b border-border/60 hover:bg-muted/40">
-                  <td className={TD}>{SCOPE_LABEL[l.scope]}</td>
-                  <td className={cn(TD, "font-medium text-foreground")}>{whom(l)}</td>
+                <tr key={l.id} onClick={() => canEdit && setTarget(l)} className={cn(PAYROLL_TR, canEdit && "cursor-pointer")}>
+                  <td className={TD}>
+                    <TonePill {...SCOPE_TONE[l.scope]}>{LIMIT_SCOPE_LABEL[l.scope]}</TonePill>
+                  </td>
+                  <td className={cn(TD, "font-medium text-foreground")}>{limitWhom(l)}</td>
                   <td className={cn(TD, "text-right font-semibold tabular-nums")}>{money(l.max_amount)}</td>
-                  <td className={cn(TD, "text-muted-foreground")}>{l.comment ?? ""}</td>
+                  <td className={cn(TD, "max-w-80 truncate text-muted-foreground")}>{l.comment || "—"}</td>
                   <td className={cn(TD, "text-xs text-muted-foreground")}>{fmtDateTime(l.updated_at)}</td>
-                  <td className={cn(TD, "text-center")}>
+                  <td className={cn(TD, "text-right")} onClick={(e) => e.stopPropagation()}>
                     {canEdit ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        aria-label="Удалить"
-                        onClick={async () => {
-                          if (await confirm({ title: "Удалить лимит", message: "Лимит будет удалён.", confirmLabel: "Удалить", cancelLabel: "Отмена" })) remove.mutate(l.id);
-                        }}
-                      >
-                        <Trash2 className="size-4 text-red-600" />
-                      </Button>
+                      <PayrollIconAction label={`Изменить: ${limitWhom(l)}`} tone="edit" onClick={() => setTarget(l)}>
+                        <Pencil className="size-3.5" />
+                      </PayrollIconAction>
                     ) : null}
                   </td>
                 </tr>
@@ -205,7 +158,8 @@ export function PayrollAdvanceLimitsWorkspace() {
         </div>
         <PayrollPagination page={paged.page} pageSize={prefs.pageSize} total={paged.total} onPage={paged.setPage} />
       </PayrollTableCard>
-      {dialog}
+
+      <PayrollAdvanceLimitDialog target={target} canEdit={canEdit} onClose={() => setTarget(null)} onSaved={(t) => { notice.ok(t); refresh(); }} />
     </PageShell>
   );
 }

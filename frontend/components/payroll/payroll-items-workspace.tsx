@@ -18,7 +18,15 @@ import { cn } from "@/lib/utils";
 import { Field, NATIVE_SELECT, useNotice } from "@/components/payroll/payroll-ui";
 import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
+  PAYROLL_ICON_BTN,
+  PAYROLL_SECONDARY_BTN,
+  PAYROLL_TABLE,
+  PAYROLL_TD,
+  PAYROLL_TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
   PayrollEmptyRow,
+  PayrollIconAction,
   PayrollPagination,
   PayrollTableCard,
   PayrollTableToolbar,
@@ -55,8 +63,8 @@ const COLUMNS = [
 ];
 type ItemSortKey = "name" | "code" | "type" | "sort";
 const itemSortValue = (r: PayrollItem, k: ItemSortKey) => (k === "sort" ? r.sort_order : k === "code" ? r.code ?? "" : k === "type" ? r.type : r.name);
-const TH = "px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground";
-const TD = "px-3 py-3";
+const TH = PAYROLL_TH;
+const TD = PAYROLL_TD;
 
 export function PayrollItemsWorkspace() {
   const tenant = useTenant();
@@ -152,9 +160,10 @@ export function PayrollItemsWorkspace() {
         }
       />
       <PayrollSegmentedTabs<Status>
+        variant="status"
         tabs={[
-          { id: "active", label: "Активный", dot: "success", count: all.filter((r) => r.is_active).length },
-          { id: "inactive", label: "Не активный", dot: "muted", count: all.filter((r) => !r.is_active).length }
+          { id: "active", label: "Активный", count: all.filter((r) => r.is_active).length },
+          { id: "inactive", label: "Не активный", count: all.filter((r) => !r.is_active).length }
         ]}
         value={status}
         onChange={setStatus}
@@ -164,26 +173,26 @@ export function PayrollItemsWorkspace() {
       <PayrollTableCard>
         <PayrollTableToolbar
           leading={
-            <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Столбцы" aria-label="Столбцы" onClick={() => setColsOpen(true)}>
+            <button type="button" className={PAYROLL_ICON_BTN} title="Настройка колонок" aria-label="Столбцы" onClick={() => setColsOpen(true)}>
               <SlidersHorizontal className="size-4" />
-            </Button>
+            </button>
           }
           pageSize={prefs.pageSize}
           onPageSize={prefs.setPageSize}
           search={q}
           onSearch={setQ}
         >
-          <Button type="button" variant="outline" className="h-9 gap-1.5" onClick={() => void exportXlsx()}>
+          <button type="button" className={PAYROLL_SECONDARY_BTN} onClick={() => void exportXlsx()}>
             <FileSpreadsheet className="size-4 text-emerald-600" /> Excel
-          </Button>
-          <Button type="button" variant="outline" size="icon" className="h-9 w-9" title="Обновить" aria-label="Обновить" disabled={itemsQ.isFetching} onClick={invalidate}>
+          </button>
+          <button type="button" className={PAYROLL_ICON_BTN} title="Обновить" aria-label="Обновить" disabled={itemsQ.isFetching} onClick={invalidate}>
             <RefreshCw className={cn("size-4", itemsQ.isFetching && "animate-spin")} />
-          </Button>
+          </button>
         </PayrollTableToolbar>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead className="bg-muted/40">
-              <tr className="border-b border-border">
+          <table className={cn(PAYROLL_TABLE, "min-w-[820px]")}>
+            <thead className={PAYROLL_THEAD}>
+              <tr>
                 <SortTh label="Название" sortKey="name" sort={sort} onSort={toggleSort} className={TH} />
                 {show("code") ? <SortTh label="Код" sortKey="code" sort={sort} onSort={toggleSort} className={TH} /> : null}
                 {show("type") ? <SortTh label="Тип" sortKey="type" sort={sort} onSort={toggleSort} className={TH} /> : null}
@@ -199,9 +208,9 @@ export function PayrollItemsWorkspace() {
                 <tr
                   key={r.id}
                   onClick={() => openRow(r)}
-                  className={cn("border-b border-border/60 last:border-0 hover:bg-primary/5", editable(r) && "cursor-pointer")}
+                  className={cn(PAYROLL_TR, editable(r) && "cursor-pointer")}
                 >
-                  <td className={cn(TD, "font-medium text-foreground")}>
+                  <td className={cn(TD, "text-[13.5px] font-medium text-foreground")}>
                     <span className="inline-flex items-center gap-2">
                       {r.color ? <span className="size-3 rounded-full" style={{ backgroundColor: r.color }} /> : null}
                       {r.name}
@@ -213,13 +222,13 @@ export function PayrollItemsWorkspace() {
                     <td className={TD}>
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ring-1 ring-inset",
                           r.type === "allowance"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
-                            : "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-400"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-600/15 dark:bg-emerald-950/40 dark:text-emerald-400"
+                            : "bg-rose-50 text-rose-600 ring-rose-500/15 dark:bg-rose-950/40 dark:text-rose-400"
                         )}
                       >
-                        <span className={cn("size-1.5 rounded-full", r.type === "allowance" ? "bg-emerald-500" : "bg-rose-500")} />
+                        <span className={cn("size-1.5 rounded-full", r.type === "allowance" ? "bg-emerald-500" : "bg-rose-400")} />
                         {TYPE_LABEL[r.type]}
                       </span>
                     </td>
@@ -227,17 +236,11 @@ export function PayrollItemsWorkspace() {
                   {show("calc") ? <td className={cn(TD, "text-muted-foreground")}>{CALC_LABEL[r.calc_type] ?? r.calc_type}</td> : null}
                   {show("sort") ? <td className={cn(TD, "text-center tabular-nums")}>{r.sort_order || "—"}</td> : null}
                   {show("comment") ? <td className={cn(TD, "max-w-80 truncate text-muted-foreground")}>{r.comment || "—"}</td> : null}
-                  <td className={cn(TD, "text-right")} onClick={(e) => e.stopPropagation()}>
+                  <td className={cn(TD, "px-2 text-right")} onClick={(e) => e.stopPropagation()}>
                     {editable(r) ? (
-                      <button
-                        type="button"
-                        title="Изменить"
-                        aria-label={`Изменить: ${r.name}`}
-                        onClick={() => openRow(r)}
-                        className="inline-flex size-8 items-center justify-center rounded-md border border-border bg-background text-amber-500 shadow-sm transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600"
-                      >
-                        <Pencil className="size-3.5" />
-                      </button>
+                      <PayrollIconAction label={`Изменить: ${r.name}`} tone="edit" onClick={() => openRow(r)}>
+                        <Pencil />
+                      </PayrollIconAction>
                     ) : null}
                   </td>
                 </tr>

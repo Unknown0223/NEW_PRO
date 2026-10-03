@@ -19,8 +19,8 @@ const METRICS: Array<{ key: keyof Metrics; label: string }> = [
   { key: "order_count", label: "Кол-во заказов" }
 ];
 
-const TH = "whitespace-nowrap border-b border-border px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground";
-const TD = "px-3 py-2 align-middle";
+const TH = "whitespace-nowrap border-b border-border px-4 py-2.5 text-left text-[12.5px] font-semibold text-muted-foreground";
+const TD = "px-4 py-2 align-middle";
 
 function FxButton({ active, onClick }: { active: boolean; onClick?: () => void }) {
   return (
@@ -31,11 +31,15 @@ function FxButton({ active, onClick }: { active: boolean; onClick?: () => void }
       title={active ? "Формула назначена — изменить" : "Назначить формулу"}
       aria-label="Назначить формулу"
       className={cn(
-        "flex size-6 shrink-0 items-center justify-center rounded-md font-serif text-[12px] font-bold italic transition-colors disabled:cursor-default",
-        active ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted-foreground/25 text-background hover:bg-primary/60"
+        "flex size-[22px] shrink-0 items-center justify-center rounded-[7px] border leading-none text-white transition-all duration-150 disabled:cursor-default",
+        active
+          ? "border-[#198b89] bg-gradient-to-br from-[#39b9b5] to-[#218f8e] shadow-[0_0_0_3px_rgba(45,156,155,0.13),0_4px_9px_rgba(28,131,129,0.28)] hover:from-[#42c1bd] hover:to-[#258f8e]"
+          : "border-[#c5ced9] bg-[#d2d8e1] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:border-[#aeb9c7] hover:bg-[#c4ccd7] dark:border-border dark:bg-muted-foreground/40"
       )}
     >
-      f
+      <span className="relative -mt-px font-serif text-[13px] font-bold italic">
+        f<span className="absolute -bottom-[3px] -right-[5px] font-sans text-[7px] font-semibold not-italic">x</span>
+      </span>
     </button>
   );
 }
@@ -45,7 +49,7 @@ function MetricBox({ fact, plan, fx }: { fact: number; plan: number; fx?: { acti
   return (
     <td className={TD}>
       <div
-        className="flex min-w-[130px] items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5"
+        className="flex h-[39px] min-w-[130px] items-center gap-2 rounded-[9px] border border-[#d7e0de] bg-[#f6f8f7] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] dark:border-border dark:bg-muted/40 dark:shadow-none"
         title={plan > 0 ? `План ${money(plan)} · ${pct}%` : undefined}
       >
         {fx ? <FxButton active={fx.active} onClick={fx.onClick} /> : null}
@@ -111,7 +115,7 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
-        <thead className="bg-muted/40">
+        <thead className="bg-[var(--pr-head)]">
           <tr>
             <th className={cn(TH, "w-10")}>
               <input type="checkbox" className="size-4 accent-primary" checked={allOn} onChange={(e) => onToggleAll(e.target.checked)} aria-label="Выбрать все" />
@@ -129,7 +133,7 @@ export function PayrollBonusTable({ rows, groupFilter, loading, editable, expand
             return [
               <tr
                 key={r.user_id}
-                className={cn("border-b border-border/60 transition-colors hover:bg-primary/5", (open || selected.has(r.user_id)) && "bg-primary/5")}
+                className={cn("border-b border-border/60 transition-colors hover:bg-[var(--pr-row-hover)]", (open || selected.has(r.user_id)) && "bg-[var(--pr-row-hover)]")}
               >
                 <td className={TD}>
                   <input type="checkbox" className="size-4 accent-primary" checked={selected.has(r.user_id)} onChange={() => onToggle(r.user_id)} aria-label={r.fio} />

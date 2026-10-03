@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calculator, CheckCircle2, Play, Search, XCircle } from "lucide-react";
+import { Calculator, CheckCircle2, FunctionSquare, Play, Save, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useTenant } from "@/lib/api-client";
 import { currentYm, money, payrollApi, payrollErrorText, roleLabel, type Ym } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
-import { Field, MonthField, NATIVE_SELECT, selectCls } from "@/components/payroll/payroll-ui";
+import { MonthField } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
+import { PAYROLL_INPUT, PAYROLL_SECONDARY_BTN } from "@/components/payroll/kit/payroll-kit-table";
 
 export type FormulaDraft = {
   id?: number;
@@ -34,8 +34,24 @@ export const FORMULA_SCOPES: Array<{ v: FormulaDraft["scope"]; label: string; hi
 ];
 
 const OPERATORS = ["+", "-", "*", "/", "(", ")", ">", "<", ">=", "<=", "=", "<>", ";"];
-const CHIP = "rounded-md border border-border bg-background px-2.5 py-1 font-mono text-xs transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-primary";
-const SECTION = "rounded-lg border border-border bg-card shadow-sm";
+const SECTION = "rounded-xl border border-[var(--pr-border)] bg-card shadow-[var(--pr-shadow)]";
+const INPUT = cn(PAYROLL_INPUT, "px-3 disabled:opacity-60");
+const SMALL_TITLE = "text-[11px] font-bold uppercase tracking-wide text-muted-foreground/80";
+const VAR_BTN =
+  "flex w-full items-center gap-2 rounded-lg border border-[var(--pr-field)] bg-card px-2.5 py-1.5 text-left text-[12px] text-foreground/70 shadow-sm transition-colors hover:border-[var(--pr-brand-200)] hover:bg-[var(--pr-brand-50)] hover:text-[var(--pr-brand-700)]";
+const FUNC_CHIP =
+  "inline-flex items-center gap-1 rounded-lg border border-[var(--pr-field)] bg-[var(--pr-head)] px-2.5 py-1 text-[12px] font-semibold text-foreground/70 transition-colors hover:border-[var(--pr-brand-200)] hover:bg-[var(--pr-brand-50)] hover:text-[var(--pr-brand-700)] disabled:opacity-50";
+const OP_CHIP =
+  "min-w-8 rounded-lg border border-[var(--pr-field)] bg-card px-2.5 py-1 text-[12.5px] font-semibold text-foreground/70 transition-colors hover:bg-muted disabled:opacity-50";
+
+function F({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[12px] font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 type Props = {
   draft: FormulaDraft;
@@ -115,28 +131,21 @@ export function PayrollFormulaEditor({ draft: d, onChange, onSave, onClear, savi
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-      <aside className={cn(SECTION, "flex max-h-[78vh] flex-col")}>
-        <div className="border-b border-border/80 px-4 py-3">
-          <h2 className="text-sm font-bold">Значения</h2>
-          <div className="relative mt-2">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Поиск значения" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-8" />
-          </div>
+      <aside className={cn(SECTION, "flex max-h-[78vh] flex-col p-3")}>
+        <p className="px-1 pb-2 text-[12px] font-bold">Значения</p>
+        <div className="relative mb-3">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input placeholder="Поиск значения" value={search} onChange={(e) => setSearch(e.target.value)} className={cn(PAYROLL_INPUT, "pl-9 pr-3")} />
         </div>
-        <div className="flex-1 space-y-3 overflow-auto p-3">
-          {varsQ.isLoading ? <p className="text-sm text-muted-foreground">Загрузка…</p> : null}
+        <div className="flex-1 space-y-3 overflow-auto pr-1">
+          {varsQ.isLoading ? <p className="text-[13px] text-muted-foreground">Загрузка…</p> : null}
           {groups.map((g) => (
             <div key={g.group}>
-              <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{g.group}</p>
-              <div className="space-y-0.5">
+              <p className="mb-1 px-1 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground/80">{g.group}</p>
+              <div className="space-y-1">
                 {g.items.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => insert(`[${v}]`)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground/90 transition-colors hover:bg-primary/10 hover:text-primary"
-                  >
-                    <Calculator className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                  <button key={v} type="button" onClick={() => insert(`[${v}]`)} className={VAR_BTN}>
+                    <Calculator className="h-3.5 w-3.5 shrink-0 text-[var(--pr-brand-600)] opacity-70" aria-hidden />
                     <span className="truncate">{v}</span>
                   </button>
                 ))}
@@ -147,27 +156,27 @@ export function PayrollFormulaEditor({ draft: d, onChange, onSave, onClear, savi
       </aside>
 
       <section className={SECTION}>
-        <div className="grid gap-4 p-4 sm:p-5">
+        <div className="grid gap-3 p-4">
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Название формулы">
-              <Input value={d.name} disabled={!canEdit} placeholder="Например: Бонус за выполнение плана" onChange={(e) => onChange({ ...d, name: e.target.value })} />
-            </Field>
-            <Field label="Раздел">
-              <select className={NATIVE_SELECT} value={d.scope} disabled={!canEdit} onChange={(e) => onChange({ ...d, scope: e.target.value as FormulaDraft["scope"] })}>
+            <F label="Название формулы">
+              <input className={INPUT} value={d.name} disabled={!canEdit} placeholder="Например: Бонус за выполнение плана" onChange={(e) => onChange({ ...d, name: e.target.value })} />
+            </F>
+            <F label="Раздел">
+              <select className={INPUT} value={d.scope} disabled={!canEdit} onChange={(e) => onChange({ ...d, scope: e.target.value as FormulaDraft["scope"] })}>
                 {FORMULA_SCOPES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}
               </select>
-            </Field>
-            <Field label="Роль">
-              <select className={NATIVE_SELECT} value={d.role ?? ""} disabled={!canEdit} onChange={(e) => onChange({ ...d, role: e.target.value || null })}>
+            </F>
+            <F label="Роль">
+              <select className={INPUT} value={d.role ?? ""} disabled={!canEdit} onChange={(e) => onChange({ ...d, role: e.target.value || null })}>
                 <option value="">— любая —</option>
                 {roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
               </select>
-            </Field>
+            </F>
             <div className="grid grid-cols-[1fr_120px] gap-3">
               {needsTarget ? (
-                <Field label="Результат записать в статью">
+                <F label="Результат записать в статью">
                   <select
-                    className={NATIVE_SELECT}
+                    className={INPUT}
                     value={d.target_item_id ?? ""}
                     disabled={!canEdit}
                     onChange={(e) => onChange({ ...d, target_item_id: e.target.value ? Number(e.target.value) : null })}
@@ -175,74 +184,76 @@ export function PayrollFormulaEditor({ draft: d, onChange, onSave, onClear, savi
                     <option value="">— выберите —</option>
                     {targetItems.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.type === "allowance" ? "+" : "−"})</option>)}
                   </select>
-                </Field>
+                </F>
               ) : (
                 <div />
               )}
-              <Field label="Порядок">
-                <Input type="number" value={d.priority} disabled={!canEdit} onChange={(e) => onChange({ ...d, priority: Number(e.target.value) || 0 })} />
-              </Field>
+              <F label="Порядок">
+                <input type="number" className={INPUT} value={d.priority} disabled={!canEdit} onChange={(e) => onChange({ ...d, priority: Number(e.target.value) || 0 })} />
+              </F>
             </div>
           </div>
-          <p className="-mt-1 text-xs text-muted-foreground">{FORMULA_SCOPES.find((s) => s.v === d.scope)?.hint}</p>
+          <p className="-mt-1 text-[12px] text-muted-foreground">{FORMULA_SCOPES.find((s) => s.v === d.scope)?.hint}</p>
 
-          <Field label="Формула">
-            <textarea
-              ref={textRef}
-              value={d.text}
-              disabled={!canEdit}
-              onChange={(e) => onChange({ ...d, text: e.target.value })}
-              rows={6}
-              spellCheck={false}
-              placeholder="ЕСЛИ([KPI - Выполнение (%)] >= 100; [KPI - Сумма (Факт)] * 0,02; 0)"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 font-mono text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-            />
-          </Field>
+          <F label="Формула">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-2.5 text-[13px] font-bold text-primary">=</span>
+              <textarea
+                ref={textRef}
+                value={d.text}
+                disabled={!canEdit}
+                onChange={(e) => onChange({ ...d, text: e.target.value })}
+                rows={5}
+                spellCheck={false}
+                placeholder="ЕСЛИ([KPI - Выполнение (%)] >= 100; [KPI - Сумма (Факт)] * 0,02; 0)"
+                className="w-full resize-y rounded-lg border border-[var(--pr-input)] bg-card py-2 pl-7 pr-3 font-mono text-[13px] leading-relaxed shadow-sm outline-none placeholder:font-sans placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-[var(--pr-brand-100)]"
+              />
+            </div>
+          </F>
           {validation ? (
             validation.ok ? (
-              <p className="-mt-2 flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Формула корректна</p>
+              <p className="-mt-1 flex items-center gap-1 text-[12.5px] text-emerald-700"><CheckCircle2 className="size-4" /> Формула корректна</p>
             ) : (
-              <p className="-mt-2 flex items-center gap-1 text-sm text-red-700">
+              <p className="-mt-1 flex items-center gap-1 text-[12.5px] text-rose-700">
                 <XCircle className="size-4" /> {validation.error}
                 {validation.unknown.length ? ` — неизвестно: ${validation.unknown.join(", ")}` : ""}
               </p>
             )
           ) : null}
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Функции</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(varsQ.data?.functions ?? []).map((f) => (
-                  <button key={f} type="button" disabled={!canEdit} onClick={() => insert(`${f}(`)} className={CHIP}>{f}</button>
-                ))}
-              </div>
+          <div>
+            <p className={cn(SMALL_TITLE, "mb-1.5")}>Функции</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(varsQ.data?.functions ?? []).map((f) => (
+                <button key={f} type="button" disabled={!canEdit} onClick={() => insert(`${f}(`)} className={FUNC_CHIP}>
+                  <FunctionSquare className="h-3 w-3" aria-hidden />
+                  {f}
+                </button>
+              ))}
             </div>
-            <div>
-              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Операторы</p>
-              <div className="flex flex-wrap gap-1.5">
-                {OPERATORS.map((op) => (
-                  <button key={op} type="button" disabled={!canEdit} onClick={() => insert(op === "(" || op === ")" ? op : ` ${op} `)} className={cn(CHIP, "min-w-8")}>{op}</button>
-                ))}
-              </div>
+            <p className={cn(SMALL_TITLE, "mb-1.5 mt-3")}>Операторы</p>
+            <div className="flex flex-wrap gap-1.5">
+              {OPERATORS.map((op) => (
+                <button key={op} type="button" disabled={!canEdit} onClick={() => insert(op === "(" || op === ")" ? op : ` ${op} `)} className={OP_CHIP}>{op}</button>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Проверка на реальных данных</p>
+          <div className="rounded-lg border border-[var(--pr-border)] bg-[var(--pr-head)] p-3">
+            <p className={cn(SMALL_TITLE, "mb-2")}>Проверка на реальных данных</p>
             <div className="flex flex-wrap items-end gap-2">
-              <select className={selectCls("w-64")} value={previewUser} onChange={(e) => setPreviewUser(e.target.value)}>
+              <select className={cn(INPUT, "w-64 bg-card")} value={previewUser} onChange={(e) => setPreviewUser(e.target.value)}>
                 <option value="">Сотрудник…</option>
                 {employees.filter((x) => !d.role || x.role === d.role).map((x) => <option key={x.user_id} value={x.user_id}>{x.fio}</option>)}
               </select>
               <MonthField value={previewYm} onChange={setPreviewYm} />
-              <select className={selectCls("w-48")} value={previewGroup} onChange={(e) => setPreviewGroup(e.target.value)}>
+              <select className={cn(INPUT, "w-48 bg-card")} value={previewGroup} onChange={(e) => setPreviewGroup(e.target.value)}>
                 <option value="">Все KPI-группы</option>
                 {(varsQ.data?.kpi_groups ?? []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
-              <Button size="sm" variant="outline" className="h-9" disabled={!previewUser || !d.text.trim()} onClick={() => void runPreview()}>
-                <Play className="mr-1 size-4" /> Посчитать
-              </Button>
+              <button type="button" className={cn(PAYROLL_SECONDARY_BTN, "disabled:opacity-50")} disabled={!previewUser || !d.text.trim()} onClick={() => void runPreview()}>
+                <Play className="size-4" /> Посчитать
+              </button>
             </div>
             {preview ? (
               <div className="mt-3 text-sm">
@@ -255,16 +266,23 @@ export function PayrollFormulaEditor({ draft: d, onChange, onSave, onClear, savi
             ) : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/80 bg-muted/25 px-4 py-3 sm:px-5">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" className="accent-primary" checked={d.is_active} disabled={!canEdit} onChange={(e) => onChange({ ...d, is_active: e.target.checked })} />
-            Активна
-          </label>
+        <div className="mx-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--pr-line)] py-4">
+          <div className="flex items-center gap-4">
+            {canEdit ? (
+              <button type="button" onClick={onClear} className="text-[12.5px] font-medium text-muted-foreground hover:text-rose-600">
+                {d.id ? "Отменить изменение" : "Очистить"}
+              </button>
+            ) : null}
+            <label className="flex items-center gap-2 text-[13px]">
+              <input type="checkbox" className="accent-primary" checked={d.is_active} disabled={!canEdit} onChange={(e) => onChange({ ...d, is_active: e.target.checked })} />
+              Активна
+            </label>
+          </div>
           {canEdit ? (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClear}>{d.id ? "Отменить изменение" : "Очистить"}</Button>
-              <Button disabled={!canSave} onClick={onSave}>{d.id ? "Сохранить изменения" : "Сохранить формулу"}</Button>
-            </div>
+            <Button className="h-9 gap-1.5 rounded-lg px-4 text-[13.5px]" disabled={!canSave} onClick={onSave}>
+              <Save className="size-4" />
+              {d.id ? "Сохранить изменения" : "Сохранить формулу"}
+            </Button>
           ) : null}
         </div>
       </section>

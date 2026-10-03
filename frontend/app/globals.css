@@ -1511,4 +1511,37 @@
   --primary: #23a08a;
   --primary-foreground: #ffffff;
   --ring: #23a08a;
+  --pr-brand-50: #ecf8f5;
+  --pr-brand-100: #d5f0ea;
+  --pr-brand-200: #a9e1d5;
+  --pr-brand-600: #17826f;
+  --pr-brand-700: #136a5b;
+  --pr-pine: #124841;
+  --pr-border: #e5e7eb;
+  --pr-line: #f3f4f6;
+  --pr-input: #d1d5db;
+  --pr-field: #d7dfe8;
+  --pr-field-hover: #b8c4d2;
+  --pr-head: #f7f9f8;
+  --pr-row-hover: rgb(236 248 245 / 0.55);
+  --pr-shadow: 0 1px 2px rgb(16 42 38 / 0.04), 0 1px 3px rgb(16 42 38 / 0.05);
+}
+.dark .payroll-template {
+  --pr-brand-50: rgb(35 160 138 / 0.16);
+  --pr-brand-100: rgb(35 160 138 / 0.24);
+  --pr-brand-200: rgb(35 160 138 / 0.4);
+  --pr-brand-600: #43b29d;
+  --pr-brand-700: #75cbba;
+  --pr-pine: #23a08a;
+  --pr-border: var(--border);
+  --pr-line: var(--border);
+  --pr-input: var(--input);
+  --pr-field: var(--input);
+  --pr-field-hover: var(--muted-foreground);
+  --pr-head: var(--muted);
+  --pr-row-hover: rgb(35 160 138 / 0.08);
+  --pr-shadow: none;
+}
+.payroll-template.space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.875rem;
 }

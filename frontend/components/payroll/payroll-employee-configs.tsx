@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Pencil, Search, X } from "lucide-react";
 import { GroupedNumberInput } from "@/components/ui/grouped-number-input";
-import { Input } from "@/components/ui/input";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { apiFetch, useTenant } from "@/lib/api-client";
@@ -14,7 +13,18 @@ import { cn } from "@/lib/utils";
 import { NATIVE_SELECT, parseAmount } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { PayrollExcelImportDialog } from "@/components/payroll/payroll-excel-import-dialog";
-import { PayrollEmptyRow, PayrollPagination, PayrollTableCard, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
+import {
+  PAYROLL_INPUT,
+  PAYROLL_TD,
+  PAYROLL_TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
+  PayrollEmptyRow,
+  PayrollIconAction,
+  PayrollPagination,
+  PayrollTableCard,
+  usePagedRows
+} from "@/components/payroll/kit/payroll-kit-table";
 
 export type EmployeeConfig = {
   user_id: number;
@@ -45,8 +55,9 @@ type Draft = { base: string; desk: string; parts: Record<string, string> };
 type ImportRow = { code: string; base_amount: number | null; cash_desk: string | null; item_amounts?: Record<string, number> };
 type ImportPreview = { row: number; code: string; fio: string | null; base_amount: number | null; status: string };
 
-const TH = "border-b border-border px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground";
-const TD = "px-3 py-2.5";
+const TH = cn(PAYROLL_TH, "px-3");
+const TD = cn(PAYROLL_TD, "px-3");
+const COL_LINE = "border-l border-[var(--pr-line)]";
 
 export function PayrollEmployeeConfigs({
   role,
@@ -128,7 +139,7 @@ export function PayrollEmployeeConfigs({
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-[360px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input className="h-9 pl-9" placeholder="Поиск по ФИО, коду, филиалу..." value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className={cn(PAYROLL_INPUT, "pl-9 pr-3")} placeholder="Поиск по ФИО, коду, филиалу..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" className="accent-primary" checked={inactive} onChange={(e) => setInactive(e.target.checked)} />
@@ -137,8 +148,8 @@ export function PayrollEmployeeConfigs({
       </div>
       <PayrollTableCard>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-sm">
-            <thead className="bg-muted/40">
+          <table className="w-full min-w-[1100px] border-collapse text-left text-[13px]">
+            <thead className={PAYROLL_THEAD}>
               <tr>
                 <th className={TH}>ФИО</th>
                 <th className={TH}>Смарт-код</th>
@@ -146,11 +157,11 @@ export function PayrollEmployeeConfigs({
                 <th className={TH}>Касса</th>
                 <th className={cn(TH, "text-right")}>Базовый оклад</th>
                 {columns.map((c) => (
-                  <th key={c.id} className={cn(TH, "min-w-[120px] border-l text-right")} title={c.name}>
+                  <th key={c.id} className={cn(TH, COL_LINE, "min-w-[120px] whitespace-normal text-right")} title={c.name}>
                     <span className="line-clamp-2">{c.name}</span>
                   </th>
                 ))}
-                <th className={cn(TH, "w-24 border-l text-center")}>Действие</th>
+                <th className={cn(TH, COL_LINE, "w-24 text-center")}>Действие</th>
               </tr>
             </thead>
             <tbody>
@@ -161,7 +172,7 @@ export function PayrollEmployeeConfigs({
                 return (
                   <tr
                     key={r.user_id}
-                    className={cn("border-b border-border/60 align-top last:border-0 hover:bg-primary/5", editing && "bg-primary/5", !r.is_active && "opacity-60")}
+                    className={cn(PAYROLL_TR, "align-top", editing && "bg-[var(--pr-row-hover)]", !r.is_active && "opacity-60")}
                   >
                     <td className={TD}>
                       <span className="block max-w-[220px] truncate font-medium text-foreground" title={r.fio}>
@@ -207,7 +218,7 @@ export function PayrollEmployeeConfigs({
                       const byRole = r.role_item_amounts?.[String(c.id)];
                       const v = own ?? byRole;
                       return (
-                        <td key={c.id} className={cn(TD, "border-l border-border/60 text-right tabular-nums")}>
+                        <td key={c.id} className={cn(TD, COL_LINE, "text-right tabular-nums")}>
                           {editing ? (
                             <GroupedNumberInput
                               value={draft.parts[String(c.id)] ?? ""}
@@ -226,40 +237,21 @@ export function PayrollEmployeeConfigs({
                         </td>
                       );
                     })}
-                    <td className={cn(TD, "border-l border-border/60")}>
+                    <td className={cn(TD, COL_LINE)}>
                       <div className="flex items-center justify-center gap-1.5">
                         {!canEdit ? null : editing ? (
                           <>
-                            <button
-                              type="button"
-                              aria-label="Сохранить"
-                              title="Сохранить"
-                              disabled={save.isPending}
-                              onClick={() => save.mutate(r.user_id)}
-                              className="flex size-8 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
-                            >
-                              <Check className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Отмена"
-                              title="Отмена"
-                              onClick={() => setEditId(null)}
-                              className="flex size-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted"
-                            >
-                              <X className="size-4" />
-                            </button>
+                            <PayrollIconAction label="Сохранить" tone="success" disabled={save.isPending} onClick={() => save.mutate(r.user_id)}>
+                              <Check />
+                            </PayrollIconAction>
+                            <PayrollIconAction label="Отмена" onClick={() => setEditId(null)}>
+                              <X />
+                            </PayrollIconAction>
                           </>
                         ) : (
-                          <button
-                            type="button"
-                            aria-label={`Изменить: ${r.fio}`}
-                            title="Изменить"
-                            onClick={() => startEdit(r)}
-                            className="flex size-8 items-center justify-center rounded-md border border-border bg-background text-amber-500 shadow-sm transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600"
-                          >
-                            <Pencil className="size-3.5" />
-                          </button>
+                          <PayrollIconAction label={`Изменить: ${r.fio}`} tone="edit" onClick={() => startEdit(r)}>
+                            <Pencil />
+                          </PayrollIconAction>
                         )}
                       </div>
                     </td>

@@ -16,6 +16,7 @@ import { FIELD_LABEL, parseAmount, useNotice } from "@/components/payroll/payrol
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { PayrollEmployeeConfigs, roleAllowanceColumns, type EmployeeConfig } from "@/components/payroll/payroll-employee-configs";
 import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
+import { PAYROLL_CARD, PAYROLL_SECONDARY_BTN } from "@/components/payroll/kit/payroll-kit-table";
 
 type RoleConfig = {
   role: string;
@@ -117,7 +118,7 @@ function RoleConfigCard({
 
   const manual = items.filter((i) => !i.system_key && i.is_active);
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm">
+    <div className={PAYROLL_CARD}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -133,7 +134,7 @@ function RoleConfigCard({
         <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        <div className="border-t border-border px-4 pb-4 pt-3">
+        <div className="border-t border-[var(--pr-line)] px-4 pb-4 pt-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
               Применяется ко всем сотрудникам роли без индивидуального оклада. Делится по отработанным дням: {money(3000000)} × 20 из 26 ={" "}
@@ -233,9 +234,9 @@ export function PayrollRoleSalariesWorkspace() {
         description="Здесь задаются части оклада: по умолчанию для роли и индивидуально для сотрудника. В формулах значение доступно как «Оклад - <надбавка>» или «Оклад статьи» (сумма той статьи, для которой считается формула); статья с расчётом «Формула» без формулы не начисляется, «Вручную» — начисляется как есть."
         actions={
           <>
-            <Button variant="outline" onClick={() => void downloadTemplate()}>
-              <FileSpreadsheet className="mr-1.5 size-4 text-emerald-600" /> Шаблон
-            </Button>
+            <button type="button" className={PAYROLL_SECONDARY_BTN} onClick={() => void downloadTemplate()}>
+              <FileSpreadsheet className="size-4 text-emerald-600" /> Шаблон
+            </button>
             {canEdit ? (
               <Button onClick={() => setImportOpen(true)}>
                 <Upload className="mr-1.5 size-4" /> Импорт из Excel

@@ -127,18 +127,37 @@ export function payrollApi(tenant: string) {
   };
 }
 
-export const RECORD_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Черновик", cls: "bg-slate-100 text-slate-700" },
-  pending: { label: "На проверке", cls: "bg-amber-100 text-amber-800" },
-  confirmed: { label: "Подтверждено", cls: "bg-emerald-100 text-emerald-800" },
-  rejected: { label: "Отклонено", cls: "bg-red-100 text-red-700" }
+export type StatusStyle = { label: string; cls: string; dot: string };
+
+const TONE = {
+  slate: { cls: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300", dot: "bg-slate-400" },
+  amber: { cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400", dot: "bg-amber-500" },
+  emerald: { cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400", dot: "bg-emerald-500" },
+  rose: { cls: "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-400", dot: "bg-rose-500" },
+  sky: { cls: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-400", dot: "bg-sky-500" },
+  violet: { cls: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-400", dot: "bg-violet-500" },
+  zinc: { cls: "border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400", dot: "bg-zinc-400" }
+} as const;
+
+export const STATUS_TONE = TONE;
+
+export const RECORD_STATUS: Record<string, StatusStyle> = {
+  draft: { label: "Черновик", ...TONE.slate },
+  pending: { label: "На проверке", ...TONE.amber },
+  confirmed: { label: "Подтверждено", ...TONE.emerald },
+  rejected: { label: "Отклонено", ...TONE.rose }
 };
 
-export const ADVANCE_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Черновик", cls: "bg-slate-100 text-slate-700" },
-  sent: { label: "Отправлен", cls: "bg-sky-100 text-sky-800" },
-  approved: { label: "Утверждён", cls: "bg-emerald-100 text-emerald-800" },
-  rejected: { label: "Отклонён", cls: "bg-red-100 text-red-700" },
-  paid: { label: "Выдан", cls: "bg-violet-100 text-violet-800" },
-  cancelled: { label: "Отменён", cls: "bg-zinc-100 text-zinc-500" }
+export const PAYOUT_KIND: Record<string, StatusStyle> = {
+  advance: { label: "Аванс", ...TONE.sky },
+  salary: { label: "Зарплата", ...TONE.emerald }
+};
+
+export const ADVANCE_STATUS: Record<string, StatusStyle> = {
+  draft: { label: "Черновик", ...TONE.slate },
+  sent: { label: "Отправлен", ...TONE.sky },
+  approved: { label: "Утверждён", ...TONE.emerald },
+  rejected: { label: "Отклонён", ...TONE.rose },
+  paid: { label: "Выдан", ...TONE.violet },
+  cancelled: { label: "Отменён", ...TONE.zinc }
 };

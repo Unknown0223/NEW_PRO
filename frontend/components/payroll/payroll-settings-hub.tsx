@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
 import { payrollApi } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
 import { useNotice } from "@/components/payroll/payroll-ui";
+import { PayrollPageTitle } from "@/components/payroll/kit/payroll-kit-layout";
 import { PayrollTableCard } from "@/components/payroll/kit/payroll-kit-table";
 
 type Settings = { enabled: boolean; parallel_run: boolean; salary_queue_enabled: boolean };
@@ -101,15 +101,15 @@ export function PayrollSettingsHub() {
 
   return (
     <PageShell className="payroll-template">
-      <PageHeader title="Настройки зарплаты" description="Включение модуля и переходы ко всем разделам зарплаты и аванса." />
+      <PayrollPageTitle title="Настройки зарплаты" description="Включение модуля и переходы ко всем разделам зарплаты и аванса." />
       {notice.element}
       <PayrollTableCard title="Параметры модуля">
-        <div className="divide-y divide-border/70">
+        <div className="divide-y divide-[var(--pr-line)]">
           {TOGGLES.map((t) => (
-            <div key={t.key} className="flex items-start justify-between gap-4 px-4 py-3.5">
+            <div key={t.key} className="flex items-start justify-between gap-4 px-4 py-3.5 sm:px-5">
               <div className="min-w-0">
-                <div className="font-medium text-foreground">{t.title}</div>
-                <div className="mt-0.5 text-sm text-muted-foreground">{t.hint}</div>
+                <div className="text-[13.5px] font-semibold text-foreground">{t.title}</div>
+                <div className="mt-0.5 text-[12.5px] text-muted-foreground">{t.hint}</div>
               </div>
               <Toggle
                 checked={Boolean(q.data?.[t.key])}
@@ -124,12 +124,12 @@ export function PayrollSettingsHub() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {GROUPS.map((g) => (
           <PayrollTableCard key={g.title} title={g.title}>
-            <div className="divide-y divide-border/70">
+            <div className="divide-y divide-[var(--pr-line)]">
               {g.links.map((l) => (
-                <Link key={l.href} href={l.href} className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+                <Link key={l.href} href={l.href} className="group flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--pr-row-hover)] sm:px-5">
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground group-hover:text-primary">{l.title}</span>
-                    <span className="block text-xs text-muted-foreground">{l.hint}</span>
+                    <span className="block text-[13px] font-medium text-foreground group-hover:text-[var(--pr-brand-700)]">{l.title}</span>
+                    <span className="block text-[12px] text-muted-foreground">{l.hint}</span>
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-primary" />
                 </Link>

@@ -109,8 +109,8 @@ type Props = {
   onOpen: (row: SheetRow) => void;
 };
 
-const TH = "whitespace-nowrap border-b border-border px-3 py-2 text-left text-xs font-semibold text-muted-foreground";
-const SUB_TH = "bg-muted/20 text-muted-foreground/70";
+const TH = "whitespace-nowrap border-b border-border px-3 py-2 text-left text-[12px] font-semibold text-muted-foreground";
+const SUB_TH = "text-muted-foreground/70";
 const GROUP_TH = "border-b border-border px-3 py-2 text-left text-[12.5px] font-semibold text-muted-foreground";
 const TD = "whitespace-nowrap border-b border-border/50 px-3 py-2.5 text-[12.5px]";
 const NUM = "text-right tabular-nums";
@@ -204,9 +204,9 @@ export function PayrollSheetTable(p: Props) {
   return (
     <div className="max-h-[68vh] overflow-auto">
       <table className="w-full min-w-max border-separate border-spacing-0">
-        <thead className="sticky top-0 z-20 bg-muted/60 backdrop-blur">
+        <thead className="sticky top-0 z-20 bg-[var(--pr-head)]">
           <tr>
-            <th rowSpan={2} className="sticky left-0 z-30 w-10 border-b border-border bg-muted px-3 text-center align-middle">
+            <th rowSpan={2} className="sticky left-0 z-30 w-10 border-b border-border bg-[var(--pr-head)] px-3 text-center align-middle">
               <input type="checkbox" className="size-4 accent-primary" checked={allOn} onChange={(e) => p.onToggleAll(e.target.checked)} aria-label="Выбрать все" />
             </th>
             <GroupTh label="Основная информация" span={1 + infoIds.length} first />
@@ -220,7 +220,7 @@ export function PayrollSheetTable(p: Props) {
             <GroupTh label="Статус" span={statusIds.length} />
           </tr>
           <tr>
-            <th className={cn(TH, "sticky left-10 z-30 min-w-[240px] bg-muted")}>
+            <th className={cn(TH, "sticky left-10 z-30 min-w-[240px] bg-[var(--pr-head)]")}>
               <SortLabel label="ФИО" k="fio" {...sp} />
             </th>
             {show("direction") ? <th className={TH}>Направление торговли</th> : null}
@@ -266,7 +266,7 @@ export function PayrollSheetTable(p: Props) {
             return (
               <tr
                 key={r.id}
-                className={cn("group cursor-pointer transition-colors hover:bg-primary/5", on && "bg-primary/5", !r.is_active && "opacity-70")}
+                className={cn("group cursor-pointer transition-colors hover:bg-[var(--pr-row-hover)]", on && "bg-[var(--pr-row-hover)]", !r.is_active && "opacity-70")}
                 onClick={() => p.onOpen(r)}
               >
                 <td className={cn(TD, "sticky left-0 z-10 bg-card text-center group-hover:bg-muted")} onClick={(e) => e.stopPropagation()}>

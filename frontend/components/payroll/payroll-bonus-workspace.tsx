@@ -12,23 +12,32 @@ import { SearchableMultiSelectPanel } from "@/components/ui/searchable-multi-sel
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { currentYm, payrollApi, roleLabel, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
+import { currentYm, payrollApi, roleLabel, STATUS_TONE, ymQuery, type Ym } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
-import { useNotice, useSelection } from "@/components/payroll/payroll-ui";
+import { TonePill, useNotice, useSelection } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { PayrollBonusAssignDialog, type AssignTarget, type BonusFormula } from "@/components/payroll/payroll-bonus-assign-dialog";
 import { PayrollBonusTable, type Assign, type BonusRow } from "@/components/payroll/payroll-bonus-table";
 import { FORMULA_SCOPES } from "@/components/payroll/payroll-formula-editor";
 import { PAYROLL_FILTER_TRIGGER, PayrollFilterCard, PayrollFloatSelect, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
-import { PayrollEmptyRow, PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
+import {
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
+  PayrollEmptyRow,
+  PayrollPagination,
+  PayrollTableCard,
+  PayrollTableToolbar,
+  usePagedRows
+} from "@/components/payroll/kit/payroll-kit-table";
 
 type BonusData = { closed: boolean; groups: Array<{ id: number; name: string }>; directions: Array<{ id: number; name: string }>; rows: BonusRow[] };
 type Tab = "kpi" | "formulas";
 type Filters = { role: string; users: number[]; group: string; direction: string };
 
 const SCOPE_LABEL = Object.fromEntries(FORMULA_SCOPES.map((s) => [s.v, s.label])) as Record<string, string>;
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5";
 
 export function PayrollBonusWorkspace() {
   const tenant = useTenant();
@@ -211,8 +220,8 @@ export function PayrollBonusWorkspace() {
         >
           <PayrollTableToolbar pageSize={prefs.pageSize} onPageSize={prefs.setPageSize} search={fq} onSearch={setFq} searchPlaceholder="Поиск формулы" onRefresh={() => void formulasQ.refetch()} refreshing={formulasQ.isFetching} />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="app-table-thead">
+            <table className={PAYROLL_TABLE}>
+              <thead className={PAYROLL_THEAD}>
                 <tr>
                   <th className={TH}>Название</th>
                   <th className={TH}>Раздел</th>
@@ -224,15 +233,13 @@ export function PayrollBonusWorkspace() {
               <tbody>
                 {formulasQ.isLoading || formulaRows.length === 0 ? <PayrollEmptyRow colSpan={5} loading={formulasQ.isLoading} text="Формул пока нет" /> : null}
                 {formulaPaged.pageRows.map((f) => (
-                  <tr key={f.id} className={cn("border-b border-border/60 hover:bg-muted/40", !f.is_active && "opacity-60")}>
-                    <td className={cn(TD, "font-medium")}>{f.name}</td>
+                  <tr key={f.id} className={cn(PAYROLL_TR, !f.is_active && "opacity-60")}>
+                    <td className={cn(TD, "font-medium text-foreground")}>{f.name}</td>
                     <td className={TD}>{SCOPE_LABEL[f.scope] ?? f.scope}</td>
                     <td className={cn(TD, "max-w-lg truncate font-mono text-xs")} title={f.text}>{f.text}</td>
                     <td className={cn(TD, "text-right tabular-nums")}>{f.assignments ?? 0}</td>
                     <td className={TD}>
-                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", f.is_active ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground")}>
-                        {f.is_active ? "Активна" : "Отключена"}
-                      </span>
+                      <TonePill {...(f.is_active ? STATUS_TONE.emerald : STATUS_TONE.zinc)}>{f.is_active ? "Активна" : "Отключена"}</TonePill>
                     </td>
                   </tr>
                 ))}

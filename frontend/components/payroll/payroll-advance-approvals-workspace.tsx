@@ -4,24 +4,26 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import { PageShell } from "@/components/dashboard/page-shell";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FilterSelect, filterPanelSelectClassName } from "@/components/ui/filter-select";
 import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { ADVANCE_STATUS, fmtDateTime, inputToYm, money, payrollApi, roleLabel, ymLabel } from "@/lib/payroll/payroll-api";
+import { ADVANCE_STATUS, fmtDateTime, money, payrollApi, roleLabel, ymLabel, type Ym } from "@/lib/payroll/payroll-api";
+import { downloadXlsx } from "@/lib/payroll/payroll-xlsx";
 import { cn } from "@/lib/utils";
 import { StatusBadge, useNotice, useSelection } from "@/components/payroll/payroll-ui";
+import { PayrollFilterCard, PayrollFloatInput, PayrollFloatSelect, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
 import {
-  PAYROLL_FILTER_CONTROL,
-  PayrollCardTab,
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
   PayrollEmptyRow,
-  PayrollFilterField,
-  PayrollFiltersSection,
+  PayrollIconAction,
   PayrollPagination,
+  PayrollSelectionBar,
   PayrollTableCard,
   PayrollTableToolbar,
   usePagedRows
@@ -50,15 +52,16 @@ type Row = {
   payout_id: number | null;
 };
 type Data = { rows: Row[]; totals: { count: number; amount: number }; filters: { branches: string[]; senders: Array<{ id: number; fio: string }> } };
+type Tab = "sent" | "approved" | "paid" | "rejected";
+type Filters = { branch: string; sender: string; dateFrom: string; dateTo: string };
 
-const TABS = [
-  { key: "sent", label: "На утверждении" },
-  { key: "approved", label: "Утверждены (ждут выдачи)" },
-  { key: "paid", label: "Выданы" },
-  { key: "rejected", label: "Отклонены" }
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "sent", label: "На утверждении" },
+  { id: "approved", label: "Утверждены (ждут выдачи)" },
+  { id: "paid", label: "Выданы" },
+  { id: "rejected", label: "Отклонены" }
 ];
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5 align-top";
+const EMPTY: Filters = { branch: "", sender: "", dateFrom: "", dateTo: "" };
 
 export function PayrollAdvanceApprovalsWorkspace() {
   const tenant = useTenant();
@@ -69,28 +72,25 @@ export function PayrollAdvanceApprovalsWorkspace() {
   const notice = useNotice();
   const { confirm, dialog } = useAppConfirm();
   const sel = useSelection<number>();
-  const [tab, setTab] = useState("sent");
-  const [month, setMonth] = useState("");
-  const [branch, setBranch] = useState("");
-  const [sender, setSender] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [tab, setTab] = useState<Tab>("sent");
+  const [ym, setYm] = useState<Ym | null>(null);
+  const [draft, setDraft] = useState<Filters>(EMPTY);
+  const [filters, setFilters] = useState<Filters>(EMPTY);
   const [q, setQ] = useState("");
   const prefs = useUserTablePrefs({ tenantSlug: tenant, tableId: "payroll.advance-approvals", defaultColumnOrder: ["fio"], defaultPageSize: 20 });
 
   const params = useMemo(() => {
-    const p = new URLSearchParams({ status: tab });
-    const ym = inputToYm(month);
+    const p = new URLSearchParams({ status: TABS.map((t) => t.id).join(",") });
     if (ym) {
       p.set("year", String(ym.year));
       p.set("month", String(ym.month));
     }
-    if (branch) p.set("branch", branch);
-    if (sender) p.set("sent_by", sender);
-    if (dateFrom) p.set("date_from", `${dateFrom}T00:00:00`);
-    if (dateTo) p.set("date_to", `${dateTo}T23:59:59`);
+    if (filters.branch) p.set("branch", filters.branch);
+    if (filters.sender) p.set("sent_by", filters.sender);
+    if (filters.dateFrom) p.set("date_from", `${filters.dateFrom}T00:00:00`);
+    if (filters.dateTo) p.set("date_to", `${filters.dateTo}T23:59:59`);
     return p.toString();
-  }, [tab, month, branch, sender, dateFrom, dateTo]);
+  }, [ym, filters]);
 
   const dataQ = useQuery({
     queryKey: ["payroll-advance-approvals", tenant, params],
@@ -98,13 +98,15 @@ export function PayrollAdvanceApprovalsWorkspace() {
     refetchInterval: 30_000,
     queryFn: () => api.get<Data>(`/advance-approvals?${params}`)
   });
+  const all = useMemo(() => dataQ.data?.rows ?? [], [dataQ.data]);
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (dataQ.data?.rows ?? []).filter((r) => !s || `${r.fio} ${r.code ?? ""} ${r.branch ?? ""}`.toLowerCase().includes(s));
-  }, [dataQ.data, q]);
-  const paged = usePagedRows(rows, prefs.pageSize, `${params}|${q}`);
+    return all.filter((r) => r.status === tab && (!s || `${r.fio} ${r.code ?? ""} ${r.branch ?? ""}`.toLowerCase().includes(s)));
+  }, [all, tab, q]);
+  const paged = usePagedRows(rows, prefs.pageSize, `${params}|${tab}|${q}`);
   const selected = rows.filter((r) => sel.ids.has(r.id));
   const selSum = selected.reduce((s, r) => s + r.amount, 0);
+  const tabSum = rows.reduce((s, r) => s + r.amount, 0);
   const refresh = () => void qc.invalidateQueries({ queryKey: ["payroll-advance-approvals", tenant] });
 
   const act = useMutation({
@@ -117,6 +119,7 @@ export function PayrollAdvanceApprovalsWorkspace() {
       notice.ok(`${label}: ${Number(r?.[key] ?? 0)}${skipped.length ? `\nПропущено ${skipped.length}: ${[...new Set(skipped.map((s) => s.reason))].join(", ")}` : ""}`);
       sel.clear();
       refresh();
+      void qc.invalidateQueries({ queryKey: ["payroll-cashier-queue", tenant] });
     },
     onError: notice.fail
   });
@@ -140,41 +143,54 @@ export function PayrollAdvanceApprovalsWorkspace() {
     if (ok) act.mutate({ action, ids });
   };
 
+  const exportXlsx = async () => {
+    try {
+      await downloadXlsx(
+        "utverzhdenie-avansov.xlsx",
+        ["Сотрудник", "Код", "Филиал", "Месяц", "Сумма", "Создал", "Отправил", "Статус", "Причина"],
+        rows.map((r) => [r.fio, r.code ?? "", r.branch ?? "", ymLabel(r), r.amount, r.created_by ?? "", r.sent_by ?? "", ADVANCE_STATUS[r.status]?.label ?? r.status, r.reject_reason ?? ""]),
+        TABS.find((t) => t.id === tab)?.label ?? "Авансы"
+      );
+    } catch (e) {
+      notice.fail(e);
+    }
+  };
+
   const pageAllOn = paged.pageRows.length > 0 && paged.pageRows.every((r) => sel.ids.has(r.id));
+  const ids = selected.map((r) => r.id);
 
   return (
     <PageShell className="payroll-template">
-      <PageHeader title="Утверждение авансов" description="Авансы, отправленные руководителями. Утверждённые попадают в очередь кассира филиала по времени утверждения." />
-      <PayrollFiltersSection>
-        <PayrollFilterField label="Месяц">
-          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={cn(PAYROLL_FILTER_CONTROL, "w-44")} title="Пусто — все месяцы" />
-        </PayrollFilterField>
-        <PayrollFilterField label="Филиал">
-          <FilterSelect emptyLabel="Все филиалы" className={filterPanelSelectClassName} value={branch} onChange={(e) => setBranch(e.target.value)}>
-            {(dataQ.data?.filters.branches ?? []).map((b) => <option key={b} value={b}>{b}</option>)}
-          </FilterSelect>
-        </PayrollFilterField>
-        <PayrollFilterField label="Отправитель">
-          <FilterSelect emptyLabel="Все отправители" className={filterPanelSelectClassName} value={sender} onChange={(e) => setSender(e.target.value)}>
-            {(dataQ.data?.filters.senders ?? []).map((s) => <option key={s.id} value={s.id}>{s.fio}</option>)}
-          </FilterSelect>
-        </PayrollFilterField>
-        <PayrollFilterField label="Отправлен с">
-          <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={cn(PAYROLL_FILTER_CONTROL, "w-40")} />
-        </PayrollFilterField>
-        <PayrollFilterField label="Отправлен по">
-          <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={cn(PAYROLL_FILTER_CONTROL, "w-40")} />
-        </PayrollFilterField>
-      </PayrollFiltersSection>
+      <PayrollRelatedBar current="approvals" />
+      <PayrollFilterCard
+        title="Утверждение авансов"
+        description="Авансы, отправленные руководителями. Утверждённые попадают в очередь кассира филиала по времени утверждения."
+        month={{ value: ym, onChange: (v) => { setYm(v); sel.clear(); }, onClear: () => { setYm(null); sel.clear(); } }}
+        onApply={() => { setFilters(draft); sel.clear(); }}
+      >
+        <PayrollFloatSelect
+          label="Филиал"
+          value={draft.branch}
+          onChange={(v) => setDraft((d) => ({ ...d, branch: v }))}
+          options={(dataQ.data?.filters.branches ?? []).map((b) => ({ value: b, label: b }))}
+        />
+        <PayrollFloatSelect
+          label="Отправитель"
+          value={draft.sender}
+          onChange={(v) => setDraft((d) => ({ ...d, sender: v }))}
+          options={(dataQ.data?.filters.senders ?? []).map((s) => ({ value: String(s.id), label: s.fio }))}
+        />
+        <PayrollFloatInput type="date" label="Отправлен с" value={draft.dateFrom} onChange={(v) => setDraft((d) => ({ ...d, dateFrom: v }))} />
+        <PayrollFloatInput type="date" label="Отправлен по" value={draft.dateTo} onChange={(v) => setDraft((d) => ({ ...d, dateTo: v }))} />
+      </PayrollFilterCard>
+      <PayrollSegmentedTabs<Tab>
+        tabs={TABS.map((t) => ({ ...t, count: all.filter((r) => r.status === t.id).length }))}
+        value={tab}
+        onChange={(v) => { setTab(v); sel.clear(); }}
+      />
       {notice.element}
 
-      <PayrollTableCard
-        tabs={TABS.map((t) => (
-          <PayrollCardTab key={t.key} active={tab === t.key} onClick={() => { setTab(t.key); sel.clear(); }}>
-            {t.label}
-          </PayrollCardTab>
-        ))}
-      >
+      <PayrollTableCard>
         <PayrollTableToolbar
           pageSize={prefs.pageSize}
           onPageSize={prefs.setPageSize}
@@ -183,34 +199,35 @@ export function PayrollAdvanceApprovalsWorkspace() {
           searchPlaceholder="Поиск: ФИО, код, филиал"
           onRefresh={refresh}
           refreshing={dataQ.isFetching}
+          onExport={() => void exportXlsx()}
         >
           <span className="text-sm text-muted-foreground">
-            {dataQ.data?.totals.count ?? 0} шт. · <b className="text-foreground">{money(dataQ.data?.totals.amount ?? 0)}</b>
+            {rows.length} шт. · <b className="text-foreground">{money(tabSum)}</b>
           </span>
+          {canApprove && tab === "sent" ? (
+            <Button className="h-9" disabled={!selected.length || act.isPending} onClick={() => void run("approve", ids, selSum)}>
+              <Check className="mr-1.5 size-4" /> Утвердить{selected.length ? ` (${selected.length})` : ""}
+            </Button>
+          ) : null}
         </PayrollTableToolbar>
 
-        {canApprove && selected.length ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-primary/20 bg-primary/5 px-3 py-2 text-sm sm:px-4">
-            <span className="font-medium">Выбрано: {selected.length} · {money(selSum)}</span>
+        {canApprove ? (
+          <PayrollSelectionBar count={selected.length} extra={` · ${money(selSum)}`} onClear={sel.clear}>
             {tab === "sent" ? (
-              <>
-                <Button size="sm" onClick={() => void run("approve", selected.map((r) => r.id), selSum)}>Утвердить</Button>
-                <Button size="sm" variant="outline" onClick={() => void run("reject", selected.map((r) => r.id), selSum)}>Отклонить</Button>
-              </>
+              <Button size="sm" variant="outline" onClick={() => void run("reject", ids, selSum)}>Отклонить</Button>
             ) : null}
             {tab === "sent" || tab === "approved" ? (
-              <Button size="sm" variant="outline" onClick={() => void run("cancel", selected.map((r) => r.id), selSum)}>Отменить</Button>
+              <Button size="sm" variant="outline" onClick={() => void run("cancel", ids, selSum)}>Отменить</Button>
             ) : null}
-            <Button size="sm" variant="ghost" onClick={sel.clear}>Снять выбор</Button>
-          </div>
+          </PayrollSelectionBar>
         ) : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="app-table-thead">
+          <table className={PAYROLL_TABLE}>
+            <thead className={PAYROLL_THEAD}>
               <tr>
                 <th className={cn(TH, "w-10")}>
-                  <input type="checkbox" className="accent-primary" checked={pageAllOn} onChange={(e) => sel.setAll(paged.pageRows.map((r) => r.id), e.target.checked)} aria-label="Выбрать все" />
+                  <input type="checkbox" className="size-4 accent-primary" checked={pageAllOn} onChange={(e) => sel.setAll(paged.pageRows.map((r) => r.id), e.target.checked)} aria-label="Выбрать все" />
                 </th>
                 <th className={TH}>Сотрудник</th>
                 <th className={TH}>Филиал</th>
@@ -226,16 +243,16 @@ export function PayrollAdvanceApprovalsWorkspace() {
             <tbody>
               {dataQ.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={10} loading={dataQ.isLoading} /> : null}
               {paged.pageRows.map((r) => (
-                <tr key={r.id} className={cn("border-b border-border/60 hover:bg-muted/40", sel.ids.has(r.id) && "bg-primary/5")}>
+                <tr key={r.id} className={cn(PAYROLL_TR, sel.ids.has(r.id) && "bg-primary/5")}>
                   <td className={TD}>
-                    <input type="checkbox" className="accent-primary" checked={sel.ids.has(r.id)} onChange={() => sel.toggle(r.id)} aria-label={r.fio} />
+                    <input type="checkbox" className="size-4 accent-primary" checked={sel.ids.has(r.id)} onChange={() => sel.toggle(r.id)} aria-label={r.fio} />
                   </td>
                   <td className={TD}>
                     <div className="font-medium text-foreground">{r.fio}</div>
                     <div className="text-[11px] text-muted-foreground">{roleLabel(r.role)}{r.code ? ` · ${r.code}` : ""}</div>
                     {r.comment ? <div className="text-[11px] text-muted-foreground">{r.comment}</div> : null}
                   </td>
-                  <td className={TD}>{r.branch ?? "—"}</td>
+                  <td className={cn(TD, "text-muted-foreground")}>{r.branch ?? "—"}</td>
                   <td className={cn(TD, "text-xs")}>{ymLabel(r)}</td>
                   <td className={cn(TD, "text-right font-semibold tabular-nums")}>{money(r.amount)}</td>
                   <td className={cn(TD, "text-xs")}>
@@ -260,17 +277,18 @@ export function PayrollAdvanceApprovalsWorkspace() {
                         <div className="text-red-700">{r.reject_reason}</div>
                       </>
                     ) : null}
+                    {!r.approved_at && !r.rejected_at ? <span className="text-muted-foreground/60">—</span> : null}
                   </td>
                   <td className={TD}><StatusBadge map={ADVANCE_STATUS} status={r.status} /></td>
                   <td className={cn(TD, "text-center")}>
                     {canApprove && r.status === "sent" ? (
-                      <div className="inline-flex gap-1">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Утвердить" onClick={() => void run("approve", [r.id], r.amount)}>
-                          <Check className="size-4 text-emerald-700" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Отклонить" onClick={() => void run("reject", [r.id], r.amount)}>
-                          <X className="size-4 text-red-700" />
-                        </Button>
+                      <div className="inline-flex gap-1.5">
+                        <PayrollIconAction label="Утвердить" tone="success" onClick={() => void run("approve", [r.id], r.amount)}>
+                          <Check className="size-4" />
+                        </PayrollIconAction>
+                        <PayrollIconAction label="Отклонить" tone="danger" onClick={() => void run("reject", [r.id], r.amount)}>
+                          <X className="size-4" />
+                        </PayrollIconAction>
                       </div>
                     ) : null}
                   </td>

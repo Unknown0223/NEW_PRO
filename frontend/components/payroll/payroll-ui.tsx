@@ -4,7 +4,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { inputToYm, payrollErrorText, ymToInput, type Ym } from "@/lib/payroll/payroll-api";
+import { inputToYm, payrollErrorText, STATUS_TONE, ymToInput, type StatusStyle, type Ym } from "@/lib/payroll/payroll-api";
 
 export const FIELD_LABEL = "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 export const NATIVE_SELECT = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
@@ -24,9 +24,18 @@ export function MonthField({ value, onChange, className }: { value: Ym; onChange
   );
 }
 
-export function StatusBadge({ map, status }: { map: Record<string, { label: string; cls: string }>; status: string }) {
-  const m = map[status] ?? { label: status, cls: "bg-slate-100 text-slate-700" };
-  return <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium", m.cls)}>{m.label}</span>;
+export function StatusBadge({ map, status }: { map: Record<string, StatusStyle>; status: string }) {
+  const m = map[status] ?? { label: status, ...STATUS_TONE.slate };
+  return <TonePill cls={m.cls} dot={m.dot}>{m.label}</TonePill>;
+}
+
+export function TonePill({ cls, dot, children }: { cls: string; dot: string; children: ReactNode }) {
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold", cls)}>
+      <span className={cn("size-1.5 rounded-full", dot)} />
+      {children}
+    </span>
+  );
 }
 
 type NoticeState = { kind: "ok" | "error"; text: string } | null;

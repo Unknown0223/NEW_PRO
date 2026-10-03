@@ -9,21 +9,31 @@ import { useAppConfirm } from "@/components/ui/app-confirm-dialog";
 import { useUserTablePrefs } from "@/hooks/use-user-table-prefs";
 import { usePermissions } from "@/lib/use-permissions";
 import { useTenant } from "@/lib/api-client";
-import { fmtDateTime, payrollApi, roleLabel } from "@/lib/payroll/payroll-api";
+import { fmtDateTime, payrollApi, roleLabel, STATUS_TONE } from "@/lib/payroll/payroll-api";
 import { cn } from "@/lib/utils";
-import { useNotice } from "@/components/payroll/payroll-ui";
+import { TonePill, useNotice } from "@/components/payroll/payroll-ui";
 import type { PayrollItem } from "@/components/payroll/payroll-items-workspace";
 import { FORMULA_SCOPES, PayrollFormulaEditor, type FormulaDraft } from "@/components/payroll/payroll-formula-editor";
 import { PayrollPageTitle, PayrollRelatedBar, PayrollSegmentedTabs } from "@/components/payroll/kit/payroll-kit-layout";
-import { PayrollEmptyRow, PayrollPagination, PayrollTableCard, PayrollTableToolbar, usePagedRows } from "@/components/payroll/kit/payroll-kit-table";
+import {
+  PAYROLL_TABLE,
+  PAYROLL_TD as TD,
+  PAYROLL_TH as TH,
+  PAYROLL_THEAD,
+  PAYROLL_TR,
+  PayrollEmptyRow,
+  PayrollIconAction,
+  PayrollPagination,
+  PayrollTableCard,
+  PayrollTableToolbar,
+  usePagedRows
+} from "@/components/payroll/kit/payroll-kit-table";
 
 export type Formula = FormulaDraft & { id: number; target_item_name: string | null; assignments: number; updated_at: string };
 type Tab = "write" | "saved";
 
 const SCOPE_LABEL = Object.fromEntries(FORMULA_SCOPES.map((s) => [s.v, s.label])) as Record<string, string>;
 const EMPTY: FormulaDraft = { name: "", scope: "bonus", text: "", role: null, target_item_id: null, priority: 100, is_active: true };
-const TH = "px-3 py-2.5 text-left font-medium";
-const TD = "px-3 py-2.5";
 
 export function PayrollFormulasWorkspace() {
   const tenant = useTenant();
@@ -175,8 +185,8 @@ export function PayrollFormulasWorkspace() {
             refreshing={listQ.isFetching}
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="app-table-thead">
+            <table className={PAYROLL_TABLE}>
+              <thead className={PAYROLL_THEAD}>
                 <tr>
                   <th className={TH}>Название</th>
                   <th className={TH}>Раздел</th>
@@ -192,37 +202,33 @@ export function PayrollFormulasWorkspace() {
               <tbody>
                 {listQ.isLoading || rows.length === 0 ? <PayrollEmptyRow colSpan={9} loading={listQ.isLoading} text="Формул пока нет" /> : null}
                 {paged.pageRows.map((f) => (
-                  <tr key={f.id} className={cn("border-b border-border/60 hover:bg-muted/40", !f.is_active && "opacity-60")}>
+                  <tr key={f.id} className={cn(PAYROLL_TR, !f.is_active && "opacity-60")}>
                     <td className={cn(TD, "font-medium text-foreground")}>{f.name}</td>
                     <td className={TD}>{SCOPE_LABEL[f.scope] ?? f.scope}</td>
-                    <td className={TD}>{f.role ? roleLabel(f.role) : "—"}</td>
-                    <td className={TD}>{f.target_item_name ?? "—"}</td>
+                    <td className={cn(TD, "text-muted-foreground")}>{f.role ? roleLabel(f.role) : "—"}</td>
+                    <td className={cn(TD, "text-muted-foreground")}>{f.target_item_name ?? "—"}</td>
                     <td className={cn(TD, "max-w-md truncate font-mono text-xs")} title={f.text}>{f.text}</td>
                     <td className={cn(TD, "text-right tabular-nums")}>{f.assignments}</td>
                     <td className={TD}>
-                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", f.is_active ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground")}>
-                        {f.is_active ? "Активна" : "Отключена"}
-                      </span>
+                      <TonePill {...(f.is_active ? STATUS_TONE.emerald : STATUS_TONE.zinc)}>{f.is_active ? "Активна" : "Отключена"}</TonePill>
                     </td>
                     <td className={cn(TD, "text-xs text-muted-foreground")}>{fmtDateTime(f.updated_at)}</td>
                     <td className={cn(TD, "text-center")}>
                       {canEdit ? (
-                        <div className="inline-flex gap-1">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50" onClick={() => edit(f)} aria-label="Изменить">
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            aria-label="Удалить"
+                        <div className="inline-flex gap-1.5">
+                          <PayrollIconAction label="Изменить" tone="edit" onClick={() => edit(f)}>
+                            <Pencil className="size-3.5" />
+                          </PayrollIconAction>
+                          <PayrollIconAction
+                            label="Удалить"
+                            tone="danger"
                             onClick={async () => {
                               const ok = await confirm({ title: "Удалить формулу", message: `Удалить «${f.name}»?`, confirmLabel: "Удалить", cancelLabel: "Отмена", destructive: true });
                               if (ok) remove.mutate(f.id);
                             }}
                           >
-                            <Trash2 className="size-4 text-red-600" />
-                          </Button>
+                            <Trash2 className="size-3.5" />
+                          </PayrollIconAction>
                         </div>
                       ) : null}
                     </td>
