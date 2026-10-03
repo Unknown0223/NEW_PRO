@@ -444,6 +444,7 @@ export function rowStatusPatchError(err: unknown): string {
   if (code === "ForbiddenRevert") return "Возврат на предыдущий этап доступен только администратору.";
   if (code === "ForbiddenReopenCancelled") return "Повторно открыть отменённый заказ может только администратор.";
   if (code === "ForbiddenOperatorCancelLate") return "На этом этапе отмена запрещена.";
+  if (code === "ForbiddenPermission") return "Нет права на этот переход статуса (Доступ → Заявки → Статус).";
   if (code === "ApprovalPending") return "Дождитесь цепочки согласования — текущий согласующий должен подтвердить.";
   if (code === "ApprovalRejected") return "Согласование отклонено — требуется повторная настройка.";
   if (code === "NotFound") return "Заказ не найден.";

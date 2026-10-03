@@ -30,6 +30,7 @@ import {
 } from "../staff/skladchik-access.prehandler";
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
+import { resolveOrderStatusRbac, sendOrderStatusPermissionError } from "./order-status-rbac";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
   bulkUpdateOrderExpeditor,
@@ -65,13 +66,15 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
         const actor = getAccessUser(request);
         const actorSub = Number.parseInt(actor.sub, 10);
         const actorUserId = Number.isFinite(actorSub) && actorSub > 0 ? actorSub : null;
+        const rbac = await resolveOrderStatusRbac(request);
         const row = await updateOrderStatus(
           request.tenant!.id,
           id,
           parsed.data.status,
           actorUserId,
           actor.role,
-          parsed.data.occurred_at
+          parsed.data.occurred_at,
+          { canTransition: rbac?.canTransition ?? null }
         );
         return reply.send(row);
       } catch (e) {
@@ -81,6 +84,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
           return sendApiError(reply, request, 400, "InvalidOccurredAt");
         }
         if (msg === "NOT_FOUND") return sendApiError(reply, request, 404, "NotFound");
+        if (msg === "FORBIDDEN_STATUS_PERMISSION") return sendOrderStatusPermissionError(reply, request, e);
         if (msg === "FORBIDDEN_REVERT") {
           return sendApiError(reply, request, 403, "ForbiddenRevert");
         }

@@ -36,9 +36,9 @@ describe("permission-model (CRUD struktura)", () => {
     expect(keys).toContain("clients.klient.deactivate");
   });
 
-  it("yangi bo'limlar mavjud (pivot/audit/finance/automation/work_slots/warehouse to'liq)", () => {
+  it("yangi bo'limlar mavjud (audit/finance/automation/work_slots/warehouse to'liq)", () => {
     const modules = new Set(PERMISSION_SECTIONS.map((s) => s.module));
-    for (const m of ["pivot", "audit", "finance", "automation", "work_slots", "warehouse", "routes", "activity"]) {
+    for (const m of ["audit", "finance", "automation", "work_slots", "warehouse", "routes", "activity"]) {
       expect(modules.has(m), `module yo'q: ${m}`).toBe(true);
     }
     const whSections = PERMISSION_SECTIONS.filter((s) => s.module === "warehouse").map((s) => s.section);
@@ -92,14 +92,14 @@ describe("route-permission-guard matchRule", () => {
   });
 
   it("maxsus yo'llar (status/bulk) umumiydan oldin", () => {
-    expect(matchRule("POST", "/api/:slug/orders/:id/status")?.anyOf).toContain("orders.zakaz.status");
+    expect(matchRule("POST", "/api/:slug/orders/:id/status")?.anyOf).toContain("orders.status_delivered.status");
     expect(matchRule("POST", "/api/:slug/orders/bulk/nakladnoy")?.anyOf).toContain("orders.zakaz.copy");
   });
 
   it("aniq URL (Fastify 5 fallback) ham :id qoidasiga mos keladi", () => {
     expect(matchRule("DELETE", "/api/acme/orders/5")?.anyOf).toContain("orders.zakaz.delete");
     expect(matchRule("PATCH", "/api/acme/payments/9")?.anyOf).toContain("cash.oplaty_klientov.update");
-    expect(matchRule("POST", "/api/acme/orders/12/status")?.anyOf).toContain("orders.zakaz.status");
+    expect(matchRule("POST", "/api/acme/orders/12/status")?.anyOf).toContain("orders.status_cancelled.status");
   });
 
   it("clients bulk-active → activate/deactivate", () => {

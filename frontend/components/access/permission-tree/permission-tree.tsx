@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { IndeterminateCheckbox } from "@/components/access/access-user-detail/access-user-detail-territory-ui";
 import {
   accessOpKind,
+  isFlatAccessModule,
   moduleKeys,
   sectionKeys,
   triState,
@@ -149,7 +150,7 @@ export function PermissionTree({
             {modOpen ? (
               <ul role="group" className="space-y-1 border-t border-border/60 px-2 py-2">
                 {mod.sections.map((sec) => {
-                  if (sec.operations.length === 1) {
+                  if (isFlatAccessModule(mod)) {
                     const op = sec.operations[0];
                     return (
                       <li key={sec.id} role="treeitem" aria-selected={isOn(op.key)} className="rounded-md bg-muted/30 px-2 py-0.5">

@@ -37,7 +37,14 @@ function shouldPersistQueryKey(key: unknown): boolean {
   }
   if (root === "me" && (key[1] === "access-permissions" || key[1] === "ui-preferences")) return false;
   if (root === "settings" && key[1] === "profile") return false;
-  if (root === "access-territories" || root === "access-users" || root === "access-user-detail") return false;
+  if (
+    root === "access-territories" ||
+    root === "access-users" ||
+    root === "access-user-detail" ||
+    root === "access-operations-tree"
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -78,7 +85,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       persister,
       maxAge: 10 * 60 * 1000, // 10 min
       /** O‘zgartirilganda eski localStorage keshi bekor — infinite query shakli bilan to‘qnashmasin */
-      buster: "v6-actor-scope-wipe-guard",
+      buster: "v7-access-tree-status-split",
       dehydrateOptions: {
         shouldDehydrateQuery: (q) => {
           if (q.state.status !== "success") return false;

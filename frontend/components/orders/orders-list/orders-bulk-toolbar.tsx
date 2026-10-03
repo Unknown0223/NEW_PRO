@@ -27,6 +27,8 @@ import {
   ORDER_LIST_COLUMNS,
   orderListExportCell
 } from "@/lib/orders-list-columns";
+import { canPickBulkTargetStatus } from "@/lib/order-status-transitions";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
@@ -129,6 +131,11 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
   } = props;
 
   const bonusPicker = useBulkBonusGiftPicker(tenantSlug);
+  const { has } = usePermissions();
+  const bulkStatusOptions = useMemo(
+    () => BULK_STATUS_QUICK.filter((s) => canPickBulkTargetStatus(s.value, has)),
+    [has]
+  );
 
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [statusOpen, setStatusOpen] = useState(false);
@@ -464,6 +471,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         </span>
       </div>
 
+      {bulkStatusOptions.length > 0 ? (
       <div className="relative shrink-0" ref={statusDropdownRef}>
         <button
           type="button"
@@ -483,7 +491,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           onClose={() => setStatusOpen(false)}
           minWidth={220}
         >
-          {BULK_STATUS_QUICK.map((s) => (
+          {bulkStatusOptions.map((s) => (
             <button
               key={s.value}
               type="button"
@@ -502,6 +510,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
           ))}
         </BulkToolbarDropdownPortal>
       </div>
+      ) : null}
 
       {expeditorAssignableOrderIds.length > 0 ? (
         <button

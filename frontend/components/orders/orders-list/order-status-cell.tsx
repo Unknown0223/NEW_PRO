@@ -2,6 +2,7 @@
 
 import type { OrderListRow } from "@/components/orders/order-detail-view";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_VALUES } from "@/lib/order-status";
+import { orderStatusTransitionPermission } from "@/lib/order-status-transitions";
 import { usePermissions } from "@/lib/use-permissions";
 import { memo } from "react";
 
@@ -20,13 +21,18 @@ export const OrderStatusCell = memo(function OrderStatusCell({
   onStatusChange
 }: OrderStatusCellProps) {
   const { has } = usePermissions();
-  const canPatch = has("orders.zakaz.status") || has("orders.status.status");
   const allowedRaw = order.allowed_next_statuses ?? [];
-  const nextOnly = new Set(allowedRaw.filter((s) => s !== order.status));
+  const nextOnly = new Set(
+    allowedRaw.filter((s) => {
+      if (s === order.status) return false;
+      const key = orderStatusTransitionPermission(order.status, s, order.order_type);
+      return key != null && has(key);
+    })
+  );
   const nextStatuses = ORDER_STATUS_VALUES.filter((v) => nextOnly.has(v));
   const err = statusError;
 
-  if (!canPatch || nextStatuses.length === 0) {
+  if (nextStatuses.length === 0) {
     return (
       <span className="inline-flex flex-col gap-0.5 align-top">
         <span className="w-fit rounded-md bg-muted px-2 py-0.5 text-xs">

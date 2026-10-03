@@ -34,6 +34,7 @@ import {
   isValidOrderStatus,
   mayActorRevertOneStep
 } from "../order-status";
+import { orderStatusTransitionPermission, type OrderStatusPermissionChecker } from "../order-status-permissions";
 import { resolveAutoExpeditorUserId } from "../expeditor-auto-assign";
 import {
   computeAgentConsignmentOutstanding,
@@ -95,6 +96,11 @@ export type UpdateOrderStatusOptions = {
   deferSideEffects?: boolean;
   /** Natija ishlatilmasa — enrich o‘tkazib yuboriladi. */
   skipEnrich?: boolean;
+  /**
+   * Veb RBAC: `from → to` o'tishi uchun alohida ruxsat (Доступ → Заявки → Статус).
+   * Berilsa, orqaga qadam ham rol ro'yxati o'rniga shu ruxsat bilan hal qilinadi.
+   */
+  canTransition?: OrderStatusPermissionChecker | null;
 };
 
 export async function updateOrderStatus(
@@ -132,7 +138,15 @@ export async function updateOrderStatus(
     throw err;
   }
 
-  if (isBackwardTransition(o.status, trimmed, orderType) && !mayActorRevertOneStep(actorRole)) {
+  if (opts?.canTransition) {
+    if (!opts.canTransition(o.status, trimmed, orderType)) {
+      const err = new Error("FORBIDDEN_STATUS_PERMISSION") as Error & { from: string; to: string; permission: string | null };
+      err.from = o.status;
+      err.to = trimmed;
+      err.permission = orderStatusTransitionPermission(o.status, trimmed, orderType);
+      throw err;
+    }
+  } else if (isBackwardTransition(o.status, trimmed, orderType) && !mayActorRevertOneStep(actorRole)) {
     throw new Error("FORBIDDEN_REVERT");
   }
 
@@ -447,13 +461,18 @@ export async function bulkUpdateOrderStatus(
   nextStatus: string,
   actorUserId: number | null,
   actorRole: string,
-  occurredAtRaw?: string
+  occurredAtRaw?: string,
+  rbac?: { canTransition: OrderStatusPermissionChecker; canEditStatusDate: boolean } | null
 ): Promise<BulkOrderStatusResult> {
   const ids = [...new Set(orderIds.filter((id) => Number.isFinite(id) && id > 0))];
   const updated: number[] = [];
   const failed: BulkOrderStatusResult["failed"] = [];
   const trimmed = nextStatus.trim();
-  const defer = { deferSideEffects: true, skipEnrich: true } as const;
+  const defer: UpdateOrderStatusOptions = {
+    deferSideEffects: true,
+    skipEnrich: true,
+    canTransition: rbac?.canTransition ?? null
+  };
 
   const existingRows = await prisma.order.findMany({
     where: { id: { in: ids }, tenant_id: tenantId },
@@ -480,6 +499,7 @@ export async function bulkUpdateOrderStatus(
       const fromStatus = existing.status;
       if (fromStatus === trimmed) {
         if (occurredAtRaw) {
+          if (rbac && !rbac.canEditStatusDate) throw new Error("FORBIDDEN_STATUS_PERMISSION");
           await updateOrderMilestoneAt(tenantId, id, trimmed, occurredAtRaw, actorRole, defer);
         }
         updated.push(id);
@@ -505,7 +525,7 @@ export async function bulkUpdateOrderStatus(
       failed.push({
         id,
         error: code,
-        ...(code === "INVALID_TRANSITION" ? { from: ex.from, to: ex.to } : {})
+        ...(code === "INVALID_TRANSITION" || code === "FORBIDDEN_STATUS_PERMISSION" ? { from: ex.from, to: ex.to } : {})
       });
     }
   }

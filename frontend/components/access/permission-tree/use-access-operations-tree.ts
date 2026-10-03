@@ -8,7 +8,7 @@ export function useAccessOperationsTree(tenantSlug: string) {
   return useQuery({
     queryKey: ["access-operations-tree", tenantSlug],
     enabled: Boolean(tenantSlug),
-    staleTime: 30 * 60_000,
+    staleTime: 5 * 60_000,
     gcTime: 60 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {

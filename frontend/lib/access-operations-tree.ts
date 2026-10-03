@@ -46,6 +46,14 @@ export function treeKeys(tree: readonly AccessTreeModule[]): string[] {
   return tree.flatMap(moduleKeys);
 }
 
+/**
+ * Bo'limlarsiz (tekis) ro'yxat — faqat moduldagi har bir bo'lim bitta operatsiyali bo'lsa (Дашборд, Накладные).
+ * Aralash modulda bitta operatsiyali bo'lim ham guruh sifatida qoladi — operatsiya bo'lim tashqarisida «osilib» qolmaydi.
+ */
+export function isFlatAccessModule(mod: AccessTreeModule): boolean {
+  return mod.sections.every((s) => s.operations.length === 1);
+}
+
 export function triState(keys: readonly string[], isOn: (key: string) => boolean): TriState {
   if (keys.length === 0) return "none";
   let on = 0;

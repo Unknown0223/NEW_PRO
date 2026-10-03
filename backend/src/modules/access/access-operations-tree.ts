@@ -5,6 +5,7 @@ import {
   buildStructuredPermissionCatalog,
   permissionKey,
   permissionOperationLabel,
+  permissionTreeSectionLabel,
   type PermissionAction,
   type StructuredPermissionEntry
 } from "./permission-model";
@@ -14,27 +15,63 @@ export type AccessTreeOperation = { key: string; action: PermissionAction; label
 export type AccessTreeSection = { id: string; label: string; operations: AccessTreeOperation[] };
 export type AccessTreeModule = { id: string; label: string; sections: AccessTreeSection[] };
 
-/** «Доступ» operatsiyalar daraxti: Modul → Bo'lim → Operatsiya (katalog tartibida). */
-export function buildAccessOperationsTree(): AccessTreeModule[] {
-  const modules = new Map<string, AccessTreeModule>();
+type PlacedOperation = {
+  moduleLabel: string;
+  sectionLabel: string;
+  sectionId: string;
+  /** Operatsiya o'z bo'limidan boshqa bo'limga ko'chirilgan. */
+  moved: boolean;
+  op: AccessTreeOperation;
+};
+
+function placedOperations(): PlacedOperation[] {
+  const out: PlacedOperation[] = [];
   for (const def of PERMISSION_SECTIONS) {
-    const label = def.groupRu ?? PERMISSION_MODULE_LABEL_RU[def.module] ?? def.module;
-    let mod = modules.get(label);
-    if (!mod) {
-      mod = { id: label, label, sections: [] };
-      modules.set(label, mod);
-    }
+    const moduleLabel = def.groupRu ?? PERMISSION_MODULE_LABEL_RU[def.module] ?? def.module;
     const single = def.actions.length === 1;
-    const operations = [...def.actions]
-      .sort((a, b) => PERMISSION_ACTION_ORDER[a] - PERMISSION_ACTION_ORDER[b])
-      .map((action) => {
-        const key = permissionKey(def.module, def.section, action);
-        const label =
-          single && !PERMISSION_OP_LABEL_RU[key] ? def.labelRu : permissionOperationLabel(key, action);
-        return { key, action, label };
+    const homeLabel = def.treeSectionRu ?? def.labelRu;
+    const actions = [...def.actions].sort((a, b) => PERMISSION_ACTION_ORDER[a] - PERMISSION_ACTION_ORDER[b]);
+    for (const action of actions) {
+      const key = permissionKey(def.module, def.section, action);
+      const label = single && !PERMISSION_OP_LABEL_RU[key] ? def.labelRu : permissionOperationLabel(key, action);
+      const sectionLabel = permissionTreeSectionLabel(def, key);
+      out.push({
+        moduleLabel,
+        sectionLabel,
+        sectionId: `${def.module}.${def.section}`,
+        moved: sectionLabel !== homeLabel,
+        op: { key, action, label }
       });
-    mod.sections.push({ id: `${def.module}.${def.section}`, label: def.labelRu, operations });
+    }
   }
+  return out;
+}
+
+/**
+ * «Доступ» operatsiyalar daraxti: Modul → Bo'lim → Operatsiya.
+ * Bir modul ichida bir xil nomli bo'limlar birlashadi (`treeSectionRu`, operatsiya override);
+ * bo'lim tartibi — unga tegishli birinchi ta'rif bo'yicha (ko'chirilgan operatsiyalar tartibni o'zgartirmaydi).
+ */
+export function buildAccessOperationsTree(): AccessTreeModule[] {
+  const placed = placedOperations();
+  const modules = new Map<string, AccessTreeModule>();
+  const sections = new Map<string, AccessTreeSection>();
+  const ensureSection = (p: PlacedOperation): AccessTreeSection => {
+    const sectionKey = `${p.moduleLabel}\u0000${p.sectionLabel}`;
+    let section = sections.get(sectionKey);
+    if (section) return section;
+    let mod = modules.get(p.moduleLabel);
+    if (!mod) {
+      mod = { id: p.moduleLabel, label: p.moduleLabel, sections: [] };
+      modules.set(p.moduleLabel, mod);
+    }
+    section = { id: p.sectionId, label: p.sectionLabel, operations: [] };
+    sections.set(sectionKey, section);
+    mod.sections.push(section);
+    return section;
+  };
+  for (const p of placed) if (!p.moved) ensureSection(p);
+  for (const p of placed) ensureSection(p).operations.push(p.op);
   return [...modules.values()];
 }
 

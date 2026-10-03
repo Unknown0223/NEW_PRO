@@ -41,6 +41,13 @@ function uniq(...lists: string[][]): string[] {
   return [...new Set(lists.flat())];
 }
 
+/** Zakaz status o'tishlari (`orders.status_<slug>.*`, daraxtda «Статус»). */
+function orderStatus(...slugs: string[]): string[] {
+  return slugs.flatMap((slug) => sec("orders", `status_${slug}`));
+}
+
+const ALL_ORDER_STATUS_SLUGS = ["confirmed", "picking", "delivering", "delivered", "returned", "cancelled", "revert", "reopen", "date"];
+
 /** Admin — hamma narsa + boshqaruv kalitlari. */
 const ADMIN_KEYS = uniq(ALL_KEYS, ["access.manage", "users.manage", "audit.view"]);
 
@@ -55,7 +62,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   operator: () =>
     uniq(
       mod("dashboard"),
-      secOnly("orders", "zakaz", ["view", "create", "update", "copy", "status", "history"]),
+      secOnly("orders", "zakaz", ["view", "create", "update", "copy", "history"]),
+      orderStatus(...ALL_ORDER_STATUS_SLUGS),
       secOnly("orders", "vozvrat", ["view", "create"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
       sec("clients", "profil"),
@@ -70,7 +78,6 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("dashboard"),
       mod("reports"),
-      mod("pivot"),
       modViewOnly("orders"),
       modViewOnly("clients"),
       modViewOnly("cash"),
@@ -122,6 +129,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       mod("cash"),
       mod("finance"),
+      secOnly("dashboard", "finansy", ["view"]),
       mod("suppliers"),
       mod("reports"),
       modViewOnly("orders"),
@@ -207,8 +215,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
 
   expeditor: () =>
     uniq(
-      secOnly("orders", "zakaz", ["view", "status"]),
-      secOnly("orders", "vozvrat", ["view", "create", "status"]),
+      secOnly("orders", "zakaz", ["view"]),
+      orderStatus("delivering", "delivered", "returned", "revert", "date"),
+      secOnly("orders", "vozvrat", ["view", "create"]),
       secOnly("clients", "foto", ["view", "create", "void"]),
       modViewOnly("invoices"),
       secOnly("cash", "zayavki_na_oplatu", ["view"]),

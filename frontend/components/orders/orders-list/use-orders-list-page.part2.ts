@@ -299,7 +299,11 @@ export function useOrdersListPagePart2(p1: OrdersListPagePart1) {
           `Обновлено: ${res.updated.length}. Не прошло: ${res.failed.length} (ID: ${res.failed
             .slice(0, 8)
             .map((f) => f.id)
-            .join(", ")}${res.failed.length > 8 ? "…" : ""})`
+            .join(", ")}${res.failed.length > 8 ? "…" : ""})${
+            res.failed.some((f) => f.error === "FORBIDDEN_STATUS_PERMISSION")
+              ? ". Часть переходов не разрешена (Доступ → Заявки → Статус)."
+              : ""
+          }`
         );
       } else {
         setBulkFeedback(null);

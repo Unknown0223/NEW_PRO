@@ -11,6 +11,7 @@ import {
   buildOperationsDraftPatch,
   draftChangedKeys,
   filterAccessTree,
+  isFlatAccessModule,
   moduleKeys,
   sectionKeys,
   treeKeys,
@@ -74,7 +75,7 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
   const searching = search.trim().length > 0;
 
   const groupIds = useMemo(
-    () => visibleTree.flatMap((m) => [m.id, ...m.sections.filter((s) => s.operations.length > 1).map((s) => s.id)]),
+    () => visibleTree.flatMap((m) => [m.id, ...(isFlatAccessModule(m) ? [] : m.sections.map((s) => s.id))]),
     [visibleTree]
   );
   const allExpanded = groupIds.length > 0 && groupIds.every((id) => expanded.has(id));
@@ -265,7 +266,7 @@ export function AccessAttachOperationsDialog({ open, onOpenChange, vm, tree, sta
                     {modOpen ? (
                       <ul role="group" className="space-y-0.5 px-4 py-2">
                         {mod.sections.map((sec) => {
-                          if (sec.operations.length === 1) return opRow(sec.operations[0], sec.operations[0].label, 1);
+                          if (isFlatAccessModule(mod)) return opRow(sec.operations[0], sec.operations[0].label, 1);
                           const sKeys = sectionKeys(sec);
                           const secOpen = isOpen(sec.id);
                           return (

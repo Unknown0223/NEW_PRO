@@ -271,7 +271,7 @@ function patchOrderLinesErrorMessage(err: unknown): string | null {
     );
   }
   if (ax.response?.status === 403) {
-    return withApiSupportLine("Нет прав на редактирование (orders.zakaz.update / status).", err);
+    return withApiSupportLine("Нет прав на редактирование заказа (orders.zakaz.update).", err);
   }
   return null;
 }
@@ -286,8 +286,7 @@ export function OrderDetailView({
   const router = useRouter();
   const role = useEffectiveRole();
   const { has } = usePermissions();
-  const canOperate =
-    has("orders.zakaz.update") || has("orders.zakaz.status") || has("orders.status.status");
+  const canOperate = has("orders.zakaz.update");
   const [editingLines, setEditingLines] = useState(false);
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const [editError, setEditError] = useState<string | null>(null);

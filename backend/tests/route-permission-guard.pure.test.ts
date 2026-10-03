@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { matchRule, ROUTE_PERMISSION_RULES } from "../src/modules/access/route-permission-guard";
+import {
+  ORDER_STATUS_CHANGE_PERMISSIONS,
+  ORDER_STATUS_DATE_PERMISSION
+} from "../src/modules/orders/order-status-permissions";
 
 describe("route-permission-guard matchRule", () => {
   it("maps GET /orders list to orders.zakaz.view", () => {
@@ -13,9 +17,53 @@ describe("route-permission-guard matchRule", () => {
     expect(rule?.anyOf).toContain("orders.zakaz.create");
   });
 
-  it("maps PATCH /orders/:id/status to orders.zakaz.status", () => {
-    const rule = matchRule("PATCH", "/api/:slug/orders/:id/status");
-    expect(rule?.anyOf).toContain("orders.zakaz.status");
+  it("maps PATCH /orders/:id/status to per-status keys (also with :id(\\d+) route pattern)", () => {
+    for (const path of ["/api/:slug/orders/:id/status", "/api/:slug/orders/:id(\\d+)/status"]) {
+      const rule = matchRule("PATCH", path);
+      expect(rule?.anyOf).toEqual(expect.arrayContaining(ORDER_STATUS_CHANGE_PERMISSIONS));
+      expect(rule?.anyOf).not.toContain("orders.zakaz.status");
+      expect(rule?.anyOf).not.toContain(ORDER_STATUS_DATE_PERMISSION);
+    }
+    expect(matchRule("PATCH", "/api/:slug/orders/:id(\\d+)/milestone-at")?.anyOf).toEqual([ORDER_STATUS_DATE_PERMISSION]);
+    expect(matchRule("POST", "/api/:slug/orders/bulk/status")?.anyOf).toEqual(expect.arrayContaining(ORDER_STATUS_CHANGE_PERMISSIONS));
+  });
+
+  it("regex / custom-named route params normalize to :id", () => {
+    expect(matchRule("PATCH", "/api/:slug/orders/:id(\\d+)")?.anyOf).toContain("orders.zakaz.update");
+    expect(matchRule("DELETE", "/api/:slug/warehouses/:warehouseId")?.anyOf).toEqual(["warehouse.sklady.delete"]);
+    expect(matchRule("DELETE", "/api/:slug/opening-balances/:id(\\d+)")?.anyOf).toEqual(["cash.nachalnye_balansy.void"]);
+  });
+
+  it("supplier payments use suppliers.oplaty.*, not client payment keys", () => {
+    expect(matchRule("GET", "/api/:slug/suppliers/accounting/payments")?.anyOf).toEqual(["suppliers.oplaty.view"]);
+    expect(matchRule("POST", "/api/:slug/suppliers/accounting/payments")?.anyOf).toContain("suppliers.oplaty.create");
+    expect(matchRule("DELETE", "/api/:slug/suppliers/accounting/payments/:paymentId")?.anyOf).toEqual(["suppliers.oplaty.update"]);
+  });
+
+  it("previously unguarded write routes are covered", () => {
+    const cases: Array<[string, string, string]> = [
+      ["POST", "/api/:slug/transfers", "warehouse.peremeshchenie.create"],
+      ["POST", "/api/:slug/transfers/:id/receive", "warehouse.peremeshchenie.transfer"],
+      ["PATCH", "/api/:slug/territories/:id", "settings.territoriya.update"],
+      ["DELETE", "/api/:slug/territories/:id", "settings.territoriya.delete"],
+      ["POST", "/api/:slug/reports/report-builder/saved", "reports.konstruktor.create"],
+      ["POST", "/api/:slug/reports/report-builder/preview", "reports.konstruktor.view"],
+      ["POST", "/api/:slug/payments/batch-confirm", "cash.oplaty_klientov.update"],
+      ["POST", "/api/:slug/payments/batch-delete", "cash.oplaty_klientov.delete"],
+      ["POST", "/api/:slug/clients/merge", "clients.obedinenie.update"],
+      ["POST", "/api/:slug/clients/merge-preview", "clients.obedinenie.view"],
+      ["DELETE", "/api/:slug/currency-rates/:id", "cash.kurs_valyuty.update"],
+      ["POST", "/api/:slug/order-restriction-rules", "automation.zaiavki.create"],
+      ["PATCH", "/api/:slug/settings/bonus-stack", "settings.bonusy_i_skidki.update"]
+    ];
+    for (const [method, path, key] of cases) {
+      expect(matchRule(method, path)?.anyOf, `${method} ${path}`).toContain(key);
+    }
+  });
+
+  it("territory check-in validation and GET /territories stay open", () => {
+    expect(matchRule("POST", "/api/:slug/territories/:id/validate-checkin")).toBeNull();
+    expect(matchRule("GET", "/api/:slug/territories")).toBeNull();
   });
 
   it("maps GET /stock/balances to warehouse.ostatki.view", () => {

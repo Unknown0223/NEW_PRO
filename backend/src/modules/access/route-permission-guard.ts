@@ -15,6 +15,7 @@ import { env } from "../../config/env";
 import { sendApiError } from "../../lib/api-error";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { resolveUserPermissionKeys } from "./rbac.service";
+import { ORDER_STATUS_CHANGE_PERMISSIONS, ORDER_STATUS_DATE_PERMISSION } from "../orders/order-status-permissions";
 import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -29,6 +30,7 @@ type RoutePermissionRule = {
 
 const READ: Method[] = ["GET"];
 const WRITE: Method[] = ["POST", "PUT", "PATCH"];
+const DEL: Method[] = ["DELETE"];
 
 function r(methods: Method[], test: RegExp, ...anyOf: string[]): RoutePermissionRule {
   return { methods, test, anyOf };
@@ -43,13 +45,15 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Заказы (orders) ───────────
   r(WRITE, /\/orders\/[^/]+\/approval(\/|$)/, "plans.ustanovka_planov.approve"),
   r(READ, /\/orders\/[^/]+\/approval(\/|$)/, "orders.zakaz.view"),
-  r(WRITE, /\/orders\/bulk\/(status)$/, "orders.zakaz.status"),
+  // Status: guard — kamida bitta status kaliti; aniq o'tish (`from → to`) servisda tekshiriladi.
+  r(WRITE, /\/orders\/bulk\/(status)$/, ...ORDER_STATUS_CHANGE_PERMISSIONS),
+  r(["POST"], /\/orders\/bulk\/details$/, "orders.zakaz.view"),
   r(WRITE, /\/orders\/bulk\/(expeditor)$/, "orders.zakaz.assign"),
   r(WRITE, /\/orders\/bulk\/(nakladnoy)/, "orders.zakaz.copy"),
   r(WRITE, /\/orders\/bulk\/(consignment)$/, "orders.drugie_operacii.update"),
   r(WRITE, /\/orders\/bulk\/(bonus-refresh)$/, "orders.zakaz.update"),
-  r(WRITE, /\/orders\/:id\/status$/, "orders.zakaz.status"),
-  r(WRITE, /\/orders\/:id\/milestone-at$/, "orders.zakaz.status"),
+  r(WRITE, /\/orders\/:id\/status$/, ...ORDER_STATUS_CHANGE_PERMISSIONS),
+  r(WRITE, /\/orders\/:id\/milestone-at$/, ORDER_STATUS_DATE_PERMISSION),
   r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update"),
   r(["POST"], /\/orders$/, "orders.zakaz.create"),
   r(["PUT", "PATCH"], /\/orders\/:id(\/meta)?$/, "orders.zakaz.update"),
@@ -72,19 +76,28 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/stock\/recommended/, "warehouse.rekomendovannyy_zapas.view"),
   r(READ, /\/stock\/material-report/, "warehouse.materialnyy_otchet.view"),
   r(READ, /\/stock\/receipts-report/, "warehouse.postuplenie.view"),
+  r(["POST"], /\/stock\/receipts$/, "warehouse.postuplenie.create"),
   r(READ, /\/stock\/receipts$/, "warehouse.postuplenie.view"),
   r(READ, /\/stock(\/|$)/, "warehouse.ostatki.view"),
   r(WRITE, /\/goods-receipts\/:id\/status$/, "warehouse.postuplenie.status"),
+  r(["POST"], /\/goods-receipts\/:id\/restore$/, "warehouse.postuplenie.delete"),
   r(["POST"], /\/goods-receipts$/, "warehouse.postuplenie.create"),
   r(["PUT", "PATCH"], /\/goods-receipts\/:id$/, "warehouse.postuplenie.update"),
   r(["DELETE"], /\/goods-receipts\/:id$/, "warehouse.postuplenie.delete"),
   r(READ, /\/goods-receipts(\/|$)/, "warehouse.postuplenie.view"),
+  // Peremeshchenie API: `/transfers` (eski nom `/warehouse-transfers` ham).
+  r(["POST"], /\/(warehouse-)?transfers$/, "warehouse.peremeshchenie.create"),
+  r(["POST"], /\/(warehouse-)?transfers\/:id\/(start|receive)$/, "warehouse.peremeshchenie.transfer"),
+  r(["POST"], /\/(warehouse-)?transfers\/:id\/cancel$/, "warehouse.peremeshchenie.update", "warehouse.peremeshchenie.transfer"),
+  r(["PUT", "PATCH"], /\/(warehouse-)?transfers\/:id$/, "warehouse.peremeshchenie.update"),
   r(WRITE, /\/warehouse-transfers/, "warehouse.peremeshchenie.create", "warehouse.peremeshchenie.transfer", "warehouse.peremeshchenie.update"),
   r(READ, /\/warehouse-transfers/, "warehouse.peremeshchenie.view"),
   r(WRITE, /\/warehouse-blocks/, "warehouse.bloki.create", "warehouse.bloki.update", "warehouse.bloki.delete"),
+  r(DEL, /\/warehouse-blocks/, "warehouse.bloki.delete"),
   r(READ, /\/warehouse-blocks/, "warehouse.bloki.view"),
   r(WRITE, /\/stock-takes/, "warehouse.korrektirovka.create", "warehouse.korrektirovka.update"),
   r(READ, /\/stock-takes/, "warehouse.korrektirovka.view"),
+  r(DEL, /\/warehouses\/:id$/, "warehouse.sklady.delete"),
   r(WRITE, /\/warehouses(\/|$)/, "warehouse.sklady.create", "warehouse.sklady.update", "warehouse.sklady.delete"),
   r(
     READ,
@@ -100,12 +113,20 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     "warehouse.korrektirovka.view"
   ),
 
+  // ─────────── Оплата поставщику — kassa `/payments` qoidalaridan OLDIN ───────────
+  r(WRITE, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.create", "suppliers.oplaty.update"),
+  r(DEL, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.update"),
+  r(READ, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.view"),
+
   // ─────────── Касса (payments / cash-desks / currency / expenses) ───────────
   r(WRITE, /\/bank-transfer-inbox\/(ingest|import|manual)$/, "cash.perechisleniya.import", "cash.perechisleniya.create"),
   r(WRITE, /\/bank-transfer-inbox\/:id\/(assign|reassign|comment|ignore|create-payment)$/, "cash.perechisleniya.update"),
   r(READ, /\/bank-transfer-inbox(\/|$)/, "cash.perechisleniya.view"),
   r(WRITE, /\/payments\/:id\/(confirm|batch-confirm)$/, "cash.oplaty_klientov.update"),
-  r(WRITE, /\/payments\/:id\/(reject|return-to-expeditor)$/, "cash.oplaty_klientov.update"),
+  r(WRITE, /\/payments\/:id\/(reject|return-to-expeditor|allocate|edit-grants)$/, "cash.oplaty_klientov.update"),
+  r(["POST"], /\/payments\/batch-(confirm|reject|return-to-expeditor)$/, "cash.oplaty_klientov.update"),
+  r(["POST"], /\/payments\/(batch-delete|batch-restore|:id\/restore)$/, "cash.oplaty_klientov.delete"),
+  r(["POST"], /\/payments\/by-ids$/, "cash.oplaty_klientov.view"),
   r(["POST"], /\/payments(\/order-cash-in)?$/, "cash.oplaty_klientov.create"),
   r(["PUT", "PATCH"], /\/payments\/:id/, "cash.oplaty_klientov.update"),
   r(["DELETE"], /\/payments\/:id$/, "cash.oplaty_klientov.delete"),
@@ -115,8 +136,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["PUT", "PATCH"], /\/cash-desks\/:id$/, "cash.kassa.create"),
   r(READ, /\/cash-desks(\/|$)/, "cash.kassa.view"),
   r(WRITE, /\/currency-rates/, "cash.kurs_valyuty.create", "cash.kurs_valyuty.update"),
+  r(DEL, /\/currency-rates/, "cash.kurs_valyuty.update"),
   r(READ, /\/currency-rates/, "cash.kurs_valyuty.view"),
   r(WRITE, /\/expenses\/:id\/(approve|reject)$/, "cash.zayavki_na_oplatu.approve"),
+  r(["POST"], /\/expenses\/:id\/restore$/, "cash.rashody_klienta.delete"),
   r(["POST"], /\/expenses$/, "cash.rashody_klienta.create"),
   r(["PUT", "PATCH"], /\/expenses\/:id$/, "cash.rashody_klienta.update"),
   r(["DELETE"], /\/expenses\/:id$/, "cash.rashody_klienta.delete"),
@@ -124,12 +147,12 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // Balanslar: yangi `balansy_klientov`; `otchety.view` — eski grantlar uchun moslik.
   r(READ, /\/client-balances(\/|$)/, "cash.balansy_klientov.view", "cash.otchety.view", "cash.otchety.spisok_balansy_klientov", "cash.otchety.spisok_balansy_klientov_po_konsignatsii", "cash.otchety.detal_balans_klienta", "cash.otchety.detal_balans_klienta_po_konsignatsii", "cash.balansy.view"),
   r(WRITE, /\/opening-balances/, "cash.nachalnye_balansy.create", "cash.nachalnye_balansy.update", "cash.nachalnye_balansy.void", "cash.nachalnye_balansy.restore"),
+  r(DEL, /\/opening-balances/, "cash.nachalnye_balansy.void"),
   r(READ, /\/opening-balances/, "cash.nachalnye_balansy.view", "cash.nachalnye_balansy_klientov.view", "cash.nachalnye_balansy_klientov.spisok_nachalnye_balansy"),
 
   // ─────────── Поставщики (suppliers) ───────────
-  r(WRITE, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.create", "suppliers.oplaty.update"),
   r(READ, /\/suppliers\/accounting\/(balances|reconciliation)/, "suppliers.balansy.view"),
-  r(READ, /\/suppliers\/accounting\/payments/, "suppliers.oplaty.view"),
+  r(["POST"], /\/suppliers\/:id\/restore$/, "suppliers.postavshchik.delete"),
   r(["POST"], /\/suppliers$/, "suppliers.postavshchik.create"),
   r(["PUT", "PATCH"], /\/suppliers\/:id$/, "suppliers.postavshchik.update"),
   r(["DELETE"], /\/suppliers\/:id$/, "suppliers.postavshchik.delete"),
@@ -137,7 +160,11 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 
   // ─────────── Клиенты (clients) ───────────
   r(WRITE, /\/clients\/bulk-active$/, "clients.klient.activate", "clients.klient.deactivate"),
-  r(WRITE, /\/clients\/bulk$/, "clients.klient.update", "clients.klient.assign"),
+  r(WRITE, /\/clients\/(bulk|bulk-items)$/, "clients.klient.update", "clients.klient.assign"),
+  r(["POST"], /\/clients\/merge-preview$/, "clients.obedinenie.view"),
+  r(["POST"], /\/clients\/merge$/, "clients.obedinenie.update"),
+  r(WRITE, /\/clients\/saved-duplicate-groups/, "clients.obedinenie.update"),
+  r(DEL, /\/clients\/saved-duplicate-groups/, "clients.obedinenie.update"),
   r(WRITE, /\/clients\/bulk-tags$/, "clients.klient.update", "clients.klient.assign"),
   r(WRITE, /\/clients\/tags$/, "clients.klient.update", "clients.klient.assign"),
   r(WRITE, /\/clients\/import/, "clients.klient.import"),
@@ -156,6 +183,10 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   // ─────────── Накладные / списания (assembly via returns write-offs) ───────────
   r(WRITE, /\/order-automation/, "automation.zaiavki.create", "automation.zaiavki.update"),
   r(READ, /\/order-automation/, "automation.zaiavki.view"),
+  r(["POST"], /\/order-(auto-confirm|restriction)-rules$/, "automation.zaiavki.create"),
+  r(["POST"], /\/order-(auto-confirm|restriction)-rules\/:id\/duplicate$/, "automation.zaiavki.create"),
+  r(WRITE, /\/order-(auto-confirm|restriction)-rules/, "automation.zaiavki.update"),
+  r(DEL, /\/order-(auto-confirm|restriction)-rules/, "automation.zaiavki.update"),
 
   // ─────────── Настройки: Товар / Цена (products) ───────────
   // Faqat katalog moduli: `/api/:slug/products…`.
@@ -167,7 +198,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/:id\/prices$/, "settings.tsena.update"),
   r(READ, /\/api\/(?::slug|[^/]+)\/products\/:id\/prices$/, "settings.tsena.view"),
   r(READ, /\/product-prices/, "settings.tsena.view"),
-  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/bulk$/, "settings.tovar.update"),
+  r(WRITE, /\/api\/(?::slug|[^/]+)\/products\/(bulk|bulk-equipment|bulk-kpi-group)$/, "settings.tovar.update"),
+  r(WRITE, /\/price-matrix\/(apply|bulk)$/, "settings.tsena.update"),
   r(["POST"], /\/api\/(?::slug|[^/]+)\/products$/, "settings.tovar.create"),
   r(["PUT", "PATCH"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.update"),
   r(["DELETE"], /\/api\/(?::slug|[^/]+)\/products\/:id$/, "settings.tovar.delete"),
@@ -180,6 +212,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/settings\/document-edit-lock/, "settings.document_edit_lock.view"),
   r(READ, /\/settings\/initial-setup/, "settings.initial_setup.view", "settings.profil_kompanii.view"),
   r(WRITE, /\/system-migration\/import/, "settings.system_migration.update", "settings.system_migration.import", "settings.profil_kompanii.update"),
+  r(["POST"], /\/system-migration\/export/, "settings.system_migration.view", "settings.profil_kompanii.view"),
+  r(WRITE, /\/settings\/bonus-stack$/, "settings.bonusy_i_skidki.update"),
   r(READ, /\/system-migration(\/|$)/, "settings.system_migration.view", "settings.profil_kompanii.view"),
 
   // ─────────── Пользователи (staff) ───────────
@@ -238,6 +272,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/timesheet/, "staff.tabel.create", "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
   r(WRITE, /\/workdays/, "staff.tabel.create", "staff.tabel.update"),
+  r(DEL, /\/workdays/, "staff.tabel.update"),
   r(READ, /\/workdays/, "staff.tabel.view"),
   r(READ, /\/tabel-audit/, "staff.tabel.view"),
   r(WRITE, /\/work-slots\/.*\/(assign|unassign)/, "work_slots.raboche_mesto.assign", "work_slots.raboche_mesto.update"),
@@ -280,6 +315,11 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/dashboard(\/|$)/, "dashboard.prodazhi.view"),
 
   // ─────────── Отчёты ───────────
+  r(["POST"], /\/reports\/report-builder\/(preview|dataset)$/, "reports.konstruktor.view", "reports.otchety.view"),
+  r(["POST"], /\/reports\/report-builder\/export$/, "reports.konstruktor.copy", "reports.otchety.copy"),
+  r(["POST"], /\/reports\/report-builder\/saved$/, "reports.konstruktor.create"),
+  r(WRITE, /\/reports\/report-builder\/saved\//, "reports.konstruktor.update"),
+  r(DEL, /\/reports\/report-builder\/saved\//, "reports.konstruktor.update"),
   r(READ, /\/reports\/.*\/export/, "reports.otchety.copy", "reports.konstruktor.copy"),
   r(
     WRITE,
@@ -289,7 +329,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
     "reports.otchety.create",
     "reports.otchety.update"
   ),
-  r(READ, /\/reports\/builder/, "reports.konstruktor.view", "reports.otchety.view", "pivot.otchety.view"),
+  r(READ, /\/reports\/builder/, "reports.konstruktor.view", "reports.otchety.view"),
   r(READ, /\/reports(\/|$)/, "reports.otchety.view", "reports.konstruktor.view"),
 
   // ─────────── Бонусы и скидки (bonus-rules) ───────────
@@ -322,10 +362,19 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/access\/(users|role-defaults|history|permissions|dimensions|territories|operations-tree)(\/|$)/, "access.upravlenie.view"),
 
   // ─────────── Справочники / территория / направления ───────────
+  // `/territories` GET — ko'p sahifalar (filtrlar) ishlatadi, shuning uchun faqat yozish cheklanadi.
+  r(["POST"], /\/territories$/, "settings.territoriya.create"),
+  r(WRITE, /\/territories\/:id(\/(assign|unassign|restore))?$/, "settings.territoriya.update"),
+  r(DEL, /\/territories\/:id$/, "settings.territoriya.delete"),
   r(WRITE, /\/territory(\/|$)/, "settings.territoriya.create", "settings.territoriya.update", "settings.territoriya.delete"),
   r(READ, /\/territory(\/|$)/, "settings.territoriya.view"),
+  r(["POST"], /\/trade-directions$/, "settings.napravlenie_torgovli.create"),
+  r(WRITE, /\/trade-directions\//, "settings.napravlenie_torgovli.update"),
+  r(DEL, /\/trade-directions\//, "settings.napravlenie_torgovli.delete"),
   r(WRITE, /\/sales-directions(\/|$)/, "settings.napravlenie_torgovli.create", "settings.napravlenie_torgovli.update", "settings.napravlenie_torgovli.delete"),
   r(READ, /\/sales-directions(\/|$)/, "settings.napravlenie_torgovli.view"),
+  r(WRITE, /\/(sales-channels|kpi-groups|product-categories)(\/|$)/, "settings.tovar.update"),
+  r(DEL, /\/(sales-channels|kpi-groups|product-categories)(\/|$)/, "settings.tovar.update"),
   r(WRITE, /\/reference(\/|$)/, "settings.tovar.update"),
   r(READ, /\/reference(\/|$)/, "settings.tovar.view"),
 
@@ -337,7 +386,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/field(\/|$)/, "gps.gps.update", "routes.marshruty.update"),
   r(READ, /\/field(\/|$)/, "gps.gps.view", "routes.marshruty.view"),
   r(READ, /\/gps-monitoring(\/|$)/, "gps.gps.view", "routes.trek.view", "routes.marshruty.view"),
+  r(WRITE, /\/agent-route-days$/, "routes.marshruty.update", "gps.gps.update"),
   r(WRITE, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.create", "settings.geo_granitsy.update"),
+  r(DEL, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.update"),
   r(READ, /\/geo-boundaries(\/|$)/, "settings.geo_granitsy.view"),
 
   // ─────────── Уведомления ───────────
@@ -362,13 +413,19 @@ function matchRule(method: string, routePath: string): RoutePermissionRule | nul
   return null;
 }
 
-/** Fastify 4 pattern (`/orders/:id`) va aniq URL (`/orders/5`) ni bir xil qoida bilan solishtirish. */
+/**
+ * Fastify 4 pattern (`/orders/:id`), regex cheklovli pattern (`/orders/:id(\\d+)`), boshqa nomli parametr
+ * (`/warehouses/:warehouseId`) va aniq URL (`/orders/5`) — hammasi bir xil `:id` qoidalari bilan solishtiriladi.
+ */
 function pathsToMatch(routePath: string): string[] {
   const path = (routePath.split("?")[0] ?? "").trim();
   if (!path) return [];
-  const asParam = path.replace(/\/\d+(?=\/|$)/g, "/:id");
+  const stripped = path.replace(/(:[A-Za-z_][A-Za-z0-9_]*)\([^)]*\)/g, "$1");
+  const asParam = stripped
+    .replace(/\/\d+(?=\/|$)/g, "/:id")
+    .replace(/\/:(?!slug(?=\/|$))[A-Za-z_][A-Za-z0-9_]*(?=\/|$)/g, "/:id");
   const asShift = asParam.replace(/\/:id\/shifts\/:id(?=\/|$)/, "/:id/shifts/:shiftId");
-  return [...new Set([path, asParam, asShift])];
+  return [...new Set([path, stripped, asParam, asShift])];
 }
 
 /** Test/diagnostika uchun eksport. */

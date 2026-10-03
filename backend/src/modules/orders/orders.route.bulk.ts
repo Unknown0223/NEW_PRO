@@ -37,6 +37,7 @@ import {
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
+import { resolveOrderStatusRbac } from "./order-status-rbac";
 import {
   bulkRefreshOrderBonuses,
   bulkUpdateOrderConsignment,
@@ -101,7 +102,8 @@ export async function registerOrderBulkRoutes(app: FastifyInstance) {
           parsed.data.status,
           actorUserId,
           actor.role,
-          parsed.data.occurred_at
+          parsed.data.occurred_at,
+          await resolveOrderStatusRbac(request)
         );
         return reply.send(result);
       } catch (e) {
