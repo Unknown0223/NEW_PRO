@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatGroupedInteger } from "@/lib/format-numbers";
+import { usePermissions } from "@/lib/use-permissions";
 import { OrdersExcelExportDialog } from "@/components/orders/orders-list/orders-excel-export-dialog";
 import { ORDER_LIST_COLUMNS, orderListColumnThClass } from "@/lib/orders-list-columns";
 import {
@@ -110,6 +111,7 @@ export function OrdersListTable(props: OrdersListTableProps) {
   const [pendingStatusDialog, setPendingStatusDialog] = useState<PendingStatusDialog | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [excelExportOpen, setExcelExportOpen] = useState(false);
+  const canExportExcel = usePermissions().has("orders.zakaz.export");
   const [searchDraft, setSearchDraft] = useState(filters.search);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [expandPanelWidth, setExpandPanelWidth] = useState<number | null>(null);
@@ -260,16 +262,18 @@ export function OrdersListTable(props: OrdersListTableProps) {
                 <ListOrdered className="h-4 w-4" />
                 Колонки
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 shrink-0"
-                disabled={rows.length === 0 || !tenantSlug}
-                onClick={() => setExcelExportOpen(true)}
-              >
-                Excel
-              </Button>
+              {canExportExcel ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 shrink-0"
+                  disabled={rows.length === 0 || !tenantSlug}
+                  onClick={() => setExcelExportOpen(true)}
+                >
+                  Excel
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"

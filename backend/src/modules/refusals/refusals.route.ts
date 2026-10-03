@@ -9,6 +9,7 @@ import {
   assertOrderAgentAllowedForActor,
   enrichScopedReportActor
 } from "../access/access-agent-scope";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
 import { DIRECTORY_READ_ROLES, getAccessUser, jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import {
   createClientRefusal,
@@ -81,7 +82,9 @@ export async function registerRefusalRoutes(app: FastifyInstance) {
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
-      const q = parseListQuery(request.query as Record<string, string | undefined>);
+      const rawQuery = request.query as Record<string, string | undefined>;
+      if (rawQuery.export_limit?.trim() && !(await ensureAnyPermission(request, reply, ["orders.otkazy.export"]))) return;
+      const q = parseListQuery(rawQuery);
       const viewer = getAccessUser(request);
       const actor = await enrichScopedReportActor(request.tenant!.id, {
         userId: actorUserIdOrNull(request),

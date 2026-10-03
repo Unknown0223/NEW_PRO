@@ -32,9 +32,11 @@ function mod(module: string): string[] {
   return CATALOG.filter((e) => e.module === module).map((e) => e.key);
 }
 
-/** Modul bo'yicha faqat ko'rish (+copy) kalitlari. */
+/** Modul bo'yicha faqat ko'rish (+copy, Excel) kalitlari. */
 function modViewOnly(module: string): string[] {
-  return CATALOG.filter((e) => e.module === module && (e.action === "view" || e.action === "copy")).map((e) => e.key);
+  return CATALOG.filter((e) => e.module === module && (e.action === "view" || e.action === "copy" || e.action === "export")).map(
+    (e) => e.key
+  );
 }
 
 function uniq(...lists: string[][]): string[] {
@@ -72,7 +74,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   operator: () =>
     uniq(
       mod("dashboard"),
-      secOnly("orders", "zakaz", ["view", "update", "copy", "history"]),
+      secOnly("orders", "zakaz", ["view", "update", "copy", "export", "history"]),
       orderCreate("sozdanie", "vozvrat_polki", "vozvrat_po_zakazu"),
       orderStatus(...ALL_ORDER_STATUS_SLUGS),
       secOnly("invoices", "vozvratnye", ["view"]),
@@ -192,7 +194,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   // Agent — buyurtma yaratish, mijoz qo'shish, dashboard
   agent: () =>
     uniq(
-      secOnly("orders", "zakaz", ["view", "copy"]),
+      secOnly("orders", "zakaz", ["view", "copy", "export"]),
       orderCreate("sozdanie", "vozvrat_polki", "vozvrat_po_zakazu"),
       secOnly("invoices", "vozvratnye", ["view"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
@@ -228,7 +230,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
 
   expeditor: () =>
     uniq(
-      secOnly("orders", "zakaz", ["view"]),
+      secOnly("orders", "zakaz", ["view", "export"]),
       orderStatus("delivering", "delivered", "returned", "revert", "date"),
       orderCreate("vozvrat_polki", "vozvrat_po_zakazu"),
       secOnly("clients", "foto", ["view", "create", "void"]),

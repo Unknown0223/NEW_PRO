@@ -14,7 +14,7 @@ const ORDER_STATUS_SECTIONS: [section: string, labelRu: string][] = [
  * Har bir status o'tishi — alohida operatsiya (`orders/order-status-permissions.ts`).
  */
 export const ORDER_PERMISSION_SECTIONS: PermissionSectionDef[] = [
-  { module: "orders", section: "zakaz", labelRu: "Заявки", actions: ["view", "update", "copy", "assign", "history"] },
+  { module: "orders", section: "zakaz", labelRu: "Заявки", actions: ["view", "update", "copy", "export", "assign", "history"] },
   { module: "orders", section: "sozdanie", labelRu: "Создать заказ", actions: ["create"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
   { module: "orders", section: "vozvrat_polki", labelRu: "Создать возврат с полки", actions: ["create"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
   {
@@ -25,12 +25,12 @@ export const ORDER_PERMISSION_SECTIONS: PermissionSectionDef[] = [
     treeSectionRu: ORDER_ZAKAZ_TREE_RU
   },
   { module: "orders", section: "obmen", labelRu: "Создать обмен", actions: ["create"], treeSectionRu: ORDER_ZAKAZ_TREE_RU },
-  { module: "orders", section: "otkazy", labelRu: "Отказы", actions: ["view", "create"] },
+  { module: "orders", section: "otkazy", labelRu: "Отказы", actions: ["view", "create", "export"] },
   {
     module: "orders",
     section: "avtomatizatsiya",
     labelRu: "Автоматизация заявок",
-    actions: ["view", "create", "update", "delete", "restore", "copy", "activate", "deactivate"]
+    actions: ["view", "create", "update", "delete", "restore", "export", "activate", "deactivate"]
   },
   ...ORDER_STATUS_SECTIONS.map(
     ([section, labelRu]): PermissionSectionDef => ({ module: "orders", section, labelRu, actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU })

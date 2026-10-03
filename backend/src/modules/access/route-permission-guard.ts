@@ -221,7 +221,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(["POST"], /\/order-(auto-confirm|restriction)-rules\/:id\/restore$/, "orders.avtomatizatsiya.restore"),
   r(WRITE, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.update", "orders.avtomatizatsiya.activate", "orders.avtomatizatsiya.deactivate"),
   r(DEL, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.delete"),
-  r(READ, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.view", "orders.avtomatizatsiya.copy"),
+  r(READ, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.view", "orders.avtomatizatsiya.export"),
 
   // ─────────── Настройки: Товар / Цена (products) ───────────
   // Faqat katalog moduli: `/api/:slug/products…`.

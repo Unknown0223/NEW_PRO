@@ -22,12 +22,21 @@ describe("Заявки — Доступ katalogi", () => {
     expect(zakaz.operations.map((o) => o.key)).toEqual([
       "orders.zakaz.view",
       "orders.zakaz.update",
+      "orders.zakaz.export",
       "orders.zakaz.history",
       "orders.sozdanie.create",
       "orders.vozvrat_polki.create",
       "orders.vozvrat_po_zakazu.create",
       "orders.obmen.create"
     ]);
+  });
+
+  it("Excel yuklab olish har bo'limda alohida ruxsat", () => {
+    for (const k of ["orders.zakaz.export", "orders.otkazy.export", "orders.avtomatizatsiya.export"]) {
+      expect(keys.has(k), k).toBe(true);
+    }
+    expect(keys.has("orders.avtomatizatsiya.copy")).toBe(false);
+    expect(new Set(buildRoleDefaultKeys("operator")).has("orders.zakaz.export")).toBe(true);
   });
 
   it("eski umumiy kalitlar va ishlamaydigan «Удаление заказа» yo'q", () => {
@@ -53,7 +62,7 @@ describe("Заявки — Доступ katalogi", () => {
       "orders.avtomatizatsiya.restore",
       "orders.avtomatizatsiya.activate",
       "orders.avtomatizatsiya.deactivate",
-      "orders.avtomatizatsiya.copy",
+      "orders.avtomatizatsiya.export",
       "invoices.vozvratnye.approve"
     ]) {
       expect(keys.has(k), k).toBe(true);
@@ -107,7 +116,7 @@ describe("Заявки — server tekshiruvi", () => {
     expect(automationPatchPermission({ is_active: false })).toBe("orders.avtomatizatsiya.deactivate");
     expect(automationPatchPermission({ is_active: true })).toBe("orders.avtomatizatsiya.activate");
     expect(automationPatchPermission({ name: "x", is_active: true })).toBe("orders.avtomatizatsiya.update");
-    expect(automationListPermission({ export: "csv" })).toBe("orders.avtomatizatsiya.copy");
+    expect(automationListPermission({ export: "csv" })).toBe("orders.avtomatizatsiya.export");
     expect(automationListPermission({ page: "1" })).toBe("orders.avtomatizatsiya.view");
   });
 

@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { getUserFacingError } from "@/lib/error-utils";
 import { formatGroupedInteger, formatNumberGrouped } from "@/lib/format-numbers";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Package } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -54,6 +55,7 @@ export function OrdersSelectionTotalsDialog({
   selectedOrderIds
 }: Props) {
   const [excelBusy, setExcelBusy] = useState(false);
+  const canExportExcel = usePermissions().has("orders.zakaz.export");
 
   const orderIds = useMemo(
     () => Array.from(selectedOrderIds).filter((id) => Number.isFinite(id) && id > 0),
@@ -105,17 +107,19 @@ export function OrdersSelectionTotalsDialog({
               </DialogDescription>
             </div>
             <DialogHeaderActions>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1.5"
-                disabled={excelBusy || linesQ.isLoading || aggregated.length === 0}
-                onClick={() => void onExcel()}
-              >
-                <Download className="size-3.5" />
-                Excel
-              </Button>
+              {canExportExcel ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={excelBusy || linesQ.isLoading || aggregated.length === 0}
+                  onClick={() => void onExcel()}
+                >
+                  <Download className="size-3.5" />
+                  Excel
+                </Button>
+              ) : null}
             </DialogHeaderActions>
           </div>
         </DialogHeader>

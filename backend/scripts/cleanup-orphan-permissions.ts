@@ -36,7 +36,7 @@ const MIGRATE_UNKNOWN_TO: Record<string, string[]> = {
   "orders.vozvrat.update": ["invoices.vozvratnye.approve"],
   "orders.obmen_i_otkaz.view": ["orders.otkazy.view"],
   "orders.obmen_i_otkaz.create": ["orders.obmen.create", "orders.otkazy.create"],
-  "automation.zaiavki.view": ["orders.avtomatizatsiya.view", "orders.avtomatizatsiya.copy"],
+  "automation.zaiavki.view": ["orders.avtomatizatsiya.view", "orders.avtomatizatsiya.export"],
   "automation.zaiavki.create": ["orders.avtomatizatsiya.create"],
   "automation.zaiavki.update": [
     "orders.avtomatizatsiya.update",

@@ -17,6 +17,7 @@ import {
   type RefusalsListResponse
 } from "@/lib/refusals-types";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { useAuthStore, useAuthStoreHydrated } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -78,6 +79,7 @@ function buildListParams(
 export function RefusalsPageContent() {
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const canExportExcel = usePermissions().has("orders.otkazy.export");
 
   const [filters, setFilters] = useState<RefusalFiltersState>(defaultFilters);
   const [appliedFilters, setAppliedFilters] = useState<RefusalFiltersState>(defaultFilters);
@@ -311,15 +313,17 @@ export function RefusalsPageContent() {
             />
           </div>
 
-          <button
-            type="button"
-            disabled={listQ.isFetching || exporting}
-            onClick={() => void exportExcel()}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-card px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
-          >
-            <FileSpreadsheet className="size-3.5" />
-            Excel
-          </button>
+          {canExportExcel ? (
+            <button
+              type="button"
+              disabled={listQ.isFetching || exporting}
+              onClick={() => void exportExcel()}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-card px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+            >
+              <FileSpreadsheet className="size-3.5" />
+              Excel
+            </button>
+          ) : null}
 
           <button
             type="button"

@@ -11,6 +11,7 @@ export type AccessOpAction =
   | "transfer"
   | "status"
   | "copy"
+  | "export"
   | "assign"
   | "activate"
   | "deactivate"

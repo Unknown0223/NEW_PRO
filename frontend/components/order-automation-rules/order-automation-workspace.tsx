@@ -273,7 +273,7 @@ export function OrderAutomationWorkspace() {
         itemsPerPage={itemsPerPage}
         onItemsPerPageChange={(n) => { setItemsPerPage(n); setPage(1); }}
         onRefresh={() => listQ.refetch()}
-        onExport={has("orders.avtomatizatsiya.copy") ? () => void exportCsv() : undefined}
+        onExport={has("orders.avtomatizatsiya.export") ? () => void exportCsv() : undefined}
       />
 
       <div className="min-h-0 flex-1 overflow-hidden">
