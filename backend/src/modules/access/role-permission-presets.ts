@@ -248,7 +248,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       modViewOnly("orders")
     ),
 
-  collector: () => uniq(secOnly("cash", "zayavki_na_oplatu", ["view"]), secOnly("cash", "oplaty_klientov", ["view", "create"])),
+  collector: () => uniq(secOnly("cash", "zayavki_na_oplatu", ["view"]), secOnly("cash", "oplaty_klientov", ["view", "create", "export"])),
   gruzchik: () => uniq(modViewOnly("invoices"), modViewOnly("warehouse")),
   driver: () => uniq(modViewOnly("orders"), modViewOnly("invoices"), mod("routes")),
   dispatcher: () => uniq(modViewOnly("orders"), mod("routes"), sec("gps", "gps")),

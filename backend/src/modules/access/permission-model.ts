@@ -165,7 +165,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "invoices", section: "vozvratnye", labelRu: "Возвратные накладные", actions: ["view", "approve"] },
 
   // ── Cash (Кассы) ───────────────────────────────────────────
-  { module: "cash", section: "oplaty_klientov", labelRu: "Оплаты клиентов", actions: ["view", "create", "update", "delete", "history"] },
+  { module: "cash", section: "oplaty_klientov", labelRu: "Оплаты клиентов", actions: ["view", "create", "update", "approve", "export", "delete", "history"] },
   { module: "cash", section: "perechisleniya", labelRu: "Банковские платежи", actions: ["view", "create", "update", "import"] },
   { module: "cash", section: "rashody_klienta", labelRu: "Расходы клиента", actions: CRUD },
   { module: "cash", section: "nachalnye_balansy", labelRu: "Начальные балансы клиентов", actions: ["view", "create", "update", "void", "restore"] },

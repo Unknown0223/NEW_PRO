@@ -21,6 +21,7 @@ import { PaymentsTemplateFiltersPanel } from "@/components/payments/payments-tem
 import { PaymentsTemplateListToolbar } from "@/components/payments/payments-template-list-toolbar";
 import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
+import { usePermissions } from "@/lib/use-permissions";
 import { decodeAccessTokenUserId } from "@/lib/me-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { getUserFacingError } from "@/lib/error-utils";
@@ -237,6 +238,10 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
   const hydrated = useAuthStoreHydrated();
   const effectiveRole = useEffectiveRole();
   const canVoidPayments = effectiveRole === "admin";
+  const { has } = usePermissions();
+  const canEditPayment = isExpenses || has("cash.oplaty_klientov.update");
+  const canApprovePayments = !isExpenses && has("cash.oplaty_klientov.approve");
+  const canExportPayments = !isExpenses && has("cash.oplaty_klientov.export");
   const qc = useQueryClient();
 
   const [draft, setDraft] = useState<FilterForm>(() => defaultForm());
@@ -699,7 +704,7 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
           }}
           onRefresh={() => void listQ.refetch()}
           refreshing={listQ.isFetching}
-          onExportExcel={!isExpenses ? () => downloadPaymentsExcel(rows) : undefined}
+          onExportExcel={canExportPayments ? () => downloadPaymentsExcel(rows) : undefined}
           exportDisabled={!rows.length}
           onOpenFilterVisibility={() => setFilterVisDialogOpen(true)}
           showEditGrantsLink={!isExpenses}
@@ -938,9 +943,9 @@ export function ClientPaymentsWorkspace({ variant = "payments" }: { variant?: Cl
             ? `${isExpenses ? "Расход" : "Оплата"} #${primarySelectedRow.number?.trim() || primarySelectedRow.id} · ${primarySelectedRow.client_name}`
             : ""
         }
-        showEdit={selected.size === 1}
+        showEdit={canEditPayment && selected.size === 1}
         showDelete={canVoidPayments && selected.size > 0}
-        showBulkConfirm={!isExpenses && selected.size > 0}
+        showBulkConfirm={canApprovePayments && selected.size > 0}
         bulkConfirmDisabled={!allSelectedPending || bulkBusy}
         bulkConfirmHint={
           allSelectedPending

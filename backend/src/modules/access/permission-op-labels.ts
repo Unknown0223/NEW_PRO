@@ -78,7 +78,9 @@ export const PERMISSION_OP_LABEL_RU: Record<string, string> = {
 
   "cash.oplaty_klientov.view": "Список оплаты клиента",
   "cash.oplaty_klientov.create": "Создать оплаты клиента",
-  "cash.oplaty_klientov.update": "Изменить / подтвердить оплаты клиента",
+  "cash.oplaty_klientov.update": "Изменить оплату клиента (сумма, распределение, разрешение на изменение)",
+  "cash.oplaty_klientov.approve": "Подтвердить / отклонить оплату клиента (вернуть экспедитору)",
+  "cash.oplaty_klientov.export": "Выгрузка оплат клиентов в Excel",
   "cash.oplaty_klientov.delete": "Удалить оплаты клиента",
   "cash.oplaty_klientov.history": "Просмотр история оплаты клиента",
   "cash.perechisleniya.view": "Банковские платежи — Список",

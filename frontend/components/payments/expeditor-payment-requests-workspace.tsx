@@ -35,6 +35,7 @@ import { api } from "@/lib/api";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
 import type { ClientBalanceTerritoryOptions } from "@/lib/client-balances-types";
 import { isAdminOrOperatorLikeRole } from "@/lib/distribution-roles";
+import { usePermissions } from "@/lib/use-permissions";
 import { downloadXlsxSheet } from "@/lib/download-xlsx";
 import { staffPickerDisplayName, staffPickerSearchText } from "@/lib/person-display";
 import { splitMultiFilterValues } from "@/lib/client-filter-select-value";
@@ -228,7 +229,8 @@ export function ExpeditorPaymentRequestsWorkspace() {
   const hydrated = useAuthStoreHydrated();
   const role = useEffectiveRole();
   const qc = useQueryClient();
-  const canAct = isAdminOrOperatorLikeRole(role);
+  const { has } = usePermissions();
+  const canAct = isAdminOrOperatorLikeRole(role) && has("cash.oplaty_klientov.approve");
   const isAdmin = role === "admin";
 
   const [applied, setApplied] = useState<EprFilterState>(() => defaultEprFilters());
