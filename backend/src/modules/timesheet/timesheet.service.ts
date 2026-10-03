@@ -541,6 +541,8 @@ export async function patchAttendanceCells(
     }
   }
 
+  const effectiveBefore = await loadEffectiveCellsBefore(tenantId, entries, state);
+
   const now = new Date().toISOString();
   const actor = changedBy?.trim() || "система";
   const additions: NewTabelAuditRecord[] = [];
@@ -552,7 +554,11 @@ export async function patchAttendanceCells(
   for (const e of entries) {
     const key = `${e.userId}:${e.date}`;
     const prev = state.overrides[key] ?? null;
-    const prevStatus: AttendanceStatus = prev?.status ?? "absent";
+    const before = effectiveBefore.get(key);
+    const prevStatus: AttendanceStatus = prev?.status ?? before?.status ?? "absent";
+    const prevLabel = prev
+      ? `${ATTENDANCE_STATUS_LABEL_RU[prevStatus]} (вручную)`
+      : `${ATTENDANCE_STATUS_LABEL_RU[prevStatus]} (авто)`;
     const next: OverrideRow = {
       status: e.status,
       source: e.source ?? "manual",
@@ -560,16 +566,18 @@ export async function patchAttendanceCells(
       updated_by: actorUserId
     };
     state.overrides[key] = next;
-    if (prevStatus === e.status) continue;
+    if (prev && prevStatus === e.status) continue;
     changed += 1;
     additions.push({
       module: "timesheet",
       kind: "status",
       title: userById.get(e.userId)!.name,
       subtitle: e.date,
-      oldValue: ATTENDANCE_STATUS_LABEL_RU[prevStatus],
-      newValue: ATTENDANCE_STATUS_LABEL_RU[e.status],
-      comment: e.comment?.trim() || "Изменено в табеле",
+      oldValue: prevLabel,
+      newValue: `${ATTENDANCE_STATUS_LABEL_RU[e.status]} (вручную)`,
+      comment: [e.comment?.trim() || "Изменено в табеле", !prev && before?.comment ? `Авто было: ${before.comment}` : ""]
+        .filter(Boolean)
+        .join(" · "),
       changedBy: actor
     });
     auditEventData.push({
@@ -597,6 +605,30 @@ export async function patchAttendanceCells(
   }
 
   return { ok: true, applied: entries.length, changed };
+}
+
+/** Qo‘lda belgilanmagan kataklar uchun o‘zgartirishdan oldingi avtomatik holat (tarix uchun). */
+async function loadEffectiveCellsBefore(
+  tenantId: number,
+  entries: AttendanceCellInput[],
+  state: TimesheetState
+): Promise<Map<string, { status: AttendanceStatus; comment?: string }>> {
+  const out = new Map<string, { status: AttendanceStatus; comment?: string }>();
+  const usersByMonth = new Map<string, Set<number>>();
+  for (const e of entries) {
+    if (state.overrides[`${e.userId}:${e.date}`]) continue;
+    const m = e.date.slice(0, 7);
+    usersByMonth.set(m, (usersByMonth.get(m) ?? new Set()).add(e.userId));
+  }
+  for (const [month, ids] of usersByMonth) {
+    const only = ids.size === 1 ? [...ids][0] : undefined;
+    const matrix = await listTimesheetMatrix(tenantId, { month, user_id: only });
+    for (const r of matrix.rows) {
+      if (!ids.has(r.user_id)) continue;
+      for (const c of r.cells) out.set(`${r.user_id}:${c.date}`, { status: c.status, comment: c.comment });
+    }
+  }
+  return out;
 }
 
 /** Правка одной ячейки — тонкая обёртка над массовым путём (единый код). */

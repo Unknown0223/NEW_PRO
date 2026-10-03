@@ -8,14 +8,21 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
+  History,
   Info,
   RefreshCw,
   RotateCcw,
   Save,
   Search,
+  Target,
   X,
   Zap
 } from "lucide-react";
+import { Can } from "@/components/access/can";
+import { NAV_PERM } from "@/components/dashboard/nav-permission-keys";
+import { usePermissions } from "@/lib/use-permissions";
+import { TimesheetNormDialog } from "@/components/timesheet/timesheet-norm-dialog";
+import { TimesheetHistoryDialog } from "@/components/timesheet/timesheet-history-dialog";
 import { api } from "@/lib/api";
 import { STALE } from "@/lib/query-stale";
 import { useAuthStore, useAuthStoreHydrated, useEffectiveRole } from "@/lib/auth-store";
@@ -100,6 +107,9 @@ export function TimesheetWorkspace() {
   const [pending, setPending] = useState<Record<string, AttendanceStatus>>({});
   const [toast, setToast] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [normOpen, setNormOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const perms = usePermissions();
 
   const canEdit = canEditTimesheet(effectiveRole);
   const canOverrideSlotLeave = effectiveRole === "admin";
@@ -516,6 +526,7 @@ export function TimesheetWorkspace() {
       await patchMut.mutateAsync(entries);
       void qc.invalidateQueries({ queryKey: ["timesheet-matrix", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["tabel-audit", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["timesheet-history", tenantSlug] });
       resetEdit();
       showToast(`Сохранено ячеек: ${entries.length}`);
     } catch {
@@ -537,6 +548,7 @@ export function TimesheetWorkspace() {
       ]);
       void qc.invalidateQueries({ queryKey: ["timesheet-matrix", tenantSlug] });
       void qc.invalidateQueries({ queryKey: ["tabel-audit", tenantSlug] });
+      void qc.invalidateQueries({ queryKey: ["timesheet-history", tenantSlug] });
       setModalTarget(null);
       showToast(prev !== status ? "Сохранено" : "Без изменений");
     } catch {
@@ -571,7 +583,19 @@ export function TimesheetWorkspace() {
             Ежемесячный табель посещаемости сотрудников — интеграция KPI и зарплаты
           </p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-end gap-2">
+          <Can anyOf={[...NAV_PERM.staffTimesheetNorm]}>
+            <Button variant="outline" className="h-[38px] shadow-sm" onClick={() => setNormOpen(true)}>
+              <Target className="mr-1.5 size-4 text-primary" /> Норматив агентов
+            </Button>
+          </Can>
+          <Can anyOf={[...NAV_PERM.staffTimesheetHistory]}>
+            <Button variant="outline" className="h-[38px] shadow-sm" onClick={() => setHistoryOpen(true)}>
+              <History className="mr-1.5 size-4 text-primary" /> История
+            </Button>
+          </Can>
+        </div>
+        <div>
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Месяц и год</div>
           <div className="flex items-center overflow-hidden rounded-lg border bg-card shadow-sm">
             <button className="px-2.5 py-2 text-muted-foreground transition hover:bg-muted" onClick={() => changeMonth(-1)} aria-label="Предыдущий месяц">
@@ -848,6 +872,15 @@ export function TimesheetWorkspace() {
         onSave={(s, c) => void saveSingle(s, c)}
         onClose={() => setModalTarget(null)}
       />
+
+      <TimesheetNormDialog
+        open={normOpen}
+        canEdit={perms.hasAny(...NAV_PERM.staffTimesheetNormEdit)}
+        onClose={() => setNormOpen(false)}
+        onSaved={showToast}
+      />
+
+      <TimesheetHistoryDialog open={historyOpen} month={month} onClose={() => setHistoryOpen(false)} />
 
       <TimesheetExportDialog
         open={exportOpen}

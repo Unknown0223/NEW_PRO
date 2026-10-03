@@ -3,7 +3,9 @@ import {
   applyAgentNormToDays,
   consignmentOpenDays,
   DEFAULT_AGENT_NORM,
+  describeAgentNormChanges,
   parseAgentNormConfig,
+  summarizeAgentNorm,
   type AgentDaySales,
   type NormDay
 } from "../src/modules/timesheet/timesheet.agent-norm.pure";
@@ -108,6 +110,19 @@ describe("consignmentOpenDays", () => {
       "2026-10-02",
       "2026-10-03"
     ]);
+  });
+});
+
+describe("norma sozlamalari tarixi", () => {
+  it("nima nimaga o‘zgargani yoziladi", () => {
+    const next = { ...DEFAULT_AGENT_NORM, open_amount: 1_200_000, enabled: false };
+    expect(describeAgentNormChanges(DEFAULT_AGENT_NORM, next)).toEqual([
+      "Расчёт по нормативу: включён → выключен",
+      "Норма при открытой консигнации: 1 000 000 → 1 200 000 сум"
+    ]);
+    expect(describeAgentNormChanges(DEFAULT_AGENT_NORM, DEFAULT_AGENT_NORM)).toEqual([]);
+    expect(summarizeAgentNorm(DEFAULT_AGENT_NORM)).toBe("Включено с 01.10.2026 · открыта 1 000 000 · закрыта 650 000 сум");
+    expect(summarizeAgentNorm(next)).toBe("Выключено");
   });
 });
 

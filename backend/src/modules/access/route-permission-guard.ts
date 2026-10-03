@@ -232,6 +232,9 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/staff(\/|$)/, "staff.agent.view"),
 
   // ─────────── Табель / Рабочее место ───────────
+  r(WRITE, /\/timesheet\/norm-settings$/, "staff.tabel_normativ.update"),
+  r(READ, /\/timesheet\/norm-settings$/, "staff.tabel_normativ.view", "staff.tabel_normativ.update"),
+  r(READ, /\/timesheet\/history$/, "staff.tabel.history"),
   r(WRITE, /\/timesheet/, "staff.tabel.create", "staff.tabel.update"),
   r(READ, /\/timesheet/, "staff.tabel.view"),
   r(WRITE, /\/workdays/, "staff.tabel.create", "staff.tabel.update"),

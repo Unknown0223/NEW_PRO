@@ -130,7 +130,8 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
       sec("staff", "zarplaty"),
       sec("staff", "avans_limity"),
       secOnly("staff", "avans", ["view", "copy"]),
-      secOnly("staff", "tabel", ["view"])
+      secOnly("staff", "tabel", ["view", "history"]),
+      secOnly("staff", "tabel_normativ", ["view"])
     ),
 
   cashier: () => uniq(mod("cash"), modViewOnly("orders"), modViewOnly("clients")),

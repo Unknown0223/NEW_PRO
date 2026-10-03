@@ -43,6 +43,35 @@ export function parseAgentNormConfig(settings: Prisma.JsonValue | null | undefin
   };
 }
 
+function fmtRuYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+/** Sozlamalar tarixidagi qisqa ko‘rinish. */
+export function summarizeAgentNorm(cfg: AgentNormConfig): string {
+  if (!cfg.enabled) return "Выключено";
+  return `Включено с ${fmtRuYmd(cfg.start_date)} · открыта ${fmtSum(cfg.open_amount)} · закрыта ${fmtSum(cfg.closed_amount)} сум`;
+}
+
+/** «Nima nimaga o‘zgardi» — tarix izohi uchun. */
+export function describeAgentNormChanges(prev: AgentNormConfig, next: AgentNormConfig): string[] {
+  const out: string[] = [];
+  if (prev.enabled !== next.enabled) {
+    out.push(`Расчёт по нормативу: ${prev.enabled ? "включён" : "выключен"} → ${next.enabled ? "включён" : "выключен"}`);
+  }
+  if (prev.start_date !== next.start_date) {
+    out.push(`Дата начала: ${fmtRuYmd(prev.start_date)} → ${fmtRuYmd(next.start_date)}`);
+  }
+  if (prev.open_amount !== next.open_amount) {
+    out.push(`Норма при открытой консигнации: ${fmtSum(prev.open_amount)} → ${fmtSum(next.open_amount)} сум`);
+  }
+  if (prev.closed_amount !== next.closed_amount) {
+    out.push(`Норма при закрытой консигнации: ${fmtSum(prev.closed_amount)} → ${fmtSum(next.closed_amount)} сум`);
+  }
+  return out;
+}
+
 export type AgentDaySales = {
   /** Shu kuni olingan barcha zakazlar summasi. */
   gross: number;

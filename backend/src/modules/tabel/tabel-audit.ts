@@ -9,7 +9,7 @@ import type { Prisma } from "@prisma/client";
  */
 
 export type TabelAuditModule = "timesheet" | "workdays";
-export type TabelAuditKind = "status" | "schedule" | "exception" | "override";
+export type TabelAuditKind = "status" | "schedule" | "exception" | "override" | "settings";
 
 export interface TabelAuditRecord {
   id: string;
@@ -50,7 +50,7 @@ function isModule(v: unknown): v is TabelAuditModule {
 }
 
 function isKind(v: unknown): v is TabelAuditKind {
-  return v === "status" || v === "schedule" || v === "exception" || v === "override";
+  return v === "status" || v === "schedule" || v === "exception" || v === "override" || v === "settings";
 }
 
 export function readTabelAudit(settings: Prisma.JsonValue): TabelAuditRecord[] {

@@ -225,7 +225,8 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "staff", section: "partnery", labelRu: "Партнёры", actions: VIEW_ONLY },
   { module: "staff", section: "kpi", labelRu: "KPI", actions: ["view", "create", "import", "copy"] },
   { module: "staff", section: "rabochie_dni", labelRu: "Рабочие дни", actions: ["view", "create", "update"] },
-  { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update"] },
+  { module: "staff", section: "tabel", labelRu: "Табель", actions: ["view", "create", "update", "history"] },
+  { module: "staff", section: "tabel_normativ", labelRu: "Табель · Норматив агентов", actions: ["view", "update"] },
   { module: "staff", section: "zadachi", labelRu: "Задачи", actions: ["view", "create", "update"] },
 
   // ── GPS / Routes ───────────────────────────────────────────

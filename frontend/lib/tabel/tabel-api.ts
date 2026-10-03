@@ -23,7 +23,7 @@ import {
 } from "@/lib/tabel/workdays-logic";
 
 export type TabelAuditModule = "timesheet" | "workdays";
-export type TabelAuditKind = "status" | "schedule" | "exception" | "override";
+export type TabelAuditKind = "status" | "schedule" | "exception" | "override" | "settings";
 
 export interface TabelAuditRecord {
   id: string;

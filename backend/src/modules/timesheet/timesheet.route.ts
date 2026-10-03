@@ -6,6 +6,7 @@ import { ensureTenantContext } from "../../lib/tenant-context";
 import { ADMIN_AND_OPERATOR_LIKE_ROLES, TENANT_ADMIN_ROLE } from "../../lib/tenant-user-roles";
 import { jwtAccessVerify, requireRoles } from "../auth/auth.prehandlers";
 import { listTimesheetFilters, listTimesheetMatrix, patchAttendanceCell, patchAttendanceCells } from "./timesheet.service";
+import { registerTimesheetNormRoutes, timesheetActorLabel } from "./timesheet.route.norm";
 
 const readRoles = [...ADMIN_AND_OPERATOR_LIKE_ROLES, "supervisor"] as const;
 const writeRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
@@ -44,14 +45,6 @@ function mapPatchError(reply: Parameters<typeof sendApiError>[0], request: Param
   return false;
 }
 
-function actorLabel(request: { user?: unknown }): string {
-  const u = request.user as { role?: string; login?: string } | undefined;
-  const role = u?.role?.trim();
-  const login = u?.login?.trim();
-  if (role && login) return `${role} (${login})`;
-  return role || login || "система";
-}
-
 function actorIsAdmin(request: { user?: unknown }): boolean {
   const role = (request.user as { role?: string } | undefined)?.role?.trim();
   return role === TENANT_ADMIN_ROLE;
@@ -74,6 +67,8 @@ function parseCsvOrList(raw: unknown): string[] | undefined {
 }
 
 export async function registerTimesheetRoutes(app: FastifyInstance) {
+  await registerTimesheetNormRoutes(app);
+
   app.get(
     "/api/:slug/timesheet/filters",
     { preHandler: [jwtAccessVerify, requireRoles(...readRoles)] },
@@ -131,7 +126,7 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
           request.tenant!.id,
           actorUserIdOrNull(request),
           parsed.data.entries,
-          actorLabel(request),
+          await timesheetActorLabel(request),
           { actorIsAdmin: actorIsAdmin(request) }
         );
         return reply.send(data);
@@ -163,7 +158,7 @@ export async function registerTimesheetRoutes(app: FastifyInstance) {
             status: parsed.data.status,
             source: parsed.data.source,
             comment: parsed.data.comment,
-            changedBy: actorLabel(request)
+            changedBy: await timesheetActorLabel(request)
           },
           { actorIsAdmin: actorIsAdmin(request) }
         );

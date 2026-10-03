@@ -109,6 +109,9 @@ export const NAV_PERM = {
   cashPayrollQueue: ["cash.vydacha_zarplaty.view", "cash.vydacha_zarplaty.history"],
   staffWorkdays: ["staff.rabochie_dni.view", "staff.tabel.view"],
   staffTimesheet: ["staff.tabel.view"],
+  staffTimesheetHistory: ["staff.tabel.history"],
+  staffTimesheetNorm: ["staff.tabel_normativ.view", "staff.tabel_normativ.update"],
+  staffTimesheetNormEdit: ["staff.tabel_normativ.update"],
   staffTasks: ["staff.zadachi.view"],
   workSlots: ["work_slots.raboche_mesto.view"],
 
