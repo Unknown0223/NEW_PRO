@@ -46,6 +46,11 @@ function orderStatus(...slugs: string[]): string[] {
   return slugs.flatMap((slug) => sec("orders", `status_${slug}`));
 }
 
+/** «Заявки» yaratish sahifalari (`orders.sozdanie|obmen|vozvrat_polki|vozvrat_po_zakazu.create`). */
+function orderCreate(...sections: string[]): string[] {
+  return sections.flatMap((section) => secOnly("orders", section, ["create"]));
+}
+
 /** «Клиенты → Групповая обработка» (`clients.gr_*.update`). */
 function clientGroupOps(): string[] {
   return CATALOG.filter((e) => e.module === "clients" && e.section.startsWith("gr_")).map((e) => e.key);
@@ -67,9 +72,10 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   operator: () =>
     uniq(
       mod("dashboard"),
-      secOnly("orders", "zakaz", ["view", "create", "update", "copy", "history"]),
+      secOnly("orders", "zakaz", ["view", "update", "copy", "history"]),
+      orderCreate("sozdanie", "vozvrat_polki", "vozvrat_po_zakazu"),
       orderStatus(...ALL_ORDER_STATUS_SLUGS),
-      secOnly("orders", "vozvrat", ["view", "create"]),
+      secOnly("invoices", "vozvratnye", ["view"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
       clientGroupOps(),
       secOnly("clients", "karta", ["view"]),
@@ -186,8 +192,9 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
   // Agent — buyurtma yaratish, mijoz qo'shish, dashboard
   agent: () =>
     uniq(
-      secOnly("orders", "zakaz", ["view", "create", "copy"]),
-      secOnly("orders", "vozvrat", ["view", "create"]),
+      secOnly("orders", "zakaz", ["view", "copy"]),
+      orderCreate("sozdanie", "vozvrat_polki", "vozvrat_po_zakazu"),
+      secOnly("invoices", "vozvratnye", ["view"]),
       secOnly("clients", "klient", ["view", "create", "update"]),
       secOnly("clients", "foto", ["view", "create", "void"]),
       sec("clients", "profil"),
@@ -223,7 +230,7 @@ const PRESET_BUILDERS: Record<string, () => string[]> = {
     uniq(
       secOnly("orders", "zakaz", ["view"]),
       orderStatus("delivering", "delivered", "returned", "revert", "date"),
-      secOnly("orders", "vozvrat", ["view", "create"]),
+      orderCreate("vozvrat_polki", "vozvrat_po_zakazu"),
       secOnly("clients", "foto", ["view", "create", "void"]),
       modViewOnly("invoices"),
       secOnly("cash", "zayavki_na_oplatu", ["view"]),

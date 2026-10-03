@@ -7,7 +7,7 @@ const COVERED_SAMPLES: Array<{ method: string; path: string; key: string }> = [
   { method: "GET", path: "/api/:slug/reports/wdr/builder", key: "reports.otchety.view" },
   { method: "GET", path: "/api/:slug/bonus-rules", key: "settings.bonusy_i_skidki.view" },
   { method: "POST", path: "/api/:slug/bonus-rules", key: "settings.bonusy_i_skidki.create" },
-  { method: "GET", path: "/api/:slug/refusals", key: "orders.obmen_i_otkaz.view" },
+  { method: "GET", path: "/api/:slug/refusals", key: "orders.otkazy.view" },
   { method: "GET", path: "/api/:slug/audit-events", key: "audit.log.view" },
   { method: "GET", path: "/api/:slug/access/users", key: "access.upravlenie.view" },
   { method: "PATCH", path: "/api/:slug/access/users/1", key: "access.upravlenie.update" },

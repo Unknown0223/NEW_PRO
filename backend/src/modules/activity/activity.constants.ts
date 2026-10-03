@@ -94,8 +94,8 @@ export const ENTITY_HISTORY: Record<string, EntityHistoryDescriptor> = {
   payment: desc("cash", "oplaty_klientov", { audit: ["finance"], activity: ["payment", "finance"] }),
   finance: desc("cash", "otchety", { audit: ["finance"] }),
   // Qaytarishlar: per-return aniq audit (`sales_return` + return id).
-  sales_return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
-  return: desc("orders", "vozvrat", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
+  sales_return: desc("invoices", "vozvratnye", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
+  return: desc("invoices", "vozvratnye", { audit: ["sales_return"], activity: ["sales_return", "return"] }),
   work_slot: desc("work_slots", "raboche_mesto", { audit: ["work_slot"] }),
   geo_boundary: desc("settings", "geo_granitsy", { audit: ["geo_boundary"] }),
   territory: desc("settings", "territoriya", { audit: ["territory"] }),

@@ -512,7 +512,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       </div>
       ) : null}
 
-      {expeditorAssignableOrderIds.length > 0 ? (
+      {expeditorAssignableOrderIds.length > 0 && has("orders.zakaz.assign") ? (
         <button
           type="button"
           className={toolbarBtn}
@@ -530,6 +530,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         Итог по заказу
       </button>
 
+      {has("orders.drugie_operacii.update") ? (
       <button
         type="button"
         className={toolbarBtn}
@@ -539,8 +540,9 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         <FileText className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
         Консигнация
       </button>
+      ) : null}
 
-      {newStatusOrderIds.length > 0 ? (
+      {newStatusOrderIds.length > 0 && has("orders.zakaz.update") ? (
       <button
         type="button"
         className={toolbarBtn}
@@ -574,6 +576,7 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
       </button>
       ) : null}
 
+      {has("orders.zakaz.copy") ? (
       <button
         type="button"
         className={toolbarBtn}
@@ -585,8 +588,9 @@ export function OrdersBulkToolbar(props: OrdersBulkToolbarProps) {
         <Upload className="size-4 shrink-0 text-gray-500 dark:text-muted-foreground" aria-hidden />
         Загрузка
       </button>
+      ) : null}
 
-      {authHydrated && !paymentPrefill.disabled ? (
+      {authHydrated && !paymentPrefill.disabled && has("cash.oplaty_klientov.create") ? (
           <Link
             href={paymentPrefill.href}
             className={cn(

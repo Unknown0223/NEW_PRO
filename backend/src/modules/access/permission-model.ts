@@ -9,6 +9,7 @@
  */
 import { PERMISSION_OP_LABEL_RU } from "./permission-op-labels";
 import { CLIENT_PERMISSION_SECTIONS } from "./permission-client-sections";
+import { ORDER_PERMISSION_SECTIONS } from "./permission-order-sections";
 
 /** Qo'llab-quvvatlanadigan amal tiplari. CRUD + soft-void + alohida holat tiplari. */
 export const PERMISSION_ACTIONS = [
@@ -127,7 +128,6 @@ export type PermissionSectionDef = {
 };
 
 export const PAYROLL_GROUP_RU = "Зарплата";
-const ORDER_STATUS_TREE_RU = "Статус";
 const REPORTS_TREE_RU = "Отчеты";
 const DICTIONARIES_TREE_RU = "Справочники";
 const SYSTEM_SETTINGS_TREE_RU = "Системные настройки";
@@ -150,20 +150,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "dashboard", section: "plan_fakt", labelRu: "Мониторинг продаж и планов", actions: VIEW_ONLY },
 
   // ── Orders (Заявки) ────────────────────────────────────────
-  { module: "orders", section: "zakaz", labelRu: "Заказ", actions: ["view", "create", "update", "delete", "copy", "assign", "history"] },
-  { module: "orders", section: "vozvrat", labelRu: "Возврат", actions: ["view", "create", "update", "history"] },
-  { module: "orders", section: "obmen_i_otkaz", labelRu: "Обмен и отказ", actions: ["view", "create", "update"] },
-  // Har bir status o'tishi — alohida operatsiya (`orders/order-status-permissions.ts`).
-  { module: "orders", section: "status_confirmed", labelRu: "Подтверждён", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_picking", labelRu: "Комплектация", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_delivering", labelRu: "Отгружен", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_delivered", labelRu: "Доставлен", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_returned", labelRu: "Возврат", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_cancelled", labelRu: "Отменён", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_revert", labelRu: "Шаг назад", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_reopen", labelRu: "Восстановление отменённого", actions: ["status"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "status_date", labelRu: "Дата статуса", actions: ["update"], treeSectionRu: ORDER_STATUS_TREE_RU },
-  { module: "orders", section: "drugie_operacii", labelRu: "Другие операции", actions: ["update"] },
+  ...ORDER_PERMISSION_SECTIONS,
 
   // ── Clients (Клиенты) ──────────────────────────────────────
   ...CLIENT_PERMISSION_SECTIONS,
@@ -171,7 +158,7 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   // ── Invoices (Накладные) ───────────────────────────────────
   { module: "invoices", section: "sborochnye", labelRu: "Сборочные накладные", actions: VIEW_ONLY },
   { module: "invoices", section: "otgruzochnye", labelRu: "Отгрузочные накладные", actions: VIEW_ONLY },
-  { module: "invoices", section: "vozvratnye", labelRu: "Возвратные накладные", actions: VIEW_ONLY },
+  { module: "invoices", section: "vozvratnye", labelRu: "Возвратные накладные", actions: ["view", "approve"] },
 
   // ── Cash (Кассы) ───────────────────────────────────────────
   { module: "cash", section: "oplaty_klientov", labelRu: "Оплаты клиентов", actions: ["view", "create", "update", "delete", "history"] },
@@ -269,9 +256,6 @@ export const PERMISSION_SECTIONS: PermissionSectionDef[] = [
   { module: "settings", section: "orders_consignment", labelRu: "Заказы → консигнация", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "timezone", labelRu: "Часовой пояс", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
   { module: "settings", section: "initial_setup", labelRu: "Начальная настройка", actions: VIEW_ONLY, treeSectionRu: SYSTEM_SETTINGS_TREE_RU },
-
-  // ── Automation (Автоматизация заявок) ──────────────────────
-  { module: "automation", section: "zaiavki", labelRu: "Автоматизация заявок", actions: ["view", "create", "update"] },
 
   // ── Audit ──────────────────────────────────────────────────
   // `finance.obzor.view` — `dashboard.finansy.view` bilan bir xil sahifa (alias, `legacy-key-map.ts`).

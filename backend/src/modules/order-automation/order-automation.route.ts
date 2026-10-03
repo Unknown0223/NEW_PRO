@@ -22,6 +22,8 @@ import {
   type ListQuery
 } from "./order-automation.crud";
 import { getOrderAutomationFormOptions } from "./order-automation.form-options";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
+import { automationListPermission, automationPatchPermission } from "./order-automation.rbac";
 import {
   autoConfirmCreateSchema,
   autoConfirmUpdateSchema,
@@ -74,6 +76,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
+      if (!(await ensureAnyPermission(request, reply, [automationListPermission(q)]))) return;
       if (q.export === "csv") {
         const result = await listRestrictionRules(request.tenant!.id, {
           ...parseListQuery(q),
@@ -166,6 +169,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureAnyPermission(request, reply, [automationPatchPermission(request.body)]))) return;
       try {
         const row = await updateRestrictionRule(
           request.tenant!.id,
@@ -277,6 +281,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       if (!ensureTenantContext(request, reply)) return;
       const q = request.query as Record<string, string | undefined>;
+      if (!(await ensureAnyPermission(request, reply, [automationListPermission(q)]))) return;
       if (q.export === "csv") {
         const result = await listAutoConfirmRules(request.tenant!.id, {
           ...parseListQuery(q),
@@ -382,6 +387,7 @@ export async function registerOrderAutomationRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureAnyPermission(request, reply, [automationPatchPermission(request.body)]))) return;
       try {
         const row = await updateAutoConfirmRule(
           request.tenant!.id,

@@ -89,16 +89,18 @@ export function AutomationRulesTable({
   refLabelByCode,
   onEdit,
   onDelete,
-  onToggleActive,
+  onActivate,
+  onDeactivate,
   onDuplicate
 }: {
   tab: TabKind;
   rows: AutomationRuleRow[];
   refLabelByCode: Map<string, string>;
-  onEdit: (row: AutomationRuleRow) => void;
-  onDelete: (id: number) => void;
-  onToggleActive: (id: number, active: boolean) => void;
-  onDuplicate: (id: number) => void;
+  onEdit?: (row: AutomationRuleRow) => void;
+  onDelete?: (id: number) => void;
+  onActivate?: (id: number) => void;
+  onDeactivate?: (id: number) => void;
+  onDuplicate?: (id: number) => void;
 }) {
   const columns = tab === "restrictions" ? RESTRICTION_COLS : AUTO_CONFIRM_COLS;
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -257,14 +259,17 @@ export function AutomationRulesTable({
               </td>
               <td className={CELL}>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(row)}
-                    className="rounded p-1 text-gray-400 transition-colors hover:bg-teal-50 hover:text-teal-600"
-                    title="Редактировать"
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  {onEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(row)}
+                      className="rounded p-1 text-gray-400 transition-colors hover:bg-teal-50 hover:text-teal-600"
+                      title="Редактировать"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  ) : null}
+                  {(row.is_active ? onDeactivate : onActivate) || onDuplicate || onDelete ? (
                   <div className="relative">
                     <button
                       type="button"
@@ -277,45 +282,52 @@ export function AutomationRulesTable({
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
                         <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-card py-1 shadow-lg">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onToggleActive(row.id, !row.is_active);
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full ${row.is_active ? "bg-red-400" : "bg-emerald-400"}`}
-                            />
-                            {row.is_active ? "Деактивировать" : "Активировать"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onDuplicate(row.id);
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
-                          >
-                            <Copy size={14} />
-                            Дублировать
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onDelete(row.id);
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 size={14} />
-                            Удалить
-                          </button>
+                          {(row.is_active ? onDeactivate : onActivate) ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                (row.is_active ? onDeactivate : onActivate)?.(row.id);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                            >
+                              <span
+                                className={`h-2 w-2 rounded-full ${row.is_active ? "bg-red-400" : "bg-emerald-400"}`}
+                              />
+                              {row.is_active ? "Деактивировать" : "Активировать"}
+                            </button>
+                          ) : null}
+                          {onDuplicate ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDuplicate(row.id);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                            >
+                              <Copy size={14} />
+                              Дублировать
+                            </button>
+                          ) : null}
+                          {onDelete ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDelete(row.id);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 size={14} />
+                              Удалить
+                            </button>
+                          ) : null}
                         </div>
                       </>
                     ) : null}
                   </div>
+                  ) : null}
                 </div>
               </td>
             </tr>

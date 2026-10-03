@@ -44,10 +44,12 @@ const ALL_NAV_ITEMS = collectNavItems();
 /**
  * Joriy yo‘l uchun eng aniq (eng uzun) nav bandini topadi.
  * Faqat `roles` yoki `showIfAnyPermission` berilgan bandlar — deep-link gate uchun.
+ * Bir yo‘lda faqat `?query` bilan farq qiladigan bandlar (`/orders/new?type=…`) — ruxsatlari birlashtiriladi;
+ * aniq tur sahifaning o‘zida tekshiriladi.
  */
 export function findGatedNavItemForPath(pathname: string): NavItem | null {
   const path = pathOnly(pathname);
-  let best: NavItem | null = null;
+  let matches: NavItem[] = [];
   let bestLen = -1;
   for (const item of ALL_NAV_ITEMS) {
     if (item.placeholder || item.href === "#") continue;
@@ -56,12 +58,19 @@ export function findGatedNavItemForPath(pathname: string): NavItem | null {
     const hrefPath = pathOnly(item.href);
     if (path === hrefPath || path.startsWith(`${hrefPath}/`)) {
       if (hrefPath.length > bestLen) {
-        best = item;
+        matches = [item];
         bestLen = hrefPath.length;
+      } else if (hrefPath.length === bestLen) {
+        matches.push(item);
       }
     }
   }
-  return best;
+  if (matches.length <= 1) return matches[0] ?? null;
+  return {
+    ...matches[0]!,
+    roles: [...new Set(matches.flatMap((m) => m.roles ?? []))],
+    showIfAnyPermission: [...new Set(matches.flatMap((m) => m.showIfAnyPermission ?? []))]
+  };
 }
 
 /** Rol + permission bo‘yicha nav bandi ko‘rinadimi (app-shell bilan bir xil mantiq). */

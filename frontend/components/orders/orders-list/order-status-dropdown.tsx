@@ -123,7 +123,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
   }, [order.allowed_next_statuses, order.status, order.order_type, has]);
 
   const canEditStatusDate = has(ORDER_STATUS_DATE_PERMISSION);
-  const canReturnFromShelf = has("orders.vozvrat.create");
+  const canReturnFromShelf = has("orders.vozvrat_po_zakazu.create");
   const actions = useMemo(() => {
     const base = buildStatusActions(order.status, nextStatuses, order.order_type);
     const specials: StatusAction[] = [];
@@ -134,7 +134,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
         value: "return_from_shelf"
       });
     }
-    if (order.status === "confirmed" && canEditStatusDate) {
+    if (order.status === "confirmed" && canEditStatusDate && onChangeShipDate) {
       specials.push({
         kind: "special",
         label: "Изменить ожидаемую дату отгрузки",
@@ -142,7 +142,7 @@ export const OrderStatusDropdown = memo(function OrderStatusDropdown({
       });
     }
     return [...specials, ...base];
-  }, [order.status, order.order_type, nextStatuses, canEditStatusDate, canReturnFromShelf]);
+  }, [order.status, order.order_type, nextStatuses, canEditStatusDate, canReturnFromShelf, onChangeShipDate]);
 
   const hasMenu = actions.some((a) => a.kind !== "text");
   const style = orderListStatusStyle(order.status, order.order_type);

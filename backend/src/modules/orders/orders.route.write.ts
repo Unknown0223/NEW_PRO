@@ -31,6 +31,8 @@ import {
 import { parseSelectedMastersFromQuery, resolveConstraintScope } from "../linkage/linkage.service";
 import { getExchangeSourceAvailability } from "./exchange-source-limits.service";
 import { resolveOrderStatusRbac, sendOrderStatusPermissionError } from "./order-status-rbac";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
+import { orderCreatePermissionForType } from "./order-create-permissions";
 import { getOrderCreateCatalogBundle, getOrderCreateContextBundle } from "./order-create-context.service";
 import {
   bulkUpdateOrderExpeditor,
@@ -161,6 +163,7 @@ export async function registerOrderWriteRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return sendApiError(reply, request, 400, "ValidationError", undefined, zodValidationExtras(parsed.error));
       }
+      if (!(await ensureAnyPermission(request, reply, [orderCreatePermissionForType(parsed.data.order_type)]))) return;
       try {
         const viewer = getAccessUser(request);
         const row = await createOrder(request.tenant!.id, parsed.data, {

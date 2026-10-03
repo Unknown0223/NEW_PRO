@@ -30,6 +30,21 @@ const MIGRATE_UNKNOWN_TO: Record<string, string[]> = {
     "clients.vizity_sklad.update",
     "clients.vizity_kassa.update"
   ],
+  "orders.zakaz.create": ["orders.sozdanie.create"],
+  "orders.vozvrat.create": ["orders.vozvrat_polki.create", "orders.vozvrat_po_zakazu.create"],
+  "orders.vozvrat.view": ["invoices.vozvratnye.view"],
+  "orders.vozvrat.update": ["invoices.vozvratnye.approve"],
+  "orders.obmen_i_otkaz.view": ["orders.otkazy.view"],
+  "orders.obmen_i_otkaz.create": ["orders.obmen.create", "orders.otkazy.create"],
+  "automation.zaiavki.view": ["orders.avtomatizatsiya.view", "orders.avtomatizatsiya.copy"],
+  "automation.zaiavki.create": ["orders.avtomatizatsiya.create"],
+  "automation.zaiavki.update": [
+    "orders.avtomatizatsiya.update",
+    "orders.avtomatizatsiya.delete",
+    "orders.avtomatizatsiya.restore",
+    "orders.avtomatizatsiya.activate",
+    "orders.avtomatizatsiya.deactivate"
+  ],
   "clients.oborudovanie.status": ["clients.oborudovanie.create", "clients.oborudovanie.delete"],
   "clients.oborudovanie.transfer": ["clients.oborudovanie.create", "clients.oborudovanie.delete"],
   "staff.agent.status": ["staff.agent.activate", "staff.agent.deactivate"],

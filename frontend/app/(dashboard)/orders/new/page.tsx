@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/use-permissions";
+import { orderCreatePageAccess } from "@/lib/order-create-access";
+import { AccessDeniedBanner } from "@/components/access/access-denied-banner";
 
 const OrderCreateWorkspace = dynamic(
   () =>
@@ -23,6 +26,7 @@ function NewOrderContent() {
   const searchParams = useSearchParams();
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
   const hydrated = useAuthStoreHydrated();
+  const perms = usePermissions();
 
   if (!hydrated) {
     return <p className="text-sm text-muted-foreground">Загрузка сессии…</p>;
@@ -44,6 +48,23 @@ function NewOrderContent() {
   const editParsed = Number.parseInt(editRaw, 10);
   const editOrderId =
     Number.isFinite(editParsed) && editParsed > 0 ? editParsed : null;
+  const access = orderCreatePageAccess(orderType, editOrderId);
+
+  if (perms.isLoading && !perms.isAdmin) {
+    return <p className="text-sm text-muted-foreground">Проверка доступа…</p>;
+  }
+  if (!perms.hasAny(...access.anyOf)) {
+    return (
+      <div className="flex flex-1 items-start justify-center p-6 sm:p-10">
+        <AccessDeniedBanner
+          title="Нет доступа"
+          message={`Раздел «${access.label}» недоступен для вашей роли или прав.`}
+          secondaryHref="/access"
+          secondaryLabel="Доступ"
+        />
+      </div>
+    );
+  }
 
   return (
     <div

@@ -78,8 +78,8 @@ const GRANT_PROBE_KEYS = [
   "clients.view",
   "orders.zakaz.view",
   "orders.view",
-  "orders.zakaz.create",
-  "orders.obmen_i_otkaz.view",
+  "orders.sozdanie.create",
+  "orders.otkazy.view",
   "dashboard.prodazhi.view",
   "dashboard.plan_fakt.view",
   "gps.gps.view"
@@ -103,8 +103,8 @@ const NAV_PERM = {
   clientsRetailStock: ["warehouse.ostatki.view"],
   visitPlanner: ["gps.gps.view", "gps.dostup_k_gps"],
   ordersView: ["orders.zakaz.view", "orders.view"],
-  ordersCreate: ["orders.zakaz.create", "orders.create"],
-  exchangeCreateNav: ["orders.obmen_i_otkaz.create"],
+  ordersCreate: ["orders.sozdanie.create", "orders.create"],
+  exchangeCreateNav: ["orders.obmen.create"],
   planFaktMonitoring: ["dashboard.plan_fakt.view", "dashboard.plan_fakt"],
   salesDash: ["dashboard.prodazhi.view", "dashboard.prodazhi"]
 } as const;
@@ -268,13 +268,13 @@ const CAP_FLAGS: CapFlag[] = [
   {
     id: "nav.orders.create",
     label: "Sidebar: Создать заказ",
-    okForGrant: (g) => g === "orders.zakaz.create" || g === "orders.create",
+    okForGrant: (g) => g === "orders.sozdanie.create" || g === "orders.create",
     trueWhen: (k) => hasAny(k, NAV_PERM.ordersCreate)
   },
   {
     id: "nav.exchange.createOrView",
     label: "Sidebar: Обмен create-entry (create only)",
-    okForGrant: (g) => g === "orders.obmen_i_otkaz.create",
+    okForGrant: (g) => g === "orders.obmen.create",
     trueWhen: (k) => hasAny(k, NAV_PERM.exchangeCreateNav)
   },
   {

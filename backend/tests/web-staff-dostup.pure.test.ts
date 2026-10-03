@@ -55,7 +55,7 @@ describe("web staff (kassir/operator/SVR/skladchik) — Dostup cheklovlari", () 
 
   it("operator — buyurtma/mijoz bor, kassa/ombor/dostup yo‘q", () => {
     const k = buildRoleDefaultKeys("operator");
-    expect(k).toContain("orders.zakaz.create");
+    expect(k).toContain("orders.sozdanie.create");
     expect(k).toContain("clients.klient.view");
     expect(k.some((x) => x.startsWith("cash."))).toBe(false);
     expect(k.some((x) => x.startsWith("warehouse."))).toBe(false);
@@ -88,7 +88,11 @@ describe("web staff (kassir/operator/SVR/skladchik) — Dostup cheklovlari", () 
   });
 
   it("Dostup deny — operator buyurtma yaratishni yopadi", () => {
-    const keys = applyDeny(buildRoleDefaultKeys("operator"), ["orders.zakaz.create"]);
+    const keys = applyDeny(buildRoleDefaultKeys("operator"), [
+      "orders.sozdanie.create",
+      "orders.vozvrat_polki.create",
+      "orders.vozvrat_po_zakazu.create"
+    ]);
     expect(can(keys, "POST", "/api/:slug/orders")).toBe(false);
     expect(can(new Set(buildRoleDefaultKeys("operator")), "POST", "/api/:slug/orders")).toBe(true);
     expect(can(keys, "GET", "/api/:slug/orders")).toBe(true);
@@ -160,7 +164,7 @@ describe("web staff (kassir/operator/SVR/skladchik) — Dostup cheklovlari", () 
     const k = new Set(buildRoleDefaultKeys("regional_manager"));
     expect(can(k, "GET", "/api/:slug/orders")).toBe(true);
     expect(can(k, "POST", "/api/:slug/orders")).toBe(false);
-    const granted = new Set([...k, "orders.zakaz.create"]);
+    const granted = new Set([...k, "orders.sozdanie.create"]);
     expect(can(granted, "POST", "/api/:slug/orders")).toBe(true);
   });
 

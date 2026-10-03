@@ -38,9 +38,10 @@ describe("permission-model (CRUD struktura)", () => {
 
   it("yangi bo'limlar mavjud (audit/finance/automation/work_slots/warehouse to'liq)", () => {
     const modules = new Set(PERMISSION_SECTIONS.map((s) => s.module));
-    for (const m of ["audit", "finance", "automation", "work_slots", "warehouse", "routes", "activity"]) {
+    for (const m of ["audit", "finance", "work_slots", "warehouse", "routes", "activity"]) {
       expect(modules.has(m), `module yo'q: ${m}`).toBe(true);
     }
+    expect(PERMISSION_SECTIONS.some((s) => s.module === "orders" && s.section === "avtomatizatsiya")).toBe(true);
     const whSections = PERMISSION_SECTIONS.filter((s) => s.module === "warehouse").map((s) => s.section);
     expect(whSections).toContain("peremeshchenie");
     expect(whSections).toContain("korrektirovka");
@@ -85,10 +86,10 @@ describe("legacy-key-map (eski → yangi)", () => {
 
 describe("route-permission-guard matchRule", () => {
   it("orders write/read to'g'ri kalitга bog'lanadi", () => {
-    expect(matchRule("POST", "/api/:slug/orders")?.anyOf).toContain("orders.zakaz.create");
+    expect(matchRule("POST", "/api/:slug/orders")?.anyOf).toContain("orders.sozdanie.create");
     expect(matchRule("GET", "/api/:slug/orders")?.anyOf).toContain("orders.zakaz.view");
     expect(matchRule("PATCH", "/api/:slug/orders/:id")?.anyOf).toContain("orders.zakaz.update");
-    expect(matchRule("DELETE", "/api/:slug/orders/:id")?.anyOf).toContain("orders.zakaz.delete");
+    expect(matchRule("DELETE", "/api/:slug/orders/:id")).toBeNull();
   });
 
   it("maxsus yo'llar (status/bulk) umumiydan oldin", () => {
@@ -97,7 +98,7 @@ describe("route-permission-guard matchRule", () => {
   });
 
   it("aniq URL (Fastify 5 fallback) ham :id qoidasiga mos keladi", () => {
-    expect(matchRule("DELETE", "/api/acme/orders/5")?.anyOf).toContain("orders.zakaz.delete");
+    expect(matchRule("PATCH", "/api/acme/orders/5")?.anyOf).toContain("orders.zakaz.update");
     expect(matchRule("PATCH", "/api/acme/payments/9")?.anyOf).toContain("cash.oplaty_klientov.update");
     expect(matchRule("POST", "/api/acme/orders/12/status")?.anyOf).toContain("orders.status_cancelled.status");
   });
@@ -123,7 +124,7 @@ describe("role-permission-presets", () => {
 
   it("agent — заказы/клиенты create bor, склад yo'q", () => {
     const agent = buildRoleDefaultKeys("agent");
-    expect(agent).toContain("orders.zakaz.create");
+    expect(agent).toContain("orders.sozdanie.create");
     expect(agent).toContain("clients.klient.create");
     expect(agent).toContain("clients.foto.view");
     expect(agent).toContain("clients.foto.create");

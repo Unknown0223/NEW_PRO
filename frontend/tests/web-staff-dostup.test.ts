@@ -38,7 +38,7 @@ describe("web staff nav — Dostup cheklovlari", () => {
   });
 
   it("operator buyurtmani ko‘radi, kassani yo‘q", () => {
-    const keys = new Set(["orders.zakaz.view", "orders.zakaz.create", "clients.klient.view"]);
+    const keys = new Set(["orders.zakaz.view", "orders.sozdanie.create", "clients.klient.view"]);
     expect(isNavItemAllowed(item("/orders"), "operator", keys)).toBe(true);
     expect(isNavItemAllowed(item("/payments"), "operator", keys)).toBe(false);
     expect(isNavItemAllowed(item("/stock/balances"), "operator", keys)).toBe(false);
@@ -222,13 +222,13 @@ const ROLE_NAV: Array<{
   },
   {
     role: "agent",
-    keys: ["orders.zakaz.view", "orders.zakaz.create", "clients.klient.view", "dashboard.prodazhi.view"],
+    keys: ["orders.zakaz.view", "orders.sozdanie.create", "clients.klient.view", "dashboard.prodazhi.view"],
     see: ["/orders", "/orders/new?type=order", "/clients"],
     hide: ["/payments", "/access", "/stock/receipts"]
   },
   {
     role: "expeditor",
-    keys: ["orders.zakaz.view", "orders.vozvrat.view", "cash.dolgi_ekspeditora.view"],
+    keys: ["orders.zakaz.view", "invoices.vozvratnye.view", "cash.dolgi_ekspeditora.view"],
     see: ["/orders"],
     hide: ["/payments", "/access", "/clients"]
   },

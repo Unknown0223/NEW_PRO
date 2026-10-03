@@ -8,12 +8,12 @@
 
 export const NAV_PERM = {
   ordersView: ["orders.zakaz.view", "orders.view"],
-  ordersCreate: ["orders.zakaz.create", "orders.create"],
-  returnsCreate: ["orders.vozvrat.create"],
-  returnsView: ["orders.vozvrat.view"],
-  exchangeCreate: ["orders.obmen_i_otkaz.create"],
-  exchangeView: ["orders.obmen_i_otkaz.view"],
-  automation: ["automation.zaiavki.view"],
+  ordersCreate: ["orders.sozdanie.create", "orders.create"],
+  returnsShelfCreate: ["orders.vozvrat_polki.create"],
+  returnsByOrderCreate: ["orders.vozvrat_po_zakazu.create"],
+  exchangeCreate: ["orders.obmen.create"],
+  refusals: ["orders.otkazy.view"],
+  automation: ["orders.avtomatizatsiya.view"],
 
   clients: ["clients.klient.view", "clients.view"],
   clientsMap: ["clients.karta.view", "clients.klienty_na_karte"],

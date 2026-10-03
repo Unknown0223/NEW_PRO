@@ -29,6 +29,8 @@ import {
 } from "./returns-enhanced.service";
 import { acceptSalesReturn, rejectSalesReturn } from "./returns-enhanced.accept";
 import { acceptDailyReturnWaybill } from "./returns-daily-waybills";
+import { ensureAnyPermission } from "../access/ensure-any-permission";
+import { returnCreatePermission } from "../orders/order-create-permissions";
 const catalogRoles = ADMIN_AND_OPERATOR_LIKE_ROLES;
 
 const priceTypeOptional = z.string().trim().min(1).max(128).optional().nullable();
@@ -178,6 +180,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, [returnCreatePermission(parsed.data.order_id)]))) return;
       try {
         await assertDocWritableByDate(request, "returns", new Date());
         const data = await createPeriodReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));
@@ -386,6 +389,7 @@ export async function registerSalesReturnWriteRoutes(app: FastifyInstance) {
           zodValidationExtras(parsed.error)
         );
       }
+      if (!(await ensureAnyPermission(request, reply, [returnCreatePermission(parsed.data.order_id)]))) return;
       try {
         await assertDocWritableByDate(request, "returns", new Date());
         const row = await createSalesReturn(request.tenant!.id, parsed.data, actorUserIdOrNull(request));

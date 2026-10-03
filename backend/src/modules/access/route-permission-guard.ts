@@ -16,6 +16,14 @@ import { sendApiError } from "../../lib/api-error";
 import { getAccessUser } from "../auth/auth.prehandlers";
 import { resolveUserPermissionKeys } from "./rbac.service";
 import { ORDER_STATUS_CHANGE_PERMISSIONS, ORDER_STATUS_DATE_PERMISSION } from "../orders/order-status-permissions";
+import {
+  ORDER_CREATE_ANY_PERMISSIONS,
+  ORDER_CREATE_PERMISSION,
+  ORDER_EXCHANGE_PERMISSION,
+  RETURN_BY_ORDER_PERMISSION,
+  RETURN_CREATE_ANY_PERMISSIONS,
+  RETURN_SHELF_PERMISSION
+} from "../orders/order-create-permissions";
 import { PAYROLL_ROUTE_PERMISSION_RULES } from "./route-permission-guard.payroll";
 import { CLIENT_BULK_PATCH_PERMISSIONS, CLIENT_GROUP_TAGS_PERMISSION } from "../clients/client-bulk-permissions";
 
@@ -55,15 +63,29 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(WRITE, /\/orders\/bulk\/(bonus-refresh)$/, "orders.zakaz.update"),
   r(WRITE, /\/orders\/:id\/status$/, ...ORDER_STATUS_CHANGE_PERMISSIONS),
   r(WRITE, /\/orders\/:id\/milestone-at$/, ORDER_STATUS_DATE_PERMISSION),
-  r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update"),
-  r(["POST"], /\/orders$/, "orders.zakaz.create"),
+  r(["POST"], /\/orders\/bonus-preview$/, "orders.zakaz.update", ORDER_CREATE_PERMISSION),
+  // Yaratish: kamida bitta yaratish kaliti; aniq tur (`order_type`) handlerda tekshiriladi.
+  r(["POST"], /\/orders$/, ...ORDER_CREATE_ANY_PERMISSIONS),
   r(["PUT", "PATCH"], /\/orders\/:id(\/meta)?$/, "orders.zakaz.update"),
-  r(["DELETE"], /\/orders\/:id$/, "orders.zakaz.delete"),
+  // Yaratish sahifalari ma'lumotlari — «Заявки» ro'yxatini ko'rish ruxsatisiz ham ochiladi.
+  r(READ, /\/orders\/(create-context|create-catalog|prices-as-of)$/, "orders.zakaz.view", ...ORDER_CREATE_ANY_PERMISSIONS),
+  r(READ, /\/orders\/exchange-source-availability$/, "orders.zakaz.view", ORDER_EXCHANGE_PERMISSION),
+  // «По заказу» va «Обмен» — mijozning zakazlarini tanlash uchun ro'yxat.
+  r(READ, /\/orders$/, "orders.zakaz.view", RETURN_BY_ORDER_PERMISSION, ORDER_EXCHANGE_PERMISSION),
   r(READ, /\/orders(\/|$)/, "orders.zakaz.view"),
 
   // ─────────── Возвраты (returns) ───────────
-  r(WRITE, /\/returns(\/|$)/, "orders.vozvrat.create", "orders.vozvrat.update"),
-  r(READ, /\/returns(\/|$)/, "orders.vozvrat.view"),
+  // Qabul qilish — «Накладные → Возвратные накладные».
+  r(["POST"], /\/returns\/daily-waybills\/[^/]+\/[^/]+\/accept$/, "invoices.vozvratnye.approve"),
+  r(["POST"], /\/returns\/:id\/(accept|reject)$/, "invoices.vozvratnye.approve"),
+  r(READ, /\/returns\/daily-waybills(\/|$)/, "invoices.vozvratnye.view"),
+  r(["POST"], /\/returns\/period-batch$/, RETURN_SHELF_PERMISSION),
+  r(["POST"], /\/returns\/full-order$/, RETURN_BY_ORDER_PERMISSION),
+  // `/returns/period` va `/returns`: «с полки» yoki «по заказу» (`order_id`) handlerda.
+  r(WRITE, /\/returns(\/|$)/, ...RETURN_CREATE_ANY_PERMISSIONS),
+  r(READ, /\/returns\/shelf-return-by-order\/check$/, RETURN_BY_ORDER_PERMISSION),
+  r(READ, /\/returns\/(client-data|order-balances)$/, ...RETURN_CREATE_ANY_PERMISSIONS, ORDER_EXCHANGE_PERMISSION),
+  r(READ, /\/returns(\/|$)/, "invoices.vozvratnye.view", ...RETURN_CREATE_ANY_PERMISSIONS),
 
   // ─────────── Склад (stock/warehouse) ───────────
   r(WRITE, /\/stock\/corrections/, "warehouse.korrektirovka.create", "warehouse.korrektirovka.update"),
@@ -192,13 +214,14 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/retail-stock\/export$/, "clients.ostatki_tt.copy"),
   r(READ, /\/retail-stock$/, "clients.ostatki_tt.view"),
 
-  // ─────────── Накладные / списания (assembly via returns write-offs) ───────────
-  r(WRITE, /\/order-automation/, "automation.zaiavki.create", "automation.zaiavki.update"),
-  r(READ, /\/order-automation/, "automation.zaiavki.view"),
-  r(["POST"], /\/order-(auto-confirm|restriction)-rules$/, "automation.zaiavki.create"),
-  r(["POST"], /\/order-(auto-confirm|restriction)-rules\/:id\/duplicate$/, "automation.zaiavki.create"),
-  r(WRITE, /\/order-(auto-confirm|restriction)-rules/, "automation.zaiavki.update"),
-  r(DEL, /\/order-(auto-confirm|restriction)-rules/, "automation.zaiavki.update"),
+  // ─────────── Заявки → Автоматизация заявок ───────────
+  // Ro'yxat `?export=csv` (copy) va faqat `is_active` PATCH (activate/deactivate) — handlerda.
+  r(READ, /\/order-automation/, "orders.avtomatizatsiya.view", "orders.avtomatizatsiya.create", "orders.avtomatizatsiya.update"),
+  r(["POST"], /\/order-(auto-confirm|restriction)-rules(\/:id\/duplicate)?$/, "orders.avtomatizatsiya.create"),
+  r(["POST"], /\/order-(auto-confirm|restriction)-rules\/:id\/restore$/, "orders.avtomatizatsiya.restore"),
+  r(WRITE, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.update", "orders.avtomatizatsiya.activate", "orders.avtomatizatsiya.deactivate"),
+  r(DEL, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.delete"),
+  r(READ, /\/order-(auto-confirm|restriction)-rules/, "orders.avtomatizatsiya.view", "orders.avtomatizatsiya.copy"),
 
   // ─────────── Настройки: Товар / Цена (products) ───────────
   // Faqat katalog moduli: `/api/:slug/products…`.
@@ -360,8 +383,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
   r(READ, /\/bonus-strategies(\/|$)/, "settings.bonusy_i_skidki.view"),
 
   // ─────────── Отказы (refusals) ───────────
-  r(WRITE, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.create", "orders.obmen_i_otkaz.update"),
-  r(READ, /\/refusals(\/|$)/, "orders.obmen_i_otkaz.view"),
+  r(WRITE, /\/refusals(\/|$)/, "orders.otkazy.create"),
+  r(READ, /\/refusals(\/|$)/, "orders.otkazy.view"),
 
   // ─────────── Аудит ───────────
   r(READ, /\/audit-events(\/|$)/, "audit.log.view"),

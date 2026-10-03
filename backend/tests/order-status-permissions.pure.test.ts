@@ -70,15 +70,25 @@ describe("Доступ daraxti — Заявки", () => {
   const tree = buildAccessOperationsTree();
   const orders = tree.find((m) => m.label === "Заявки")!;
 
-  it("statuslar bitta «Статус» bo'limida, «Заказ» ichida status yo'q", () => {
+  it("statuslar bitta «Статус» bo'limida, «Заявки» ichida status yo'q", () => {
     const status = orders.sections.find((s) => s.label === "Статус")!;
     expect(status.operations.map((o) => o.key)).toEqual([...ORDER_STATUS_CHANGE_PERMISSIONS, ORDER_STATUS_DATE_PERMISSION]);
-    const zakaz = orders.sections.find((s) => s.label === "Заказ")!;
+    const zakaz = orders.sections.find((s) => s.label === "Заявки")!;
     expect(zakaz.operations.some((o) => o.action === "status")).toBe(false);
   });
 
   it("«Другие операции» — накладные, экспедитор, консигнация; bo'lim tartibi saqlanadi", () => {
-    expect(orders.sections.map((s) => s.label)).toEqual(["Заказ", "Возврат", "Обмен и отказ", "Статус", "Другие операции"]);
+    expect(orders.sections.map((s) => s.label)).toEqual([
+      "Создать заказ",
+      "Создать возврат с полки",
+      "Создать возврат с полки по заказу",
+      "Создать обмен",
+      "Заявки",
+      "Отказы",
+      "Автоматизация заявок",
+      "Статус",
+      "Другие операции"
+    ]);
     const other = orders.sections.find((s) => s.label === "Другие операции")!;
     expect(other.operations.map((o) => o.key)).toEqual([
       "orders.zakaz.copy",

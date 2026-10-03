@@ -12,9 +12,12 @@ describe("route-permission-guard matchRule", () => {
     expect(rule!.anyOf).toContain("orders.zakaz.view");
   });
 
-  it("maps POST /orders to orders.zakaz.create", () => {
+  it("maps POST /orders to any create-page key (exact type checked in handler)", () => {
     const rule = matchRule("POST", "/api/:slug/orders");
-    expect(rule?.anyOf).toContain("orders.zakaz.create");
+    expect(rule?.anyOf).toEqual(
+      expect.arrayContaining(["orders.sozdanie.create", "orders.obmen.create", "orders.vozvrat_polki.create", "orders.vozvrat_po_zakazu.create"])
+    );
+    expect(rule?.anyOf).not.toContain("orders.zakaz.view");
   });
 
   it("maps PATCH /orders/:id/status to per-status keys (also with :id(\\d+) route pattern)", () => {
@@ -53,7 +56,7 @@ describe("route-permission-guard matchRule", () => {
       ["POST", "/api/:slug/clients/merge", "clients.obedinenie.update"],
       ["POST", "/api/:slug/clients/merge-preview", "clients.obedinenie.view"],
       ["DELETE", "/api/:slug/currency-rates/:id", "cash.kurs_valyuty.update"],
-      ["POST", "/api/:slug/order-restriction-rules", "automation.zaiavki.create"],
+      ["POST", "/api/:slug/order-restriction-rules", "orders.avtomatizatsiya.create"],
       ["PATCH", "/api/:slug/settings/bonus-stack", "settings.bonusy_i_skidki.update"]
     ];
     for (const [method, path, key] of cases) {
@@ -100,7 +103,7 @@ describe("route-permission-guard matchRule", () => {
     expect(matchRule("POST", "/api/:slug/mobile/payments/order-cash-in")).toBeNull();
     expect(matchRule("POST", "/api/:slug/mobile/clients/:id/photo-reports")).toBeNull();
     // Stripped routeOptions collision risk (guard must use request.url)
-    expect(matchRule("POST", "/orders")?.anyOf).toContain("orders.zakaz.create");
+    expect(matchRule("POST", "/orders")?.anyOf).toContain("orders.sozdanie.create");
     expect(matchRule("POST", "/payments")?.anyOf).toContain("cash.oplaty_klientov.create");
   });
 

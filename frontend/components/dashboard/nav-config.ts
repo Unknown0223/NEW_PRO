@@ -89,12 +89,12 @@ export const dashboardOrdersNav: {
         {
           href: "/orders/new?type=return",
           label: "Создать возврат с полки",
-          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+          showIfAnyPermission: [...NAV_PERM.returnsShelfCreate]
         },
         {
           href: "/orders/new?type=return_by_order",
           label: "Создать возврат с полки по заказу",
-          showIfAnyPermission: [...NAV_PERM.returnsCreate]
+          showIfAnyPermission: [...NAV_PERM.returnsByOrderCreate]
         },
         {
           href: "/orders/new?type=exchange",
@@ -107,7 +107,7 @@ export const dashboardOrdersNav: {
       title: "УПРАВЛЕНИЕ ЗАКАЗАМИ",
       items: [
         { href: "/orders", label: "Заявки", showIfAnyPermission: [...NAV_PERM.ordersView] },
-        { href: "/orders/refusals", label: "Отказы", showIfAnyPermission: [...NAV_PERM.exchangeView] },
+        { href: "/orders/refusals", label: "Отказы", showIfAnyPermission: [...NAV_PERM.refusals] },
         { href: "/orders/automation", label: "Автоматизация заявок", showIfAnyPermission: [...NAV_PERM.automation] }
       ]
     }

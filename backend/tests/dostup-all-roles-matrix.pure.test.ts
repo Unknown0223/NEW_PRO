@@ -109,7 +109,13 @@ describe("Dostup — barcha rollar: katalog va dostup yopiq", () => {
   });
 
   it("har bir permission section kamida bitta view kalitiga ega", () => {
-    const actionOnlySections = new Set(["orders.drugie_operacii"]);
+    const actionOnlySections = new Set([
+      "orders.drugie_operacii",
+      "orders.sozdanie",
+      "orders.vozvrat_polki",
+      "orders.vozvrat_po_zakazu",
+      "orders.obmen"
+    ]);
     for (const sec of PERMISSION_SECTIONS) {
       if (actionOnlySections.has(`${sec.module}.${sec.section}`)) continue;
       if (sec.module === "orders" && sec.section.startsWith("status_")) continue;

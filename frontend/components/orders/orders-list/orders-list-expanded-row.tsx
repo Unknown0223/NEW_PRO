@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { api } from "@/lib/api";
 import { applyOrderDetailToListCaches } from "@/lib/orders-list-cache";
 import { STALE } from "@/lib/query-stale";
+import { usePermissions } from "@/lib/use-permissions";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Package, Pencil } from "lucide-react";
@@ -25,6 +26,7 @@ function OrdersListExpandedBody({
   orderStatus?: string;
 }) {
   const qc = useQueryClient();
+  const { has } = usePermissions();
   const q = useQuery({
     queryKey: ["order", tenantSlug, orderId],
     staleTime: STALE.detail,
@@ -38,7 +40,7 @@ function OrdersListExpandedBody({
   const items = q.data?.items ?? [];
   const status = q.data?.status ?? orderStatus ?? "";
   /** Tahrirlash faqat «Новый» — Sozdat zakaz formasiga o‘tadi. */
-  const canEditHint = status === "new";
+  const canEditHint = status === "new" && has("orders.zakaz.update");
 
   return (
     <div
