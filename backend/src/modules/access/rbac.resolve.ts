@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { TENANT_ADMIN_ROLE, TENANT_USER_ROLE_KEYS_FOR_DEFAULT_COMPOSITION } from "../../lib/tenant-user-roles";
 import { isGrantDelegationKey, isMatrixOperationKey } from "./access-grant-delegation";
 import { expandPermissionKeyAliases } from "./legacy-key-map";
+import { structuredCatalogByKey } from "./access-operations-tree";
 
 
 export function derivePermissionModule(key: string): string {
@@ -134,7 +135,7 @@ export async function getRolePermissionKeysOnly(tenantId: number, userId: number
 
 export async function getUserOperationsCount(tenantId: number, userId: number, fallbackRole?: string | null) {
   const { effective } = await resolveUserPermissionKeysSplit(tenantId, userId, fallbackRole);
-  return effective.size;
+  return countCatalogOperations(effective);
 }
 
 /** Один запрос к ролям + батч к связям — вместо N×`resolveUserPermissionKeys` в списке пользователей. */
@@ -208,7 +209,15 @@ export async function getOperationsCountsForUsers(
     for (const k of expandPermissionKeyAliases([...allowed])) addRoleOperationKey(rolePerms, k);
     applyDeniedPermissionKeys(rolePerms, denied);
     stripGrantDelegationKeys(rolePerms);
-    out.set(userId, rolePerms.size);
+    out.set(userId, countCatalogOperations(rolePerms));
   }
   return out;
+}
+
+/** «N операций» — faqat «Доступ» daraxtidagi operatsiyalar (legacy aliaslar ikki marta sanalmasin). */
+export function countCatalogOperations(keys: ReadonlySet<string>): number {
+  const catalog = structuredCatalogByKey();
+  let n = 0;
+  for (const k of keys) if (catalog.has(k)) n += 1;
+  return n;
 }

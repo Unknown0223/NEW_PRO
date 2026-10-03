@@ -319,7 +319,7 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 
   // ─────────── Доступ (access workspace) ───────────
   r(WRITE, /\/access\/(users|role-defaults|users-bulk)/, "access.upravlenie.update"),
-  r(READ, /\/access\/(users|role-defaults|history|permissions|dimensions|territories)(\/|$)/, "access.upravlenie.view"),
+  r(READ, /\/access\/(users|role-defaults|history|permissions|dimensions|territories|operations-tree)(\/|$)/, "access.upravlenie.view"),
 
   // ─────────── Справочники / территория / направления ───────────
   r(WRITE, /\/territory(\/|$)/, "settings.territoriya.create", "settings.territoriya.update", "settings.territoriya.delete"),

@@ -75,7 +75,7 @@ describe("legacy permission catalog metadata", () => {
     expect(permissionDisplayDescription("staff.tabel.view", "Пользователи / Табель / Просмотр")).toBe(
       "Пользователи / Табель / Просмотр"
     );
-    const payroll = buildStructuredPermissionCatalog().filter((e) => permissionDisplayGroup(e.key));
+    const payroll = buildStructuredPermissionCatalog().filter((e) => permissionDisplayGroup(e.key) === "Зарплата");
     expect(payroll.length).toBeGreaterThan(0);
     for (const e of payroll) expect(e.description.startsWith("Зарплата / ")).toBe(true);
   });

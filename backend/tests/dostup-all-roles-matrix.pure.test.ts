@@ -109,7 +109,9 @@ describe("Dostup — barcha rollar: katalog va dostup yopiq", () => {
   });
 
   it("har bir permission section kamida bitta view kalitiga ega", () => {
+    const actionOnlySections = new Set(["orders.status", "orders.drugie_operacii"]);
     for (const sec of PERMISSION_SECTIONS) {
+      if (actionOnlySections.has(`${sec.module}.${sec.section}`)) continue;
       expect(sec.actions.includes("view"), `${sec.module}.${sec.section}`).toBe(true);
     }
   });

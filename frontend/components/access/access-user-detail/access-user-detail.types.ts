@@ -77,6 +77,8 @@ export type DetailResponse = {
   grant_delegation_operation_keys?: string[];
   /** Asosiy `user.role` dan tashqari `user_roles` paketlari. */
   extra_role_keys?: string[];
+  /** Kim tahrirlayapti: admin — hammasi; boshqalar faqat `grantable_keys` ni bera / ola oladi. */
+  actor?: { is_admin: boolean; can_edit_user: boolean; grantable_keys: string[] | null };
   supervisees: { id: number; login: string; name: string; code: string | null; role: string; is_active: boolean }[];
   scope: {
     branches: string[];

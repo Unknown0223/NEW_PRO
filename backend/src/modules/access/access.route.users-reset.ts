@@ -5,6 +5,8 @@ import { sendApiError } from "../../lib/api-error";
 import { actorUserIdOrNull } from "../../lib/request-actor";
 import { appendTenantAuditEvent } from "../../lib/tenant-audit";
 import { adminOrAccessManager } from "./access.route.shared";
+import { getAccessUser } from "../auth/auth.prehandlers";
+import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor } from "./access-grant-guard";
 import {
   applyAccessResetToRoleDefault,
   findLatestAccessResetLog,
@@ -23,6 +25,18 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
     const user = await prisma.user.findFirst({ where: { id, tenant_id: tenantId }, select: { role: true } });
     if (!user) return sendApiError(reply, request, 404, "UserNotFound");
     const actorId = actorUserIdOrNull(request);
+    try {
+      await assertActorCanPatchUser(
+        tenantId,
+        { userId: actorId, role: getAccessUser(request)?.role },
+        { id, role: user.role },
+        { permissions: [], denied_permissions: [], merge_permissions: false }
+      );
+    } catch (e) {
+      const res = grantGuardErrorResponse(e);
+      if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+      throw e;
+    }
     const snapshot = await snapshotUserAccessGrants(tenantId, id, user.role);
     await applyAccessResetToRoleDefault(tenantId, id, user.role);
     await prisma.accessLog.create({
@@ -77,6 +91,9 @@ export async function registerAccessUsersResetRoutes(app: FastifyInstance) {
         select: { id: true, role: true }
       });
       if (!user) return sendApiError(reply, request, 404, "UserNotFound");
+      if (!isAdminActor({ userId: actorUserIdOrNull(request), role: getAccessUser(request)?.role })) {
+        return sendApiError(reply, request, 403, "ACCESS_ADMIN_ONLY", "Восстановить доступ из снимка может только администратор.");
+      }
 
       const resetLog = await findLatestAccessResetLog(tenantId, id);
       if (!resetLog) {

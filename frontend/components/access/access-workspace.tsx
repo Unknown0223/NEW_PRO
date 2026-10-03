@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState, type MouseEvent } from "react";
+import { useRouter } from "next/navigation";
 import { SoftVoidConfirmDialog } from "@/components/shared/soft-void-confirm-dialog";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,8 @@ import { AccessWorkspaceScopePanel } from "./access-workspace-scope-panel";
 import { AccessWorkspaceUserPickerModal } from "./access-workspace-user-picker-modal";
 import { AccessEntityRoleLinkModal } from "./access-entity-role-link-modal";
 import { AccessUserDetailPanel } from "@/components/access/access-user-detail-panel";
+import type { AccessLeaveGuard } from "@/components/access/access-user-detail/access-user-detail-panel-view";
+import { AccessUsersTable } from "./access-users-table";
 import { useAccessWorkspace } from "./use-access-workspace";
 import { isScopeDimensionTab } from "./access-workspace.shared";
 
@@ -24,6 +27,17 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
   const ws = useAccessWorkspace({ tenantSlug });
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [leaveGuard, setLeaveGuardState] = useState<AccessLeaveGuard | null>(null);
+  const setLeaveGuard = useCallback((g: AccessLeaveGuard | null) => setLeaveGuardState(() => g), []);
+  const runGuarded = (action: () => void) => (leaveGuard ? leaveGuard(action) : action());
+  const router = useRouter();
+  const guardLink = (e: MouseEvent, href: string) => {
+    if (!leaveGuard) return;
+    e.preventDefault();
+    leaveGuard(() => router.push(href));
+  };
+  const selectedUserId =
+    ws.tab === "users" && ws.selectedKey && Number.isFinite(Number(ws.selectedKey)) ? Number(ws.selectedKey) : null;
 
   return (
     <div className="access-surface flex min-h-0 w-full max-w-full flex-1 flex-col gap-3 p-3">
@@ -42,10 +56,12 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
               key={x.key}
               data-active={ws.tab === x.key}
               className={`access-tab-chip ${ws.tab === x.key ? "" : "text-muted-foreground hover:bg-muted/50"}`}
-              onClick={() => {
-                ws.setTab(x.key as typeof ws.tab);
-                ws.startListNavTransition(() => ws.setSelectedKey(null));
-              }}
+              onClick={() =>
+                runGuarded(() => {
+                  ws.setTab(x.key as typeof ws.tab);
+                  ws.startListNavTransition(() => ws.setSelectedKey(null));
+                })
+              }
               type="button"
             >
               {x.label}
@@ -53,26 +69,37 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/access/role-defaults" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}>
+          <Link
+            href="/access/role-defaults"
+            onClick={(e) => guardLink(e, "/access/role-defaults")}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}
+          >
             Состав ролей по умолчанию
           </Link>
-          <Link href="/access/history" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}>
+          <Link
+            href="/access/history"
+            onClick={(e) => guardLink(e, "/access/history")}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 text-xs no-underline")}
+          >
             История изменения доступов
           </Link>
         </div>
       </div>
 
+      {ws.tab === "users" && !selectedUserId ? (
+        <AccessUsersTable ws={ws} onOpenUser={(id) => ws.selectSideRowKey(String(id))} />
+      ) : (
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row lg:items-stretch">
-        <AccessWorkspaceLeftPanel ws={ws} />
+        {ws.tab !== "users" ? <AccessWorkspaceLeftPanel ws={ws} /> : null}
         <div className="access-right-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {ws.tab === "users" &&
-          ws.selectedKey &&
-          Number.isFinite(Number(ws.selectedKey)) ? (
+          {ws.tab === "users" && selectedUserId ? (
             <div className="min-h-0 flex-1 overflow-hidden">
               <AccessUserDetailPanel
                 tenantSlug={ws.tenantSlug}
-                userId={Number(ws.selectedKey)}
+                userId={selectedUserId}
                 onInvalidateUsers={ws.scheduleAccessUsersListRefresh}
+                onBack={() => ws.setSelectedKey(null)}
+                onGuardChange={setLeaveGuard}
                 userAccountControls={
                   ws.selected
                     ? {
@@ -113,6 +140,7 @@ export function AccessWorkspace({ tenantSlug }: { tenantSlug: string }) {
           )}
         </div>
       </div>
+      )}
       <AccessWorkspaceUserPickerModal ws={ws} />
       <AccessEntityRoleLinkModal ws={ws} />
 

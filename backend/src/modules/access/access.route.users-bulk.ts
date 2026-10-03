@@ -60,6 +60,7 @@ import {
 import type { PaymentMethodEntryDto } from "../tenant-settings/finance-refs";
 import { paymentMethodStorageKey } from "../tenant-settings/finance-refs";
 import { adminOrAccessManager, bulkAccessPatchBodySchema } from "./access.route.shared";
+import { assertActorCanPatchUser, grantGuardErrorResponse, isAdminActor, loadActorGrantableKeys } from "./access-grant-guard";
 
 export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
   app.post("/api/:slug/access/users-bulk-patch", { preHandler: [...adminOrAccessManager] }, async (request, reply) => {
@@ -86,6 +87,20 @@ export async function registerAccessUsersBulkRoutes(app: FastifyInstance) {
       return sendApiError(reply, request, 400, "SomeUsersNotFound", "Некоторые пользователи не найдены в этой компании");
     }
     const byId = new Map(users.map((u) => [u.id, u]));
+    const actor = { userId: actorId, role: getAccessUser(request)?.role };
+    if (!isAdminActor(actor)) {
+      try {
+        const grantable = await loadActorGrantableKeys(tenantId, actor);
+        for (const it of items) {
+          const { user_id, ...body } = it;
+          await assertActorCanPatchUser(tenantId, actor, byId.get(user_id)!, body, grantable);
+        }
+      } catch (e) {
+        const res = grantGuardErrorResponse(e);
+        if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+        throw e;
+      }
+    }
     const allTyped = items as BulkAccessPatchItem[];
     /** Butun body bir xil merge/remove bo‘lsa — bitta commit (chunk’lar orasidagi WAL/fsync tejalishi yo‘q). */
     const fullUniformMerge = tryUniformMergeBulk(allTyped);

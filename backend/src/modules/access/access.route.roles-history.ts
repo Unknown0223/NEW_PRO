@@ -14,6 +14,7 @@ import {
   listAccessHistoryActionTypes
 } from "./history.service";
 import { getUserAccessMatrix } from "./access-matrix.service";
+import { assertActorCanEditRoleDefaults, grantGuardErrorResponse } from "./access-grant-guard";
 import { getPermissionCatalogGrouped } from "./permission-catalog.service";
 import {
   AccessManageRequiredError,
@@ -94,9 +95,47 @@ export async function registerAccessRolesHistoryRoutes(app: FastifyInstance) {
     if (!permissions.success) {
       return sendApiError(reply, request, 400, "ValidationError", "Некорректные данные запроса", zodValidationExtras(permissions.error));
     }
-    const role = await prisma.role.findFirst({ where: { id: roleId, tenant_id: tenantId } });
+    const role = await prisma.role.findFirst({
+      where: { id: roleId, tenant_id: tenantId },
+      select: { id: true, key: true, name: true, permissions: { select: { permission: { select: { key: true } } } } }
+    });
     if (!role) return sendApiError(reply, request, 404, "RoleNotFound");
+    const currentKeys = role.permissions.map((p) => p.permission.key);
+    const actorId = actorUserIdOrNull(request);
+    try {
+      await assertActorCanEditRoleDefaults(
+        tenantId,
+        { userId: actorId, role: getAccessUser(request)?.role },
+        role.key,
+        currentKeys,
+        permissions.data
+      );
+    } catch (e) {
+      const res = grantGuardErrorResponse(e);
+      if (res) return sendApiError(reply, request, 403, res.code, res.message, res.keys ? { keys: res.keys } : undefined);
+      throw e;
+    }
     await setRolePermissions(tenantId, roleId, permissions.data);
+    const cur = new Set(currentKeys);
+    const next = new Set(permissions.data);
+    const added = [...next].filter((k) => !cur.has(k)).sort();
+    const removed = [...cur].filter((k) => !next.has(k)).sort();
+    if (added.length > 0 || removed.length > 0) {
+      await prisma.accessLog.create({
+        data: {
+          tenant_id: tenantId,
+          actor_user_id: actorId,
+          target_user_id: null,
+          action_type: "access.role_defaults",
+          entity_type: "role",
+          entity_id: role.key,
+          old_value: { role_key: role.key, role_name: role.name, removed },
+          new_value: { role_key: role.key, role_name: role.name, added },
+          ip_address: request.ip ?? null,
+          device: String(request.headers["user-agent"] ?? "").slice(0, 255) || null
+        }
+      });
+    }
     return reply.send({ ok: true });
   });
 
